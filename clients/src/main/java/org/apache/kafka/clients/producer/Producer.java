@@ -67,6 +67,14 @@ public interface Producer<K, V> extends Closeable {
     void commitTransaction() throws ProducerFencedException;
 
     /**
+     * See {@link KafkaProducer#commitTransaction(KafkaProducer.CommitOption)}
+     */
+    default void commitTransaction(KafkaProducer.CommitOption option) throws ProducerFencedException {
+        commitTransaction(option);
+    }
+
+
+    /**
      * See {@link KafkaProducer#abortTransaction()}
      */
     void abortTransaction() throws ProducerFencedException;

@@ -833,6 +833,35 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
+     * This method should only be called if there are no pending writes, i.e., only after calling {@link #flush()}.
+     * If there are any errors in sending messages to topics, these errors can be cleared by passing {@link CommitOption#CLEAR_SEND_ERRORS},
+     * allowing the transaction to be committed even in case of data loss.
+     * <p>
+     * If this method is used while there are pending sends, the send errors cannot be cleared.
+     *
+     * @param option The method option
+     * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started
+     * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
+     * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
+     *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
+     * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
+     *         transactional.id is not authorized. See the exception for more details
+     * @throws org.apache.kafka.common.errors.InvalidProducerEpochException if the producer has attempted to produce with an old epoch
+     *         to the partition leader. See the exception for more details
+     * @throws KafkaException if the producer has encountered a previous fatal or abortable error, or for any
+     *         other unexpected error
+     * @throws TimeoutException if the time taken for committing the transaction has surpassed <code>max.block.ms</code>.
+     * @throws InterruptException if the thread is interrupted while blocked
+     */
+    public void commitTransaction(CommitOption option) throws ProducerFencedException {
+        throwIfNoTransactionManager();
+        if (!accumulator.hasIncomplete() && option == CommitOption.CLEAR_SEND_ERRORS) {
+            transactionManager.maybeClearLastError();
+        }
+        commitTransaction();
+    }
+
+    /**
      * Aborts the ongoing transaction. Any unflushed produce messages will be aborted when this call is made.
      * This call will throw an exception immediately if any prior {@link #send(ProducerRecord)} calls failed with a
      * {@link ProducerFencedException} or an instance of {@link org.apache.kafka.common.errors.AuthorizationException}.
@@ -1601,5 +1630,24 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
             return topicPartition;
         }
+    }
+
+    public enum CommitOption {
+        /**
+         * Commits the ongoing transaction, flushing any unsent records before actually committing
+         * the transaction. If any of the records sent in this transaction hit unrecoverable errors,
+         * the transaction will not be committed.
+         */
+        NONE,
+        /**
+         * Commits the ongoing transaction, first clearing any errors from records already sent in
+         * this transaction. If there are any unsent records flushed by this operation which hit
+         * unrecoverable errors, these errors will not be cleared and the transaction will not be
+         * committed.
+         * <p>
+         * To ensure there are no unsent records, you must call {@link #flush()} before
+         * committing the transaction.
+         */
+        CLEAR_SEND_ERRORS
     }
 }
