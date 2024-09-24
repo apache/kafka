@@ -63,6 +63,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.InOrder;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -1253,18 +1254,28 @@ public class TaskManagerTest {
                 .inState(State.RUNNING).build();
         final TasksRegistry tasks = mock(TasksRegistry.class);
         when(tasks.drainPendingTasksToInit()).thenReturn(mkSet(task00, task01));
-        when(stateDirectory.lock(taskId00)).thenReturn(false);
-        when(stateDirectory.lock(taskId01)).thenReturn(true);
+        doThrow(new LockException("Lock Exception!")).when(task00).initializeIfNeeded();
 
         taskManager = setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, tasks, true);
 
         taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
 
+        verify(task00).initializeIfNeeded();
+        verify(task01).initializeIfNeeded();
         verify(tasks).addPendingTasksToInit(
                 argThat(tasksToInit -> tasksToInit.contains(task00) && !tasksToInit.contains(task01))
         );
         verify(stateUpdater, never()).add(task00);
         verify(stateUpdater).add(task01);
+
+        taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
+
+        // initializeIfNeeded() has not been called 2 times
+        verify(task00, Mockito.times(1)).initializeIfNeeded();
+        verify(tasks).addPendingTasksToInit(
+                argThat(tasksToInit -> tasksToInit.contains(task00))
+        );
+        verify(stateUpdater, never()).add(task00);
     }
 
     @Test
