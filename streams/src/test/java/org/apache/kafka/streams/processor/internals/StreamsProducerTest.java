@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -151,10 +152,9 @@ public class StreamsProducerTest {
         eosMockClientSupplier.setCluster(cluster);
         eosMockClientSupplier.setApplicationIdForProducer("appId");
         final String clientId = "threadId-StreamThread-0";
-        final UUID processId = UUID.randomUUID();
-        eosMockProducer = (MockProducer<byte[], byte[]>) eosMockClientSupplier.getProducer(
-            eosConfig.getProducerConfigs(clientId, processId, 0)
-        );
+        final Map<String, Object> producerConfig = eosConfig.getProducerConfigs(clientId);
+        producerConfig.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "appId-" + UUID.randomUUID() + "-0");
+        eosMockProducer = (MockProducer<byte[], byte[]>) eosMockClientSupplier.getProducer(producerConfig);
         eosStreamsProducer =
             new StreamsProducer(
                 StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2,

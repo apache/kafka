@@ -58,7 +58,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.UUID;
 
 import static java.util.Collections.nCopies;
 import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
@@ -152,7 +151,7 @@ public class StreamsConfigTest {
 
     @Test
     public void testGetProducerConfigs() {
-        final Map<String, Object> returnedProps = streamsConfig.getProducerConfigs(clientId, null, -1);
+        final Map<String, Object> returnedProps = streamsConfig.getProducerConfigs(clientId);
         assertThat(returnedProps.get(ProducerConfig.CLIENT_ID_CONFIG), equalTo(clientId));
         assertThat(returnedProps.get(ProducerConfig.LINGER_MS_CONFIG), equalTo("100"));
     }
@@ -308,7 +307,7 @@ public class StreamsConfigTest {
     public void shouldSupportPrefixedPropertiesThatAreNotPartOfProducerConfig() {
         props.put(producerPrefix("interceptor.statsd.host"), "host");
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId, null, -1);
+        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
         assertEquals("host", producerConfigs.get("interceptor.statsd.host"));
     }
 
@@ -317,7 +316,7 @@ public class StreamsConfigTest {
         props.put(producerPrefix(ProducerConfig.BUFFER_MEMORY_CONFIG), 10);
         props.put(producerPrefix(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG), 1);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> configs = streamsConfig.getProducerConfigs(clientId, null, -1);
+        final Map<String, Object> configs = streamsConfig.getProducerConfigs(clientId);
         assertEquals(10, configs.get(ProducerConfig.BUFFER_MEMORY_CONFIG));
         assertEquals(1, configs.get(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG));
     }
@@ -345,7 +344,7 @@ public class StreamsConfigTest {
         props.put(ProducerConfig.BUFFER_MEMORY_CONFIG, 10);
         props.put(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG, 1);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> configs = streamsConfig.getProducerConfigs(clientId, null, -1);
+        final Map<String, Object> configs = streamsConfig.getProducerConfigs(clientId);
         assertEquals(10, configs.get(ProducerConfig.BUFFER_MEMORY_CONFIG));
         assertEquals(1, configs.get(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG));
     }
@@ -356,7 +355,7 @@ public class StreamsConfigTest {
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
         final Map<String, Object> restoreConsumerConfigs = streamsConfig.getRestoreConsumerConfigs(clientId);
-        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId, null, -1);
+        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
         final Map<String, Object> adminConfigs = streamsConfig.getAdminConfigs(clientId);
         assertEquals("host", consumerConfigs.get("custom.property.host"));
         assertEquals("host", restoreConsumerConfigs.get("custom.property.host"));
@@ -373,7 +372,7 @@ public class StreamsConfigTest {
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
         final Map<String, Object> restoreConsumerConfigs = streamsConfig.getRestoreConsumerConfigs(clientId);
-        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId, null, -1);
+        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
         final Map<String, Object> adminConfigs = streamsConfig.getAdminConfigs(clientId);
         assertEquals("host1", consumerConfigs.get("custom.property.host"));
         assertEquals("host1", restoreConsumerConfigs.get("custom.property.host"));
@@ -418,7 +417,7 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.producerPrefix(ProducerConfig.LINGER_MS_CONFIG), "10000");
         props.put(StreamsConfig.producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), "30000");
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId, null, -1);
+        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
         assertEquals("10000", producerConfigs.get(ProducerConfig.LINGER_MS_CONFIG));
         assertEquals("30000", producerConfigs.get(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG));
     }
@@ -561,7 +560,7 @@ public class StreamsConfigTest {
     public void shouldNotSetInternalAutoDowngradeTxnCommitToTrueInProducerForEosV2() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId, UUID.randomUUID(), 0);
+        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
         assertThat(producerConfigs.get("internal.auto.downgrade.txn.commit"), is(nullValue()));
     }
 
@@ -630,7 +629,7 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "anyValue");
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId, UUID.randomUUID(), 0);
+        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
         assertTrue((Boolean) producerConfigs.get(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG));
     }
 
@@ -638,7 +637,7 @@ public class StreamsConfigTest {
     public void shouldAllowSettingProducerEnableIdempotenceIfEosDisabled() {
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId, null, -1);
+        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
         assertThat(producerConfigs.get(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG), equalTo(false));
     }
 
@@ -648,7 +647,7 @@ public class StreamsConfigTest {
         final StreamsConfig streamsConfig = new StreamsConfig(props);
 
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
-        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId, null, -1);
+        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
 
         assertThat(
             consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG),
@@ -666,10 +665,9 @@ public class StreamsConfigTest {
         props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "user-TxId");
         final StreamsConfig streamsConfig = new StreamsConfig(props);
 
-        final UUID processId = UUID.randomUUID();
-        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId, processId, 0);
+        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
 
-        assertThat(producerConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG), is(groupId + "-" + processId + "-0"));
+        assertThat(producerConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG), is(nullValue()));
     }
 
     @Test
@@ -679,7 +677,7 @@ public class StreamsConfigTest {
         props.put(ProducerConfig.RETRIES_CONFIG, numberOfRetries);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
 
-        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId, UUID.randomUUID(), 0);
+        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
 
         assertThat(producerConfigs.get(ProducerConfig.RETRIES_CONFIG), equalTo(numberOfRetries));
     }
@@ -769,7 +767,7 @@ public class StreamsConfigTest {
         props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 7);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         try {
-            streamsConfig.getProducerConfigs(clientId, UUID.randomUUID(), 0);
+            streamsConfig.getProducerConfigs(clientId);
             fail("Should throw ConfigException when ESO is enabled and maxInFlight requests exceeds 5");
         } catch (final ConfigException e) {
             assertEquals(
@@ -785,7 +783,7 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
         props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "3");
 
-        new StreamsConfig(props).getProducerConfigs(clientId, UUID.randomUUID(), 0);
+        new StreamsConfig(props).getProducerConfigs(clientId);
     }
 
     @Test
@@ -794,7 +792,7 @@ public class StreamsConfigTest {
         props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "not-a-number");
 
         try {
-            new StreamsConfig(props).getProducerConfigs(clientId, UUID.randomUUID(), 0);
+            new StreamsConfig(props).getProducerConfigs(clientId);
             fail("Should throw ConfigException when EOS is enabled and maxInFlight cannot be paresed into an integer");
         } catch (final ConfigException e) {
             assertEquals(
@@ -1242,7 +1240,7 @@ public class StreamsConfigTest {
                 .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
         );
         assertNull(
-            streamsConfig.getProducerConfigs("clientId", null, -1)
+            streamsConfig.getProducerConfigs("clientId")
                 .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
         );
         assertNull(
@@ -1269,7 +1267,7 @@ public class StreamsConfigTest {
                 .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
         );
         assertTrue(
-            (Boolean) streamsConfig.getProducerConfigs("clientId", null, -1)
+            (Boolean) streamsConfig.getProducerConfigs("clientId")
                 .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
         );
         assertTrue(
@@ -1296,7 +1294,7 @@ public class StreamsConfigTest {
                 .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
         );
         assertFalse(
-            (Boolean) streamsConfig.getProducerConfigs("clientId", null, -1)
+            (Boolean) streamsConfig.getProducerConfigs("clientId")
                 .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
         );
         assertFalse(

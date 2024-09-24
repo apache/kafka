@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
@@ -113,11 +114,14 @@ class ActiveTaskCreator {
     }
 
     private Producer<byte[], byte[]> producer() {
-        return clientSupplier.getProducer(applicationConfig.getProducerConfigs(
-            producerClientId(threadId),
-            processId,
-            threadIdx
-        ));
+        final Map<String, Object> producerConfig = applicationConfig.getProducerConfigs(producerClientId(threadId));
+        if (eosEnabled(processingMode)) {
+            producerConfig.put(
+                ProducerConfig.TRANSACTIONAL_ID_CONFIG,
+                applicationConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG) + "-" + processId + "-" + threadIdx
+            );
+        }
+        return clientSupplier.getProducer(producerConfig);
     }
 
     public void reInitializeThreadProducer() {
