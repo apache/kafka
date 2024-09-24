@@ -110,8 +110,6 @@ class StreamsGroupHeartbeatRequestManagerTest {
 
     private final Map<String, Subtopology> subtopologyMap = new HashMap<>();
 
-    private final Map<String, Object> assignmentConfiguration = new HashMap<>();
-
     private final Map<String, String> clientTags = new HashMap<>();
 
     private final Node coordinatorNode = new Node(1, "localhost", 9092);
@@ -121,7 +119,6 @@ class StreamsGroupHeartbeatRequestManagerTest {
         config = config();
 
         subtopologyMap.clear();
-        assignmentConfiguration.clear();
         clientTags.clear();
         streamsAssignmentInterface =
             new StreamsAssignmentInterface(
@@ -129,7 +126,6 @@ class StreamsGroupHeartbeatRequestManagerTest {
                 Optional.of(endPoint),
                 assignor,
                 subtopologyMap,
-                assignmentConfiguration,
                 clientTags
             );
         LogContext logContext = new LogContext("test");
@@ -204,7 +200,6 @@ class StreamsGroupHeartbeatRequestManagerTest {
     @Test
     void testFullStaticInformationWhenJoining() {
         mockJoiningState();
-        assignmentConfiguration.put("config1", "value1");
         clientTags.put("clientTag1", "value2");
 
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
@@ -244,7 +239,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         final Uuid uuid0 = Uuid.randomUuid();
         final Uuid uuid1 = Uuid.randomUuid();
 
-        final TopicInfo emptyTopicInfo = new TopicInfo(Optional.empty(), Collections.emptyMap());
+        final TopicInfo emptyTopicInfo = new TopicInfo(Optional.empty(), Optional.empty(), Collections.emptyMap());
 
         when(metadata.topicIds()).thenReturn(
             mkMap(
@@ -257,21 +252,24 @@ class StreamsGroupHeartbeatRequestManagerTest {
                 Collections.singleton("source0"),
                 Collections.singleton("sink0"),
                 Collections.singletonMap("repartition0", emptyTopicInfo),
-                Collections.singletonMap("changelog0", emptyTopicInfo)
+                Collections.singletonMap("changelog0", emptyTopicInfo),
+                Collections.emptySet() // TODO
             ));
         streamsAssignmentInterface.subtopologyMap().put("1",
             new Subtopology(
                 Collections.singleton("source1"),
                 Collections.singleton("sink1"),
                 Collections.singletonMap("repartition1", emptyTopicInfo),
-                Collections.singletonMap("changelog1", emptyTopicInfo)
+                Collections.singletonMap("changelog1", emptyTopicInfo),
+                Collections.emptySet() // TODO
             ));
         streamsAssignmentInterface.subtopologyMap().put("2",
             new Subtopology(
                 Collections.singleton("source2"),
                 Collections.singleton("sink2"),
                 Collections.singletonMap("repartition2", emptyTopicInfo),
-                Collections.singletonMap("changelog2", emptyTopicInfo)
+                Collections.singletonMap("changelog2", emptyTopicInfo),
+                Collections.emptySet() // TODO
             ));
 
         StreamsGroupHeartbeatResponseData data = new StreamsGroupHeartbeatResponseData()

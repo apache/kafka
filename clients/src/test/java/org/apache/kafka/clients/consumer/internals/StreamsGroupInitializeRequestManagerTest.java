@@ -72,19 +72,20 @@ class StreamsGroupInitializeRequestManagerTest {
         final Set<String> sourceTopics = mkSet("sourceTopic1", "sourceTopic2");
         final Set<String> sinkTopics = mkSet("sinkTopic1", "sinkTopic2", "sinkTopic3");
         final Map<String, StreamsAssignmentInterface.TopicInfo> repartitionTopics = mkMap(
-            mkEntry("repartitionTopic1", new StreamsAssignmentInterface.TopicInfo(Optional.of(2), Collections.emptyMap())),
-            mkEntry("repartitionTopic2", new StreamsAssignmentInterface.TopicInfo(Optional.of(3), Collections.emptyMap()))
+            mkEntry("repartitionTopic1", new StreamsAssignmentInterface.TopicInfo(Optional.of(2), Optional.of((short) 1), Collections.emptyMap())),
+            mkEntry("repartitionTopic2", new StreamsAssignmentInterface.TopicInfo(Optional.of(3), Optional.of((short) 3), Collections.emptyMap()))
         );
         final Map<String, StreamsAssignmentInterface.TopicInfo> changelogTopics = mkMap(
-            mkEntry("changelogTopic1", new StreamsAssignmentInterface.TopicInfo(Optional.empty(), Collections.emptyMap())),
-            mkEntry("changelogTopic2", new StreamsAssignmentInterface.TopicInfo(Optional.empty(), Collections.emptyMap())),
-            mkEntry("changelogTopic3", new StreamsAssignmentInterface.TopicInfo(Optional.empty(), Collections.emptyMap()))
+            mkEntry("changelogTopic1", new StreamsAssignmentInterface.TopicInfo(Optional.empty(), Optional.of((short) 1), Collections.emptyMap())),
+            mkEntry("changelogTopic2", new StreamsAssignmentInterface.TopicInfo(Optional.empty(), Optional.of((short) 2), Collections.emptyMap())),
+            mkEntry("changelogTopic3", new StreamsAssignmentInterface.TopicInfo(Optional.empty(), Optional.of((short) 3), Collections.emptyMap()))
         );
         final StreamsAssignmentInterface.Subtopology subtopology1 = new StreamsAssignmentInterface.Subtopology(
             sourceTopics,
             sinkTopics,
             repartitionTopics,
-            changelogTopics
+            changelogTopics,
+            Collections.emptySet() // TODO
         );
         final String subtopologyName1 = "subtopology1";
         when(streamsAssignmentInterface.subtopologyMap()).thenReturn(
@@ -121,11 +122,14 @@ class StreamsGroupInitializeRequestManagerTest {
         subtopology.repartitionSourceTopics().forEach(topicInfo -> {
             final StreamsAssignmentInterface.TopicInfo repartitionTopic = repartitionTopics.get(topicInfo.name());
             assertEquals(repartitionTopic.numPartitions.get(), topicInfo.partitions());
+            assertEquals(repartitionTopic.replicationFactor.get(), topicInfo.replicationFactor());
         });
         assertEquals(changelogTopics.size(), subtopology.stateChangelogTopics().size());
         subtopology.stateChangelogTopics().forEach(topicInfo -> {
             assertTrue(changelogTopics.containsKey(topicInfo.name()));
             assertEquals(0, topicInfo.partitions());
+            final StreamsAssignmentInterface.TopicInfo changelogTopic = changelogTopics.get(topicInfo.name());
+            assertEquals(changelogTopic.replicationFactor.get(), topicInfo.replicationFactor());
         });
     }
 }

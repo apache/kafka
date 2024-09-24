@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.util.Collection;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collections;
@@ -45,8 +46,6 @@ public class StreamsAssignmentInterface {
 
     private Map<String, Subtopology> subtopologyMap;
 
-    private Map<String, Object> assignmentConfiguration;
-
     private Map<TaskId, Long> taskLags;
 
     private AtomicBoolean shutdownRequested;
@@ -72,10 +71,6 @@ public class StreamsAssignmentInterface {
 
     public Map<String, Subtopology> subtopologyMap() {
         return subtopologyMap;
-    }
-
-    public Map<String, Object> assignmentConfiguration() {
-        return assignmentConfiguration;
     }
 
     // TODO: This needs to be used somewhere
@@ -190,11 +185,14 @@ public class StreamsAssignmentInterface {
     public static class TopicInfo {
 
         public final Optional<Integer> numPartitions;
+        public final Optional<Short> replicationFactor;
         public final Map<String, String> topicConfigs;
 
         public TopicInfo(final Optional<Integer> numPartitions,
+                         final Optional<Short> replicationFactor,
                          final Map<String, String> topicConfigs) {
             this.numPartitions = numPartitions;
+            this.replicationFactor = replicationFactor;
             this.topicConfigs = topicConfigs;
         }
 
@@ -202,10 +200,10 @@ public class StreamsAssignmentInterface {
         public String toString() {
             return "TopicInfo{" +
                 "numPartitions=" + numPartitions +
+                ", replicationFactor=" + replicationFactor +
                 ", topicConfigs=" + topicConfigs +
                 '}';
         }
-
     }
 
     public static class TaskId {
@@ -241,15 +239,19 @@ public class StreamsAssignmentInterface {
         public final Set<String> sinkTopics;
         public final Map<String, TopicInfo> stateChangelogTopics;
         public final Map<String, TopicInfo> repartitionSourceTopics;
+        public final Collection<Set<String>> copartitionGroups;
 
         public Subtopology(final Set<String> sourceTopics,
                            final Set<String> sinkTopics,
                            final Map<String, TopicInfo> repartitionSourceTopics,
-                           final Map<String, TopicInfo> stateChangelogTopics) {
+                           final Map<String, TopicInfo> stateChangelogTopics,
+                           final Collection<Set<String>> copartitionGroups
+        ) {
             this.sourceTopics = sourceTopics;
             this.sinkTopics = sinkTopics;
             this.stateChangelogTopics = stateChangelogTopics;
             this.repartitionSourceTopics = repartitionSourceTopics;
+            this.copartitionGroups = copartitionGroups;
         }
 
         @Override
@@ -259,6 +261,7 @@ public class StreamsAssignmentInterface {
                 ", sinkTopics=" + sinkTopics +
                 ", stateChangelogTopics=" + stateChangelogTopics +
                 ", repartitionSourceTopics=" + repartitionSourceTopics +
+                ", copartitionGroups=" + copartitionGroups +
                 '}';
         }
     }
@@ -267,14 +270,12 @@ public class StreamsAssignmentInterface {
                                       Optional<HostInfo> endpoint,
                                       String assignor,
                                       Map<String, Subtopology> subtopologyMap,
-                                      Map<String, Object> assignmentConfiguration,
                                       Map<String, String> clientTags
     ) {
         this.processId = processId;
         this.endpoint = endpoint;
         this.assignor = assignor;
         this.subtopologyMap = subtopologyMap;
-        this.assignmentConfiguration = assignmentConfiguration;
         this.taskLags = new HashMap<>();
         this.shutdownRequested = new AtomicBoolean(false);
         this.clientTags = clientTags;
@@ -287,7 +288,6 @@ public class StreamsAssignmentInterface {
             ", endpoint='" + endpoint + '\'' +
             ", assignor='" + assignor + '\'' +
             ", subtopologyMap=" + subtopologyMap +
-            ", assignmentConfiguration=" + assignmentConfiguration +
             ", taskLags=" + taskLags +
             ", clientTags=" + clientTags +
             '}';

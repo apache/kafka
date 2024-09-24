@@ -78,6 +78,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorShardBuilderSuppli
 import org.apache.kafka.coordinator.common.runtime.MultiThreadedEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupInitializeResult;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.record.BrokerCompressionType;
@@ -352,14 +353,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * See {@link GroupCoordinator#streamsGroupInitialize(RequestContext, org.apache.kafka.common.message.StreamsGroupInitializeRequestData)}.
      */
     @Override
-    public CompletableFuture<StreamsGroupInitializeResponseData> streamsGroupInitialize(
+    public CompletableFuture<StreamsGroupInitializeResult> streamsGroupInitialize(
         RequestContext context,
         StreamsGroupInitializeRequestData request
     ) {
         if (!isActive.get()) {
-            return CompletableFuture.completedFuture(new StreamsGroupInitializeResponseData()
+            return CompletableFuture.completedFuture(new StreamsGroupInitializeResult(new StreamsGroupInitializeResponseData()
                 .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
-            );
+            ));
         }
 
         return runtime.scheduleWriteOperation(
@@ -371,9 +372,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
             "streams-group-initialize",
             request,
             exception,
-            (error, message) -> new StreamsGroupInitializeResponseData()
+            (error, message) -> new StreamsGroupInitializeResult(new StreamsGroupInitializeResponseData()
                 .setErrorCode(error.code())
-                .setErrorMessage(message),
+                .setErrorMessage(message)),
             log
         ));
     }

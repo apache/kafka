@@ -19,7 +19,7 @@ package org.apache.kafka.coordinator.group.streams;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
+import org.apache.kafka.coordinator.group.streams.topics.TopicsInfo;
 import org.apache.kafka.coordinator.group.taskassignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.taskassignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.taskassignor.GroupSpecImpl;
@@ -116,9 +116,16 @@ public class TargetAssignmentBuilderTest {
                 partitionRacks
             ));
             topicsImageBuilder = topicsImageBuilder.addTopic(topicId, topicName, numTasks);
-            topology.subtopologies().put(subtopologyId, new StreamsGroupTopologyValue.Subtopology()
-                .setSubtopology(subtopologyId)
-                .setSourceTopics(Collections.singletonList(topicId.toString())));
+            topology.subtopologies().put(subtopologyId,
+                new TopicsInfo(
+                    Collections.emptyList(),
+                    Collections.singletonList(topicId.toString()),
+                    Collections.emptyList(),
+                    Collections.emptyMap(),
+                    Collections.emptyMap(),
+                    Collections.emptyList()
+                )
+            );
 
             return subtopologyId;
         }

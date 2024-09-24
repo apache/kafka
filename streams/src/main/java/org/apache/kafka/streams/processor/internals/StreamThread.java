@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Collection;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -548,9 +549,39 @@ public class StreamThread extends Thread implements ProcessingThread {
                                                                       final TopologyMetadata topologyMetadata) {
         final InternalTopologyBuilder internalTopologyBuilder = topologyMetadata.lookupBuilderForNamedTopology(null);
 
+        final Map<String, Subtopology> subtopologyMap = initBrokerTopology(config, internalTopologyBuilder);
+
+        return new StreamsAssignmentInterface(
+            processId,
+            endpoint,
+            null,
+            subtopologyMap,
+            config.getClientTags()
+        );
+    }
+
+    private static Map<String, Subtopology> initBrokerTopology(final StreamsConfig config, final InternalTopologyBuilder internalTopologyBuilder) {
+        final Map<String, String> defaultTopicConfigs = new HashMap<>();
+        for (final Map.Entry<String, Object> entry : config.originalsWithPrefix(StreamsConfig.TOPIC_PREFIX).entrySet()) {
+            if (entry.getValue() != null) {
+                defaultTopicConfigs.put(entry.getKey(), entry.getValue().toString());
+            }
+        }
+        final long windowChangeLogAdditionalRetention = config.getLong(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG);
+
         final Map<String, Subtopology> subtopologyMap = new HashMap<>();
+        final Collection<Set<String>> copartitionGroups = internalTopologyBuilder.copartitionGroups();
+
         for (final Map.Entry<TopologyMetadata.Subtopology, TopicsInfo> topicsInfoEntry : internalTopologyBuilder.subtopologyToTopicsInfo()
             .entrySet()) {
+
+            final HashSet<String> allSourceTopics = new HashSet<>(
+                topicsInfoEntry.getValue().sourceTopics);
+            topicsInfoEntry.getValue().repartitionSourceTopics.forEach(
+                (repartitionSourceTopic, repartitionTopicInfo) -> {
+                    allSourceTopics.add(repartitionSourceTopic);
+                });
+
             subtopologyMap.put(
                 String.valueOf(topicsInfoEntry.getKey().nodeGroupId),
                 new Subtopology(
@@ -559,44 +590,28 @@ public class StreamThread extends Thread implements ProcessingThread {
                     topicsInfoEntry.getValue().repartitionSourceTopics.entrySet()
                         .stream()
                         .collect(Collectors.toMap(Map.Entry::getKey, e ->
-                            new StreamsAssignmentInterface.TopicInfo(e.getValue().numberOfPartitions(), e.getValue().topicConfigs))),
+                            new StreamsAssignmentInterface.TopicInfo(e.getValue().numberOfPartitions(),
+                                Optional.of(config.getShort(StreamsConfig.REPLICATION_FACTOR_CONFIG)),
+                                e.getValue().properties(defaultTopicConfigs, windowChangeLogAdditionalRetention)))),
                     topicsInfoEntry.getValue().stateChangelogTopics.entrySet()
                         .stream()
                         .collect(Collectors.toMap(Map.Entry::getKey, e ->
-                            new StreamsAssignmentInterface.TopicInfo(e.getValue().numberOfPartitions(), e.getValue().topicConfigs)))
-
+                            new StreamsAssignmentInterface.TopicInfo(e.getValue().numberOfPartitions(),
+                                Optional.of(config.getShort(StreamsConfig.REPLICATION_FACTOR_CONFIG)),
+                                e.getValue().properties(defaultTopicConfigs, windowChangeLogAdditionalRetention)))),
+                    copartitionGroups.stream().filter(allSourceTopics::containsAll).collect(
+                        Collectors.toList())
                 )
             );
         }
 
-        // TODO: Which of these are actually needed?
-        // TODO: Maybe we want to split this into assignment properties and internal topic configuration properties
-        final HashMap<String, Object> assignmentProperties = new HashMap<>();
-        assignmentProperties.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, config.getInt(StreamsConfig.REPLICATION_FACTOR_CONFIG));
-        assignmentProperties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG));
-        assignmentProperties.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, config.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG));
-        assignmentProperties.put(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG,
-            config.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG));
-        assignmentProperties.put(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, config.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG));
-        assignmentProperties.put(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG,
-            config.getLong(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG));
-        assignmentProperties.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG,
-            config.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG));
-        assignmentProperties.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG,
-            config.getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG));
-        assignmentProperties.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
-            config.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG));
-        assignmentProperties.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG,
-            config.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG));
+        if (subtopologyMap.values().stream().mapToInt(x -> x.copartitionGroups.size()).sum()
+            != copartitionGroups.size()) {
+            throw new IllegalStateException(
+                "Not all copartition groups were converted to broker topology");
+        }
 
-        return new StreamsAssignmentInterface(
-            processId,
-            endpoint,
-            null,
-            subtopologyMap,
-            assignmentProperties,
-            config.getClientTags()
-        );
+        return subtopologyMap;
     }
 
     private static DefaultTaskManager maybeCreateSchedulingTaskManager(final boolean processingThreadsEnabled,

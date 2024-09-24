@@ -47,6 +47,14 @@ trait AutoTopicCreationManager {
     controllerMutationQuota: ControllerMutationQuota,
     metadataRequestContext: Option[RequestContext]
   ): Seq[MetadataResponseTopic]
+
+
+  def createTopicsWithConfigs(
+    topics: Map[String, CreatableTopic],
+    controllerMutationQuota: ControllerMutationQuota,
+    requestContext: Option[RequestContext]
+  ): Seq[String]
+
 }
 
 object AutoTopicCreationManager {
@@ -106,6 +114,38 @@ class DefaultAutoTopicCreationManager(
     }
 
     uncreatableTopicResponses ++ creatableTopicResponses
+  }
+
+  // TODO: This fails if one topic cannot be created.
+  override def createTopicsWithConfigs(
+    topics: Map[String, CreatableTopic],
+    controllerMutationQuota: ControllerMutationQuota,
+    requestContext: Option[RequestContext]
+  ): Seq[String] = {
+
+    val (creatableTopics, uncreatableTopicResponses) = filterCreatableTopics(topics.keySet)
+
+    if (uncreatableTopicResponses.nonEmpty) {
+      return uncreatableTopicResponses.map(_.name)
+    }
+
+    for ((topicName, creatableTopic) <- topics) {
+      creatableTopics.get(topicName).foreach { existingCreatableTopic =>
+        existingCreatableTopic.setNumPartitions(creatableTopic.numPartitions)
+        existingCreatableTopic.setReplicationFactor(creatableTopic.replicationFactor)
+        existingCreatableTopic.setConfigs(creatableTopic.configs)
+      }
+    }
+
+    val creatableTopicResponses = if (creatableTopics.isEmpty) {
+      Seq.empty
+    } else if (controller.isEmpty || !controller.get.isActive && channelManager.isDefined) {
+      sendCreateTopicRequest(creatableTopics, requestContext)
+    } else {
+      createTopicsInZk(creatableTopics, controllerMutationQuota)
+    }
+
+    creatableTopicResponses.map(_.name())
   }
 
   private def createTopicsInZk(
@@ -180,11 +220,12 @@ class DefaultAutoTopicCreationManager(
       override def onComplete(response: ClientResponse): Unit = {
         clearInflightRequests(creatableTopics)
         if (response.authenticationException() != null) {
-          warn(s"Auto topic creation failed for ${creatableTopics.keys} with authentication exception")
+          error(s"Auto topic creation failed for ${creatableTopics.keys} with authentication exception")
         } else if (response.versionMismatch() != null) {
-          warn(s"Auto topic creation failed for ${creatableTopics.keys} with invalid version exception")
+          error(s"Auto topic creation failed for ${creatableTopics.keys} with invalid version exception")
         } else {
-          debug(s"Auto topic creation completed for ${creatableTopics.keys} with response ${response.responseBody}.")
+          // TODO: Response may still contain errors for individual topics. This should be exposed.
+          error(s"Auto topic creation completed for ${creatableTopics.keys} with response ${response.responseBody}.")
         }
       }
     }

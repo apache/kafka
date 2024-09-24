@@ -16,19 +16,19 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
-import java.util.HashMap;
 import java.util.List;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupInitializeRequestData;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.TopicInfo;
 
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.apache.kafka.coordinator.group.streams.topics.InternalTopicConfig;
+import org.apache.kafka.coordinator.group.streams.topics.TopicsInfo;
 
 /**
  * Immutable topology metadata.
@@ -37,63 +37,28 @@ public class StreamsTopology {
 
     private final String topologyId;
 
-    private final Map<String, Subtopology> subtopologies;
+    private final Map<String, TopicsInfo> subtopologies;
 
     public StreamsTopology(final String topologyId,
-                           final Map<String, Subtopology> subtopologies) {
+        final Map<String, TopicsInfo> subtopologies) {
         this.topologyId = topologyId;
         this.subtopologies = subtopologies;
-    }
-
-    public StreamsTopology(final String topologyId,
-                           final List<StreamsGroupInitializeRequestData.Subtopology> subtopologies) {
-        this.topologyId = topologyId;
-        this.subtopologies = new HashMap<>();
-        subtopologies.forEach(subtopology -> {
-            List<StreamsGroupTopologyValue.TopicInfo> repartitionSourceTopics = subtopology.repartitionSourceTopics().stream()
-                .map(topicInfo -> {
-                    List<StreamsGroupTopologyValue.TopicConfig> topicConfigs =  topicInfo.topicConfigs() != null ? topicInfo.topicConfigs().stream()
-                        .map(config -> new StreamsGroupTopologyValue.TopicConfig().setKey(config.key()).setValue(config.value()))
-                        .collect(Collectors.toList()) : null;
-                    return new StreamsGroupTopologyValue.TopicInfo().setName(topicInfo.name()).setTopicConfigs(topicConfigs)
-                        .setPartitions(topicInfo.partitions());
-                }).collect(Collectors.toList());
-
-            List<StreamsGroupTopologyValue.TopicInfo> stateChangelogTopics = subtopology.stateChangelogTopics().stream().map(topicInfo -> {
-                List<StreamsGroupTopologyValue.TopicConfig> topicConfigs = topicInfo.topicConfigs() != null ? topicInfo.topicConfigs().stream()
-                    .map(config -> new StreamsGroupTopologyValue.TopicConfig().setKey(config.key()).setValue(config.value()))
-                    .collect(Collectors.toList()) : null;
-                return new StreamsGroupTopologyValue.TopicInfo().setName(topicInfo.name()).setTopicConfigs(topicConfigs);
-            }).collect(Collectors.toList());
-
-            this.subtopologies.put(
-                subtopology.subtopologyId(),
-                new StreamsGroupTopologyValue.Subtopology().setSubtopology(subtopology.subtopologyId())
-                    .setSourceTopics(subtopology.sourceTopics()).setRepartitionSinkTopics(subtopology.repartitionSinkTopics())
-                    .setRepartitionSourceTopics(repartitionSourceTopics).setStateChangelogTopics(stateChangelogTopics));
-        });
     }
 
     public String topologyId() {
         return topologyId;
     }
 
-    public Map<String, Subtopology> subtopologies() {
+    public Map<String, TopicsInfo> subtopologies() {
         return subtopologies;
     }
 
     public Set<String> topicSubscription() {
         return subtopologies.values().stream()
-            .flatMap(x -> Stream.concat(x.sourceTopics().stream(), x.repartitionSourceTopics().stream().map(
-                TopicInfo::name))).collect(
+            .flatMap(x -> Stream.concat(x.sourceTopics().stream(),
+                x.repartitionSourceTopics().values().stream().map(
+                    InternalTopicConfig::name))).collect(
                 Collectors.toSet());
-    }
-
-    public static StreamsTopology fromRecord(StreamsGroupTopologyValue record) {
-        return new StreamsTopology(
-            record.topologyId(),
-            record.topology().stream().collect(Collectors.toMap(Subtopology::subtopology, x -> x))
-        );
     }
 
     @Override
@@ -121,34 +86,26 @@ public class StreamsTopology {
             '}';
     }
 
-    public List<StreamsGroupDescribeResponseData.Subtopology> asStreamsGroupDescribeTopology() {
-        return subtopologies.values().stream().map(
-            subtopology -> new StreamsGroupDescribeResponseData.Subtopology()
-                .setSourceTopicRegex(subtopology.sourceTopicRegex())
-                .setSubtopology(subtopology.subtopology())
-                .setSourceTopics(subtopology.sourceTopics())
-                .setRepartitionSinkTopics(subtopology.repartitionSinkTopics())
-                .setRepartitionSourceTopics(
-                    asStreamsGroupDescribeTopicInfo(subtopology.repartitionSourceTopics()))
-                .setStateChangelogTopics(
-                    asStreamsGroupDescribeTopicInfo(subtopology.stateChangelogTopics()))
-        ).collect(Collectors.toList());
+    public static StreamsTopology fromRecord(StreamsGroupTopologyValue record) {
+        return new StreamsTopology(
+            record.topologyId(),
+            record.topology().stream().collect(
+                Collectors.toMap(Subtopology::subtopologyId, TopicsInfo::fromPersistedSubtopology))
+        );
     }
 
-    private static List<StreamsGroupDescribeResponseData.TopicInfo> asStreamsGroupDescribeTopicInfo(
-        final List<TopicInfo> topicInfos) {
-        return topicInfos.stream().map(x ->
-            new StreamsGroupDescribeResponseData.TopicInfo()
-                .setName(x.name())
-                .setPartitions(x.partitions())
-                .setTopicConfigs(
-                    x.topicConfigs() != null ?
-                        x.topicConfigs().stream().map(
-                            y -> new StreamsGroupDescribeResponseData.KeyValue()
-                                .setKey(y.key())
-                                .setValue(y.value())
-                        ).collect(Collectors.toList()) : null
-                )
+    public static StreamsTopology fromRecord(StreamsGroupInitializeRequestData record) {
+        return new StreamsTopology(
+            record.topologyId(),
+            record.topology().stream().collect(Collectors.toMap(
+                StreamsGroupInitializeRequestData.Subtopology::subtopologyId,
+                TopicsInfo::fromInitializationSubtopology))
+        );
+    }
+
+    public List<StreamsGroupDescribeResponseData.Subtopology> toStreamsGroupDescribeTopology() {
+        return subtopologies.entrySet().stream().map(
+            e -> TopicsInfo.toStreamsGroupDescribeSubtopology(e.getKey(), e.getValue())
         ).collect(Collectors.toList());
     }
 }

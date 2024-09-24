@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
-import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
+import org.apache.kafka.coordinator.group.streams.topics.TopicsInfo;
 import org.apache.kafka.coordinator.group.taskassignor.TopologyDescriber;
 
 import java.util.Map;
@@ -71,12 +71,12 @@ public class TopologyMetadata implements TopologyDescriber {
      */
     @Override
     public int numPartitions(String subtopologyId) {
-        final Subtopology subtopology = topology.subtopologies().get(subtopologyId);
+        final TopicsInfo subtopology = topology.subtopologies().get(subtopologyId);
         if (subtopology == null) {
             return -1;
         }
         // TODO: We need to validate the validity of the subtopology here or somewhere else
-        final String firstSourceTopic = subtopology.sourceTopics().get(0);
+        final String firstSourceTopic = subtopology.sourceTopics().stream().findFirst().orElse(null);
         if (firstSourceTopic == null) {
             return -1;
         }

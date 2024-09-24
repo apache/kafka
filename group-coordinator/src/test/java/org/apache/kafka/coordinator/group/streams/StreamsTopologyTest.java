@@ -30,8 +30,8 @@ import java.util.Map;
 import java.util.Set;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.TopicInfo;
+import org.apache.kafka.coordinator.group.streams.topics.InternalTopicConfig;
+import org.apache.kafka.coordinator.group.streams.topics.TopicsInfo;
 import org.junit.jupiter.api.Test;
 
 public class StreamsTopologyTest {
@@ -44,9 +44,9 @@ public class StreamsTopologyTest {
 
     @Test
     public void subtopologiesShouldBeCorrect() {
-        Map<String, Subtopology> subtopologies = mkMap(
-            mkEntry("subtopology-1", new Subtopology().setSubtopology("subtopology-1")),
-            mkEntry("subtopology-2", new Subtopology().setSubtopology("subtopology-2"))
+        Map<String, TopicsInfo> subtopologies = mkMap(
+            mkEntry("subtopology-1", new TopicsInfo()),
+            mkEntry("subtopology-2", new TopicsInfo())
         );
         StreamsTopology topology = new StreamsTopology("topology-id", subtopologies);
         assertEquals(subtopologies, topology.subtopologies());
@@ -54,19 +54,19 @@ public class StreamsTopologyTest {
 
     @Test
     public void topicSubscriptionShouldBeCorrect() {
-        Map<String, Subtopology> subtopologies = mkMap(
-            mkEntry("subtopology-1", new Subtopology()
+        Map<String, TopicsInfo> subtopologies = mkMap(
+            mkEntry("subtopology-1", new TopicsInfo()
                 .setSourceTopics(Arrays.asList("source-topic-1", "source-topic-2"))
-                .setRepartitionSourceTopics(Arrays.asList(
-                    new TopicInfo().setName("repartition-topic-1"),
-                    new TopicInfo().setName("repartition-topic-2")
+                .setRepartitionSourceTopics(mkMap(
+                    mkEntry("repartition-topic-1", new InternalTopicConfig("repartition-topic-1")),
+                    mkEntry("repartition-topic-2", new InternalTopicConfig("repartition-topic-2"))
                 ))
             ),
-            mkEntry("subtopology-2", new Subtopology()
+            mkEntry("subtopology-2", new TopicsInfo()
                 .setSourceTopics(Arrays.asList("source-topic-3", "source-topic-4"))
-                .setRepartitionSourceTopics(Arrays.asList(
-                    new TopicInfo().setName("repartition-topic-3"),
-                    new TopicInfo().setName("repartition-topic-4")
+                .setRepartitionSourceTopics(mkMap(
+                    mkEntry("repartition-topic-3", new InternalTopicConfig("repartition-topic-3")),
+                    mkEntry("repartition-topic-4", new InternalTopicConfig("repartition-topic-4"))
                 ))
             )
         );
@@ -83,8 +83,8 @@ public class StreamsTopologyTest {
         StreamsGroupTopologyValue record = new StreamsGroupTopologyValue()
             .setTopologyId("topology-id")
             .setTopology(Arrays.asList(
-                new Subtopology().setSubtopology("subtopology-1"),
-                new Subtopology().setSubtopology("subtopology-2")
+                new StreamsGroupTopologyValue.Subtopology().setSubtopologyId("subtopology-1"),
+                new StreamsGroupTopologyValue.Subtopology().setSubtopologyId("subtopology-2")
             ));
         StreamsTopology topology = StreamsTopology.fromRecord(record);
         assertEquals("topology-id", topology.topologyId());
@@ -95,9 +95,9 @@ public class StreamsTopologyTest {
 
     @Test
     public void equalsShouldReturnTrueForEqualTopologies() {
-        Map<String, Subtopology> subtopologies = mkMap(
-            mkEntry("subtopology-1", new Subtopology().setSubtopology("subtopology-1")),
-            mkEntry("subtopology-2", new Subtopology().setSubtopology("subtopology-2"))
+        Map<String, TopicsInfo> subtopologies = mkMap(
+            mkEntry("subtopology-1", new TopicsInfo()),
+            mkEntry("subtopology-2", new TopicsInfo())
         );
         StreamsTopology topology1 = new StreamsTopology("topology-id", subtopologies);
         StreamsTopology topology2 = new StreamsTopology("topology-id", subtopologies);
@@ -106,11 +106,11 @@ public class StreamsTopologyTest {
 
     @Test
     public void equalsShouldReturnFalseForDifferentTopologies() {
-        Map<String, Subtopology> subtopologies1 = mkMap(
-            mkEntry("subtopology-1", new Subtopology().setSubtopology("subtopology-1"))
+        Map<String, TopicsInfo> subtopologies1 = mkMap(
+            mkEntry("subtopology-1", new TopicsInfo())
         );
-        Map<String, Subtopology> subtopologies2 = mkMap(
-            mkEntry("subtopology-2", new Subtopology().setSubtopology("subtopology-2"))
+        Map<String, TopicsInfo> subtopologies2 = mkMap(
+            mkEntry("subtopology-2", new TopicsInfo())
         );
         StreamsTopology topology1 = new StreamsTopology("topology-id-1", subtopologies1);
         StreamsTopology topology2 = new StreamsTopology("topology-id-2", subtopologies2);
@@ -119,9 +119,9 @@ public class StreamsTopologyTest {
 
     @Test
     public void hashCodeShouldBeConsistentWithEquals() {
-        Map<String, Subtopology> subtopologies = mkMap(
-            mkEntry("subtopology-1", new Subtopology().setSubtopology("subtopology-1")),
-            mkEntry("subtopology-2", new Subtopology().setSubtopology("subtopology-2"))
+        Map<String, TopicsInfo> subtopologies = mkMap(
+            mkEntry("subtopology-1", new TopicsInfo()),
+            mkEntry("subtopology-2", new TopicsInfo())
         );
         StreamsTopology topology1 = new StreamsTopology("topology-id", subtopologies);
         StreamsTopology topology2 = new StreamsTopology("topology-id", subtopologies);
@@ -130,9 +130,9 @@ public class StreamsTopologyTest {
 
     @Test
     public void toStringShouldReturnCorrectRepresentation() {
-        Map<String, Subtopology> subtopologies = mkMap(
-            mkEntry("subtopology-1", new Subtopology().setSubtopology("subtopology-1")),
-            mkEntry("subtopology-2", new Subtopology().setSubtopology("subtopology-2"))
+        Map<String, TopicsInfo> subtopologies = mkMap(
+            mkEntry("subtopology-1", new TopicsInfo()),
+            mkEntry("subtopology-2", new TopicsInfo())
         );
         StreamsTopology topology = new StreamsTopology("topology-id", subtopologies);
         String expectedString = "StreamsTopology{topologyId=topology-id, subtopologies=" + subtopologies + "}";
@@ -140,40 +140,36 @@ public class StreamsTopologyTest {
     }
 
     @Test
-    public void asStreamsGroupDescribeTopologyShouldReturnCorrectSubtopologies() {
-        Map<String, Subtopology> subtopologies = mkMap(
-            mkEntry("subtopology-1", new Subtopology()
-                .setSourceTopicRegex("regex-1")
-                .setSubtopology("subtopology-1")
+    public void toStreamsGroupDescribeTopologyShouldReturnCorrectSubtopologies() {
+        Map<String, TopicsInfo> subtopologies = mkMap(
+            mkEntry("subtopology-1", new TopicsInfo()
                 .setSourceTopics(Collections.singletonList("source-topic-1"))
                 .setRepartitionSinkTopics(Collections.singletonList("sink-topic-1"))
                 .setRepartitionSourceTopics(
-                    Collections.singletonList(new TopicInfo().setName("repartition-topic-1")))
+                    Collections.singletonMap("repartition-topic-1", new InternalTopicConfig("repartition-topic-1")))
                 .setStateChangelogTopics(
-                    Collections.singletonList(new TopicInfo().setName("changelog-topic-1")))
+                    Collections.singletonMap("changelog-topic-1", new InternalTopicConfig("changelog-topic-1")))
             ),
-            mkEntry("subtopology-2", new Subtopology()
-                .setSourceTopicRegex("regex-2")
-                .setSubtopology("subtopology-2")
+            mkEntry("subtopology-2", new TopicsInfo()
                 .setSourceTopics(Collections.singletonList("source-topic-2"))
                 .setRepartitionSinkTopics(Collections.singletonList("sink-topic-2"))
                 .setRepartitionSourceTopics(
-                    Collections.singletonList(new TopicInfo().setName("repartition-topic-2")))
+                    Collections.singletonMap("repartition-topic-2", new InternalTopicConfig("repartition-topic-2")))
                 .setStateChangelogTopics(
-                    Collections.singletonList(new TopicInfo().setName("changelog-topic-2")))
+                    Collections.singletonMap("changelog-topic-2", new InternalTopicConfig("changelog-topic-2")))
             )
         );
         StreamsTopology topology = new StreamsTopology("topology-id", subtopologies);
-        List<StreamsGroupDescribeResponseData.Subtopology> result = topology.asStreamsGroupDescribeTopology();
+        List<StreamsGroupDescribeResponseData.Subtopology> result = topology.toStreamsGroupDescribeTopology();
         assertEquals(2, result.size());
-        assertEquals("regex-1", result.get(0).sourceTopicRegex());
-        assertEquals("subtopology-1", result.get(0).subtopology());
+        assertEquals(Collections.emptyList(), result.get(0).sourceTopicRegex());
+        assertEquals("subtopology-1", result.get(0).subtopologyId());
         assertEquals(Collections.singletonList("source-topic-1"), result.get(0).sourceTopics());
         assertEquals(Collections.singletonList("sink-topic-1"), result.get(0).repartitionSinkTopics());
         assertEquals("repartition-topic-1", result.get(0).repartitionSourceTopics().get(0).name());
         assertEquals("changelog-topic-1", result.get(0).stateChangelogTopics().get(0).name());
-        assertEquals("regex-2", result.get(1).sourceTopicRegex());
-        assertEquals("subtopology-2", result.get(1).subtopology());
+        assertEquals(Collections.emptyList(), result.get(1).sourceTopicRegex());
+        assertEquals("subtopology-2", result.get(1).subtopologyId());
         assertEquals(Collections.singletonList("source-topic-2"), result.get(1).sourceTopics());
         assertEquals(Collections.singletonList("sink-topic-2"), result.get(1).repartitionSinkTopics());
         assertEquals("repartition-topic-2", result.get(1).repartitionSourceTopics().get(0).name());

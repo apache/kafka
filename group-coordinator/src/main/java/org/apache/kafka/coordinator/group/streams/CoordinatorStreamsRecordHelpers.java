@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
-import org.apache.kafka.common.message.StreamsGroupInitializeRequestData;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentValue;
@@ -32,6 +31,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignment
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
+import org.apache.kafka.coordinator.group.streams.topics.TopicsInfo;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.ArrayList;
@@ -380,28 +380,12 @@ public class CoordinatorStreamsRecordHelpers {
      * @return The record.
      */
     public static CoordinatorRecord newStreamsGroupTopologyRecord(String groupId,
-                                                                  List<StreamsGroupInitializeRequestData.Subtopology> subtopologies) {
+        Map<String, TopicsInfo> subtopologies) {
         StreamsGroupTopologyValue value = new StreamsGroupTopologyValue();
-        subtopologies.forEach(subtopology -> {
-            List<StreamsGroupTopologyValue.TopicInfo> repartitionSourceTopics = subtopology.repartitionSourceTopics().stream()
-                .map(topicInfo -> {
-                    List<StreamsGroupTopologyValue.TopicConfig> topicConfigs =  topicInfo.topicConfigs() != null ? topicInfo.topicConfigs().stream()
-                        .map(config -> new StreamsGroupTopologyValue.TopicConfig().setKey(config.key()).setValue(config.value()))
-                        .collect(Collectors.toList()) : null;
-                    return new StreamsGroupTopologyValue.TopicInfo().setName(topicInfo.name()).setTopicConfigs(topicConfigs)
-                        .setPartitions(topicInfo.partitions());
-                }).collect(Collectors.toList());
-
-            List<StreamsGroupTopologyValue.TopicInfo> stateChangelogTopics = subtopology.stateChangelogTopics().stream().map(topicInfo -> {
-                List<StreamsGroupTopologyValue.TopicConfig> topicConfigs = topicInfo.topicConfigs() != null ? topicInfo.topicConfigs().stream()
-                    .map(config -> new StreamsGroupTopologyValue.TopicConfig().setKey(config.key()).setValue(config.value()))
-                    .collect(Collectors.toList()) : null;
-                return new StreamsGroupTopologyValue.TopicInfo().setName(topicInfo.name()).setTopicConfigs(topicConfigs);
-            }).collect(Collectors.toList());
-
-            value.topology().add(new StreamsGroupTopologyValue.Subtopology().setSubtopology(subtopology.subtopologyId())
-                .setSourceTopics(subtopology.sourceTopics()).setRepartitionSinkTopics(subtopology.repartitionSinkTopics())
-                .setRepartitionSourceTopics(repartitionSourceTopics).setStateChangelogTopics(stateChangelogTopics));
+        subtopologies.forEach((subtopologyId, subtopology) -> {
+            value.topology().add(
+                TopicsInfo.toStreamsGroupTopologyValueSubtopology(subtopologyId, subtopology)
+            );
         });
 
         return new CoordinatorRecord(new ApiMessageAndVersion(

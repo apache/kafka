@@ -1145,7 +1145,9 @@ public class StreamsGroup implements Group {
             .setGroupEpoch(groupEpoch.get(committedOffset))
             .setGroupState(state.get(committedOffset).toString())
             .setAssignmentEpoch(targetAssignmentEpoch.get(committedOffset))
-            .setTopology(topology.get(committedOffset).map(StreamsTopology::asStreamsGroupDescribeTopology).orElse(null));
+            .setTopology(
+                topology.get(committedOffset).map(StreamsTopology::toStreamsGroupDescribeTopology)
+                    .orElse(null));
         members.entrySet(committedOffset).forEach(
             entry -> describedGroup.members().add(
                 entry.getValue().asStreamsGroupDescribeMember(

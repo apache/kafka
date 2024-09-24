@@ -40,6 +40,9 @@ import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.ConsumerProtocolAssignment;
 import org.apache.kafka.common.message.ConsumerProtocolSubscription;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicConfig;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicConfigCollection;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
@@ -57,6 +60,7 @@ import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsGroupInitializeRequestData;
+import org.apache.kafka.common.message.StreamsGroupInitializeRequestData.Subtopology;
 import org.apache.kafka.common.message.StreamsGroupInitializeResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment;
@@ -94,8 +98,10 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.coordinator.group.streams.CoordinatorStreamsRecordHelpers;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupBuilder;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupInitializeResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil;
+import org.apache.kafka.coordinator.group.streams.topics.TopicsInfo;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
@@ -521,15 +527,18 @@ public class GroupMetadataManagerTest {
             .setTopologyId(topologyId)
             .setTopology(subtopologies);
 
-        CoordinatorResult<StreamsGroupInitializeResponseData, CoordinatorRecord> result = context.streamsGroupInitialize(initialize);
+        CoordinatorResult<StreamsGroupInitializeResult, CoordinatorRecord> result = context.streamsGroupInitialize(initialize);
 
         assertNotNull(result.response());
-        StreamsGroupInitializeResponseData response = result.response();
+        StreamsGroupInitializeResponseData response = result.response().data();
         assertEquals(Errors.NONE.code(), response.errorCode());
         List<CoordinatorRecord> coordinatorRecords = result.records();
         assertEquals(5, coordinatorRecords.size());
         assertTrue(coordinatorRecords.contains(CoordinatorStreamsRecordHelpers.newStreamsGroupEpochRecord(groupId, 2)));
-        assertTrue(coordinatorRecords.contains(CoordinatorStreamsRecordHelpers.newStreamsGroupTopologyRecord(groupId, subtopologies)));
+        assertTrue(coordinatorRecords.contains(
+            CoordinatorStreamsRecordHelpers.newStreamsGroupTopologyRecord(groupId,
+                subtopologies.stream().collect(Collectors.toMap(Subtopology::subtopologyId,
+                    TopicsInfo::fromInitializationSubtopology)))));
         org.apache.kafka.coordinator.group.streams.TopicMetadata topicMetadata = new org.apache.kafka.coordinator.group.streams.TopicMetadata(
             inputTopicId,
             inputTopicName,
@@ -638,10 +647,10 @@ public class GroupMetadataManagerTest {
             .setTopologyId(wrongTopologyId)
             .setTopology(subtopologies);
 
-        CoordinatorResult<StreamsGroupInitializeResponseData, CoordinatorRecord> result = context.streamsGroupInitialize(initialize);
+        CoordinatorResult<StreamsGroupInitializeResult, CoordinatorRecord> result = context.streamsGroupInitialize(initialize);
 
         assertNotNull(result.response());
-        StreamsGroupInitializeResponseData response = result.response();
+        StreamsGroupInitializeResponseData response = result.response().data();
         assertEquals(Errors.NONE.code(), response.errorCode());
         assertTrue(result.records().isEmpty());
     }
@@ -682,10 +691,10 @@ public class GroupMetadataManagerTest {
             .setTopology(subtopologies);
 
         context.streamsGroupInitialize(initialize);
-        CoordinatorResult<StreamsGroupInitializeResponseData, CoordinatorRecord> result = context.streamsGroupInitialize(initialize);
+        CoordinatorResult<StreamsGroupInitializeResult, CoordinatorRecord> result = context.streamsGroupInitialize(initialize);
 
         assertNotNull(result.response());
-        StreamsGroupInitializeResponseData response = result.response();
+        StreamsGroupInitializeResponseData response = result.response().data();
         assertEquals(Errors.NONE.code(), response.errorCode());
         assertTrue(result.records().isEmpty());
     }
@@ -698,9 +707,12 @@ public class GroupMetadataManagerTest {
         String processId = "process-id";
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "repartition";
+        Uuid barTopicId = Uuid.randomUuid();
+        String barTopicName = "bar";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withMetadataImage(new MetadataImageBuilder()
-                .addTopic(fooTopicId, fooTopicName, 6)
+                .addTopic(fooTopicId, fooTopicName, 4)
+                .addTopic(barTopicId, barTopicName, 4)
                 .addRacks()
                 .build())
             .build();
@@ -729,6 +741,7 @@ public class GroupMetadataManagerTest {
                     Collections.singletonList(
                         new StreamsGroupInitializeRequestData.TopicInfo()
                             .setName("changelog")
+                            .setReplicationFactor((short) 3)
                             .setTopicConfigs(Collections.singletonList(
                                 new StreamsGroupInitializeRequestData.TopicConfig()
                                     .setKey("config-name2")
@@ -737,7 +750,7 @@ public class GroupMetadataManagerTest {
                     )
                 )
         );
-        CoordinatorResult<StreamsGroupInitializeResponseData, CoordinatorRecord> result =
+        CoordinatorResult<StreamsGroupInitializeResult, CoordinatorRecord> result =
             context.streamsGroupInitialize(
                 new StreamsGroupInitializeRequestData()
                     .setGroupId(groupId)
@@ -745,14 +758,31 @@ public class GroupMetadataManagerTest {
                     .setTopology(topology)
             );
 
+        CreatableTopicConfigCollection expectedConfig = new CreatableTopicConfigCollection();
+        expectedConfig.add(
+            new CreatableTopicConfig()
+                .setName("config-name2")
+                .setValue("config-value2")
+        );
+        CreatableTopic expected =
+            new CreatableTopic()
+                .setName("changelog")
+                .setNumPartitions(4)
+                .setReplicationFactor((short) 3)
+                .setConfigs(expectedConfig);
+
         assertEquals(
-            new StreamsGroupInitializeResponseData()
-                .setErrorCode(Errors.STREAMS_INVALID_TOPOLOGY.code())
-                .setErrorMessage("Internal topics changelog do not exist."),
+            new StreamsGroupInitializeResult(
+                new StreamsGroupInitializeResponseData(),
+                Collections.singletonMap(
+                    "changelog", expected
+                )
+            ),
             result.response()
         );
-        
-        assertTrue(result.records().isEmpty());
+
+        // TODO: Need to check the generated records. Adapt this unit test after merging of
+        //       initilization & heartbeat
     }
 
     private StreamsGroupHeartbeatRequestData buildFirstStreamsGroupHeartbeatRequest(

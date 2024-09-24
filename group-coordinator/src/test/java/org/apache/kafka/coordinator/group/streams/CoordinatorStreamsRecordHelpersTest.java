@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import java.util.stream.Collectors;
 import org.apache.kafka.common.message.StreamsGroupInitializeRequestData;
+import org.apache.kafka.common.message.StreamsGroupInitializeRequestData.Subtopology;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
+import org.apache.kafka.coordinator.group.streams.topics.TopicsInfo;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
 
@@ -64,7 +67,7 @@ class CoordinatorStreamsRecordHelpersTest {
 
         List<StreamsGroupTopologyValue.Subtopology> expectedTopology =
             Collections.singletonList(new StreamsGroupTopologyValue.Subtopology()
-                .setSubtopology("subtopology-id")
+                .setSubtopologyId("subtopology-id")
                 .setRepartitionSinkTopics(Collections.singletonList("foo"))
                 .setSourceTopics(Collections.singletonList("bar"))
                 .setRepartitionSourceTopics(
@@ -104,7 +107,8 @@ class CoordinatorStreamsRecordHelpersTest {
 
         assertEquals(expectedRecord, CoordinatorStreamsRecordHelpers.newStreamsGroupTopologyRecord(
             "group-id",
-            topology
+            topology.stream().collect(Collectors.toMap(Subtopology::subtopologyId,
+                TopicsInfo::fromInitializationSubtopology))
         ));
     }
 }
