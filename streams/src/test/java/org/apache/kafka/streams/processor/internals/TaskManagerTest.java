@@ -122,6 +122,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
@@ -1255,7 +1256,6 @@ public class TaskManagerTest {
         final TasksRegistry tasks = mock(TasksRegistry.class);
         when(tasks.drainPendingTasksToInit()).thenReturn(mkSet(task00, task01));
         doThrow(new LockException("Lock Exception!")).when(task00).initializeIfNeeded();
-
         taskManager = setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, tasks, true);
 
         taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
@@ -1270,12 +1270,23 @@ public class TaskManagerTest {
 
         taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
 
-        // initializeIfNeeded() has not been called 2 times
+        // initializeIfNeeded() has NOT been called this time
         verify(task00, Mockito.times(1)).initializeIfNeeded();
-        verify(tasks).addPendingTasksToInit(
+        verify(tasks, Mockito.times(2)).addPendingTasksToInit(
                 argThat(tasksToInit -> tasksToInit.contains(task00))
         );
         verify(stateUpdater, never()).add(task00);
+
+        time.sleep(10000);
+        // do not throw lock exception this time
+        doNothing().when(task00).initializeIfNeeded();
+        taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
+
+        verify(task00, Mockito.times(2)).initializeIfNeeded();
+        verify(tasks, Mockito.times(2)).addPendingTasksToInit(
+                argThat(tasksToInit -> tasksToInit.contains(task00))
+        );
+        verify(stateUpdater).add(task00);
     }
 
     @Test
