@@ -20,10 +20,8 @@ import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.ConfigUtils;
 import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Field;
@@ -60,12 +58,8 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(ConfigName.EXCLUDE, ConfigDef.Type.LIST, Collections.emptyList(), ConfigDef.Importance.MEDIUM,
                     "Fields to exclude. This takes precedence over the fields to include.")
-            .define("blacklist", ConfigDef.Type.LIST, null, Importance.LOW,
-                    "Deprecated. Use " + ConfigName.EXCLUDE + " instead.")
             .define(ConfigName.INCLUDE, ConfigDef.Type.LIST, Collections.emptyList(), ConfigDef.Importance.MEDIUM,
                     "Fields to include. If specified, only these fields will be used.")
-            .define("whitelist", ConfigDef.Type.LIST, null, Importance.LOW,
-                    "Deprecated. Use " + ConfigName.INCLUDE + " instead.")
             .define(ConfigName.RENAME, ConfigDef.Type.LIST, Collections.emptyList(),
                 ConfigDef.LambdaValidator.with(
                     (name, value) -> {
@@ -95,10 +89,7 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
 
     @Override
     public void configure(Map<String, ?> configs) {
-        final SimpleConfig config = new SimpleConfig(CONFIG_DEF, ConfigUtils.translateDeprecatedConfigs(configs, new String[][]{
-            {ConfigName.INCLUDE, "whitelist"},
-            {ConfigName.EXCLUDE, "blacklist"},
-        }));
+        final SimpleConfig config = new SimpleConfig(CONFIG_DEF, configs);
 
         exclude = new HashSet<>(config.getList(ConfigName.EXCLUDE));
         include = new HashSet<>(config.getList(ConfigName.INCLUDE));
