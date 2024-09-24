@@ -153,11 +153,6 @@ public class TaskManager {
         this.mainConsumer = mainConsumer;
     }
 
-    /* For testing */
-    void setTaskIdToBackoffRecord(final Map<TaskId, BackoffRecord> taskIdToBackoffRecord) {
-        this.taskIdToBackoffRecord = taskIdToBackoffRecord;
-    }
-
     public double totalProducerBlockedTime() {
         return activeTaskCreator.totalProducerBlockedTime();
     }
@@ -1015,7 +1010,7 @@ public class TaskManager {
     }
 
     private void addTaskToStateUpdater(final Task task) {
-        final long nowMs = System.currentTimeMillis();
+        final long nowMs = time.milliseconds();
         try {
             if (canTryInitializeTask(task.id(), nowMs)) {
                 task.initializeIfNeeded();
@@ -1786,7 +1781,6 @@ public class TaskManager {
             return standbyTasksInTaskRegistry;
         }
     }
-
     // For testing only.
     int commitAll() {
         return commit(tasks.allTasks());
