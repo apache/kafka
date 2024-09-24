@@ -37,7 +37,9 @@
   // Version 10 is the same as version 9 (KIP-951).
   //
   // Version 11 adds support for new error code TRANSACTION_ABORTABLE (KIP-890).
-  "validVersions": "0-11",
+  //
+  // Version 12 is the same as version 10 (KIP-890).
+  "validVersions": "0-12",
   "deprecatedVersions": "0-6",
   "flexibleVersions": "9+",
   "fields": [

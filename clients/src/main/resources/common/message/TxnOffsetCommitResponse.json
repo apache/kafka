@@ -24,7 +24,9 @@
   // Version 3 adds illegal generation, fenced instance id, and unknown member id errors.
   //
   // Version 4 adds support for new error code TRANSACTION_ABORTABLE (KIP-890).
-  "validVersions": "0-4",
+  //
+  // Version 5 is the same with version 3 (KIP-890).
+  "validVersions": "0-5",
   "flexibleVersions": "3+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",

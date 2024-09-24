@@ -40,8 +40,9 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.common.requests.ProduceResponse.INVALID_OFFSET;
 
 public class ProduceRequest extends AbstractRequest {
+    public static final short LAST_BEFORE_TRANSACTION_V2_VERSION = 11;
 
-    public static Builder forMagic(byte magic, ProduceRequestData data) {
+    public static Builder forMagic(byte magic, ProduceRequestData data, short latestVersion) {
         // Message format upgrades correspond with a bump in the produce request version. Older
         // message format versions are generally not supported by the produce request versions
         // following the bump.
@@ -53,9 +54,13 @@ public class ProduceRequest extends AbstractRequest {
             maxVersion = 2;
         } else {
             minVersion = 3;
-            maxVersion = ApiKeys.PRODUCE.latestVersion();
+            maxVersion = latestVersion;
         }
         return new Builder(minVersion, maxVersion, data);
+    }
+
+    public static Builder forMagic(byte magic, ProduceRequestData data) {
+        return forMagic(magic, data, ApiKeys.PRODUCE.latestVersion());
     }
 
     public static Builder forCurrentMagic(ProduceRequestData data) {
@@ -216,6 +221,10 @@ public class ProduceRequest extends AbstractRequest {
         return transactionalId;
     }
 
+    public boolean isTransactionV2Requested() {
+        return version() > LAST_BEFORE_TRANSACTION_V2_VERSION;
+    }
+
     public void clearPartitionRecords() {
         // lazily initialize partitionSizes.
         partitionSizes();
@@ -253,6 +262,10 @@ public class ProduceRequest extends AbstractRequest {
 
     public static ProduceRequest parse(ByteBuffer buffer, short version) {
         return new ProduceRequest(new ProduceRequestData(new ByteBufferAccessor(buffer), version), version);
+    }
+
+    public static boolean isTransactionV2Requested(short version) {
+        return version > LAST_BEFORE_TRANSACTION_V2_VERSION;
     }
 
     public static byte requiredMagicForVersion(short produceRequestVersion) {

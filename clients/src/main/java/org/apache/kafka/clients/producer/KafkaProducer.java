@@ -296,7 +296,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public KafkaProducer(Map<String, Object> configs, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
         this(new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, keySerializer, valueSerializer)),
-                keySerializer, valueSerializer, null, null, null, Time.SYSTEM);
+                keySerializer, valueSerializer, null, null, null, new ApiVersions(), Time.SYSTEM);
     }
 
     /**
@@ -350,6 +350,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                   ProducerMetadata metadata,
                   KafkaClient kafkaClient,
                   ProducerInterceptors<K, V> interceptors,
+                  ApiVersions apiVersions,
                   Time time) {
         try {
             this.producerConfig = config;
@@ -422,7 +423,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.maxBlockTimeMs = config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
             int deliveryTimeoutMs = configureDeliveryTimeout(config, log);
 
-            this.apiVersions = new ApiVersions();
+            this.apiVersions = apiVersions;
             this.transactionManager = configureTransactionState(config, logContext);
             // There is no need to do work required for adaptive partitioning, if we use a custom partitioner.
             boolean enableAdaptivePartitioning = partitioner == null &&
@@ -1495,6 +1496,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         return clientId;
     }
 
+    // Visible for testing
+    TransactionManager getTransactionManager() {
+        return transactionManager;
+    }
+
     private static class ClusterAndWaitTime {
         final Cluster cluster;
         final long waitedOnMetadataMs;
@@ -1571,6 +1577,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 metadata = new RecordMetadata(topicPartition(), -1, -1, RecordBatch.NO_TIMESTAMP, -1, -1);
             }
             this.interceptors.onAcknowledgement(metadata, exception);
+
             if (this.userCallback != null)
                 this.userCallback.onCompletion(metadata, exception);
         }

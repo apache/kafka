@@ -22,11 +22,11 @@ import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientResponse, NetworkClient, RequestCompletionHandler}
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.{AddPartitionsToTxnTopic, AddPartitionsToTxnTopicCollection, AddPartitionsToTxnTransaction, AddPartitionsToTxnTransactionCollection}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AddPartitionsToTxnRequest, AddPartitionsToTxnResponse, MetadataResponse}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
 
@@ -86,7 +86,7 @@ class AddPartitionsToTxnManager(
   private val verificationFailureRate = metricsGroup.newMeter(VerificationFailureRateMetricName, "failures", TimeUnit.SECONDS)
   private val verificationTimeMs = metricsGroup.newHistogram(VerificationTimeMsMetricName)
 
-  def verifyTransaction(
+  def addOrVerifyTransaction(
     transactionalId: String,
     producerId: Long,
     producerEpoch: Short,
@@ -109,11 +109,10 @@ class AddPartitionsToTxnManager(
         .setTransactionalId(transactionalId)
         .setProducerId(producerId)
         .setProducerEpoch(producerEpoch)
-        .setVerifyOnly(true)
+        .setVerifyOnly(transactionSupportedOperation != addPartition)
         .setTopics(topicCollection)
 
       addTxnData(coordinatorNode.get, transactionData, callback, transactionSupportedOperation)
-
     }
   }
 

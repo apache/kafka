@@ -1004,7 +1004,7 @@ public class RecordAccumulatorTest {
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(12345L, (short) 5);
         Mockito.when(transactionManager.producerIdAndEpoch()).thenReturn(producerIdAndEpoch);
         Mockito.when(transactionManager.isSendToPartitionAllowed(tp1)).thenReturn(true);
-        Mockito.when(transactionManager.isPartitionAdded(tp1)).thenReturn(true);
+        Mockito.when(transactionManager.transactionContainsPartition(tp1)).thenReturn(true);
         Mockito.when(transactionManager.firstInFlightSequence(tp1)).thenReturn(0);
 
         // Initially, the transaction is still in progress, so we should respect the linger.

@@ -2026,8 +2026,9 @@ public class GroupCoordinatorServiceTest {
         );
     }
 
-    @Test
-    public void testCommitTransactionalOffsets() throws ExecutionException, InterruptedException {
+    @ParameterizedTest
+    @ValueSource(shorts = {4, 5})
+    public void testCommitTransactionalOffsets(Short txnOffsetCommitVersion) throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
@@ -2070,7 +2071,7 @@ public class GroupCoordinatorServiceTest {
         )).thenReturn(CompletableFuture.completedFuture(response));
 
         CompletableFuture<TxnOffsetCommitResponseData> future = service.commitTransactionalOffsets(
-            requestContext(ApiKeys.TXN_OFFSET_COMMIT),
+            requestContext(ApiKeys.TXN_OFFSET_COMMIT, txnOffsetCommitVersion),
             request,
             BufferSupplier.NO_CACHING
         );

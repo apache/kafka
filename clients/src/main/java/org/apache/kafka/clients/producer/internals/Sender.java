@@ -45,6 +45,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Meter;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
@@ -72,6 +73,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.requests.ProduceResponse.INVALID_OFFSET;
+import static org.apache.kafka.common.utils.Utils.min;
 
 /**
  * The background thread that handles the sending of produce requests to the Kafka cluster. This thread makes metadata
@@ -397,6 +399,7 @@ public class Sender implements Runnable {
                 // Update both readyTimeMs and drainTimeMs, this would "reset" the node
                 // latency.
                 this.accumulator.updateNodeLatencyStats(node.id(), now, true);
+                if (transactionManager != null) this.transactionManager.handleCoordinatorReady();
             }
         }
 
@@ -904,16 +907,21 @@ public class Sender implements Runnable {
         }
 
         String transactionalId = null;
+        short maxProduceRequestVersion = ApiKeys.PRODUCE.latestVersion();
         if (transactionManager != null && transactionManager.isTransactional()) {
             transactionalId = transactionManager.transactionalId();
+            if (!transactionManager.isTransactionV2Enabled()) {
+                maxProduceRequestVersion = min(maxProduceRequestVersion, ProduceRequest.LAST_BEFORE_TRANSACTION_V2_VERSION);
+            }
         }
 
         ProduceRequest.Builder requestBuilder = ProduceRequest.forMagic(minUsedMagic,
-                new ProduceRequestData()
-                        .setAcks(acks)
-                        .setTimeoutMs(timeout)
-                        .setTransactionalId(transactionalId)
-                        .setTopicData(tpd));
+            new ProduceRequestData()
+                .setAcks(acks)
+                .setTimeoutMs(timeout)
+                .setTransactionalId(transactionalId)
+                .setTopicData(tpd),
+            maxProduceRequestVersion);
         RequestCompletionHandler callback = response -> handleProduceResponse(response, recordsByPartition, time.milliseconds());
 
         String nodeId = Integer.toString(destination);
