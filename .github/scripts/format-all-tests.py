@@ -18,6 +18,7 @@ from collections import OrderedDict
 from glob import glob
 import logging
 import os
+import re
 import sys
 
 import yaml
@@ -32,35 +33,41 @@ logger.addHandler(handler)
 
 def all_tests_to_yaml(glob_path: str, out_dir: str):
     reports = glob(pathname=glob_path, recursive=True)
-    logger.debug(f"Found {len(reports)} all-tests.txt files")
+    logger.debug(f"Found {len(reports)} module test files")
+    method_matcher = re.compile("([a-zA-Z_$][a-zA-Z0-9]+).*")
 
     all_tests = {}
     for report in reports:
         with open(report, "r") as fp:
             logger.debug(f"Parsing {report}")
             for line in fp:
-                line_tokens = line.split(maxsplit=1)
+                line_tokens = line.strip().split(maxsplit=1)
                 module = line_tokens[0]
                 if module not in all_tests:
                     all_tests[module] = OrderedDict()
                 test_tokens = line_tokens[1].split("#", maxsplit=1)
                 clazz = test_tokens[0]
                 if clazz not in all_tests[module]:
-                    all_tests[module][clazz] = []
+                    all_tests[module][clazz] = set()
                 method = test_tokens[1].rstrip("()")
-                all_tests[module][clazz].append(method)
-
+                m = method_matcher.match(method)
+                all_tests[module][clazz].add(m.group(1))
     if not os.path.exists(out_dir):
         logger.debug(f"Creating output directory {out_dir}.")
         os.makedirs(out_dir)
 
     for module, tests in all_tests.items():
+        sorted_tests = {}
+        count = 0
         for test, methods in tests.items():
-            methods.sort()
+            sorted_methods = sorted(methods)
+            count += len(sorted_methods)
+            sorted_tests[test] = sorted_methods
+
         out_path = os.path.join(out_dir, f"{module}-tests.yaml")
-        logger.debug(f"Writing {len(tests)} tests for {module} into {out_path}.")
+        logger.debug(f"Writing {count} tests for {module} into {out_path}.")
         stream = open(out_path, "w")
-        yaml.dump(dict(tests), stream)
+        yaml.dump(sorted_tests, stream)
 
 
 def yaml_to_all_tests(glob_path: str, out_file: str):
