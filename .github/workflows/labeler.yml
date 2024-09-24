@@ -37,14 +37,8 @@ jobs:
       run: |
         repo=origin
         base_branch=${{ github.event.pull_request.base.ref }}
-
-        echo "kkkk $(git rev-parse HEAD)"
         git fetch $repo $base_branch
 
-        echo "git rev-parse HEAD $(git rev-parse HEAD)"
-        echo "github.event.pull_request.head.sha $base_branch"
-        echo "$repo/$base_branch $(git rev-parse $repo/$base_branch)"
-        echo "git remote -v $(git remote -v)"
         summary=$(git diff --stat $repo/$base_branch..HEAD | tail -n 1)
         echo "summary $summary"
 
@@ -63,14 +57,6 @@ jobs:
             files_changed=${BASH_REMATCH[1]}
             deletions=${BASH_REMATCH[3]}
         fi
-
-        echo "Insertions: $insertions"
-        echo "Deletions: $deletions"
-
-        echo "token $GH_TOKEN"
-        echo " inputs.repository ${{ inputs.repository }}"
-        echo "github.event.number  ${{ github.event.number }}"
-        echo "Full repository name: $GITHUB_REPOSITORY"
 
         total_changes=$((insertions + deletions))
         if [ "$total_changes" -lt "$min_size" ]; then
