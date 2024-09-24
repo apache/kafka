@@ -1351,7 +1351,7 @@ project(':metadata') {
     testImplementation project(':raft').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
 
-    testRuntimeOnly libs.junitPlatformLanucher
+    testRuntimeOnly project(':test-common')
 
     generator project(':generator')
   }
@@ -1940,8 +1940,7 @@ project(':raft') {
     testImplementation libs.jqwik
     testImplementation libs.hamcrest
 
-    testRuntimeOnly libs.slf4jReload4j
-    testRuntimeOnly libs.junitPlatformLanucher
+    testRuntimeOnly project(':test-common')
 
     generator project(':generator')
   }
@@ -2271,6 +2270,14 @@ project(':storage') {
 
   checkstyle {
     configProperties = checkstyleConfigProperties("import-control-storage.xml")
+  }
+}
+
+project(':test-common') {
+  dependencies {
+    implementation libs.junitJupiter
+    runtimeOnly libs.slf4jReload4j
+    runtimeOnly libs.junitPlatformLanucher
   }
 }
 
