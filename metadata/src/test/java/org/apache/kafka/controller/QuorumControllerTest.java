@@ -221,6 +221,11 @@ public class QuorumControllerTest {
                 BROKER0, Collections.emptyList())).get());
     }
 
+    @Test
+    public void testSomethingNew() {
+
+    }
+    
     /**
      * Test that an incrementalAlterConfigs operation doesn't complete until the records
      * can be written to the metadata log.
