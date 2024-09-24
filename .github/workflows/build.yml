@@ -126,7 +126,7 @@ jobs:
           -PmaxParallelForks=2 \
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
           -PcommitId=xxxxxxxxxxxxxxxx \
-          test -x :core:test :streams:test :storage:test
+          :metadata:test :raft:test
           exitcode="$?"
           echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
       - name: Archive JUnit reports
@@ -176,6 +176,8 @@ jobs:
   update-test-data:
     needs: test
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -197,7 +199,7 @@ jobs:
           git fetch origin test-metrics
           git switch test-metrics
           git checkout ${{ github.sha }} -- .github/scripts/format-all-tests.py
-          python .github/scripts/format-all-tests.py
-          git add --all data/all-tests
+          python .github/scripts/format-all-tests.py to-yaml
+          git add data/all-tests
           git commit -m 'Update all-tests data for Run ${{ github.run_id }}'
-          git push origin test-metrics
+          git push
