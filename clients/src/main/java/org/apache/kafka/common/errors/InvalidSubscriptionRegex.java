@@ -17,10 +17,8 @@
 
 package org.apache.kafka.common.errors;
 
-import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
-
 /**
- * Thrown when a string received in the SubscribedTopicRegex in a {@link ConsumerGroupHeartbeatRequestData} is
+ * Thrown when a string received in the SubscribedTopicRegex in a Consumer Group heartbeat request is
  * not a valid RE2J regular expression.
  */
 public class InvalidSubscriptionRegex extends ApiException {
