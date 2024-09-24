@@ -15,18 +15,12 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.group.share;
+package org.apache.kafka.server.share;
 
 /**
- * This interface is implemented by classes used to contain the data for a partition with state and error data
+ * This interface is implemented by classes used to contain the data for a partition with its leader epoch
  * in the interface to {@link Persister}.
  */
-public interface PartitionStateErrorData extends PartitionInfoData, PartitionIdData {
-    int stateEpoch();
-
-    long startOffset();
-
-    short errorCode();
-
-    String errorMessage();
+public interface PartitionIdLeaderEpochData extends PartitionInfoData, PartitionIdData {
+    int leaderEpoch();
 }
