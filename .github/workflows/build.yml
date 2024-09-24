@@ -195,11 +195,12 @@ jobs:
       - name: Update test data
         if: always()
         run: |
-          git config user.name github-actions
-          git config user.email github-actions@github.com
+          git config user.name 'github-actions'
+          git config user.email 'github-actions@github.com'
           git fetch origin test-metrics
           git switch test-metrics
           git checkout ${{ github.sha }} -- .github/scripts/format-all-tests.py
+          git restore --staged .github/scripts/format-all-tests.py
           python .github/scripts/format-all-tests.py to-yaml
           git add data/all-tests
           git commit -m 'Update all-tests data for Run ${{ github.run_id }}'
