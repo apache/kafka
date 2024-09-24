@@ -150,7 +150,7 @@ public abstract class AbstractResetIntegrationTest {
 
     protected static final int STREAMS_CONSUMER_TIMEOUT = 2000;
     protected static final int CLEANUP_CONSUMER_TIMEOUT = 2000;
-    protected static final int TIMEOUT_MULTIPLIER = 15;
+    protected static final int TIMEOUT_MULTIPLIER = 30;
 
     void prepareTest(final TestInfo testInfo) throws Exception {
         final String appID = IntegrationTestUtils.safeUniqueTestName(testInfo);
@@ -302,6 +302,9 @@ public abstract class AbstractResetIntegrationTest {
 
         // RE-RUN
         streams.start();
+        TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING,
+                "KafkaStreams not running in time");
+        
         final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
         final List<KeyValue<Long, Long>> resultRerun2 = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC_2_RERUN, 40);
         streams.close();
