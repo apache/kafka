@@ -662,27 +662,12 @@ trait BrokerReconfigurable {
 }
 
 object DynamicLogConfig {
-  val ReconfigurableConfigs: Set[String] = {
-    val results = new util.HashSet[String]
-    ServerTopicConfigSynonyms.ALL_TOPIC_CONFIG_SYNONYMS.values().forEach(v =>
-      v.forEach(configSynonym => results.add(configSynonym.name())))
-
-    // Exclude message.format.version for now since we need to check that the version
-    // is supported on all brokers in the cluster.
-    results.remove(ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_CONFIG)
-
-    results.asScala
-  }
-
-  val KafkaConfigToLogConfigName: Map[String, String] = {
-    val results = new util.HashMap[String, String]
-    ServerTopicConfigSynonyms.ALL_TOPIC_CONFIG_SYNONYMS.entrySet().forEach(e => {
-      e.getValue.forEach(configSynonym => {
-        results.put(configSynonym.name(), e.getKey)
-      })
-    })
-    results.asScala
-  }
+  // Exclude message.format.version for now since we need to check that the version
+  // is supported on all brokers in the cluster.
+  val ReconfigurableConfigs: Set[String] =
+    ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.values.asScala.toSet - ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_CONFIG
+  val KafkaConfigToLogConfigName: Map[String, String] =
+    ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.asScala.map { case (k, v) => (v, k) }
 }
 
 class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends BrokerReconfigurable with Logging {
