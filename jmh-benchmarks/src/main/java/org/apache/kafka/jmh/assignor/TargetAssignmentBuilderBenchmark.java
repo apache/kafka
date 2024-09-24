@@ -122,8 +122,7 @@ public class TargetAssignmentBuilderBenchmark {
         int partitionsPerTopic = (memberCount * partitionsToMemberRatio) / topicCount;
         subscriptionMetadata = AssignorBenchmarkUtils.createSubscriptionMetadata(
             allTopicNames,
-            partitionsPerTopic,
-            topicName -> Collections.emptyMap()
+            partitionsPerTopic
         );
 
         topicsImage = AssignorBenchmarkUtils.createTopicsImage(subscriptionMetadata);

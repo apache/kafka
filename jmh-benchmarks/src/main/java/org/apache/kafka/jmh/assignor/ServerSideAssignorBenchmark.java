@@ -148,13 +148,9 @@ public class ServerSideAssignorBenchmark {
         allTopicNames = AssignorBenchmarkUtils.createTopicNames(topicCount);
 
         int partitionsPerTopic = (memberCount * partitionsToMemberRatio) / topicCount;
-        Map<Integer, Set<String>> partitionRacks = isRackAware ?
-            mkMapOfPartitionRacks(partitionsPerTopic) :
-            Collections.emptyMap();
         subscriptionMetadata = AssignorBenchmarkUtils.createSubscriptionMetadata(
             allTopicNames,
-            partitionsPerTopic,
-            topicName -> partitionRacks
+            partitionsPerTopic
         );
 
         topicsImage = AssignorBenchmarkUtils.createTopicsImage(subscriptionMetadata);
