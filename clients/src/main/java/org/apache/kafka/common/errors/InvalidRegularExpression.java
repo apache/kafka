@@ -18,11 +18,10 @@
 package org.apache.kafka.common.errors;
 
 /**
- * Thrown when a string received in the SubscribedTopicRegex in a Consumer Group heartbeat request is
- * not a valid RE2J regular expression.
+ * Thrown when a regular expression received in a request is not valid.
  */
-public class InvalidSubscriptionRegex extends ApiException {
-    public InvalidSubscriptionRegex(String message) {
+public class InvalidRegularExpression extends ApiException {
+    public InvalidRegularExpression(String message) {
         super(message);
     }
 }

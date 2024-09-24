@@ -73,7 +73,7 @@ import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidRequiredAcksException;
 import org.apache.kafka.common.errors.InvalidSessionTimeoutException;
 import org.apache.kafka.common.errors.InvalidShareSessionEpochException;
-import org.apache.kafka.common.errors.InvalidSubscriptionRegex;
+import org.apache.kafka.common.errors.InvalidRegularExpression;
 import org.apache.kafka.common.errors.InvalidTimestampException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
@@ -411,7 +411,7 @@ public enum Errors {
     INVALID_VOTER_KEY(125, "The voter key doesn't match the receiving replica's key.", InvalidVoterKeyException::new),
     DUPLICATE_VOTER(126, "The voter is already part of the set of voters.", DuplicateVoterException::new),
     VOTER_NOT_FOUND(127, "The voter is not part of the set of voters.", VoterNotFoundException::new),
-    INVALID_SUBSCRIPTION_REGEX(128, "The subscribed topics regex is not a valid regular expression.", InvalidSubscriptionRegex::new);
+    INVALID_REGULAR_EXPRESSION(128, "The regular expression is not valid.", InvalidRegularExpression::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
