@@ -2351,7 +2351,7 @@ class ReplicaManagerTest {
       val callback2: AddPartitionsToTxnManager.AppendCallback = appendCallback2.getValue()
       callback2(Map.empty[TopicPartition, Errors].toMap)
       assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp0, producerId))
-      assertTrue(replicaManager.localLog(tp0).get.hasOngoingTransaction(producerId))
+      assertTrue(replicaManager.localLog(tp0).get.hasOngoingTransaction(producerId, producerEpoch))
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -2559,7 +2559,7 @@ class ReplicaManagerTest {
       handleProduceAppend(replicaManager, tp, moreTransactionalRecords, transactionalId = transactionalId)
       verify(addPartitionsToTxnManager, times(0)).addOrVerifyTransaction(any(), any(), any(), any(), any(), any())
       assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp, producerId))
-      assertTrue(replicaManager.localLog(tp).get.hasOngoingTransaction(producerId))
+      assertTrue(replicaManager.localLog(tp).get.hasOngoingTransaction(producerId, producerEpoch))
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -2614,7 +2614,7 @@ class ReplicaManagerTest {
       handleProduceAppend(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
       verify(addPartitionsToTxnManager, times(1)).addOrVerifyTransaction(any(), any(), any(), any(), any(), any())
       assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp0, producerId))
-      assertTrue(replicaManager.localLog(tp0).get.hasOngoingTransaction(producerId))
+      assertTrue(replicaManager.localLog(tp0).get.hasOngoingTransaction(producerId, producerEpoch))
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }

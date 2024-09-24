@@ -811,7 +811,7 @@ public class TransactionManager {
             return null;
         }
 
-        if (nextRequestHandler.isEndTxn() && !transactionStarted) {
+        if (nextRequestHandler.isEndTxn() && (!isTransactionV2Enabled() && !transactionStarted)) {
             nextRequestHandler.result.done();
             if (currentState != State.FATAL_ERROR) {
                 log.debug("Not sending EndTxn for completed transaction since no partitions " +
@@ -1000,6 +1000,10 @@ public class TransactionManager {
 
     private void transitionTo(State target) {
         transitionTo(target, null);
+    }
+
+    private void clearEpochBumpRequired() {
+        this.epochBumpRequired = false;
     }
 
     private void transitionTo(State target, RuntimeException error) {
@@ -1335,6 +1339,7 @@ public class TransactionManager {
                         initProducerIdResponse.data().producerEpoch());
                 setProducerIdAndEpoch(producerIdAndEpoch);
                 transitionTo(State.READY);
+                clearEpochBumpRequired();
                 lastError = null;
                 if (this.isEpochBump) {
                     resetSequenceNumbers();
