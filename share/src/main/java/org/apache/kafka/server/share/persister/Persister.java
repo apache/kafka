@@ -73,4 +73,12 @@ public interface Persister {
      * Perform cleanup and interrupt any threads
      */
     void stop();
+
+    /**
+     * Add any specific configs for the persister
+     *
+     * @param config - {@link PersisterConfig} object
+     */
+    default void configure(PersisterConfig config) {
+    }
 }

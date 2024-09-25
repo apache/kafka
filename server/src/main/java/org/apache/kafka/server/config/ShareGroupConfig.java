@@ -30,6 +30,7 @@ import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.Type.SHORT;
+import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 
 public class ShareGroupConfig {
     /** Share Group Configurations **/
@@ -67,6 +68,11 @@ public class ShareGroupConfig {
     public static final int SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_DEFAULT = 1000;
     public static final String SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_DOC = "The purge interval (in number of requests) of the share fetch request purgatory";
 
+    public static final String SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG = "group.share.persister.class.name";
+    public static final String SHARE_GROUP_PERSISTER_CLASS_NAME_DEFAULT = "org.apache.kafka.server.share.DefaultStatePersister";
+    public static final String SHARE_GROUP_PERSISTER_CLASS_NAME_DOC = "The class name of share persister for share group. The class should implement " +
+        "the <code>org.apache.kafka.server.share.Persister</code> interface.";
+
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .defineInternal(SHARE_GROUP_ENABLE_CONFIG, BOOLEAN, SHARE_GROUP_ENABLE_DEFAULT, null, MEDIUM, SHARE_GROUP_ENABLE_DOC)
             .define(SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG, INT, SHARE_GROUP_DELIVERY_COUNT_LIMIT_DEFAULT, between(2, 10), MEDIUM, SHARE_GROUP_DELIVERY_COUNT_LIMIT_DOC)
@@ -75,7 +81,8 @@ public class ShareGroupConfig {
             .define(SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, INT, SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_DEFAULT, between(30000, 3600000), MEDIUM, SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_DOC)
             .define(SHARE_GROUP_MAX_GROUPS_CONFIG, SHORT, SHARE_GROUP_MAX_GROUPS_DEFAULT, between(1, 100), MEDIUM, SHARE_GROUP_MAX_GROUPS_DOC)
             .define(SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG, INT, SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_DEFAULT, between(100, 10000), MEDIUM, SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_DOC)
-            .define(SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG, INT, SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_DEFAULT, MEDIUM, SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_DOC);;
+            .define(SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG, INT, SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_DEFAULT, MEDIUM, SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_DOC)
+            .define(SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, STRING, SHARE_GROUP_PERSISTER_CLASS_NAME_DEFAULT, MEDIUM, SHARE_GROUP_PERSISTER_CLASS_NAME_DOC);
 
     private final boolean isShareGroupEnabled;
     private final int shareGroupPartitionMaxRecordLocks;
@@ -85,6 +92,7 @@ public class ShareGroupConfig {
     private final int shareGroupMaxRecordLockDurationMs;
     private final int shareGroupMinRecordLockDurationMs;
     private final int shareFetchPurgatoryPurgeIntervalRequests;
+    private final String shareGroupPersisterClassName;
 
     public ShareGroupConfig(AbstractConfig config) {
         // Share groups are enabled in two cases: 1) The internal configuration to enable it is
@@ -100,6 +108,7 @@ public class ShareGroupConfig {
         shareGroupMaxRecordLockDurationMs = config.getInt(ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG);
         shareGroupMinRecordLockDurationMs = config.getInt(ShareGroupConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG);
         shareFetchPurgatoryPurgeIntervalRequests = config.getInt(ShareGroupConfig.SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG);
+        shareGroupPersisterClassName = config.getString(ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG);
         validate();
     }
 
@@ -136,6 +145,10 @@ public class ShareGroupConfig {
         return shareFetchPurgatoryPurgeIntervalRequests;
     }
 
+    public String shareGroupPersisterClassName() {
+        return shareGroupPersisterClassName;
+    }
+
     private void validate() {
         Utils.require(shareGroupRecordLockDurationMs >= shareGroupMinRecordLockDurationMs,
                 String.format("%s must be greater than or equals to %s",
@@ -143,6 +156,5 @@ public class ShareGroupConfig {
         Utils.require(shareGroupMaxRecordLockDurationMs >= shareGroupRecordLockDurationMs,
                 String.format("%s must be greater than or equals to %s",
                         SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG));
-
     }
 }

@@ -24,7 +24,7 @@ import kafka.log.LogManager
 import kafka.log.remote.RemoteLogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
-import kafka.server.metadata.{AclPublisher, BrokerMetadataPublisher, ClientQuotaMetadataManager, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher}
+import kafka.server.metadata.{AclPublisher, BrokerMetadataPublisher, ClientQuotaMetadataManager, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher, ShareCoordinatorMetadataCacheHelperImpl}
 import kafka.server.share.SharePartitionManager
 import kafka.utils.CoreUtils
 import org.apache.kafka.common.config.ConfigException
@@ -47,6 +47,7 @@ import org.apache.kafka.server.{AssignmentsManager, ClientMetricsManager, NodeTo
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, TopicIdPartition}
 import org.apache.kafka.server.config.ConfigType
+import org.apache.kafka.server.share.{PersisterConfig, PersisterStateManager}
 import org.apache.kafka.server.share.persister.{NoOpShareStatePersister, Persister}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.{ClientMetricsReceiverPlugin, KafkaYammerMetrics}
@@ -347,6 +348,17 @@ class BrokerServer(
 
       shareCoordinator = createShareCoordinator()
 
+      /* setup and configure the persister */
+      persister = if (config.shareGroupConfig.shareGroupPersisterClassName.nonEmpty)
+        CoreUtils.createObject[Persister](config.shareGroupConfig.shareGroupPersisterClassName) else NoOpShareStatePersister.getInstance()
+
+      if (shareCoordinator.isDefined) {
+        val persisterStateManager = new PersisterStateManager(
+          NetworkUtils.buildNetworkClient("Persister", config, metrics, Time.SYSTEM, new LogContext(s"[PersisterStateManager broker=${config.brokerId}]")),
+          Time.SYSTEM, new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.get.partitionFor(key), config.interBrokerListenerName))
+        persister.configure(new PersisterConfig(persisterStateManager))
+      }
+
       groupCoordinator = createGroupCoordinator()
 
       val producerIdManagerSupplier = () => ProducerIdManager.rpc(
@@ -411,8 +423,6 @@ class BrokerServer(
       val shareFetchSessionCache : ShareSessionCache = new ShareSessionCache(
         config.shareGroupConfig.shareGroupMaxGroups * config.groupCoordinatorConfig.shareGroupMaxSize,
         KafkaServer.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS)
-
-      persister = NoOpShareStatePersister.getInstance()
 
       sharePartitionManager = new SharePartitionManager(
         replicaManager,
