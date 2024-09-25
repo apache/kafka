@@ -2316,7 +2316,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         // leaderId, it should be consistent with what is in the message.
         if (leaderId.isPresent() && leaderId.getAsInt() == quorum.localIdOrSentinel()) {
             // The response indicates that we should be the leader, so we verify that is the case
-            return quorum.isLeader() || quorum.isResigned();
+            return quorum.isLeader();
         } else {
             return epoch != quorum.epoch()
                 || !leaderId.isPresent()
