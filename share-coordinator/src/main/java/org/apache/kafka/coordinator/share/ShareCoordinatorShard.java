@@ -47,9 +47,9 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.config.ShareCoordinatorConfig;
-import org.apache.kafka.server.group.share.PartitionFactory;
-import org.apache.kafka.server.group.share.PersisterStateBatch;
-import org.apache.kafka.server.group.share.SharePartitionKey;
+import org.apache.kafka.server.share.PartitionFactory;
+import org.apache.kafka.server.share.PersisterStateBatch;
+import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 
@@ -566,9 +566,6 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         combinedList.addAll(batchesSoFar);
         combinedList.addAll(newBatches);
 
-        // sort keeping delivery state in mind
-        combinedList.sort(PersisterStateBatch::compareTo);
-
         return mergeBatches(
             pruneBatches(
                 combinedList,
@@ -669,11 +666,12 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             } else if (candidate.firstOffset() <= last.lastOffset()) { // non-contiguous overlap
                 // overlap and different state
                 // covers:
-                // case:        1        2 (NP)      3            4          5           6
+                // case:        1        2*          3            4          5           6
                 // last:        ______   _______    _______      _______    _______     ________
                 // candidate:   ______   ____       _________      ____        ____          _______
                 // max batches: 1           2       2                3          2            2
                 // min batches: 1           1       1                1          1            2
+                // * not possible with treeset
 
                 if (candidate.firstOffset() == last.firstOffset()) {
                     if (candidate.lastOffset() == last.lastOffset()) {  // case 1
