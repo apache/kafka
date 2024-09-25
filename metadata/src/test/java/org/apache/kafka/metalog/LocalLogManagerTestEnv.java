@@ -25,6 +25,7 @@ import org.apache.kafka.metalog.LocalLogManager.LocalRecordBatch;
 import org.apache.kafka.metalog.LocalLogManager.SharedLogData;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.test.TestUtils;
 
@@ -37,7 +38,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
-import java.util.OptionalLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -72,6 +72,7 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         private final int numManagers;
         private Optional<RawSnapshotReader> snapshotReader = Optional.empty();
         private Consumer<SharedLogData> sharedLogDataInitializer = __ -> { };
+        private KRaftVersion lastKRaftVersion = KRaftVersion.KRAFT_VERSION_0;
 
         public Builder(int numManagers) {
             this.numManagers = numManagers;
@@ -87,11 +88,20 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
             return this;
         }
 
+        /**
+         * Used to mock the latest KRaft version that would be returned from RaftClient.kraftVersion()
+         */
+        public Builder setLastKRaftVersion(KRaftVersion kraftVersion) {
+            this.lastKRaftVersion = kraftVersion;
+            return this;
+        }
+
         public LocalLogManagerTestEnv build() {
             return new LocalLogManagerTestEnv(
                 numManagers,
                 snapshotReader,
-                sharedLogDataInitializer);
+                sharedLogDataInitializer,
+                lastKRaftVersion);
         }
 
         public LocalLogManagerTestEnv buildWithMockListeners() {
@@ -115,7 +125,8 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
     private LocalLogManagerTestEnv(
         int numManagers,
         Optional<RawSnapshotReader> snapshotReader,
-        Consumer<SharedLogData> sharedLogDataInitializer
+        Consumer<SharedLogData> sharedLogDataInitializer,
+        KRaftVersion lastKRaftVersion
     ) {
         clusterId = Uuid.randomUuid().toString();
         dir = TestUtils.tempDirectory();
@@ -128,7 +139,8 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
                     new LogContext(String.format("[LocalLogManager %d] ", nodeId)),
                     nodeId,
                     shared,
-                    String.format("LocalLogManager-%d_", nodeId)));
+                    String.format("LocalLogManager-%d_", nodeId),
+                    lastKRaftVersion));
             }
         } catch (Throwable t) {
             for (LocalLogManager logManager : newLogManagers) {
@@ -154,12 +166,9 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
      */
     public void appendInitialRecords(List<ApiMessageAndVersion> records) {
         int initialLeaderEpoch = 1;
-        shared.append(OptionalLong.empty(), new LeaderChangeBatch(
-            new LeaderAndEpoch(OptionalInt.empty(), initialLeaderEpoch + 1)));
-        shared.append(OptionalLong.empty(),
-            new LocalRecordBatch(initialLeaderEpoch + 1, 0, records));
-        shared.append(OptionalLong.empty(),
-            new LeaderChangeBatch(new LeaderAndEpoch(OptionalInt.of(0), initialLeaderEpoch + 2)));
+        shared.append(new LeaderChangeBatch(new LeaderAndEpoch(OptionalInt.empty(), initialLeaderEpoch + 1)));
+        shared.append(new LocalRecordBatch(initialLeaderEpoch + 1, 0, records));
+        shared.append(new LeaderChangeBatch(new LeaderAndEpoch(OptionalInt.of(0), initialLeaderEpoch + 2)));
     }
 
     public String clusterId() {
@@ -199,6 +208,15 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
 
     public List<LocalLogManager> logManagers() {
         return logManagers;
+    }
+
+    public Optional<LocalLogManager> activeLogManager() {
+        OptionalInt leader = shared.leaderAndEpoch().leaderId();
+        if (leader.isPresent()) {
+            return Optional.of(logManagers.get(leader.getAsInt()));
+        } else {
+            return Optional.empty();
+        }
     }
 
     public RawSnapshotReader waitForSnapshot(long committedOffset) throws InterruptedException {

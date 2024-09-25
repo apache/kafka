@@ -18,13 +18,13 @@
 package org.apache.kafka.streams.kstream.internals.graph;
 
 
-import java.util.LinkedList;
-import java.util.Optional;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedHashSet;
+import java.util.LinkedList;
+import java.util.Optional;
 
 public abstract class GraphNode {
 

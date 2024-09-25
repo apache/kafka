@@ -21,11 +21,11 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
-import org.apache.kafka.streams.processor.internals.Task.TaskType;
 
 public interface StateManager {
     File baseDir();
@@ -39,7 +39,7 @@ public interface StateManager {
                        final StateRestoreCallback stateRestoreCallback,
                        final CommitCallback checkpoint);
 
-    StateStore getStore(final String name);
+    StateStore store(final String name);
 
     void flush();
 
@@ -56,5 +56,5 @@ public interface StateManager {
     String changelogFor(final String storeName);
 
     // TODO: we can remove this when consolidating global state manager into processor state manager
-    StateStore getGlobalStore(final String name);
+    StateStore globalStore(final String name);
 }

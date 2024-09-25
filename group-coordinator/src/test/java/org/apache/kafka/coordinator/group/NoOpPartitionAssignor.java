@@ -19,12 +19,13 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
+import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-public class NoOpPartitionAssignor implements ConsumerGroupPartitionAssignor {
+public class NoOpPartitionAssignor implements ConsumerGroupPartitionAssignor, ShareGroupPartitionAssignor {
     static final String NAME = "no-op";
 
     @Override

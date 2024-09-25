@@ -28,6 +28,7 @@ import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StateUpdater.ExceptionAndTask;
 import org.apache.kafka.streams.processor.internals.Task.State;
+
 import org.hamcrest.Matcher;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -1464,7 +1465,7 @@ class DefaultStateUpdaterTest {
     }
 
     @Test
-    public void shouldGetTasksFromInputQueue() {
+    public void shouldTasksFromInputQueue() {
         stateUpdater.shutdown(Duration.ofMillis(Long.MAX_VALUE));
 
         final StreamTask activeTask1 = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
@@ -1483,7 +1484,7 @@ class DefaultStateUpdaterTest {
     }
 
     @Test
-    public void shouldGetTasksFromUpdatingTasks() throws Exception {
+    public void shouldTasks() throws Exception {
         final StreamTask activeTask1 = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final StreamTask activeTask2 = statefulTask(TASK_1_0, mkSet(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
         final StandbyTask standbyTask1 = standbyTask(TASK_0_2, mkSet(TOPIC_PARTITION_C_0)).inState(State.RUNNING).build();
@@ -1682,7 +1683,7 @@ class DefaultStateUpdaterTest {
 
     private void verifyGetTasks(final Set<StreamTask> expectedActiveTasks,
                                 final Set<StandbyTask> expectedStandbyTasks) {
-        final Set<Task> tasks = stateUpdater.getTasks();
+        final Set<Task> tasks = stateUpdater.tasks();
 
         assertEquals(expectedActiveTasks.size() + expectedStandbyTasks.size(), tasks.size());
         tasks.forEach(task -> assertInstanceOf(ReadOnlyTask.class, task));
@@ -1692,11 +1693,11 @@ class DefaultStateUpdaterTest {
         final Set<TaskId> expectedTaskIds = expectedTasks.stream().map(Task::id).collect(Collectors.toSet());
         assertTrue(actualTaskIds.containsAll(expectedTaskIds));
 
-        final Set<StreamTask> activeTasks = stateUpdater.getActiveTasks();
+        final Set<StreamTask> activeTasks = stateUpdater.activeTasks();
         assertEquals(expectedActiveTasks.size(), activeTasks.size());
         assertTrue(activeTasks.containsAll(expectedActiveTasks));
 
-        final Set<StandbyTask> standbyTasks = stateUpdater.getStandbyTasks();
+        final Set<StandbyTask> standbyTasks = stateUpdater.standbyTasks();
         assertEquals(expectedStandbyTasks.size(), standbyTasks.size());
         assertTrue(standbyTasks.containsAll(expectedStandbyTasks));
     }
@@ -1704,7 +1705,7 @@ class DefaultStateUpdaterTest {
     private void verifyRestoredActiveTasks(final StreamTask... tasks) throws Exception {
         if (tasks.length == 0) {
             waitForCondition(
-                () -> stateUpdater.getRestoredActiveTasks().isEmpty(),
+                () -> stateUpdater.restoredActiveTasks().isEmpty(),
                 VERIFICATION_TIMEOUT,
                 "Did not get empty restored active task within the given timeout!"
             );
@@ -1713,7 +1714,7 @@ class DefaultStateUpdaterTest {
             final Set<StreamTask> restoredTasks = new HashSet<>();
             waitForCondition(
                 () -> {
-                    restoredTasks.addAll(stateUpdater.getRestoredActiveTasks());
+                    restoredTasks.addAll(stateUpdater.restoredActiveTasks());
                     return restoredTasks.containsAll(expectedRestoredTasks)
                         && restoredTasks.size() == expectedRestoredTasks.size();
                 },
@@ -1741,7 +1742,7 @@ class DefaultStateUpdaterTest {
     private void verifyUpdatingTasks(final Task... tasks) throws Exception {
         if (tasks.length == 0) {
             waitForCondition(
-                () -> stateUpdater.getUpdatingTasks().isEmpty(),
+                () -> stateUpdater.updatingTasks().isEmpty(),
                 VERIFICATION_TIMEOUT,
                 "Did not get empty updating task within the given timeout!"
             );
@@ -1750,7 +1751,7 @@ class DefaultStateUpdaterTest {
             final Set<Task> updatingTasks = new HashSet<>();
             waitForCondition(
                 () -> {
-                    updatingTasks.addAll(stateUpdater.getUpdatingTasks());
+                    updatingTasks.addAll(stateUpdater.updatingTasks());
                     return updatingTasks.containsAll(expectedUpdatingTasks)
                         && updatingTasks.size() == expectedUpdatingTasks.size();
                 },
@@ -1765,7 +1766,7 @@ class DefaultStateUpdaterTest {
         final Set<StandbyTask> standbyTasks = new HashSet<>();
         waitForCondition(
             () -> {
-                standbyTasks.addAll(stateUpdater.getUpdatingStandbyTasks());
+                standbyTasks.addAll(stateUpdater.updatingStandbyTasks());
                 return standbyTasks.containsAll(expectedStandbyTasks)
                     && standbyTasks.size() == expectedStandbyTasks.size();
             },
@@ -1785,7 +1786,7 @@ class DefaultStateUpdaterTest {
     private void verifyPausedTasks(final Task... tasks) throws Exception {
         if (tasks.length == 0) {
             waitForCondition(
-                () -> stateUpdater.getPausedTasks().isEmpty(),
+                () -> stateUpdater.pausedTasks().isEmpty(),
                 VERIFICATION_TIMEOUT,
                 "Did not get empty paused task within the given timeout!"
             );
@@ -1794,7 +1795,7 @@ class DefaultStateUpdaterTest {
             final Set<Task> pausedTasks = new HashSet<>();
             waitForCondition(
                 () -> {
-                    pausedTasks.addAll(stateUpdater.getPausedTasks());
+                    pausedTasks.addAll(stateUpdater.pausedTasks());
                     return pausedTasks.containsAll(expectedPausedTasks)
                         && pausedTasks.size() == expectedPausedTasks.size();
                 },
@@ -1809,7 +1810,7 @@ class DefaultStateUpdaterTest {
         final Set<ExceptionAndTask> failedTasks = new HashSet<>();
         waitForCondition(
             () -> {
-                failedTasks.addAll(stateUpdater.getExceptionsAndFailedTasks());
+                failedTasks.addAll(stateUpdater.exceptionsAndFailedTasks());
                 return failedTasks.containsAll(expectedExceptionAndTasks)
                     && failedTasks.size() == expectedExceptionAndTasks.size();
             },
@@ -1823,7 +1824,7 @@ class DefaultStateUpdaterTest {
         final Set<Task> failedTasks = new HashSet<>();
         waitForCondition(
             () -> {
-                for (final ExceptionAndTask exceptionAndTask : stateUpdater.getExceptionsAndFailedTasks()) {
+                for (final ExceptionAndTask exceptionAndTask : stateUpdater.exceptionsAndFailedTasks()) {
                     if (clazz.isInstance(exceptionAndTask.exception())) {
                         failedTasks.add(exceptionAndTask.task());
                     }
@@ -1859,7 +1860,7 @@ class DefaultStateUpdaterTest {
     private void verifyRemovedTasks(final Task... tasks) throws Exception {
         if (tasks.length == 0) {
             waitForCondition(
-                () -> stateUpdater.getRemovedTasks().isEmpty(),
+                () -> stateUpdater.removedTasks().isEmpty(),
                 VERIFICATION_TIMEOUT,
                 "Did not get empty removed task within the given timeout!"
             );
@@ -1868,7 +1869,7 @@ class DefaultStateUpdaterTest {
             final Set<Task> removedTasks = new HashSet<>();
             waitForCondition(
                 () -> {
-                    removedTasks.addAll(stateUpdater.getRemovedTasks());
+                    removedTasks.addAll(stateUpdater.removedTasks());
                     return removedTasks.containsAll(expectedRemovedTasks)
                         && removedTasks.size() == expectedRemovedTasks.size();
                 },

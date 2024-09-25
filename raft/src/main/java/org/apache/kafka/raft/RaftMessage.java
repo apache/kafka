@@ -21,7 +21,5 @@ import org.apache.kafka.common.protocol.ApiMessage;
 public interface RaftMessage {
     int correlationId();
 
-    short apiVersion();
-
     ApiMessage data();
 }

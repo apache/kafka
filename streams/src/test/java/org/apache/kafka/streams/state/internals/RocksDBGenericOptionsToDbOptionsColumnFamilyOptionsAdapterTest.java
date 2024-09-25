@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.LogCaptureAppender;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.invocation.Invocation;
@@ -55,14 +56,13 @@ import org.rocksdb.util.BytewiseComparator;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-
-import java.util.Arrays;
-import java.util.Set;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.hamcrest.CoreMatchers.hasItem;
@@ -108,6 +108,10 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
             add("notifyAll");
             add("toString");
             add("getOptionStringFromProps");
+            add("maxBackgroundCompactions");
+            add("setMaxBackgroundCompactions");
+            add("maxBackgroundFlushes");
+            add("setMaxBackgroundFlushes");
             addAll(walRelatedMethods);
         }
     };

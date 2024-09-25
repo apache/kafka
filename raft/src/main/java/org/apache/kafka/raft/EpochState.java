@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.raft.internals.ReplicaKey;
-
 import java.io.Closeable;
 import java.util.Optional;
 
@@ -31,7 +29,7 @@ public interface EpochState extends Closeable {
      * Decide whether to grant a vote to a candidate.
      *
      * It is the responsibility of the caller to invoke
-     * {@link QuorumState#transitionToVoted(int, ReplicaKey)} if vote is granted.
+     * {@link QuorumState#transitionToUnattachedVotedState(int, ReplicaKey)} if vote is granted.
      *
      * @param candidateKey the id and directory of the candidate
      * @param isLogUpToDate whether the candidate’s log is at least as up-to-date as receiver’s log
@@ -48,6 +46,13 @@ public interface EpochState extends Closeable {
      * Get the current (immutable) epoch.
      */
     int epoch();
+
+    /**
+     * Returns the known endpoints for the leader.
+     *
+     * If the leader is not known then {@code Endpoints.empty()} is returned.
+     */
+    Endpoints leaderEndpoints();
 
     /**
      * User-friendly description of the state

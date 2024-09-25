@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import java.time.Duration;
-import java.util.HashMap;
-import java.util.Map;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.EmitStrategy;
@@ -30,6 +27,10 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
+
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 
 public class StreamJoinedStoreFactory<K, V1, V2> extends AbstractConfigurableStoreFactory {
 

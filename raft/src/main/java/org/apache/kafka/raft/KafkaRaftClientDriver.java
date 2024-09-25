@@ -17,6 +17,7 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.fault.FaultHandler;
@@ -101,11 +102,13 @@ public class KafkaRaftClientDriver<T> extends ShutdownableThread {
     }
 
     public CompletableFuture<ApiMessage> handleRequest(
+        RequestContext context,
         RequestHeader header,
         ApiMessage request,
         long createdTimeMs
     ) {
         RaftRequest.Inbound inboundRequest = new RaftRequest.Inbound(
+            context.listenerName,
             header.correlationId(),
             header.apiVersion(),
             request,

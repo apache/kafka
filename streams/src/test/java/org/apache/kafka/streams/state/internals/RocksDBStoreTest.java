@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.lang.reflect.Field;
-import java.util.Optional;
-
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -61,6 +58,7 @@ import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRocksDbConfigSetter;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
+
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -81,6 +79,7 @@ import org.rocksdb.Statistics;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -88,6 +87,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;

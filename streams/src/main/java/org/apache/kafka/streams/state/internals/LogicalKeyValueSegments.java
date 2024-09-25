@@ -16,19 +16,20 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.HashMap;
-import java.util.Map;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * A {@link Segments} implementation which uses a single underlying RocksDB instance.
  * Regular segments with {@code segmentId >= 0} expire according to the specified
  * retention period. "Reserved" segments with {@code segmentId < 0} do not expire
  * and are completely separate from regular segments in that methods such as
- * {@link #getSegmentForTimestamp(long)}, {@link #getOrCreateSegment(long, ProcessorContext)},
+ * {@link #segmentForTimestamp(long)}, {@link #getOrCreateSegment(long, ProcessorContext)},
  * {@link #getOrCreateSegmentIfLive(long, ProcessorContext, long)},
  * {@link #segments(long, long, boolean)}, and {@link #allSegments(boolean)}
  * only return regular segments and not reserved segments. The methods {@link #flush()}
@@ -103,7 +104,7 @@ public class LogicalKeyValueSegments extends AbstractSegments<LogicalKeyValueSeg
 
     @Override
     public void openExisting(final ProcessorContext context, final long streamTime) {
-        metricsRecorder.init(ProcessorContextUtils.getMetricsImpl(context), context.taskId());
+        metricsRecorder.init(ProcessorContextUtils.metricsImpl(context), context.taskId());
         physicalStore.openDB(context.appConfigs(), context.stateDir());
     }
 

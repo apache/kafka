@@ -60,30 +60,30 @@ import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager;
 import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager.DefaultTaskExecutorCreator;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
-import java.util.HashMap;
-import java.util.Queue;
-import java.util.function.BiConsumer;
 import org.slf4j.Logger;
 
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.processingMode;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.getConsumerClientId;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.getRestoreConsumerClientId;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.adminClientId;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.consumerClientId;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.restoreConsumerClientId;
 
 public class StreamThread extends Thread implements ProcessingThread {
 
@@ -303,7 +303,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     private final Sensor commitRatioSensor;
     private final Sensor failedStreamThreadSensor;
 
-    private static final long LOG_SUMMARY_INTERVAL_MS = 2 * 60 * 1000L; // log a summary of processing every 2 minutes
+    private final long logSummaryIntervalMs; // the count summary log output time interval
     private long lastLogSummaryMs = -1L;
     private long totalRecordsProcessedSinceLastSummary = 0L;
     private long totalPunctuatorsSinceLastSummary = 0L;
@@ -318,7 +318,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     private volatile State state = State.CREATED;
     private volatile ThreadMetadata threadMetadata;
     private StreamThread.StateListener stateListener;
-    private final Optional<String> getGroupInstanceID;
+    private final Optional<String> groupInstanceID;
 
     private final ChangelogReader changelogReader;
     private final ConsumerRebalanceListener rebalanceListener;
@@ -381,7 +381,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         referenceContainer.clientTags = config.getClientTags();
 
         log.info("Creating restore consumer client");
-        final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(getRestoreConsumerClientId(threadId));
+        final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(restoreConsumerClientId(threadId));
         final Consumer<byte[], byte[]> restoreConsumer = clientSupplier.getRestoreConsumer(restoreConsumerConfigs);
 
         final StoreChangelogReader changelogReader = new StoreChangelogReader(
@@ -396,8 +396,8 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
 
-        final boolean stateUpdaterEnabled = InternalConfig.getStateUpdaterEnabled(config.originals());
-        final boolean proceessingThreadsEnabled = InternalConfig.getProcessingThreadsEnabled(config.originals());
+        final boolean stateUpdaterEnabled = InternalConfig.stateUpdaterEnabled(config.originals());
+        final boolean proceessingThreadsEnabled = InternalConfig.processingThreadsEnabled(config.originals());
         final ActiveTaskCreator activeTaskCreator = new ActiveTaskCreator(
             topologyMetadata,
             config,
@@ -425,7 +425,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         final Tasks tasks = new Tasks(new LogContext(logPrefix));
         final boolean processingThreadsEnabled =
-            InternalConfig.getProcessingThreadsEnabled(config.originals());
+            InternalConfig.processingThreadsEnabled(config.originals());
 
         final DefaultTaskManager schedulingTaskManager =
             maybeCreateSchedulingTaskManager(processingThreadsEnabled, stateUpdaterEnabled, topologyMetadata, time, threadId, tasks);
@@ -460,7 +460,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         log.info("Creating consumer client");
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
-        final Map<String, Object> consumerConfigs = config.getMainConsumerConfigs(applicationId, getConsumerClientId(threadId), threadIdx);
+        final Map<String, Object> consumerConfigs = config.getMainConsumerConfigs(applicationId, consumerClientId(threadId), threadIdx);
         consumerConfigs.put(StreamsConfig.InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
 
         final String originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
@@ -495,7 +495,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             cache::resize
         );
 
-        return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
+        return streamThread.updateThreadMetadata(adminClientId(clientId));
     }
 
     private static DefaultTaskManager maybeCreateSchedulingTaskManager(final boolean processingThreadsEnabled,
@@ -629,7 +629,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         this.originalReset = originalReset;
         this.nextProbingRebalanceMs = nextProbingRebalanceMs;
         this.nonFatalExceptionsToHandle = nonFatalExceptionsToHandle;
-        this.getGroupInstanceID = mainConsumer.groupMetadata().groupInstanceId();
+        this.groupInstanceID = mainConsumer.groupMetadata().groupInstanceId();
 
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
         final int dummyThreadIdx = 1;
@@ -641,8 +641,9 @@ public class StreamThread extends Thread implements ProcessingThread {
         this.numIterations = 1;
         this.eosEnabled = eosEnabled(config);
         this.processingMode = processingMode(config);
-        this.stateUpdaterEnabled = InternalConfig.getStateUpdaterEnabled(config.originals());
-        this.processingThreadsEnabled = InternalConfig.getProcessingThreadsEnabled(config.originals());
+        this.stateUpdaterEnabled = InternalConfig.stateUpdaterEnabled(config.originals());
+        this.processingThreadsEnabled = InternalConfig.processingThreadsEnabled(config.originals());
+        this.logSummaryIntervalMs = config.getLong(StreamsConfig.LOG_SUMMARY_INTERVAL_MS_CONFIG);
     }
 
     private static final class InternalConsumerConfig extends ConsumerConfig {
@@ -684,7 +685,6 @@ public class StreamThread extends Thread implements ProcessingThread {
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException      if the store's change log does not contain the partition
      */
-    @SuppressWarnings("deprecation") // Needed to include StreamsConfig.EXACTLY_ONCE_BETA in error log for UnsupportedVersionException
     boolean runLoop() {
         subscribeConsumer();
 
@@ -741,9 +741,9 @@ public class StreamThread extends Thread implements ProcessingThread {
                     errorMessage.startsWith("Broker unexpectedly doesn't support requireStable flag on version ")) {
 
                     log.error("Shutting down because the Kafka cluster seems to be on a too old version. " +
-                              "Setting {}=\"{}\"/\"{}\" requires broker version 2.5 or higher.",
+                              "Setting {}=\"{}\" requires broker version 2.5 or higher.",
                           StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
-                          StreamsConfig.EXACTLY_ONCE_V2, StreamsConfig.EXACTLY_ONCE_BETA);
+                          StreamsConfig.EXACTLY_ONCE_V2);
                 }
                 failedStreamThreadSensor.record();
                 this.streamsUncaughtExceptionHandler.accept(new StreamsException(e), false);
@@ -930,14 +930,14 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     /**
      * One iteration of a thread includes the following steps:
-     *
+     * <p>
      * 1. poll records from main consumer and add to buffer;
      * 2. restore from restore consumer and update standby tasks if necessary;
      * 3. process active tasks from the buffers;
      * 4. punctuate active tasks if necessary;
      * 5. commit all tasks if necessary;
      *
-     * Among them, step 3/4/5 is done in batches in which we try to process as much as possible while trying to
+     * <p> Among them, step 3/4/5 is done in batches in which we try to process as much as possible while trying to
      * stop iteration to call the next iteration when it's close to the next main consumer's poll deadline
      *
      * @throws IllegalStateException If store gets registered after initialized is already finished
@@ -1069,8 +1069,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         pollRatioSensor.record((double) pollLatency / runOnceLatency, now);
         commitRatioSensor.record((double) totalCommitLatency / runOnceLatency, now);
 
-        final boolean logProcessingSummary = now - lastLogSummaryMs > LOG_SUMMARY_INTERVAL_MS;
-        if (logProcessingSummary) {
+        if (logSummaryIntervalMs > 0 && now - lastLogSummaryMs > logSummaryIntervalMs) {
             log.info("Processed {} total records, ran {} punctuators, and committed {} total tasks since the last update",
                  totalRecordsProcessedSinceLastSummary, totalPunctuatorsSinceLastSummary, totalCommittedSinceLastSummary);
 
@@ -1083,7 +1082,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     /**
      * One iteration of a thread includes the following steps:
-     *
+     * <p>
      * 1. poll records from main consumer and add to buffer;
      * 2. check the task manager for any exceptions to be handled
      * 3. commit all tasks if necessary;
@@ -1142,8 +1141,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         pollRatioSensor.record((double) pollLatency / runOnceLatency, now);
         commitRatioSensor.record((double) totalCommitLatency / runOnceLatency, now);
 
-        final boolean logProcessingSummary = now - lastLogSummaryMs > LOG_SUMMARY_INTERVAL_MS;
-        if (logProcessingSummary) {
+        if (logSummaryIntervalMs > 0 && now - lastLogSummaryMs > logSummaryIntervalMs) {
             log.info("Committed {} total tasks since the last update", totalCommittedSinceLastSummary);
 
             totalCommittedSinceLastSummary = 0L;
@@ -1368,11 +1366,10 @@ public class StreamThread extends Thread implements ProcessingThread {
     /**
      * Try to commit all active tasks owned by this thread.
      *
-     * Visible for testing.
-     *
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      */
+    // visible for testing
     int maybeCommit() {
         final int committed;
         if (now - lastCommitMs > commitTimeMs) {
@@ -1501,8 +1498,8 @@ public class StreamThread extends Thread implements ProcessingThread {
         threadMetadata = new ThreadMetadataImpl(
             getName(),
             state().name(),
-            getConsumerClientId(getName()),
-            getRestoreConsumerClientId(getName()),
+            consumerClientId(getName()),
+            restoreConsumerClientId(getName()),
             taskManager.producerClientIds(),
             adminClientId,
             Collections.emptySet(),
@@ -1538,8 +1535,8 @@ public class StreamThread extends Thread implements ProcessingThread {
         threadMetadata = new ThreadMetadataImpl(
             getName(),
             state().name(),
-            getConsumerClientId(getName()),
-            getRestoreConsumerClientId(getName()),
+            consumerClientId(getName()),
+            restoreConsumerClientId(getName()),
             taskManager.producerClientIds(),
             adminClientId,
             activeTasksMetadata,
@@ -1587,8 +1584,8 @@ public class StreamThread extends Thread implements ProcessingThread {
         return indent + "\tStreamsThread threadId: " + getName() + "\n" + taskManager.toString(indent);
     }
 
-    public Optional<String> getGroupInstanceID() {
-        return getGroupInstanceID;
+    public Optional<String> groupInstanceID() {
+        return groupInstanceID;
     }
 
     public void requestLeaveGroupDuringShutdown() {

@@ -28,7 +28,6 @@ import kafka.log.LogManager
 import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils
-import kafka.utils.FileLock
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, MetadataRecoveryStrategy, NetworkClient}
 import org.apache.kafka.common.KafkaException
@@ -39,14 +38,16 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ChannelBuilders, ListenerName, NetworkReceive, Selectable, Selector}
 import org.apache.kafka.common.protocol.ApiMessage
+import org.apache.kafka.common.requests.RequestContext
 import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
-import org.apache.kafka.raft.{FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, QuorumConfig, RaftClient, ReplicatedLog}
+import org.apache.kafka.raft.{Endpoints, FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, QuorumConfig, RaftClient, ReplicatedLog}
 import org.apache.kafka.server.ProcessRole
+import org.apache.kafka.server.common.Features
 import org.apache.kafka.server.common.serialization.RecordSerde
-import org.apache.kafka.server.util.KafkaScheduler
+import org.apache.kafka.server.util.{FileLock, KafkaScheduler}
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.server.util.timer.SystemTimer
 
@@ -122,6 +123,7 @@ object KafkaRaftManager {
 
 trait RaftManager[T] {
   def handleRequest(
+    context: RequestContext,
     header: RequestHeader,
     request: ApiMessage,
     createdTimeMs: Long
@@ -152,6 +154,7 @@ class KafkaRaftManager[T](
   threadNamePrefixOpt: Option[String],
   val controllerQuorumVotersFuture: CompletableFuture[JMap[Integer, InetSocketAddress]],
   bootstrapServers: JCollection[InetSocketAddress],
+  localListeners: Endpoints,
   fatalFaultHandler: FaultHandler
 ) extends RaftManager[T] with Logging {
 
@@ -214,15 +217,16 @@ class KafkaRaftManager[T](
   }
 
   override def handleRequest(
+    context: RequestContext,
     header: RequestHeader,
     request: ApiMessage,
     createdTimeMs: Long
   ): CompletableFuture[ApiMessage] = {
-    clientDriver.handleRequest(header, request, createdTimeMs)
+    clientDriver.handleRequest(context, header, request, createdTimeMs)
   }
 
   private def buildRaftClient(): KafkaRaftClient[T] = {
-    val client = new KafkaRaftClient(
+    new KafkaRaftClient(
       OptionalInt.of(config.nodeId),
       metadataLogDirUuid,
       recordSerde,
@@ -231,11 +235,14 @@ class KafkaRaftManager[T](
       time,
       expirationService,
       logContext,
+      // Controllers should always flush the log on replication because they may become voters
+      config.processRoles.contains(ProcessRole.ControllerRole),
       clusterId,
       bootstrapServers,
+      localListeners,
+      Features.KRAFT_VERSION.supportedVersionRange(),
       raftConfig
     )
-    client
   }
 
   private def buildNetworkChannel(): KafkaNetworkChannel = {

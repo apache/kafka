@@ -25,28 +25,28 @@ notifications:
 # https://cwiki.apache.org/confluence/pages/viewpage.action?spaceKey=INFRA&title=Git+-+.asf.yaml+features#Git.asf.yamlfeatures-JenkinsPRwhitelisting
 jenkins:
   github_whitelist:
-    - vcrfxia
-    - clolov
-    - fvaleri
-    - philipnee
-    - vamossagar12
+    - FrankYang0529
     - kamalcph
-    - hudeqi
-    - lihaosky
-    - jeffkbkim
-    - tinaselenge
+    - apoorvmittal10
+    - lianetm
+    - brandboat
+    - kirktrue
+    - nizhikov
+    - OmniaGM
+    - dongnuo123
+    - frankvicky
 
 # This list allows you to triage pull requests. It can have a maximum of 10 people.
 # https://cwiki.apache.org/confluence/pages/viewpage.action?spaceKey=INFRA&title=Git+-+.asf.yaml+features#Git.asf.yamlfeatures-AssigningexternalcollaboratorswiththetriageroleonGitHub
 github:
   collaborators:
-    - vcrfxia
-    - clolov
-    - fvaleri
-    - philipnee
-    - vamossagar12
+    - FrankYang0529
     - kamalcph
-    - hudeqi
-    - lihaosky
-    - jeffkbkim
-    - tinaselenge
+    - apoorvmittal10
+    - lianetm
+    - brandboat
+    - kirktrue
+    - nizhikov
+    - OmniaGM
+    - dongnuo123
+    - frankvicky

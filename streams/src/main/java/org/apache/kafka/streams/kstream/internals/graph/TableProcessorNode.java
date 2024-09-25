@@ -17,11 +17,12 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
-import java.util.Arrays;
-import java.util.Objects;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
+
+import java.util.Arrays;
+import java.util.Objects;
 
 public class TableProcessorNode<K, V> extends GraphNode {
 

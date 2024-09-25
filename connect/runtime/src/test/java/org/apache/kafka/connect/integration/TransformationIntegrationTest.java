@@ -84,7 +84,7 @@ public class TransformationIntegrationTest {
         // This is required because tests in this class also test per-connector topic creation with transformations
         brokerProps.put("auto.create.topics.enable", "false");
 
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by a Kafka KRaft cluster
         connect = new EmbeddedConnectCluster.Builder()
                 .name("connect-cluster")
                 .numWorkers(NUM_WORKERS)
@@ -105,7 +105,7 @@ public class TransformationIntegrationTest {
         // delete connector handle
         RuntimeHandles.get().deleteConnector(CONNECTOR_NAME);
 
-        // stop all Connect, Kafka and Zk threads.
+        // stop the Connect cluster and its backing Kafka cluster.
         connect.stop();
     }
 

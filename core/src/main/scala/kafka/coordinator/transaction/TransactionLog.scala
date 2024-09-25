@@ -19,12 +19,12 @@ package kafka.coordinator.transaction
 import java.io.PrintStream
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
-import kafka.internals.generated.{TransactionLogKey, TransactionLogValue}
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, MessageUtil}
 import org.apache.kafka.common.record.{Record, RecordBatch}
 import org.apache.kafka.common.{MessageFormatter, TopicPartition}
+import org.apache.kafka.coordinator.transaction.generated.{TransactionLogKey, TransactionLogValue}
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
@@ -62,7 +62,8 @@ object TransactionLog {
     *
     * @return value payload bytes
     */
-  private[transaction] def valueToBytes(txnMetadata: TxnTransitMetadata): Array[Byte] = {
+  private[transaction] def valueToBytes(txnMetadata: TxnTransitMetadata,
+                                        usesFlexibleRecords: Boolean): Array[Byte] = {
     if (txnMetadata.txnState == Empty && txnMetadata.topicPartitions.nonEmpty)
         throw new IllegalStateException(s"Transaction is not expected to have any partitions since its state is ${txnMetadata.txnState}: $txnMetadata")
 
@@ -75,9 +76,11 @@ object TransactionLog {
             .setPartitionIds(partitions.map(tp => Integer.valueOf(tp.partition)).toList.asJava)
         }.toList.asJava
 
-    // Serialize with the highest supported non-flexible version
-    // until a tagged field is introduced or the version is bumped.
-    MessageUtil.toVersionPrefixedBytes(0,
+    // Serialize with version 0 (highest non-flexible version) until transaction.version 1 is enabled
+    // which enables flexible fields in records.
+    val version: Short =
+      if (usesFlexibleRecords) 1 else 0
+    MessageUtil.toVersionPrefixedBytes(version,
       new TransactionLogValue()
         .setProducerId(txnMetadata.producerId)
         .setProducerEpoch(txnMetadata.producerEpoch)
@@ -143,6 +146,7 @@ object TransactionLog {
   }
 
   // Formatter for use with tools to read transaction log messages
+  @Deprecated
   class TransactionLogMessageFormatter extends MessageFormatter {
     def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
       Option(consumerRecord.key).map(key => readTxnRecordKey(ByteBuffer.wrap(key))).foreach {

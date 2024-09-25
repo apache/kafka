@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import java.util.HashSet;
-import java.util.Set;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.DslStoreSuppliers;
+
+import java.util.HashSet;
+import java.util.Set;
 
 public abstract class AbstractConfigurableStoreFactory implements StoreFactory {
     private final Set<String> connectedProcessorNames = new HashSet<>();

@@ -20,6 +20,7 @@ import kafka.cluster.EndPoint;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.utils.TestUtils;
+
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -32,6 +33,7 @@ import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ZkConfigs;
 import org.apache.kafka.server.util.MockTime;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,9 +44,9 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
-import static org.apache.kafka.server.config.ServerLogConfigs.NUM_PARTITIONS_CONFIG;
 import static org.apache.kafka.server.config.ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG;
 import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIR_CONFIG;
+import static org.apache.kafka.server.config.ServerLogConfigs.NUM_PARTITIONS_CONFIG;
 
 
 /**

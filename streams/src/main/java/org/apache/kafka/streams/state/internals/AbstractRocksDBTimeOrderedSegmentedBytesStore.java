@@ -16,14 +16,16 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.Optional;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Optional;
 
 /**
  * RocksDB store backed by two SegmentedBytesStores which can optimize scan by time as well as window

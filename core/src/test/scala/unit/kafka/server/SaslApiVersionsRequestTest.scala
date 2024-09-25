@@ -16,14 +16,12 @@
   */
 package kafka.server
 
-import java.net.Socket
-import java.util.Collections
 import kafka.api.{KafkaSasl, SaslSetup}
+import kafka.security.JaasTestUtils
 import kafka.server.SaslApiVersionsRequestTest.{kafkaClientSaslMechanism, kafkaServerSaslMechanisms}
 import kafka.test.annotation.{ClusterTemplate, Type}
 import kafka.test.junit.ClusterTestExtensions
 import kafka.test.{ClusterConfig, ClusterInstance}
-import kafka.utils.JaasTestUtils
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.message.SaslHandshakeRequestData
@@ -35,6 +33,8 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 
+import java.net.Socket
+import java.util.Collections
 import scala.jdk.CollectionConverters._
 
 object SaslApiVersionsRequestTest {
@@ -75,7 +75,7 @@ class SaslApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVe
   @BeforeEach
   def setupSasl(): Unit = {
     sasl = new SaslSetup() {}
-    sasl.startSasl(sasl.jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), KafkaSasl, JaasTestUtils.KafkaServerContextName))
+    sasl.startSasl(sasl.jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), KafkaSasl, JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
   }
 
   @ClusterTemplate("saslApiVersionsRequestClusterConfig")
@@ -84,7 +84,9 @@ class SaslApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVe
     try {
       val apiVersionsResponse = IntegrationTestUtils.sendAndReceive[ApiVersionsResponse](
         new ApiVersionsRequest.Builder().build(0), socket)
-      validateApiVersionsResponse(apiVersionsResponse)
+      validateApiVersionsResponse(apiVersionsResponse,
+        enableUnstableLastVersion = !"false".equals(
+          cluster.config().serverProperties().get("unstable.api.versions.enable")))
       sendSaslHandshakeRequestValidateResponse(socket)
     } finally {
       socket.close()
@@ -113,7 +115,9 @@ class SaslApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVe
       assertEquals(Errors.UNSUPPORTED_VERSION.code, apiVersionsResponse.data.errorCode)
       val apiVersionsResponse2 = IntegrationTestUtils.sendAndReceive[ApiVersionsResponse](
         new ApiVersionsRequest.Builder().build(0), socket)
-      validateApiVersionsResponse(apiVersionsResponse2)
+      validateApiVersionsResponse(apiVersionsResponse2,
+        enableUnstableLastVersion = !"false".equals(
+          cluster.config().serverProperties().get("unstable.api.versions.enable")))
       sendSaslHandshakeRequestValidateResponse(socket)
     } finally {
       socket.close()

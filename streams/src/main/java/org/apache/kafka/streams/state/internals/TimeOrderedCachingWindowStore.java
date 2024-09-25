@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.function.Function;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -27,7 +23,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.Change;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -45,12 +40,17 @@ import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.KeyFirs
 import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.TimeFirstWindowKeySchema;
 import org.apache.kafka.streams.state.internals.SegmentedBytesStore.KeySchema;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntry;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.state.internals.ExceptionUtils.executeAll;
@@ -107,26 +107,14 @@ class TimeOrderedCachingWindowStore
         return null;
     }
 
-    @Deprecated
-    @Override
-    public void init(final ProcessorContext context, final StateStore root) {
-        initInternal(asInternalProcessorContext(context));
-        super.init(context, root);
-    }
-
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
-        initInternal(asInternalProcessorContext(context));
-        super.init(context, root);
-    }
-
-    private void initInternal(final InternalProcessorContext<?, ?> context) {
         final String prefix = StreamsConfig.InternalConfig.getString(
             context.appConfigs(),
             StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE,
             context.applicationId()
         );
-        this.context = context;
+        this.context = asInternalProcessorContext(context);
         final String topic = ProcessorStateManager.storeChangelogTopic(prefix, name(),  context.taskId().topologyName());
 
         bytesSerdes = new StateSerdes<>(
@@ -135,9 +123,10 @@ class TimeOrderedCachingWindowStore
             Serdes.ByteArray());
         cacheName = context.taskId() + "-" + name();
 
-        context.registerCacheFlushListener(cacheName, entries -> {
-            putAndMaybeForward(entries, context);
+        this.context.registerCacheFlushListener(cacheName, entries -> {
+            putAndMaybeForward(entries, this.context);
         });
+        super.init(context, root);
     }
 
     private void putAndMaybeForward(final List<DirtyEntry> entries,

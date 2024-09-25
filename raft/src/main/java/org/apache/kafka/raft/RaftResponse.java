@@ -34,11 +34,6 @@ public abstract class RaftResponse implements RaftMessage {
     }
 
     @Override
-    public short apiVersion() {
-        return data().highestSupportedVersion();
-    }
-
-    @Override
     public ApiMessage data() {
         return data;
     }

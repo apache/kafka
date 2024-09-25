@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.streams.kstream.internals.UnlimitedWindow;
 import org.apache.kafka.streams.kstream.internals.emitstrategy.WindowCloseStrategy;
 import org.apache.kafka.streams.kstream.internals.emitstrategy.WindowUpdateStrategy;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

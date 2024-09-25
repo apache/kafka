@@ -174,7 +174,7 @@ public class PartitionRegistrationTest {
     @Test
     public void testBuilderThrowsIllegalStateExceptionWhenMissingReplicas() {
         PartitionRegistration.Builder builder = new PartitionRegistration.Builder();
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> builder.build());
+        IllegalStateException exception = assertThrows(IllegalStateException.class, builder::build);
         assertEquals("You must set replicas.", exception.getMessage());
     }
 
@@ -182,7 +182,7 @@ public class PartitionRegistrationTest {
     public void testBuilderThrowsIllegalStateExceptionWhenMissingIsr() {
         PartitionRegistration.Builder builder = new PartitionRegistration.Builder().
             setReplicas(new int[]{0}).setDirectories(new Uuid[]{DirectoryId.UNASSIGNED});
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> builder.build());
+        IllegalStateException exception = assertThrows(IllegalStateException.class, builder::build);
         assertEquals("You must set isr.", exception.getMessage());
     }
 
@@ -195,7 +195,7 @@ public class PartitionRegistrationTest {
             setRemovingReplicas(new int[]{0}).
             setAddingReplicas(new int[]{0});
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> builder.build());
+        IllegalStateException exception = assertThrows(IllegalStateException.class, builder::build);
         assertEquals("You must set leader.", exception.getMessage());
     }
 
@@ -208,7 +208,7 @@ public class PartitionRegistrationTest {
             setRemovingReplicas(new int[]{0}).
             setAddingReplicas(new int[]{0}).
             setLeader(0);
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> builder.build());
+        IllegalStateException exception = assertThrows(IllegalStateException.class, builder::build);
         assertEquals("You must set leader recovery state.", exception.getMessage());
     }
 
@@ -222,7 +222,7 @@ public class PartitionRegistrationTest {
             setAddingReplicas(new int[]{0}).
             setLeader(0).
             setLeaderRecoveryState(LeaderRecoveryState.RECOVERED);
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> builder.build());
+        IllegalStateException exception = assertThrows(IllegalStateException.class, builder::build);
         assertEquals("You must set leader epoch.", exception.getMessage());
     }
 
@@ -237,7 +237,7 @@ public class PartitionRegistrationTest {
             setLeader(0).
             setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
             setLeaderEpoch(0);
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> builder.build());
+        IllegalStateException exception = assertThrows(IllegalStateException.class, builder::build);
         assertEquals("You must set partition epoch.", exception.getMessage());
     }
 
@@ -287,8 +287,8 @@ public class PartitionRegistrationTest {
         return Stream.of(
             MetadataVersion.IBP_3_7_IV1,
             MetadataVersion.IBP_3_7_IV2,
-            MetadataVersion.IBP_3_8_IV0
-        ).map(mv -> Arguments.of(mv));
+            MetadataVersion.IBP_4_0_IV1
+        ).map(Arguments::of);
     }
 
     @ParameterizedTest
@@ -373,7 +373,7 @@ public class PartitionRegistrationTest {
             setPartitionEpoch(0);
         List<UnwritableMetadataException> exceptions = new ArrayList<>();
         ImageWriterOptions options = new ImageWriterOptions.Builder().
-            setMetadataVersion(MetadataVersion.IBP_3_8_IV0).
+            setMetadataVersion(MetadataVersion.IBP_4_0_IV1).
             setLossHandler(exceptions::add).
             build();
         assertEquals(new ApiMessageAndVersion(expectRecord, (short) 2), partitionRegistration.toRecord(topicID, 0, options));

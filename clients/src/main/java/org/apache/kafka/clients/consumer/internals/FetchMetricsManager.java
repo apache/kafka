@@ -81,8 +81,14 @@ public class FetchMetricsManager {
         return throttleTime;
     }
 
-    void recordLatency(long requestLatencyMs) {
+    void recordLatency(String node, long requestLatencyMs) {
         fetchLatency.record(requestLatencyMs);
+        if (!node.isEmpty()) {
+            String nodeTimeName = "node-" + node + ".latency";
+            Sensor nodeRequestTime = this.metrics.getSensor(nodeTimeName);
+            if (nodeRequestTime != null)
+                nodeRequestTime.record(requestLatencyMs);
+        }
     }
 
     void recordBytesFetched(int bytes) {

@@ -42,8 +42,8 @@ import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.ChannelBuilders;
 import org.apache.kafka.common.network.ChannelMetadataRegistry;
 import org.apache.kafka.common.network.ChannelState;
+import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.NetworkTestUtils;
 import org.apache.kafka.common.network.NioEchoServer;
@@ -121,7 +121,6 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -1672,7 +1671,7 @@ public class SaslAuthenticatorTest {
 
         String saslMechanism = (String) saslClientConfigs.get(SaslConfigs.SASL_MECHANISM);
         Map<String, ?> configs = new TestSecurityConfig(saslClientConfigs).values();
-        this.channelBuilder = new AlternateSaslChannelBuilder(Mode.CLIENT,
+        this.channelBuilder = new AlternateSaslChannelBuilder(ConnectionMode.CLIENT,
                 Collections.singletonMap(saslMechanism, JaasContext.loadClientContext(configs)), securityProtocol, null,
                 false, saslMechanism, true, credentialCache, null, time);
         this.channelBuilder.configure(configs);
@@ -1951,14 +1950,14 @@ public class SaslAuthenticatorTest {
         if (isScram)
             ScramCredentialUtils.createCache(credentialCache, Collections.singletonList(saslMechanism));
 
-        Supplier<ApiVersionsResponse> apiVersionSupplier = () -> {
+        Function<Short, ApiVersionsResponse> apiVersionSupplier = version -> {
             ApiVersionCollection versionCollection = new ApiVersionCollection(2);
             versionCollection.add(new ApiVersion().setApiKey(ApiKeys.SASL_HANDSHAKE.id).setMinVersion((short) 0).setMaxVersion((short) 100));
             versionCollection.add(new ApiVersion().setApiKey(ApiKeys.SASL_AUTHENTICATE.id).setMinVersion((short) 0).setMaxVersion((short) 100));
             return new ApiVersionsResponse(new ApiVersionsResponseData().setApiKeys(versionCollection));
         };
 
-        SaslChannelBuilder serverChannelBuilder = new SaslChannelBuilder(Mode.SERVER, jaasContexts,
+        SaslChannelBuilder serverChannelBuilder = new SaslChannelBuilder(ConnectionMode.SERVER, jaasContexts,
                 securityProtocol, listenerName, false, saslMechanism, true,
                 credentialCache, null, null, time, new LogContext(), apiVersionSupplier);
 
@@ -1980,7 +1979,7 @@ public class SaslAuthenticatorTest {
         if (isScram)
             ScramCredentialUtils.createCache(credentialCache, Collections.singletonList(saslMechanism));
 
-        Supplier<ApiVersionsResponse> apiVersionSupplier = () -> {
+        Function<Short, ApiVersionsResponse> apiVersionSupplier = version -> {
             ApiVersionsResponse defaultApiVersionResponse = TestUtils.defaultApiVersionsResponse(
                 ApiMessageType.ListenerType.ZK_BROKER);
             ApiVersionCollection apiVersions = new ApiVersionCollection();
@@ -1999,7 +1998,7 @@ public class SaslAuthenticatorTest {
             return new ApiVersionsResponse(data);
         };
 
-        SaslChannelBuilder serverChannelBuilder = new SaslChannelBuilder(Mode.SERVER, jaasContexts,
+        SaslChannelBuilder serverChannelBuilder = new SaslChannelBuilder(ConnectionMode.SERVER, jaasContexts,
                 securityProtocol, listenerName, false, saslMechanism, true,
                 credentialCache, null, null, time, new LogContext(), apiVersionSupplier) {
             @Override
@@ -2034,7 +2033,7 @@ public class SaslAuthenticatorTest {
         final JaasContext jaasContext = JaasContext.loadClientContext(configs);
         final Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
 
-        SaslChannelBuilder clientChannelBuilder = new SaslChannelBuilder(Mode.CLIENT, jaasContexts,
+        SaslChannelBuilder clientChannelBuilder = new SaslChannelBuilder(ConnectionMode.CLIENT, jaasContexts,
                 securityProtocol, listenerName, false, saslMechanism, true,
                 null, null, null, time, new LogContext(), null) {
 
@@ -2571,13 +2570,13 @@ public class SaslAuthenticatorTest {
     private static class AlternateSaslChannelBuilder extends SaslChannelBuilder {
         private int numInvocations = 0;
 
-        public AlternateSaslChannelBuilder(Mode mode, Map<String, JaasContext> jaasContexts,
+        public AlternateSaslChannelBuilder(ConnectionMode connectionMode, Map<String, JaasContext> jaasContexts,
                 SecurityProtocol securityProtocol, ListenerName listenerName, boolean isInterBrokerListener,
                 String clientSaslMechanism, boolean handshakeRequestEnable, CredentialCache credentialCache,
                 DelegationTokenCache tokenCache, Time time) {
-            super(mode, jaasContexts, securityProtocol, listenerName, isInterBrokerListener, clientSaslMechanism,
+            super(connectionMode, jaasContexts, securityProtocol, listenerName, isInterBrokerListener, clientSaslMechanism,
                 handshakeRequestEnable, credentialCache, tokenCache, null, time, new LogContext(),
-                () -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER));
+                version -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER));
         }
 
         @Override

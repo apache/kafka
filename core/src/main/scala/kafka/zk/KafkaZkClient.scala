@@ -17,8 +17,6 @@
 package kafka.zk
 
 import java.util.Properties
-import com.yammer.metrics.core.MetricName
-import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch, ReplicaAssignment}
 import kafka.security.authorizer.AclAuthorizer.{NoAcls, VersionedAcls}
@@ -32,6 +30,7 @@ import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
+import org.apache.kafka.metadata.LeaderAndIsr
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.config.{ConfigType, ZkConfigs}
@@ -44,9 +43,9 @@ import org.apache.zookeeper.common.ZKConfig
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException, OpResult, ZooKeeper}
 
-import java.util
 import java.lang.{Long => JLong}
 import scala.collection.{Map, Seq, mutable}
+import scala.jdk.CollectionConverters._
 
 sealed trait KRaftRegistrationResult
 case class FailedRegistrationResult() extends KRaftRegistrationResult
@@ -67,11 +66,7 @@ class KafkaZkClient private[zk] (
   enableEntityConfigControllerCheck: Boolean
 ) extends AutoCloseable with Logging {
 
-  private val metricsGroup: KafkaMetricsGroup = new KafkaMetricsGroup(this.getClass) {
-    override def metricName(name: String, metricTags: util.Map[String, String]): MetricName = {
-      KafkaMetricsGroup.explicitMetricName("kafka.server", "ZooKeeperClientMetrics", name, metricTags)
-    }
-  }
+  private val metricsGroup: KafkaMetricsGroup = new KafkaMetricsGroup("kafka.server", "ZooKeeperClientMetrics")
 
   private val latencyMetric = metricsGroup.newHistogram("ZooKeeperRequestLatencyMs")
 
@@ -1162,7 +1157,7 @@ class KafkaZkClient private[zk] (
    * @return optional ISR if exists and None otherwise
    */
   def getInSyncReplicasForPartition(partition: TopicPartition): Option[Seq[Int]] =
-    getTopicPartitionState(partition).map(_.leaderAndIsr.isr)
+    getTopicPartitionState(partition).map(_.leaderAndIsr.isr.asScala.map(_.toInt))
 
 
   /**
@@ -2043,10 +2038,10 @@ class KafkaZkClient private[zk] (
                 case Some(value) =>
                   val failedPayload = MigrationZNode.decode(value, version, -1)
                   throw new RuntimeException(
-                    s"Conditional update on KRaft Migration ZNode failed. Expected zkVersion = $version. The failed " +
+                    s"Conditional update on KRaft Migration ZNode failed. Sent zkVersion = $version. The failed " +
                     s"write was: $failedPayload. This indicates that another KRaft controller is making writes to ZooKeeper.")
                 case None =>
-                  throw new RuntimeException(s"Check op on KRaft Migration ZNode failed. Expected zkVersion = $version. " +
+                  throw new RuntimeException(s"Check op on KRaft Migration ZNode failed. Sent zkVersion = $version. " +
                     s"This indicates that another KRaft controller is making writes to ZooKeeper.")
               }
             } else if (errorCode == Code.OK) {

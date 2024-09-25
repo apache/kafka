@@ -16,7 +16,6 @@
  */
 package kafka.migration
 
-import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.controller.{ControllerChannelContext, ControllerChannelManager, ReplicaAssignment, StateChangeLogger}
 import kafka.server.KafkaConfig
@@ -25,7 +24,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.requests.AbstractControlRequest
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.image.{ClusterImage, MetadataDelta, MetadataImage, TopicsImage}
-import org.apache.kafka.metadata.PartitionRegistration
+import org.apache.kafka.metadata.{LeaderAndIsr, PartitionRegistration}
 import org.apache.kafka.metadata.migration.LegacyPropagator
 
 import java.util
@@ -174,11 +173,11 @@ class MigrationPropagator(
         val offlineReplicas = partitionRegistration.replicas.filter {
           MigrationControllerChannelContext.isReplicaOnline(image, _, partitionRegistration.replicas.toSet)
         }
-        val deletedLeaderAndIsr = LeaderAndIsr.duringDelete(partitionRegistration.isr.toList)
+        val deletedLeaderAndIsr = LeaderAndIsr.duringDelete(partitionRegistration.isr.toList.map(Integer.valueOf).asJava)
         requestBatch.addStopReplicaRequestForBrokers(partitionRegistration.replicas, tp, deletePartition = true)
         requestBatch.addUpdateMetadataRequestForBrokers(
           oldZkBrokers.toSeq, zkControllerEpoch, tp, deletedLeaderAndIsr.leader, deletedLeaderAndIsr.leaderEpoch,
-          deletedLeaderAndIsr.partitionEpoch, deletedLeaderAndIsr.isr, partitionRegistration.replicas, offlineReplicas)
+          deletedLeaderAndIsr.partitionEpoch, deletedLeaderAndIsr.isr.asScala.map(_.intValue()).toList, partitionRegistration.replicas, offlineReplicas)
       }
     }
 

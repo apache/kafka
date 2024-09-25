@@ -32,7 +32,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -41,6 +40,7 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.KeyValueIteratorStub;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -134,21 +134,6 @@ public class MeteredKeyValueStoreTest {
 
     private void init() {
         metered.init((StateStoreContext) context, metered);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        setUp();
-        final MeteredKeyValueStore<String, String> outer = new MeteredKeyValueStore<>(
-            inner,
-            STORE_TYPE,
-            new MockTime(),
-            Serdes.String(),
-            Serdes.String()
-        );
-        doNothing().when(inner).init((ProcessorContext) context, outer);
-        outer.init((ProcessorContext) context, outer);
     }
 
     @Test

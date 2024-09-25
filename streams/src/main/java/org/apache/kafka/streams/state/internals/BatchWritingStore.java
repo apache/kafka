@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
+
 import org.rocksdb.RocksDBException;
 import org.rocksdb.WriteBatchInterface;
 

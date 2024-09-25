@@ -22,7 +22,7 @@ import org.apache.kafka.streams.processor.api.Processor;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class MockProcessorSupplier<KIn, VIn, KOut, VOut> implements org.apache.kafka.streams.processor.api.ProcessorSupplier<KIn, VIn, KOut, VOut> {

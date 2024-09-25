@@ -64,6 +64,11 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     _brokers.asInstanceOf[mutable.Buffer[KafkaServer]]
   }
 
+  def brokerServers: mutable.Buffer[BrokerServer] = {
+    checkIsKRaftTest()
+    _brokers.asInstanceOf[mutable.Buffer[BrokerServer]]
+  }
+
   var alive: Array[Boolean] = _
 
   /**
@@ -449,8 +454,8 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
    */
   private def createOffsetsTopic(zkClient: KafkaZkClient, servers: Seq[KafkaBroker]): Unit = {
     val server = servers.head
-    val numPartitions = server.config.offsetsTopicPartitions
-    val replicationFactor = server.config.offsetsTopicReplicationFactor.toInt
+    val numPartitions = server.config.groupCoordinatorConfig.offsetsTopicPartitions
+    val replicationFactor = server.config.groupCoordinatorConfig.offsetsTopicReplicationFactor.toInt
 
     try {
        TestUtils.createTopic(

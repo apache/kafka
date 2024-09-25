@@ -101,6 +101,8 @@ public class KafkaConfigSchemaTest {
             DescribeConfigsResponse.ConfigSource.STATIC_BROKER_CONFIG);
         testTranslateConfigSource(ConfigEntry.ConfigSource.DYNAMIC_CLIENT_METRICS_CONFIG,
             DescribeConfigsResponse.ConfigSource.CLIENT_METRICS_CONFIG);
+        testTranslateConfigSource(ConfigEntry.ConfigSource.DYNAMIC_GROUP_CONFIG,
+            DescribeConfigsResponse.ConfigSource.GROUP_CONFIG);
         testTranslateConfigSource(ConfigEntry.ConfigSource.DEFAULT_CONFIG,
             DescribeConfigsResponse.ConfigSource.DEFAULT_CONFIG);
     }

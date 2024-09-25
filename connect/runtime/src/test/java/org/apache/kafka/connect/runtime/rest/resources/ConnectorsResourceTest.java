@@ -28,7 +28,6 @@ import org.apache.kafka.connect.runtime.distributed.NotLeaderException;
 import org.apache.kafka.connect.runtime.distributed.RebalanceNeededException;
 import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.RestRequestTimeout;
-import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.RestServerConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
@@ -72,6 +71,8 @@ import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriInfo;
 
+import static org.apache.kafka.connect.runtime.rest.RestServer.DEFAULT_HEALTH_CHECK_TIMEOUT_MS;
+import static org.apache.kafka.connect.runtime.rest.RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -159,7 +160,10 @@ public class ConnectorsResourceTest {
     private static final Set<String> CONNECTOR_ACTIVE_TOPICS = new HashSet<>(
             Arrays.asList("foo_topic", "bar_topic"));
 
-    private static final RestRequestTimeout REQUEST_TIMEOUT = () -> RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS;
+    private static final RestRequestTimeout REQUEST_TIMEOUT = RestRequestTimeout.constant(
+        DEFAULT_REST_REQUEST_TIMEOUT_MS,
+        DEFAULT_HEALTH_CHECK_TIMEOUT_MS
+    );
 
     @Mock
     private Herder herder;

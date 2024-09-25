@@ -101,6 +101,30 @@ public class JoinGroupRequest extends AbstractRequest {
         return apiVersion >= 4;
     }
 
+
+    /**
+     * Since JoinGroupRequest version 4, a client that sends a join group request with
+     * {@link #UNKNOWN_MEMBER_ID} needs to rejoin with a new member id generated
+     * by the server. Once the second join group request is complete, the client is
+     * added as a new member of the group.
+     *
+     * Prior to version 4, a client is immediately added as a new member if it sends a
+     * join group request with UNKNOWN_MEMBER_ID.
+     *
+     * @param request    The request.
+     * @param apiVersion The JoinGroupRequest api version.
+     *
+     * @return whether a known member id is required or not.
+     */
+    public static boolean requiresKnownMemberId(
+        JoinGroupRequestData request,
+        short apiVersion
+    ) {
+        return request.groupInstanceId() == null
+            && request.memberId().equals(UNKNOWN_MEMBER_ID)
+            && requiresKnownMemberId(apiVersion);
+    }
+
     /**
      * Starting from version 9 of the JoinGroup API, static members are able to
      * skip running the assignor based on the `SkipAssignment` field. We leverage

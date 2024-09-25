@@ -17,8 +17,6 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.HashMap;
-import java.util.Map;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -41,26 +39,28 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.StreamsTestUtils;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Properties;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class RepartitionWithMergeOptimizingTest {
 
-    private final Logger log = LoggerFactory.getLogger(RepartitionWithMergeOptimizingTest.class);
+    private static final Logger log = LoggerFactory.getLogger(RepartitionWithMergeOptimizingTest.class);
 
     private static final String INPUT_A_TOPIC = "inputA";
     private static final String INPUT_B_TOPIC = "inputB";
@@ -83,14 +83,14 @@ public class RepartitionWithMergeOptimizingTest {
     private final List<KeyValue<String, String>> expectedStringCountKeyValues =
         Arrays.asList(KeyValue.pair("A", "6"), KeyValue.pair("B", "6"), KeyValue.pair("C", "6"));
 
-    @Before
+    @BeforeEach
     public void setUp() {
         streamsConfiguration = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
         streamsConfiguration.setProperty(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, Integer.toString(1024 * 10));
         streamsConfiguration.setProperty(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.toString(5000));
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         topologyTestDriver.close();
     }

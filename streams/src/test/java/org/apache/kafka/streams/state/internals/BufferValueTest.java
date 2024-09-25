@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;

@@ -61,7 +61,7 @@ public class MetricConfigs {
             " the standard MBean convention.";
     public static final String KAFKA_METRICS_POLLING_INTERVAL_SECONDS_CONFIG = "kafka.metrics.polling.interval.secs";
     public static final int KAFKA_METRICS_POLLING_INTERVAL_SECONDS_DEFAULT = 10;
-    public static final String KAFKA_METRICS_POLLING_INTERVAL_SECONDS_DOC = "The metrics polling interval (in seconds) which can be used in" +
+    public static final String KAFKA_METRICS_POLLING_INTERVAL_SECONDS_DOC = "The metrics polling interval (in seconds) which can be used in " +
             KAFKA_METRICS_REPORTER_CLASSES_CONFIG + " implementations.";
 
     /** ********* Kafka Client Telemetry Metrics Configuration ***********/

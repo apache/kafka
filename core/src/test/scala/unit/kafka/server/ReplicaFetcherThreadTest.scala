@@ -39,6 +39,7 @@ import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.storage.internals.log.LogAppendInfo
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -121,15 +122,20 @@ class ReplicaFetcherThreadTest {
 
   @Test
   def shouldSendLatestRequestVersionsByDefault(): Unit = {
-    val props = TestUtils.createBrokerConfig(1, "localhost:1234")
-    val config = KafkaConfig.fromProps(props)
-
-    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
-    when(replicaManager.brokerTopicStats).thenReturn(mock(classOf[BrokerTopicStats]))
-
-    assertEquals(ApiKeys.FETCH.latestVersion, config.interBrokerProtocolVersion.fetchRequestVersion())
-    assertEquals(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, config.interBrokerProtocolVersion.offsetForLeaderEpochRequestVersion)
-    assertEquals(ApiKeys.LIST_OFFSETS.latestVersion, config.interBrokerProtocolVersion.listOffsetRequestVersion)
+    // Check unstable versions
+    val testingVersion = MetadataVersion.latestTesting
+    assertEquals(
+      ApiKeys.FETCH.latestVersion(true),
+      testingVersion.fetchRequestVersion
+    )
+    assertEquals(
+      ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(true),
+      testingVersion.offsetForLeaderEpochRequestVersion
+    )
+    assertEquals(
+      ApiKeys.LIST_OFFSETS.latestVersion(true),
+      testingVersion.listOffsetRequestVersion
+    )
   }
 
   @Test

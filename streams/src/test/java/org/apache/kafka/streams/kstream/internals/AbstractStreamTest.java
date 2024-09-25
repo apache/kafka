@@ -19,6 +19,14 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
@@ -26,15 +34,7 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.NoopValueTransformer;
 import org.apache.kafka.test.NoopValueTransformerWithKey;
-import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.TestInputTopic;
-import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
-import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
-import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
-import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -51,9 +51,11 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class AbstractStreamTest {
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testToInternalValueTransformerSupplierSuppliesNewTransformers() {
-        final ValueTransformerSupplier<?, ?> valueTransformerSupplier = mock(ValueTransformerSupplier.class);
+        final org.apache.kafka.streams.kstream.ValueTransformerSupplier<?, ?> valueTransformerSupplier =
+            mock(org.apache.kafka.streams.kstream.ValueTransformerSupplier.class);
         when(valueTransformerSupplier.get())
             .thenReturn(new NoopValueTransformer<>())
             .thenReturn(new NoopValueTransformer<>());

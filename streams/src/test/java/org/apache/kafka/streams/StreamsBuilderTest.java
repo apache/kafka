@@ -62,6 +62,7 @@ import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.NoopValueTransformer;
 import org.apache.kafka.test.NoopValueTransformerWithKey;
 import org.apache.kafka.test.StreamsTestUtils;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -76,10 +77,9 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.regex.Pattern;
 
+import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_1;
-
-import static java.util.Arrays.asList;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -892,21 +892,6 @@ public class StreamsBuilderTest {
         builder.build();
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
         assertNamesForOperation(topology, "KSTREAM-SOURCE-0000000000", STREAM_OPERATION_NAME);
-    }
-
-    @Test
-    @SuppressWarnings({"unchecked", "deprecation"})
-    public void shouldUseSpecifiedNameForBranchOperation() {
-        builder.stream(STREAM_TOPIC)
-               .branch(Named.as("branch-processor"), (k, v) -> true, (k, v) -> false);
-
-        builder.build();
-        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
-        assertNamesForOperation(topology,
-                                "KSTREAM-SOURCE-0000000000",
-                                "branch-processor",
-                                "branch-processor-predicate-0",
-                                "branch-processor-predicate-1");
     }
 
     @Test

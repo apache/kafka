@@ -19,21 +19,20 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValueTimestamp;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.ValueTransformer;
-import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
-import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.NoOpValueTransformerWithKeySupplier;
 import org.apache.kafka.test.StreamsTestUtils;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -60,8 +59,8 @@ public class KStreamTransformValuesTest {
     public void testTransform() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final ValueTransformerSupplier<Number, Integer> valueTransformerSupplier =
-            () -> new ValueTransformer<Number, Integer>() {
+        final org.apache.kafka.streams.kstream.ValueTransformerSupplier<Number, Integer> valueTransformerSupplier =
+            () -> new org.apache.kafka.streams.kstream.ValueTransformer<Number, Integer>() {
                 private int total = 0;
 
                 @Override

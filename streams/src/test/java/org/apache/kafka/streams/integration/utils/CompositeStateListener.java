@@ -16,13 +16,14 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
+import org.apache.kafka.streams.KafkaStreams.State;
+import org.apache.kafka.streams.KafkaStreams.StateListener;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import org.apache.kafka.streams.KafkaStreams.State;
-import org.apache.kafka.streams.KafkaStreams.StateListener;
 
 /**
  * A {@link StateListener} that holds zero or more listeners internally and invokes all of them

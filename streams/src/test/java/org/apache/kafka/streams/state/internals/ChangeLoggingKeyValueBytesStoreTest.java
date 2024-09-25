@@ -28,7 +28,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
@@ -41,6 +40,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -109,16 +109,6 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     @AfterEach
     public void after() {
         store.close();
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        final InternalMockProcessorContext context = mockContext();
-        final KeyValueStore<Bytes, byte[]> innerMock = mock(InMemoryKeyValueStore.class);
-        final StateStore outer = new ChangeLoggingKeyValueBytesStore(innerMock);
-        outer.init((ProcessorContext) context, outer);
-        verify(innerMock).init((ProcessorContext) context, outer);
     }
 
     @Test

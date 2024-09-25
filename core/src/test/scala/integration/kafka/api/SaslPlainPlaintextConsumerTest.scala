@@ -12,8 +12,9 @@
   */
 package kafka.api
 
+import kafka.security.JaasTestUtils
+import kafka.utils.TestUtils
 import kafka.utils.TestUtils.{isAclUnsecure, secureZkPaths}
-import kafka.utils.{JaasTestUtils, TestUtils}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.server.config.ZkConfigs
@@ -28,7 +29,7 @@ class SaslPlainPlaintextConsumerTest extends BaseConsumerTest with SaslSetup {
   private val kafkaClientSaslMechanism = "PLAIN"
   private val kafkaServerSaslMechanisms = List(kafkaClientSaslMechanism)
   private val kafkaServerJaasEntryName =
-    s"${listenerName.value.toLowerCase(Locale.ROOT)}.${JaasTestUtils.KafkaServerContextName}"
+    s"${listenerName.value.toLowerCase(Locale.ROOT)}.${JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME}"
   this.serverConfig.setProperty(ZkConfigs.ZK_ENABLE_SECURE_ACLS_CONFIG, "false")
   // disable secure acls of zkClient in QuorumTestHarness
   override protected def zkAclsEnabled = Some(false)

@@ -16,12 +16,14 @@
  */
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
-import java.util.Collections;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.state.internals.Murmur3;
+
 import org.junit.jupiter.api.Test;
+
+import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -49,11 +51,11 @@ public class SubscriptionWrapperSerdeTest {
         final SubscriptionWrapper deserialized = (SubscriptionWrapper) swSerde.deserializer()
             .deserialize(null, serialized);
 
-        assertEquals(SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE, deserialized.getInstruction());
-        assertArrayEquals(hashedValue, deserialized.getHash());
-        assertEquals(originalKey, deserialized.getPrimaryKey());
-        assertEquals(primaryPartition, deserialized.getPrimaryPartition());
-        assertEquals(version, deserialized.getVersion());
+        assertEquals(SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE, deserialized.instruction());
+        assertArrayEquals(hashedValue, deserialized.hash());
+        assertEquals(originalKey, deserialized.primaryKey());
+        assertEquals(primaryPartition, deserialized.primaryPartition());
+        assertEquals(version, deserialized.version());
     }
 
     @Test
@@ -74,11 +76,11 @@ public class SubscriptionWrapperSerdeTest {
         final SubscriptionWrapper deserialized = (SubscriptionWrapper) swSerde.deserializer()
             .deserialize(null, serialized);
 
-        assertEquals(SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE, deserialized.getInstruction());
-        assertArrayEquals(hashedValue, deserialized.getHash());
-        assertEquals(originalKey, deserialized.getPrimaryKey());
-        assertEquals(primaryPartition, deserialized.getPrimaryPartition());
-        assertEquals(version, deserialized.getVersion());
+        assertEquals(SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE, deserialized.instruction());
+        assertArrayEquals(hashedValue, deserialized.hash());
+        assertEquals(originalKey, deserialized.primaryKey());
+        assertEquals(primaryPartition, deserialized.primaryPartition());
+        assertEquals(version, deserialized.version());
     }
 
     @Test
@@ -102,11 +104,11 @@ public class SubscriptionWrapperSerdeTest {
         final SubscriptionWrapper deserialized = (SubscriptionWrapper) swSerde.deserializer()
             .deserialize(null, serialized);
 
-        assertEquals(SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE, deserialized.getInstruction());
-        assertArrayEquals(hashedValue, deserialized.getHash());
-        assertEquals(originalKey, deserialized.getPrimaryKey());
-        assertEquals(0, deserialized.getVersion());
-        assertNull(deserialized.getPrimaryPartition());
+        assertEquals(SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE, deserialized.instruction());
+        assertArrayEquals(hashedValue, deserialized.hash());
+        assertEquals(originalKey, deserialized.primaryKey());
+        assertEquals(0, deserialized.version());
+        assertNull(deserialized.primaryPartition());
     }
 
     @Test
@@ -126,11 +128,11 @@ public class SubscriptionWrapperSerdeTest {
         final byte[] serialized = swSerde.serializer().serialize(null, wrapper);
         final SubscriptionWrapper deserialized = (SubscriptionWrapper) swSerde.deserializer().deserialize(null, serialized);
 
-        assertEquals(SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, deserialized.getInstruction());
-        assertArrayEquals(hashedValue, deserialized.getHash());
-        assertEquals(originalKey, deserialized.getPrimaryKey());
-        assertEquals(primaryPartition, deserialized.getPrimaryPartition());
-        assertEquals(version, deserialized.getVersion());
+        assertEquals(SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, deserialized.instruction());
+        assertArrayEquals(hashedValue, deserialized.hash());
+        assertEquals(originalKey, deserialized.primaryKey());
+        assertEquals(primaryPartition, deserialized.primaryPartition());
+        assertEquals(version, deserialized.version());
     }
 
     @Test
@@ -151,11 +153,11 @@ public class SubscriptionWrapperSerdeTest {
         final SubscriptionWrapper deserialized = (SubscriptionWrapper) swSerde.deserializer()
             .deserialize(null, serialized);
 
-        assertEquals(SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, deserialized.getInstruction());
-        assertArrayEquals(hashedValue, deserialized.getHash());
-        assertEquals(originalKey, deserialized.getPrimaryKey());
-        assertEquals(primaryPartition, deserialized.getPrimaryPartition());
-        assertEquals(version, deserialized.getVersion());
+        assertEquals(SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, deserialized.instruction());
+        assertArrayEquals(hashedValue, deserialized.hash());
+        assertEquals(originalKey, deserialized.primaryKey());
+        assertEquals(primaryPartition, deserialized.primaryPartition());
+        assertEquals(version, deserialized.version());
     }
 
     @Test
@@ -174,11 +176,11 @@ public class SubscriptionWrapperSerdeTest {
         final byte[] serialized = swSerde.serializer().serialize(null, wrapper);
         final SubscriptionWrapper deserialized = (SubscriptionWrapper) swSerde.deserializer().deserialize(null, serialized);
 
-        assertEquals(SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, deserialized.getInstruction());
-        assertArrayEquals(hashedValue, deserialized.getHash());
-        assertEquals(originalKey, deserialized.getPrimaryKey());
-        assertEquals(primaryPartition, deserialized.getPrimaryPartition());
-        assertEquals(version, deserialized.getVersion());
+        assertEquals(SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, deserialized.instruction());
+        assertArrayEquals(hashedValue, deserialized.hash());
+        assertEquals(originalKey, deserialized.primaryKey());
+        assertEquals(primaryPartition, deserialized.primaryPartition());
+        assertEquals(version, deserialized.version());
     }
 
     @Test

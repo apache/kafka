@@ -23,14 +23,18 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.kstream.TimeWindowedSerializer;
 import org.apache.kafka.streams.kstream.Windowed;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.Random;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class WindowedStreamPartitionerTest {
 
@@ -66,16 +70,16 @@ public class WindowedStreamPartitionerTest {
             final String value = key.toString();
             final byte[] valueBytes = stringSerializer.serialize(topicName, value);
 
-            final Integer expected = defaultPartitioner.partition("topic", key, keyBytes, value, valueBytes, cluster);
+            final Set<Integer> expected = Collections.singleton(defaultPartitioner.partition(topicName, key, keyBytes, value, valueBytes, cluster));
 
             for (int w = 1; w < 10; w++) {
                 final TimeWindow window = new TimeWindow(10 * w, 20 * w);
 
                 final Windowed<Integer> windowedKey = new Windowed<>(key, window);
-                @SuppressWarnings("deprecation")
-                final Integer actual = streamPartitioner.partition(topicName, windowedKey, value, infos.size());
+                final Optional<Set<Integer>> actual = streamPartitioner.partitions(topicName, windowedKey, value, infos.size());
 
-                assertEquals(expected, actual);
+                assertTrue(actual.isPresent());
+                assertEquals(expected, actual.get());
             }
         }
 

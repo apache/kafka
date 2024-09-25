@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.streams.processor;
 
-import java.time.Duration;
 import org.apache.kafka.streams.processor.api.Record;
+
+import java.time.Duration;
 
 /**
  * A functional interface used as an argument to {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator)}.

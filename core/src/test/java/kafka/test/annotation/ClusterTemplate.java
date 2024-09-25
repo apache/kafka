@@ -20,7 +20,9 @@ package kafka.test.annotation;
 import kafka.test.ClusterConfig;
 import kafka.test.ClusterGenerator;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestTemplate;
+import org.junit.jupiter.api.Timeout;
 
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
@@ -48,6 +50,8 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 @Target({METHOD})
 @Retention(RUNTIME)
 @TestTemplate
+@Timeout(60)
+@Tag("integration")
 public @interface ClusterTemplate {
     /**
      * Specify the static method used for generating cluster configs

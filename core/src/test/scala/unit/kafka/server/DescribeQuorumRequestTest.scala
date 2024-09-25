@@ -24,16 +24,13 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.DescribeQuorumRequest.singletonRequest
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ApiVersionsRequest, ApiVersionsResponse, DescribeQuorumRequest, DescribeQuorumResponse}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
 
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
-@Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(types = Array(Type.KRAFT))
-@Tag("integration")
 class DescribeQuorumRequestTest(cluster: ClusterInstance) {
 
   @ClusterTest(types = Array(Type.ZK))
@@ -97,6 +94,13 @@ class DescribeQuorumRequestTest(cluster: ClusterInstance) {
           assertNotEquals(-1, state.lastFetchTimestamp)
           assertNotEquals(-1, state.lastCaughtUpTimestamp)
         }
+      }
+
+      if (version >= 2) {
+        val nodes = response.data.nodes().asScala
+        assertEquals(cluster.controllerIds().asScala, nodes.map(_.nodeId()).toSet)
+        val node = nodes.find(_.nodeId() == cluster.controllers().keySet().asScala.head)
+        assertEquals(cluster.controllerListenerName().get().value(), node.get.listeners().asScala.head.name())
       }
     }
   }

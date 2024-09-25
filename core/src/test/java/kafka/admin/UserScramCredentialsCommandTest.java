@@ -19,8 +19,8 @@ package kafka.admin;
 import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.junit.ClusterTestExtensions;
-import kafka.utils.Exit;
 
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
 

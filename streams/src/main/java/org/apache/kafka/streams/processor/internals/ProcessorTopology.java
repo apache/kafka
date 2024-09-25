@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.processor.StateStore;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,7 +31,7 @@ import java.util.Optional;
 import java.util.Set;
 
 public class ProcessorTopology {
-    private final Logger log = LoggerFactory.getLogger(ProcessorTopology.class);
+    private static final Logger log = LoggerFactory.getLogger(ProcessorTopology.class);
 
     private final List<ProcessorNode<?, ?, ?, ?>> processorNodes;
     private final Map<String, SourceNode<?, ?>> sourceNodesByName;

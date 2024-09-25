@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.List;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.LockException;
@@ -26,22 +25,29 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.slf4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
 
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mockStatic;
@@ -50,7 +56,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class StateManagerUtilTest {
 
     @Mock
@@ -81,6 +88,7 @@ public class StateManagerUtilTest {
     public void testRegisterStateStoreFailToLockStateDirectory() {
         when(topology.stateStores()).thenReturn(singletonList(new MockKeyValueStore("store", false)));
         when(stateManager.taskId()).thenReturn(taskId);
+        when(stateDirectory.canTryLock(any(), anyLong())).thenReturn(true);
         when(stateDirectory.lock(taskId)).thenReturn(false);
 
         final LockException thrown = assertThrows(LockException.class,
@@ -91,6 +99,17 @@ public class StateManagerUtilTest {
     }
 
     @Test
+    public void testRegisterStateStoreWhenTryLockIsNotAllowed() {
+        when(topology.stateStores()).thenReturn(singletonList(new MockKeyValueStore("store", false)));
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateDirectory.canTryLock(any(), anyLong())).thenReturn(false);
+
+        assertDoesNotThrow(() -> StateManagerUtil.registerStateStores(logger, "logPrefix:",
+                        topology, stateManager, stateDirectory, processorContext));
+
+    }
+
+    @Test
     public void testRegisterStateStores() {
         final MockKeyValueStore store1 = new MockKeyValueStore("store1", false);
         final MockKeyValueStore store2 = new MockKeyValueStore("store2", false);
@@ -98,6 +117,7 @@ public class StateManagerUtilTest {
         final InOrder inOrder = inOrder(stateManager);
         when(topology.stateStores()).thenReturn(stateStores);
         when(stateManager.taskId()).thenReturn(taskId);
+        when(stateDirectory.canTryLock(any(), anyLong())).thenReturn(true);
         when(stateDirectory.lock(taskId)).thenReturn(true);
         when(stateDirectory.directoryForTaskIsEmpty(taskId)).thenReturn(true);
         when(topology.stateStores()).thenReturn(stateStores);

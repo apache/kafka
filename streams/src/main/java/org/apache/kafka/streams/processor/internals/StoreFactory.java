@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Map;
-import java.util.Set;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.processor.StateStore;
+
+import java.util.Map;
+import java.util.Set;
 
 /**
  * What! Another mechanism for obtaining a {@link StateStore}? This isn't just

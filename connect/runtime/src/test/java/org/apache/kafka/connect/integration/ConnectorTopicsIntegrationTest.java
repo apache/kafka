@@ -90,7 +90,7 @@ public class ConnectorTopicsIntegrationTest {
         // setup Kafka broker properties
         brokerProps.put("auto.create.topics.enable", String.valueOf(false));
 
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by a Kafka KRaft cluster
         connectBuilder = new EmbeddedConnectCluster.Builder()
                 .name("connect-cluster")
                 .numWorkers(NUM_WORKERS)
@@ -101,7 +101,7 @@ public class ConnectorTopicsIntegrationTest {
 
     @AfterEach
     public void close() {
-        // stop all Connect, Kafka and Zk threads.
+        // stop the Connect cluster and its backing Kafka cluster.
         connect.stop();
     }
 

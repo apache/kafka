@@ -29,7 +29,7 @@ import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.TimeoutException
-import org.apache.kafka.common.network.{ListenerName, Mode}
+import org.apache.kafka.common.network.{ListenerName, ConnectionMode}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{KafkaException, TopicPartition}
@@ -70,7 +70,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     super.setUp(testInfo)
 
     admin = TestUtils.createAdminClient(brokers, listenerName,
-        TestUtils.securityConfigs(Mode.CLIENT,
+        TestUtils.securityConfigs(ConnectionMode.CLIENT,
           securityProtocol,
           trustStoreFile,
           "adminClient",

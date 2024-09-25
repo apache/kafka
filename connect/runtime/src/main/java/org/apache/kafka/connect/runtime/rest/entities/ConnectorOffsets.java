@@ -88,4 +88,9 @@ public class ConnectorOffsets {
     public int hashCode() {
         return Objects.hashCode(offsets);
     }
+
+    @Override
+    public String toString() {
+        return Objects.toString(offsets);
+    }
 }

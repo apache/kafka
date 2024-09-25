@@ -162,7 +162,7 @@ class ControllerServer(
       authorizer = config.createNewAuthorizer()
       authorizer.foreach(_.configure(config.originals))
 
-      metadataCache = MetadataCache.kRaftMetadataCache(config.nodeId)
+      metadataCache = MetadataCache.kRaftMetadataCache(config.nodeId, () => raftManager.client.kraftVersion())
 
       metadataCachePublisher = new KRaftMetadataCachePublisher(metadataCache)
 
@@ -187,9 +187,10 @@ class ControllerServer(
         credentialProvider,
         apiVersionManager)
 
-      val listenerInfo = ListenerInfo.create(config.controllerListeners.map(_.toJava).asJava).
-        withWildcardHostnamesResolved().
-        withEphemeralPortsCorrected(name => socketServer.boundPort(new ListenerName(name)))
+      val listenerInfo = ListenerInfo
+        .create(config.effectiveAdvertisedControllerListeners.map(_.toJava).asJava)
+        .withWildcardHostnamesResolved()
+        .withEphemeralPortsCorrected(name => socketServer.boundPort(new ListenerName(name)))
       socketServerFirstBoundPortFuture.complete(listenerInfo.firstListener().port())
 
       val endpointReadyFutures = {
@@ -203,7 +204,7 @@ class ControllerServer(
             config.earlyStartListeners.map(_.value()).asJava))
       }
 
-      sharedServer.startForController()
+      sharedServer.startForController(listenerInfo)
 
       createTopicPolicy = Option(config.
         getConfiguredInstance(CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG, classOf[CreateTopicPolicy]))
@@ -246,7 +247,6 @@ class ControllerServer(
           setQuorumFeatures(quorumFeatures).
           setDefaultReplicationFactor(config.defaultReplicationFactor.toShort).
           setDefaultNumPartitions(config.numPartitions.intValue()).
-          setDefaultMinIsr(config.minInSyncReplicas.intValue()).
           setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),
             TimeUnit.MILLISECONDS)).
           setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs).
@@ -265,6 +265,8 @@ class ControllerServer(
           setDelegationTokenMaxLifeMs(config.delegationTokenMaxLifeMs).
           setDelegationTokenExpiryTimeMs(config.delegationTokenExpiryTimeMs).
           setDelegationTokenExpiryCheckIntervalMs(config.delegationTokenExpiryCheckIntervalMs).
+          setUncleanLeaderElectionCheckIntervalMs(config.uncleanLeaderElectionCheckIntervalMs).
+          setInterBrokerListenerName(config.interBrokerListenerName.value()).
           setEligibleLeaderReplicasEnabled(config.elrEnabled)
       }
       controller = controllerBuilder.build()

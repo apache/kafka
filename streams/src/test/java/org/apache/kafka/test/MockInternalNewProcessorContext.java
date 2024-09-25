@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.test;
 
-import java.util.Objects;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
@@ -42,6 +41,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 import java.io.File;
+import java.util.Objects;
 import java.util.Properties;
 
 public class MockInternalNewProcessorContext<KOut, VOut> extends MockProcessorContext<KOut, VOut> implements InternalProcessorContext<KOut, VOut> {
@@ -231,7 +231,7 @@ public class MockInternalNewProcessorContext<KOut, VOut> extends MockProcessorCo
     }
 
     @Override
-    public ProcessorMetadata getProcessorMetadata() {
+    public ProcessorMetadata processorMetadata() {
         return processorMetadata;
     }
 

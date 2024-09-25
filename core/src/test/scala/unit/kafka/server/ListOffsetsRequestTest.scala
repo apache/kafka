@@ -22,17 +22,26 @@ import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartit
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
+import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-import java.util.Optional
+import java.util.{Optional, Properties}
+import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
 class ListOffsetsRequestTest extends BaseRequestTest {
 
   val topic = "topic"
   val partition = new TopicPartition(topic, 0)
+
+  override def modifyConfigs(props: Seq[Properties]): Unit = {
+    super.modifyConfigs(props)
+    props.foreach { p =>
+      p.put(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true")
+    }
+  }
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
@@ -45,7 +54,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
         .setCurrentLeaderEpoch(0)).asJava)).asJava
 
     val consumerRequest = ListOffsetsRequest.Builder
-      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false)
+      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
       .setTargetTimes(targetTimes)
       .build()
 
@@ -83,19 +92,6 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, nonReplica, debugReplicaRequest)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testListOffsetsMaxTimeStampOldestVersion(quorum: String): Unit = {
-    val consumerRequestBuilder = ListOffsetsRequest.Builder
-      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false)
-
-    val maxTimestampRequestBuilder = ListOffsetsRequest.Builder
-      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, true)
-
-    assertEquals(0.toShort, consumerRequestBuilder.oldestAllowedVersion())
-    assertEquals(7.toShort, maxTimestampRequestBuilder.oldestAllowedVersion())
-  }
-
   def assertResponseErrorForEpoch(error: Errors, brokerId: Int, currentLeaderEpoch: Optional[Integer]): Unit = {
     val listOffsetPartition = new ListOffsetsPartition()
       .setPartitionIndex(partition.partition)
@@ -106,7 +102,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
       .setName(topic)
       .setPartitions(List(listOffsetPartition).asJava)).asJava
     val request = ListOffsetsRequest.Builder
-      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false)
+      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
       .setTargetTimes(targetTimes)
       .build()
     assertResponseError(error, brokerId, request)
@@ -150,7 +146,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
         .setTimestamp(timestamp)).asJava)).asJava
 
     val builder = ListOffsetsRequest.Builder
-      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false)
+      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
       .setTargetTimes(targetTimes)
 
     val request = if (version == -1) builder.build() else builder.build(version)
@@ -233,24 +229,33 @@ class ListOffsetsRequestTest extends BaseRequestTest {
       if (version == 0) {
         assertEquals((-1L, -1), fetchOffsetAndEpoch(firstLeaderId, 0L, version.toShort))
         assertEquals((0L, -1), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, version.toShort))
-        assertEquals((0L, -1), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, version.toShort))
         assertEquals((10L, -1), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, version.toShort))
+        assertEquals((-1L, -1, Errors.UNSUPPORTED_VERSION.code()), fetchOffsetAndEpochWithError(firstLeaderId, ListOffsetsRequest.MAX_TIMESTAMP, version.toShort))
+        assertEquals((-1L, -1, Errors.UNSUPPORTED_VERSION.code()), fetchOffsetAndEpochWithError(firstLeaderId, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, version.toShort))
       } else if (version >= 1 && version <= 3) {
         assertEquals((0L, -1), fetchOffsetAndEpoch(firstLeaderId, 0L, version.toShort))
         assertEquals((0L, -1), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, version.toShort))
-        assertEquals((0L, -1), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, version.toShort))
         assertEquals((10L, -1), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, version.toShort))
+        assertEquals((-1L, -1, Errors.UNSUPPORTED_VERSION.code()), fetchOffsetAndEpochWithError(firstLeaderId, ListOffsetsRequest.MAX_TIMESTAMP, version.toShort))
+        assertEquals((-1L, -1, Errors.UNSUPPORTED_VERSION.code()), fetchOffsetAndEpochWithError(firstLeaderId, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, version.toShort))
       } else if (version >= 4 && version <= 6) {
         assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, version.toShort))
         assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, version.toShort))
-        assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, version.toShort))
         assertEquals((10L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, version.toShort))
-      } else if (version >= 7) {
+        assertEquals((-1L, -1, Errors.UNSUPPORTED_VERSION.code()), fetchOffsetAndEpochWithError(firstLeaderId, ListOffsetsRequest.MAX_TIMESTAMP, version.toShort))
+        assertEquals((-1L, -1, Errors.UNSUPPORTED_VERSION.code()), fetchOffsetAndEpochWithError(firstLeaderId, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, version.toShort))
+      } else if (version == 7) {
         assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, version.toShort))
         assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, version.toShort))
-        assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, version.toShort))
         assertEquals((10L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, version.toShort))
         assertEquals((9L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.MAX_TIMESTAMP, version.toShort))
+        assertEquals((-1L, -1, Errors.UNSUPPORTED_VERSION.code()), fetchOffsetAndEpochWithError(firstLeaderId, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, version.toShort))
+      } else if (version >= 8) {
+        assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, version.toShort))
+        assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, version.toShort))
+        assertEquals((10L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, version.toShort))
+        assertEquals((9L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.MAX_TIMESTAMP, version.toShort))
+        assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, version.toShort))
       }
     }
   }

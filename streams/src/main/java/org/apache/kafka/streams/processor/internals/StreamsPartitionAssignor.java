@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.time.Instant;
-import java.util.Optional;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Function;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
@@ -41,14 +37,13 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.ApplicationState;
-import org.apache.kafka.streams.processor.assignment.TaskAssignmentUtils;
 import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
-import org.apache.kafka.streams.processor.assignment.TaskAssignor.AssignmentError;
-import org.apache.kafka.streams.processor.assignment.TaskInfo;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
+import org.apache.kafka.streams.processor.assignment.TaskAssignmentUtils;
+import org.apache.kafka.streams.processor.assignment.TaskAssignor.AssignmentError;
 import org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment;
+import org.apache.kafka.streams.processor.assignment.TaskInfo;
 import org.apache.kafka.streams.processor.assignment.TaskTopicPartition;
-import org.apache.kafka.streams.processor.internals.assignment.DefaultApplicationState;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
@@ -57,19 +52,22 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorConfigura
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
+import org.apache.kafka.streams.processor.internals.assignment.DefaultApplicationState;
+import org.apache.kafka.streams.processor.internals.assignment.DefaultTaskInfo;
 import org.apache.kafka.streams.processor.internals.assignment.DefaultTaskTopicPartition;
 import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.LegacyStickyTaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.LegacyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.RackUtils;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
-import org.apache.kafka.streams.processor.internals.assignment.LegacyTaskAssignor;
-import org.apache.kafka.streams.processor.internals.assignment.DefaultTaskInfo;
 import org.apache.kafka.streams.state.HostInfo;
+
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -80,14 +78,17 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -294,8 +295,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         // If using NamedTopologies, filter out any that are no longer recognized/have been removed
         final Map<TaskId, Long> taskOffsetSums = taskManager.topologyMetadata().hasNamedTopologies() ?
-            filterMap(taskManager.getTaskOffsetSums(), t -> currentNamedTopologies.contains(t.getKey().topologyName())) :
-            taskManager.getTaskOffsetSums();
+            filterMap(taskManager.taskOffsetSums(), t -> currentNamedTopologies.contains(t.getKey().topologyName())) :
+            taskManager.taskOffsetSums();
 
         return new SubscriptionInfo(
             usedSubscriptionMetadataVersion,

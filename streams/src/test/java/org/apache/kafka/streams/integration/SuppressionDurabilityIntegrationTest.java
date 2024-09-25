@@ -27,7 +27,6 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -38,9 +37,10 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.kstream.Transformer;
-import org.apache.kafka.streams.kstream.TransformerSupplier;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.TestUtils;
 
@@ -107,9 +107,8 @@ public class SuppressionDurabilityIntegrationTest {
     private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
     private static final long COMMIT_INTERVAL = 100L;
 
-    @SuppressWarnings("deprecation")
     @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
+    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
     public void shouldRecoverBufferAfterShutdown(final String processingGuarantee, final TestInfo testInfo) {
         final String testId = safeUniqueTestName(testInfo);
         final String appId = "appId_" + testId;
@@ -141,12 +140,12 @@ public class SuppressionDurabilityIntegrationTest {
         final MetadataValidator metadataValidator = new MetadataValidator(input);
 
         suppressedCounts
-            .transform(metadataValidator)
+            .process(metadataValidator)
             .to(outputSuppressed, Produced.with(STRING_SERDE, Serdes.Long()));
 
         valueCounts
             .toStream()
-            .transform(metadataValidator)
+            .process(metadataValidator)
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
         final Properties streamsConfig = mkProperties(mkMap(
@@ -252,7 +251,7 @@ public class SuppressionDurabilityIntegrationTest {
         }
     }
 
-    private static final class MetadataValidator implements TransformerSupplier<String, Long, KeyValue<String, Long>> {
+    private static final class MetadataValidator implements ProcessorSupplier<String, Long, String, Long> {
         private static final Logger LOG = LoggerFactory.getLogger(MetadataValidator.class);
         private final AtomicReference<Throwable> firstException = new AtomicReference<>();
         private final String topic;
@@ -262,29 +261,24 @@ public class SuppressionDurabilityIntegrationTest {
         }
 
         @Override
-        public Transformer<String, Long, KeyValue<String, Long>> get() {
-            return new Transformer<String, Long, KeyValue<String, Long>>() {
-                private ProcessorContext context;
+        public Processor<String, Long, String, Long> get() {
+            return new Processor<String, Long, String, Long>() {
+                private ProcessorContext<String, Long> context;
 
                 @Override
-                public void init(final ProcessorContext context) {
+                public void init(final ProcessorContext<String, Long> context) {
                     this.context = context;
                 }
 
                 @Override
-                public KeyValue<String, Long> transform(final String key, final Long value) {
+                public void process(final Record<String, Long> record) {
                     try {
-                        assertThat(context.topic(), equalTo(topic));
+                        assertThat(context.recordMetadata().get().topic(), equalTo(topic));
                     } catch (final Throwable e) {
                         firstException.compareAndSet(null, e);
                         LOG.error("Validation Failed", e);
                     }
-                    return new KeyValue<>(key, value);
-                }
-
-                @Override
-                public void close() {
-
+                    context.forward(record);
                 }
             };
         }

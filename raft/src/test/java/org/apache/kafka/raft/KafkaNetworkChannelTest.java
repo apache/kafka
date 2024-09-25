@@ -26,7 +26,6 @@ import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
-import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.network.ListenerName;
@@ -42,7 +41,6 @@ import org.apache.kafka.common.requests.EndQuorumEpochRequest;
 import org.apache.kafka.common.requests.EndQuorumEpochResponse;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
-import org.apache.kafka.common.requests.FetchSnapshotRequest;
 import org.apache.kafka.common.requests.FetchSnapshotResponse;
 import org.apache.kafka.common.requests.VoteRequest;
 import org.apache.kafka.common.requests.VoteResponse;
@@ -233,7 +231,6 @@ public class KafkaNetworkChannelTest {
         ApiMessage apiRequest = buildTestRequest(apiKey);
         RaftRequest.Outbound request = new RaftRequest.Outbound(
             correlationId,
-            apiRequest.highestSupportedVersion(),
             apiRequest,
             destination,
             createdTimeMs
@@ -287,27 +284,24 @@ public class KafkaNetworkChannelTest {
                 return VoteRequest.singletonRequest(topicPartition, clusterId, leaderEpoch, leaderId, lastEpoch, 329);
 
             case FETCH:
-                FetchRequestData request = RaftUtil.singletonFetchRequest(topicPartition, topicId, fetchPartition -> {
+                FetchRequestData request = RaftUtil.singletonFetchRequest(topicPartition, topicId, fetchPartition ->
                     fetchPartition
                         .setCurrentLeaderEpoch(5)
                         .setFetchOffset(333)
-                        .setLastFetchedEpoch(5);
-                });
+                        .setLastFetchedEpoch(5)
+                );
                 request.setReplicaState(new FetchRequestData.ReplicaState().setReplicaId(1));
                 return request;
 
             case FETCH_SNAPSHOT:
-                return FetchSnapshotRequest.singleton(
+                return RaftUtil.singletonFetchSnapshotRequest(
                     clusterId,
-                    1,
+                    ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID),
                     topicPartition,
-                    snapshotPartition -> snapshotPartition
-                        .setCurrentLeaderEpoch(5)
-                        .setSnapshotId(new FetchSnapshotRequestData.SnapshotId()
-                            .setEpoch(4)
-                            .setEndOffset(323)
-                        )
-                        .setPosition(10)
+                    5,
+                    new OffsetAndEpoch(323, 4),
+                    1024,
+                    10
                 );
 
             default:
@@ -322,7 +316,23 @@ public class KafkaNetworkChannelTest {
             case END_QUORUM_EPOCH:
                 return new EndQuorumEpochResponseData().setErrorCode(error.code());
             case VOTE:
-                return VoteResponse.singletonResponse(error, topicPartition, Errors.NONE, 1, 5, false);
+                return new VoteResponseData()
+                    .setErrorCode(error.code())
+                    .setTopics(
+                        Collections.singletonList(
+                            new VoteResponseData.TopicData()
+                                .setTopicName(topicPartition.topic())
+                                .setPartitions(
+                                    Collections.singletonList(
+                                        new VoteResponseData.PartitionData()
+                                            .setErrorCode(Errors.NONE.code())
+                                            .setLeaderId(1)
+                                            .setLeaderEpoch(5)
+                                            .setVoteGranted(false)
+                                    )
+                                )
+                        )
+                    );
             case FETCH:
                 return new FetchResponseData().setErrorCode(error.code());
             case FETCH_SNAPSHOT:

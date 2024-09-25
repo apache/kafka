@@ -20,6 +20,7 @@ import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.RestClient;
+import org.apache.kafka.connect.runtime.rest.RestRequestTimeout;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.util.Callback;
 
@@ -69,6 +70,10 @@ public class InternalConnectResourceTest {
     }
     private static final String FENCE_PATH = "/connectors/" + CONNECTOR_NAME + "/fence";
     private static final String TASK_CONFIGS_PATH = "/connectors/" + CONNECTOR_NAME + "/tasks";
+    private static final RestRequestTimeout REST_REQUEST_TIMEOUT = RestRequestTimeout.constant(
+            RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS,
+            RestServer.DEFAULT_HEALTH_CHECK_TIMEOUT_MS
+    );
 
     @Mock
     private UriInfo uriInfo;
@@ -81,7 +86,7 @@ public class InternalConnectResourceTest {
 
     @BeforeEach
     public void setup() {
-        internalResource = new InternalConnectResource(herder, restClient, () -> RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS);
+        internalResource = new InternalConnectResource(herder, restClient, REST_REQUEST_TIMEOUT);
         internalResource.uriInfo = uriInfo;
     }
 

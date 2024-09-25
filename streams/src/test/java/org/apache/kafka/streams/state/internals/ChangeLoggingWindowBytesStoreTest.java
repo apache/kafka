@@ -18,11 +18,11 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.WindowStore;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -63,14 +63,6 @@ public class ChangeLoggingWindowBytesStoreTest {
     @AfterEach
     public void tearDown() {
         verify(inner).init((StateStoreContext) context, store);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        store.init((ProcessorContext) context, store);
-
-        verify(inner).init((ProcessorContext) context, store);
     }
 
     @Test

@@ -19,22 +19,24 @@ package kafka.server
 
 import kafka.raft.KafkaRaftManager
 import kafka.server.Server.MetricsPrefix
-import kafka.server.metadata.BrokerServerMetrics
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
 import org.apache.kafka.controller.metrics.ControllerMetadataMetrics
 import org.apache.kafka.image.MetadataProvenance
 import org.apache.kafka.image.loader.MetadataLoader
 import org.apache.kafka.image.loader.metrics.MetadataLoaderMetrics
-import org.apache.kafka.image.publisher.{SnapshotEmitter, SnapshotGenerator}
 import org.apache.kafka.image.publisher.metrics.SnapshotEmitterMetrics
+import org.apache.kafka.image.publisher.{SnapshotEmitter, SnapshotGenerator}
+import org.apache.kafka.metadata.ListenerInfo
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble
+import org.apache.kafka.raft.Endpoints
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.{FaultHandler, LoggingFaultHandler, ProcessTerminatingFaultHandler}
-import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.metrics.{BrokerServerMetrics, KafkaYammerMetrics}
 
 import java.net.InetSocketAddress
 import java.util.Arrays
@@ -43,7 +45,7 @@ import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import java.util.{Collection => JCollection}
 import java.util.{Map => JMap}
-
+import scala.jdk.CollectionConverters._
 
 /**
  * Creates a fault handler.
@@ -103,8 +105,8 @@ class SharedServer(
   private var started = false
   private var usedByBroker: Boolean = false
   private var usedByController: Boolean = false
-  val brokerConfig = new KafkaConfig(sharedServerConfig.props, false, None)
-  val controllerConfig = new KafkaConfig(sharedServerConfig.props, false, None)
+  val brokerConfig = new KafkaConfig(sharedServerConfig.props, false)
+  val controllerConfig = new KafkaConfig(sharedServerConfig.props, false)
   @volatile var metrics: Metrics = _metrics
   @volatile var raftManager: KafkaRaftManager[ApiMessageAndVersion] = _
   @volatile var brokerMetrics: BrokerServerMetrics = _
@@ -128,7 +130,7 @@ class SharedServer(
    */
   def startForBroker(): Unit = synchronized {
     if (!isUsed()) {
-      start()
+      start(Endpoints.empty())
     }
     usedByBroker = true
   }
@@ -136,9 +138,22 @@ class SharedServer(
   /**
    * The start function called by the controller.
    */
-  def startForController(): Unit = synchronized {
+  def startForController(listenerInfo: ListenerInfo): Unit = synchronized {
     if (!isUsed()) {
-      start()
+      val endpoints = Endpoints.fromInetSocketAddresses(
+        listenerInfo
+          .listeners()
+          .asScala
+          .map { case (listenerName, endpoint) =>
+            (
+              ListenerName.normalised(listenerName),
+              InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
+            )
+          }
+          .toMap
+          .asJava
+      )
+      start(endpoints)
     }
     usedByController = true
   }
@@ -237,7 +252,7 @@ class SharedServer(
       // Note: snapshot generation does not need to be disabled for a publishing fault.
     })
 
-  private def start(): Unit = synchronized {
+  private def start(listenerEndpoints: Endpoints): Unit = synchronized {
     if (started) {
       debug("SharedServer has already been started.")
     } else {
@@ -251,11 +266,12 @@ class SharedServer(
         sharedServerConfig.dynamicConfig.initialize(zkClientOpt = None, clientMetricsReceiverPluginOpt = None)
 
         if (sharedServerConfig.processRoles.contains(ProcessRole.BrokerRole)) {
-          brokerMetrics = BrokerServerMetrics(metrics)
+          brokerMetrics = new BrokerServerMetrics(metrics)
         }
         if (sharedServerConfig.processRoles.contains(ProcessRole.ControllerRole)) {
           controllerServerMetrics = new ControllerMetadataMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry()))
         }
+
         val _raftManager = new KafkaRaftManager[ApiMessageAndVersion](
           clusterId,
           sharedServerConfig,
@@ -268,6 +284,7 @@ class SharedServer(
           Some(s"kafka-${sharedServerConfig.nodeId}-raft"), // No dash expected at the end
           controllerQuorumVotersFuture,
           bootstrapServers,
+          listenerEndpoints,
           raftManagerFaultHandler
         )
         raftManager = _raftManager

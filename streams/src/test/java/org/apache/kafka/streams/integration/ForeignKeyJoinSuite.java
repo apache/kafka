@@ -22,8 +22,9 @@ import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.CombinedKeySche
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.ResponseJoinProcessorSupplierTest;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionResponseWrapperSerdeTest;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapperSerdeTest;
-import org.junit.runner.RunWith;
-import org.junit.runners.Suite;
+
+import org.junit.platform.suite.api.SelectClasses;
+import org.junit.platform.suite.api.Suite;
 
 /**
  * This suite runs all the tests related to the KTable-KTable foreign key join feature.
@@ -34,8 +35,8 @@ import org.junit.runners.Suite;
  * If desired, it can also be added to a Gradle build task, although this isn't strictly necessary, since all
  * these tests are already included in the `:streams:test` task.
  */
-@RunWith(Suite.class)
-@Suite.SuiteClasses({
+@Suite
+@SelectClasses({
     BytesTest.class,
     KTableKTableForeignKeyInnerJoinMultiIntegrationTest.class,
     KTableKTableForeignKeyJoinIntegrationTest.class,
@@ -48,5 +49,3 @@ import org.junit.runners.Suite;
 })
 public class ForeignKeyJoinSuite {
 }
-
-

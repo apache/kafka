@@ -30,18 +30,17 @@ import org.apache.kafka.common.metrics.Sensor
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.{CompressionType, Records}
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.compress.{GzipCompression, Lz4Compression, ZstdCompression}
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.coordinator.group.ConsumerGroupMigrationPolicy
 import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
-import org.apache.kafka.coordinator.transaction.{TransactionLogConfigs, TransactionStateManagerConfigs}
+import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.PasswordEncoderConfigs
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_8_2, IBP_3_0_IV1}
-import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, KRaftConfigs, QuotaConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms, ShareGroupConfigs, ZkConfigs}
+import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, KRaftConfigs, QuotaConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms, ShareGroupConfig, ZkConfigs}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
 import org.apache.kafka.storage.internals.log.CleanerConfig
@@ -165,7 +164,7 @@ class KafkaConfigTest {
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, s"PLAINTEXT://$hostName:$port")
     val serverConfig = KafkaConfig.fromProps(props)
 
-    val endpoints = serverConfig.effectiveAdvertisedListeners
+    val endpoints = serverConfig.effectiveAdvertisedBrokerListeners
     assertEquals(1, endpoints.size)
     val endpoint = endpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get
     assertEquals(endpoint.host, hostName)
@@ -181,7 +180,7 @@ class KafkaConfigTest {
     props.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, s"PLAINTEXT://$advertisedHostName:$advertisedPort")
 
     val serverConfig = KafkaConfig.fromProps(props)
-    val endpoints = serverConfig.effectiveAdvertisedListeners
+    val endpoints = serverConfig.effectiveAdvertisedBrokerListeners
     val endpoint = endpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get
 
     assertEquals(endpoint.host, advertisedHostName)
@@ -274,7 +273,7 @@ class KafkaConfigTest {
     assertEquals(SecurityProtocol.SSL, controlEndpoint.securityProtocol)
 
     //advertised listener should contain control-plane listener
-    val advertisedEndpoints = serverConfig.effectiveAdvertisedListeners
+    val advertisedEndpoints = serverConfig.effectiveAdvertisedBrokerListeners
     assertTrue(advertisedEndpoints.exists { endpoint =>
       endpoint.securityProtocol == controlEndpoint.securityProtocol && endpoint.listenerName.value().equals(controlEndpoint.listenerName.value())
     })
@@ -360,6 +359,59 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testEffectAdvertiseControllerListenerForControllerWithAdvertisement(): Unit = {
+    val props = new Properties()
+    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
+    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://localhost:9093")
+    props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2")
+    props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9093")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    props.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "CONTROLLER://lb1.example.com:9000")
+
+    val config = KafkaConfig.fromProps(props)
+    assertEquals(
+      Seq(EndPoint("lb1.example.com", 9000, ListenerName.normalised("CONTROLLER"), SecurityProtocol.PLAINTEXT)),
+      config.effectiveAdvertisedControllerListeners
+    )
+  }
+
+  @Test
+  def testEffectAdvertiseControllerListenerForControllerWithoutAdvertisement(): Unit = {
+    val props = new Properties()
+    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
+    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://localhost:9093")
+    props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2")
+    props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9093")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+
+    val config = KafkaConfig.fromProps(props)
+    assertEquals(
+      Seq(EndPoint("localhost", 9093, ListenerName.normalised("CONTROLLER"), SecurityProtocol.PLAINTEXT)),
+      config.effectiveAdvertisedControllerListeners
+    )
+  }
+
+  @Test
+  def testEffectAdvertiseControllerListenerForControllerWithMixedAdvertisement(): Unit = {
+    val props = new Properties()
+    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
+    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://localhost:9093,CONTROLLER_NEW://localhost:9094")
+    props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2")
+    props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9093")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER,CONTROLLER_NEW")
+    props.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "CONTROLLER://lb1.example.com:9000")
+
+    val config = KafkaConfig.fromProps(props)
+    assertEquals(
+      Seq(
+        EndPoint("lb1.example.com", 9000, ListenerName.normalised("CONTROLLER"), SecurityProtocol.PLAINTEXT),
+        EndPoint("localhost", 9094, ListenerName.normalised("CONTROLLER_NEW"), SecurityProtocol.PLAINTEXT)
+      ),
+      config.effectiveAdvertisedControllerListeners
+    )
+  }
+
+  @Test
   def testPortInQuorumVotersNotRequiredToMatchFirstControllerListenerPortForThisKRaftController(): Unit = {
     val props = new Properties()
     props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller,broker")
@@ -394,7 +446,10 @@ class KafkaConfigTest {
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9093")
 
     assertFalse(isValidKafkaConfig(props))
-    assertBadConfigContainingMessage(props, "There must be at least one advertised listener. Perhaps all listeners appear in controller.listener.names?")
+    assertBadConfigContainingMessage(
+      props,
+      "There must be at least one broker advertised listener. Perhaps all listeners appear in controller.listener.names?"
+    )
 
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
     KafkaConfig.fromProps(props)
@@ -492,7 +547,7 @@ class KafkaConfigTest {
       EndPoint("localhost", 9092, new ListenerName("REPLICATION"), SecurityProtocol.SSL),
       EndPoint("localhost", 9093, new ListenerName("INTERNAL"), SecurityProtocol.PLAINTEXT))
     assertEquals(expectedListeners, config.listeners)
-    assertEquals(expectedListeners, config.effectiveAdvertisedListeners)
+    assertEquals(expectedListeners, config.effectiveAdvertisedBrokerListeners)
     val expectedSecurityProtocolMap = Map(
       new ListenerName("CLIENT") -> SecurityProtocol.SSL,
       new ListenerName("REPLICATION") -> SecurityProtocol.SSL,
@@ -523,7 +578,7 @@ class KafkaConfigTest {
       EndPoint("lb1.example.com", 9000, new ListenerName("EXTERNAL"), SecurityProtocol.SSL),
       EndPoint("host1", 9093, new ListenerName("INTERNAL"), SecurityProtocol.PLAINTEXT)
     )
-    assertEquals(expectedAdvertisedListeners, config.effectiveAdvertisedListeners)
+    assertEquals(expectedAdvertisedListeners, config.effectiveAdvertisedBrokerListeners)
 
     val expectedSecurityProtocolMap = Map(
       new ListenerName("EXTERNAL") -> SecurityProtocol.SSL,
@@ -578,7 +633,7 @@ class KafkaConfigTest {
   }
 
   private def listenerListToEndPoints(listenerList: String,
-                              securityProtocolMap: collection.Map[ListenerName, SecurityProtocol] = EndPoint.DefaultSecurityProtocolMap) =
+                              securityProtocolMap: collection.Map[ListenerName, SecurityProtocol] = SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO.asScala) =
     CoreUtils.listenerListToEndPoints(listenerList, securityProtocolMap)
 
   @Test
@@ -591,7 +646,7 @@ class KafkaConfigTest {
     val conf = KafkaConfig.fromProps(props)
     assertEquals(listenerListToEndPoints("PLAINTEXT://:9092"), conf.listeners)
     assertNull(conf.listeners.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get.host)
-    assertEquals(conf.effectiveAdvertisedListeners, listenerListToEndPoints("PLAINTEXT://:9092"))
+    assertEquals(conf.effectiveAdvertisedBrokerListeners, listenerListToEndPoints("PLAINTEXT://:9092"))
   }
 
   @nowarn("cat=deprecation")
@@ -716,7 +771,7 @@ class KafkaConfigTest {
   def testInvalidGzipCompressionLevel(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.setProperty(ServerConfigs.COMPRESSION_TYPE_CONFIG, "gzip")
-    props.setProperty(ServerConfigs.COMPRESSION_GZIP_LEVEL_CONFIG, (GzipCompression.MAX_LEVEL + 1).toString)
+    props.setProperty(ServerConfigs.COMPRESSION_GZIP_LEVEL_CONFIG, (CompressionType.GZIP.maxLevel() + 1).toString)
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
   }
 
@@ -724,7 +779,7 @@ class KafkaConfigTest {
   def testInvalidLz4CompressionLevel(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.setProperty(ServerConfigs.COMPRESSION_TYPE_CONFIG, "lz4")
-    props.setProperty(ServerConfigs.COMPRESSION_LZ4_LEVEL_CONFIG, (Lz4Compression.MAX_LEVEL + 1).toString)
+    props.setProperty(ServerConfigs.COMPRESSION_LZ4_LEVEL_CONFIG, (CompressionType.LZ4.maxLevel() + 1).toString)
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
   }
 
@@ -732,7 +787,7 @@ class KafkaConfigTest {
   def testInvalidZstdCompressionLevel(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.setProperty(ServerConfigs.COMPRESSION_TYPE_CONFIG, "zstd")
-    props.setProperty(ServerConfigs.COMPRESSION_ZSTD_LEVEL_CONFIG, (ZstdCompression.MAX_LEVEL + 1).toString)
+    props.setProperty(ServerConfigs.COMPRESSION_ZSTD_LEVEL_CONFIG, (CompressionType.ZSTD.maxLevel() + 1).toString)
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
   }
 
@@ -823,12 +878,9 @@ class KafkaConfigTest {
         case ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_boolean")
 
         case ServerConfigs.BROKER_ID_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
-        case ServerConfigs.NUM_NETWORK_THREADS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case ServerConfigs.NUM_IO_THREADS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case ServerConfigs.BACKGROUND_THREADS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case ServerConfigs.QUEUED_MAX_REQUESTS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case ServerConfigs.NUM_REPLICA_ALTER_LOG_DIRS_THREADS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
-        case ServerConfigs.QUEUED_MAX_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case ServerConfigs.REQUEST_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
@@ -857,6 +909,9 @@ class KafkaConfigTest {
           assertPropertyInvalid(baseProperties, name, "127.0.0.1:not_a_number")
         case SocketServerConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case SocketServerConfigs.FAILED_AUTHENTICATION_DELAY_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
+        case SocketServerConfigs.QUEUED_MAX_REQUESTS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case SocketServerConfigs.QUEUED_MAX_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
 
         case ServerLogConfigs.NUM_PARTITIONS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case ServerLogConfigs.LOG_DIRS_CONFIG => // ignore string
@@ -927,14 +982,13 @@ class KafkaConfigTest {
         case GroupCoordinatorConfig.OFFSETS_RETENTION_MINUTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case GroupCoordinatorConfig.OFFSETS_RETENTION_CHECK_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case GroupCoordinatorConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case GroupCoordinatorConfig.OFFSET_COMMIT_REQUIRED_ACKS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-2")
-        case TransactionStateManagerConfigs.TRANSACTIONAL_ID_EXPIRATION_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
-        case TransactionStateManagerConfigs.TRANSACTIONS_MAX_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
-        case TransactionLogConfigs.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
-        case TransactionLogConfigs.TRANSACTIONS_LOAD_BUFFER_SIZE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
-        case TransactionLogConfigs.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
-        case TransactionLogConfigs.TRANSACTIONS_TOPIC_SEGMENT_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
-        case TransactionLogConfigs.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
+        case TransactionStateManagerConfig.TRANSACTIONAL_ID_EXPIRATION_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
+        case TransactionStateManagerConfig.TRANSACTIONS_MAX_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
+        case TransactionLogConfig.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
+        case TransactionLogConfig.TRANSACTIONS_LOAD_BUFFER_SIZE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
+        case TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
+        case TransactionLogConfig.TRANSACTIONS_TOPIC_SEGMENT_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
+        case TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
         case QuotaConfigs.QUOTA_WINDOW_SIZE_SECONDS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
 
@@ -946,7 +1000,7 @@ class KafkaConfigTest {
 
         case ServerConfigs.COMPRESSION_GZIP_LEVEL_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case ServerConfigs.COMPRESSION_LZ4_LEVEL_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case ServerConfigs.COMPRESSION_ZSTD_LEVEL_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", ZstdCompression.MAX_LEVEL + 1)
+        case ServerConfigs.COMPRESSION_ZSTD_LEVEL_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", CompressionType.ZSTD.maxLevel() + 1)
 
         //SSL Configs
         case BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG =>
@@ -1018,7 +1072,6 @@ class KafkaConfigTest {
         case PasswordEncoderConfigs.PASSWORD_ENCODER_ITERATIONS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1", "0")
 
         //delegation token configs
-        case DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_ALIAS_CONFIG => // ignore
         case DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG => // ignore
         case DelegationTokenManagerConfigs.DELEGATION_TOKEN_MAX_LIFETIME_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case DelegationTokenManagerConfigs.DELEGATION_TOKEN_EXPIRY_TIME_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
@@ -1075,19 +1128,20 @@ class KafkaConfigTest {
         case GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG => // ignore string
 
         /** Share groups configs */
-        case ShareGroupConfigs.SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
-        case ShareGroupConfigs.SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
-        case ShareGroupConfigs.SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
-        case ShareGroupConfigs.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
-        case ShareGroupConfigs.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
-        case ShareGroupConfigs.SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
-        case ShareGroupConfigs.SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
-        case ShareGroupConfigs.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
-        case ShareGroupConfigs.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
-        case ShareGroupConfigs.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
-        case ShareGroupConfigs.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
-        case ShareGroupConfigs.SHARE_GROUP_MAX_GROUPS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
-        case ShareGroupConfigs.SHARE_GROUP_MAX_SIZE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case GroupCoordinatorConfig.SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case GroupCoordinatorConfig.SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case GroupCoordinatorConfig.SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case GroupCoordinatorConfig.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case GroupCoordinatorConfig.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case GroupCoordinatorConfig.SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case ShareGroupConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case ShareGroupConfig.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case ShareGroupConfig.SHARE_GROUP_MAX_GROUPS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case ShareGroupConfig.SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
 
 
         case _ => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
@@ -1178,9 +1232,9 @@ class KafkaConfigTest {
         case TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG =>
           assertDynamic(kafkaConfigProp, true, () => config.uncleanLeaderElectionEnable)
         case TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG =>
-          assertDynamic(kafkaConfigProp, 10015L, () => config.logLocalRetentionMs)
+          assertDynamic(kafkaConfigProp, 10015L, () => config.remoteLogManagerConfig.logLocalRetentionMs)
         case TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG =>
-          assertDynamic(kafkaConfigProp, 10016L, () => config.logLocalRetentionBytes)
+          assertDynamic(kafkaConfigProp, 10016L, () => config.remoteLogManagerConfig.logLocalRetentionBytes)
         case TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG =>
         // not dynamically updatable
         case QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG =>
@@ -1220,14 +1274,14 @@ class KafkaConfigTest {
     assertEquals(false, config.brokerIdGenerationEnable)
     assertEquals(1, config.maxReservedBrokerId)
     assertEquals(1, config.brokerId)
-    assertEquals(Seq("PLAINTEXT://127.0.0.1:1122"), config.effectiveAdvertisedListeners.map(_.connectionString))
+    assertEquals(Seq("PLAINTEXT://127.0.0.1:1122"), config.effectiveAdvertisedBrokerListeners.map(_.connectionString))
     assertEquals(Map("127.0.0.1" -> 2, "127.0.0.2" -> 3), config.maxConnectionsPerIpOverrides)
     assertEquals(List("/tmp1", "/tmp2"), config.logDirs)
     assertEquals(12 * 60L * 1000L * 60, config.logRollTimeMillis)
     assertEquals(11 * 60L * 1000L * 60, config.logRollTimeJitterMillis)
     assertEquals(10 * 60L * 1000L * 60, config.logRetentionTimeMillis)
     assertEquals(123L, config.logFlushIntervalMs)
-    assertEquals(CompressionType.SNAPPY, config.offsetsTopicCompressionType)
+    assertEquals(CompressionType.SNAPPY, config.groupCoordinatorConfig.offsetTopicCompressionType)
     assertEquals(Sensor.RecordingLevel.DEBUG.toString, config.metricRecordingLevel)
     assertEquals(false, config.tokenAuthEnabled)
     assertEquals(7 * 24 * 60L * 60L * 1000L, config.delegationTokenMaxLifeMs)
@@ -1294,7 +1348,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testControllerListenersCannotBeAdvertisedForKRaftBroker(): Unit = {
+  def testControllerListenersCanBeAdvertisedForKRaftCombined(): Unit = {
     val props = new Properties()
     props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker,controller")
     val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
@@ -1304,11 +1358,8 @@ class KafkaConfigTest {
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "PLAINTEXT,SSL")
     props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9092")
-    assertBadConfigContainingMessage(props,
-      "The advertised.listeners config must not contain KRaft controller listeners from controller.listener.names when process.roles contains the broker role")
 
-    // Valid now
-    props.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "SASL_SSL://C:9094")
+    // Valid
     KafkaConfig.fromProps(props)
 
     // Also valid if we allow advertised listeners to derive from listeners/controller.listener.names
@@ -1317,8 +1368,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testAdvertisedListenersDisallowedForKRaftControllerOnlyRole(): Unit = {
-    // Test that advertised listeners cannot be set when KRaft and server is controller only.
+  def testAdvertisedListenersAllowedForKRaftControllerOnlyRole(): Unit = {
     // Test that listeners must enumerate every controller listener
     // Test that controller listener must enumerate every listener
     val correctListeners = "PLAINTEXT://A:9092,SSL://B:9093"
@@ -1329,21 +1379,18 @@ class KafkaConfigTest {
     val props = new Properties()
     props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, correctListeners)
-    props.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, incorrectListeners)
+    props.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, correctListeners)
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, correctControllerListenerNames)
     props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9092")
-    var expectedExceptionContainsText = "The advertised.listeners config must be empty when process.roles=controller"
-    assertBadConfigContainingMessage(props, expectedExceptionContainsText)
 
-    // Invalid if advertised listeners is explicitly to the set
-    props.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, correctListeners)
-    assertBadConfigContainingMessage(props, expectedExceptionContainsText)
+    // Valid
+    KafkaConfig.fromProps(props)
 
     // Invalid if listeners contains names not in controller.listener.names
     props.remove(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG)
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, incorrectListeners)
-    expectedExceptionContainsText = """The listeners config must only contain KRaft controller listeners from
+    var expectedExceptionContainsText = """The listeners config must only contain KRaft controller listeners from
     |controller.listener.names when process.roles=controller""".stripMargin.replaceAll("\n", " ")
     assertBadConfigContainingMessage(props, expectedExceptionContainsText)
 
@@ -1787,8 +1834,11 @@ class KafkaConfigTest {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
     props.setProperty(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
     assertEquals(
-      "If using zookeeper.metadata.migration.enable, controller.quorum.voters must contain a parseable set of voters.",
-      assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props)).getMessage)
+      """If using zookeeper.metadata.migration.enable, either controller.quorum.bootstrap.servers
+      |must contain the set of bootstrap controllers or controller.quorum.voters must contain a
+      |parseable set of controllers.""".stripMargin.replace("\n", " "),
+      assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props)).getMessage
+    )
 
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "3000@localhost:9093")
     assertEquals(
@@ -1830,6 +1880,17 @@ class KafkaConfigTest {
     assertEquals(
       "requirement failed: Cannot enable ZooKeeper migration with multiple log directories " +
       "(aka JBOD) without setting 'inter.broker.protocol.version' to 3.7-IV2 or higher",
+      assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props)).getMessage)
+  }
+
+  @Test
+  def testMigrationCannotBeEnabledWithBrokerIdGeneration(): Unit = {
+    val props = TestUtils.createBrokerConfig(-1, TestUtils.MockZkConnect, port = TestUtils.MockZkPort, logDirCount = 2)
+    props.setProperty(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
+    props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "3000@localhost:9093")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    assertEquals(
+      "requirement failed: broker.id generation is incompatible with ZooKeeper migration. Please stop using it before enabling migration (set broker.id to a value greater or equal to 0).",
       assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props)).getMessage)
   }
 
@@ -1889,14 +1950,10 @@ class KafkaConfigTest {
   def testGroupCoordinatorRebalanceProtocols(): Unit = {
     val props = new Properties()
 
-    // consumer cannot be enabled in ZK mode.
-    props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer")
-    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
-
     // Setting KRaft's properties.
     props.putAll(kraftProps())
 
-    // Only classic and consumer are supported.
+    // Only classic, consumer and share are supported.
     props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "foo")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
 
@@ -1906,9 +1963,17 @@ class KafkaConfigTest {
 
     // This is OK.
     props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer")
-    val config = KafkaConfig.fromProps(props)
+    var config = KafkaConfig.fromProps(props)
     assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER), config.groupCoordinatorRebalanceProtocols)
     assertTrue(config.isNewGroupCoordinatorEnabled)
+    assertFalse(config.shareGroupConfig.isShareGroupEnabled)
+
+    // This is OK.
+    props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,share")
+    config = KafkaConfig.fromProps(props)
+    assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER, GroupType.SHARE), config.groupCoordinatorRebalanceProtocols)
+    assertTrue(config.isNewGroupCoordinatorEnabled)
+    assertTrue(config.shareGroupConfig.isShareGroupEnabled)
   }
 
   @Test
@@ -1923,14 +1988,14 @@ class KafkaConfigTest {
     ConsumerGroupMigrationPolicy.values.foreach { policy =>
       props.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, policy.toString)
       val config = KafkaConfig.fromProps(props)
-      assertEquals(policy, config.consumerGroupMigrationPolicy)
+      assertEquals(policy, config.groupCoordinatorConfig.consumerGroupMigrationPolicy)
     }
 
     // The config is case-insensitive.
     ConsumerGroupMigrationPolicy.values.foreach { policy =>
       props.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, policy.toString.toUpperCase())
       val config = KafkaConfig.fromProps(props)
-      assertEquals(policy, config.consumerGroupMigrationPolicy)
+      assertEquals(policy, config.groupCoordinatorConfig.consumerGroupMigrationPolicy)
     }
   }
 
@@ -1951,16 +2016,16 @@ class KafkaConfigTest {
     props.putAll(kraftProps())
 
     // Max should be greater than or equals to min.
-    props.put(ShareGroupConfigs.SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, "20")
-    props.put(ShareGroupConfigs.SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, "10")
+    props.put(GroupCoordinatorConfig.SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, "20")
+    props.put(GroupCoordinatorConfig.SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, "10")
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
 
     // The timeout should be within the min-max range.
-    props.put(ShareGroupConfigs.SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, "10")
-    props.put(ShareGroupConfigs.SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, "20")
-    props.put(ShareGroupConfigs.SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, "5")
+    props.put(GroupCoordinatorConfig.SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, "10")
+    props.put(GroupCoordinatorConfig.SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, "20")
+    props.put(GroupCoordinatorConfig.SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, "5")
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
-    props.put(ShareGroupConfigs.SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, "25")
+    props.put(GroupCoordinatorConfig.SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, "25")
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
   }
 
@@ -1970,16 +2035,16 @@ class KafkaConfigTest {
     props.putAll(kraftProps())
 
     // Max should be greater than or equals to min.
-    props.put(ShareGroupConfigs.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, "20")
-    props.put(ShareGroupConfigs.SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, "10")
+    props.put(GroupCoordinatorConfig.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, "20")
+    props.put(GroupCoordinatorConfig.SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, "10")
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
 
     // The timeout should be within the min-max range.
-    props.put(ShareGroupConfigs.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, "10")
-    props.put(ShareGroupConfigs.SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, "20")
-    props.put(ShareGroupConfigs.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, "5")
+    props.put(GroupCoordinatorConfig.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, "10")
+    props.put(GroupCoordinatorConfig.SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, "20")
+    props.put(GroupCoordinatorConfig.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, "5")
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
-    props.put(ShareGroupConfigs.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, "25")
+    props.put(GroupCoordinatorConfig.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, "25")
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
   }
 
@@ -1988,19 +2053,19 @@ class KafkaConfigTest {
     val props = new Properties()
     props.putAll(kraftProps())
 
-    props.put(ShareGroupConfigs.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG, "10")
+    props.put(ShareGroupConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG, "10")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
-    props.put(ShareGroupConfigs.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, "10000000")
+    props.put(ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, "10000000")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
 
     // The duration should be within the min-max range.
-    props.put(ShareGroupConfigs.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG, "1000")
-    props.put(ShareGroupConfigs.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, "3600000")
-    props.put(ShareGroupConfigs.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, "999")
+    props.put(ShareGroupConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG, "1000")
+    props.put(ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, "3600000")
+    props.put(ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, "999")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
-    props.put(ShareGroupConfigs.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, "3600001")
+    props.put(ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, "3600001")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
-    props.put(ShareGroupConfigs.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, "30000")
+    props.put(ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, "30000")
     assertDoesNotThrow(() => KafkaConfig.fromProps(props))
   }
 }

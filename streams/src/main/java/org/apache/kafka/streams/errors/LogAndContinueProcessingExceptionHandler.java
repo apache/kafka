@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.streams.processor.api.Record;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

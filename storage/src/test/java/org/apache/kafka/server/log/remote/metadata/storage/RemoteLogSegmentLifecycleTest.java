@@ -34,7 +34,6 @@ import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.storage.internals.log.EpochEntry;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.Arrays;
@@ -57,7 +56,6 @@ import static org.mockito.Mockito.verify;
 
 @ClusterTestDefaults(brokers = 3)
 @ExtendWith(value = ClusterTestExtensions.class)
-@Tag("integration")
 public class RemoteLogSegmentLifecycleTest {
 
     private final int segSize = 1048576;

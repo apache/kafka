@@ -16,6 +16,11 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
+import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor.CostFunction;
+
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -25,10 +30,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.BiPredicate;
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.assignment.ProcessId;
-import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor.CostFunction;
 
 /**
  * Construct graph for rack aware task assignor

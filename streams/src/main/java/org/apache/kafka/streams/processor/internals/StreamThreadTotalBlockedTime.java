@@ -17,11 +17,12 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Map;
-import java.util.function.Supplier;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+
+import java.util.Map;
+import java.util.function.Supplier;
 
 public class StreamThreadTotalBlockedTime {
     private final Consumer<?, ?> consumer;

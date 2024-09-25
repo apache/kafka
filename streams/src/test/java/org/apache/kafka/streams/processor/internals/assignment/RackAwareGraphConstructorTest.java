@@ -16,7 +16,25 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import static java.util.Arrays.asList;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
+import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
+
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+import java.util.SortedMap;
+import java.util.SortedSet;
+import java.util.TreeMap;
+
 import static java.util.Collections.emptySet;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertBalancedTasks;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertValidAssignment;
@@ -26,28 +44,6 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
-import java.util.SortedMap;
-import java.util.SortedSet;
-import java.util.TreeMap;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.assignment.ProcessId;
-import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.jupiter.api.Assertions;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-
-@RunWith(Parameterized.class)
 public class RackAwareGraphConstructorTest {
     private static final String MIN_COST = "min_cost";
     private static final String BALANCE_SUBTOPOLOGY = "balance_sub_topology";
@@ -71,19 +67,8 @@ public class RackAwareGraphConstructorTest {
         PARTITION_SIZE);
     private RackAwareGraphConstructor<ClientState> constructor;
 
-    @Parameter
-    public String constructorType;
 
-    @Parameterized.Parameters(name = "constructorType={0}")
-    public static Collection<Object[]> getParamStoreType() {
-        return asList(new Object[][] {
-            {MIN_COST},
-            {BALANCE_SUBTOPOLOGY}
-        });
-    }
-
-    @Before
-    public void setUp() {
+    public void setUp(final String constructorType) {
         randomAssignTasksToClient(taskIdList, clientStateMap);
 
         if (constructorType.equals(MIN_COST)) {
@@ -100,8 +85,10 @@ public class RackAwareGraphConstructorTest {
         return 1;
     }
 
-    @Test
-    public void testSubtopologyShouldContainAllTasks() {
+    @ParameterizedTest
+    @ValueSource(strings = {MIN_COST, BALANCE_SUBTOPOLOGY})
+    public void testSubtopologyShouldContainAllTasks(final String constructorType) {
+        setUp(constructorType);
         if (constructorType.equals(MIN_COST)) {
             return;
         }
@@ -111,8 +98,10 @@ public class RackAwareGraphConstructorTest {
             ClientState::hasAssignedTask, this::getCost, 10, 1, false, false));
     }
 
-    @Test
-    public void testMinCostGraphConstructor() {
+    @ParameterizedTest
+    @ValueSource(strings = {MIN_COST, BALANCE_SUBTOPOLOGY})
+    public void testMinCostGraphConstructor(final String constructorType) {
+        setUp(constructorType);
         if (constructorType.equals(BALANCE_SUBTOPOLOGY)) {
             return;
         }
@@ -173,8 +162,10 @@ public class RackAwareGraphConstructorTest {
         assertEquals(taskIdList.size(), totalFlow);
     }
 
-    @Test
-    public void testBalanceSubtopologyGraphConstructor() {
+    @ParameterizedTest
+    @ValueSource(strings = {MIN_COST, BALANCE_SUBTOPOLOGY})
+    public void testBalanceSubtopologyGraphConstructor(final String constructorType) {
+        setUp(constructorType);
         if (constructorType.equals(MIN_COST)) {
             return;
         }
@@ -262,8 +253,10 @@ public class RackAwareGraphConstructorTest {
         assertEquals(taskIdList.size(), totalFlow);
     }
 
-    @Test
-    public void testAssignTaskFromMinCostFlow() {
+    @ParameterizedTest
+    @ValueSource(strings = {MIN_COST, BALANCE_SUBTOPOLOGY})
+    public void testAssignTaskFromMinCostFlow(final String constructorType) {
+        setUp(constructorType);
         graph.solveMinCostFlow();
         constructor.assignTaskFromMinCostFlow(
             graph,

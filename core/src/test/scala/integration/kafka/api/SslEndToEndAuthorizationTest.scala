@@ -22,7 +22,7 @@ import java.util.Properties
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
-import org.apache.kafka.common.network.Mode
+import org.apache.kafka.common.network.ConnectionMode
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.utils.Java
@@ -78,7 +78,7 @@ class SslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   }
 
   override def clientSecurityProps(certAlias: String): Properties = {
-    val props = TestUtils.securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile,
+    val props = TestUtils.securityConfigs(ConnectionMode.CLIENT, securityProtocol, trustStoreFile,
       certAlias, clientCn, clientSaslProperties, tlsProtocol)
     props.remove(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG)
     props
@@ -86,7 +86,7 @@ class SslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   // This test doesn't really care about matching the SSL certificate to a particular principal
   // We can override the CN and create a principal based on it or on the server SSL
   override def superuserSecurityProps(certAlias: String): Properties = {
-    val props = TestUtils.securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile,
+    val props = TestUtils.securityConfigs(ConnectionMode.CLIENT, securityProtocol, trustStoreFile,
       certAlias, superuserCn, clientSaslProperties, tlsProtocol)
     props.remove(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG)
     props

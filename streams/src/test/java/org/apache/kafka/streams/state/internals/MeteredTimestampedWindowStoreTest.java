@@ -29,7 +29,6 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
@@ -40,6 +39,7 @@ import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -128,27 +128,6 @@ public class MeteredTimestampedWindowStoreTest {
                 Serdes.String(),
                 new ValueAndTimestampSerde<>(new SerdeThatDoesntHandleNull())
         );
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        setUpWithoutContextName();
-        @SuppressWarnings("unchecked")
-        final WindowStore<Bytes, byte[]> inner = mock(WindowStore.class);
-        final MeteredTimestampedWindowStore<String, String> outer = new MeteredTimestampedWindowStore<>(
-            inner,
-            WINDOW_SIZE_MS, // any size
-            STORE_TYPE,
-            new MockTime(),
-            Serdes.String(),
-            new ValueAndTimestampSerde<>(new SerdeThatDoesntHandleNull())
-        );
-        when(inner.name()).thenReturn("store");
-
-        outer.init((ProcessorContext) context, outer);
-
-        verify(inner).init((ProcessorContext) context, outer);
     }
 
     @Test

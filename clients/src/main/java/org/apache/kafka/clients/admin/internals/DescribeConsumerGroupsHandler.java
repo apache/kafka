@@ -40,9 +40,7 @@ import org.apache.kafka.common.requests.DescribeGroupsRequest;
 import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
-import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
 
@@ -57,6 +55,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.clients.admin.internals.AdminUtils.validAclOperations;
 
 public class DescribeConsumerGroupsHandler implements AdminApiHandler<CoordinatorKey, ConsumerGroupDescription> {
 
@@ -367,18 +367,4 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                 failed.put(groupId, error.exception(errorMsg));
         }
     }
-
-    private Set<AclOperation> validAclOperations(final int authorizedOperations) {
-        if (authorizedOperations == MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED) {
-            return null;
-        }
-        return Utils.from32BitField(authorizedOperations)
-            .stream()
-            .map(AclOperation::fromCode)
-            .filter(operation -> operation != AclOperation.UNKNOWN
-                && operation != AclOperation.ALL
-                && operation != AclOperation.ANY)
-            .collect(Collectors.toSet());
-    }
-
 }

@@ -33,13 +33,13 @@ import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.coordinator.group.CoordinatorRecord;
-import org.apache.kafka.coordinator.group.CoordinatorRecordHelpers;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
+import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.MetadataVersion;
 
@@ -293,6 +293,13 @@ public class ClassicGroup implements Group {
     }
 
     /**
+     * @return True if the group is a simple group.
+     */
+    public boolean isSimpleGroup() {
+        return !protocolType.isPresent() && isEmpty() && pendingJoinMembers.isEmpty();
+    }
+
+    /**
      * @return the current group state.
      */
     public ClassicGroupState currentState() {
@@ -321,12 +328,10 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * To identify whether the given member id is part of this group.
-     *
-     * @param memberId the given member id.
      * @return true if the member is part of this group, false otherwise.
      */
-    public boolean hasMemberId(String memberId) {
+    @Override
+    public boolean hasMember(String memberId) {
         return members.containsKey(memberId);
     }
 
@@ -343,7 +348,8 @@ public class ClassicGroup implements Group {
     /**
      * @return the total number of members in this group.
      */
-    public int size() {
+    @Override
+    public int numMembers() {
         return members.size();
     }
 
@@ -604,6 +610,13 @@ public class ClassicGroup implements Group {
     }
 
     /**
+     * @return The set of pending join members.
+     */
+    public Set<String> pendingJoinMembers() {
+        return Collections.unmodifiableSet(pendingJoinMembers);
+    }
+
+    /**
      * Add a pending member.
      *
      * @param memberId the member id.
@@ -611,7 +624,7 @@ public class ClassicGroup implements Group {
      *         false otherwise.
      */
     public boolean addPendingMember(String memberId) {
-        if (hasMemberId(memberId)) {
+        if (hasMember(memberId)) {
             throw new IllegalStateException("Attempt to add pending member " + memberId +
                 " which is already a stable member of the group.");
         }
@@ -633,7 +646,7 @@ public class ClassicGroup implements Group {
      *         false otherwise.
      */
     public boolean addPendingSyncMember(String memberId) {
-        if (!hasMemberId(memberId)) {
+        if (!hasMember(memberId)) {
             throw new IllegalStateException("Attempt to add pending sync member " + memberId +
                 " which is already a stable member of the group.");
         }
@@ -648,7 +661,7 @@ public class ClassicGroup implements Group {
      * @return true if the group did store this member, false otherwise.
      */
     public boolean removePendingSyncMember(String memberId) {
-        if (!hasMemberId(memberId)) {
+        if (!hasMember(memberId)) {
             throw new IllegalStateException("Attempt to add pending member " + memberId +
                 " which is already a stable member of the group.");
         }
@@ -808,7 +821,7 @@ public class ClassicGroup implements Group {
             }
         }
 
-        if (!hasMemberId(memberId)) {
+        if (!hasMember(memberId)) {
             throw Errors.UNKNOWN_MEMBER_ID.exception();
         }
     }
@@ -926,7 +939,7 @@ public class ClassicGroup implements Group {
      */
     @Override
     public void createGroupTombstoneRecords(List<CoordinatorRecord> records) {
-        records.add(CoordinatorRecordHelpers.newGroupMetadataTombstoneRecord(groupId()));
+        records.add(GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord(groupId()));
     }
 
     @Override
@@ -1443,7 +1456,7 @@ public class ClassicGroup implements Group {
             assignments.put(classicGroupMember.memberId(), classicGroupMember.assignment())
         );
 
-        records.add(CoordinatorRecordHelpers.newGroupMetadataRecord(this, assignments, metadataVersion));
+        records.add(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(this, assignments, metadataVersion));
     }
 
     /**

@@ -36,9 +36,8 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -58,7 +57,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test the unclean shutdown behavior around state store cleanup.
  */
-@SuppressWarnings("deprecation")
 @Tag("integration")
 @Timeout(600)
 public class EOSUncleanShutdownIntegrationTest {
@@ -71,8 +69,8 @@ public class EOSUncleanShutdownIntegrationTest {
         CLUSTER.start();
         STREAMS_CONFIG.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        STREAMS_CONFIG.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        STREAMS_CONFIG.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        STREAMS_CONFIG.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+        STREAMS_CONFIG.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         STREAMS_CONFIG.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL);
         STREAMS_CONFIG.put(StreamsConfig.STATE_DIR_CONFIG, TEST_FOLDER.getPath());
     }
@@ -88,12 +86,11 @@ public class EOSUncleanShutdownIntegrationTest {
 
     private static final int RECORD_TOTAL = 3;
 
-    @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
-    public void shouldWorkWithUncleanShutdownWipeOutStateStore(final String eosConfig) throws InterruptedException {
+    @Test
+    public void shouldWorkWithUncleanShutdownWipeOutStateStore() throws InterruptedException {
         final String appId = "shouldWorkWithUncleanShutdownWipeOutStateStore";
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
-        STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
+        STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
 
         final String input = "input-topic";
         cleanStateBeforeTest(CLUSTER, input);
@@ -127,6 +124,9 @@ public class EOSUncleanShutdownIntegrationTest {
         driver.cleanUp();
         driver.start();
 
+        TestUtils.waitForCondition(() -> driver.state().equals(State.RUNNING),
+            "Expected RUNNING state but driver is on " + driver.state());
+
         // Task's StateDir
         final File taskStateDir = new File(String.join("/", TEST_FOLDER.getPath(), appId, "0_0"));
         final File taskCheckpointFile = new File(taskStateDir, ".checkpoint");
@@ -144,6 +144,8 @@ public class EOSUncleanShutdownIntegrationTest {
 
             TestUtils.waitForCondition(() -> recordCount.get() == RECORD_TOTAL,
                 "Expected " + RECORD_TOTAL + " records processed but only got " + recordCount.get());
+        } catch (final Exception e) {
+            e.printStackTrace();
         } finally {
             TestUtils.waitForCondition(() -> driver.state().equals(State.ERROR),
                 "Expected ERROR state but driver is on " + driver.state());

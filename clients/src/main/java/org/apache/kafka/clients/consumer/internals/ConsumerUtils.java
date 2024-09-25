@@ -66,6 +66,7 @@ public final class ConsumerUtils {
     public static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
     public static final String CONSUMER_JMX_PREFIX = "kafka.consumer";
     public static final String CONSUMER_METRIC_GROUP_PREFIX = "consumer";
+    public static final String CONSUMER_SHARE_METRIC_GROUP_PREFIX = "consumer-share";
     public static final String COORDINATOR_METRICS_SUFFIX = "-coordinator-metrics";
     public static final String CONSUMER_METRICS_SUFFIX = "-metrics";
 
@@ -158,6 +159,12 @@ public final class ConsumerUtils {
         return new FetchMetricsManager(metrics, metricsRegistry);
     }
 
+    public static ShareFetchMetricsManager createShareFetchMetricsManager(Metrics metrics) {
+        Set<String> metricsTags = Collections.singleton(CONSUMER_CLIENT_ID_METRIC_TAG);
+        ShareFetchMetricsRegistry metricsRegistry = new ShareFetchMetricsRegistry(metricsTags, CONSUMER_SHARE_METRIC_GROUP_PREFIX);
+        return new ShareFetchMetricsManager(metrics, metricsRegistry);
+    }
+
     @SuppressWarnings("unchecked")
     public static <K, V> List<ConsumerInterceptor<K, V>> configuredConsumerInterceptors(ConsumerConfig config) {
         return (List<ConsumerInterceptor<K, V>>) ClientUtils.configuredInterceptors(config, ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, ConsumerInterceptor.class);
@@ -208,10 +215,12 @@ public final class ConsumerUtils {
         }
     }
 
-    public static <T> T getResult(Future<T> future, Timer timer) {
+    public static <T> T getResult(Future<T> future, long timeoutMs) {
         try {
-            return future.get(timer.remainingMs(), TimeUnit.MILLISECONDS);
+            return future.get(timeoutMs, TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
+            if (e.getCause() instanceof IllegalStateException)
+                throw (IllegalStateException) e.getCause();
             throw maybeWrapAsKafkaException(e.getCause());
         } catch (InterruptedException e) {
             throw new InterruptException(e);
@@ -220,10 +229,16 @@ public final class ConsumerUtils {
         }
     }
 
+    public static <T> T getResult(Future<T> future, Timer timer) {
+        return getResult(future, timer.remainingMs());
+    }
+
     public static <T> T getResult(Future<T> future) {
         try {
             return future.get();
         } catch (ExecutionException e) {
+            if (e.getCause() instanceof IllegalStateException)
+                throw (IllegalStateException) e.getCause();
             throw maybeWrapAsKafkaException(e.getCause());
         } catch (InterruptedException e) {
             throw new InterruptException(e);

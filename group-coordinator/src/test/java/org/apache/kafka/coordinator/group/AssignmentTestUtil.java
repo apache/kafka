@@ -18,7 +18,7 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
-import org.apache.kafka.coordinator.group.consumer.MemberSubscriptionAndAssignmentImpl;
+import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
 
 import java.util.AbstractMap;
 import java.util.Arrays;

@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.TopicPartition;
+
 import java.util.Collection;
 import java.util.Set;
-
-import org.apache.kafka.common.TopicPartition;
 
 /**
  * See {@link StoreChangelogReader}.

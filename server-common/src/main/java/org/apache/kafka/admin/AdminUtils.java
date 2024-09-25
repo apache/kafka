@@ -130,8 +130,6 @@ public class AdminUtils {
             return assignReplicasToBrokersRackUnaware(nPartitions, replicationFactor, brokerMetadatas.stream().map(b -> b.id).collect(Collectors.toList()), fixedStartIndex,
                 startPartitionId);
         else {
-            if (brokerMetadatas.stream().anyMatch(b -> !b.rack.isPresent()))
-                throw new AdminOperationException("Not all brokers have rack information for replica rack aware assignment.");
             return assignReplicasToBrokersRackAware(nPartitions, replicationFactor, brokerMetadatas, fixedStartIndex,
                 startPartitionId);
         }
@@ -166,7 +164,7 @@ public class AdminUtils {
                                                                                 int fixedStartIndex,
                                                                                 int startPartitionId) {
         Map<Integer, String> brokerRackMap = new HashMap<>();
-        brokerMetadatas.forEach(m -> brokerRackMap.put(m.id, m.rack.get()));
+        brokerMetadatas.forEach(m -> brokerRackMap.put(m.id, m.rack.orElseThrow(() -> new AdminOperationException("Not all brokers have rack information for replica rack aware assignment."))));
         int numRacks = new HashSet<>(brokerRackMap.values()).size();
         List<Integer> arrangedBrokerList = getRackAlternatedBrokerList(brokerRackMap);
         int numBrokers = arrangedBrokerList.size();

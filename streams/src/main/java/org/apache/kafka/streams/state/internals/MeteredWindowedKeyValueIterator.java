@@ -24,8 +24,8 @@ import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
-import java.util.concurrent.atomic.LongAdder;
 import java.util.Set;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Function;
 
 class MeteredWindowedKeyValueIterator<K, V> implements KeyValueIterator<Windowed<K>, V>, MeteredIterator {

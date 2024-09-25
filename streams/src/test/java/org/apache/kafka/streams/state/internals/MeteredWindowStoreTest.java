@@ -34,7 +34,6 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -44,6 +43,7 @@ import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -133,22 +133,6 @@ public class MeteredWindowStoreTest {
             mkEntry("task-id", context.taskId().toString()),
             mkEntry(STORE_TYPE + "-state-id", STORE_NAME)
         );
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        final MeteredWindowStore<String, String> outer = new MeteredWindowStore<>(
-            innerStoreMock,
-            WINDOW_SIZE_MS, // any size
-            STORE_TYPE,
-            new MockTime(),
-            Serdes.String(),
-            new SerdeThatDoesntHandleNull()
-        );
-        when(innerStoreMock.name()).thenReturn("store");
-        doNothing().when(innerStoreMock).init((ProcessorContext) context, outer);
-        outer.init((ProcessorContext) context, outer);
     }
 
     @Test

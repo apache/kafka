@@ -33,6 +33,7 @@ public interface DirectoryEventHandler {
      * Handle the assignment of a topic partition to a directory.
      * @param directoryId  The directory ID
      * @param partition    The topic partition
+     * @param reason       The reason
      * @param callback     Callback to apply when the request is completed.
      */
     void handleAssignment(TopicIdPartition partition, Uuid directoryId, String reason, Runnable callback);

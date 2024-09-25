@@ -31,6 +31,7 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -200,6 +201,10 @@ public class ListValueStoreTest {
         it.close();
 
         // A new all() iterator after a previous all() iterator was closed should not return deleted records.
-        assertThrows(InvalidStateStoreException.class, it::next);
+        if (storeType == StoreType.InMemory) {
+            assertThrows(IllegalStateException.class, it::next);
+        } else {
+            assertThrows(InvalidStateStoreException.class, it::next);
+        }
     }
 }

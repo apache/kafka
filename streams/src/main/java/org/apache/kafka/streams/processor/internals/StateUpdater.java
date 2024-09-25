@@ -195,7 +195,7 @@ public interface StateUpdater {
      *
      * @return set of all tasks managed by the state updater
      */
-    Set<Task> getTasks();
+    Set<Task> tasks();
 
     /**
      * Gets all tasks that are currently being restored inside the state updater.
@@ -206,7 +206,7 @@ public interface StateUpdater {
      *
      * @return set of all updating tasks inside the state updater
      */
-    Set<Task> getUpdatingTasks();
+    Set<Task> updatingTasks();
 
     /**
      * Returns if the state updater restores active tasks.
@@ -238,7 +238,7 @@ public interface StateUpdater {
      *
      * @return set of all tasks managed by the state updater
      */
-    Set<StandbyTask> getStandbyTasks();
+    Set<StandbyTask> standbyTasks();
 
     /**
      * Get the restore consumer instance id for telemetry, and complete the given future to return it.

@@ -59,10 +59,12 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.metadata.LeaderRecoveryState;
+import org.apache.kafka.network.metrics.RequestChannelMetrics;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.apache.kafka.server.authorizer.Authorizer;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.KRaftConfigs;
 
@@ -89,7 +91,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class DescribeTopicPartitionsRequestHandlerTest {
-    private final RequestChannel.Metrics requestChannelMetrics = mock(RequestChannel.Metrics.class);
+    private final RequestChannelMetrics requestChannelMetrics = mock(RequestChannelMetrics.class);
     private final KafkaPrincipalSerde kafkaPrincipalSerde = new KafkaPrincipalSerde() {
         @Override
         public byte[] serialize(KafkaPrincipal principal) throws SerializationException {
@@ -197,7 +199,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
                 .setPartitionEpoch(2)
                 .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value())
         );
-        KRaftMetadataCache metadataCache = new KRaftMetadataCache(0);
+        KRaftMetadataCache metadataCache = new KRaftMetadataCache(0, () -> KRaftVersion.KRAFT_VERSION_1);
         updateKraftMetadataCache(metadataCache, records);
         DescribeTopicPartitionsRequestHandler handler =
             new DescribeTopicPartitionsRequestHandler(metadataCache, new AuthHelper(scala.Option.apply(authorizer)), createKafkaDefaultConfig());
@@ -399,7 +401,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
                 .setPartitionEpoch(2)
                 .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value())
         );
-        KRaftMetadataCache metadataCache = new KRaftMetadataCache(0);
+        KRaftMetadataCache metadataCache = new KRaftMetadataCache(0, () -> KRaftVersion.KRAFT_VERSION_1);
         updateKraftMetadataCache(metadataCache, records);
         DescribeTopicPartitionsRequestHandler handler =
             new DescribeTopicPartitionsRequestHandler(metadataCache, new AuthHelper(scala.Option.apply(authorizer)), createKafkaDefaultConfig());

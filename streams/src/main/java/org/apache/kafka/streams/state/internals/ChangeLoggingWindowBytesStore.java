@@ -18,14 +18,12 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
-
 
 import static java.util.Objects.requireNonNull;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
@@ -53,14 +51,6 @@ class ChangeLoggingWindowBytesStore
         super(bytesStore);
         this.retainDuplicates = retainDuplicates;
         this.keySerializer = requireNonNull(keySerializer, "keySerializer");
-    }
-
-    @Deprecated
-    @Override
-    public void init(final ProcessorContext context,
-                     final StateStore root) {
-        this.context = asInternalProcessorContext(context);
-        super.init(context, root);
     }
 
     @Override
