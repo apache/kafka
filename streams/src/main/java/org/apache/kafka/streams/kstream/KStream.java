@@ -747,43 +747,6 @@ public interface KStream<K, V> {
     KStream<K, V> peek(final ForeachAction<? super K, ? super V> action, final Named named);
 
     /**
-     * Creates an array of {@code KStream} from this stream by branching the records in the original stream based on
-     * the supplied predicates.
-     * Each record is evaluated against the supplied predicates, and predicates are evaluated in order.
-     * Each stream in the result array corresponds position-wise (index) to the predicate in the supplied predicates.
-     * The branching happens on first-match: A record in the original stream is assigned to the corresponding result
-     * stream for the first predicate that evaluates to true, and is assigned to this stream only.
-     * A record will be dropped if none of the predicates evaluate to true.
-     * This is a stateless record-by-record operation.
-     *
-     * @param predicates the ordered list of {@link Predicate} instances
-     * @return multiple distinct substreams of this {@code KStream}
-     * @deprecated since 2.8. Use {@link #split()} instead.
-     */
-    @Deprecated
-    @SuppressWarnings("unchecked")
-    KStream<K, V>[] branch(final Predicate<? super K, ? super V>... predicates);
-
-    /**
-     * Creates an array of {@code KStream} from this stream by branching the records in the original stream based on
-     * the supplied predicates.
-     * Each record is evaluated against the supplied predicates, and predicates are evaluated in order.
-     * Each stream in the result array corresponds position-wise (index) to the predicate in the supplied predicates.
-     * The branching happens on first-match: A record in the original stream is assigned to the corresponding result
-     * stream for the first predicate that evaluates to true, and is assigned to this stream only.
-     * A record will be dropped if none of the predicates evaluate to true.
-     * This is a stateless record-by-record operation.
-     *
-     * @param named  a {@link Named} config used to name the processor in the topology
-     * @param predicates the ordered list of {@link Predicate} instances
-     * @return multiple distinct substreams of this {@code KStream}
-     * @deprecated since 2.8. Use {@link #split(Named)} instead.
-     */
-    @Deprecated
-    @SuppressWarnings("unchecked")
-    KStream<K, V>[] branch(final Named named, final Predicate<? super K, ? super V>... predicates);
-
-    /**
      * Split this stream into different branches. The returned {@link BranchedKStream} instance can be used for routing
      * the records to different branches depending on evaluation against the supplied predicates.
      * <p>

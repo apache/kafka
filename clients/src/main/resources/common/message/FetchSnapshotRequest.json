@@ -46,7 +46,7 @@
             },
             { "name": "Position", "type": "int64", "versions": "0+",
               "about": "The byte position within the snapshot to start fetching from" },
-            { "name": "ReplicaDirectoryId", "type": "uuid", "versions": "1+", "taggedVersions": "1+", "tag": 0,
+            { "name": "ReplicaDirectoryId", "type": "uuid", "versions": "1+", "taggedVersions": "1+", "tag": 0, "ignorable": true,
               "about": "The directory id of the follower fetching" }
           ]
         }

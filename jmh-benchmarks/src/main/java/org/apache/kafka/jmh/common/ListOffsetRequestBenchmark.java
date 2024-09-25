@@ -71,7 +71,7 @@ public class ListOffsetRequestBenchmark {
             }
         }
 
-        this.offsetRequest = ListOffsetsRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false)
+        this.offsetRequest = ListOffsetsRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
                 .build(ApiKeys.LIST_OFFSETS.latestVersion());
     }
 

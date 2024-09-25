@@ -51,7 +51,7 @@ public class WindowedChangelogTopicConfig extends InternalTopicConfig {
      * @return Properties to be used when creating the topic
      */
     @Override
-    public Map<String, String> getProperties(final Map<String, String> defaultProperties, final long additionalRetentionMs) {
+    public Map<String, String> properties(final Map<String, String> defaultProperties, final long additionalRetentionMs) {
         // internal topic config overridden rule: library overrides < global config overrides < per-topic config overrides
         final Map<String, String> topicConfig = new HashMap<>(WINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES);
 

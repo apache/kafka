@@ -76,10 +76,7 @@ public final class LocalTieredStorageEvent implements Comparable<LocalTieredStor
         if (condition.baseOffset != null && !metadata.isPresent()) {
             return false;
         }
-        if (condition.baseOffset != null && metadata.get().startOffset() != condition.baseOffset) {
-            return false;
-        }
-        return true;
+        return condition.baseOffset == null || metadata.get().startOffset() == condition.baseOffset;
     }
 
     /**

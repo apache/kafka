@@ -34,4 +34,6 @@ public interface NodeToControllerChannelManager {
         AbstractRequest.Builder<? extends AbstractRequest> request,
         ControllerRequestCompletionHandler callback
     );
+
+    long getTimeoutMs();
 }

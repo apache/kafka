@@ -61,7 +61,7 @@ public class KafkaMetricsGroup {
         return explicitMetricName(this.pkg, this.simpleName, name, tags);
     }
 
-    public static MetricName explicitMetricName(String group, String typeName,
+    private static MetricName explicitMetricName(String group, String typeName,
                                                 String name, Map<String, String> tags) {
         StringBuilder nameBuilder = new StringBuilder(100);
         nameBuilder.append(group);

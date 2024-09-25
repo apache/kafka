@@ -74,35 +74,6 @@ public class ConsoleConsumerOptionsTest {
     }
 
     @Test
-    public void shouldParseWhitelistArgument() throws IOException {
-        String[] args = new String[]{
-            "--bootstrap-server", "localhost:9092",
-            "--whitelist", "whitelistTest*",
-            "--from-beginning"
-        };
-
-        ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
-
-        assertEquals("localhost:9092", config.bootstrapServer());
-        assertEquals("whitelistTest*", config.includedTopicsArg().orElse(""));
-        assertTrue(config.fromBeginning());
-    }
-
-    @Test
-    public void shouldIgnoreWhitelistArgumentIfIncludeSpecified() throws IOException {
-        String[] args = new String[]{
-            "--bootstrap-server", "localhost:9092",
-            "--include", "includeTest*",
-            "--whitelist", "whitelistTest*",
-            "--from-beginning"
-        };
-        ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
-        assertEquals("localhost:9092", config.bootstrapServer());
-        assertEquals("includeTest*", config.includedTopicsArg().orElse(""));
-        assertTrue(config.fromBeginning());
-    }
-
-    @Test
     public void shouldParseValidSimpleConsumerValidConfigWithNumericOffset() throws IOException {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
@@ -538,25 +509,6 @@ public class ConsoleConsumerOptionsTest {
     }
 
     @Test
-    public void shouldExitIfTopicAndWhitelistSpecified() {
-        Exit.setExitProcedure((code, message) -> {
-            throw new IllegalArgumentException(message);
-        });
-
-        String[] args = new String[]{
-            "--bootstrap-server", "localhost:9092",
-            "--topic", "test",
-            "--whitelist", "whitelistTest*"
-        };
-
-        try {
-            assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args));
-        } finally {
-            Exit.resetExitProcedure();
-        }
-    }
-
-    @Test
     public void testClientIdOverride() throws IOException {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
@@ -648,15 +600,15 @@ public class ConsoleConsumerOptionsTest {
     }
 
     @Test
-    public void testParseDeprecatedFormatter() throws Exception {
-        String[] deprecatedDefaultMessageFormatter = generateArgsForFormatter("kafka.tools.DefaultMessageFormatter");
-        assertInstanceOf(DefaultMessageFormatter.class, new ConsoleConsumerOptions(deprecatedDefaultMessageFormatter).formatter());
+    public void testParseFormatter() throws Exception {
+        String[] defaultMessageFormatter = generateArgsForFormatter("org.apache.kafka.tools.consumer.DefaultMessageFormatter");
+        assertInstanceOf(DefaultMessageFormatter.class, new ConsoleConsumerOptions(defaultMessageFormatter).formatter());
 
-        String[] deprecatedLoggingMessageFormatter = generateArgsForFormatter("kafka.tools.LoggingMessageFormatter");
-        assertInstanceOf(LoggingMessageFormatter.class, new ConsoleConsumerOptions(deprecatedLoggingMessageFormatter).formatter());
+        String[] loggingMessageFormatter = generateArgsForFormatter("org.apache.kafka.tools.consumer.LoggingMessageFormatter");
+        assertInstanceOf(LoggingMessageFormatter.class, new ConsoleConsumerOptions(loggingMessageFormatter).formatter());
 
-        String[] deprecatedNoOpMessageFormatter = generateArgsForFormatter("kafka.tools.NoOpMessageFormatter");
-        assertInstanceOf(NoOpMessageFormatter.class, new ConsoleConsumerOptions(deprecatedNoOpMessageFormatter).formatter());
+        String[] noOpMessageFormatter = generateArgsForFormatter("org.apache.kafka.tools.consumer.NoOpMessageFormatter");
+        assertInstanceOf(NoOpMessageFormatter.class, new ConsoleConsumerOptions(noOpMessageFormatter).formatter());
     }
 
     @SuppressWarnings("deprecation")
@@ -685,6 +637,20 @@ public class ConsoleConsumerOptionsTest {
                 generateArgsForFormatter("org.apache.kafka.tools.consumer.OffsetsMessageFormatter");
         assertInstanceOf(OffsetsMessageFormatter.class,
                 new ConsoleConsumerOptions(offsetsMessageFormatter).formatter());
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void testNewAndDeprecateGroupMetadataMessageFormatter() throws Exception {
+        String[] deprecatedGroupMetadataMessageFormatter =
+                generateArgsForFormatter("kafka.coordinator.group.GroupMetadataManager$GroupMetadataMessageFormatter");
+        assertInstanceOf(kafka.coordinator.group.GroupMetadataManager.GroupMetadataMessageFormatter.class,
+                new ConsoleConsumerOptions(deprecatedGroupMetadataMessageFormatter).formatter());
+
+        String[] groupMetadataMessageFormatter =
+                generateArgsForFormatter("org.apache.kafka.tools.consumer.GroupMetadataMessageFormatter");
+        assertInstanceOf(GroupMetadataMessageFormatter.class,
+                new ConsoleConsumerOptions(groupMetadataMessageFormatter).formatter());
     }
     
     private String[] generateArgsForFormatter(String formatter) {

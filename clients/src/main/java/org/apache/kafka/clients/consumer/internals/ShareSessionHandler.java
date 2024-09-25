@@ -25,9 +25,9 @@ import org.apache.kafka.common.message.ShareFetchRequestData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ShareAcknowledgeRequest;
 import org.apache.kafka.common.requests.ShareAcknowledgeResponse;
-import org.apache.kafka.common.requests.ShareFetchMetadata;
 import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
+import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.utils.LogContext;
 
 import org.slf4j.Logger;
@@ -61,7 +61,7 @@ public class ShareSessionHandler {
     /**
      * The metadata for the next ShareFetchRequest/ShareAcknowledgeRequest.
      */
-    private ShareFetchMetadata nextMetadata;
+    private ShareRequestMetadata nextMetadata;
 
     /**
      * All the partitions in the share session.
@@ -82,7 +82,7 @@ public class ShareSessionHandler {
         this.log = logContext.logger(ShareSessionHandler.class);
         this.node = node;
         this.memberId = memberId;
-        this.nextMetadata = ShareFetchMetadata.initialEpoch(memberId);
+        this.nextMetadata = ShareRequestMetadata.initialEpoch(memberId);
         this.sessionPartitions = new LinkedHashMap<>();
         this.nextPartitions = new LinkedHashMap<>();
         this.nextAcknowledgements = new LinkedHashMap<>();

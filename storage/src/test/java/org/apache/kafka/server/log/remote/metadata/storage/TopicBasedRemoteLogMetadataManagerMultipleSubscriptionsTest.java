@@ -127,7 +127,7 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
             int segSize = 1048576;
             RemoteLogSegmentMetadata leaderSegmentMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()),
                 0, 100, -1L, 0,
-                time.milliseconds(), segSize, Collections.singletonMap(0, 0L), 0);
+                time.milliseconds(), segSize, Collections.singletonMap(0, 0L));
             ExecutionException exception = assertThrows(ExecutionException.class,
                     () -> remoteLogMetadataManager.addRemoteLogSegmentMetadata(leaderSegmentMetadata).get());
             assertEquals("org.apache.kafka.common.KafkaException: This consumer is not assigned to the target partition 0. Currently assigned partitions: []",
@@ -135,7 +135,7 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
 
             RemoteLogSegmentMetadata followerSegmentMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(followerTopicIdPartition, Uuid.randomUuid()),
                 0, 100, -1L, 0,
-                time.milliseconds(), segSize, Collections.singletonMap(0, 0L), 0);
+                time.milliseconds(), segSize, Collections.singletonMap(0, 0L));
             exception = assertThrows(ExecutionException.class, () -> remoteLogMetadataManager.addRemoteLogSegmentMetadata(followerSegmentMetadata).get());
             assertEquals("org.apache.kafka.common.KafkaException: This consumer is not assigned to the target partition 0. Currently assigned partitions: []",
                 exception.getMessage());

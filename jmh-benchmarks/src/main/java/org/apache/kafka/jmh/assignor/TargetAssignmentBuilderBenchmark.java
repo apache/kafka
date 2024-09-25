@@ -18,20 +18,16 @@ package org.apache.kafka.jmh.assignor;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
+import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 import org.apache.kafka.coordinator.group.modern.Assignment;
-import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
-import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
 import org.apache.kafka.coordinator.group.modern.TargetAssignmentBuilder;
-import org.apache.kafka.coordinator.group.modern.TopicIds;
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
-import org.apache.kafka.image.MetadataDelta;
-import org.apache.kafka.image.MetadataImage;
-import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.image.TopicsImage;
 
 import org.openjdk.jmh.annotations.Benchmark;
@@ -48,10 +44,8 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -83,17 +77,19 @@ public class TargetAssignmentBuilderBenchmark {
 
     private PartitionAssignor partitionAssignor;
 
-    private Map<String, TopicMetadata> subscriptionMetadata = Collections.emptyMap();
-
     private TargetAssignmentBuilder<ConsumerGroupMember> targetAssignmentBuilder;
 
-    private GroupSpecImpl groupSpec;
+    private GroupSpec groupSpec;
 
     private Map<Uuid, Map<Integer, String>> invertedTargetAssignment;
 
-    private final List<String> allTopicNames = new ArrayList<>();
+    private List<String> allTopicNames = Collections.emptyList();
+
+    private Map<String, TopicMetadata> subscriptionMetadata = Collections.emptyMap();
 
     private TopicsImage topicsImage;
+
+    private SubscribedTopicDescriber subscribedTopicDescriber;
 
     @Setup(Level.Trial)
     public void setup() {
@@ -101,9 +97,10 @@ public class TargetAssignmentBuilderBenchmark {
         // and a group that has a homogeneous subscription model.
         partitionAssignor = new UniformAssignor();
 
-        subscriptionMetadata = generateMockSubscriptionMetadata();
-        Map<String, ConsumerGroupMember> members = generateMockMembers();
-        Map<String, Assignment> existingTargetAssignment = generateMockInitialTargetAssignmentAndUpdateInvertedTargetAssignment();
+        setupTopics();
+
+        Map<String, ConsumerGroupMember> members = createMembers();
+        Map<String, Assignment> existingTargetAssignment = generateMockInitialTargetAssignmentAndUpdateInvertedTargetAssignment(members);
 
         ConsumerGroupMember newMember = new ConsumerGroupMember.Builder("newMember")
             .setSubscribedTopicNames(allTopicNames)
@@ -119,62 +116,33 @@ public class TargetAssignmentBuilderBenchmark {
             .addOrUpdateMember(newMember.memberId(), newMember);
     }
 
-    private Map<String, ConsumerGroupMember> generateMockMembers() {
-        Map<String, ConsumerGroupMember> members = new HashMap<>();
+    private void setupTopics() {
+        allTopicNames = AssignorBenchmarkUtils.createTopicNames(topicCount);
 
-        for (int i = 0; i < memberCount - 1; i++) {
-            ConsumerGroupMember member = new ConsumerGroupMember.Builder("member" + i)
-                .setSubscribedTopicNames(allTopicNames)
-                .build();
-            members.put("member" + i, member);
-        }
-        return members;
-    }
-
-    private Map<String, TopicMetadata> generateMockSubscriptionMetadata() {
-        Map<String, TopicMetadata> subscriptionMetadata = new HashMap<>();
-        MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
-        int partitionsPerTopicCount = (memberCount * partitionsToMemberRatio) / topicCount;
-
-        for (int i = 0; i < topicCount; i++) {
-            String topicName = "topic-" + i;
-            Uuid topicId = Uuid.randomUuid();
-            allTopicNames.add(topicName);
-
-            TopicMetadata metadata = new TopicMetadata(
-                topicId,
-                topicName,
-                partitionsPerTopicCount,
-                Collections.emptyMap()
-            );
-            subscriptionMetadata.put(topicName, metadata);
-
-            AssignorBenchmarkUtils.addTopic(
-                delta,
-                topicId,
-                topicName,
-                partitionsPerTopicCount
-            );
-        }
-
-        topicsImage = delta.apply(MetadataProvenance.EMPTY).topics();
-        return subscriptionMetadata;
-    }
-
-    private Map<String, Assignment> generateMockInitialTargetAssignmentAndUpdateInvertedTargetAssignment() {
-        Map<Uuid, TopicMetadata> topicMetadataMap = new HashMap<>(topicCount);
-        subscriptionMetadata.forEach((topicName, topicMetadata) ->
-            topicMetadataMap.put(
-                topicMetadata.id(),
-                topicMetadata
-            )
+        int partitionsPerTopic = (memberCount * partitionsToMemberRatio) / topicCount;
+        subscriptionMetadata = AssignorBenchmarkUtils.createSubscriptionMetadata(
+            allTopicNames,
+            partitionsPerTopic
         );
 
-        createAssignmentSpec();
+        topicsImage = AssignorBenchmarkUtils.createTopicsImage(subscriptionMetadata);
+
+        Map<Uuid, TopicMetadata> topicMetadata = AssignorBenchmarkUtils.createTopicMetadata(subscriptionMetadata);
+        subscribedTopicDescriber = new SubscribedTopicDescriberImpl(topicMetadata);
+    }
+
+    private Map<String, Assignment> generateMockInitialTargetAssignmentAndUpdateInvertedTargetAssignment(
+        Map<String, ConsumerGroupMember> members
+    ) {
+        this.groupSpec = AssignorBenchmarkUtils.createGroupSpec(
+            members,
+            HOMOGENEOUS,
+            topicsImage
+        );
 
         GroupAssignment groupAssignment = partitionAssignor.assign(
             groupSpec,
-            new SubscribedTopicDescriberImpl(topicMetadataMap)
+            subscribedTopicDescriber
         );
         invertedTargetAssignment = AssignorBenchmarkUtils.computeInvertedTargetAssignment(groupAssignment);
 
@@ -189,24 +157,21 @@ public class TargetAssignmentBuilderBenchmark {
         return initialTargetAssignment;
     }
 
-    private void createAssignmentSpec() {
-        Map<String, MemberSubscriptionAndAssignmentImpl> members = new HashMap<>();
-
-        for (int i = 0; i < memberCount - 1; i++) {
-            String memberId = "member" + i;
-
-            members.put(memberId, new MemberSubscriptionAndAssignmentImpl(
-                Optional.empty(),
-                Optional.empty(),
-                new TopicIds(new HashSet<>(allTopicNames), topicsImage),
-                Assignment.EMPTY
-            ));
-        }
-        groupSpec = new GroupSpecImpl(
-            members,
-            HOMOGENEOUS,
-            Collections.emptyMap()
+    private Map<String, ConsumerGroupMember> createMembers() {
+        return AssignorBenchmarkUtils.createHomogeneousMembers(
+            memberCount - 1,
+            this::memberId,
+            this::rackId,
+            allTopicNames
         );
+    }
+
+    private String memberId(int memberIndex) {
+        return "member" + memberIndex;
+    }
+
+    private Optional<String> rackId(int memberIndex) {
+        return Optional.empty();
     }
 
     @Benchmark

@@ -16,7 +16,6 @@
  */
 package kafka.admin
 
-import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
 import kafka.server.KafkaConfig._
@@ -32,6 +31,7 @@ import org.apache.kafka.common.errors.{InvalidReplicaAssignmentException, Invali
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.metadata.LeaderAndIsr
 import org.apache.kafka.server.common.{AdminOperationException, MetadataVersion}
 import org.apache.kafka.server.config.{ConfigType, QuotaConfigs}
 import org.apache.kafka.storage.internals.log.LogConfig
@@ -450,7 +450,7 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
       val topicPartition = new TopicPartition(topic, partition)
       val newLeaderAndIsr = zkClient.getTopicPartitionState(topicPartition)
         .map(_.leaderAndIsr.newLeader(leader))
-        .getOrElse(LeaderAndIsr(leader, List(leader)))
+        .getOrElse(new LeaderAndIsr(leader, List(leader).map(Integer.valueOf).asJava))
       topicPartition -> LeaderIsrAndControllerEpoch(newLeaderAndIsr, 1)
     }
     zkClient.setTopicPartitionStatesRaw(newLeaderIsrAndControllerEpochs, ZkVersion.MatchAnyVersion)

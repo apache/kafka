@@ -38,6 +38,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import static org.apache.kafka.streams.StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG;
@@ -98,7 +99,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
         return children;
     }
 
-    ProcessorNode<KOut, VOut, ?, ?> getChild(final String childName) {
+    ProcessorNode<KOut, VOut, ?, ?> child(final String childName) {
         return childByName.get(childName);
     }
 
@@ -202,7 +203,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
         } catch (final FailedProcessingException | TaskCorruptedException | TaskMigratedException e) {
             // Rethrow exceptions that should not be handled here
             throw e;
-        } catch (final RuntimeException e) {
+        } catch (final RuntimeException processingException) {
             final ErrorHandlerContext errorHandlerContext = new DefaultErrorHandlerContext(
                 null, // only required to pass for DeserializationExceptionHandler
                 internalProcessorContext.topic(),
@@ -210,21 +211,30 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
                 internalProcessorContext.offset(),
                 internalProcessorContext.headers(),
                 internalProcessorContext.currentNode().name(),
-                internalProcessorContext.taskId());
+                internalProcessorContext.taskId(),
+                internalProcessorContext.timestamp());
 
             final ProcessingExceptionHandler.ProcessingHandlerResponse response;
-
             try {
-                response = processingExceptionHandler.handle(errorHandlerContext, record, e);
-            } catch (final Exception fatalUserException) {
-                throw new FailedProcessingException(fatalUserException);
+                response = Objects.requireNonNull(
+                    processingExceptionHandler.handle(errorHandlerContext, record, processingException),
+                    "Invalid ProductionExceptionHandler response."
+                );
+            } catch (final RuntimeException fatalUserException) {
+                log.error(
+                    "Processing error callback failed after processing error for record: {}",
+                    errorHandlerContext,
+                    processingException
+                );
+                throw new FailedProcessingException("Fatal user code error in processing error callback", fatalUserException);
             }
+
             if (response == ProcessingExceptionHandler.ProcessingHandlerResponse.FAIL) {
                 log.error("Processing exception handler is set to fail upon" +
                      " a processing error. If you would rather have the streaming pipeline" +
                      " continue after a processing error, please set the " +
                      PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.");
-                throw new FailedProcessingException(e);
+                throw new FailedProcessingException(processingException);
             } else {
                 droppedRecordsSensor.record();
             }

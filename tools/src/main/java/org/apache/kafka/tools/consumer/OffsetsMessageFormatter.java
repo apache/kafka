@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.tools.consumer;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
@@ -27,69 +25,29 @@ import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValueJsonConverter;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.NullNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 
-import java.io.IOException;
-import java.io.PrintStream;
 import java.nio.ByteBuffer;
-import java.util.Objects;
 import java.util.Optional;
-
-import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  * Formatter for use with tools such as console consumer: Consumer should also set exclude.internal.topics to false.
  */
-public class OffsetsMessageFormatter implements MessageFormatter {
-
-    private static final String VERSION = "version";
-    private static final String DATA = "data";
-    private static final String KEY = "key";
-    private static final String VALUE = "value";
-    private static final String UNKNOWN = "unknown";
+public class OffsetsMessageFormatter extends ApiMessageFormatter {
 
     @Override
-    public void writeTo(ConsumerRecord<byte[], byte[]> consumerRecord, PrintStream output) {
-        ObjectNode json = new ObjectNode(JsonNodeFactory.instance);
+    protected JsonNode readToKeyJson(ByteBuffer byteBuffer, short version) {
+        return readToGroupMetadataKey(byteBuffer)
+                .map(logKey -> transferKeyMessageToJsonNode(logKey, version))
+                .orElseGet(() -> new TextNode(UNKNOWN));
+    }
 
-        byte[] key = consumerRecord.key();
-        if (Objects.nonNull(key)) {
-            short keyVersion = ByteBuffer.wrap(key).getShort();
-            JsonNode dataNode = readToGroupMetadataKey(ByteBuffer.wrap(key))
-                    .map(logKey -> transferMetadataToJsonNode(logKey, keyVersion))
-                    .orElseGet(() -> new TextNode(UNKNOWN));
-            // Only print if the message is an offset record.
-            if (dataNode instanceof NullNode) {
-                return;
-            }
-            json.putObject(KEY)
-                    .put(VERSION, keyVersion)
-                    .set(DATA, dataNode);
-        } else {
-            json.set(KEY, NullNode.getInstance());
-        }
-
-        byte[] value = consumerRecord.value();
-        if (Objects.nonNull(value)) {
-            short valueVersion = ByteBuffer.wrap(value).getShort();
-            JsonNode dataNode = readToOffsetCommitValue(ByteBuffer.wrap(value))
-                    .map(logValue -> OffsetCommitValueJsonConverter.write(logValue, valueVersion))
-                    .orElseGet(() -> new TextNode(UNKNOWN));
-            json.putObject(VALUE)
-                    .put(VERSION, valueVersion)
-                    .set(DATA, dataNode);
-        } else {
-            json.set(VALUE, NullNode.getInstance());
-        }
-
-        try {
-            output.write(json.toString().getBytes(UTF_8));
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+    @Override
+    protected JsonNode readToValueJson(ByteBuffer byteBuffer, short version) {
+        return readToOffsetMessageValue(byteBuffer)
+                .map(logValue -> OffsetCommitValueJsonConverter.write(logValue, version))
+                .orElseGet(() -> new TextNode(UNKNOWN));
     }
 
     private Optional<ApiMessage> readToGroupMetadataKey(ByteBuffer byteBuffer) {
@@ -104,7 +62,7 @@ public class OffsetsMessageFormatter implements MessageFormatter {
         }
     }
 
-    private static JsonNode transferMetadataToJsonNode(ApiMessage logKey, short keyVersion) {
+    private JsonNode transferKeyMessageToJsonNode(ApiMessage logKey, short keyVersion) {
         if (logKey instanceof OffsetCommitKey) {
             return OffsetCommitKeyJsonConverter.write((OffsetCommitKey) logKey, keyVersion);
         } else if (logKey instanceof GroupMetadataKey) {
@@ -114,7 +72,7 @@ public class OffsetsMessageFormatter implements MessageFormatter {
         }
     }
 
-    private Optional<OffsetCommitValue> readToOffsetCommitValue(ByteBuffer byteBuffer) {
+    private Optional<OffsetCommitValue> readToOffsetMessageValue(ByteBuffer byteBuffer) {
         short version = byteBuffer.getShort();
         if (version >= OffsetCommitValue.LOWEST_SUPPORTED_VERSION
                 && version <= OffsetCommitValue.HIGHEST_SUPPORTED_VERSION) {

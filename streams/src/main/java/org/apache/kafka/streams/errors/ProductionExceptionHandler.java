@@ -46,7 +46,6 @@ public interface ProductionExceptionHandler extends Configurable {
      * @param record The record that failed to produce
      * @param exception The exception that occurred during production
      */
-    @SuppressWarnings("deprecation")
     default ProductionExceptionHandlerResponse handle(final ErrorHandlerContext context,
                                                       final ProducerRecord<byte[], byte[]> record,
                                                       final Exception exception) {
@@ -59,7 +58,7 @@ public interface ProductionExceptionHandler extends Configurable {
      *
      * @param record        the record that failed to serialize
      * @param exception     the exception that occurred during serialization
-     * @deprecated Since 3.9. Use {@link #handle(ErrorHandlerContext, ProducerRecord, Exception)} instead.
+     * @deprecated Since 3.9. Use {@link #handleSerializationException(ErrorHandlerContext, ProducerRecord, Exception, SerializationExceptionOrigin)} instead.
      */
     @Deprecated
     default ProductionExceptionHandlerResponse handleSerializationException(final ProducerRecord record,
@@ -76,7 +75,6 @@ public interface ProductionExceptionHandler extends Configurable {
      * @param exception the exception that occurred during serialization
      * @param origin    the origin of the serialization exception
      */
-    @SuppressWarnings("deprecation")
     default ProductionExceptionHandlerResponse handleSerializationException(final ErrorHandlerContext context,
                                                                             final ProducerRecord record,
                                                                             final Exception exception,

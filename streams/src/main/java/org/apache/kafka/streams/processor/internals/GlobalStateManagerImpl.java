@@ -122,7 +122,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             config.getLong(StreamsConfig.POLL_MS_CONFIG) + requestTimeoutMs
         );
         taskTimeoutMs = config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG);
-        deserializationExceptionHandler = config.defaultDeserializationExceptionHandler();
+        deserializationExceptionHandler = config.deserializationExceptionHandler();
     }
 
     @Override
@@ -161,13 +161,13 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         return Collections.unmodifiableSet(globalStoreNames);
     }
 
-    public StateStore getGlobalStore(final String name) {
+    public StateStore globalStore(final String name) {
         return globalStores.getOrDefault(name, Optional.empty()).orElse(null);
     }
 
     @Override
-    public StateStore getStore(final String name) {
-        return getGlobalStore(name);
+    public StateStore store(final String name) {
+        return globalStore(name);
     }
 
     public File baseDir() {
@@ -319,7 +319,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                 record.headers()));
                             restoreCount++;
                         }
-                    } catch (final Exception deserializationException) {
+                    } catch (final RuntimeException deserializationException) {
                         handleDeserializationFailure(
                             deserializationExceptionHandler,
                             globalProcessorContext,
@@ -330,7 +330,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                 Thread.currentThread().getName(),
                                 globalProcessorContext.taskId().toString(),
                                 globalProcessorContext.metrics()
-                            )
+                            ),
+                            null
                         );
                     }
                 }

@@ -17,8 +17,6 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.Transformer;
-import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.internals.KStreamFlatTransform.KStreamFlatTransformProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
@@ -46,13 +44,14 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
+@SuppressWarnings("deprecation")
 public class KStreamFlatTransformTest {
 
     private Number inputKey;
     private Number inputValue;
 
     @Mock
-    private Transformer<Number, Number, Iterable<KeyValue<Integer, Integer>>> transformer;
+    private org.apache.kafka.streams.kstream.Transformer<Number, Number, Iterable<KeyValue<Integer, Integer>>> transformer;
     @Mock
     private InternalProcessorContext<Integer, Integer> context;
     private InOrder inOrder;
@@ -124,8 +123,8 @@ public class KStreamFlatTransformTest {
     @Test
     public void shouldGetFlatTransformProcessor() {
         @SuppressWarnings("unchecked")
-        final TransformerSupplier<Number, Number, Iterable<KeyValue<Integer, Integer>>> transformerSupplier =
-            mock(TransformerSupplier.class);
+        final org.apache.kafka.streams.kstream.TransformerSupplier<Number, Number, Iterable<KeyValue<Integer, Integer>>> transformerSupplier =
+            mock(org.apache.kafka.streams.kstream.TransformerSupplier.class);
         final KStreamFlatTransform<Number, Number, Integer, Integer> processorSupplier =
             new KStreamFlatTransform<>(transformerSupplier);
 

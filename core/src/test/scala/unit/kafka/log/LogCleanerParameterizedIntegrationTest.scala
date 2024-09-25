@@ -20,7 +20,6 @@ package kafka.log
 import java.io.File
 import java.util.Properties
 import kafka.server.KafkaConfig
-import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.compress.Compression
@@ -29,6 +28,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_0_IV1, IBP_0_11_0_IV0, IBP_0_9_0}
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.util.MockTime
+import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.extension.ExtensionContext
@@ -87,9 +87,9 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     // and make sure its gone from checkpoint file
     cleaner.logs.remove(topicPartitions(0))
     cleaner.updateCheckpoints(logDir, partitionToRemove = Option(topicPartitions(0)))
-    val checkpoints = new OffsetCheckpointFile(new File(logDir, cleaner.cleanerManager.offsetCheckpointFile)).read()
+    val checkpoints = new OffsetCheckpointFile(new File(logDir, cleaner.cleanerManager.offsetCheckpointFile), null).read()
     // we expect partition 0 to be gone
-    assertFalse(checkpoints.contains(topicPartitions(0)))
+    assertFalse(checkpoints.containsKey(topicPartitions(0)))
   }
 
   @ParameterizedTest

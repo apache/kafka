@@ -17,9 +17,6 @@
 package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.compress.Compression;
-import org.apache.kafka.common.compress.GzipCompression;
-import org.apache.kafka.common.compress.Lz4Compression;
-import org.apache.kafka.common.compress.ZstdCompression;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.ConfigKey;
@@ -28,6 +25,7 @@ import org.apache.kafka.common.config.ConfigDef.ValidList;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.LegacyRecord;
 import org.apache.kafka.common.record.RecordVersion;
 import org.apache.kafka.common.record.Records;
@@ -110,16 +108,18 @@ public class LogConfig extends AbstractConfig {
         }
     }
 
-    public static class RemoteLogConfig {
+    private static class RemoteLogConfig {
 
-        public final boolean remoteStorageEnable;
-        public final String remoteLogDisablePolicy;
-        public final long localRetentionMs;
-        public final long localRetentionBytes;
+        private final boolean remoteStorageEnable;
+        private final boolean remoteLogDeleteOnDisable;
+        private final boolean remoteLogCopyDisable;
+        private final long localRetentionMs;
+        private final long localRetentionBytes;
 
         private RemoteLogConfig(LogConfig config) {
             this.remoteStorageEnable = config.getBoolean(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
-            this.remoteLogDisablePolicy = config.getString(TopicConfig.REMOTE_LOG_DISABLE_POLICY_CONFIG);
+            this.remoteLogCopyDisable = config.getBoolean(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG);
+            this.remoteLogDeleteOnDisable = config.getBoolean(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG);
             this.localRetentionMs = config.getLong(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG);
             this.localRetentionBytes = config.getLong(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG);
         }
@@ -128,7 +128,8 @@ public class LogConfig extends AbstractConfig {
         public String toString() {
             return "RemoteLogConfig{" +
                     "remoteStorageEnable=" + remoteStorageEnable +
-                    ", remoteLogDisablePolicy=" + remoteLogDisablePolicy +
+                    ", remoteLogCopyDisable=" + remoteLogCopyDisable +
+                    ", remoteLogDeleteOnDisable=" + remoteLogDeleteOnDisable +
                     ", localRetentionMs=" + localRetentionMs +
                     ", localRetentionBytes=" + localRetentionBytes +
                     '}';
@@ -183,6 +184,8 @@ public class LogConfig extends AbstractConfig {
     public static final long DEFAULT_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS = ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DEFAULT;
 
     public static final boolean DEFAULT_REMOTE_STORAGE_ENABLE = false;
+    public static final boolean DEFAULT_REMOTE_LOG_COPY_DISABLE_CONFIG = false;
+    public static final boolean DEFAULT_REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = false;
     public static final long DEFAULT_LOCAL_RETENTION_BYTES = -2; // It indicates the value to be derived from RetentionBytes
     public static final long DEFAULT_LOCAL_RETENTION_MS = -2; // It indicates the value to be derived from RetentionMs
 
@@ -204,7 +207,8 @@ public class LogConfig extends AbstractConfig {
     // Visible for testing
     public static final Set<String> CONFIGS_WITH_NO_SERVER_DEFAULTS = Collections.unmodifiableSet(Utils.mkSet(
             TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG,
-            TopicConfig.REMOTE_LOG_DISABLE_POLICY_CONFIG,
+            TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG,
+            TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG,
             QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG,
             QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG
     ));
@@ -296,12 +300,12 @@ public class LogConfig extends AbstractConfig {
                         TopicConfig.MIN_IN_SYNC_REPLICAS_DOC)
                 .define(TopicConfig.COMPRESSION_TYPE_CONFIG, STRING, DEFAULT_COMPRESSION_TYPE, in(BrokerCompressionType.names().toArray(new String[0])),
                         MEDIUM, TopicConfig.COMPRESSION_TYPE_DOC)
-                .define(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG, INT, GzipCompression.DEFAULT_LEVEL,
-                        new GzipCompression.LevelValidator(), MEDIUM, TopicConfig.COMPRESSION_GZIP_LEVEL_DOC)
-                .define(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG, INT, Lz4Compression.DEFAULT_LEVEL,
-                        between(Lz4Compression.MIN_LEVEL, Lz4Compression.MAX_LEVEL), MEDIUM, TopicConfig.COMPRESSION_LZ4_LEVEL_DOC)
-                .define(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG, INT, ZstdCompression.DEFAULT_LEVEL,
-                        between(ZstdCompression.MIN_LEVEL, ZstdCompression.MAX_LEVEL), MEDIUM, TopicConfig.COMPRESSION_ZSTD_LEVEL_DOC)
+                .define(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG, INT, CompressionType.GZIP.defaultLevel(),
+                        CompressionType.GZIP.levelValidator(), MEDIUM, TopicConfig.COMPRESSION_GZIP_LEVEL_DOC)
+                .define(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG, INT, CompressionType.LZ4.defaultLevel(),
+                        CompressionType.LZ4.levelValidator(), MEDIUM, TopicConfig.COMPRESSION_LZ4_LEVEL_DOC)
+                .define(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG, INT, CompressionType.ZSTD.defaultLevel(),
+                        CompressionType.ZSTD.levelValidator(), MEDIUM, TopicConfig.COMPRESSION_ZSTD_LEVEL_DOC)
                 .define(TopicConfig.PREALLOCATE_CONFIG, BOOLEAN, DEFAULT_PREALLOCATE, MEDIUM, TopicConfig.PREALLOCATE_DOC)
                 .define(MESSAGE_FORMAT_VERSION_CONFIG, STRING, DEFAULT_MESSAGE_FORMAT_VERSION, new MetadataVersionValidator(), MEDIUM,
                         MESSAGE_FORMAT_VERSION_DOC)
@@ -325,9 +329,8 @@ public class LogConfig extends AbstractConfig {
                         TopicConfig.LOCAL_LOG_RETENTION_MS_DOC)
                 .define(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_BYTES, atLeast(-2), MEDIUM,
                         TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC)
-                .define(TopicConfig.REMOTE_LOG_DISABLE_POLICY_CONFIG, STRING, TopicConfig.REMOTE_LOG_DISABLE_POLICY_RETAIN,
-                        in(TopicConfig.REMOTE_LOG_DISABLE_POLICY_RETAIN, TopicConfig.REMOTE_LOG_DISABLE_POLICY_DELETE),
-                        MEDIUM, TopicConfig.REMOTE_LOG_DISABLE_POLICY_DOC);
+                .define(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_COPY_DISABLE_DOC)
+                .define(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_DOC);
     }
 
     public final Set<String> overriddenConfigs;
@@ -372,8 +375,8 @@ public class LogConfig extends AbstractConfig {
     public final List<String> leaderReplicationThrottledReplicas;
     public final List<String> followerReplicationThrottledReplicas;
     public final boolean messageDownConversionEnable;
-    public final RemoteLogConfig remoteLogConfig;
 
+    private final RemoteLogConfig remoteLogConfig;
     private final int maxMessageSize;
     private final Map<?, ?> props;
 
@@ -508,8 +511,12 @@ public class LogConfig extends AbstractConfig {
         return remoteLogConfig.remoteStorageEnable;
     }
 
-    public String remoteLogDisablePolicy() {
-        return remoteLogConfig.remoteLogDisablePolicy;
+    public Boolean remoteLogDeleteOnDisable() {
+        return remoteLogConfig.remoteLogDeleteOnDisable;
+    }
+
+    public Boolean remoteLogCopyDisable() {
+        return remoteLogConfig.remoteLogCopyDisable;
     }
 
     public long localRetentionMs() {
@@ -534,7 +541,7 @@ public class LogConfig extends AbstractConfig {
      */
     public static LogConfig fromProps(Map<?, ?> defaults, Properties overrides) {
         Properties props = new Properties();
-        defaults.forEach((k, v) -> props.put(k, v));
+        props.putAll(defaults);
         props.putAll(overrides);
         Set<String> overriddenKeys = overrides.keySet().stream().map(k -> (String) k).collect(Collectors.toSet());
         return new LogConfig(props, overriddenKeys);
@@ -613,27 +620,64 @@ public class LogConfig extends AbstractConfig {
      * @param existingConfigs                   The existing properties
      * @param newConfigs                        The new properties to be validated
      * @param isRemoteLogStorageSystemEnabled   true if system wise remote log storage is enabled
+     * @param fromZK                            true if this is a ZK cluster
      */
     private static void validateTopicLogConfigValues(Map<String, String> existingConfigs,
                                                      Map<?, ?> newConfigs,
-                                                     boolean isRemoteLogStorageSystemEnabled) {
+                                                     boolean isRemoteLogStorageSystemEnabled,
+                                                     boolean fromZK) {
         validateValues(newConfigs);
+
+        if (fromZK) {
+            validateNoInvalidRemoteStorageConfigsInZK(newConfigs);
+        }
         boolean isRemoteLogStorageEnabled = (Boolean) newConfigs.get(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
         if (isRemoteLogStorageEnabled) {
             validateRemoteStorageOnlyIfSystemEnabled(newConfigs, isRemoteLogStorageSystemEnabled, false);
             validateNoRemoteStorageForCompactedTopic(newConfigs);
             validateRemoteStorageRetentionSize(newConfigs);
             validateRemoteStorageRetentionTime(newConfigs);
+            validateRetentionConfigsWhenRemoteCopyDisabled(newConfigs, isRemoteLogStorageEnabled);
         } else {
             // The new config "remote.storage.enable" is false, validate if it's turning from true to false
-            validateNotTurningOffRemoteStorage(existingConfigs);
+            boolean wasRemoteLogEnabled = Boolean.parseBoolean(existingConfigs.getOrDefault(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false"));
+            validateTurningOffRemoteStorageWithDelete(newConfigs, wasRemoteLogEnabled, isRemoteLogStorageEnabled);
         }
     }
 
-    public static void validateNotTurningOffRemoteStorage(Map<String, String> existingConfigs) {
-        boolean wasRemoteLogEnabledBeforeUpdate = Boolean.parseBoolean(existingConfigs.getOrDefault(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false"));
-        if (wasRemoteLogEnabledBeforeUpdate) {
-            throw new InvalidConfigurationException("Disabling remote storage feature on the topic level is not supported.");
+    public static void validateTurningOffRemoteStorageWithDelete(Map<?, ?> newConfigs, boolean wasRemoteLogEnabled, boolean isRemoteLogStorageEnabled) {
+        boolean isRemoteLogDeleteOnDisable = (Boolean) Utils.castToStringObjectMap(newConfigs).getOrDefault(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, false);
+        if (wasRemoteLogEnabled && !isRemoteLogStorageEnabled && !isRemoteLogDeleteOnDisable) {
+            throw new InvalidConfigurationException("It is invalid to disable remote storage without deleting remote data. " +
+                    "If you want to keep the remote data and turn to read only, please set `remote.storage.enable=true,remote.log.copy.disable=true`. " +
+                    "If you want to disable remote storage and delete all remote data, please set `remote.storage.enable=false,remote.log.delete.on.disable=true`.");
+        }
+    }
+
+    public static void validateRetentionConfigsWhenRemoteCopyDisabled(Map<?, ?> newConfigs, boolean isRemoteLogStorageEnabled) {
+        boolean isRemoteLogCopyDisabled = (Boolean) Utils.castToStringObjectMap(newConfigs).getOrDefault(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, false);
+        long retentionMs = (Long) newConfigs.get(TopicConfig.RETENTION_MS_CONFIG);
+        long localRetentionMs = (Long) newConfigs.get(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG);
+        long retentionBytes = (Long) newConfigs.get(TopicConfig.RETENTION_BYTES_CONFIG);
+        long localRetentionBytes = (Long) newConfigs.get(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG);
+        if (isRemoteLogStorageEnabled && isRemoteLogCopyDisabled) {
+            if (localRetentionBytes != -2 && localRetentionBytes != retentionBytes) {
+                throw new InvalidConfigurationException("When `remote.log.copy.disable` is set to true, the `local.retention.bytes` " +
+                        "and `retention.bytes` must be set to the identical value because there will be no more logs copied to the remote storage.");
+            }
+            if (localRetentionMs != -2 && localRetentionMs != retentionMs) {
+                throw new InvalidConfigurationException("When `remote.log.copy.disable` is set to true, the `local.retention.ms` " +
+                        "and `retention.ms` must be set to the identical value because there will be no more logs copied to the remote storage.");
+            }
+        }
+    }
+
+    public static void validateNoInvalidRemoteStorageConfigsInZK(Map<?, ?> newConfigs) {
+        boolean isRemoteLogDeleteOnDisable = (Boolean) Utils.castToStringObjectMap(newConfigs).getOrDefault(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, false);
+        boolean isRemoteLogCopyDisabled = (Boolean) Utils.castToStringObjectMap(newConfigs).getOrDefault(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, false);
+        if (isRemoteLogDeleteOnDisable || isRemoteLogCopyDisabled) {
+            throw new InvalidConfigurationException("It is invalid to set `remote.log.delete.on.disable` or " +
+                    "`remote.log.copy.disable` under Zookeeper's mode.");
         }
     }
 
@@ -694,13 +738,14 @@ public class LogConfig extends AbstractConfig {
      * Check that the given properties contain only valid log config names and that all values can be parsed and are valid
      */
     public static void validate(Properties props) {
-        validate(Collections.emptyMap(), props, Collections.emptyMap(), false);
+        validate(Collections.emptyMap(), props, Collections.emptyMap(), false, false);
     }
 
     public static void validate(Map<String, String> existingConfigs,
                                 Properties props,
                                 Map<?, ?> configuredProps,
-                                boolean isRemoteLogStorageSystemEnabled) {
+                                boolean isRemoteLogStorageSystemEnabled,
+                                boolean fromZK) {
         validateNames(props);
         if (configuredProps == null || configuredProps.isEmpty()) {
             Map<?, ?> valueMaps = CONFIG.parse(props);
@@ -709,7 +754,7 @@ public class LogConfig extends AbstractConfig {
             Map<Object, Object> combinedConfigs = new HashMap<>(configuredProps);
             combinedConfigs.putAll(props);
             Map<?, ?> valueMaps = CONFIG.parse(combinedConfigs);
-            validateTopicLogConfigValues(existingConfigs, valueMaps, isRemoteLogStorageSystemEnabled);
+            validateTopicLogConfigValues(existingConfigs, valueMaps, isRemoteLogStorageSystemEnabled, fromZK);
         }
     }
 

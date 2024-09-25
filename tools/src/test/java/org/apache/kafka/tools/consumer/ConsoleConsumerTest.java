@@ -39,6 +39,10 @@ import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
+import org.apache.kafka.coordinator.group.generated.GroupMetadataKeyJsonConverter;
+import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
+import org.apache.kafka.coordinator.group.generated.GroupMetadataValueJsonConverter;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKeyJsonConverter;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
@@ -83,6 +87,7 @@ import static org.apache.kafka.clients.producer.ProducerConfig.TRANSACTIONAL_ID_
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -297,12 +302,9 @@ public class ConsoleConsumerTest {
             admin.createTopics(singleton(newTopic));
             produceMessagesWithTxn(cluster);
 
-            String[] transactionLogMessageFormatter = new String[]{
-                "--bootstrap-server", cluster.bootstrapServers(),
-                "--topic", Topic.TRANSACTION_STATE_TOPIC_NAME,
-                "--formatter", "org.apache.kafka.tools.consumer.TransactionLogMessageFormatter",
-                "--from-beginning"
-            };
+            String[] transactionLogMessageFormatter = createConsoleConsumerArgs(cluster, 
+                    Topic.TRANSACTION_STATE_TOPIC_NAME, 
+                    "org.apache.kafka.tools.consumer.TransactionLogMessageFormatter");
 
             ConsoleConsumerOptions options = new ConsoleConsumerOptions(transactionLogMessageFormatter);
             ConsoleConsumer.ConsumerWrapper consumerWrapper = new ConsoleConsumer.ConsumerWrapper(options, createTxnConsumer(cluster));
@@ -339,11 +341,9 @@ public class ConsoleConsumerTest {
             admin.createTopics(singleton(newTopic));
             produceMessages(cluster);
 
-            String[] offsetsMessageFormatter = new String[]{
-                "--bootstrap-server", cluster.bootstrapServers(),
-                "--topic", Topic.GROUP_METADATA_TOPIC_NAME,
-                "--formatter", "org.apache.kafka.tools.consumer.OffsetsMessageFormatter"
-            };
+            String[] offsetsMessageFormatter = createConsoleConsumerArgs(cluster, 
+                    Topic.GROUP_METADATA_TOPIC_NAME, 
+                    "org.apache.kafka.tools.consumer.OffsetsMessageFormatter");
 
             ConsoleConsumerOptions options = new ConsoleConsumerOptions(offsetsMessageFormatter);
             ConsoleConsumer.ConsumerWrapper consumerWrapper = new ConsoleConsumer.ConsumerWrapper(options, createOffsetConsumer(cluster));
@@ -375,6 +375,70 @@ public class ConsoleConsumerTest {
         }
     }
 
+    @ClusterTest(brokers = 3)
+    public void testGroupMetadataMessageFormatter(ClusterInstance cluster) throws Exception {
+        try (Admin admin = cluster.createAdminClient()) {
+
+            NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
+            admin.createTopics(singleton(newTopic));
+            produceMessages(cluster);
+
+            String[] groupMetadataMessageFormatter = createConsoleConsumerArgs(cluster, 
+                    Topic.GROUP_METADATA_TOPIC_NAME, 
+                    "org.apache.kafka.tools.consumer.GroupMetadataMessageFormatter");
+
+            ConsoleConsumerOptions options = new ConsoleConsumerOptions(groupMetadataMessageFormatter);
+            ConsoleConsumer.ConsumerWrapper consumerWrapper = 
+                    new ConsoleConsumer.ConsumerWrapper(options, createGroupMetaDataConsumer(cluster));
+
+            try (ByteArrayOutputStream out = new ByteArrayOutputStream();
+                 PrintStream output = new PrintStream(out)) {
+                ConsoleConsumer.process(1, options.formatter(), consumerWrapper, output, true);
+
+                JsonNode jsonNode = objectMapper.reader().readTree(out.toByteArray());
+
+                // The new group coordinator writes an empty group metadata record when the group is created for
+                // the first time whereas the old group coordinator only writes a group metadata record when
+                // the first rebalance completes.
+                if (cluster.isKRaftTest()) {
+                    JsonNode keyNode = jsonNode.get("key");
+                    GroupMetadataKey groupMetadataKey =
+                        GroupMetadataKeyJsonConverter.read(keyNode.get("data"), GroupMetadataKey.HIGHEST_SUPPORTED_VERSION);
+                    assertNotNull(groupMetadataKey);
+                    assertEquals(groupId, groupMetadataKey.group());
+
+                    JsonNode valueNode = jsonNode.get("value");
+                    GroupMetadataValue groupMetadataValue =
+                        GroupMetadataValueJsonConverter.read(valueNode.get("data"), GroupMetadataValue.HIGHEST_SUPPORTED_VERSION);
+                    assertNotNull(groupMetadataValue);
+                    assertEquals("", groupMetadataValue.protocolType());
+                    assertEquals(0, groupMetadataValue.generation());
+                    assertNull(groupMetadataValue.protocol());
+                    assertNull(groupMetadataValue.leader());
+                    assertEquals(0, groupMetadataValue.members().size());
+                } else {
+                    JsonNode keyNode = jsonNode.get("key");
+                    GroupMetadataKey groupMetadataKey =
+                        GroupMetadataKeyJsonConverter.read(keyNode.get("data"), GroupMetadataKey.HIGHEST_SUPPORTED_VERSION);
+                    assertNotNull(groupMetadataKey);
+                    assertEquals(groupId, groupMetadataKey.group());
+
+                    JsonNode valueNode = jsonNode.get("value");
+                    GroupMetadataValue groupMetadataValue =
+                        GroupMetadataValueJsonConverter.read(valueNode.get("data"), GroupMetadataValue.HIGHEST_SUPPORTED_VERSION);
+                    assertNotNull(groupMetadataValue);
+                    assertEquals("consumer", groupMetadataValue.protocolType());
+                    assertEquals(1, groupMetadataValue.generation());
+                    assertEquals("range", groupMetadataValue.protocol());
+                    assertNotNull(groupMetadataValue.leader());
+                    assertEquals(1, groupMetadataValue.members().size());
+                }
+            } finally {
+                consumerWrapper.cleanup();
+            }
+        }
+    }
+
     private void produceMessagesWithTxn(ClusterInstance cluster) {
         try (Producer<byte[], byte[]> producer = createTxnProducer(cluster)) {
             producer.initTransactions();
@@ -388,6 +452,14 @@ public class ConsoleConsumerTest {
         try (Producer<byte[], byte[]> producer = new KafkaProducer<>(producerProps(cluster))) {
             producer.send(new ProducerRecord<>(topic, new byte[1_000 * 100]));
         }
+    }
+    
+    private String[] createConsoleConsumerArgs(ClusterInstance cluster, String topic, String formatter) {
+        return new String[]{
+            "--bootstrap-server", cluster.bootstrapServers(),
+            "--topic", topic,
+            "--formatter", formatter
+        };
     }
 
     private Producer<byte[], byte[]> createTxnProducer(ClusterInstance cluster) {
@@ -408,6 +480,12 @@ public class ConsoleConsumerTest {
     private Consumer<byte[], byte[]> createOffsetConsumer(ClusterInstance cluster) {
         Properties props = consumerProps(cluster);
         props.put(EXCLUDE_INTERNAL_TOPICS_CONFIG, "false");
+        return new KafkaConsumer<>(props);
+    }
+
+    private Consumer<byte[], byte[]> createGroupMetaDataConsumer(ClusterInstance cluster) {
+        Properties props = consumerProps(cluster);
+        props.put(AUTO_OFFSET_RESET_CONFIG, "earliest");
         return new KafkaConsumer<>(props);
     }
     

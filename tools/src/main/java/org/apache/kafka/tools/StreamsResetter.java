@@ -136,8 +136,6 @@ public class StreamsResetter {
             String bootstrapServerValue = "localhost:9092";
             if (options.hasBootstrapServer()) {
                 bootstrapServerValue = options.bootstrapServer();
-            } else if (options.hasBootstrapServers()) {
-                bootstrapServerValue = options.bootstrapServers();
             }
 
             properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServerValue);
@@ -546,7 +544,6 @@ public class StreamsResetter {
     }
 
     private static class StreamsResetterOptions extends CommandDefaultOptions {
-        private final OptionSpec<String> bootstrapServersOption;
         private final OptionSpec<String> bootstrapServerOption;
         private final OptionSpec<String> applicationIdOption;
         private final OptionSpec<String> inputTopicsOption;
@@ -570,11 +567,7 @@ public class StreamsResetter {
                 .ofType(String.class)
                 .describedAs("id")
                 .required();
-            bootstrapServersOption = parser.accepts("bootstrap-servers", "DEPRECATED: Comma-separated list of broker urls with format: HOST1:PORT1,HOST2:PORT2")
-                .withRequiredArg()
-                .ofType(String.class)
-                .describedAs("urls");
-            bootstrapServerOption = parser.accepts("bootstrap-server", "REQUIRED unless --bootstrap-servers(deprecated) is specified. The server(s) to connect to. The broker list string in the form HOST1:PORT1,HOST2:PORT2. (default: localhost:9092)")
+            bootstrapServerOption = parser.accepts("bootstrap-server", "The server(s) to connect to. The broker list string in the form HOST1:PORT1,HOST2:PORT2. (default: localhost:9092)")
                 .withRequiredArg()
                 .ofType(String.class)
                 .describedAs("server to connect to");
@@ -666,14 +659,6 @@ public class StreamsResetter {
 
         public String bootstrapServer() {
             return options.valueOf(bootstrapServerOption);
-        }
-
-        public boolean hasBootstrapServers() {
-            return options.has(bootstrapServersOption);
-        }
-
-        public String bootstrapServers() {
-            return options.valueOf(bootstrapServersOption);
         }
 
         public boolean hasForce() {
