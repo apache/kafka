@@ -650,7 +650,7 @@ public class RemoteLogManager implements Closeable {
 
     /**
      * Search the message offset in the remote storage for the given timestamp and starting-offset.
-     * Once the target segment is found:
+     * Once the target segment where the search to be performed is found:
      * 1. If the target segment lies in the local storage (common segments that lies in both remote and local storage),
      *    then the search will be performed in the local storage.
      * 2. If the target segment is found only in the remote storage, then the search will be performed in the remote storage.
