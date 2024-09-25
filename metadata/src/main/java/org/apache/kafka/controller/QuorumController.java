@@ -1065,6 +1065,11 @@ public final class QuorumController implements Controller {
                         int epoch = batch.epoch();
                         List<ApiMessageAndVersion> messages = batch.records();
 
+                        if (messages.isEmpty()) {
+                            log.debug("Skipping handling commit for batch with no data records with offset {} and epoch {}.", offset, epoch);
+                            continue;
+                        }
+    
                         if (isActive) {
                             // If the controller is active, the records were already replayed,
                             // so we don't need to do it here.
