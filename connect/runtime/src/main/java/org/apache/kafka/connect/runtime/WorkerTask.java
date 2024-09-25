@@ -31,6 +31,7 @@ import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
+import org.apache.kafka.connect.reporter.ErrorRecordReporter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.LoggingContext;
@@ -76,6 +77,7 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
     protected final RetryWithToleranceOperator<T> retryWithToleranceOperator;
     protected final TransformationChain<T, R> transformationChain;
     private final Supplier<List<ErrorReporter<T>>> errorReportersSupplier;
+    private final Supplier<List<ErrorRecordReporter<T>>> errorRecordReportersSupplier;
 
     public WorkerTask(ConnectorTaskId id,
                       TaskStatus.Listener statusListener,
@@ -86,6 +88,7 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
                       RetryWithToleranceOperator<T> retryWithToleranceOperator,
                       TransformationChain<T, R> transformationChain,
                       Supplier<List<ErrorReporter<T>>> errorReportersSupplier,
+                      Supplier<List<ErrorRecordReporter<T>>> errorRecordReportersSupplier,
                       Time time,
                       StatusBackingStore statusBackingStore) {
         this.id = id;
@@ -101,6 +104,7 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
         this.retryWithToleranceOperator = retryWithToleranceOperator;
         this.transformationChain = transformationChain;
         this.errorReportersSupplier = errorReportersSupplier;
+        this.errorRecordReportersSupplier = errorRecordReportersSupplier;
         this.time = time;
         this.statusBackingStore = statusBackingStore;
     }
@@ -173,6 +177,7 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
     // Visible for testing
     void doStart() {
         retryWithToleranceOperator.reporters(errorReportersSupplier.get());
+        retryWithToleranceOperator.errorRecordReporters(errorRecordReportersSupplier.get());
         initializeAndStart();
         statusListener.onStartup(id);
     }

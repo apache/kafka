@@ -27,6 +27,7 @@ import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePo
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
+import org.apache.kafka.connect.reporter.ErrorRecordReporter;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.ConverterConfig;
@@ -269,6 +270,10 @@ public class Plugins {
 
     public Set<PluginDesc<HeaderConverter>> headerConverters() {
         return scanResult.headerConverters();
+    }
+
+    public Set<PluginDesc<ErrorRecordReporter<?>>> errorRecordReporters() {
+        return scanResult.errorRecordReporters();
     }
 
     public Set<PluginDesc<Transformation<?>>> transformations() {

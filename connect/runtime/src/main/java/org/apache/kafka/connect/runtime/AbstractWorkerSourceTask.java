@@ -42,6 +42,7 @@ import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.runtime.errors.ToleranceType;
+import org.apache.kafka.connect.reporter.ErrorRecordReporter;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.source.SourceTaskContext;
@@ -230,10 +231,11 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask<SourceRecord, 
                                        RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator,
                                        StatusBackingStore statusBackingStore,
                                        Executor closeExecutor,
-                                       Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier) {
+                                       Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier,
+                                       Supplier<List<ErrorRecordReporter<SourceRecord>>> errorRecordReportersSupplier) {
 
         super(id, statusListener, initialState, loader, connectMetrics, errorMetrics,
-                retryWithToleranceOperator, transformationChain, errorReportersSupplier,
+                retryWithToleranceOperator, transformationChain, errorReportersSupplier, errorRecordReportersSupplier,
                 time, statusBackingStore);
 
         this.workerConfig = workerConfig;

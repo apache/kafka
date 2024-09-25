@@ -81,6 +81,7 @@ public class DelegatingClassLoaderTest {
                 Collections.emptySortedSet(),
                 Collections.emptySortedSet(),
                 Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
                 Collections.emptySortedSet()
         );
     }
