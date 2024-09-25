@@ -70,7 +70,7 @@ public enum TransactionVersion implements FeatureVersion {
 
     // Transactions V1 enables log version 0 (flexible fields)
     public short transactionLogValueVersion() {
-        return (short) (featureLevel >= 1 ? 0 : 1);
+        return (short) (featureLevel >= 1 ? 1 : 0);
     }
 
     // Transactions V2 enables epoch bump on commit/abort.
