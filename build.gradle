@@ -1637,6 +1637,7 @@ project(':share-coordinator') {
     implementation project(':metadata')
     implementation project(':server')
     implementation project(':server-common')
+    implementation project(':share')
     implementation libs.slf4jApi
     implementation libs.metrics
 
@@ -2370,6 +2371,12 @@ project(':tools') {
       exclude group: 'junit', module: 'junit'
     }
     testImplementation libs.reload4j
+    testImplementation libs.apachedsCoreApi
+    testImplementation libs.apachedsInterceptorKerberos
+    testImplementation libs.apachedsProtocolShared
+    testImplementation libs.apachedsProtocolKerberos
+    testImplementation libs.apachedsProtocolLdap
+    testImplementation libs.apachedsLdifPartition
 
     testRuntimeOnly libs.junitPlatformLanucher
   }

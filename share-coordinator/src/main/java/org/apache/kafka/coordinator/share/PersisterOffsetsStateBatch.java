@@ -19,7 +19,7 @@ package org.apache.kafka.coordinator.share;
 
 import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
-import org.apache.kafka.server.group.share.PersisterStateBatch;
+import org.apache.kafka.server.share.PersisterStateBatch;
 
 import java.util.Objects;
 

@@ -180,7 +180,7 @@ public final class TieredStorageTestBuilder {
         TopicPartition topicPartition = new TopicPartition(topic, partition);
         List<ProducerRecord<String, String>> records = new ArrayList<>();
         for (KeyValueSpec kv: keyValues) {
-            records.add(new ProducerRecord<>(topic, partition, kv.getKey(), kv.getValue()));
+            records.add(new ProducerRecord<>(topic, partition, kv.getTimestamp(), kv.getKey(), kv.getValue()));
         }
         offloadables.computeIfAbsent(topicPartition, k -> new ArrayList<>())
                 .add(new OffloadableSpec(fromBroker, baseOffset, records));
