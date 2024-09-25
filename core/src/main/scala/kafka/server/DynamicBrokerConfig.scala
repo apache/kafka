@@ -733,6 +733,11 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends Brok
     val originalLogConfig = logManager.currentDefaultConfig
     val originalUncleanLeaderElectionEnable = originalLogConfig.uncleanLeaderElectionEnable
     val newBrokerDefaults = new util.HashMap[String, Object](newConfig.extractLogConfigMap)
+    originalLogConfig.originals().forEach((k, v) => {
+      if (!DynamicLogConfig.ReconfigurableConfigs.contains(k)) {
+        newBrokerDefaults.put(k, v)
+      }
+    })
 
     logManager.reconfigureDefaultLogConfig(new LogConfig(newBrokerDefaults))
 
