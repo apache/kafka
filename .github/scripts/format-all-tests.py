@@ -105,7 +105,7 @@ if __name__ == "__main__":
                                   help="Path to module YAML files. Glob patterns are supported.")
     from_yaml_parser.add_argument("--output-file",
                                   required=False,
-                                  default="all-tests.txt",
+                                  default="data/all-tests.txt",
                                   help="Output file location")
 
     if not os.getenv("GITHUB_WORKSPACE"):

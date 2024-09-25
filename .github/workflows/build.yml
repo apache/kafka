@@ -113,8 +113,8 @@ jobs:
         run: |
           git fetch origin test-metrics
           git checkout cce5772c -- data/module-tests
-          python .github/scripts/format-all-tests.py from-yaml
-          echo "test-catalog=$(ls all-tests.txt)" >> "$GITHUB_OUTPUT"
+          python .github/scripts/format-all-tests.py from-yaml --output-file data/all-tests.txt
+          echo "test-catalog=$(realpath data/all-tests.txt)" >> "$GITHUB_OUTPUT"
       - name: Test
         # Gradle flags
         # --build-cache:  Let Gradle restore the build cache
