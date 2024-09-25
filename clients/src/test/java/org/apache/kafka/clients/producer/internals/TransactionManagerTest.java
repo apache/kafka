@@ -168,7 +168,11 @@ public class TransactionManagerTest {
             new ApiVersion()
                 .setApiKey(ApiKeys.INIT_PRODUCER_ID.id)
                 .setMinVersion((short) 0)
-                .setMaxVersion((short) 3)),
+                .setMaxVersion((short) 3),
+            new ApiVersion()
+                .setApiKey(ApiKeys.PRODUCE.id)
+                .setMinVersion((short) 0)
+                .setMaxVersion((short) 7)),
             Arrays.asList(new ApiVersionsResponseData.SupportedFeatureKey()
                 .setName("transaction.version")
                 .setMaxVersion(transactionV2Enabled ? (short) 2 : (short) 1)

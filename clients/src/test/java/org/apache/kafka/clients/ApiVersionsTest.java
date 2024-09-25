@@ -58,7 +58,6 @@ public class ApiVersionsTest {
         assertEquals(RecordBatch.CURRENT_MAGIC_VALUE, apiVersions.maxUsableProduceMagic());
     }
 
-
     @Test
     public void testFinalizedFeaturesUpdate() {
         ApiVersions apiVersions = new ApiVersions();
