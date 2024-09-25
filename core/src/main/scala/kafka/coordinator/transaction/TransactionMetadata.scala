@@ -17,11 +17,11 @@
 package kafka.coordinator.transaction
 
 import java.util.concurrent.locks.ReentrantLock
-
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
+import org.apache.kafka.server.common.TransactionVersion
 
 import scala.collection.{immutable, mutable}
 
@@ -177,7 +177,7 @@ private[transaction] case class TxnTransitMetadata(producerId: Long,
                                                    topicPartitions: immutable.Set[TopicPartition],
                                                    txnStartTimestamp: Long,
                                                    txnLastUpdateTimestamp: Long,
-                                                   clientTransactionVersion: Short) {
+                                                   clientTransactionVersion: TransactionVersion) {
   override def toString: String = {
     "TxnTransitMetadata(" +
       s"producerId=$producerId, " +
@@ -196,17 +196,17 @@ private[transaction] case class TxnTransitMetadata(producerId: Long,
 
 /**
   *
-  * @param producerId            producer id
-  * @param previousProducerId    producer id for the last committed transaction with this transactional ID
-  * @param nextProducerId        Latest producer ID sent to the producer for the given transactional ID
-  * @param producerEpoch         current epoch of the producer
-  * @param lastProducerEpoch     last epoch of the producer
-  * @param txnTimeoutMs          timeout to be used to abort long running transactions
-  * @param state                 current state of the transaction
-  * @param topicPartitions       current set of partitions that are part of this transaction
-  * @param txnStartTimestamp     time the transaction was started, i.e., when first partition is added
-  * @param txnLastUpdateTimestamp   updated when any operation updates the TransactionMetadata. To be used for expiration
-  * @param clientTransactionVersion    TransactionVersion used by the client when the staet was transitioned
+  * @param producerId                  producer id
+  * @param previousProducerId          producer id for the last committed transaction with this transactional ID
+  * @param nextProducerId              Latest producer ID sent to the producer for the given transactional ID
+  * @param producerEpoch               current epoch of the producer
+  * @param lastProducerEpoch           last epoch of the producer
+  * @param txnTimeoutMs                timeout to be used to abort long running transactions
+  * @param state                       current state of the transaction
+  * @param topicPartitions             current set of partitions that are part of this transaction
+  * @param txnStartTimestamp           time the transaction was started, i.e., when first partition is added
+  * @param txnLastUpdateTimestamp      updated when any operation updates the TransactionMetadata. To be used for expiration
+  * @param clientTransactionVersion    TransactionVersion used by the client when the state was transitioned
   */
 @nonthreadsafe
 private[transaction] class TransactionMetadata(val transactionalId: String,
@@ -220,7 +220,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
                                                val topicPartitions: mutable.Set[TopicPartition],
                                                @volatile var txnStartTimestamp: Long = -1,
                                                @volatile var txnLastUpdateTimestamp: Long,
-                                               var clientTransactionVersion: Short) extends Logging {
+                                               var clientTransactionVersion: TransactionVersion) extends Logging {
 
   // pending state is used to indicate the state that this transaction is going to
   // transit to, and for blocking future attempts to transit it again if it is not legal;
@@ -251,7 +251,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
   def prepareNoTransit(): TxnTransitMetadata = {
     // do not call transitTo as it will set the pending state, a follow-up call to abort the transaction will set its pending state
     TxnTransitMetadata(producerId, previousProducerId, nextProducerId, producerEpoch, lastProducerEpoch, txnTimeoutMs, state, topicPartitions.toSet,
-      txnStartTimestamp, txnLastUpdateTimestamp, 0)
+      txnStartTimestamp, txnLastUpdateTimestamp, TransactionVersion.TV_0)
   }
 
   def prepareFenceProducerEpoch(): TxnTransitMetadata = {
@@ -329,9 +329,8 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
       (topicPartitions ++ addedTopicPartitions).toSet, newTxnStartTimestamp, updateTimestamp)
   }
 
-  def prepareAbortOrCommit(newState: TransactionState, clientTransactionVersion: Short, nextProducerId: Long, updateTimestamp: Long): TxnTransitMetadata = {
-
-    val (updatedProducerEpoch, updatedLastProducerEpoch) = if (clientTransactionVersion >= 2) {
+  def prepareAbortOrCommit(newState: TransactionState, clientTransactionVersion: TransactionVersion, nextProducerId: Long, updateTimestamp: Long): TxnTransitMetadata = {
+    val (updatedProducerEpoch, updatedLastProducerEpoch) = if (clientTransactionVersion.supportsEpochBump()) {
       // We already ensured that we do not overflow here. MAX_SHORT is the highest possible value.
       ((producerEpoch + 1).toShort, producerEpoch)
     } else {
@@ -347,8 +346,9 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
 
     // Since the state change was successfully written to the log, unset the flag for a failed epoch fence
     hasFailedEpochFence = false
-    val (updatedProducerId, updatedProducerEpoch) = if (clientTransactionVersion >= 2 && nextProducerId != RecordBatch.NO_PRODUCER_ID) {
+    val (updatedProducerId, updatedProducerEpoch) =
       // If we overflowed on epoch bump, we have to set it as the producer ID now the marker has been written.
+      if (clientTransactionVersion.supportsEpochBump() && nextProducerId != RecordBatch.NO_PRODUCER_ID) {
         (nextProducerId, 0.toShort)
       } else {
         (producerId, producerEpoch)
@@ -383,7 +383,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
                                   updatedTopicPartitions: immutable.Set[TopicPartition],
                                   updatedTxnStartTimestamp: Long,
                                   updateTimestamp: Long): TxnTransitMetadata = {
-    prepareTransitionTo(updatedState, updatedProducerId, RecordBatch.NO_PRODUCER_ID, updatedEpoch, updatedLastEpoch, updatedTxnTimeoutMs, updatedTopicPartitions, updatedTxnStartTimestamp, updateTimestamp, 0)
+    prepareTransitionTo(updatedState, updatedProducerId, RecordBatch.NO_PRODUCER_ID, updatedEpoch, updatedLastEpoch, updatedTxnTimeoutMs, updatedTopicPartitions, updatedTxnStartTimestamp, updateTimestamp, TransactionVersion.TV_0)
   }
 
   private def prepareTransitionTo(updatedState: TransactionState,
@@ -395,7 +395,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
                                   updatedTopicPartitions: immutable.Set[TopicPartition],
                                   updatedTxnStartTimestamp: Long,
                                   updateTimestamp: Long,
-                                  clientTransactionVersion: Short): TxnTransitMetadata = {
+                                  clientTransactionVersion: TransactionVersion): TxnTransitMetadata = {
     if (pendingState.isDefined)
       throw new IllegalStateException(s"Preparing transaction state transition to $updatedState " +
         s"while it already a pending state ${pendingState.get}")
@@ -478,7 +478,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
             txnStartTimestamp != transitMetadata.txnStartTimestamp) {
 
             throwStateTransitionFailure(transitMetadata)
-          } else if (transitMetadata.clientTransactionVersion >= 2) {
+          } else if (transitMetadata.clientTransactionVersion.supportsEpochBump()) {
             producerEpoch = transitMetadata.producerEpoch
             lastProducerEpoch = transitMetadata.lastProducerEpoch
             nextProducerId = transitMetadata.nextProducerId
@@ -493,7 +493,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
           } else {
             txnStartTimestamp = transitMetadata.txnStartTimestamp
             topicPartitions.clear()
-            if (transitMetadata.clientTransactionVersion >= 2) {
+            if (transitMetadata.clientTransactionVersion.supportsEpochBump()) {
               producerEpoch = transitMetadata.producerEpoch
               lastProducerEpoch = transitMetadata.lastProducerEpoch
               previousProducerId = transitMetadata.prevProducerId
@@ -527,7 +527,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
   }
 
   private def validProducerEpoch(transitMetadata: TxnTransitMetadata): Boolean = {
-    val isAtLeastTransactionsV2 = transitMetadata.clientTransactionVersion >= 2
+    val isAtLeastTransactionsV2 = transitMetadata.clientTransactionVersion.supportsEpochBump()
     val isOverflowComplete = isAtLeastTransactionsV2 && (transitMetadata.txnState == CompleteCommit || transitMetadata.txnState == CompleteAbort) && transitMetadata.producerEpoch == 0
     val transitEpoch =
       if (isOverflowComplete || (isAtLeastTransactionsV2 && (transitMetadata.txnState == PrepareCommit || transitMetadata.txnState == PrepareAbort)))

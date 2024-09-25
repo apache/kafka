@@ -29,6 +29,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{AddPartitionsToTxnResponse, TransactionResult}
 import org.apache.kafka.common.utils.{LogContext, ProducerIdAndEpoch, Time}
+import org.apache.kafka.server.common.TransactionVersion
 import org.apache.kafka.server.util.Scheduler
 
 import scala.jdk.CollectionConverters._
@@ -142,7 +143,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                 state = Empty,
                 topicPartitions = collection.mutable.Set.empty[TopicPartition],
                 txnLastUpdateTimestamp = time.milliseconds(),
-                clientTransactionVersion = 0)
+                clientTransactionVersion = TransactionVersion.TV_0)
               txnManager.putTransactionStateIfNotExists(createdMetadata)
 
             case Failure(exception) =>
@@ -489,7 +490,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                            producerId: Long,
                            producerEpoch: Short,
                            txnMarkerResult: TransactionResult,
-                           clientTransactionVersion: Short,
+                           clientTransactionVersion: TransactionVersion,
                            responseCallback: EndTxnCallback,
                            requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
     endTransaction(transactionalId,
@@ -507,10 +508,9 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                              producerEpoch: Short,
                              txnMarkerResult: TransactionResult,
                              isFromClient: Boolean,
-                             clientTransactionVersion: Short,
+                             clientTransactionVersion: TransactionVersion,
                              responseCallback: EndTxnCallback,
                              requestLocal: RequestLocal): Unit = {
-    val requestIsAtLeastTransactionsV2 = clientTransactionVersion >= 2
     var isEpochFence = false
     if (transactionalId == null || transactionalId.isEmpty)
       responseCallback(Errors.INVALID_REQUEST, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH)
@@ -529,7 +529,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
             producerIdCopy = txnMetadata.producerId
             producerEpochCopy = txnMetadata.producerEpoch
             // PrepareEpochFence has slightly different epoch bumping logic so don't include it here.
-            val currentTxnMetadataIsAtLeastTransactionsV2 = !txnMetadata.pendingState.contains(PrepareEpochFence) && txnMetadata.clientTransactionVersion >= 2
+            val currentTxnMetadataIsAtLeastTransactionsV2 = !txnMetadata.pendingState.contains(PrepareEpochFence) && txnMetadata.clientTransactionVersion.supportsEpochBump()
             // True if the client used TV_2 and retried a request that had overflowed the epoch, and a new producer ID is stored in the txnMetadata
             val retryOnOverflow = currentTxnMetadataIsAtLeastTransactionsV2 &&
               txnMetadata.previousProducerId == producerId && producerEpoch == Short.MaxValue - 1 && txnMetadata.producerEpoch == 0
@@ -571,7 +571,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
 
                 // Maybe allocate new producer ID if we are bumping epoch and epoch is exhausted
                 val nextProducerIdOrErrors =
-                  if (requestIsAtLeastTransactionsV2 && !txnMetadata.pendingState.contains(PrepareEpochFence) && txnMetadata.isProducerEpochExhausted) {
+                  if (clientTransactionVersion.supportsEpochBump() && !txnMetadata.pendingState.contains(PrepareEpochFence) && txnMetadata.isProducerEpochExhausted) {
                     producerIdManager.generateProducerId() match {
                       case Success(newProducerId) =>
                         Right(newProducerId)
@@ -729,8 +729,8 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
   // When a client and server support V2, every endTransaction call bumps the producer epoch. When checking epoch, we want to
   // check epoch + 1. Epoch bumps from PrepareEpochFence state are handled separately, so this method should not be used to check that case.
   // Returns true if the transaction state epoch is the specified producer epoch + 1 and epoch bump on every transaction is expected.
-  def endTxnEpochBumped(txnMetadata: TransactionMetadata, producerEpoch: Short): Boolean = {
-    !txnMetadata.pendingState.contains(PrepareEpochFence) && txnMetadata.clientTransactionVersion >= 2 &&
+  private def endTxnEpochBumped(txnMetadata: TransactionMetadata, producerEpoch: Short): Boolean = {
+    !txnMetadata.pendingState.contains(PrepareEpochFence) && txnMetadata.clientTransactionVersion.supportsEpochBump() &&
       txnMetadata.producerEpoch == producerEpoch + 1
   }
 

@@ -101,8 +101,10 @@ class TransactionStateManager(brokerId: Int,
     TransactionStateManagerConfigs.METRICS_GROUP,
     "The avg time it took to load the partitions in the last 30sec"), new Avg())
 
-  private[transaction] def transactionVersionLevel(): Short = {
-    metadataCache.features().finalizedFeatures().getOrDefault(TransactionVersion.FEATURE_NAME, 0.toShort)
+  private[transaction] def transactionVersionLevel(): TransactionVersion = {
+    val version = TransactionVersion.fromFeatureLevel(metadataCache.features().finalizedFeatures().getOrDefault(
+      TransactionVersion.FEATURE_NAME, 0.toShort))
+    version
   }
 
   // visible for testing only

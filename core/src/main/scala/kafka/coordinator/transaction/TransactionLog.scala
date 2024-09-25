@@ -25,6 +25,7 @@ import org.apache.kafka.common.protocol.{ByteBufferAccessor, MessageUtil}
 import org.apache.kafka.common.record.{Record, RecordBatch}
 import org.apache.kafka.common.{MessageFormatter, TopicPartition}
 import org.apache.kafka.coordinator.transaction.generated.{TransactionLogKey, TransactionLogValue}
+import org.apache.kafka.server.common.TransactionVersion
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
@@ -63,7 +64,7 @@ object TransactionLog {
     * @return value payload bytes
     */
   private[transaction] def valueToBytes(txnMetadata: TxnTransitMetadata,
-                                        transactionVersionLevel: Short): Array[Byte] = {
+                                        transactionVersionLevel: TransactionVersion): Array[Byte] = {
     if (txnMetadata.txnState == Empty && txnMetadata.topicPartitions.nonEmpty)
         throw new IllegalStateException(s"Transaction is not expected to have any partitions since its state is ${txnMetadata.txnState}: $txnMetadata")
 
@@ -78,9 +79,7 @@ object TransactionLog {
 
     // Serialize with version 0 (highest non-flexible version) until transaction.version 1 is enabled
     // which enables flexible fields in records.
-    val version: Short =
-      if (transactionVersionLevel >= 1) 1 else 0
-    MessageUtil.toVersionPrefixedBytes(version,
+    MessageUtil.toVersionPrefixedBytes(transactionVersionLevel.transactionLogValueVersion(),
       new TransactionLogValue()
         .setProducerId(txnMetadata.producerId)
         .setProducerEpoch(txnMetadata.producerEpoch)
@@ -89,7 +88,7 @@ object TransactionLog {
         .setTransactionLastUpdateTimestampMs(txnMetadata.txnLastUpdateTimestamp)
         .setTransactionStartTimestampMs(txnMetadata.txnStartTimestamp)
         .setTransactionPartitions(transactionPartitions)
-        .setClientTransactionVersion(transactionVersionLevel))
+        .setClientTransactionVersion(txnMetadata.clientTransactionVersion.featureLevel()))
   }
 
   /**
@@ -134,7 +133,7 @@ object TransactionLog {
           topicPartitions = mutable.Set.empty[TopicPartition],
           txnStartTimestamp = value.transactionStartTimestampMs,
           txnLastUpdateTimestamp = value.transactionLastUpdateTimestampMs,
-          clientTransactionVersion = value.clientTransactionVersion)
+          clientTransactionVersion = TransactionVersion.fromFeatureLevel(value.clientTransactionVersion))
 
         if (!transactionMetadata.state.equals(Empty))
           value.transactionPartitions.forEach(partitionsSchema =>

@@ -42,7 +42,7 @@
       "about": "Time the transaction was last updated"},
     { "name": "TransactionStartTimestampMs", "type": "int64", "versions": "0+",
       "about": "Time the transaction was started"},
-    { "name": "clientTransactionVersion", "type": "int16", "default": 0, "taggedVersions": "1+", "tag": 2,
+    { "name": "ClientTransactionVersion", "type": "int16", "default": 0, "taggedVersions": "1+", "tag": 2,
       "about": "The transaction version used by the client"}
   ]
 }

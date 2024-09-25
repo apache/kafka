@@ -80,7 +80,7 @@ import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
-import org.apache.kafka.server.common.{FinalizedFeatures, KRaftVersion, MetadataVersion}
+import org.apache.kafka.server.common.{FinalizedFeatures, KRaftVersion, MetadataVersion, TransactionVersion}
 import org.apache.kafka.server.config.{ConfigType, KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ShareGroupConfig}
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils
 import org.apache.kafka.server.util.{FutureUtils, MockTime}
@@ -2464,7 +2464,7 @@ class KafkaApisTest extends Logging {
       ).build(version.toShort)
       val request = buildRequest(endTxnRequest)
 
-      val clientTransactionVersion = if (version > 4) 2 else 0
+      val clientTransactionVersion = if (version > 4) TransactionVersion.TV_2 else TransactionVersion.TV_0
 
       val requestLocal = RequestLocal.withThreadConfinedCaching
       when(txnCoordinator.handleEndTransaction(
@@ -2472,7 +2472,7 @@ class KafkaApisTest extends Logging {
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(epoch),
         ArgumentMatchers.eq(TransactionResult.COMMIT),
-        ArgumentMatchers.eq(clientTransactionVersion.toShort),
+        ArgumentMatchers.eq(clientTransactionVersion),
         responseCallback.capture(),
         ArgumentMatchers.eq(requestLocal)
       )).thenAnswer(_ => responseCallback.getValue.apply(Errors.PRODUCER_FENCED, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH))
