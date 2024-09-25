@@ -32,6 +32,7 @@ import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
@@ -290,7 +291,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         mockResponse(data);
 
         ArgumentCaptor<ConsumerGroupHeartbeatResponseData> captor = ArgumentCaptor.forClass(ConsumerGroupHeartbeatResponseData.class);
-        verify(membershipManager, times(1)).onHeartbeatSuccess(captor.capture());
+        verify(membershipManager, times(1)).onHeartbeatSuccess(new ConsumerGroupHeartbeatResponse(captor.capture()));
         ConsumerGroupHeartbeatResponseData response = captor.getValue();
         assertEquals(Errors.NONE.code(), response.errorCode());
         assertEquals(TEST_MEMBER_ID, response.memberId());

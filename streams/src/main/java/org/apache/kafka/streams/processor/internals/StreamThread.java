@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.StreamsAssignmentInterface;
@@ -44,6 +43,7 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
@@ -487,8 +487,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         final Consumer<byte[], byte[]> mainConsumer;
         final StreamsAssignmentInterface streamsAssignmentInterface;
-        if (consumerConfigs.containsKey(ConsumerConfig.GROUP_PROTOCOL_CONFIG) &&
-            consumerConfigs.get(ConsumerConfig.GROUP_PROTOCOL_CONFIG).toString().equalsIgnoreCase(GroupProtocol.CONSUMER.name)) {
+        if (config.getString(StreamsConfig.GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.STREAMS.name)) {
             if (topologyMetadata.hasNamedTopologies()) {
                 throw new IllegalStateException("Named topologies and the CONSUMER protocol cannot be used at the same time.");
             }

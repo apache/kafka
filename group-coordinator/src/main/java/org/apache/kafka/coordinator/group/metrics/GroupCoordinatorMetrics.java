@@ -116,6 +116,7 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
         this(KafkaYammerMetrics.defaultRegistry(), new Metrics());
     }
 
+    @SuppressWarnings("MethodLength")
     public GroupCoordinatorMetrics(MetricsRegistry registry, Metrics metrics) {
         this.registry = Objects.requireNonNull(registry);
         this.metrics = Objects.requireNonNull(metrics);
@@ -198,6 +199,7 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             "The number of share groups in dead state.",
             SHARE_GROUP_PROTOCOL_TAG, Group.GroupType.SHARE.toString(),
             SHARE_GROUP_COUNT_STATE_TAG, ShareGroup.ShareGroupState.DEAD.toString()
+        );
 
         streamsGroupCountMetricName = metrics.metricName(
             GROUP_COUNT_METRIC_NAME,

@@ -59,6 +59,10 @@ object TestInfoUtils {
     testInfo.getDisplayName.contains("kraft+kip932")
   }
 
+  def isStreamsGroupTest(testInfo: TestInfo): Boolean = {
+    testInfo.getDisplayName.contains("kraft+kip1071")
+  }
+
   def maybeGroupProtocolSpecified(testInfo: TestInfo): Option[GroupProtocol] = {
     if (testInfo.getDisplayName.contains("groupProtocol=classic"))
       Some(GroupProtocol.CLASSIC)

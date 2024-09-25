@@ -17,7 +17,7 @@
 package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.common.message.StreamsGroupInitializeRequestData;
-import org.apache.kafka.coordinator.group.CoordinatorRecord;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
