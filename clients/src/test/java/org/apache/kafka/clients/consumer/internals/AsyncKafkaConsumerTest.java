@@ -1245,7 +1245,9 @@ public class AsyncKafkaConsumerTest {
 
         try {
             Thread.currentThread().interrupt();
-            assertThrows(InterruptException.class, () -> consumer.close());
+            InterruptException e = assertThrows(InterruptException.class, () -> consumer.close());
+            assertNotNull(e.getCause());
+            assertEquals(InterruptedException.class, e.getCause().getClass());
         } finally {
             Thread.interrupted();
         }
@@ -1267,7 +1269,9 @@ public class AsyncKafkaConsumerTest {
 
         try {
             Thread.currentThread().interrupt();
-            assertThrows(InterruptException.class, () -> consumer.close(Duration.ZERO));
+            InterruptException e = assertThrows(InterruptException.class, () -> consumer.close(Duration.ZERO));
+            assertNotNull(e.getCause());
+            assertEquals(InterruptedException.class, e.getCause().getClass());
         } finally {
             Thread.interrupted();
         }

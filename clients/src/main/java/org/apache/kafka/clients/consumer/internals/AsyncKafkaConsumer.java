@@ -1257,7 +1257,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             if (exception instanceof InterruptException) {
                 throw (InterruptException) exception;
             } else if (wasInterrupted) {
-                throw new InterruptException("Consumer was interrupted by user prior to close()");
+                throw new InterruptException(new InterruptedException());
             }
             throw new KafkaException("Failed to close kafka consumer", exception);
         }
