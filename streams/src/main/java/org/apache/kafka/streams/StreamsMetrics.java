@@ -42,7 +42,7 @@ public interface StreamsMetrics {
      * <li>invocation rate (num.operations / seconds)</li>
      * <li>total invocation count</li>
      * </ol>
-     * Whenever a user records this sensor via {@link Sensor#record(double)} etc, it will be counted as one invocation
+     * Whenever a user records this sensor via {@link Sensor#record(double)} etc., it will be counted as one invocation
      * of the operation, and hence the rate / count metrics will be updated accordingly; and the recorded latency value
      * will be used to update the average / max latency as well.
      *
@@ -73,7 +73,7 @@ public interface StreamsMetrics {
      * <li>invocation rate (num.operations / time unit)</li>
      * <li>total invocation count</li>
      * </ol>
-     * Whenever a user records this sensor via {@link Sensor#record(double)} etc,
+     * Whenever a user records this sensor via {@link Sensor#record(double)} etc.,
      * it will be counted as one invocation of the operation, and hence the rate / count metrics will be updated accordingly.
      *
      * <p>Note that you can add more metrics to this sensor after you created it, which can then be updated upon

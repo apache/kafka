@@ -15,20 +15,20 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.group.share;
+package org.apache.kafka.server.share;
 
-import org.apache.kafka.common.message.InitializeShareGroupStateResponseData;
+import org.apache.kafka.common.message.WriteShareGroupStateResponseData;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * This class contains the result from {@link Persister#initializeState(InitializeShareGroupStateParameters)}.
+ * This class contains the result from {@link Persister#writeState(WriteShareGroupStateParameters)}.
  */
-public class InitializeShareGroupStateResult implements PersisterResult {
+public class WriteShareGroupStateResult implements PersisterResult {
     private final List<TopicData<PartitionErrorData>> topicsData;
 
-    private InitializeShareGroupStateResult(List<TopicData<PartitionErrorData>> topicsData) {
+    private WriteShareGroupStateResult(List<TopicData<PartitionErrorData>> topicsData) {
         this.topicsData = topicsData;
     }
 
@@ -36,11 +36,11 @@ public class InitializeShareGroupStateResult implements PersisterResult {
         return topicsData;
     }
 
-    public static InitializeShareGroupStateResult from(InitializeShareGroupStateResponseData data) {
+    public static WriteShareGroupStateResult from(WriteShareGroupStateResponseData data) {
         return new Builder()
                 .setTopicsData(data.results().stream()
-                        .map(initializeStateResult -> new TopicData<>(initializeStateResult.topicId(),
-                                initializeStateResult.partitions().stream()
+                        .map(writeStateResult -> new TopicData<>(writeStateResult.topicId(),
+                                writeStateResult.partitions().stream()
                                         .map(partitionResult -> PartitionFactory.newPartitionErrorData(partitionResult.partition(), partitionResult.errorCode(), partitionResult.errorMessage()))
                                         .collect(Collectors.toList())))
                         .collect(Collectors.toList()))
@@ -55,8 +55,8 @@ public class InitializeShareGroupStateResult implements PersisterResult {
             return this;
         }
 
-        public InitializeShareGroupStateResult build() {
-            return new InitializeShareGroupStateResult(topicsData);
+        public WriteShareGroupStateResult build() {
+            return new WriteShareGroupStateResult(topicsData);
         }
     }
 }
