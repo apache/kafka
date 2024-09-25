@@ -160,7 +160,6 @@ public class RecordCollectorTest {
             config,
             processId + "-StreamThread-1",
             clientSupplier,
-            null,
             processId,
             logContext,
             Time.SYSTEM
@@ -1401,7 +1400,6 @@ public class RecordCollectorTest {
                         };
                     }
                 },
-                taskId,
                 processId,
                 logContext,
                 Time.SYSTEM
@@ -1434,7 +1432,6 @@ public class RecordCollectorTest {
                         };
                     }
                 },
-                null,
                 null,
                 logContext,
                 Time.SYSTEM
@@ -1470,7 +1467,6 @@ public class RecordCollectorTest {
                         return mockProducer;
                     }
                 },
-                taskId,
                 processId,
                 logContext,
                 Time.SYSTEM
@@ -1578,6 +1574,98 @@ public class RecordCollectorTest {
             assertInstanceOf(RuntimeException.class, exception.getCause());
             assertEquals("KABOOM!", exception.getCause().getMessage());
         }
+    }
+
+    @Test
+    public void shouldNotFailIfContextIsNotAvailableOnSerializationError() {
+        try (final ErrorStringSerializer errorSerializer = new ErrorStringSerializer()) {
+            final RecordCollector collector = new RecordCollectorImpl(
+                logContext,
+                taskId,
+                streamsProducer,
+                productionExceptionHandler,
+                streamsMetrics,
+                topology
+            );
+
+            assertThrows(
+                StreamsException.class, // should not crash with NullPointerException
+                () -> collector.send(
+                    topic,
+                    "key",
+                    "val",
+                    null,
+                    0,
+                    null,
+                    errorSerializer,
+                    stringSerializer,
+                    sinkNodeName,
+                    null // pass `null` context for testing
+                )
+            );
+        }
+    }
+    
+    @Test
+    public void shouldNotFailIfRecordContextIsNotAvailableOnSerializationError() {
+        try (final ErrorStringSerializer errorSerializer = new ErrorStringSerializer()) {
+            final RecordCollector collector = new RecordCollectorImpl(
+                logContext,
+                taskId,
+                streamsProducer,
+                productionExceptionHandler,
+                streamsMetrics,
+                topology
+            );
+
+            // RecordContext is null when writing into a changelog topic
+            context.setRecordContext(null);
+            assertThrows(
+                StreamsException.class, // should not crash with NullPointerException
+                () -> collector.send(topic, "key", "val", null, 0, null, errorSerializer, stringSerializer, sinkNodeName, context)
+            );
+        }
+    }
+
+    @Test
+    public void shouldNotFailIfContextIsNotAvailableOnSendError() {
+        final RecordCollector collector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            getExceptionalStreamsProducerOnSend(new RuntimeException("Kaboom!")),
+            productionExceptionHandler,
+            streamsMetrics,
+            topology
+        );
+
+        collector.send(
+            topic,
+            "key",
+            "val",
+            null,
+            0,
+            null,
+            stringSerializer,
+            stringSerializer,
+            sinkNodeName,
+            null // pass `null` context for testing
+        );
+    }
+
+    @Test
+    public void shouldNotFailIfRecordContextIsNotAvailableOnSendError() {
+        final RecordCollector collector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            getExceptionalStreamsProducerOnSend(new RuntimeException("Kaboom!")),
+            productionExceptionHandler,
+            streamsMetrics,
+            topology
+        );
+
+        // RecordContext is null when writing into a changelog topic
+        context.setRecordContext(null);
+        collector.send(topic, "key", "val", null, 0, null, stringSerializer, stringSerializer, sinkNodeName, context);
     }
 
     @Test
@@ -1789,7 +1877,6 @@ public class RecordCollectorTest {
                 }
             },
             null,
-            null,
             logContext,
             Time.SYSTEM
         );
@@ -1810,7 +1897,6 @@ public class RecordCollectorTest {
                     };
                 }
             },
-            null,
             null,
             logContext,
             Time.SYSTEM
