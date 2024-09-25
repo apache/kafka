@@ -1410,14 +1410,16 @@ public class ConsumerGroupTest {
             .build();
         consumerGroup.updateMember(member1);
         assertEquals(1, consumerGroup.numClassicProtocolMembers());
-        assertTrue(consumerGroup.allMembersUseClassic());
+        assertTrue(consumerGroup.allMembersUseClassicProtocol());
+        assertFalse(consumerGroup.allMembersUseClassicProtocolExcept(member1.memberId()));
 
         // The group has member 1 (using the classic protocol) and member 2 (using the consumer protocol).
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member-2")
             .build();
         consumerGroup.updateMember(member2);
         assertEquals(1, consumerGroup.numClassicProtocolMembers());
-        assertFalse(consumerGroup.allMembersUseClassic());
+        assertFalse(consumerGroup.allMembersUseClassicProtocol());
+        assertTrue(consumerGroup.allMembersUseClassicProtocolExcept(member2.memberId()));
 
         // The group has member 2 (using the consumer protocol) and member 3 (using the consumer protocol).
         consumerGroup.removeMember(member1.memberId());
@@ -1425,12 +1427,13 @@ public class ConsumerGroupTest {
             .build();
         consumerGroup.updateMember(member3);
         assertEquals(0, consumerGroup.numClassicProtocolMembers());
-        assertFalse(consumerGroup.allMembersUseClassic());
+        assertFalse(consumerGroup.allMembersUseClassicProtocol());
+        assertFalse(consumerGroup.allMembersUseClassicProtocolExcept(member2.memberId()));
 
         // The group is empty.
         consumerGroup.removeMember(member2.memberId());
         consumerGroup.removeMember(member3.memberId());
         assertEquals(0, consumerGroup.numClassicProtocolMembers());
-        assertTrue(consumerGroup.allMembersUseClassic());
+        assertTrue(consumerGroup.allMembersUseClassicProtocol());
     }
 }
