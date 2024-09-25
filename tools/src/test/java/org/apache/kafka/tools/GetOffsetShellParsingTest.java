@@ -22,6 +22,7 @@ import org.apache.kafka.server.util.TopicPartitionFilter;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -241,6 +242,13 @@ public class GetOffsetShellParsingTest {
     @Test
     public void testInvalidTimeValue() {
         assertThrows(TerseException.class, () -> GetOffsetShell.execute("--bootstrap-server", "localhost:9092", "--time", "invalid"));
+    }
+
+    @Test
+    public void testInvalidOffset() {
+        assertEquals("Malformed time argument foo. " +
+                        "Please use -1 or latest / -2 or earliest / -3 or max-timestamp / -4 or earliest-local / -5 or latest-tiered, or a specified long format timestamp",
+                assertThrows(TerseException.class, () -> GetOffsetShell.parseOffsetSpec("foo")).getMessage());
     }
 
     private TopicPartition getTopicPartition(String topic, Integer partition) {

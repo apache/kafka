@@ -24,47 +24,56 @@ import java.time.Duration;
  * The {@code Joined} class represents optional params that can be passed to
  * {@link KStream#join(KTable, ValueJoiner, Joined) KStream#join(KTable,...)} and
  * {@link KStream#leftJoin(KTable, ValueJoiner) KStream#leftJoin(KTable,...)} operations.
+ *
+ * @param <K> type of record key
+ * @param <VLeft> type of left record value
+ * @param <VRight> type of right record value
  */
-public class Joined<K, V, VO> implements NamedOperation<Joined<K, V, VO>> {
+public class Joined<K, VLeft, VRight> implements NamedOperation<Joined<K, VLeft, VRight>> {
 
     protected final Serde<K> keySerde;
-    protected final Serde<V> valueSerde;
-    protected final Serde<VO> otherValueSerde;
+    protected final Serde<VLeft> leftValueSerde;
+    protected final Serde<VRight> rightValueSerde;
     protected final String name;
     protected final Duration gracePeriod;
 
     private Joined(final Serde<K> keySerde,
-                   final Serde<V> valueSerde,
-                   final Serde<VO> otherValueSerde,
+                   final Serde<VLeft> leftValueSerde,
+                   final Serde<VRight> rightValueSerde,
                    final String name,
                    final Duration gracePeriod) {
         this.keySerde = keySerde;
-        this.valueSerde = valueSerde;
-        this.otherValueSerde = otherValueSerde;
+        this.leftValueSerde = leftValueSerde;
+        this.rightValueSerde = rightValueSerde;
         this.name = name;
         this.gracePeriod = gracePeriod;
     }
 
-    protected Joined(final Joined<K, V, VO> joined) {
-        this(joined.keySerde, joined.valueSerde, joined.otherValueSerde, joined.name, joined.gracePeriod);
+    protected Joined(final Joined<K, VLeft, VRight> joined) {
+        this(joined.keySerde, joined.leftValueSerde, joined.rightValueSerde, joined.name, joined.gracePeriod);
     }
 
     /**
      * Create an instance of {@code Joined} with key, value, and otherValue {@link Serde} instances.
      * {@code null} values are accepted and will be replaced by the default serdes as defined in config.
      *
-     * @param keySerde        the key serde to use. If {@code null} the default key serde from config will be used
-     * @param valueSerde      the value serde to use. If {@code null} the default value serde from config will be used
-     * @param otherValueSerde the otherValue serde to use. If {@code null} the default value serde from config will be used
-     * @param <K>             key type
-     * @param <V>             value type
-     * @param <VO>            other value type
+     * @param keySerde
+     *        the key serde to use. If {@code null} the default key serde from config will be used
+     * @param leftValueSerde
+     *        the value serde to use. If {@code null} the default value serde from config will be used
+     * @param rightValueSerde
+     *        the otherValue serde to use. If {@code null} the default value serde from config will be used
+     *
+     * @param <K> key type
+     * @param <VLeft> left value type
+     * @param <VRight> right value type
+     *
      * @return new {@code Joined} instance with the provided serdes
      */
-    public static <K, V, VO> Joined<K, V, VO> with(final Serde<K> keySerde,
-                                                   final Serde<V> valueSerde,
-                                                   final Serde<VO> otherValueSerde) {
-        return new Joined<>(keySerde, valueSerde, otherValueSerde, null, null);
+    public static <K, VLeft, VRight> Joined<K, VLeft, VRight> with(final Serde<K> keySerde,
+                                                                   final Serde<VLeft> leftValueSerde,
+                                                                   final Serde<VRight> rightValueSerde) {
+        return new Joined<>(keySerde, leftValueSerde, rightValueSerde, null, null);
     }
 
     /**
@@ -72,24 +81,26 @@ public class Joined<K, V, VO> implements NamedOperation<Joined<K, V, VO>> {
      * {@code null} values are accepted and will be replaced by the default serdes as defined in
      * config.
      *
-     * @param keySerde the key serde to use. If {@code null} the default key serde from config will be
-     * used
-     * @param valueSerde the value serde to use. If {@code null} the default value serde from config
-     * will be used
-     * @param otherValueSerde the otherValue serde to use. If {@code null} the default value serde
-     * from config will be used
-     * @param name the name used as the base for naming components of the join including any
-     * repartition topics
+     * @param keySerde
+     *        the key serde to use. If {@code null} the default key serde from config will be used
+     * @param leftValueSerde
+     *        the left value serde to use. If {@code null} the default value serde from config will be used
+     * @param rightValueSerde
+     *        the right value serde to use. If {@code null} the default value serde from config will be used
+     * @param name
+     *        the name used as the base for naming components of the join including any repartition topics
+     *
      * @param <K> key type
-     * @param <V> value type
-     * @param <VO> other value type
+     * @param <VLeft> left value type
+     * @param <VRight> right value type
+     *
      * @return new {@code Joined} instance with the provided serdes
      */
-    public static <K, V, VO> Joined<K, V, VO> with(final Serde<K> keySerde,
-                                                   final Serde<V> valueSerde,
-                                                   final Serde<VO> otherValueSerde,
-                                                   final String name) {
-        return new Joined<>(keySerde, valueSerde, otherValueSerde, name, null);
+    public static <K, VLeft, VRight> Joined<K, VLeft, VRight> with(final Serde<K> keySerde,
+                                                                   final Serde<VLeft> leftValueSerde,
+                                                                   final Serde<VRight> rightValueSerde,
+                                                                   final String name) {
+        return new Joined<>(keySerde, leftValueSerde, rightValueSerde, name, null);
     }
 
     /**
@@ -97,39 +108,45 @@ public class Joined<K, V, VO> implements NamedOperation<Joined<K, V, VO>> {
      * {@code null} values are accepted and will be replaced by the default serdes as defined in
      * config.
      *
-     * @param keySerde the key serde to use. If {@code null} the default key serde from config will be
-     * used
-     * @param valueSerde the value serde to use. If {@code null} the default value serde from config
-     * will be used
-     * @param otherValueSerde the otherValue serde to use. If {@code null} the default value serde
-     * from config will be used
-     * @param name the name used as the base for naming components of the join including any
-     * repartition topics
-     * @param gracePeriod stream buffer time
+     * @param keySerde
+     *        the key serde to use. If {@code null} the default key serde from config will be used
+     * @param leftValueSerde
+     *        the left value serde to use. If {@code null} the default value serde from config will be used
+     * @param rightValueSerde
+     *        the right value serde to use. If {@code null} the default value serde from config will be used
+     * @param name
+     *        the name used as the base for naming components of the join including any repartition topics
+     * @param gracePeriod
+     *        stream buffer time
+     *
      * @param <K> key type
-     * @param <V> value type
-     * @param <VO> other value type
+     * @param <VLeft> value value type
+     * @param <VRight> right value type
+     *
      * @return new {@code Joined} instance with the provided serdes
      */
-    public static <K, V, VO> Joined<K, V, VO> with(final Serde<K> keySerde,
-                                                   final Serde<V> valueSerde,
-                                                   final Serde<VO> otherValueSerde,
-                                                   final String name,
-                                                   final Duration gracePeriod) {
-        return new Joined<>(keySerde, valueSerde, otherValueSerde, name, gracePeriod);
+    public static <K, VLeft, VRight> Joined<K, VLeft, VRight> with(final Serde<K> keySerde,
+                                                                   final Serde<VLeft> leftValueSerde,
+                                                                   final Serde<VRight> rightValueSerde,
+                                                                   final String name,
+                                                                   final Duration gracePeriod) {
+        return new Joined<>(keySerde, leftValueSerde, rightValueSerde, name, gracePeriod);
     }
 
     /**
      * Create an instance of {@code Joined} with  a key {@link Serde}.
      * {@code null} values are accepted and will be replaced by the default key serde as defined in config.
      *
-     * @param keySerde the key serde to use. If {@code null} the default key serde from config will be used
-     * @param <K>      key type
-     * @param <V>      value type
-     * @param <VO>     other value type
+     * @param keySerde
+     *        the key serde to use. If {@code null} the default key serde from config will be used
+     *
+     * @param <K> key type
+     * @param <VLeft> value value type
+     * @param <VRight> right value type
+     *
      * @return new {@code Joined} instance configured with the keySerde
      */
-    public static <K, V, VO> Joined<K, V, VO> keySerde(final Serde<K> keySerde) {
+    public static <K, VLeft, VRight> Joined<K, VLeft, VRight> keySerde(final Serde<K> keySerde) {
         return new Joined<>(keySerde, null, null, null, null);
     }
 
@@ -137,44 +154,51 @@ public class Joined<K, V, VO> implements NamedOperation<Joined<K, V, VO>> {
      * Create an instance of {@code Joined} with a value {@link Serde}.
      * {@code null} values are accepted and will be replaced by the default value serde as defined in config.
      *
-     * @param valueSerde the value serde to use. If {@code null} the default value serde from config will be used
-     * @param <K>        key type
-     * @param <V>        value type
-     * @param <VO>       other value type
+     * @param leftValueSerde
+     *        the left value serde to use. If {@code null} the default value serde from config will be used
+     *
+     * @param <K> key type
+     * @param <VLeft> left value type
+     * @param <VRight> right value type
+     *
      * @return new {@code Joined} instance configured with the valueSerde
      */
-    public static <K, V, VO> Joined<K, V, VO> valueSerde(final Serde<V> valueSerde) {
-        return new Joined<>(null, valueSerde, null, null, null);
+    public static <K, VLeft, VRight> Joined<K, VLeft, VRight> valueSerde(final Serde<VLeft> leftValueSerde) {
+        return new Joined<>(null, leftValueSerde, null, null, null);
     }
 
 
     /**
-     * Create an instance of {@code Joined} with an other value {@link Serde}.
+     * Create an instance of {@code Joined} with aother value {@link Serde}.
      * {@code null} values are accepted and will be replaced by the default value serde as defined in config.
      *
-     * @param otherValueSerde the otherValue serde to use. If {@code null} the default value serde from config will be used
-     * @param <K>             key type
-     * @param <V>             value type
-     * @param <VO>            other value type
+     * @param rightValueSerde
+     *        the right value serde to use. If {@code null} the default value serde from config will be used
+     *
+     * @param <K> key type
+     * @param <VLeft> value type
+     * @param <VRight> right value type
+     *
      * @return new {@code Joined} instance configured with the otherValueSerde
      */
-    public static <K, V, VO> Joined<K, V, VO> otherValueSerde(final Serde<VO> otherValueSerde) {
-        return new Joined<>(null, null, otherValueSerde, null, null);
+    public static <K, VLeft, VRight> Joined<K, VLeft, VRight> otherValueSerde(final Serde<VRight> rightValueSerde) {
+        return new Joined<>(null, null, rightValueSerde, null, null);
     }
 
     /**
      * Create an instance of {@code Joined} with base name for all components of the join, this may
      * include any repartition topics created to complete the join.
      *
-     * @param name the name used as the base for naming components of the join including any
-     * repartition topics
-     * @param <K> key type
-     * @param <V> value type
-     * @param <VO> other value type
-     * @return new {@code Joined} instance configured with the name
+     * @param name
+     *        the name used as the base for naming components of the join including any repartition topics
      *
+     * @param <K> key type
+     * @param <VLeft> left value type
+     * @param <VRight> right value type
+     *
+     * @return new {@code Joined} instance configured with the name
      */
-    public static <K, V, VO> Joined<K, V, VO> as(final String name) {
+    public static <K, VLeft, VRight> Joined<K, VLeft, VRight> as(final String name) {
         return new Joined<>(null, null, null, name, null);
     }
 
@@ -182,46 +206,53 @@ public class Joined<K, V, VO> implements NamedOperation<Joined<K, V, VO>> {
      * Set the key {@link Serde} to be used. Null values are accepted and will be replaced by the default
      * key serde as defined in config
      *
-     * @param keySerde the key serde to use. If null the default key serde from config will be used
+     * @param keySerde
+     *        the key serde to use. If null the default key serde from config will be used
+     *
      * @return new {@code Joined} instance configured with the {@code name}
      */
-    public Joined<K, V, VO> withKeySerde(final Serde<K> keySerde) {
-        return new Joined<>(keySerde, valueSerde, otherValueSerde, name, gracePeriod);
+    public Joined<K, VLeft, VRight> withKeySerde(final Serde<K> keySerde) {
+        return new Joined<>(keySerde, leftValueSerde, rightValueSerde, name, gracePeriod);
     }
 
     /**
      * Set the value {@link Serde} to be used. Null values are accepted and will be replaced by the default
      * value serde as defined in config
      *
-     * @param valueSerde the value serde to use. If null the default value serde from config will be used
+     * @param leftValueSerde
+     *        the left value serde to use. If null the default value serde from config will be used
+     *
      * @return new {@code Joined} instance configured with the {@code valueSerde}
      */
-    public Joined<K, V, VO> withValueSerde(final Serde<V> valueSerde) {
-        return new Joined<>(keySerde, valueSerde, otherValueSerde, name, gracePeriod);
+    public Joined<K, VLeft, VRight> withValueSerde(final Serde<VLeft> leftValueSerde) {
+        return new Joined<>(keySerde, leftValueSerde, rightValueSerde, name, gracePeriod);
     }
 
     /**
      * Set the otherValue {@link Serde} to be used. Null values are accepted and will be replaced by the default
      * value serde as defined in config
      *
-     * @param otherValueSerde the otherValue serde to use. If null the default value serde from config will be used
+     * @param rightValueSerde
+     *        the right value serde to use. If null the default value serde from config will be used
+     *
      * @return new {@code Joined} instance configured with the {@code valueSerde}
      */
-    public Joined<K, V, VO> withOtherValueSerde(final Serde<VO> otherValueSerde) {
-        return new Joined<>(keySerde, valueSerde, otherValueSerde, name, gracePeriod);
+    public Joined<K, VLeft, VRight> withOtherValueSerde(final Serde<VRight> rightValueSerde) {
+        return new Joined<>(keySerde, leftValueSerde, rightValueSerde, name, gracePeriod);
     }
 
     /**
      * Set the base name used for all components of the join, this may include any repartition topics
      * created to complete the join.
      *
-     * @param name the name used as the base for naming components of the join including any
-     * repartition topics
+     * @param name
+     *        the name used as the base for naming components of the join including any repartition topics
+     *
      * @return new {@code Joined} instance configured with the {@code name}
      */
     @Override
-    public Joined<K, V, VO> withName(final String name) {
-        return new Joined<>(keySerde, valueSerde, otherValueSerde, name, gracePeriod);
+    public Joined<K, VLeft, VRight> withName(final String name) {
+        return new Joined<>(keySerde, leftValueSerde, rightValueSerde, name, gracePeriod);
     }
 
     /**
@@ -231,27 +262,45 @@ public class Joined<K, V, VO> implements NamedOperation<Joined<K, V, VO>> {
      * result in a null join. Long gaps in stream side arriving records will cause
      * records to be delayed in processing.
      *
+     * @param gracePeriod
+     *        the duration of the grace period. Must be less than the joining table's history retention.
      *
-     * @param gracePeriod the duration of the grace period. Must be less than the joining table's history retention.
      * @return new {@code Joined} instance configured with the gracePeriod
      */
-    public Joined<K, V, VO> withGracePeriod(final Duration gracePeriod) {
-        return new Joined<>(keySerde, valueSerde, otherValueSerde, name, gracePeriod);
+    public Joined<K, VLeft, VRight> withGracePeriod(final Duration gracePeriod) {
+        return new Joined<>(keySerde, leftValueSerde, rightValueSerde, name, gracePeriod);
     }
 
+
+    /**
+     * @deprecated since 4.0 and should not be used any longer.
+     */
+    @Deprecated
     public Duration gracePeriod() {
         return gracePeriod;
     }
 
+    /**
+     * @deprecated since 4.0 and should not be used any longer.
+     */
+    @Deprecated
     public Serde<K> keySerde() {
         return keySerde;
     }
 
-    public Serde<V> valueSerde() {
-        return valueSerde;
+    /**
+     * @deprecated since 4.0 and should not be used any longer.
+     */
+    @Deprecated
+    public Serde<VLeft> valueSerde() {
+        return leftValueSerde;
     }
 
-    public Serde<VO> otherValueSerde() {
-        return otherValueSerde;
+    /**
+     * @deprecated since 4.0 and should not be used any longer.
+     */
+    @Deprecated
+    public Serde<VRight> otherValueSerde() {
+        return rightValueSerde;
     }
 }

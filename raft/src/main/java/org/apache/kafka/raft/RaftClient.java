@@ -18,7 +18,6 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.raft.errors.BufferAllocationException;
 import org.apache.kafka.raft.errors.NotLeaderException;
-import org.apache.kafka.raft.errors.UnexpectedBaseOffsetException;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
@@ -38,13 +37,10 @@ public interface RaftClient<T> extends AutoCloseable {
          * after consuming the reader.
          *
          * Note that there is not a one-to-one correspondence between writes through
-         * {@link #scheduleAppend(int, List)} or {@link #scheduleAtomicAppend(int, OptionalLong, List)}
-         * and this callback. The Raft implementation is free to batch together the records
-         * from multiple append calls provided that batch boundaries are respected. Records
-         * specified through {@link #scheduleAtomicAppend(int, OptionalLong, List)} are guaranteed to be a
-         * subset of a batch provided by the {@link BatchReader}. Records specified through
-         * {@link #scheduleAppend(int, List)} are guaranteed to be in the same order but
-         * they can map to any number of batches provided by the {@link BatchReader}.
+         * {@link #prepareAppend(int, List)} and this callback. The Raft implementation is free to
+         * batch together the records from multiple append calls provided that batch boundaries are
+         * respected. Records specified through {@link #prepareAppend(int, List)} are guaranteed
+         * to be a subset of a batch provided by the {@link BatchReader}.
          *
          * @param reader reader instance which must be iterated and closed
          */
@@ -105,7 +101,7 @@ public interface RaftClient<T> extends AutoCloseable {
      * To distinguish from events that happened before the call to {@code unregister} and a future
      * call to {@code register}, different {@code Listener} instances must be used.
      *
-     * If the {@code Listener} provided was never registered then the unregistration is ignored. 
+     * If the {@code Listener} provided was never registered then the unregistration is ignored.
      *
      * @param listener the listener to unregister
      */
@@ -132,12 +128,12 @@ public interface RaftClient<T> extends AutoCloseable {
     OptionalInt nodeId();
 
     /**
-     * Append a list of records to the log. The write will be scheduled for some time
-     * in the future. There is no guarantee that appended records will be written to
-     * the log and eventually committed. While the order of the records is preserve, they can
-     * be appended to the log using one or more batches. Each record may be committed independently.
-     * If a record is committed, then all records scheduled for append during this epoch
-     * and prior to this record are also committed.
+     * Prepare a list of records to be appended to the log.
+     *
+     * This method will not write any records to the log. To have the KRaft implementation write
+     * records to the log, the {@code schedulePreparedAppend} method must be called. There is no
+     * guarantee that appended records will be written to the log and eventually committed. However,
+     * it is guaranteed that if any of the records become committed, then all of them will be.
      *
      * If the provided current leader epoch does not match the current epoch, which
      * is possible when the state machine has yet to observe the epoch change, then
@@ -147,42 +143,26 @@ public interface RaftClient<T> extends AutoCloseable {
      *
      * @param epoch the current leader epoch
      * @param records the list of records to append
-     * @return the expected offset of the last record if append succeed
-     * @throws org.apache.kafka.common.errors.RecordBatchTooLargeException if the size of the records is greater than the maximum
-     *         batch size; if this exception is throw none of the elements in records were
-     *         committed
-     * @throws NotLeaderException if we are not the current leader or the epoch doesn't match the leader epoch
-     * @throws BufferAllocationException if we failed to allocate memory for the records
-     */
-    long scheduleAppend(int epoch, List<T> records);
-
-    /**
-     * Append a list of records to the log. The write will be scheduled for some time
-     * in the future. There is no guarantee that appended records will be written to
-     * the log and eventually committed. However, it is guaranteed that if any of the
-     * records become committed, then all of them will be.
-     *
-     * If the provided current leader epoch does not match the current epoch, which
-     * is possible when the state machine has yet to observe the epoch change, then
-     * this method will throw an {@link NotLeaderException} to indicate the leader
-     * to resign its leadership. The state machine is expected to discard all
-     * uncommitted entries after observing an epoch change.
-     *
-     * If the current base offset does not match the supplied required base offset,
-     * then this method will throw {@link UnexpectedBaseOffsetException}.
-     *
-     * @param epoch the current leader epoch
-     * @param requiredBaseOffset if this is set, it is the offset we must use as the base offset.
-     * @param records the list of records to append
-     * @return the expected offset of the last record if append succeed
-     * @throws org.apache.kafka.common.errors.RecordBatchTooLargeException if the size of the records is greater than the maximum
-     *         batch size; if this exception is throw none of the elements in records were
-     *         committed
+     * @return the expected offset of the last record
+     * @throws org.apache.kafka.common.errors.RecordBatchTooLargeException if the size of the
+     *         records is greater than the maximum batch size; if this exception is throw none of
+     *         the elements in records were committed
      * @throws NotLeaderException if we are not the current leader or the epoch doesn't match the leader epoch
      * @throws BufferAllocationException we failed to allocate memory for the records
-     * @throws UnexpectedBaseOffsetException the requested base offset could not be obtained.
+     * @throws IllegalStateException if the number of accumulated batches reaches the maximum
+     *         number of batches
      */
-    long scheduleAtomicAppend(int epoch, OptionalLong requiredBaseOffset, List<T> records);
+    long prepareAppend(int epoch, List<T> records);
+
+    /**
+     * Schedule for all of prepared batches to get appended to the log.
+     *
+     * Any batches previously prepared for append with {@code prepareAppend(int List)} will be
+     * scheduled to get appended to the log.
+     *
+     * @throws NotLeaderException if we are not the current leader
+     */
+    void schedulePreparedAppend();
 
     /**
      * Attempt a graceful shutdown of the client. This allows the leader to proactively

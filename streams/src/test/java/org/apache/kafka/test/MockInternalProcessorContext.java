@@ -18,7 +18,6 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.CommitCallback;
-import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -45,7 +44,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 
-public class MockInternalProcessorContext extends MockProcessorContext implements InternalProcessorContext<Object, Object> {
+@SuppressWarnings("deprecation")
+public class MockInternalProcessorContext extends org.apache.kafka.streams.processor.MockProcessorContext implements InternalProcessorContext<Object, Object> {
 
     private final Map<String, StateRestoreCallback> restoreCallbacks = new LinkedHashMap<>();
     private ProcessorNode currentNode;
@@ -205,7 +205,7 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     }
 
     @Override
-    public ProcessorMetadata getProcessorMetadata() {
+    public ProcessorMetadata processorMetadata() {
         return processorMetadata;
     }
 

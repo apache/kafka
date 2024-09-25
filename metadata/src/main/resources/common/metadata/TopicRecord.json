@@ -17,18 +17,12 @@
   "apiKey": 2,
   "type": "metadata",
   "name": "TopicRecord",
-  // Version 0 first version of TopicRecord with Name and TopicId
-  // Version 1 adds TieredEpoch and TieredState for KIP-950
-  "validVersions": "0-1",
+  "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
       "about": "The topic name." },
     { "name": "TopicId", "type": "uuid", "versions": "0+",
-      "about": "The unique ID of this topic." },
-    { "name": "TieredEpoch", "type": "int32", "versions": "1+",
-      "about": "The epoch denoting how many times the tiered state has changed" },
-    { "name": "TieredState", "type": "bool", "versions": "1+",
-      "about": "Denotes whether the topic is currently tiered or not" }
+      "about": "The unique ID of this topic." }
   ]
 }

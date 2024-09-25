@@ -19,7 +19,6 @@ package kafka.zk
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 import java.util.{Collections, Properties}
-import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
 import kafka.server.{KafkaConfig, QuorumTestHarness}
@@ -41,7 +40,7 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.TokenInformation
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.common.MetadataVersion
@@ -928,10 +927,10 @@ class KafkaZkClientTest extends QuorumTestHarness {
   private def leaderIsrAndControllerEpochs(state: Int, partitionEpoch: Int): Map[TopicPartition, LeaderIsrAndControllerEpoch] =
     Map(
       topicPartition10 -> LeaderIsrAndControllerEpoch(
-        LeaderAndIsr(leader = 1, leaderEpoch = state, isr = List(2 + state, 3 + state), LeaderRecoveryState.RECOVERED, partitionEpoch = partitionEpoch),
+        new LeaderAndIsr(1, state, List(2 + state, 3 + state).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, partitionEpoch),
         controllerEpoch = 4),
       topicPartition11 -> LeaderIsrAndControllerEpoch(
-        LeaderAndIsr(leader = 0, leaderEpoch = state + 1, isr = List(1 + state, 2 + state), LeaderRecoveryState.RECOVERED, partitionEpoch = partitionEpoch),
+        new LeaderAndIsr(0, state + 1, List(1 + state, 2 + state).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, partitionEpoch),
         controllerEpoch = 4))
 
   val initialLeaderIsrAndControllerEpochs: Map[TopicPartition, LeaderIsrAndControllerEpoch] =
@@ -1020,9 +1019,9 @@ class KafkaZkClientTest extends QuorumTestHarness {
 
     // Trigger successful, to be retried and failed partitions in same call
     val mixedState = Map(
-      topicPartition10 -> LeaderAndIsr(leader = 1, leaderEpoch = 2, isr = List(4, 5), LeaderRecoveryState.RECOVERED, partitionEpoch = 1),
-      topicPartition11 -> LeaderAndIsr(leader = 0, leaderEpoch = 2, isr = List(3, 4), LeaderRecoveryState.RECOVERED, partitionEpoch = 0),
-      topicPartition20 -> LeaderAndIsr(leader = 0, leaderEpoch = 2, isr = List(3, 4), LeaderRecoveryState.RECOVERED, partitionEpoch = 0))
+      topicPartition10 -> new LeaderAndIsr(1, 2, List(4, 5).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 1),
+      topicPartition11 -> new LeaderAndIsr(0, 2, List(3, 4).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 0),
+      topicPartition20 -> new LeaderAndIsr(0, 2, List(3, 4).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 0))
 
     checkUpdateLeaderAndIsrResult(
       leaderIsrs(state = 2, partitionEpoch = 2).filter { case (tp, _) => tp == topicPartition10 },

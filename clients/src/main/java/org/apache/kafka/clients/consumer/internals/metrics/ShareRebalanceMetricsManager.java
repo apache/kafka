@@ -28,15 +28,16 @@ import java.util.concurrent.TimeUnit;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_SHARE_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 
-public class ShareRebalanceMetricsManager {
-    private final String metricGroupName;
+public class ShareRebalanceMetricsManager extends RebalanceMetricsManager {
     private final Sensor rebalanceSensor;
     public final MetricName rebalanceTotal;
     public final MetricName rebalanceRatePerHour;
+    private long lastRebalanceEndMs = -1L;
     private long lastRebalanceStartMs = -1L;
 
+    @SuppressWarnings("this-escape")
     public ShareRebalanceMetricsManager(Metrics metrics) {
-        metricGroupName = CONSUMER_SHARE_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX;
+        super(CONSUMER_SHARE_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX);
 
         rebalanceTotal = createMetric(metrics, "rebalance-total",
                 "The total number of rebalance events");
@@ -48,14 +49,16 @@ public class ShareRebalanceMetricsManager {
         rebalanceSensor.add(rebalanceRatePerHour, new Rate(TimeUnit.HOURS, new WindowedCount()));
     }
 
-    private MetricName createMetric(Metrics metrics, String name, String description) {
-        return metrics.metricName(name, metricGroupName, description);
-    }
-
     public void recordRebalanceStarted(long nowMs) {
         lastRebalanceStartMs = nowMs;
     }
+
     public void recordRebalanceEnded(long nowMs) {
+        lastRebalanceEndMs = nowMs;
         rebalanceSensor.record(nowMs - lastRebalanceStartMs);
+    }
+
+    public boolean rebalanceStarted() {
+        return lastRebalanceStartMs > lastRebalanceEndMs;
     }
 }

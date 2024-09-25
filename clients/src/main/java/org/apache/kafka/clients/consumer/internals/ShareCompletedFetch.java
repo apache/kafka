@@ -282,7 +282,6 @@ public class ShareCompletedFetch {
     /**
      * Parse the record entry, deserializing the key / value fields if necessary
      */
-    @SuppressWarnings("UnusedParameters")
     <K, V> ConsumerRecord<K, V> parseRecord(final Deserializers<K, V> deserializers,
                                             final TopicIdPartition partition,
                                             final Optional<Integer> leaderEpoch,
@@ -306,12 +305,11 @@ public class ShareCompletedFetch {
             log.error("Value Deserializers with error: {}", deserializers);
             throw newRecordDeserializationException(RecordDeserializationException.DeserializationExceptionOrigin.VALUE, partition.topicPartition(), timestampType, record, e, headers);
         }
-        // When ConsumerRecord gains the delivery count, add it here
         return new ConsumerRecord<>(partition.topic(), partition.partition(), record.offset(),
                 record.timestamp(), timestampType,
                 keyBytes == null ? ConsumerRecord.NULL_SIZE : keyBytes.remaining(),
                 valueBytes == null ? ConsumerRecord.NULL_SIZE : valueBytes.remaining(),
-                key, value, headers, leaderEpoch);
+                key, value, headers, leaderEpoch, Optional.of(deliveryCount));
     }
 
     private static RecordDeserializationException newRecordDeserializationException(RecordDeserializationException.DeserializationExceptionOrigin origin,

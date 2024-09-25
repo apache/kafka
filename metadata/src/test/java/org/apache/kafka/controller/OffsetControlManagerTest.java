@@ -138,7 +138,7 @@ public class OffsetControlManagerTest {
     public void testHandleScheduleAtomicAppend() {
         OffsetControlManager offsetControl = new OffsetControlManager.Builder().build();
 
-        offsetControl.handleScheduleAtomicAppend(2000L);
+        offsetControl.handleScheduleAppend(2000L);
         assertEquals(2001L, offsetControl.nextWriteOffset());
         assertEquals(2000L, offsetControl.metrics().lastAppliedRecordOffset());
         assertEquals(-1L, offsetControl.lastStableOffset());

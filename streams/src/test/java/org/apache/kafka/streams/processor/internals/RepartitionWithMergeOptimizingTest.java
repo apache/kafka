@@ -60,7 +60,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class RepartitionWithMergeOptimizingTest {
 
-    private final Logger log = LoggerFactory.getLogger(RepartitionWithMergeOptimizingTest.class);
+    private static final Logger log = LoggerFactory.getLogger(RepartitionWithMergeOptimizingTest.class);
 
     private static final String INPUT_A_TOPIC = "inputA";
     private static final String INPUT_B_TOPIC = "inputB";

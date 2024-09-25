@@ -166,6 +166,19 @@ public class ShareConsumerImplTest {
     }
 
     @Test
+    public void testFailConstructor() {
+        final Properties props = requiredConsumerProperties();
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "group-id");
+        props.put(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, "an.invalid.class");
+        final ConsumerConfig config = new ConsumerConfig(props);
+        KafkaException ce = assertThrows(
+                KafkaException.class,
+                () -> newConsumer(config));
+        assertTrue(ce.getMessage().contains("Failed to construct Kafka share consumer"), "Unexpected exception message: " + ce.getMessage());
+        assertTrue(ce.getCause().getMessage().contains("Class an.invalid.class cannot be found"), "Unexpected cause: " + ce.getCause());
+    }
+
+    @Test
     public void testWakeupBeforeCallingPoll() {
         consumer = newConsumer();
         final String topicName = "foo";

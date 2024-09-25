@@ -18,7 +18,7 @@ package kafka.coordinator.transaction
 
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
-import kafka.server.{KafkaConfig, MetadataCache, ReplicaManager, RequestLocal}
+import kafka.server.{KafkaConfig, MetadataCache, ReplicaManager}
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
@@ -29,7 +29,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{AddPartitionsToTxnResponse, TransactionResult}
 import org.apache.kafka.common.utils.{LogContext, ProducerIdAndEpoch, Time}
-import org.apache.kafka.server.common.TransactionVersion
+import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.util.Scheduler
 
 import scala.jdk.CollectionConverters._
@@ -45,15 +45,15 @@ object TransactionCoordinator {
             metadataCache: MetadataCache,
             time: Time): TransactionCoordinator = {
 
-    val txnConfig = TransactionConfig(config.transactionalIdExpirationMs,
-      config.transactionMaxTimeoutMs,
-      config.transactionTopicPartitions,
-      config.transactionTopicReplicationFactor,
-      config.transactionTopicSegmentBytes,
-      config.transactionsLoadBufferSize,
-      config.transactionTopicMinISR,
-      config.transactionAbortTimedOutTransactionCleanupIntervalMs,
-      config.transactionRemoveExpiredTransactionalIdCleanupIntervalMs,
+    val txnConfig = TransactionConfig(config.transactionStateManagerConfig.transactionalIdExpirationMs,
+      config.transactionStateManagerConfig.transactionMaxTimeoutMs,
+      config.transactionLogConfig.transactionTopicPartitions,
+      config.transactionLogConfig.transactionTopicReplicationFactor,
+      config.transactionLogConfig.transactionTopicSegmentBytes,
+      config.transactionLogConfig.transactionsLoadBufferSize,
+      config.transactionLogConfig.transactionTopicMinISR,
+      config.transactionStateManagerConfig.transactionAbortTimedOutTransactionCleanupIntervalMs,
+      config.transactionStateManagerConfig.transactionRemoveExpiredTransactionalIdCleanupIntervalMs,
       config.requestTimeoutMs)
 
     val txnStateManager = new TransactionStateManager(config.brokerId, scheduler, replicaManager, metadataCache, txnConfig,
@@ -110,7 +110,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                            transactionTimeoutMs: Int,
                            expectedProducerIdAndEpoch: Option[ProducerIdAndEpoch],
                            responseCallback: InitProducerIdCallback,
-                           requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
+                           requestLocal: RequestLocal = RequestLocal.noCaching): Unit = {
 
     if (transactionalId == null) {
       // if the transactional id is null, then always blindly accept the request
@@ -396,7 +396,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                                        producerEpoch: Short,
                                        partitions: collection.Set[TopicPartition],
                                        responseCallback: AddPartitionsCallback,
-                                       requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
+                                       requestLocal: RequestLocal = RequestLocal.noCaching): Unit = {
     if (transactionalId == null || transactionalId.isEmpty) {
       debug(s"Returning ${Errors.INVALID_REQUEST} error code to client for $transactionalId's AddPartitions request")
       responseCallback(Errors.INVALID_REQUEST)
@@ -492,7 +492,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                            txnMarkerResult: TransactionResult,
                            clientTransactionVersion: TransactionVersion,
                            responseCallback: EndTxnCallback,
-                           requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
+                           requestLocal: RequestLocal = RequestLocal.noCaching): Unit = {
     endTransaction(transactionalId,
       producerId,
       producerEpoch,
@@ -788,7 +788,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
               isFromClient = false,
               clientTransactionVersion = txnManager.transactionVersionLevel(), // Since this is not from client, use server TV
               onComplete(txnIdAndPidEpoch),
-              RequestLocal.NoCaching)
+              RequestLocal.noCaching)
           }
       }
     }

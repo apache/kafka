@@ -109,7 +109,7 @@ public class QuorumControllerMetricsIntegrationTest {
                 }
             });
             if (forceFailoverUsingLogLayer) {
-                controlEnv.activeController().setNewNextWriteOffset(123L);
+                logEnv.activeLogManager().get().throwOnNextAppend();
 
                 TestUtils.retryOnExceptionWithTimeout(30_000, () ->
                     createTopics(controlEnv.activeController(), "test_", 1, 1)

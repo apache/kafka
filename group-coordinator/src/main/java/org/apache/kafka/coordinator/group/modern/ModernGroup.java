@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.Utils;
@@ -114,13 +115,6 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     private final TimelineHashMap<Uuid, TimelineHashMap<Integer, String>> invertedTargetAssignment;
 
     /**
-     * The current partition epoch maps each topic-partitions to their current epoch where
-     * the epoch is the epoch of their owners. When a member revokes a partition, it removes
-     * its epochs from this map. When a member gets a partition, it adds its epochs to this map.
-     */
-    protected final TimelineHashMap<Uuid, TimelineHashMap<Integer, Integer>> currentPartitionEpoch;
-
-    /**
      * The metadata refresh deadline. It consists of a timestamp in milliseconds together with
      * the group epoch at the time of setting it. The metadata refresh time is considered as a
      * soft state (read that it is not stored in a timeline data structure). It is like this
@@ -146,7 +140,6 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
         this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.invertedTargetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.currentPartitionEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
     }
 
     /**
@@ -357,26 +350,6 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     }
 
     /**
-     * Returns the current epoch of a partition or -1 if the partition
-     * does not have one.
-     *
-     * @param topicId       The topic id.
-     * @param partitionId   The partition id.
-     *
-     * @return The epoch or -1.
-     */
-    public int currentPartitionEpoch(
-        Uuid topicId, int partitionId
-    ) {
-        Map<Integer, Integer> partitions = currentPartitionEpoch.get(topicId);
-        if (partitions == null) {
-            return -1;
-        } else {
-            return partitions.getOrDefault(partitionId, -1);
-        }
-    }
-
-    /**
      * @return An immutable Map of subscription metadata for
      *         each topic that the consumer group is subscribed to.
      */
@@ -568,7 +541,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     }
 
     /**
-     * Compute the subscription type of the consumer group.
+     * Compute the subscription type of the group.
      *
      * @param subscribedTopicNames      A map of topic names to the count of members subscribed to each topic.
      *
@@ -592,73 +565,6 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     }
 
     /**
-     * Removes the partition epochs based on the provided assignment.
-     *
-     * @param assignment    The assignment.
-     * @param expectedEpoch The expected epoch.
-     * @throws IllegalStateException if the epoch does not match the expected one.
-     * package-private for testing.
-     */
-    public void removePartitionEpochs(
-        Map<Uuid, Set<Integer>> assignment,
-        int expectedEpoch
-    ) {
-        assignment.forEach((topicId, assignedPartitions) -> {
-            currentPartitionEpoch.compute(topicId, (__, partitionsOrNull) -> {
-                if (partitionsOrNull != null) {
-                    assignedPartitions.forEach(partitionId -> {
-                        Integer prevValue = partitionsOrNull.remove(partitionId);
-                        if (prevValue != expectedEpoch) {
-                            throw new IllegalStateException(
-                                String.format("Cannot remove the epoch %d from %s-%s because the partition is " +
-                                    "still owned at a different epoch %d", expectedEpoch, topicId, partitionId, prevValue));
-                        }
-                    });
-                    if (partitionsOrNull.isEmpty()) {
-                        return null;
-                    } else {
-                        return partitionsOrNull;
-                    }
-                } else {
-                    throw new IllegalStateException(
-                        String.format("Cannot remove the epoch %d from %s because it does not have any epoch",
-                            expectedEpoch, topicId));
-                }
-            });
-        });
-    }
-
-    /**
-     * Adds the partitions epoch based on the provided assignment.
-     *
-     * @param assignment    The assignment.
-     * @param epoch         The new epoch.
-     * @throws IllegalStateException if the partition already has an epoch assigned.
-     * package-private for testing.
-     */
-    public void addPartitionEpochs(
-        Map<Uuid, Set<Integer>> assignment,
-        int epoch
-    ) {
-        assignment.forEach((topicId, assignedPartitions) -> {
-            currentPartitionEpoch.compute(topicId, (__, partitionsOrNull) -> {
-                if (partitionsOrNull == null) {
-                    partitionsOrNull = new TimelineHashMap<>(snapshotRegistry, assignedPartitions.size());
-                }
-                for (Integer partitionId : assignedPartitions) {
-                    Integer prevValue = partitionsOrNull.put(partitionId, epoch);
-                    if (prevValue != null) {
-                        throw new IllegalStateException(
-                            String.format("Cannot set the epoch of %s-%s to %d because the partition is " +
-                                "still owned at epoch %d", topicId, partitionId, epoch, prevValue));
-                    }
-                }
-                return partitionsOrNull;
-            });
-        });
-    }
-
-    /**
      * Gets the protocol type for the group.
      *
      * @return The group protocol type.
@@ -673,8 +579,9 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
      *                          created if it does not exist.
      *
      * @return A ConsumerGroupMember.
+     * @throws UnknownMemberIdException when the member does not exist and createIfNotExists is false.
      */
-    public abstract T getOrMaybeCreateMember(String memberId, boolean createIfNotExists);
+    public abstract T getOrMaybeCreateMember(String memberId, boolean createIfNotExists) throws UnknownMemberIdException;
 
     /**
      * Adds or updates the member.

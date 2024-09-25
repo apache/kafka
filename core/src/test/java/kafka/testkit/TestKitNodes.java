@@ -20,14 +20,20 @@ package kafka.testkit;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
+import org.apache.kafka.metadata.properties.MetaProperties;
+import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
+import org.apache.kafka.metadata.properties.MetaPropertiesVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.test.TestUtils;
 
+import java.io.File;
+import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
@@ -128,51 +134,47 @@ public class TestKitNodes {
                                         .collect(Collectors.joining(", "))));
             }
 
-            TreeMap<Integer, ControllerNode> controllerNodes = new TreeMap<>();
+            TreeMap<Integer, TestKitNode> controllerNodes = new TreeMap<>();
             for (int id : controllerNodeIds) {
-                ControllerNode controllerNode = ControllerNode.builder()
-                    .setId(id)
-                    .setBaseDirectory(baseDirectory)
-                    .setClusterId(clusterId)
-                    .setCombined(brokerNodeIds.contains(id))
-                    .setPropertyOverrides(perServerProperties.getOrDefault(id, Collections.emptyMap()))
-                    .build();
+                TestKitNode controllerNode = TestKitNodes.buildControllerNode(
+                    id,
+                    baseDirectory,
+                    clusterId,
+                    brokerNodeIds.contains(id),
+                    perServerProperties.getOrDefault(id, Collections.emptyMap())
+                );
                 controllerNodes.put(id, controllerNode);
             }
 
-            TreeMap<Integer, BrokerNode> brokerNodes = new TreeMap<>();
+            TreeMap<Integer, TestKitNode> brokerNodes = new TreeMap<>();
             for (int id : brokerNodeIds) {
-                BrokerNode brokerNode = BrokerNode.builder()
-                    .setId(id)
-                    .setNumLogDirectories(numDisksPerBroker)
-                    .setBaseDirectory(baseDirectory)
-                    .setClusterId(clusterId)
-                    .setCombined(controllerNodeIds.contains(id))
-                    .setPropertyOverrides(perServerProperties.getOrDefault(id, Collections.emptyMap()))
-                    .build();
+                TestKitNode brokerNode = TestKitNodes.buildBrokerNode(
+                    id,
+                    baseDirectory,
+                    clusterId,
+                    controllerNodeIds.contains(id),
+                    perServerProperties.getOrDefault(id, Collections.emptyMap()),
+                    numDisksPerBroker
+                );
                 brokerNodes.put(id, brokerNode);
             }
 
-            return new TestKitNodes(baseDirectory,
-                clusterId,
-                bootstrapMetadata,
-                controllerNodes,
-                brokerNodes);
+            return new TestKitNodes(baseDirectory, clusterId, bootstrapMetadata, controllerNodes, brokerNodes);
         }
     }
 
     private final String baseDirectory;
     private final String clusterId;
     private final BootstrapMetadata bootstrapMetadata;
-    private final SortedMap<Integer, ControllerNode> controllerNodes;
-    private final SortedMap<Integer, BrokerNode> brokerNodes;
+    private final SortedMap<Integer, TestKitNode> controllerNodes;
+    private final SortedMap<Integer, TestKitNode> brokerNodes;
 
     private TestKitNodes(
         String baseDirectory,
         String clusterId,
         BootstrapMetadata bootstrapMetadata,
-        SortedMap<Integer, ControllerNode> controllerNodes,
-        SortedMap<Integer, BrokerNode> brokerNodes
+        SortedMap<Integer, TestKitNode> controllerNodes,
+        SortedMap<Integer, TestKitNode> brokerNodes
     ) {
         this.baseDirectory = Objects.requireNonNull(baseDirectory);
         this.clusterId = Objects.requireNonNull(clusterId);
@@ -193,7 +195,7 @@ public class TestKitNodes {
         return clusterId;
     }
 
-    public SortedMap<Integer, ControllerNode> controllerNodes() {
+    public SortedMap<Integer, TestKitNode> controllerNodes() {
         return controllerNodes;
     }
 
@@ -201,7 +203,7 @@ public class TestKitNodes {
         return bootstrapMetadata;
     }
 
-    public SortedMap<Integer, BrokerNode> brokerNodes() {
+    public SortedMap<Integer, TestKitNode> brokerNodes() {
         return brokerNodes;
     }
 
@@ -215,5 +217,91 @@ public class TestKitNodes {
 
     public ListenerName controllerListenerName() {
         return new ListenerName("CONTROLLER");
+    }
+
+    private static TestKitNode buildBrokerNode(int id,
+                                              String baseDirectory,
+                                              String clusterId,
+                                              boolean combined,
+                                              Map<String, String> propertyOverrides,
+                                              int numDisksPerBroker) {
+        List<String> logDataDirectories = IntStream
+            .range(0, numDisksPerBroker)
+            .mapToObj(i -> {
+                if (combined) {
+                    return String.format("combined_%d_%d", id, i);
+                }
+                return String.format("broker_%d_data%d", id, i);
+            })
+            .map(logDir -> {
+                if (Paths.get(logDir).isAbsolute()) {
+                    return logDir;
+                }
+                return new File(baseDirectory, logDir).getAbsolutePath();
+            })
+            .collect(Collectors.toList());
+        MetaPropertiesEnsemble.Copier copier = new MetaPropertiesEnsemble.Copier(MetaPropertiesEnsemble.EMPTY);
+
+        copier.setMetaLogDir(Optional.of(logDataDirectories.get(0)));
+        for (String logDir : logDataDirectories) {
+            copier.setLogDirProps(
+                logDir,
+                new MetaProperties.Builder()
+                    .setVersion(MetaPropertiesVersion.V1)
+                    .setClusterId(clusterId)
+                    .setNodeId(id)
+                    .setDirectoryId(copier.generateValidDirectoryId())
+                    .build()
+            );
+        }
+
+        return new TestKitNode() {
+            private final MetaPropertiesEnsemble ensemble = copier.copy();
+
+            @Override
+            public MetaPropertiesEnsemble initialMetaPropertiesEnsemble() {
+                return ensemble;
+            }
+
+            @Override
+            public Map<String, String> propertyOverrides() {
+                return Collections.unmodifiableMap(propertyOverrides);
+            }
+        };
+    }
+
+    private static TestKitNode buildControllerNode(int id,
+                                                  String baseDirectory,
+                                                  String clusterId,
+                                                  boolean combined,
+                                                  Map<String, String> propertyOverrides) {
+        String metadataDirectory = new File(baseDirectory,
+            combined ? String.format("combined_%d_0", id) : String.format("controller_%d", id)).getAbsolutePath();
+        MetaPropertiesEnsemble.Copier copier = new MetaPropertiesEnsemble.Copier(MetaPropertiesEnsemble.EMPTY);
+
+        copier.setMetaLogDir(Optional.of(metadataDirectory));
+        copier.setLogDirProps(
+            metadataDirectory,
+            new MetaProperties.Builder()
+                .setVersion(MetaPropertiesVersion.V1)
+                .setClusterId(clusterId)
+                .setNodeId(id)
+                .setDirectoryId(copier.generateValidDirectoryId())
+                .build()
+        );
+
+        return new TestKitNode() {
+            private final MetaPropertiesEnsemble ensemble = copier.copy();
+
+            @Override
+            public MetaPropertiesEnsemble initialMetaPropertiesEnsemble() {
+                return ensemble;
+            }
+
+            @Override
+            public Map<String, String> propertyOverrides() {
+                return Collections.unmodifiableMap(propertyOverrides);
+            }
+        };
     }
 }

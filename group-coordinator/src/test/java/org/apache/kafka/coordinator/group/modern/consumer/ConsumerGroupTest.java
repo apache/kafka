@@ -58,7 +58,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpersTest.mkMapOfPartitionRacks;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpersTest.mkMapOfPartitionRacks;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -1110,12 +1110,12 @@ public class ConsumerGroupTest {
             new TopicPartition("__consumer_offsets", 0)
         );
         ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-foo", metricsShard);
-        snapshotRegistry.getOrCreateSnapshot(0);
+        snapshotRegistry.idempotentCreateSnapshot(0);
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
         group.updateMember(new ConsumerGroupMember.Builder("member1")
             .setSubscribedTopicNames(Collections.singletonList("foo"))
             .build());
-        snapshotRegistry.getOrCreateSnapshot(1);
+        snapshotRegistry.idempotentCreateSnapshot(1);
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
         assertEquals(ConsumerGroup.ConsumerGroupState.STABLE.toString(), group.stateAsString(1));
     }
@@ -1137,7 +1137,7 @@ public class ConsumerGroupTest {
             group.validateOffsetFetch("member-id", 0, Long.MAX_VALUE));
 
         // Create a member.
-        snapshotRegistry.getOrCreateSnapshot(0);
+        snapshotRegistry.idempotentCreateSnapshot(0);
         group.updateMember(new ConsumerGroupMember.Builder("member-id").build());
 
         // The member does not exist at last committed offset 0.
@@ -1244,7 +1244,7 @@ public class ConsumerGroupTest {
     public void testAsDescribedGroup() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-id-1", mock(GroupCoordinatorMetricsShard.class));
-        snapshotRegistry.getOrCreateSnapshot(0);
+        snapshotRegistry.idempotentCreateSnapshot(0);
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
 
         group.updateMember(new ConsumerGroupMember.Builder("member1")
@@ -1253,7 +1253,7 @@ public class ConsumerGroupTest {
                 .build());
         group.updateMember(new ConsumerGroupMember.Builder("member2")
                 .build());
-        snapshotRegistry.getOrCreateSnapshot(1);
+        snapshotRegistry.idempotentCreateSnapshot(1);
 
         ConsumerGroupDescribeResponseData.DescribedGroup expected = new ConsumerGroupDescribeResponseData.DescribedGroup()
             .setGroupId("group-id-1")
@@ -1324,14 +1324,14 @@ public class ConsumerGroupTest {
             new TopicPartition("__consumer_offsets", 0)
         );
         ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-foo", metricsShard);
-        snapshotRegistry.getOrCreateSnapshot(0);
+        snapshotRegistry.idempotentCreateSnapshot(0);
         assertTrue(group.isInStates(Collections.singleton("empty"), 0));
         assertFalse(group.isInStates(Collections.singleton("Empty"), 0));
 
         group.updateMember(new ConsumerGroupMember.Builder("member1")
             .setSubscribedTopicNames(Collections.singletonList("foo"))
             .build());
-        snapshotRegistry.getOrCreateSnapshot(1);
+        snapshotRegistry.idempotentCreateSnapshot(1);
         assertTrue(group.isInStates(Collections.singleton("empty"), 0));
         assertTrue(group.isInStates(Collections.singleton("stable"), 1));
         assertFalse(group.isInStates(Collections.singleton("empty"), 1));
