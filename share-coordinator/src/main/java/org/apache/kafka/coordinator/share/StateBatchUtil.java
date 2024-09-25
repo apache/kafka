@@ -31,12 +31,11 @@ public class StateBatchUtil {
     /**
      * Util method which takes in 2 lists containing {@link PersisterStateBatch}
      * and the startOffset.
-     * This method checks any overlap between current and new state batches.
-     * Based on various conditions it creates new non-overlapping batches preferring new ones.
-     * Finally, it removes any batches where the lastOffset < startOffset, if the startOffset > -1 and
-     * merges any contiguous intervals with same state.
-     * @param batchesSoFar - list containing current soft state of {@link PersisterStateBatch}
-     * @param newBatches - list containing {@link PersisterStateBatch} in incoming request
+     * This method removes any batches where the lastOffset < startOffset, if the startOffset > -1.
+     * It then merges any contiguous intervals with same state. If states differ,
+     * based on various conditions it creates new non-overlapping batches preferring new ones.
+     * @param batchesSoFar - List containing current soft state of {@link PersisterStateBatch}
+     * @param newBatches - List containing {@link PersisterStateBatch} in incoming request
      * @param startOffset - startOffset to consider when removing old batches.
      * @return List containing combined batches
      */
@@ -213,13 +212,13 @@ public class StateBatchUtil {
 
     /**
      * Accepts a sorted set of state batches and finds the first 2 batches which overlap.
-     * Overlap means that they have some offsets in common or they are contiguous with the same state.
+     * Overlap means that they have some offsets in common or, they are contiguous with the same state.
      * Along with the 2 overlapping batches, also returns a list of non overlapping intervals
      * prefixing them. For example
      * _____ ____  _____ _____      _____
      *                      ______     __
      * <---------------> <-------->
-     *  non-`overlapping   1st overlapping pair
+     *  non-overlapping   1st overlapping pair
      *
      * @param sortedBatches - TreeSet representing sorted set of {@link PersisterStateBatch}
      * @return object of {@link BatchOverlapState} representing overlapping pair and non-overlapping prefix
@@ -250,8 +249,8 @@ public class StateBatchUtil {
     /**
      * Compares the state of 2 batches i.e. the deliveryCount and deliverState.
      * Uses standard compareTo contract x < y => +int, x > y => -int, x == y => 0
-     * @param b1 - PersisterStateBatch to compare
-     * @param b2 - PersisterStateBatch to compare
+     * @param b1 - {@link PersisterStateBatch} to compare
+     * @param b2 - {@link PersisterStateBatch} to compare
      * @return int representing comparison result.
      */
     private static int compareBatchState(PersisterStateBatch b1, PersisterStateBatch b2) {
