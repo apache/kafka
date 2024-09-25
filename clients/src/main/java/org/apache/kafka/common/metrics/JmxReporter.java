@@ -19,7 +19,6 @@ package org.apache.kafka.common.metrics;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.utils.ConfigUtils;
 import org.apache.kafka.common.utils.Sanitizer;
 import org.apache.kafka.common.utils.Utils;
 
@@ -305,10 +304,7 @@ public class JmxReporter implements MetricsReporter {
 
     }
 
-    public static Predicate<String> compilePredicate(Map<String, ?> originalConfig) {
-        Map<String, ?> configs = ConfigUtils.translateDeprecatedConfigs(
-            originalConfig, new String[][]{{INCLUDE_CONFIG},
-                                           {EXCLUDE_CONFIG}});
+    public static Predicate<String> compilePredicate(Map<String, ?> configs) {
         String include = (String) configs.get(INCLUDE_CONFIG);
         String exclude = (String) configs.get(EXCLUDE_CONFIG);
 
