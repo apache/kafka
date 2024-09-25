@@ -86,11 +86,11 @@ class TestQuorumReconfiguration(ProduceConsumeValidateTest):
         voters = json_from_line(r"CurrentVoters:.*", self.kafka.describe_quorum())
         directory_id = next(voter["directoryId"] for voter in voters if voter["id"] == active_controller_id)
         self.kafka.controller_quorum.remove_controller(active_controller_id, directory_id)
-        # Check describe quorum output to show second_controller is now the leader. Observers contain the old controller
+        # Describe quorum output shows the second controller is now leader, old controller is an observer
         wait_until(lambda: check_describe_quorum_output(self.kafka.describe_quorum(),
                                                         inactive_controller_id,
                                                         [inactive_controller_id],
-                                                        broker_only_ids), timeout_sec=5)
+                                                        broker_only_ids + [active_controller_id]), timeout_sec=30)
 
     @cluster(num_nodes=6)
     @matrix(metadata_quorum=[combined_kraft])
@@ -170,12 +170,15 @@ class TestQuorumReconfiguration(ProduceConsumeValidateTest):
                                                            inactive_controller,
                                                            [self.kafka.idx(node) for node in self.kafka.nodes]))
 
-def assert_nodes_in_output(pattern: str, output: str, *node_ids: int):
+def check_nodes_in_output(pattern: str, output: str, *node_ids: int):
     nodes = json_from_line(pattern, output)
-    assert len(nodes) == len(node_ids)
+    if len(nodes) != len(node_ids):
+        return False
 
     for node in nodes:
-        assert node["id"] in node_ids
+        if not node["id"] in node_ids:
+            return False
+    return True
 
 def check_describe_quorum_output(output: str, leader_id: int, voter_ids: List[int], observer_ids: List[int]):
     """
@@ -186,10 +189,10 @@ def check_describe_quorum_output(output: str, leader_id: int, voter_ids: List[in
     :param observer_ids: Expected observer ids
     :return:
     """
-    assert re.search(r"LeaderId:\s*" + str(leader_id), output)
-    assert_nodes_in_output(r"CurrentVoters:.*", output, *voter_ids)
-    assert_nodes_in_output(r"CurrentObservers:.*", output, *observer_ids)
-    return True
+    if not re.search(r"LeaderId:\s*" + str(leader_id), output):
+        return False
+    return (check_nodes_in_output(r"CurrentVoters:.*", output, *voter_ids) and
+            check_nodes_in_output(r"CurrentObservers:.*", output, *observer_ids))
 
 def json_from_line(pattern: str, output: str):
     match = re.search(pattern, output)
