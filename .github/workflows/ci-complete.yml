@@ -118,16 +118,3 @@ jobs:
           description: 'The build scan was successfully published'
           context: 'Gradle Build Scan / Java ${{ matrix.java }}'
           state: 'success'
-
-  update-cached-tag:
-    # Only run this job if the previous workflow run was successful
-    if: github.event.workflow_run.conclusion == 'success'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Update trunk-cached branch with trunk
-        run: |
-          git switch trunk-cached || git switch -c trunk-cached
-          git reset --hard ${{ github.sha }}
-          git push -f origin trunk-cached
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
