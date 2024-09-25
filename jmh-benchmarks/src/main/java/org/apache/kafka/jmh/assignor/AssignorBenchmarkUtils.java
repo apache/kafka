@@ -93,14 +93,11 @@ public class AssignorBenchmarkUtils {
      *
      * @param topicNames                The names of the topics.
      * @param partitionsPerTopic        The number of partitions per topic.
-     * @param getTopicPartitionRacks    A function to get the racks map for each topic. May return
-     *                                  an empty map if no rack info is desired.
      * @return The subscription metadata map.
      */
     public static Map<String, TopicMetadata> createSubscriptionMetadata(
         List<String> topicNames,
-        int partitionsPerTopic,
-        Function<String, Map<Integer, Set<String>>> getTopicPartitionRacks
+        int partitionsPerTopic
     ) {
         Map<String, TopicMetadata> subscriptionMetadata = new HashMap<>();
 
@@ -110,8 +107,7 @@ public class AssignorBenchmarkUtils {
             TopicMetadata metadata = new TopicMetadata(
                 topicId,
                 topicName,
-                partitionsPerTopic,
-                getTopicPartitionRacks.apply(topicName)
+                partitionsPerTopic
             );
             subscriptionMetadata.put(topicName, metadata);
         }

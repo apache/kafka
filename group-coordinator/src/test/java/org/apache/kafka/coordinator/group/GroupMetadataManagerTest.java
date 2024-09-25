@@ -125,7 +125,6 @@ import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpersTest.mkMapOfPartitionRacks;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESULT;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.appendGroupMetadataErrorToResponseError;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupHeartbeatKey;
@@ -501,8 +500,8 @@ public class GroupMetadataManagerTest {
         List<CoordinatorRecord> expectedRecords = Arrays.asList(
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember),
             GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {{
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
-                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, mkMapOfPartitionRacks(3)));
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6));
+                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3));
                 }}),
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 1),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId, mkAssignment(
@@ -600,8 +599,8 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember),
             GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
                 {
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
-                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, mkMapOfPartitionRacks(3)));
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6));
+                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3));
                 }
             }),
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 11),
@@ -725,12 +724,6 @@ public class GroupMetadataManagerTest {
 
         List<CoordinatorRecord> expectedRecords = Arrays.asList(
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember3),
-            GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
-                {
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
-                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, mkMapOfPartitionRacks(3)));
-                }
-            }),
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 11),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1),
@@ -748,9 +741,9 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember3)
         );
 
-        assertRecordsEquals(expectedRecords.subList(0, 3), result.records().subList(0, 3));
-        assertUnorderedListEquals(expectedRecords.subList(3, 6), result.records().subList(3, 6));
-        assertRecordsEquals(expectedRecords.subList(6, 8), result.records().subList(6, 8));
+        assertRecordsEquals(expectedRecords.subList(0, 2), result.records().subList(0, 2));
+        assertUnorderedListEquals(expectedRecords.subList(2, 5), result.records().subList(2, 5));
+        assertRecordsEquals(expectedRecords.subList(5, 7), result.records().subList(5, 7));
     }
 
     @Test
@@ -837,8 +830,8 @@ public class GroupMetadataManagerTest {
             // Subscription metadata is recomputed because zar is no longer there.
             GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
                 {
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
-                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, mkMapOfPartitionRacks(3)));
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6));
+                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3));
                 }
             }),
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 11)
@@ -961,12 +954,6 @@ public class GroupMetadataManagerTest {
 
         List<CoordinatorRecord> expectedRecords = Arrays.asList(
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember3),
-            GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
-                {
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
-                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, mkMapOfPartitionRacks(3)));
-                }
-            }),
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 11),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId1, mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1),
@@ -984,9 +971,9 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember3)
         );
 
-        assertRecordsEquals(expectedRecords.subList(0, 3), result.records().subList(0, 3));
-        assertUnorderedListEquals(expectedRecords.subList(3, 6), result.records().subList(3, 6));
-        assertRecordsEquals(expectedRecords.subList(6, 8), result.records().subList(6, 8));
+        assertRecordsEquals(expectedRecords.subList(0, 2), result.records().subList(0, 2));
+        assertUnorderedListEquals(expectedRecords.subList(2, 5), result.records().subList(2, 5));
+        assertRecordsEquals(expectedRecords.subList(5, 7), result.records().subList(5, 7));
     }
 
     @Test
@@ -1052,8 +1039,8 @@ public class GroupMetadataManagerTest {
                 .withAssignmentEpoch(10)
                 .withSubscriptionMetadata(new HashMap<String, TopicMetadata>() {
                     {
-                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
-                        put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, mkMapOfPartitionRacks(3)));
+                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6));
+                        put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3));
                     }
                 }))
             .build();
@@ -1225,7 +1212,7 @@ public class GroupMetadataManagerTest {
                 .withAssignmentEpoch(10)
                 .withSubscriptionMetadata(new HashMap<String, TopicMetadata>() {
                     {
-                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
+                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6));
                     }
                 }))
             .build();
@@ -1343,8 +1330,8 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedRejoinedMember),
             GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
                 {
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
-                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, mkMapOfPartitionRacks(3)));
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6));
+                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3));
                 }
             }),
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 11),
@@ -1538,8 +1525,8 @@ public class GroupMetadataManagerTest {
             // Subscription metadata is recomputed because zar is no longer there.
             GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
                 {
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
-                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, mkMapOfPartitionRacks(3)));
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6));
+                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3));
                 }
             }),
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 11)
@@ -2597,7 +2584,7 @@ public class GroupMetadataManagerTest {
                     {
                         // foo only has 3 partitions stored in the metadata but foo has
                         // 6 partitions the metadata image.
-                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 3, mkMapOfPartitionRacks(3)));
+                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 3));
                     }
                 }))
             .build();
@@ -2651,7 +2638,7 @@ public class GroupMetadataManagerTest {
         List<CoordinatorRecord> expectedRecords = Arrays.asList(
             GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
                 {
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6));
                 }
             }),
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 11),
@@ -2708,7 +2695,7 @@ public class GroupMetadataManagerTest {
                     {
                         // foo only has 3 partitions stored in the metadata but foo has
                         // 6 partitions the metadata image.
-                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 3, mkMapOfPartitionRacks(3)));
+                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 3));
                     }
                 }))
             .build();
@@ -2780,7 +2767,7 @@ public class GroupMetadataManagerTest {
         List<CoordinatorRecord> expectedRecords = Arrays.asList(
             GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
                 {
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6));
                 }
             }),
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 11),
@@ -9845,8 +9832,8 @@ public class GroupMetadataManagerTest {
             // The subscription metadata hasn't been updated during the conversion, so a new one is computed.
             GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
                 {
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 1, mkMapOfPartitionRacks(1)));
-                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 1, mkMapOfPartitionRacks(1)));
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 1));
+                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 1));
                 }
             }),
 
@@ -10078,8 +10065,8 @@ public class GroupMetadataManagerTest {
             // The subscription metadata hasn't been updated during the conversion, so a new one is computed.
             GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
                 {
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2, mkMapOfPartitionRacks(2)));
-                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 1, mkMapOfPartitionRacks(1)));
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2));
+                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 1));
                 }
             }),
 
@@ -10241,7 +10228,7 @@ public class GroupMetadataManagerTest {
             // The subscription metadata hasn't been updated during the conversion, so a new one is computed.
             GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
                 {
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 1, mkMapOfPartitionRacks(1)));
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 1));
                 }
             }),
 
@@ -10345,8 +10332,8 @@ public class GroupMetadataManagerTest {
 
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
             {
-                put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
-                put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, mkMapOfPartitionRacks(3)));
+                put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6));
+                put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3));
             }
         }));
 
@@ -10632,8 +10619,8 @@ public class GroupMetadataManagerTest {
             // The subscription metadata hasn't been updated during the conversion, so a new one is computed.
             GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
                 {
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2, mkMapOfPartitionRacks(2)));
-                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 1, mkMapOfPartitionRacks(1)));
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2));
+                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 1));
                 }
             }),
 
@@ -10846,8 +10833,8 @@ public class GroupMetadataManagerTest {
 
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
             {
-                put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
-                put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, mkMapOfPartitionRacks(3)));
+                put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6));
+                put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3));
             }
         }));
 
@@ -11034,8 +11021,8 @@ public class GroupMetadataManagerTest {
 
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
             {
-                put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
-                put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, mkMapOfPartitionRacks(3)));
+                put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6));
+                put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3));
             }
         }));
 
@@ -11221,9 +11208,9 @@ public class GroupMetadataManagerTest {
 
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
             {
-                put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
-                put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, mkMapOfPartitionRacks(3)));
-                put(zarTopicName, new TopicMetadata(zarTopicId, zarTopicName, 1, mkMapOfPartitionRacks(1)));
+                put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6));
+                put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3));
+                put(zarTopicName, new TopicMetadata(zarTopicId, zarTopicName, 1));
             }
         }));
 
@@ -11428,7 +11415,7 @@ public class GroupMetadataManagerTest {
                 .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                     .withSubscriptionMetadata(new HashMap<String, TopicMetadata>() {
                         {
-                            put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2, mkMapOfPartitionRacks(2)));
+                            put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2));
                         }
                     })
                     .withMember(new ConsumerGroupMember.Builder(memberId)
@@ -11514,8 +11501,8 @@ public class GroupMetadataManagerTest {
                 GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember),
                 GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
                     {
-                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2, mkMapOfPartitionRacks(2)));
-                        put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 1, mkMapOfPartitionRacks(1)));
+                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2));
+                        put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 1));
                     }
                 }),
                 GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 11),
@@ -11577,7 +11564,7 @@ public class GroupMetadataManagerTest {
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withSubscriptionMetadata(new HashMap<String, TopicMetadata>() {
                     {
-                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2, mkMapOfPartitionRacks(2)));
+                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2));
                     }
                 })
                 .withMember(new ConsumerGroupMember.Builder(memberId)
@@ -11633,7 +11620,7 @@ public class GroupMetadataManagerTest {
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withSubscriptionMetadata(new HashMap<String, TopicMetadata>() {
                     {
-                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2, mkMapOfPartitionRacks(2)));
+                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2));
                     }
                 })
                 .withMember(new ConsumerGroupMember.Builder(memberId)
@@ -11684,8 +11671,8 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember),
             GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
                 {
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2, mkMapOfPartitionRacks(2)));
-                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 1, mkMapOfPartitionRacks(1)));
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2));
+                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 1));
                 }
             }),
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 11),
@@ -11728,7 +11715,7 @@ public class GroupMetadataManagerTest {
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withSubscriptionMetadata(new HashMap<String, TopicMetadata>() {
                     {
-                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2, mkMapOfPartitionRacks(2)));
+                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2));
                     }
                 })
                 .withMember(new ConsumerGroupMember.Builder(memberId)
@@ -11850,9 +11837,9 @@ public class GroupMetadataManagerTest {
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withSubscriptionMetadata(new HashMap<String, TopicMetadata>() {
                     {
-                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2, mkMapOfPartitionRacks(2)));
-                        put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 1, mkMapOfPartitionRacks(1)));
-                        put(zarTopicName, new TopicMetadata(zarTopicId, zarTopicName, 1, mkMapOfPartitionRacks(1)));
+                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2));
+                        put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 1));
+                        put(zarTopicName, new TopicMetadata(zarTopicId, zarTopicName, 1));
                     }
                 })
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
@@ -12080,8 +12067,8 @@ public class GroupMetadataManagerTest {
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withSubscriptionMetadata(new HashMap<String, TopicMetadata>() {
                     {
-                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2, mkMapOfPartitionRacks(2)));
-                        put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 1, mkMapOfPartitionRacks(1)));
+                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2));
+                        put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 1));
                     }
                 })
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
@@ -12182,9 +12169,9 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1),
             GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
                 {
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2, mkMapOfPartitionRacks(2)));
-                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 1, mkMapOfPartitionRacks(1)));
-                    put(zarTopicName, new TopicMetadata(zarTopicId, zarTopicName, 1, mkMapOfPartitionRacks(1)));
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2));
+                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 1));
+                    put(zarTopicName, new TopicMetadata(zarTopicId, zarTopicName, 1));
                 }
             }),
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 11),
@@ -12322,8 +12309,8 @@ public class GroupMetadataManagerTest {
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withSubscriptionMetadata(new HashMap<String, TopicMetadata>() {
                     {
-                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2, mkMapOfPartitionRacks(2)));
-                        put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 1, mkMapOfPartitionRacks(1)));
+                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2));
+                        put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 1));
                     }
                 })
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
@@ -12424,9 +12411,9 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1),
             GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
                 {
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2, mkMapOfPartitionRacks(2)));
-                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 1, mkMapOfPartitionRacks(1)));
-                    put(zarTopicName, new TopicMetadata(zarTopicId, zarTopicName, 1, mkMapOfPartitionRacks(1)));
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2));
+                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 1));
+                    put(zarTopicName, new TopicMetadata(zarTopicId, zarTopicName, 1));
                 }
             }),
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 11),
@@ -13422,8 +13409,8 @@ public class GroupMetadataManagerTest {
         context.groupMetadataManager.consumerGroup(groupId).setMetadataRefreshDeadline(Long.MAX_VALUE, 10);
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
             {
-                put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2, mkMapOfPartitionRacks(2)));
-                put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 1, mkMapOfPartitionRacks(1)));
+                put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2));
+                put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 1));
             }
         }));
 
@@ -13594,8 +13581,8 @@ public class GroupMetadataManagerTest {
         context.groupMetadataManager.consumerGroup(groupId).setMetadataRefreshDeadline(Long.MAX_VALUE, 10);
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
             {
-                put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2, mkMapOfPartitionRacks(2)));
-                put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 1, mkMapOfPartitionRacks(1)));
+                put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2));
+                put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 1));
             }
         }));
 
@@ -13627,7 +13614,7 @@ public class GroupMetadataManagerTest {
             // Update the subscription metadata.
             GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
                 {
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2, mkMapOfPartitionRacks(2)));
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 2));
                 }
             }),
             // Bump the group epoch.
@@ -13988,8 +13975,8 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord(groupId, expectedMember),
             GroupCoordinatorRecordHelpers.newShareGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
                 {
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
-                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, mkMapOfPartitionRacks(3)));
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6));
+                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3));
                 }
             }),
             GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 1),
@@ -14082,8 +14069,8 @@ public class GroupMetadataManagerTest {
                 // Subscription metadata is recomputed because zar is no longer there.
                 GroupCoordinatorRecordHelpers.newShareGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
                     {
-                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
-                        put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, mkMapOfPartitionRacks(3)));
+                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6));
+                        put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3));
                     }
                 }),
                 GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 11)
@@ -14348,7 +14335,7 @@ public class GroupMetadataManagerTest {
 
         Map<String, TopicMetadata> metadata = Collections.singletonMap(
             "bar",
-            new TopicMetadata(Uuid.randomUuid(), "bar", 10, Collections.emptyMap())
+            new TopicMetadata(Uuid.randomUuid(), "bar", 10)
         );
 
         // The group is created if it does not exist.

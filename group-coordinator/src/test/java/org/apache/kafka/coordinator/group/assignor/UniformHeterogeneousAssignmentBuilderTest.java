@@ -40,7 +40,6 @@ import static org.apache.kafka.coordinator.group.AssignmentTestUtil.assertAssign
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.invertedTargetAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpersTest.mkMapOfPartitionRacks;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -67,8 +66,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
                 new TopicMetadata(
                     topic1Uuid,
                     topic1Name,
-                    3,
-                    mkMapOfPartitionRacks(3)
+                    3
                 )
             )
         );
@@ -109,8 +107,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
                 new TopicMetadata(
                     topic1Uuid,
                     topic1Name,
-                    3,
-                    mkMapOfPartitionRacks(3)
+                    3
                 )
             )
         );
@@ -146,14 +143,12 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         topicMetadata.put(topic1Uuid, new TopicMetadata(
             topic1Uuid,
             topic1Name,
-            3,
-            mkMapOfPartitionRacks(3)
+            3
         ));
         topicMetadata.put(topic3Uuid, new TopicMetadata(
             topic3Uuid,
             topic3Name,
-            6,
-            mkMapOfPartitionRacks(6)
+            6
         ));
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -202,14 +197,12 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         topicMetadata.put(topic3Uuid, new TopicMetadata(
             topic3Uuid,
             topic3Name,
-            1,
-            mkMapOfPartitionRacks(1)
+            1
         ));
         topicMetadata.put(topic1Uuid, new TopicMetadata(
             topic1Uuid,
             topic1Name,
-            2,
-            mkMapOfPartitionRacks(2)
+            2
         ));
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -268,20 +261,17 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         topicMetadata.put(topic1Uuid, new TopicMetadata(
             topic1Uuid,
             topic1Name,
-            6,
-            mkMapOfPartitionRacks(6)
+            6
         ));
         topicMetadata.put(topic2Uuid, new TopicMetadata(
             topic2Uuid,
             topic2Name,
-            4,
-            mkMapOfPartitionRacks(4)
+            4
         ));
         topicMetadata.put(topic3Uuid, new TopicMetadata(
             topic3Uuid,
             topic3Name,
-            4,
-            mkMapOfPartitionRacks(4)
+            4
         ));
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -350,26 +340,22 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         topicMetadata.put(topic1Uuid, new TopicMetadata(
             topic1Uuid,
             topic1Name,
-            6,
-            mkMapOfPartitionRacks(6)
+            6
         ));
         topicMetadata.put(topic2Uuid, new TopicMetadata(
             topic2Uuid,
             topic2Name,
-            5,
-            mkMapOfPartitionRacks(5)
+            5
         ));
         topicMetadata.put(topic3Uuid, new TopicMetadata(
             topic3Uuid,
             topic3Name,
-            3,
-            mkMapOfPartitionRacks(3)
+            3
         ));
         topicMetadata.put(topic4Uuid, new TopicMetadata(
             topic4Uuid,
             topic4Name,
-            3,
-            mkMapOfPartitionRacks(3)
+            3
         ));
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -426,14 +412,12 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         topicMetadata.put(topic1Uuid, new TopicMetadata(
             topic1Uuid,
             topic1Name,
-            6,
-            mkMapOfPartitionRacks(6)
+            6
         ));
         topicMetadata.put(topic2Uuid, new TopicMetadata(
             topic2Uuid,
             topic2Name,
-            7,
-            mkMapOfPartitionRacks(7)
+            7
         ));
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -499,20 +483,17 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         topicMetadata.put(topic1Uuid, new TopicMetadata(
             topic1Uuid,
             topic1Name,
-            3,
-            mkMapOfPartitionRacks(3)
+            3
         ));
         topicMetadata.put(topic2Uuid, new TopicMetadata(
             topic2Uuid,
             topic2Name,
-            8,
-            mkMapOfPartitionRacks(4)
+            8
         ));
         topicMetadata.put(topic3Uuid, new TopicMetadata(
             topic3Uuid,
             topic3Name,
-            3,
-            mkMapOfPartitionRacks(3)
+            3
         ));
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -568,14 +549,12 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         topicMetadata.put(topic1Uuid, new TopicMetadata(
             topic1Uuid,
             topic1Name,
-            3,
-            mkMapOfPartitionRacks(3)
+            3
         ));
         topicMetadata.put(topic2Uuid, new TopicMetadata(
             topic2Uuid,
             topic2Name,
-            5,
-            mkMapOfPartitionRacks(5)
+            5
         ));
 
         // Initial subscriptions were [T1, T2]
@@ -630,8 +609,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         topicMetadata.put(topic1Uuid, new TopicMetadata(
             topic1Uuid,
             topic1Name,
-            3,
-            mkMapOfPartitionRacks(3)
+            3
         ));
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();

@@ -88,8 +88,7 @@ public class SimpleAssignorTest {
                 new TopicMetadata(
                     TOPIC_1_UUID,
                     TOPIC_1_NAME,
-                    3,
-                    Collections.emptyMap()
+                    3
                 )
             )
         );
@@ -126,8 +125,7 @@ public class SimpleAssignorTest {
                 new TopicMetadata(
                     TOPIC_1_UUID,
                     TOPIC_1_NAME,
-                    3,
-                    Collections.emptyMap()
+                    3
                 )
             )
         );
@@ -158,14 +156,12 @@ public class SimpleAssignorTest {
         topicMetadata.put(TOPIC_1_UUID, new TopicMetadata(
             TOPIC_1_UUID,
             TOPIC_1_NAME,
-            3,
-            Collections.emptyMap()
+            3
         ));
         topicMetadata.put(TOPIC_3_UUID, new TopicMetadata(
             TOPIC_3_UUID,
             TOPIC_3_NAME,
-            2,
-            Collections.emptyMap()
+            2
         ));
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -215,21 +211,18 @@ public class SimpleAssignorTest {
         topicMetadata.put(TOPIC_1_UUID, new TopicMetadata(
             TOPIC_1_UUID,
             TOPIC_1_NAME,
-            3,
-            Collections.emptyMap()
+            3
         ));
 
         topicMetadata.put(TOPIC_2_UUID, new TopicMetadata(
             TOPIC_2_UUID,
             "topic2",
-            3,
-            Collections.emptyMap()
+            3
         ));
         topicMetadata.put(TOPIC_3_UUID, new TopicMetadata(
             TOPIC_3_UUID,
             TOPIC_3_NAME,
-            2,
-            Collections.emptyMap()
+            2
         ));
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -289,15 +282,13 @@ public class SimpleAssignorTest {
         topicMetadata.put(TOPIC_1_UUID, new TopicMetadata(
             TOPIC_1_UUID,
             TOPIC_1_NAME,
-            3,
-            Collections.emptyMap()
+            3
         ));
 
         topicMetadata.put(TOPIC_2_UUID, new TopicMetadata(
             TOPIC_2_UUID,
             "topic2",
-            2,
-            Collections.emptyMap()
+            2
         ));
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();

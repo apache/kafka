@@ -44,7 +44,6 @@ import static org.apache.kafka.coordinator.group.AssignmentTestUtil.invertedTarg
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkOrderedAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpersTest.mkMapOfPartitionRacks;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -70,8 +69,7 @@ public class OptimizedUniformAssignmentBuilderTest {
                 new TopicMetadata(
                     topic1Uuid,
                     topic1Name,
-                    3,
-                    mkMapOfPartitionRacks(3)
+                    3
                 )
             )
         );
@@ -108,8 +106,7 @@ public class OptimizedUniformAssignmentBuilderTest {
                 new TopicMetadata(
                     topic1Uuid,
                     topic1Name,
-                    3,
-                    mkMapOfPartitionRacks(3)
+                    3
                 )
             )
         );
@@ -140,14 +137,12 @@ public class OptimizedUniformAssignmentBuilderTest {
         topicMetadata.put(topic1Uuid, new TopicMetadata(
             topic1Uuid,
             topic1Name,
-            3,
-            mkMapOfPartitionRacks(3)
+            3
         ));
         topicMetadata.put(topic3Uuid, new TopicMetadata(
             topic3Uuid,
             topic3Name,
-            2,
-            mkMapOfPartitionRacks(2)
+            2
         ));
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -197,8 +192,7 @@ public class OptimizedUniformAssignmentBuilderTest {
         topicMetadata.put(topic3Uuid, new TopicMetadata(
             topic3Uuid,
             topic3Name,
-            2,
-            mkMapOfPartitionRacks(2)
+            2
         ));
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -260,8 +254,7 @@ public class OptimizedUniformAssignmentBuilderTest {
             topicMetadata.put(topicId, new TopicMetadata(
                 topicId,
                 "topic-" + i,
-                3,
-                mkMapOfPartitionRacks(3)
+                3
             ));
         }
 
@@ -296,14 +289,12 @@ public class OptimizedUniformAssignmentBuilderTest {
         topicMetadata.put(topic1Uuid, new TopicMetadata(
             topic1Uuid,
             topic1Name,
-            3,
-            mkMapOfPartitionRacks(3)
+            3
         ));
         topicMetadata.put(topic2Uuid, new TopicMetadata(
             topic2Uuid,
             topic2Name,
-            3,
-            mkMapOfPartitionRacks(3)
+            3
         ));
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -361,14 +352,12 @@ public class OptimizedUniformAssignmentBuilderTest {
         topicMetadata.put(topic1Uuid, new TopicMetadata(
             topic1Uuid,
             topic1Name,
-            6,
-            mkMapOfPartitionRacks(6)
+            6
         ));
         topicMetadata.put(topic2Uuid, new TopicMetadata(
             topic2Uuid,
             topic2Name,
-            5,
-            mkMapOfPartitionRacks(5)
+            5
         ));
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -425,14 +414,12 @@ public class OptimizedUniformAssignmentBuilderTest {
         topicMetadata.put(topic1Uuid, new TopicMetadata(
             topic1Uuid,
             topic1Name,
-            3,
-            mkMapOfPartitionRacks(3)
+            3
         ));
         topicMetadata.put(topic2Uuid, new TopicMetadata(
             topic2Uuid,
             topic2Name,
-            3,
-            mkMapOfPartitionRacks(3)
+            3
         ));
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -499,14 +486,12 @@ public class OptimizedUniformAssignmentBuilderTest {
         topicMetadata.put(topic1Uuid, new TopicMetadata(
             topic1Uuid,
             topic1Name,
-            3,
-            mkMapOfPartitionRacks(3)
+            3
         ));
         topicMetadata.put(topic2Uuid, new TopicMetadata(
             topic2Uuid,
             topic2Name,
-            3,
-            mkMapOfPartitionRacks(3)
+            3
         ));
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -565,14 +550,12 @@ public class OptimizedUniformAssignmentBuilderTest {
         topicMetadata.put(topic1Uuid, new TopicMetadata(
             topic1Uuid,
             topic1Name,
-            2,
-            mkMapOfPartitionRacks(2)
+            2
         ));
         topicMetadata.put(topic2Uuid, new TopicMetadata(
             topic2Uuid,
             topic2Name,
-            2,
-            mkMapOfPartitionRacks(2)
+            2
         ));
 
         // Initial subscriptions were [T1, T2]

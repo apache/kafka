@@ -165,14 +165,12 @@ public class GroupCoordinatorRecordHelpersTest {
         subscriptionMetadata.put("foo", new TopicMetadata(
             fooTopicId,
             "foo",
-            10,
-            mkMapOfPartitionRacks(10)
+            10
         ));
         subscriptionMetadata.put("bar", new TopicMetadata(
             barTopicId,
             "bar",
-            20,
-            mkMapOfPartitionRacks(20)
+            20
         ));
 
         CoordinatorRecord expectedRecord = new CoordinatorRecord(
@@ -187,13 +185,11 @@ public class GroupCoordinatorRecordHelpersTest {
                         new ConsumerGroupPartitionMetadataValue.TopicMetadata()
                             .setTopicId(fooTopicId)
                             .setTopicName("foo")
-                            .setNumPartitions(10)
-                            .setPartitionMetadata(mkListOfPartitionRacks(10)),
+                            .setNumPartitions(10),
                         new ConsumerGroupPartitionMetadataValue.TopicMetadata()
                             .setTopicId(barTopicId)
                             .setTopicName("bar")
-                            .setNumPartitions(20)
-                            .setPartitionMetadata(mkListOfPartitionRacks(20)))),
+                            .setNumPartitions(20))),
                 (short) 0));
 
         assertRecordEquals(expectedRecord, newConsumerGroupSubscriptionMetadataRecord(
@@ -226,14 +222,12 @@ public class GroupCoordinatorRecordHelpersTest {
         subscriptionMetadata.put("foo", new TopicMetadata(
             fooTopicId,
             "foo",
-            10,
-            Collections.emptyMap()
+            10
         ));
         subscriptionMetadata.put("bar", new TopicMetadata(
             barTopicId,
             "bar",
-            20,
-            Collections.emptyMap()
+            20
         ));
 
         CoordinatorRecord expectedRecord = new CoordinatorRecord(
@@ -248,13 +242,11 @@ public class GroupCoordinatorRecordHelpersTest {
                         new ConsumerGroupPartitionMetadataValue.TopicMetadata()
                             .setTopicId(fooTopicId)
                             .setTopicName("foo")
-                            .setNumPartitions(10)
-                            .setPartitionMetadata(Collections.emptyList()),
+                            .setNumPartitions(10),
                         new ConsumerGroupPartitionMetadataValue.TopicMetadata()
                             .setTopicId(barTopicId)
                             .setTopicName("bar")
-                            .setNumPartitions(20)
-                            .setPartitionMetadata(Collections.emptyList()))),
+                            .setNumPartitions(20))),
                 (short) 0));
 
         assertRecordEquals(expectedRecord, newConsumerGroupSubscriptionMetadataRecord(
@@ -819,28 +811,6 @@ public class GroupCoordinatorRecordHelpersTest {
 
         CoordinatorRecord record = GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("group-id", "foo", 1);
         assertEquals(expectedRecord, record);
-    }
-
-    /**
-     * Creates a list of values to be added to the record and assigns partitions to racks for testing.
-     *
-     * @param numPartitions The number of partitions for the topic.
-     *
-     * For testing purposes, the following criteria are used:
-     *      - Number of replicas for each partition: 2
-     *      - Number of racks available to the cluster: 4
-     */
-    public static List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> mkListOfPartitionRacks(int numPartitions) {
-        List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> partitionRacks = new ArrayList<>(numPartitions);
-        for (int i = 0; i < numPartitions; i++) {
-            List<String> racks = new ArrayList<>(Arrays.asList("rack" + i % 4, "rack" + (i + 1) % 4));
-            partitionRacks.add(
-                new ConsumerGroupPartitionMetadataValue.PartitionMetadata()
-                    .setPartition(i)
-                    .setRacks(racks)
-            );
-        }
-        return partitionRacks;
     }
 
     /**
