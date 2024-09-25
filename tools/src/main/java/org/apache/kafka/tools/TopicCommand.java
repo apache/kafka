@@ -967,7 +967,7 @@ public abstract class TopicCommand {
                 CommandLineUtils.printUsageAndExit(parser, "Command must include exactly one action: --list, --describe, --create, --alter or --delete");
 
             if (has(deleteConfigOpt)) {
-                System.err.println("delete-config option has been deprecated since version 4.0 and will be fully removed in future releases.");
+                System.err.println("delete-config option is no longer supported and deprecated since version 4.0. The config will be fully removed in future releases.");
             }
 
             checkRequiredArgs();
