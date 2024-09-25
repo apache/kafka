@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.jmh.metrics;
 
-import java.util.concurrent.ThreadLocalRandom;
 import org.apache.kafka.coordinator.common.runtime.HdrHistogram;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
@@ -38,6 +37,7 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
 @State(Scope.Benchmark)
