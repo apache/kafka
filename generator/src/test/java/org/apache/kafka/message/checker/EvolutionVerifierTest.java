@@ -17,9 +17,9 @@
 
 package org.apache.kafka.message.checker;
 
-import com.fasterxml.jackson.databind.exc.ValueInstantiationException;
 import org.apache.kafka.message.MessageGenerator;
 import org.apache.kafka.message.MessageSpec;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
