@@ -543,6 +543,8 @@ public class KafkaAdminClient extends AdminClient {
                 adminAddresses.usingBootstrapControllers());
             metadataManager.update(Cluster.bootstrap(adminAddresses.addresses()), time.milliseconds());
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
+            clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
+            clientTelemetryReporter.ifPresent(reporters::add);
             Map<String, String> metricTags = Collections.singletonMap("client-id", clientId);
             MetricConfig metricConfig = new MetricConfig().samples(config.getInt(AdminClientConfig.METRICS_NUM_SAMPLES_CONFIG))
                 .timeWindow(config.getLong(AdminClientConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
@@ -551,8 +553,6 @@ public class KafkaAdminClient extends AdminClient {
             MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
                     config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
             metrics = new Metrics(metricConfig, reporters, time, metricsContext);
-            clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
-            clientTelemetryReporter.ifPresent(telemetryReporter -> telemetryReporter.contextChange(metricsContext));
             networkClient = ClientUtils.createNetworkClient(config,
                 clientId,
                 metrics,
