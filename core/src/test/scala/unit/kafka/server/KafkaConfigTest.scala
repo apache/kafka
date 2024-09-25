@@ -1462,7 +1462,7 @@ class KafkaConfigTest {
   private def assertValidQuorumVoters(expectedVoters: util.Map[Integer, InetSocketAddress], value: String): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, value)
-    val addresses = QuorumConfig.parseVoterConnections(KafkaConfig.fromProps(props).quorumVoters)
+    val addresses = QuorumConfig.parseVoterConnections(KafkaConfig.fromProps(props).quorumConfig.voters)
     assertEquals(expectedVoters, addresses)
   }
 
@@ -1477,7 +1477,7 @@ class KafkaConfigTest {
     props.setProperty(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "kafka1:9092,kafka2:9092")
 
     val addresses = QuorumConfig.parseBootstrapServers(
-      KafkaConfig.fromProps(props).quorumBootstrapServers
+      KafkaConfig.fromProps(props).quorumConfig.bootstrapServers
     )
 
     assertEquals(expected, addresses)
