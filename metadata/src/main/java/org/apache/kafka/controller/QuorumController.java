@@ -1067,10 +1067,8 @@ public final class QuorumController implements Controller {
 
                         if (messages.isEmpty()) {
                             log.debug("Skipping handling commit for batch with no data records with offset {} and epoch {}.", offset, epoch);
-                            continue;
-                        }
-    
-                        if (isActive) {
+                            offsetControl.handleCommitBatchMetrics(batch);
+                        } else if (isActive) {
                             // If the controller is active, the records were already replayed,
                             // so we don't need to do it here.
                             log.debug("Completing purgatory items up to offset {} and epoch {}.", offset, epoch);
