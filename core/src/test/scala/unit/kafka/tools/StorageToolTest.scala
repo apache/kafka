@@ -512,7 +512,7 @@ Found problem:
       runVersionMappingCommand(stream, "2.9-IV2")
     })
 
-    assertEquals("Unsupported release version '2.9-IV2'." +
+    assertEquals("Unknown release version '2.9-IV2'." +
       " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION.version +
       " to " + MetadataVersion.LATEST_PRODUCTION.version, exception.getMessage
     )
@@ -521,7 +521,7 @@ Found problem:
       runVersionMappingCommand(stream, "invalid")
     })
 
-    assertEquals("Unsupported release version 'invalid'." +
+    assertEquals("Unknown release version 'invalid'." +
       " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION.version +
       " to " + MetadataVersion.LATEST_PRODUCTION.version, exception2.getMessage
     )

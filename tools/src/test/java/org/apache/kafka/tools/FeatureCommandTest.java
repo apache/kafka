@@ -386,7 +386,7 @@ public class FeatureCommandTest {
             FeatureCommand.handleVersionMapping(new Namespace(namespace))
         );
 
-        assertEquals("Unsupported release version '2.9-IV2'." +
+        assertEquals("Unknown release version '2.9-IV2'." +
             " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION +
             " to " + MetadataVersion.LATEST_PRODUCTION, exception1.getMessage());
 
@@ -396,7 +396,7 @@ public class FeatureCommandTest {
             FeatureCommand.handleVersionMapping(new Namespace(namespace))
         );
 
-        assertEquals("Unsupported release version 'invalid'." +
+        assertEquals("Unknown release version 'invalid'." +
             " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION +
             " to " + MetadataVersion.LATEST_PRODUCTION, exception2.getMessage());
     }

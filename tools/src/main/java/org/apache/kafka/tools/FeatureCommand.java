@@ -40,11 +40,11 @@ import net.sourceforge.argparse4j.inf.Subparsers;
 import net.sourceforge.argparse4j.internal.HelpScreenException;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.Map;
-import java.util.HashMap;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
@@ -279,7 +279,7 @@ public class FeatureCommand {
             try {
                 version = MetadataVersion.fromVersionString(metadata);
             } catch (Throwable e) {
-                throw new TerseException("Unsupported metadata.version " + metadata +
+                throw new TerseException("Unknown metadata.version " + metadata +
                         ". Supported metadata.version are " + metadataVersionsToString(
                         MetadataVersion.MINIMUM_BOOTSTRAP_VERSION, MetadataVersion.latestProduction()));
             }
@@ -333,7 +333,7 @@ public class FeatureCommand {
                 System.out.printf("%s=%d%n", feature.featureName(), featureLevel);
             }
         } catch (IllegalArgumentException e) {
-            throw new TerseException("Unsupported release version '" + releaseVersion + "'." +
+            throw new TerseException("Unknown release version '" + releaseVersion + "'." +
                 " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION +
                 " to " + MetadataVersion.LATEST_PRODUCTION);
         }
@@ -355,7 +355,7 @@ public class FeatureCommand {
                     try {
                         metadataVersion = MetadataVersion.fromFeatureLevel(featureLevel);
                     } catch (IllegalArgumentException e) {
-                        throw new TerseException("Unsupported metadata.version " + featureLevel);
+                        throw new TerseException("Unknown metadata.version " + featureLevel);
                     }
 
                     // Assuming metadata versions do not have dependencies.

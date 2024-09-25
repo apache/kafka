@@ -167,7 +167,7 @@ object StorageTool extends Logging {
       }
     } catch {
       case e: IllegalArgumentException =>
-        throw new TerseFailure(s"Unsupported release version '$releaseVersion'. Supported versions are: " +
+        throw new TerseFailure(s"Unknown release version '$releaseVersion'. Supported versions are: " +
           s"${MetadataVersion.MINIMUM_BOOTSTRAP_VERSION.version} to ${MetadataVersion.LATEST_PRODUCTION.version}")
     }
   }
@@ -195,7 +195,7 @@ object StorageTool extends Logging {
             MetadataVersion.fromFeatureLevel(featureLevel)
           } catch {
             case _: IllegalArgumentException =>
-              throw new TerseFailure(s"Unsupported metadata.version $featureLevel")
+              throw new TerseFailure(s"Unknown metadata.version $featureLevel")
           }
           printStream.printf("%s=%d (%s) has no dependencies.%n", featureName, featureLevel, metadataVersion.version())
         } else {
