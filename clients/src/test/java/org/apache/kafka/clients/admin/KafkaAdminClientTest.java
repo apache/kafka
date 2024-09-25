@@ -261,7 +261,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -6324,10 +6323,10 @@ public class KafkaAdminClientTest {
             Utils.mkEntry("test_feature_2", new FeatureUpdate((short) 3,  FeatureUpdate.UpgradeType.SAFE_DOWNGRADE)));
     }
 
-    private Map<String, ApiError> makeTestFeatureUpdateErrors(final Map<String, FeatureUpdate> updates, final Errors error) {
-        final Map<String, ApiError> errors = new LinkedHashMap<>(); // Use LinkedHashMap so it is in the same order each time.
+    private Map<String, ApiError> makeTestFeatureUpdateNoErrors(final Map<String, FeatureUpdate> updates) {
+        final Map<String, ApiError> errors = new HashMap<>();
         for (Map.Entry<String, FeatureUpdate> entry : updates.entrySet()) {
-            errors.put(entry.getKey(), new ApiError(error));
+            errors.put(entry.getKey(), ApiError.NONE);
         }
         return errors;
     }
@@ -6362,7 +6361,7 @@ public class KafkaAdminClientTest {
     @Test
     public void testUpdateFeaturesDuringSuccess() throws Exception {
         final Map<String, FeatureUpdate> updates = makeTestFeatureUpdates();
-        testUpdateFeatures(updates, ApiError.NONE, makeTestFeatureUpdateErrors(updates, Errors.NONE));
+        testUpdateFeatures(updates, ApiError.NONE, makeTestFeatureUpdateNoErrors(updates));
     }
 
     @Test
@@ -6372,25 +6371,10 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testUpdateFeaturesInvalidRequestError() throws Exception {
-        final Map<String, FeatureUpdate> updates = makeTestFeatureUpdates();
-        Map<String, ApiError> errors = makeTestFeatureUpdateErrors(updates, Errors.INVALID_REQUEST);
-        testUpdateFeatures(updates, topLevelError(errors), errors);
-    }
-
-    @Test
-    public void testUpdateFeaturesUpdateFailedError() throws Exception {
-        final Map<String, FeatureUpdate> updates = makeTestFeatureUpdates();
-        Map<String, ApiError> errors = makeTestFeatureUpdateErrors(updates, Errors.FEATURE_UPDATE_FAILED);
-        testUpdateFeatures(updates, topLevelError(errors), errors);
-    }
-
-    @Test
-    public void testUpdateFeaturesPartialSuccess() throws Exception {
-        final Map<String, ApiError> errors = makeTestFeatureUpdateErrors(makeTestFeatureUpdates(), Errors.NONE);
+    public void testUpdateFeaturesFeatureError() throws Exception {
         ApiError error = new ApiError(Errors.INVALID_REQUEST);
-        errors.put("test_feature_2", error);
-        testUpdateFeatures(makeTestFeatureUpdates(), topLevelError(errors), errors);
+        final Map<String, ApiError> errors =  Collections.singletonMap("test_feature_2", error);
+        testUpdateFeatures(makeTestFeatureUpdates(), topLevelError(errors), new HashMap<>());
     }
 
     private ApiError topLevelError(Map<String, ApiError> errors) {
@@ -6403,7 +6387,7 @@ public class KafkaAdminClientTest {
             String errorFeatureName = errorEntry.get().getKey();
             ApiError topError = errorEntry.get().getValue();
             String errorString = errorFeatureName + ":" + topError.error().exceptionName() + " (" + topError.message() + ")";
-            topLevelError = new ApiError(Errors.INVALID_UPDATE_VERSION.code(),
+            topLevelError = new ApiError(topError.error().code(),
                     "The update failed for all features since the following feature had an error: " + errorString);
         }
 

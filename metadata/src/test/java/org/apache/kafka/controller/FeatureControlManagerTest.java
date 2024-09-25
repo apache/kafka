@@ -45,7 +45,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -86,7 +85,7 @@ public class FeatureControlManagerTest {
     }
 
     private static Map<String, Short> updateMap(Object... args) {
-        Map<String, Short> result = new LinkedHashMap<>(); // Use LinkedHashMap so it is in the same order each time.
+        Map<String, Short> result = new HashMap<>();
         for (int i = 0; i < args.length; i += 2) {
             String feature = (String) args[i];
             Number ver = (Number) args[i + 1];
@@ -116,7 +115,6 @@ public class FeatureControlManagerTest {
                 updateMap(TestFeatureVersion.FEATURE_NAME, 1, "bar", 1), Collections.emptyMap(),
                 false);
         Map<String, ApiError> expectedMap = new HashMap<>();
-        expectedMap.put(TestFeatureVersion.FEATURE_NAME, ApiError.NONE);
         expectedMap.put("bar", new ApiError(Errors.INVALID_UPDATE_VERSION,
                 "Invalid update version 1 for feature bar. Local controller 0 does not support this feature."));
         assertEquals(expectedMap, result.response());

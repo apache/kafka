@@ -66,13 +66,14 @@ public class UpdateFeaturesResponseTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.UPDATE_FEATURES)
     public void testTopLevelError(short version) {
+        Errors error = Errors.FEATURE_UPDATE_FAILED;
         Map<String, ApiError> updateErrors = new HashMap<>();
         updateErrors.put("metadata.version", ApiError.NONE);
-        updateErrors.put("group.version", new ApiError(Errors.FEATURE_UPDATE_FAILED, "update failed"));
+        updateErrors.put("group.version", new ApiError(error, "update failed"));
 
         UpdateFeaturesResponse response = UpdateFeaturesResponse.createWithErrors(version, ApiError.NONE, updateErrors, 0);
 
-        Errors expectedError = version > 1 ? Errors.INVALID_UPDATE_VERSION : Errors.NONE;
+        Errors expectedError = version > 1 ? error : Errors.NONE;
         assertEquals(expectedError, response.topLevelError().error());
     }
 

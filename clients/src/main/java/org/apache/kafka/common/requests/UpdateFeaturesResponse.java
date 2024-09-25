@@ -97,14 +97,8 @@ public class UpdateFeaturesResponse extends AbstractResponse {
             String errorFeatureName = errorEntry.get().getKey();
             ApiError topError = errorEntry.get().getValue();
             String errorString = errorFeatureName + ":" + topError.error().exceptionName() + " (" + topError.message() + ")";
-            topLevelError = new ApiError(Errors.INVALID_UPDATE_VERSION.code(),
+            topLevelError = new ApiError(topError.error(),
                     "The update failed for all features since the following feature had an error: " + errorString);
-            updateErrors.forEach((featureName, error) ->
-                    results.add(
-                            new UpdatableFeatureResult()
-                                    .setFeature(featureName)
-                                    .setErrorCode(Errors.INVALID_UPDATE_VERSION.code()))
-            );
         } else {
             updateErrors.forEach((featureName, error) ->
                     results.add(

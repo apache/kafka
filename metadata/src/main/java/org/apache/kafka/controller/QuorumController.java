@@ -2318,14 +2318,8 @@ public final class QuorumController implements Controller {
                 String errorFeatureName = errorEntry.get().getKey();
                 ApiError topError = errorEntry.get().getValue();
                 String errorString = errorFeatureName + ":" + topError.error().exceptionName() + " (" + topError.message() + ")";
-                responseData.setErrorCode(Errors.INVALID_UPDATE_VERSION.code());
+                responseData.setErrorCode(topError.error().code());
                 responseData.setErrorMessage("The update failed for all features since the following feature had an error: " + errorString);
-                result.forEach((featureName, error) ->
-                    responseData.results().add(
-                         new UpdateFeaturesResponseData.UpdatableFeatureResult()
-                              .setFeature(featureName)
-                              .setErrorCode(Errors.INVALID_UPDATE_VERSION.code()))
-                );
             } else {
                 result.forEach((featureName, error) ->
                     responseData.results().add(

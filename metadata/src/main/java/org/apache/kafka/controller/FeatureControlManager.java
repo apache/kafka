@@ -175,7 +175,6 @@ public class FeatureControlManager {
         Map<String, FeatureUpdate.UpgradeType> upgradeTypes,
         boolean validateOnly
     ) {
-        boolean updateFailed = false;
         TreeMap<String, ApiError> results = new TreeMap<>();
         List<ApiMessageAndVersion> records =
                 BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
@@ -188,14 +187,13 @@ public class FeatureControlManager {
         for (Entry<String, Short> entry : updates.entrySet()) {
             ApiError error = updateFeature(entry.getKey(), entry.getValue(),
                 upgradeTypes.getOrDefault(entry.getKey(), FeatureUpdate.UpgradeType.UPGRADE), records, proposedUpdatedVersions);
-            results.put(entry.getKey(), error);
             if (!error.error().equals(Errors.NONE)) {
-                updateFailed = true;
-                break;
+                return ControllerResult.of(Collections.emptyList(), Collections.singletonMap(entry.getKey(), error));
             }
+            results.put(entry.getKey(), error);
         }
 
-        if (validateOnly || updateFailed) {
+        if (validateOnly) {
             return ControllerResult.of(Collections.emptyList(), results);
         } else {
             return ControllerResult.atomicOf(records, results);
@@ -259,6 +257,7 @@ public class FeatureControlManager {
             try {
                 if (newVersion != 0) {
                     Features.validateVersion(
+                        // Allow unstable feature versions is true because the version range is already checked above.
                         Features.featureFromName(featureName).fromFeatureLevel(newVersion, true),
                         proposedUpdatedVersions);
                 }
