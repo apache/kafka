@@ -373,7 +373,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             exception,
             (error, message) -> new StreamsGroupInitializeResponseData()
                 .setErrorCode(error.code())
-                .setErrorMessage(message)
+                .setErrorMessage(message),
+            log
         ));
     }
 
@@ -402,7 +403,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             exception,
             (error, message) -> new StreamsGroupHeartbeatResponseData()
                 .setErrorCode(error.code())
-                .setErrorMessage(message)
+                .setErrorMessage(message),
+            log
         ));
     }
 
@@ -765,7 +767,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     "streams-group-describe",
                     groupList,
                     exception,
-                    (error, __) -> StreamsGroupDescribeRequest.getErrorDescribedGroupList(groupList, error)
+                    (error, __) -> StreamsGroupDescribeRequest.getErrorDescribedGroupList(groupList, error),
+                    log
                 ));
 
             futures.add(future);

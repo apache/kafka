@@ -20,8 +20,8 @@ import java.util.Locale;
 
 import kafka.api.IntegrationTestHarness;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.tests.SmokeTestClient;
@@ -86,7 +86,7 @@ public class SmokeTestDriverIntegrationTest extends IntegrationTestHarness {
     }
 
     @Override
-    public boolean isNewGroupCoordinatorEnabled() {
+    public boolean isStreamsGroupTest() {
         return true;
     }
 
@@ -110,7 +110,7 @@ public class SmokeTestDriverIntegrationTest extends IntegrationTestHarness {
     public void shouldWorkWithRebalance(
         final boolean stateUpdaterEnabled,
         final boolean processingThreadsEnabled,
-        final boolean consumerProtocolEnabled
+        final boolean streamsProtocolEnabled
     ) throws InterruptedException {
         Exit.setExitProcedure((statusCode, message) -> {
             throw new AssertionError("Test called exit(). code:" + statusCode + " message:" + message);
@@ -166,8 +166,8 @@ public class SmokeTestDriverIntegrationTest extends IntegrationTestHarness {
         props.put(InternalConfig.PROCESSING_THREADS_ENABLED, processingThreadsEnabled);
         // decrease the session timeout so that we can trigger the rebalance soon after old client left closed
         props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
-        if (consumerProtocolEnabled) {
-            props.put(StreamsConfig.consumerPrefix(ConsumerConfig.GROUP_PROTOCOL_CONFIG), GroupProtocol.CONSUMER.name().toLowerCase(Locale.getDefault()));
+        if (streamsProtocolEnabled) {
+            props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
         }
 
         // cycle out Streams instances as long as the test is running.

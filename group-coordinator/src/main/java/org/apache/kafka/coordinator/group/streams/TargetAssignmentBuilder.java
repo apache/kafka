@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
-import org.apache.kafka.coordinator.group.CoordinatorRecord;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.taskassignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.taskassignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.taskassignor.GroupSpecImpl;

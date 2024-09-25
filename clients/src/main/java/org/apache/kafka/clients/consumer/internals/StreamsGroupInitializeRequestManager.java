@@ -68,7 +68,7 @@ public class StreamsGroupInitializeRequestManager implements RequestManager {
     private NetworkClientDelegate.UnsentRequest makeRequest() {
         final StreamsGroupInitializeRequestData streamsGroupInitializeRequestData = new StreamsGroupInitializeRequestData();
         streamsGroupInitializeRequestData.setGroupId(groupId);
-        streamsGroupInitializeRequestData.setTopologyId(streamsAssignmentInterface.topologyId);
+        streamsGroupInitializeRequestData.setTopologyId(streamsAssignmentInterface.topologyId());
         final List<StreamsGroupInitializeRequestData.Subtopology> topology = getTopologyFromStreams();
         streamsGroupInitializeRequestData.setTopology(topology);
         final StreamsGroupInitializeRequest.Builder streamsGroupInitializeRequestBuilder = new StreamsGroupInitializeRequest.Builder(

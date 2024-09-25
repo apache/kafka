@@ -34,6 +34,7 @@ import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData.Endpoint;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -264,7 +265,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             }
         }
 
-        membershipManager.onHeartbeatSuccess(cgData);
+        membershipManager.onHeartbeatSuccess(new ConsumerGroupHeartbeatResponse(cgData));
     }
 
     private void setTargetAssignmentForConsumerGroup(final StreamsGroupHeartbeatResponseData data, final ConsumerGroupHeartbeatResponseData cgData) {
@@ -534,7 +535,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             data.setGroupId(membershipManager.groupId());
 
             // TopologyId - always sent
-            data.setTopologyId(streamsInterface.topologyId);
+            data.setTopologyId(streamsInterface.topologyId());
 
             // MemberId - always sent, empty until it has been received from the coordinator
             data.setMemberId(membershipManager.memberId());
@@ -555,7 +556,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
             // Immutable -- only sent when joining
             if (joining) {
-                data.setProcessId(streamsInterface.processID().toString());
+                data.setProcessId(streamsInterface.processId().toString());
                 data.setActiveTasks(Collections.emptyList());
                 data.setStandbyTasks(Collections.emptyList());
                 data.setWarmupTasks(Collections.emptyList());

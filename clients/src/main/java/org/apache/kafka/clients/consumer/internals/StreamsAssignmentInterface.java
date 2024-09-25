@@ -37,7 +37,7 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class StreamsAssignmentInterface {
 
-    private UUID processID;
+    private UUID processId;
 
     private Optional<HostInfo> endpoint;
 
@@ -53,8 +53,13 @@ public class StreamsAssignmentInterface {
 
     private Map<String, String> clientTags;
 
-    public UUID processID() {
-        return processID;
+    public UUID processId() {
+        return processId;
+    }
+
+    public String topologyId() {
+        // ToDo: As long as we do not compute the topology ID, let's use a constant one
+        return "topology-id";
     }
 
     public Optional<HostInfo> endpoint() {
@@ -73,17 +78,9 @@ public class StreamsAssignmentInterface {
         return assignmentConfiguration;
     }
 
-    // ToDo: As long as we do not compute the topology ID, let's use a constant one
-    public final String topologyId = "topology-id";
-
     // TODO: This needs to be used somewhere
     public Map<TaskId, Long> taskLags() {
         return taskLags;
-    }
-
-    public byte[] computeTopologyHash() {
-        // TODO
-        return new byte[0];
     }
 
     public Map<String, String> clientTags() {
@@ -266,14 +263,14 @@ public class StreamsAssignmentInterface {
         }
     }
 
-    public StreamsAssignmentInterface(UUID processID,
+    public StreamsAssignmentInterface(UUID processId,
                                       Optional<HostInfo> endpoint,
                                       String assignor,
                                       Map<String, Subtopology> subtopologyMap,
                                       Map<String, Object> assignmentConfiguration,
                                       Map<String, String> clientTags
     ) {
-        this.processID = processID;
+        this.processId = processId;
         this.endpoint = endpoint;
         this.assignor = assignor;
         this.subtopologyMap = subtopologyMap;
@@ -286,7 +283,7 @@ public class StreamsAssignmentInterface {
     @Override
     public String toString() {
         return "StreamsAssignmentMetadata{" +
-            "processID=" + processID +
+            "processID=" + processId +
             ", endpoint='" + endpoint + '\'' +
             ", assignor='" + assignor + '\'' +
             ", subtopologyMap=" + subtopologyMap +

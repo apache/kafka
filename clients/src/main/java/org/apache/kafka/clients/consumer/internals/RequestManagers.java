@@ -252,7 +252,7 @@ public class RequestManagers implements Closeable {
                             metadata
                             );
                     } else {
-                        heartbeatRequestManager = new HeartbeatRequestManager(
+                        heartbeatRequestManager = new ConsumerHeartbeatRequestManager(
                             logContext,
                             time,
                             config,

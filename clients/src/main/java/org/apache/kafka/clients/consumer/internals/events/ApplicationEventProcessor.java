@@ -233,7 +233,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             log.warn("Group membership manager not present when processing a subscribe event");
             return;
         }
-        requestManagers.consumerHeartbeatRequestManager.get().membershipManager().onSubscriptionUpdated();
+        requestManagers.consumerMembershipManager.get().onSubscriptionUpdated();
     }
 
     /**
@@ -245,8 +245,8 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      *              the group is sent out.
      */
     private void process(final UnsubscribeEvent event) {
-        if (requestManagers.consumerHeartbeatRequestManager.isPresent()) {
-            CompletableFuture<Void> future = requestManagers.consumerHeartbeatRequestManager.get().membershipManager().leaveGroup();
+        if (requestManagers.consumerMembershipManager.isPresent()) {
+            CompletableFuture<Void> future = requestManagers.consumerMembershipManager.get().leaveGroup();
             future.whenComplete(complete(event.future()));
         } else {
             // If the consumer is not using the group management capabilities, we still need to clear all assignments it may have.
@@ -284,7 +284,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             );
             return;
         }
-        requestManagers.consumerHeartbeatRequestManager.get().membershipManager().consumerRebalanceListenerCallbackCompleted(event);
+        requestManagers.consumerMembershipManager.get().consumerRebalanceListenerCallbackCompleted(event);
     }
 
     private void process(@SuppressWarnings("unused") final CommitOnCloseEvent event) {
