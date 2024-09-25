@@ -232,7 +232,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   def remoteLogManagerConfig = _remoteLogManagerConfig
 
   private val _quorumConfig = new QuorumConfig(this)
-  def quorumConfig = _quorumConfig
+  def quorumConfig: QuorumConfig = _quorumConfig
 
   private val _groupCoordinatorConfig = new GroupCoordinatorConfig(this)
 
