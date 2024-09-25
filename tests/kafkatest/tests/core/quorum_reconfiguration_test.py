@@ -90,7 +90,7 @@ class TestQuorumReconfiguration(ProduceConsumeValidateTest):
         wait_until(lambda: check_describe_quorum_output(self.kafka.describe_quorum(),
                                                         inactive_controller_id,
                                                         [inactive_controller_id],
-                                                        broker_only_ids + [active_controller_id]), timeout_sec=30)
+                                                        broker_only_ids + [active_controller_id]), timeout_sec=5)
 
     @cluster(num_nodes=6)
     @matrix(metadata_quorum=[combined_kraft])
