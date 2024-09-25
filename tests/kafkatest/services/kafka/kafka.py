@@ -752,8 +752,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         for port in self.port_mappings.values():
             if port.open:
                 listeners.append(port.listener())
-                if not port.name in controller_listener_names:
-                    advertised_listeners.append(port.advertised_listener(node))
+                advertised_listeners.append(port.advertised_listener(node))
                 protocol_map.append(port.listener_security_protocol())
         controller_sec_protocol = self.isolated_controller_quorum.controller_security_protocol if self.isolated_controller_quorum \
             else self.controller_security_protocol if self.quorum_info.has_brokers_and_controllers and not quorum.NodeQuorumInfo(self.quorum_info, node).has_controller_role \
