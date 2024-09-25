@@ -11156,15 +11156,10 @@ public class GroupMetadataManagerTest {
             classicGroupHeartbeatKey(groupId, memberId1)
         );
         assertNotNull(heartbeatTimeout);
-        // The new rebalance has a groupJoin timeout.
-        ScheduledTimeout<Void, CoordinatorRecord> groupJoinTimeout = context.timer.timeout(
-            classicGroupJoinKey(groupId)
-        );
-        assertNotNull(groupJoinTimeout);
 
-        // A new rebalance is triggered.
+        // No rebalance is triggered.
         ClassicGroup classicGroup = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId, false);
-        assertTrue(classicGroup.isInState(PREPARING_REBALANCE));
+        assertTrue(classicGroup.isInState(STABLE));
     }
 
     @Test

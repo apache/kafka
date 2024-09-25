@@ -1099,16 +1099,18 @@ public class GroupMetadataManager {
     /**
      * Maybe downgrade the consumer group to a classic group if it's valid for online downgrade.
      *
-     * @param groupId   The group id.
+     * @param groupId           The group id.
+     * @param needsRebalance    The boolean indicating whether a rebalance should be triggered after the conversion.
      * @return The CoordinatorResult to be applied.
      */
     private <T> CoordinatorResult<T, CoordinatorRecord> consumerGroupDowngradeOperation(
-        String groupId
+        String groupId,
+        boolean needsRebalance
     ) {
         try {
             ConsumerGroup consumerGroup = consumerGroup(groupId);
             if (validateOnlineDowngrade(consumerGroup)) {
-                return convertToClassicGroup(consumerGroup);
+                return convertToClassicGroup(consumerGroup, needsRebalance);
             }
         } catch (GroupIdNotFoundException e) {
             log.debug("Cannot downgrade group {} because the group doesn't exist or it's not a consumer group.");
@@ -1120,10 +1122,12 @@ public class GroupMetadataManager {
      * Creates a ClassicGroup corresponding to the given ConsumerGroup.
      *
      * @param consumerGroup     The converted ConsumerGroup.
+     * @param needsRebalance    The boolean indicating whether a rebalance should be triggered after the conversion.
      * @return A CoordinatorResult.
      */
     private <T> CoordinatorResult<T, CoordinatorRecord> convertToClassicGroup(
-        ConsumerGroup consumerGroup
+        ConsumerGroup consumerGroup,
+        boolean needsRebalance
     ) {
         List<CoordinatorRecord> records = new ArrayList<>();
         consumerGroup.createGroupTombstoneRecords(records);
@@ -1155,7 +1159,12 @@ public class GroupMetadataManager {
 
         classicGroup.allMembers().forEach(member -> rescheduleClassicGroupMemberHeartbeat(classicGroup, member));
 
-        prepareRebalance(classicGroup, String.format("Downgrade group %s from consumer to classic.", classicGroup.groupId()));
+        if (needsRebalance) {
+            prepareRebalance(
+                classicGroup,
+                String.format("Downgrade group %s from consumer to classic.", classicGroup.groupId())
+            );
+        }
 
         CompletableFuture<Void> appendFuture = new CompletableFuture<>();
         appendFuture.exceptionally(__ -> {
@@ -2090,8 +2099,9 @@ public class GroupMetadataManager {
                 responseFuture.complete(response);
 
                 // Maybe downgrade the consumer group if the last member using the
-                // consumer protocol is replaced by the joining member.
-                scheduleConsumerGroupDowngradeTimeout(group);
+                // consumer protocol is replaced by the joining member. No rebalance
+                // is needed after the replacement.
+                scheduleConsumerGroupDowngradeTimeout(group, false);
             }
         });
 
@@ -2786,7 +2796,8 @@ public class GroupMetadataManager {
             records.add(newConsumerGroupSubscriptionMetadataRecord(group.groupId(), subscriptionMetadata));
         }
 
-        // We bump the group epoch if the group doesn't need a downgrade.
+        // We bump the group epoch if the group doesn't need a downgrade,
+        // or the rebalance will be triggered after the downgrade conversion.
         if (!validateOnlineDowngradeWithFencedMember(group, member.memberId())) {
             int groupEpoch = group.groupEpoch() + 1;
             records.add(newConsumerGroupEpochRecord(group.groupId(), groupEpoch));
@@ -2797,7 +2808,7 @@ public class GroupMetadataManager {
         CompletableFuture<Void> appendFuture = new CompletableFuture<>();
         appendFuture.whenComplete((__, t) -> {
             if (t == null) {
-                scheduleConsumerGroupDowngradeTimeout(group);
+                scheduleConsumerGroupDowngradeTimeout(group, true);
             }
         });
 
@@ -3179,10 +3190,12 @@ public class GroupMetadataManager {
     /**
      * Maybe schedules the downgrade timeout for the consumer group.
      *
-     * @param consumerGroup The group to downgrade.
+     * @param consumerGroup     The group to downgrade.
+     * @param needsRebalance    The boolean indicating whether a rebalance should be triggered after the conversion.
      */
     private void scheduleConsumerGroupDowngradeTimeout(
-        ConsumerGroup consumerGroup
+        ConsumerGroup consumerGroup,
+        boolean needsRebalance
     ) {
         if (validateOnlineDowngrade(consumerGroup)) {
             timer.scheduleIfAbsent(
@@ -3190,7 +3203,7 @@ public class GroupMetadataManager {
                 0,
                 TimeUnit.MILLISECONDS,
                 true,
-                () -> consumerGroupDowngradeOperation(consumerGroup.groupId())
+                () -> consumerGroupDowngradeOperation(consumerGroup.groupId(), needsRebalance)
             );
         }
     }
@@ -3760,7 +3773,7 @@ public class GroupMetadataManager {
                             );
                         }
                     });
-                    scheduleConsumerGroupDowngradeTimeout(consumerGroup);
+                    scheduleConsumerGroupDowngradeTimeout(consumerGroup, true);
                     break;
 
                 case CLASSIC:
