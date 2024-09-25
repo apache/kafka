@@ -29,7 +29,7 @@ public class QuarantinedExecutionCondition implements ExecutionCondition {
     private final QuarantinedTestSelector selector;
 
     public QuarantinedExecutionCondition() {
-        selector = QuarantinedDataLoader.loadMainTests();
+        selector = QuarantinedDataLoader.loadTestCatalog();
     }
 
     @Override

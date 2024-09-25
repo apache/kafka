@@ -132,7 +132,7 @@ jobs:
           -PmaxParallelForks=2 \
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
           -PcommitId=xxxxxxxxxxxxxxxx \
-          -Pkafka.test.suites.main.list=${{ steps.load-catalog.outputs.test-catalog }}
+          -Pkafka.test.catalog.file=${{ steps.load-catalog.outputs.test-catalog }}
           test
           exitcode="$?"
           echo "exitcode=$exitcode" >> $GITHUB_OUTPUT

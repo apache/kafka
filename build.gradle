@@ -2276,6 +2276,7 @@ project(':storage') {
 
 project(':test-common') {
   dependencies {
+    implementation libs.slf4jApi
     implementation libs.junitJupiter
     runtimeOnly libs.slf4jReload4j
     runtimeOnly libs.junitPlatformLanucher
