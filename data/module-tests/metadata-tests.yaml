@@ -1,0 +1,887 @@
+org.apache.kafka.controller.AclControlManagerTest:
+- testAddAndDelete
+- testCreateAclDeleteAcl
+- testDeleteDedupe
+- testLoadSnapshot
+- testValidateFilter
+- testValidateNewAcl
+org.apache.kafka.controller.ActivationRecordsGeneratorTest:
+- testActivationMessageForEmptyLog
+- testActivationMessageForNonEmptyLogNoMigrations
+- testActivationMessageForNonEmptyLogWithMigrations
+org.apache.kafka.controller.BrokerHeartbeatManagerTest:
+- testBrokerHeartbeatStateList
+- testCalculateNextBrokerState
+- testControlledShutdownOffsetIsOnlyUpdatedOnce
+- testFindOneStaleBroker
+- testHasValidSession
+- testMetadataOffsetComparator
+- testNextCheckTimeNs
+- testTouchThrowsExceptionUnlessRegistered
+- testUsableBrokerIterator
+org.apache.kafka.controller.BrokerToElrsTest:
+- testIterator
+org.apache.kafka.controller.BrokersToIsrsTest:
+- testIterator
+- testLeadersOnlyIterator
+- testNoLeader
+org.apache.kafka.controller.ClientQuotaControlManagerTest:
+- testAlterAndRemove
+- testConfigKeysForEmptyEntity
+- testConfigKeysForEntityTypeWithClientId
+- testConfigKeysForEntityTypeWithIp
+- testConfigKeysForEntityTypeWithIpAndClientId
+- testConfigKeysForEntityTypeWithIpAndUser
+- testConfigKeysForEntityTypeWithUser
+- testConfigKeysForEntityTypeWithUserAndClientId
+- testConfigKeysForUnresolvableIpEntity
+- testEntityTypes
+- testInvalidEntityTypes
+- testInvalidQuotaKeys
+- testIsValidIpEntityWithLocalhost
+- testIsValidIpEntityWithNull
+- testIsValidIpEntityWithUnresolvableHostname
+- testValidateQuotaKeyValueForConsumerByteRateTooLarge
+- testValidateQuotaKeyValueForFractionalConsumerByteRate
+- testValidateQuotaKeyValueForNegativeQuota
+- testValidateQuotaKeyValueForUnknownQuota
+- testValidateQuotaKeyValueForValidConsumerByteRate
+- testValidateQuotaKeyValueForValidConsumerByteRate2
+- testValidateQuotaKeyValueForValidRequestPercentage
+- testValidateQuotaKeyValueForZeroQuota
+org.apache.kafka.controller.ClusterControlManagerTest:
+- testDefaultDir
+- testHasOnlineDir
+- testPlaceReplicas
+- testReRegistrationAndBrokerEpoch
+- testRegisterBrokerRecordVersion
+- testRegisterControlWithOlderMetadataVersion
+- testRegisterWithDuplicateDirectoryId
+- testRegistrationWithIncorrectClusterId
+- testRegistrationWithIncorrectInterBrokerListenerName
+- testRegistrationWithUnsupportedFeature
+- testRegistrationWithUnsupportedKraftVersion
+- testRegistrationWithUnsupportedMetadataVersion
+- testRegistrationsToRecords
+- testReplay
+- testReplayBrokerRegistrationChangeRecord
+- testReplayRegisterBrokerRecord
+- testUnregister
+org.apache.kafka.controller.ConfigurationControlManagerTest:
+- testIncrementalAlterConfig
+- testIncrementalAlterConfigs
+- testIncrementalAlterConfigsWithPolicy
+- testIncrementalAlterConfigsWithoutExistence
+- testIncrementalAlterMultipleConfigValues
+- testLegacyAlterConfigs
+- testReplay
+org.apache.kafka.controller.FeatureControlManagerTest:
+- testApplyMetadataVersionChangeRecord
+- testCanUpgradeToHigherVersion
+- testCanUseSafeDowngradeIfMetadataDidNotChange
+- testCanUseUnsafeDowngradeIfMetadataChanged
+- testCannotDowngradeBefore3
+- testCannotDowngradeToHigherVersion
+- testCannotDowngradeToVersionBeforeMinimumSupportedKraftVersion
+- testCannotUnsafeDowngradeToHigherVersion
+- testCannotUpgradeToLowerVersion
+- testCannotUseSafeDowngradeIfMetadataChanged
+- testCreateFeatureLevelRecords
+- testNoMetadataVersionChangeDuringMigration
+- testReplay
+- testReplayRecords
+- testUnsafeDowngradeIsTemporarilyDisabled
+- testUpdateFeatures
+- testUpdateFeaturesErrorCases
+org.apache.kafka.controller.LogReplayTrackerTest:
+- testEmpty
+org.apache.kafka.controller.OffsetControlManagerTest:
+- testAbortTransactionRecordNotAllowedInSnapshot
+- testActivate
+- testActivateAndDeactivate
+- testActivateFailsIfAlreadyActive
+- testActivateFailsIfNewNextWriteOffsetIsNegative
+- testBeginTransactionRecordNotAllowedInSnapshot
+- testDeactivateFailsIfNotActive
+- testEndLoadSnapshotFailsWhenNotInSnapshot
+- testEndTransactionRecordNotAllowedInSnapshot
+- testHandleCommitBatch
+- testHandleLoadSnapshot
+- testHandleScheduleAtomicAppend
+- testInitialValues
+- testLoadSnapshotClearsTransactionalState
+- testReplayTransaction
+org.apache.kafka.controller.PartitionChangeBuilderTest:
+- testAddingReplicaReassignment
+- testChangeInLeadershipDoesNotChangeRecoveryState
+- testChangeRecordIsNoOp
+- testElectLeader
+- testEligibleLeaderReplicas
+- testIsrChangeAndLeaderChange
+- testIsrChangeDoesntBumpLeaderEpoch
+- testIsrEnlargementCompletesReassignment
+- testKeepsDirectoriesAfterReassignment
+- testLeaderEpochBumpOnIsrShrink
+- testLeaderEpochBumpOnIsrShrinkWithZkMigration
+- testLeaderEpochBumpOnNewReplicaSetDisjoint
+- testNoChange
+- testNoLeaderEpochBumpIfNothingChanged
+- testNoLeaderEpochBumpOnEmptyTargetIsr
+- testNoLeaderEpochBumpOnIsrExpansion
+- testNoLeaderEpochBumpOnIsrExpansionDuringMigration
+- testNoLeaderEpochBumpOnIsrShrink
+- testReassignmentRearrangesReplicas
+- testRemovingReplicaReassignment
+- testRevertReassignment
+- testStoppedLeaderIsDemotedAfterReassignmentCompletesEvenIfNoNewEligibleLeaders
+- testUncleanLeaderElection
+- testUncleanSetsLeaderRecoveringState
+- testUpdateDirectories
+org.apache.kafka.controller.PartitionReassignmentReplicasTest:
+- testAdditions
+- testAdditionsAndRemovals
+- testDoesCompleteReassignmentAllNewReplicas
+- testDoesCompleteReassignmentSomeNewReplicas
+- testDoesNotCompleteReassignment
+- testDoesNotCompleteReassignmentIfIsrDoesNotHaveAllTargetReplicas
+- testDoesNotCompleteReassignmentIfNoneOngoing
+- testIsReassignmentInProgress
+- testNoneAddedOrRemoved
+- testOriginalReplicas
+- testRearrangement
+- testRemovals
+org.apache.kafka.controller.PartitionReassignmentRevertTest:
+- testIsrSpecialCase
+- testNoneAddedOrRemoved
+- testSomeAdding
+- testSomeRemoving
+- testSomeRemovingAndAdding
+org.apache.kafka.controller.ProducerIdControlManagerTest:
+- testGenerateProducerIds
+- testInitialResult
+- testMaxValue
+- testMonotonic
+- testUnknownBrokerOrEpoch
+org.apache.kafka.controller.QuorumControllerMetricsIntegrationTest:
+- testClosingQuorumControllerClosesMetrics
+- testEventQueueOperationsStartedMetric
+- testFailingOverIncrementsNewActiveControllerCount
+- testTimeoutMetrics
+org.apache.kafka.controller.QuorumControllerTest:
+- testActivationRecords33
+- testActivationRecords34
+- testActivationRecordsNonEmptyLog
+- testActivationRecordsPartialBootstrap
+- testActivationRecordsPartialTransaction
+- testActivationRecordsPartialTransactionNoSupport
+- testAppendRecords
+- testAppendRecordsAtomically
+- testBalancePartitionLeaders
+- testBootstrapZkMigrationRecord
+- testBrokerHeartbeatDuringMigration
+- testConfigResourceExistenceChecker
+- testConfigurationOperations
+- testDelayedConfigurationOperations
+- testEarlyControllerResults
+- testFailoverDuringMigrationTransaction
+- testFatalMetadataErrorDuringLogLoading
+- testFatalMetadataErrorDuringSnapshotLoading
+- testFatalMetadataReplayErrorOnActive
+- testFenceMultipleBrokers
+- testInsertBootstrapRecordsToEmptyLog
+- testMigrationsEnabledForOldBootstrapMetadataVersion
+- testNoOpRecordWriteAfterTimeout
+- testRegisterBrokerKRaftVersions
+- testSnapshotSaveAndLoad
+- testTimeouts
+- testUncleanShutdownBroker
+- testUnregisterBroker
+- testUpgradeFromPreProductionVersion
+- testUpgradeMigrationStateFrom34
+org.apache.kafka.controller.QuorumFeaturesTest:
+- ensureDefaultSupportedFeaturesRangeMaxNotZero
+- testDefaultFeatureMap
+- testDefaultFeatureMapWithUnstable
+- testIsControllerId
+- testLocalSupportedFeature
+- testReasonNotSupported
+- testZkMigrationNotReadyIfControllerNotReady
+- testZkMigrationNotReadyIfMetadataVersionTooLow
+- testZkMigrationNotReadyIfNotAllControllersRegistered
+- testZkMigrationReadyIfAllControllersReady
+- testZkMigrationReadyIfControllerRegistrationNotSupported
+org.apache.kafka.controller.ReplicationControlManagerTest:
+- testAlterPartitionHandleUnknownTopicIdOrName
+- testAlterPartitionShouldRejectBrokersWithStaleEpoch
+- testAlterPartitionShouldRejectFencedBrokers
+- testAlterPartitionShouldRejectShuttingDownBrokers
+- testBalancePartitionLeaders
+- testCancelReassignPartitions
+- testCreatePartitions
+- testCreatePartitionsFailsWhenAllBrokersAreFencedOrInControlledShutdown
+- testCreatePartitionsFailsWithManualAssignmentWithAllFenced
+- testCreatePartitionsISRInvariants
+- testCreatePartitionsWithMutationQuotaExceeded
+- testCreateTopicWithCollisionChars
+- testCreateTopics
+- testCreateTopicsISRInvariants
+- testCreateTopicsWithConfigs
+- testCreateTopicsWithMutationQuotaExceeded
+- testCreateTopicsWithPolicy
+- testCreateTopicsWithValidateOnlyFlag
+- testDeleteTopics
+- testDeleteTopicsWithMutationQuotaExceeded
+- testDuplicateTopicIdReplay
+- testElectPreferredLeaders
+- testElectUncleanLeaders
+- testEligibleLeaderReplicas
+- testFenceMultipleBrokers
+- testHandleAssignReplicasToDirs
+- testHandleAssignReplicasToDirsFailsOnOlderMv
+- testHandleDirectoriesOffline
+- testInvalidAlterPartitionRequests
+- testInvalidCreateTopicsWithValidateOnlyFlag
+- testKRaftClusterDescriber
+- testManualPartitionAssignmentOnAllFencedBrokers
+- testMaybeTriggerUncleanLeaderElectionForLeaderlessPartitions
+- testPreferredElectionDoesNotTriggerUncleanElection
+- testProcessBrokerHeartbeatInControlledShutdown
+- testProcessExpiredBrokerHeartbeat
+- testReassignPartitions
+- testReassignPartitionsHandlesNewReassignmentThatRemovesPreviouslyAddingReplicas
+- testRemoveLeaderships
+- testShrinkAndExpandIsr
+- testTopicNameCollision
+- testValidateBadManualPartitionAssignments
+- testValidateGoodManualPartitionAssignments
+- testValidateNewTopicNames
+org.apache.kafka.controller.ResultOrErrorTest:
+- testEquals
+- testError
+- testResult
+org.apache.kafka.controller.ScramCredentialValueTest:
+- testEqualsAndHashCode
+- testEqualsSameInstance
+- testNotEqualsDifferentContent
+org.apache.kafka.controller.errors.ControllerExceptionsTest:
+- testExecutionExceptionWithNullCauseIsNotTimeoutException
+- testNewPreMigrationExceptionWithActiveController
+- testNewPreMigrationExceptionWithNoController
+- testNewWrongControllerExceptionWithActiveController
+- testNewWrongControllerExceptionWithNoController
+- testRuntimeExceptionIsNotTimeoutException
+- testTimeoutExceptionIsTimeoutException
+- testTopicExistsExceptionIsNotTimeoutException
+- testWrappedRuntimeExceptionIsNotTimeoutException
+- testWrappedTimeoutExceptionIsTimeoutException
+org.apache.kafka.controller.errors.EventHandlerExceptionInfoTest:
+- testFaultExceptionFailureMessage
+- testInterruptedExceptionFailureMessageWhenActive
+- testInterruptedExceptionFailureMessageWhenInactive
+- testInterruptedExceptionInfo
+- testIsNotTimeoutException
+- testIsTimeoutException
+- testNotLeaderExceptionFailureMessage
+- testNotLeaderExceptionInfo
+- testNullPointerExceptionFailureMessageWhenActive
+- testNullPointerExceptionFailureMessageWhenInactive
+- testNullPointerExceptionInfo
+- testRejectedExecutionExceptionFailureMessage
+- testRejectedExecutionExceptionInfo
+- testTopicExistsExceptionFailureMessage
+- testTopicExistsExceptionInfo
+org.apache.kafka.controller.metrics.ControllerMetadataMetricsPublisherTest:
+- testLoadSnapshot
+- testMetricsBeforePublishing
+- testPublish
+org.apache.kafka.controller.metrics.ControllerMetadataMetricsTest:
+- testActiveBrokerCountMetric
+- testFencedBrokerMetric
+- testGlobalPartitionCountMetric
+- testGlobalTopicCountMetric
+- testMetadataErrorCount
+- testMetricNames
+- testOfflinePartitionCountMetric
+- testPreferredReplicaImbalanceCountMetric
+- testUpdateUncleanLeaderElection
+org.apache.kafka.controller.metrics.ControllerMetricsChangesTest:
+- testDelta
+- testHandleBrokerFencing
+- testHandleBrokerUnfencing
+- testHandleDeletedTopic
+- testHandleNewFencedBroker
+- testHandleNewTopic
+- testHandleNewUnfencedBroker
+- testHandleZkBroker
+- testInitialValues
+- testTopicChange
+org.apache.kafka.controller.metrics.QuorumControllerMetricsTest:
+- testLastAppliedRecordMetrics
+- testMetricNames
+- testUpdateEventQueueProcessingTime
+- testUpdateEventQueueTime
+- testUpdateZKWriteBehindLag
+org.apache.kafka.image.AclsDeltaTest:
+- testKeepsDeleteIfInImage
+- testRemovesDeleteIfNotInImage
+- testThrowsExceptionOnInvalidStateWhenImageHasOtherAcls
+- testThrowsExceptionOnInvalidStateWhenImageIsEmpty
+org.apache.kafka.image.AclsImageTest:
+- testApplyDelta1
+- testEmptyImageRoundTrip
+- testImage1RoundTrip
+- testImage2RoundTrip
+org.apache.kafka.image.ClientQuotasImageTest:
+- testApplyDelta1
+- testEmptyImageRoundTrip
+- testImage1RoundTrip
+- testImage2RoundTrip
+org.apache.kafka.image.ClusterImageTest:
+- testApplyDelta1
+- testApplyDelta2
+- testBrokerEpoch
+- testBrokerEpochForNonExistentBroker
+- testEmptyImageRoundTrip
+- testHandleLossOfControllerRegistrations
+- testImage1RoundTrip
+- testImage2RoundTrip
+- testImage3RoundTrip
+org.apache.kafka.image.ConfigurationsImageTest:
+- testApplyDelta1
+- testEmptyImageRoundTrip
+- testImage1RoundTrip
+- testImage2RoundTrip
+org.apache.kafka.image.DelegationTokenImageTest:
+- testApplyDelta1
+- testEmptyImageRoundTrip
+- testEmptyWithInvalidIBP
+- testImage1RoundTrip
+- testImage1withInvalidIBP
+- testImage2RoundTrip
+org.apache.kafka.image.FeaturesImageTest:
+- testApplyDelta1
+- testApplyDelta2
+- testEmpty
+- testEmptyImageRoundTrip
+- testImage1RoundTrip
+- testImage2RoundTrip
+- testImage3RoundTrip
+org.apache.kafka.image.ImageDowngradeTest:
+- testDirectoryAssignmentState
+- testPreControlledShutdownStateVersion
+- testPreZkMigrationSupportVersion
+- testPremodernVersion
+org.apache.kafka.image.MetadataImageTest:
+- testApplyDelta1
+- testEmptyImageRoundTrip
+- testImage1RoundTrip
+- testImage2RoundTrip
+org.apache.kafka.image.MetadataVersionChangeTest:
+- testIsDowngrade
+- testIsUpgrade
+- testMetadataVersionChangeExceptionToString
+org.apache.kafka.image.ProducerIdsImageTest:
+- testApplyDelta1
+- testEmptyImageRoundTrip
+- testImage1RoundTrip
+- testImage2RoundTrip
+org.apache.kafka.image.ScramImageTest:
+- testApplyDelta1
+- testEmptyImageRoundTrip
+- testEmptyWithInvalidIBP
+- testImage1RoundTrip
+- testImage1withInvalidIBP
+- testImage2RoundTrip
+org.apache.kafka.image.TopicsImageTest:
+- testApplyDelta1
+- testBasicLocalChanges
+- testDeleteAfterChanges
+- testEmptyImageRoundTrip
+- testImage1RoundTrip
+- testImage2RoundTrip
+- testLocalReassignmentChanges
+- testTopicIdToNameView
+- testTopicNameToIdView
+- testUpdatedLeaders
+org.apache.kafka.image.loader.MetadataBatchLoaderTest:
+- testAlignedTransactionBatches
+- testMultipleTransactionsInOneBatch
+- testMultipleTransactionsInOneBatchesWithNoOp
+- testOneTransactionInMultipleBatches
+- testSingletonBeginAndEnd
+- testUnexpectedAbortTransaction
+- testUnexpectedBeginTransaction
+- testUnexpectedEndTransaction
+org.apache.kafka.image.loader.MetadataLoaderTest:
+- testCatchingUpState
+- testCreateAndClose
+- testInstallPublishers
+- testLastAppliedOffset
+- testLoadEmptyBatch
+- testLoadEmptySnapshot
+- testNoPublishEmptyImage
+- testPublishTransaction
+- testPublishTransactionWithinBatch
+- testPublisherCannotBeInstalledMoreThanOnce
+- testReloadSnapshot
+- testRemovePublisher
+- testSnapshotDuringTransaction
+org.apache.kafka.image.loader.metrics.MetadataLoaderMetricsTest:
+- testInitialValueOfCurrentControllerId
+- testManagedMetrics
+- testMetricNames
+- testSetValueOfCurrentControllerId
+- testUpdateBatchProcessingTimeNs
+- testUpdateBatchSize
+- testUpdateLastAppliedImageProvenance
+org.apache.kafka.image.node.ClientQuotasImageNodeTest:
+- clientIdAndUserEntityRoundTrip
+- clientIdEntityRoundTrip
+- defaultClientIdEntityRoundTrip
+- defaultIpEntityRoundTrip
+- defaultUserEntityRoundTrip
+- ipEntityRoundTrip
+- testClientIdEntityWithParentheses
+- testErrorOnInvalidEmptyEntityName
+- testErrorOnInvalidEntityType
+- testEscapeBackslashes
+- testEscapeEmptyString
+- testEscapeNormalString
+- testEscapeParentheses
+- testUserEntityWithBackslashesInNameRoundTrip
+- userEntityRoundTrip
+org.apache.kafka.image.node.ClusterImageBrokersNodeTest:
+- testChildNames
+- testNode1Child
+- testUnknownChild
+org.apache.kafka.image.node.ClusterImageControllersNodeTest:
+- testChildNames
+- testNode1Child
+- testUnknownChild
+org.apache.kafka.image.node.ClusterImageNodeTest:
+- testBrokersChild
+- testChildNames
+- testControllersChild
+- testUnknownChild
+org.apache.kafka.image.node.ConfigurationImageNodeTest:
+- testNonSecretChild
+- testSecretChild
+- testUnknownChild
+org.apache.kafka.image.node.ConfigurationsImageNodeTest:
+- testNodeChildNameParsing
+- testNodeChildNames
+org.apache.kafka.image.node.ScramCredentialDataNodeTest:
+- testPrintRedacted
+- testPrintUnredacted
+org.apache.kafka.image.node.TopicImageNodeTest:
+- testChildNames
+- testChildPartitionId
+- testChildPartitionIdNull
+- testIdChild
+- testNameChild
+- testUnknownChild
+org.apache.kafka.image.node.printer.MetadataNodeRedactionCriteriaTest:
+- testDisabledDoesNotRedactDelegationToken
+- testDisabledDoesNotRedactNonSensitiveConfig
+- testDisabledDoesNotRedactScram
+- testDisabledDoesNotRedactSensitiveConfig
+- testDisabledDoesNotRedactUnknownConfig
+- testNormalDoesNotRedactNonSensitiveConfig
+- testNormalDoesRedactsSensitiveConfig
+- testNormalDoesRedactsUnknownConfig
+- testNormalRedactsDelegationToken
+- testNormalRedactsScram
+- testStrictRedactsDelegationToken
+- testStrictRedactsNonSensitiveConfig
+- testStrictRedactsScram
+- testStrictRedactsSensitiveConfig
+- testStrictRedactsUnknownConfig
+org.apache.kafka.image.node.printer.NodeStringifierTest:
+- testEnterNode
+- testNesting
+- testOutput
+org.apache.kafka.image.publisher.BrokerRegistrationTrackerTest:
+- testBrokerUpdateWithNewMv
+- testBrokerUpdateWithNewMvWithTwoDeltas
+- testBrokerUpdateWithoutNewMvDoesNothing
+- testMetadataVersionUpdateWithoutRegistrationDoesNothing
+- testTrackerName
+org.apache.kafka.image.publisher.ControllerRegistrationsPublisherTest:
+- testInitialControllers
+- testName
+- testOnMetadataUpdate
+org.apache.kafka.image.publisher.SnapshotEmitterTest:
+- testEmit
+org.apache.kafka.image.publisher.SnapshotGeneratorTest:
+- testCreateSnapshot
+- testEmitterProblem
+- testSnapshotsDisabled
+- testTimeBasedSnapshots
+org.apache.kafka.image.publisher.metrics.SnapshotEmitterMetricsTest:
+- testLatestSnapshotGeneratedAgeMsMetric
+- testLatestSnapshotGeneratedBytesMetric
+- testMetricNames
+org.apache.kafka.image.writer.ImageReWriterTest:
+- testCloseInvokesFinishSnapshot
+- testCloseWithoutFreeze
+- testWrite
+- testWriteAfterClose
+org.apache.kafka.image.writer.ImageWriterOptionsTest:
+- testDefaultLossHandler
+- testHandleLoss
+- testSetMetadataVersion
+org.apache.kafka.image.writer.RaftSnapshotWriterTest:
+- testCloseWithoutFreeze
+- testFreezeAndClose
+org.apache.kafka.image.writer.RecordListWriterTest:
+- testCloseWithoutFreeze
+- testWrite
+- testWriteAfterClose
+org.apache.kafka.metadata.BrokerRegistrationFencingChangeTest:
+- testAsBoolean
+- testValueRoundTrip
+- testValues
+org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChangeTest:
+- testAsBoolean
+- testValueRoundTrip
+- testValues
+org.apache.kafka.metadata.BrokerRegistrationTest:
+- testDirectoriesAreSorted
+- testEquals
+- testFromRecordAndToRecord
+- testHasOnlineDir
+- testToNode
+- testToString
+- testValues
+org.apache.kafka.metadata.BrokerStateTest:
+- testFromValue
+- testUnknownValues
+org.apache.kafka.metadata.ConfigSynonymTest:
+- testHoursToMilliseconds
+- testMinutesToMilliseconds
+org.apache.kafka.metadata.ControllerRegistrationTest:
+- testEquals
+- testFromRecordAndToRecord
+- testToNode
+- testToString
+- testValues
+org.apache.kafka.metadata.DelegationTokenDataTest:
+- testEquals
+- testFromRecordAndToRecord
+- testToString
+- testValues
+org.apache.kafka.metadata.KafkaConfigSchemaTest:
+- testGetConfigValueDefault
+- testIsSensitive
+- testIsSplittable
+- testResolveEffectiveTopicConfig
+- testTranslateConfigSources
+- testTranslateConfigTypes
+org.apache.kafka.metadata.LeaderAndIsrTest:
+- testLeaderOpt
+- testNewEpoch
+- testNewLeader
+- testNewLeaderAndIsr
+- testRecoveringLeaderAndIsr
+org.apache.kafka.metadata.LeaderRecoveryStateTest:
+- testByteToLeaderRecoveryState
+- testChangeTo
+- testDoesNotContainNoChange
+- testInvalidValue
+- testLeaderRecoveryStateValue
+- testOptionalInvalidValue
+- testUniqueValues
+org.apache.kafka.metadata.ListenerInfoTest:
+- testCreatePreservesOrdering
+- testCreateWithExplicitFirstListener
+- testEmptyHostname
+- testEmptyHostnameGetsResolved
+- testNullHostname
+- testNullHostnameGetsResolved
+- testRoundTripToBrokerRegistrationRecord
+- testRoundTripToBrokerRegistrationRequest
+- testRoundTripToControllerRegistrationRecord
+- testRoundTripToControllerRegistrationRequest
+- testToBrokerRegistrationRecordFailsOnNullHost
+- testToBrokerRegistrationRecordFailsOnZeroPort
+- testToBrokerRegistrationRequestFailsOnNullHost
+- testToBrokerRegistrationRequestFailsOnZeroPort
+- testToControllerRegistrationRecordFailsOnNullHost
+- testToControllerRegistrationRecordFailsOnZeroPort
+- testToControllerRegistrationRequestFailsOnNullHost
+- testToControllerRegistrationRequestFailsOnZeroPort
+- testToString
+org.apache.kafka.metadata.MetadataRecordSerdeTest:
+- testDeserializeWithUnhandledFrameVersion
+- testParsingMalformedFrameVersionVarint
+- testParsingMalformedMessage
+- testParsingMalformedMessageTypeVarint
+- testParsingMalformedMessageVersionVarint
+- testParsingRecordWithGarbageAtEnd
+- testParsingUnsupportedApiKey
+- testParsingVersionTooLarge
+- testSerde
+org.apache.kafka.metadata.OptionalStringComparatorTest:
+- testComparisons
+org.apache.kafka.metadata.PartitionRegistrationTest:
+- testBuilderSetsDefaultAddingAndRemovingReplicas
+- testBuilderSuccess
+- testBuilderThrowsIllegalStateExceptionWhenMissingIsr
+- testBuilderThrowsIllegalStateExceptionWhenMissingLeader
+- testBuilderThrowsIllegalStateExceptionWhenMissingLeaderEpoch
+- testBuilderThrowsIllegalStateExceptionWhenMissingLeaderRecoveryState
+- testBuilderThrowsIllegalStateExceptionWhenMissingPartitionEpoch
+- testBuilderThrowsIllegalStateExceptionWhenMissingReplicas
+- testDirectories
+- testElectionWasClean
+- testMergePartitionChangeRecordWithReassignmentData
+- testMigratingRecordDirectories
+- testPartitionControlInfoMergeAndDiff
+- testPartitionRegistrationToRecord
+- testRecordRoundTrip
+- testToLeaderAndIsrPartitionState
+org.apache.kafka.metadata.ReplicasTest:
+- testClone
+- testContains
+- testContains2
+- testCopyWith
+- testCopyWithout
+- testCopyWithout2
+- testToArray
+- testToList
+- testToSet
+- testValidate
+- testValidateIsr
+org.apache.kafka.metadata.ScramCredentialDataTest:
+- testEquals
+- testEqualsAndHashCode
+- testEqualsSameInstance
+- testFromRecordAndToRecord
+- testNotEqualsDifferentContent
+- testToString
+- testValues
+org.apache.kafka.metadata.VersionRangeTest:
+- testContains
+- testEquality
+- testToString
+org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizerTest:
+- testCreateAcls
+- testCreateAclsError
+- testDeleteAcls
+- testDeleteAclsError
+org.apache.kafka.metadata.authorizer.StandardAclRecordIteratorTest:
+- testIteration
+- testNoSuchElementException
+org.apache.kafka.metadata.authorizer.StandardAclTest:
+- testCompareTo
+- testEquals
+- testToBindingRoundTrips
+org.apache.kafka.metadata.authorizer.StandardAclWithIdTest:
+- testEquals
+- testToRecordRoundTrips
+org.apache.kafka.metadata.authorizer.StandardAuthorizerTest:
+- testAllowAuditLogging
+- testAllowEveryoneIfNoAclFoundConfigDisabled
+- testAllowEveryoneIfNoAclFoundConfigEnabled
+- testAuthorizationPriorToCompleteInitialLoad
+- testAuthorizationWithManyAcls
+- testCompleteInitialLoad
+- testCompleteInitialLoadWithException
+- testConfigure
+- testDenyAuditLogging
+- testDenyPrecedenceWithOperationAll
+- testFindResultImplication
+- testFindResultPrincipalMatching
+- testGetConfiguredSuperUsers
+- testGetDefaultResult
+- testHostAddressAclValidation
+- testListAcls
+- testPrefixAcls
+- testSimpleAuthorizations
+- testStartWithEarlyStartListeners
+- testTopicAclWithOperationAll
+org.apache.kafka.metadata.bootstrap.BootstrapDirectoryTest:
+- testMissingDirectory
+- testReadFromConfiguration
+- testReadFromConfigurationFile
+- testReadFromConfigurationWithAncientVersion
+- testReadFromEmptyConfiguration
+org.apache.kafka.metadata.bootstrap.BootstrapMetadataTest:
+- testCopyWithOnlyVersion
+- testFromRecordsList
+- testFromRecordsListWithOldMetadataVersion
+- testFromRecordsListWithoutMetadataVersion
+- testFromVersion
+org.apache.kafka.metadata.migration.BufferingBatchConsumerTest:
+- testEmptyBatches
+- testMultiBatchLargerThanMinSize
+- testMultiBatchSameAsMinSize
+- testMultiBatchSmallerThanMinSize
+- testOneBatchLargerThanMinSize
+- testOneBatchSameAsMinSize
+- testOneBatchSmallerThanMinSize
+org.apache.kafka.metadata.migration.KRaftMigrationDriverTest:
+- testBeginMigrationOnce
+- testCoalesceMigrationRecords
+- testControllerFailover
+- testMigrationWithClientException
+- testMigrationWithClientExceptionWhileMigratingZnodeCreation
+- testNoDualWriteBeforeMigration
+- testOnControllerChangeWhenUninitialized
+- testOnlySendNeededRPCsToBrokers
+- testShouldNotMoveToNextStateIfControllerNodesAreNotReadyToMigrate
+- testSkipWaitForBrokersInDualWrite
+- testTopicDualWriteDelta
+- testTopicDualWriteSnapshot
+org.apache.kafka.metadata.migration.KRaftMigrationZkWriterTest:
+- testExtraneousZkPartitions
+- testReconcileSnapshotEmptyZk
+- testReconcileSnapshotTopics
+org.apache.kafka.metadata.migration.MigrationManifestTest:
+- testEmpty
+- testManyBatch
+- testOneBatch
+org.apache.kafka.metadata.placement.PartitionAssignmentTest:
+- testConsistentEqualsAndHashCode
+- testPartitionAssignmentReplicas
+- testToString
+org.apache.kafka.metadata.placement.StripedReplicaPlacerTest:
+- testAllBrokersFenced
+- testAvoidFencedReplicaIfPossibleOnSingleRack
+- testBrokerList
+- testEvenDistribution
+- testMultiPartitionTopicPlacementOnSingleUnfencedBroker
+- testNonPositiveReplicationFactor
+- testNotEnoughBrokers
+- testPlacementOnFencedReplicaOnSingleRack
+- testRackListAllBrokersFenced
+- testRackListNonPositiveReplicationFactor
+- testRackListNotEnoughBrokers
+- testRackListWithInvalidRacks
+- testRackListWithMultipleRacks
+- testSuccessfulPlacement
+org.apache.kafka.metadata.placement.TopicAssignmentTest:
+- testConsistentEqualsAndHashCode
+- testToString
+- testTopicAssignmentReplicas
+org.apache.kafka.metadata.properties.MetaPropertiesEnsembleTest:
+- testClusterIdForEmpty
+- testClusterIdForFoo
+- testCopierGenerateValidDirectoryId
+- testCopierVerificationFailsOnEmptyAndErrorOverlap
+- testCopierVerificationFailsOnEmptyAndLogDirsOverlap
+- testCopierVerificationFailsOnErrorAndLogDirsOverlap
+- testCopierWithoutModifications
+- testCopierWriteChanged
+- testCopierWriteLogDirChanges
+- testCopyFooItemByItem
+- testEmptyLogDirsForEmpty
+- testEmptyLogDirsForFoo
+- testErrorLogDirsForEmpty
+- testErrorLogDirsForFoo
+- testLogDirPropsForEmpty
+- testLogDirPropsForFoo
+- testMetaPropertiesEnsembleLoad
+- testMetaPropertiesEnsembleLoadEmpty
+- testMetaPropertiesEnsembleLoadError
+- testMetadataLogDirForEmpty
+- testMetadataLogDirForFoo
+- testNodeIdForEmpty
+- testNodeIdForFoo
+- testNonFailedDirectoryPropsForEmpty
+- testNonFailedDirectoryPropsForFoo
+- testSuccessfulVerification
+- testSuccessfulVerificationWithClusterId
+- testSuccessfulVerificationWithClusterIdAndNodeId
+- testVerificationFailureOnLackOfMetadataLogDir
+- testVerificationFailureOnMetadataLogDirWithError
+- testVerificationFailureOnRequireAtLeastOneValid
+- testVerificationFailureOnRequireV0
+org.apache.kafka.metadata.properties.MetaPropertiesTest:
+- testClusterIdRequiredInV1
+- testNodeIdRequiredInV1
+- testV0SerializationWithAll
+- testV0SerializationWithJustClusterId
+- testV0SerializationWithJustClusterIdAndNodeId
+- testV0SerializationWithJustNodeId
+- testV0SerializationWithNothing
+- testV1SerializationWithDirectoryId
+- testV1SerializationWithNonUuidClusterId
+- testV1SerializationWithoutDirectoryId
+org.apache.kafka.metadata.properties.MetaPropertiesVersionTest:
+- testAlwaysHasClusterId
+- testAlwaysHasNodeId
+- testFromInvalidNumber
+- testFromInvalidString
+- testHasBrokerId
+- testV0FromNumber
+- testV0FromNumberString
+- testV0ToNumber
+- testV0ToNumberString
+- testV1FromNumber
+- testV1FromNumberString
+- testV1ToNumber
+- testV1ToNumberString
+org.apache.kafka.metadata.properties.PropertiesUtilsTest:
+- loadMissingRequiredIntProp
+- loadNonIntegerRequiredIntProp
+- loadRequiredIntProp
+- testReadPropertiesFile
+- testWritePropertiesFile
+org.apache.kafka.metadata.storage.FormatterTest:
+- testDirectories
+- testFeatureFlag
+- testFormatWithInitialVoters
+- testFormatWithInitialVotersFailsWithOlderKraftVersion
+- testFormatWithInitialVotersFailsWithOlderMetadataVersion
+- testFormatWithOlderReleaseVersion
+- testFormatWithScram
+- testFormatWithScramFailsOnUnsupportedReleaseVersions
+- testFormatWithUnstableReleaseVersion
+- testFormatWithUnstableReleaseVersionFailsWithoutEnableUnstable
+- testFormatWithoutInitialVotersFailsWithNewerKraftVersion
+- testFormatterFailsOnAlreadyFormatted
+- testFormatterFailsOnUnwritableDirectory
+- testFormattingCreatesLogDirId
+- testIgnoreFormatted
+- testInvalidFeatureFlag
+- testOneDirectoryFormattedAndOthersNotFormatted
+- testOneDirectoryFormattedAndOthersNotFormattedWithIgnoreFormatted
+org.apache.kafka.metadata.storage.ScramParserTest:
+- testConfiguredIterations
+- testConfiguredSalt
+- testDefaultIterations
+- testParsePerMechanismArgument
+- testParsePerMechanismArgumentWithConfigStringWithoutBraces
+- testParsePerMechanismArgumentWithConfigStringWithoutEndBrace
+- testParsePerMechanismArgumentWithUnsupportedScramMethod
+- testParsePerMechanismArgumentWithoutEqualsSign
+- testParsePerMechanismData
+- testParsePerMechanismDataFailsWithExtraArguments
+- testParsePerMechanismDataFailsWithoutName
+- testParsePerMechanismDataFailsWithoutPassword
+- testParsePerMechanismDataWithConfiguredSalt
+- testParsePerMechanismDataWithConfiguredSaltedPassword
+- testParsePerMechanismDataWithConfiguredSaltedPasswordFailsWithoutSalt
+- testParsePerMechanismDataWithIterations
+- testParsePerMechanismDataWithIterationsAndConfiguredSalt
+- testPerMechanismDataToRecord
+- testRandomSalt
+- testSplitTrimmedConfigStringComponentOnNameEqualsEmpty
+- testSplitTrimmedConfigStringComponentOnNameEqualsFoo
+- testSplitTrimmedConfigStringComponentOnNameEqualsQuotedEmpty
+- testSplitTrimmedConfigStringComponentOnNameEqualsQuotedFoo
+- testSplitTrimmedConfigStringComponentWithNoEquals
+org.apache.kafka.metadata.util.BatchFileWriterReaderTest:
+- testHeaderFooter
+org.apache.kafka.metadata.util.RecordRedactorTest:
+- testNonSensitiveConfigRecordToString
+- testSensitiveConfigRecordToString
+- testTopicRecordToString
+- testUserScramCredentialRecordToString
+- testUserScramCredentialRecordToStringWithNullName
+org.apache.kafka.metalog.LocalLogManagerTest:
+- testClaimsLeadership
+- testCommits
+- testCreateAndClose
+- testPassLeadership

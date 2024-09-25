@@ -21,14 +21,31 @@ import org.junit.jupiter.api.extension.ConditionEvaluationResult;
 import org.junit.jupiter.api.extension.ExecutionCondition;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
+import java.lang.reflect.Method;
+import java.util.Optional;
+
 public class QuarantinedExecutionCondition implements ExecutionCondition {
+
+    private final QuarantinedTestSelector selector;
+
+    public QuarantinedExecutionCondition() {
+        selector = QuarantinedDataLoader.loadMainTests();
+    }
+
     @Override
     public ConditionEvaluationResult evaluateExecutionCondition(ExtensionContext extensionContext) {
-        extensionContext.getTestMethod().ifPresent(method -> {
+        Optional<Method> methodOpt = extensionContext.getTestMethod();
+        if (methodOpt.isPresent()) {
             Class<?> clazz = extensionContext.getRequiredTestClass();
-
-        });
-
-        return ConditionEvaluationResult.enabled("default");
+            Optional<String> reason = selector.selectQuarantined(
+                clazz.getCanonicalName(), methodOpt.get().getName());
+            if (reason.isPresent()) {
+                return ConditionEvaluationResult.disabled("quarantined", reason.get());
+            } else {
+                return ConditionEvaluationResult.enabled("not quarantined");
+            }
+        } else {
+            return ConditionEvaluationResult.enabled("not quarantined");
+        }
     }
 }

@@ -82,6 +82,8 @@ def yaml_to_all_tests(glob_path: str, out_file: str):
                     for method in methods:
                         fp.write(f"{clazz}#{method}\n")
 
+    logger.debug(f"Wrote to {out_file}")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Convert test suite to and from YAML.")

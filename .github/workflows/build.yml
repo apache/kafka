@@ -108,6 +108,13 @@ jobs:
           gradle-cache-read-only: ${{ inputs.gradle-cache-read-only }}
           gradle-cache-write-only: ${{ inputs.gradle-cache-write-only }}
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
+      - name: Load Test Catalog
+        id: load-catalog
+        run: |
+          git fetch origin test-metrics
+          git checkout cce5772c -- data/module-tests
+          python .github/scripts/format-all-tests.py from-yaml
+          echo "test-catalog=$(ls all-tests.txt)" >> "$GITHUB_OUTPUT"
       - name: Test
         # Gradle flags
         # --build-cache:  Let Gradle restore the build cache
@@ -121,12 +128,12 @@ jobs:
           set +e
           ./.github/scripts/thread-dump.sh &
           timeout ${TIMEOUT_MINUTES}m ./gradlew --build-cache --continue --no-scan \
-          --rerun-tasks \
           -PtestLoggingEvents=started,passed,skipped,failed \
           -PmaxParallelForks=2 \
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
           -PcommitId=xxxxxxxxxxxxxxxx \
-          :metadata:test :raft:test
+          -Pkafka.test.suites.main.list=${{ steps.load-catalog.outputs.test-catalog }}
+          test
           exitcode="$?"
           echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
       - name: Archive JUnit reports

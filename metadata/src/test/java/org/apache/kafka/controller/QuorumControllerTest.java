@@ -225,7 +225,7 @@ public class QuorumControllerTest {
     public void testSomethingNew() {
 
     }
-    
+
     /**
      * Test that an incrementalAlterConfigs operation doesn't complete until the records
      * can be written to the metadata log.
