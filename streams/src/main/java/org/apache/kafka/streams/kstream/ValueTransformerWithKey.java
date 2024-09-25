@@ -47,8 +47,6 @@ import java.time.Duration;
  * @param <VR> transformed value type
  * @see ValueTransformer
  * @see ValueTransformerWithKeySupplier
- * @see KStream#transformValues(ValueTransformerSupplier, String...)
- * @see KStream#transformValues(ValueTransformerWithKeySupplier, String...)
  * @see Transformer
  */
 
@@ -77,9 +75,6 @@ public interface ValueTransformerWithKey<K, V, VR> {
 
     /**
      * Transform the given [key and] value to a new value.
-     * Additionally, any {@link StateStore} that is {@link KStream#transformValues(ValueTransformerWithKeySupplier, String...)
-     * attached} to this operator can be accessed and modified arbitrarily (cf.
-     * {@link ProcessorContext#getStateStore(String)}).
      * <p>
      * Note that using {@link ProcessorContext#forward(Object, Object)} or
      * {@link ProcessorContext#forward(Object, Object, To)} is not allowed within {@code transform} and

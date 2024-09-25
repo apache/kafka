@@ -135,41 +135,6 @@ public class KStreamTransformIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldTransformValuesWithValueTransformerWithKey() {
-        builder.addStateStore(storeBuilder());
-
-        stream
-            .transformValues(TestValueTransformerWithKey::new, stateStoreName)
-            .foreach(accumulateExpected);
-
-        final List<KeyValue<Integer, Integer>> expected = Arrays.asList(
-            KeyValue.pair(1, 1),
-            KeyValue.pair(2, 2),
-            KeyValue.pair(3, 3),
-            KeyValue.pair(2, 2),
-            KeyValue.pair(2, 5),
-            KeyValue.pair(1, 4));
-        verifyResult(expected);
-    }
-
-    @Test
-    public void shouldTransformValuesWithValueTransformerWithKeyWithConnectedStoreProvider() {
-        stream
-            .transformValues(new ValueTransformerWithKeySupplier<Integer, Integer, Integer>() {
-                @Override
-                public ValueTransformerWithKey<Integer, Integer, Integer> get() {
-                    return new TestValueTransformerWithKey();
-                }
-
-                @Override
-                public Set<StoreBuilder<?>> stores() {
-                    return Collections.singleton(storeBuilder());
-                }
-            })
-            .foreach(accumulateExpected);
-    }
-
     private class TestValueTransformer implements org.apache.kafka.streams.kstream.ValueTransformer<Integer, Integer> {
         private KeyValueStore<Integer, Integer> state;
 
@@ -189,50 +154,6 @@ public class KStreamTransformIntegrationTest {
         @Override
         public void close() {
         }
-    }
-
-    @Test
-    public void shouldTransformValuesWithValueTransformerWithoutKey() {
-        builder.addStateStore(storeBuilder());
-
-        stream
-            .transformValues(TestValueTransformer::new, stateStoreName)
-            .foreach(accumulateExpected);
-
-        final List<KeyValue<Integer, Integer>> expected = Arrays.asList(
-            KeyValue.pair(1, 1),
-            KeyValue.pair(2, 1),
-            KeyValue.pair(3, 1),
-            KeyValue.pair(2, 2),
-            KeyValue.pair(2, 2),
-            KeyValue.pair(1, 3));
-        verifyResult(expected);
-    }
-
-    @Test
-    public void shouldTransformValuesWithValueTransformerWithoutKeyWithConnectedStoreProvider() {
-        stream
-            .transformValues(new org.apache.kafka.streams.kstream.ValueTransformerSupplier<Integer, Integer>() {
-                @Override
-                public org.apache.kafka.streams.kstream.ValueTransformer<Integer, Integer> get() {
-                    return new TestValueTransformer();
-                }
-
-                @Override
-                public Set<StoreBuilder<?>> stores() {
-                    return Collections.singleton(storeBuilder());
-                }
-            })
-            .foreach(accumulateExpected);
-
-        final List<KeyValue<Integer, Integer>> expected = Arrays.asList(
-            KeyValue.pair(1, 1),
-            KeyValue.pair(2, 1),
-            KeyValue.pair(3, 1),
-            KeyValue.pair(2, 2),
-            KeyValue.pair(2, 2),
-            KeyValue.pair(1, 3));
-        verifyResult(expected);
     }
 
     private class TestValueTransformerWithoutKey implements ValueTransformerWithKey<Integer, Integer, Iterable<Integer>> {
