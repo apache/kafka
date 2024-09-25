@@ -19,6 +19,7 @@ package org.apache.kafka.storage.internals.log;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.PrimitiveRef;
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -266,21 +267,25 @@ public class TransactionIndex implements Closeable {
             }
         }
 
-        void flush() throws IOException {
+        synchronized void flush() throws IOException {
             if (channel != null)
                 channel.force(true);
         }
 
-        void closeChannel() throws IOException {
+        synchronized void closeChannel() throws IOException {
             if (channel != null)
                 channel.close();
+        }
+        
+        synchronized boolean isChannelOpen() {
+            return channel != null && channel.isOpen();
         }
 
         Path path() {
             return path;
         }
 
-        void truncate(long position) throws IOException {
+        synchronized void truncate(long position) throws IOException {
             if (channel != null)
                 channel.truncate(position);
         }
@@ -314,12 +319,12 @@ public class TransactionIndex implements Closeable {
          * @throws IOException if any I/O error happens, but not if existing channel is closed.
          *                     In that case, it is reopened.
          */
-        private FileChannel channel() throws IOException {
+        private synchronized FileChannel channel() throws IOException {
             if (channel == null) {
                 openChannel();
             } else {
                 // as channel is exposed, it could be closed without setting it to null
-                if (!channel.isOpen())  {
+                if (!isChannelOpen())  {
                     log.debug("Transaction index channel was closed directly and is going to be reopened");
                     openChannel();
                 }
