@@ -1624,14 +1624,17 @@ public class RemoteLogManagerTest {
                     throw new IllegalArgumentException("Unexpected call!");
                 }
             });
-
-        FileRecords.TimestampAndOffset expectedLocalResult = new FileRecords.TimestampAndOffset(timestamp, 9999, Optional.of(Integer.MAX_VALUE));
-        FileRecords.TimestampAndOffset expectedRemoteResult = new FileRecords.TimestampAndOffset(timestamp, 999, Optional.of(Integer.MAX_VALUE));
+        // Different (timestamp, offset) is chosen for remote and local read result to assert the behaviour
+        // 9999 -> refers to read from local, 999 -> refers to read from remote
+        FileRecords.TimestampAndOffset expectedLocalResult = new FileRecords.TimestampAndOffset(timestamp + 9999, 9999, Optional.of(Integer.MAX_VALUE));
+        FileRecords.TimestampAndOffset expectedRemoteResult = new FileRecords.TimestampAndOffset(timestamp + 999, 999, Optional.of(Integer.MAX_VALUE));
         Partition mockFollowerPartition = mockPartition(tpId);
 
         LogSegment logSegment = mock(LogSegment.class);
-        mockLogSegment(logSegment, 50L, timestamp + 10, expectedLocalResult);
-        when(mockLog.logSegments()).thenReturn(Collections.singletonList(logSegment));
+        mockLogSegment(logSegment, 50L, timestamp, null);
+        LogSegment logSegment1 = mock(LogSegment.class);
+        mockLogSegment(logSegment1, 100L, timestamp + 1, expectedLocalResult);
+        when(mockLog.logSegments()).thenReturn(Arrays.asList(logSegment, logSegment1));
         when(mockLog.logEndOffset()).thenReturn(300L);
 
         remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
@@ -1658,12 +1661,12 @@ public class RemoteLogManagerTest {
 
         // Move the local-log start offset to 100L, still the read from the remote storage should be short-circuited
         // as the message with (timestamp + 1) exists in the local log
-        mockLogSegment(logSegment, 100L, timestamp + 10, expectedLocalResult);
+        when(mockLog.logSegments()).thenReturn(Collections.singletonList(logSegment1));
         assertEquals(Optional.of(expectedLocalResult), remoteLogManager.findOffsetByTimestamp(tp, timestamp + 1, 0L, cache));
 
         // Move the local log start offset to 101L, now message with (timestamp + 1) does not exist in the local log and
         // the indexes needs to be fetched from the remote storage
-        mockLogSegment(logSegment, 101L, timestamp + 10, expectedLocalResult);
+        mockLogSegment(logSegment1, 101L, timestamp + 1, expectedLocalResult);
         assertEquals(Optional.of(expectedRemoteResult), remoteLogManager.findOffsetByTimestamp(tp, timestamp + 1, 0L, cache));
     }
 
@@ -1673,8 +1676,10 @@ public class RemoteLogManagerTest {
                                 FileRecords.TimestampAndOffset timestampAndOffset) throws IOException {
         when(logSegment.baseOffset()).thenReturn(baseOffset);
         when(logSegment.largestTimestamp()).thenReturn(largestTimestamp);
-        when(logSegment.findOffsetByTimestamp(anyLong(), anyLong()))
-                .thenReturn(Optional.of(timestampAndOffset));
+        if (timestampAndOffset != null) {
+            when(logSegment.findOffsetByTimestamp(anyLong(), anyLong()))
+                    .thenReturn(Optional.of(timestampAndOffset));
+        }
     }
 
     @Test
