@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
@@ -68,7 +69,7 @@ import java.util.stream.Collectors;
  * {@link ShareAcknowledgeRequest} to fetch and acknowledge records being delivered for a consumer
  * in a share group.
  */
-@SuppressWarnings("NPathComplexity")
+@SuppressWarnings({"NPathComplexity", "CyclomaticComplexity"})
 public class ShareConsumeRequestManager implements RequestManager, MemberStateListener, Closeable {
     private final Time time;
     private final Logger log;
@@ -572,6 +573,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             final Set<TopicPartition> partitions = responseData.keySet().stream().map(TopicIdPartition::topicPartition).collect(Collectors.toSet());
             final ShareFetchMetricsAggregator shareFetchMetricsAggregator = new ShareFetchMetricsAggregator(metricsManager, partitions);
 
+            Map<TopicPartition, Metadata.LeaderIdAndEpoch> partitionsWithUpdatedLeaderInfo = new HashMap<>();
             for (Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData> entry : responseData.entrySet()) {
                 TopicIdPartition tip = entry.getKey();
 
@@ -590,6 +592,15 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     backgroundEventHandler.add(event);
                 }
 
+                Errors partitionError = Errors.forCode(partitionData.errorCode());
+                if (partitionError == Errors.NOT_LEADER_OR_FOLLOWER || partitionError == Errors.FENCED_LEADER_EPOCH) {
+                    log.debug("For {}, received error {}, with leaderIdAndEpoch {}", tip, partitionError, partitionData.currentLeader());
+                    if (partitionData.currentLeader().leaderId() != -1 && partitionData.currentLeader().leaderEpoch() != -1) {
+                        partitionsWithUpdatedLeaderInfo.put(tip.topicPartition(), new Metadata.LeaderIdAndEpoch(
+                            Optional.of(partitionData.currentLeader().leaderId()), Optional.of(partitionData.currentLeader().leaderEpoch())));
+                    }
+                }
+
                 ShareCompletedFetch completedFetch = new ShareCompletedFetch(
                         logContext,
                         BufferSupplier.create(),
@@ -602,6 +613,14 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 if (!partitionData.acquiredRecords().isEmpty()) {
                     fetchMoreRecords = false;
                 }
+            }
+
+            if (!partitionsWithUpdatedLeaderInfo.isEmpty()) {
+                List<Node> leaderNodes = response.data().nodeEndpoints().stream()
+                    .map(e -> new Node(e.nodeId(), e.host(), e.port(), e.rack()))
+                    .filter(e -> !e.equals(Node.noNode()))
+                    .collect(Collectors.toList());
+                metadata.updatePartitionLeadership(partitionsWithUpdatedLeaderInfo, leaderNodes);
             }
 
             metricsManager.recordLatency(resp.destination(), resp.requestLatencyMs());
@@ -650,6 +669,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             log.debug("Completed ShareAcknowledge request from node {} successfully", fetchTarget.id());
             ShareAcknowledgeResponse response = (ShareAcknowledgeResponse) resp.responseBody();
 
+            Map<TopicPartition, Metadata.LeaderIdAndEpoch> partitionsWithUpdatedLeaderInfo = new HashMap<>();
+
             if (acknowledgeRequestState.onClose()) {
                 response.data().responses().forEach(topic -> topic.partitions().forEach(partition -> {
                     TopicIdPartition tip = new TopicIdPartition(topic.topicId(),
@@ -691,7 +712,26 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                 partitionData.partitionIndex(),
                                 metadata.topicNames().get(shareAcknowledgeTopicResponse.topicId()));
                         if (partitionError.exception() != null) {
-                            if (partitionError.exception() instanceof RetriableException) {
+                            boolean retry = false;
+
+                            if (partitionError == Errors.NOT_LEADER_OR_FOLLOWER || partitionError == Errors.FENCED_LEADER_EPOCH) {
+                                // If the leader has changed, there's no point in retrying the operation because the acquisition locks
+                                // will have been released.
+                                TopicPartition tp = new TopicPartition(metadata.topicNames().get(shareAcknowledgeTopicResponse.topicId()), partitionData.partitionIndex());
+
+                                log.debug("For {}, received error {}, with leaderIdAndEpoch {}", tp, partitionError, partitionData.currentLeader());
+                                if (partitionData.currentLeader().leaderId() != -1 && partitionData.currentLeader().leaderEpoch() != -1) {
+                                    partitionsWithUpdatedLeaderInfo.put(tp, new Metadata.LeaderIdAndEpoch(
+                                        Optional.of(partitionData.currentLeader().leaderId()), Optional.of(partitionData.currentLeader().leaderEpoch())));
+                                }
+
+                                metricsManager.recordFailedAcknowledgements(acknowledgeRequestState.getInFlightAcknowledgementsCount(tip));
+                                acknowledgeRequestState.handleAcknowledgeErrorCode(tip, partitionError);
+                            } else if (partitionError.exception() instanceof RetriableException) {
+                                retry = true;
+                            }
+
+                            if (retry) {
                                 // Move to incomplete acknowledgements to retry
                                 acknowledgeRequestState.moveToIncompleteAcks(tip);
                                 shouldRetry.set(true);
@@ -711,6 +751,14 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     }
                     acknowledgeRequestState.processingComplete();
                 }
+            }
+
+            if (!partitionsWithUpdatedLeaderInfo.isEmpty()) {
+                List<Node> leaderNodes = response.data().nodeEndpoints().stream()
+                    .map(e -> new Node(e.nodeId(), e.host(), e.port(), e.rack()))
+                    .filter(e -> !e.equals(Node.noNode()))
+                    .collect(Collectors.toList());
+                metadata.updatePartitionLeadership(partitionsWithUpdatedLeaderInfo, leaderNodes);
             }
 
             if (acknowledgeRequestState.isProcessed) {
