@@ -758,19 +758,18 @@ public class KRaftMigrationDriverTest {
             TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.WAIT_FOR_CONTROLLER_QUORUM),
                 "Waiting for KRaftMigrationDriver to enter WAIT_FOR_CONTROLLER_QUORUM state");
 
-            driver.onMetadataUpdate(delta, image, logDeltaManifestBuilder(provenance, newLeader).build());
-
             driver.transitionTo(MigrationDriverState.WAIT_FOR_BROKERS);
             driver.transitionTo(MigrationDriverState.BECOME_CONTROLLER);
             driver.transitionTo(MigrationDriverState.ZK_MIGRATION);
             driver.transitionTo(MigrationDriverState.SYNC_KRAFT_TO_ZK);
+
+            driver.onMetadataUpdate(delta, image, logDeltaManifestBuilder(provenance, newLeader).build());
 
             provenance = new MetadataProvenance(200, 1, 1);
             delta = new MetadataDelta(image);
             RecordTestUtils.replayAll(delta, DELTA1_RECORDS);
             image = delta.apply(provenance);
             driver.onMetadataUpdate(delta, image, new SnapshotManifest(provenance, 100));
-
 
             // Wait for migration
             TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
