@@ -26,10 +26,10 @@ script_path="${0}"
 
 # The absolute path to the directory which this script is in.  This will also be the directory
 # which we run docker build from.
-ducker_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+ducker_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # The absolute path to the root Kafka directory
-kafka_dir="$( cd "${ducker_dir}/../.." && pwd )"
+kafka_dir="$(cd "${ducker_dir}/../.." && pwd)"
 
 # The absolute path to the directory to hold the necessary files to construct a ducker image for executing Kafka in native mode.
 tmp_native_dir=${ducker_dir}/native
@@ -45,7 +45,7 @@ docker_run_memory_limit="2000m"
 default_num_nodes=14
 
 # The default OpenJDK base image.
-default_jdk="openjdk:8"
+default_jdk="eclipse-temurin:8"
 
 # The default ducker-ak image name.
 default_image_name="ducker-ak"
@@ -60,8 +60,8 @@ debugpy_port=5678
 #
 # $1: The exit status to use
 usage() {
-    local exit_status="${1}"
-    cat <<EOF
+	local exit_status="${1}"
+	cat <<EOF
 ducker-ak: a tool for running Apache Kafka tests inside Docker images.
 
 Usage: ${script_path} [command] [options]
@@ -95,7 +95,7 @@ test [-d|--debug] [test-name(s)] [-- [ducktape args]]
     If --debug is passed, the tests will wait for remote VS Code debugger to connect on port 5678:
         ./tests/docker/ducker-ak test --debug ./tests/kafkatest/tests/core/produce_bench_test.py
     
-    To pass arguments to underlying ducktape invocation, pass them after `--`, e.g.:
+    To pass arguments to underlying ducktape invocation, pass them after $(--), e.g.:
         ./tests/docker/ducker-ak test ./tests/kafkatest/tests/core/produce_bench_test.py -- --test-runner-timeout 1800000
 
 ssh [node-name|user-name@node-name] [command]
@@ -115,13 +115,13 @@ purge [--f|--force]
     Purge Docker images created by ducker-ak.  This will free disk space.
     If --force is set, we run 'docker rmi -f'.
 EOF
-    exit "${exit_status}"
+	exit "${exit_status}"
 }
 
 # Exit with an error message.
 die() {
-    echo $@
-    exit 1
+	echo $@
+	exit 1
 }
 
 # Check for the presence of certain commands.
@@ -129,10 +129,10 @@ die() {
 # $@: The commands to check for.  This function will die if any of these commands are not found by
 #       the 'which' command.
 require_commands() {
-    local cmds="${@}"
-    for cmd in ${cmds}; do
-        which -- "${cmd}" &> /dev/null || die "You must install ${cmd} to run this script."
-    done
+	local cmds="${@}"
+	for cmd in ${cmds}; do
+		which -- "${cmd}" &>/dev/null || die "You must install ${cmd} to run this script."
+	done
 }
 
 # Set a global variable to a value.
@@ -143,13 +143,13 @@ require_commands() {
 #     with a dash.
 # $3: A human-readable description of the variable.
 set_once() {
-    local key="${1}"
-    local value="${2}"
-    local what="${3}"
-    [[ -n "${!key}" ]] && die "Error: more than one value specified for ${what}."
-    verify_command_line_argument "${value}" "${what}"
-    # It would be better to use declare -g, but older bash versions don't support it.
-    export ${key}="${value}"
+	local key="${1}"
+	local value="${2}"
+	local what="${3}"
+	[[ -n "${!key}" ]] && die "Error: more than one value specified for ${what}."
+	verify_command_line_argument "${value}" "${what}"
+	# It would be better to use declare -g, but older bash versions don't support it.
+	export ${key}="${value}"
 }
 
 # Verify that a command-line argument is present and does not start with a slash.
@@ -157,10 +157,10 @@ set_once() {
 # $1: The command-line argument to verify.
 # $2: A human-readable description of the variable.
 verify_command_line_argument() {
-    local value="${1}"
-    local what="${2}"
-    [[ -n "${value}" ]] || die "Error: no value specified for ${what}"
-    [[ ${value} == -* ]] && die "Error: invalid value ${value} specified for ${what}"
+	local value="${1}"
+	local what="${2}"
+	[[ -n "${value}" ]] || die "Error: no value specified for ${what}"
+	[[ ${value} == -* ]] && die "Error: invalid value ${value} specified for ${what}"
 }
 
 # Echo a message if a flag is set.
@@ -168,33 +168,33 @@ verify_command_line_argument() {
 # $1: If this is 1, the message will be echoed.
 # $@: The message
 maybe_echo() {
-    local verbose="${1}"
-    shift
-    [[ "${verbose}" -eq 1 ]] && echo "${@}"
+	local verbose="${1}"
+	shift
+	[[ "${verbose}" -eq 1 ]] && echo "${@}"
 }
 
 # Counts the number of elements passed to this subroutine.
 count() {
-    echo $#
+	echo $#
 }
 
 # Push a new directory on to the bash directory stack, or exit with a failure message.
 #
 # $1: The directory push on to the directory stack.
 must_pushd() {
-    local target_dir="${1}"
-    pushd -- "${target_dir}" &> /dev/null || die "failed to change directory to ${target_dir}"
+	local target_dir="${1}"
+	pushd -- "${target_dir}" &>/dev/null || die "failed to change directory to ${target_dir}"
 }
 
 # Pop a directory from the bash directory stack, or exit with a failure message.
 must_popd() {
-    popd &> /dev/null || die "failed to popd"
+	popd &>/dev/null || die "failed to popd"
 }
 
 echo_and_do() {
-    local cmd="${@}"
-    echo "${cmd}"
-    ${cmd}
+	local cmd="${@}"
+	echo "${cmd}"
+	${cmd}
 }
 
 # Run a command and die if it fails.
@@ -204,18 +204,24 @@ echo_and_do() {
 # -o: display the command output.
 # $@: The command to run.
 must_do() {
-    local verbose=0
-    local output="/dev/null"
-    while true; do
-        case ${1} in
-            -v) verbose=1; shift;;
-            -o) output="/dev/stdout"; shift;;
-            *) break;;
-        esac
-    done
-    local cmd="${@}"
-    [[ "${verbose}" -eq 1 ]] && echo "${cmd}"
-    ${cmd} >${output} || die "${1} failed"
+	local verbose=0
+	local output="/dev/null"
+	while true; do
+		case ${1} in
+		-v)
+			verbose=1
+			shift
+			;;
+		-o)
+			output="/dev/stdout"
+			shift
+			;;
+		*) break ;;
+		esac
+	done
+	local cmd="${@}"
+	[[ "${verbose}" -eq 1 ]] && echo "${cmd}"
+	${cmd} >${output} || die "${1} failed"
 }
 
 # Ask the user a yes/no question.
@@ -223,214 +229,241 @@ must_do() {
 # $1: The prompt to use
 # $_return: 0 if the user answered no; 1 if the user answered yes.
 ask_yes_no() {
-    local prompt="${1}"
-    while true; do
-        read -r -p "${prompt} " response
-        case "${response}" in
-            [yY]|[yY][eE][sS]) _return=1; return;;
-            [nN]|[nN][oO]) _return=0; return;;
-            *);;
-        esac
-        echo "Please respond 'yes' or 'no'."
-        echo
-    done
+	local prompt="${1}"
+	while true; do
+		read -r -p "${prompt} " response
+		case "${response}" in
+		[yY] | [yY][eE][sS])
+			_return=1
+			return
+			;;
+		[nN] | [nN][oO])
+			_return=0
+			return
+			;;
+		*) ;;
+		esac
+		echo "Please respond 'yes' or 'no'."
+		echo
+	done
 }
 
 # Build a docker image.
 #
 # $1: The name of the image to build.
 ducker_build() {
-    local image_name="${1}"
+	local image_name="${1}"
 
-    # Use SECONDS, a builtin bash variable that gets incremented each second, to measure the docker
-    # build duration.
-    SECONDS=0
+	# Use SECONDS, a builtin bash variable that gets incremented each second, to measure the docker
+	# build duration.
+	SECONDS=0
 
-    must_pushd "${ducker_dir}"
-    # Tip: if you are scratching your head for some dependency problems that are referring to an old code version
-    # (for example java.lang.NoClassDefFoundError), add --no-cache flag to the build shall give you a clean start.
-    echo_and_do docker build --memory="${docker_build_memory_limit}" \
-        --build-arg "ducker_creator=${user_name}" \
-        --build-arg "jdk_version=${jdk_version}" \
-        --build-arg "UID=${UID}" \
-        --build-arg "KAFKA_MODE=${kafka_mode}" \
-        -t "${image_name}" \
-        -f "${ducker_dir}/Dockerfile" ${docker_args} -- .
-    docker_status=$?
-    must_popd
-    duration="${SECONDS}"
-    if [[ ${docker_status} -ne 0 ]]; then
-        echo "ERROR: Failed to build ${what} image after $((${duration} / 60))m \
+	must_pushd "${ducker_dir}"
+	# Tip: if you are scratching your head for some dependency problems that are referring to an old code version
+	# (for example java.lang.NoClassDefFoundError), add --no-cache flag to the build shall give you a clean start.
+	echo_and_do docker build --memory="${docker_build_memory_limit}" \
+		--build-arg "ducker_creator=${user_name}" \
+		--build-arg "jdk_version=${jdk_version}" \
+		--build-arg "UID=${UID}" \
+		--build-arg "KAFKA_MODE=${kafka_mode}" \
+		-t "${image_name}" \
+		-f "${ducker_dir}/Dockerfile" ${docker_args} -- .
+	docker_status=$?
+	must_popd
+	duration="${SECONDS}"
+	if [[ ${docker_status} -ne 0 ]]; then
+		echo "ERROR: Failed to build ${what} image after $((${duration} / 60))m \
 $((${duration} % 60))s."
-        echo "If this error is unexpected, consider running 'docker system prune -a' \
+		echo "If this error is unexpected, consider running 'docker system prune -a' \
 to clear old images from your local cache."
-        cleanup_native_dir
-        exit 1
-    fi
-    echo "Successfully built ${what} image in $((${duration} / 60))m \
+		cleanup_native_dir
+		exit 1
+	fi
+	echo "Successfully built ${what} image in $((${duration} / 60))m \
 $((${duration} % 60))s.  See ${build_log} for details."
 }
 
 docker_run() {
-    local node=${1}
-    local image_name=${2}
-    local ports_option=${3}
-    local port_mapping=${4}
+	local node=${1}
+	local image_name=${2}
+	local ports_option=${3}
+	local port_mapping=${4}
 
-    local expose_ports=""
-    if [[ -n ${ports_option} ]]; then
-        expose_ports="-P"
-        for expose_port in ${ports_option//,/ }; do
-            expose_ports="${expose_ports} --expose ${expose_port}"
-        done
-    fi
-    if [[ -n ${port_mapping} ]]; then
-        expose_ports="${expose_ports} -p ${port_mapping}:${port_mapping}"
-    fi
+	local expose_ports=""
+	if [[ -n ${ports_option} ]]; then
+		expose_ports="-P"
+		for expose_port in ${ports_option//,/ }; do
+			expose_ports="${expose_ports} --expose ${expose_port}"
+		done
+	fi
+	if [[ -n ${port_mapping} ]]; then
+		expose_ports="${expose_ports} -p ${port_mapping}:${port_mapping}"
+	fi
 
-    # Invoke docker-run. We need privileged mode to be able to run iptables
-    # and mount FUSE filesystems inside the container.  We also need it to
-    # run iptables inside the container.
-    must_do -v docker run --privileged \
-        -d -t -h "${node}" --network ducknet "${expose_ports}" \
-        --memory=${docker_run_memory_limit} --memory-swappiness=1 \
-        -v "${kafka_dir}:/opt/kafka-dev" --name "${node}" -- "${image_name}"
+	# Invoke docker-run. We need privileged mode to be able to run iptables
+	# and mount FUSE filesystems inside the container.  We also need it to
+	# run iptables inside the container.
+	must_do -v docker run --privileged \
+		-d -t -h "${node}" --network ducknet "${expose_ports}" \
+		--memory=${docker_run_memory_limit} --memory-swappiness=1 \
+		-v "${kafka_dir}:/opt/kafka-dev" --name "${node}" -- "${image_name}"
 }
 
 setup_custom_ducktape() {
-    local custom_ducktape="${1}"
-    local image_name="${2}"
+	local custom_ducktape="${1}"
+	local image_name="${2}"
 
-    [[ -f "${custom_ducktape}/ducktape/__init__.py" ]] || \
-        die "You must supply a valid ducktape directory to --custom-ducktape"
-    docker_run ducker01 "${image_name}"
-    local running_container="$(docker ps -f=network=ducknet -q)"
-    must_do -v -o docker cp "${custom_ducktape}" "${running_container}:/opt/ducktape"
-    docker exec --user=root ducker01 bash -c 'set -x && cd /opt/kafka-dev/tests && sudo python3 ./setup.py develop install && cd /opt/ducktape && sudo python3 ./setup.py develop install'
-    [[ $? -ne 0 ]] && die "failed to install the new ducktape."
-    must_do -v -o docker commit ducker01 "${image_name}"
-    must_do -v docker kill "${running_container}"
-    must_do -v docker rm ducker01
+	[[ -f "${custom_ducktape}/ducktape/__init__.py" ]] ||
+		die "You must supply a valid ducktape directory to --custom-ducktape"
+	docker_run ducker01 "${image_name}"
+	local running_container="$(docker ps -f=network=ducknet -q)"
+	must_do -v -o docker cp "${custom_ducktape}" "${running_container}:/opt/ducktape"
+	docker exec --user=root ducker01 bash -c 'set -x && cd /opt/kafka-dev/tests && sudo python3 ./setup.py develop install && cd /opt/ducktape && sudo python3 ./setup.py develop install'
+	[[ $? -ne 0 ]] && die "failed to install the new ducktape."
+	must_do -v -o docker commit ducker01 "${image_name}"
+	must_do -v docker kill "${running_container}"
+	must_do -v docker rm ducker01
 }
 
 cleanup_native_dir() {
-    if [ -d "${tmp_native_dir}" ]; then
-        echo "Deleting temporary native dir: ${tmp_native_dir}"
-        rm -rf "${tmp_native_dir}"
-    fi
+	if [ -d "${tmp_native_dir}" ]; then
+		echo "Deleting temporary native dir: ${tmp_native_dir}"
+		rm -rf "${tmp_native_dir}"
+	fi
 }
 
 prepare_native_dir() {
-    echo "Mode provided for system tests run: $kafka_mode"
-    must_pushd "${kafka_dir}"
-    cleanup_native_dir && mkdir "${tmp_native_dir}"
+	echo "Mode provided for system tests run: $kafka_mode"
+	must_pushd "${kafka_dir}"
+	cleanup_native_dir && mkdir "${tmp_native_dir}"
 
-    if [ "$kafka_mode" == "native" ]; then
-        kafka_tarball_filename=(core/build/distributions/kafka*SNAPSHOT.tgz)
-        if [ ! -e "${kafka_tarball_filename[0]}" ]; then
-            echo "Kafka tarball not present. Building Kafka tarball for native image."
-            ./gradlew clean releaseTarGz
-        fi
+	if [ "$kafka_mode" == "native" ]; then
+		kafka_tarball_filename=(core/build/distributions/kafka*SNAPSHOT.tgz)
+		if [ ! -e "${kafka_tarball_filename[0]}" ]; then
+			echo "Kafka tarball not present. Building Kafka tarball for native image."
+			./gradlew clean releaseTarGz
+		fi
 
-        cp core/build/distributions/kafka*SNAPSHOT.tgz "${tmp_native_dir}"/kafka.tgz
-        cp -r docker/native/native-image-configs "${tmp_native_dir}"
-        cp docker/native/native_command.sh "${tmp_native_dir}"
-    fi
-    must_popd
+		cp core/build/distributions/kafka*SNAPSHOT.tgz "${tmp_native_dir}"/kafka.tgz
+		cp -r docker/native/native-image-configs "${tmp_native_dir}"
+		cp docker/native/native_command.sh "${tmp_native_dir}"
+	fi
+	must_popd
 }
 
 ducker_up() {
-    require_commands docker
-    while [[ $# -ge 1 ]]; do
-        case "${1}" in
-            -C|--custom-ducktape) set_once custom_ducktape "${2}" "the custom ducktape directory"; shift 2;;
-            -f|--force) force=1; shift;;
-            -n|--num-nodes) set_once num_nodes "${2}" "number of nodes"; shift 2;;
-            -j|--jdk) set_once jdk_version "${2}" "the OpenJDK base image"; shift 2;;
-            -e|--expose-ports) set_once expose_ports "${2}" "the ports to expose"; shift 2;;
-            -m|--kafka_mode) set_once kafka_mode "${2}" "the mode in which kafka will run"; shift 2;;
-            *) set_once image_name "${1}" "docker image name"; shift;;
-        esac
-    done
-    [[ -n "${num_nodes}" ]] || num_nodes="${default_num_nodes}"
-    [[ -n "${jdk_version}" ]] || jdk_version="${default_jdk}"
-    [[ -n "${kafka_mode}" ]] || kafka_mode="${default_kafka_mode}"
-    [[ -n "${image_name}" ]] || image_name="${default_image_name}-${jdk_version/:/-}"
-    [[ "${num_nodes}" =~ ^-?[0-9]+$ ]] || \
-        die "ducker_up: the number of nodes must be an integer."
-    [[ "${num_nodes}" -gt 0 ]] || die "ducker_up: the number of nodes must be greater than 0."
-    if [[ "${num_nodes}" -lt 2 ]]; then
-        if [[ "${force}" -ne 1 ]]; then
-            echo "ducker_up: It is recommended to run at least 2 nodes, since ducker01 is only \
+	require_commands docker
+	while [[ $# -ge 1 ]]; do
+		case "${1}" in
+		-C | --custom-ducktape)
+			set_once custom_ducktape "${2}" "the custom ducktape directory"
+			shift 2
+			;;
+		-f | --force)
+			force=1
+			shift
+			;;
+		-n | --num-nodes)
+			set_once num_nodes "${2}" "number of nodes"
+			shift 2
+			;;
+		-j | --jdk)
+			set_once jdk_version "${2}" "the OpenJDK base image"
+			shift 2
+			;;
+		-e | --expose-ports)
+			set_once expose_ports "${2}" "the ports to expose"
+			shift 2
+			;;
+		-m | --kafka_mode)
+			set_once kafka_mode "${2}" "the mode in which kafka will run"
+			shift 2
+			;;
+		*)
+			set_once image_name "${1}" "docker image name"
+			shift
+			;;
+		esac
+	done
+	[[ -n "${num_nodes}" ]] || num_nodes="${default_num_nodes}"
+	[[ -n "${jdk_version}" ]] || jdk_version="${default_jdk}"
+	[[ -n "${kafka_mode}" ]] || kafka_mode="${default_kafka_mode}"
+	[[ -n "${image_name}" ]] || image_name="${default_image_name}-${jdk_version/:/-}"
+	[[ "${num_nodes}" =~ ^-?[0-9]+$ ]] ||
+		die "ducker_up: the number of nodes must be an integer."
+	[[ "${num_nodes}" -gt 0 ]] || die "ducker_up: the number of nodes must be greater than 0."
+	if [[ "${num_nodes}" -lt 2 ]]; then
+		if [[ "${force}" -ne 1 ]]; then
+			echo "ducker_up: It is recommended to run at least 2 nodes, since ducker01 is only \
 used to run ducktape itself.  If you want to do it anyway, you can use --force to attempt to \
 use only ${num_nodes}."
-            exit 1
-        fi
-    fi
+			exit 1
+		fi
+	fi
 
-    docker ps >/dev/null || die "ducker_up: failed to run docker.  Please check that the daemon is started."
+	docker ps >/dev/null || die "ducker_up: failed to run docker.  Please check that the daemon is started."
 
-    prepare_native_dir
-    ducker_build "${image_name}"
-    cleanup_native_dir
+	prepare_native_dir
+	ducker_build "${image_name}"
+	cleanup_native_dir
 
-    docker inspect --format='{{.Config.Labels}}' --type=image "${image_name}" | grep -q 'ducker.type'
-    local docker_status=${PIPESTATUS[0]}
-    local grep_status=${PIPESTATUS[1]}
-    [[ "${docker_status}" -eq 0 ]] || die "ducker_up: failed to inspect image ${image_name}.  \
+	docker inspect --format='{{.Config.Labels}}' --type=image "${image_name}" | grep -q 'ducker.type'
+	local docker_status=${PIPESTATUS[0]}
+	local grep_status=${PIPESTATUS[1]}
+	[[ "${docker_status}" -eq 0 ]] || die "ducker_up: failed to inspect image ${image_name}.  \
 Please check that it exists."
-    if [[ "${grep_status}" -ne 0 ]]; then
-        if [[ "${force}" -ne 1 ]]; then
-            echo "ducker_up: ${image_name} does not appear to be a ducker image.  It lacks the \
+	if [[ "${grep_status}" -ne 0 ]]; then
+		if [[ "${force}" -ne 1 ]]; then
+			echo "ducker_up: ${image_name} does not appear to be a ducker image.  It lacks the \
 ducker.type label.  If you think this is a mistake, you can use --force to attempt to bring \
 it up anyway."
-            exit 1
-        fi
-    fi
-    local running_containers="$(docker ps -f=network=ducknet -q)"
-    local num_running_containers=$(count ${running_containers})
-    if [[ ${num_running_containers} -gt 0 ]]; then
-        die "ducker_up: there are ${num_running_containers} ducker containers \
+			exit 1
+		fi
+	fi
+	local running_containers="$(docker ps -f=network=ducknet -q)"
+	local num_running_containers=$(count ${running_containers})
+	if [[ ${num_running_containers} -gt 0 ]]; then
+		die "ducker_up: there are ${num_running_containers} ducker containers \
 running already.  Use ducker down to bring down these containers before \
 attempting to start new ones."
-    fi
+	fi
 
-    echo "ducker_up: Bringing up ${image_name} with ${num_nodes} nodes..."
-    if docker network inspect ducknet &>/dev/null; then
-        must_do -v docker network rm ducknet
-    fi
-    must_do -v docker network create ducknet
-    if [[ -n "${custom_ducktape}" ]]; then
-        setup_custom_ducktape "${custom_ducktape}" "${image_name}"
-    fi
-    docker_run ducker01 "${image_name}" "${expose_ports}" "${debugpy_port}"
-    for n in $(seq -f %02g 2 ${num_nodes}); do
-        local node="ducker${n}"
-        docker_run "${node}" "${image_name}" "${expose_ports}"
-    done
-    mkdir -p "${ducker_dir}/build"
-    exec 3<> "${ducker_dir}/build/node_hosts"
-    for n in $(seq -f %02g 1 ${num_nodes}); do
-        local node="ducker${n}"
-        docker exec --user=root "${node}" grep "${node}" /etc/hosts >&3
-        [[ $? -ne 0 ]] && die "failed to find the /etc/hosts entry for ${node}"
-    done
-    exec 3>&-
-    for n in $(seq -f %02g 1 ${num_nodes}); do
-        local node="ducker${n}"
-        docker exec --user=root "${node}" \
-            bash -c "grep -v ${node} /opt/kafka-dev/tests/docker/build/node_hosts >> /etc/hosts"
-        [[ $? -ne 0 ]] && die "failed to append to the /etc/hosts file on ${node}"
-    done
+	echo "ducker_up: Bringing up ${image_name} with ${num_nodes} nodes..."
+	if docker network inspect ducknet &>/dev/null; then
+		must_do -v docker network rm ducknet
+	fi
+	must_do -v docker network create ducknet
+	if [[ -n "${custom_ducktape}" ]]; then
+		setup_custom_ducktape "${custom_ducktape}" "${image_name}"
+	fi
+	docker_run ducker01 "${image_name}" "${expose_ports}" "${debugpy_port}"
+	for n in $(seq -f %02g 2 ${num_nodes}); do
+		local node="ducker${n}"
+		docker_run "${node}" "${image_name}" "${expose_ports}"
+	done
+	mkdir -p "${ducker_dir}/build"
+	exec 3<>"${ducker_dir}/build/node_hosts"
+	for n in $(seq -f %02g 1 ${num_nodes}); do
+		local node="ducker${n}"
+		docker exec --user=root "${node}" grep "${node}" /etc/hosts >&3
+		[[ $? -ne 0 ]] && die "failed to find the /etc/hosts entry for ${node}"
+	done
+	exec 3>&-
+	for n in $(seq -f %02g 1 ${num_nodes}); do
+		local node="ducker${n}"
+		docker exec --user=root "${node}" \
+			bash -c "grep -v ${node} /opt/kafka-dev/tests/docker/build/node_hosts >> /etc/hosts"
+		[[ $? -ne 0 ]] && die "failed to append to the /etc/hosts file on ${node}"
+	done
 
-    if [ "$kafka_mode" == "native" ]; then
-      docker exec --user=root ducker01 bash -c 'cp /opt/kafka-binary/kafka.Kafka /opt/kafka-dev/kafka.Kafka'
-    fi
+	if [ "$kafka_mode" == "native" ]; then
+		docker exec --user=root ducker01 bash -c 'cp /opt/kafka-binary/kafka.Kafka /opt/kafka-dev/kafka.Kafka'
+	fi
 
-    echo "ducker_up: added the latest entries to /etc/hosts on each node."
-    generate_cluster_json_file "${num_nodes}" "${ducker_dir}/build/cluster.json"
-    echo "ducker_up: successfully wrote ${ducker_dir}/build/cluster.json"
-    echo "** ducker_up: successfully brought up ${num_nodes} nodes."
+	echo "ducker_up: added the latest entries to /etc/hosts on each node."
+	generate_cluster_json_file "${num_nodes}" "${ducker_dir}/build/cluster.json"
+	echo "ducker_up: successfully wrote ${ducker_dir}/build/cluster.json"
+	echo "** ducker_up: successfully brought up ${num_nodes} nodes."
 }
 
 # Generate the cluster.json file used by ducktape to identify cluster nodes.
@@ -438,10 +471,10 @@ attempting to start new ones."
 # $1: The number of cluster nodes.
 # $2: The path to write the cluster.json file to.
 generate_cluster_json_file() {
-    local num_nodes="${1}"
-    local path="${2}"
-    exec 3<> "${path}"
-cat<<EOF >&3
+	local num_nodes="${1}"
+	local path="${2}"
+	exec 3<>"${path}"
+	cat <<EOF >&3
 {
   "_comment": [
     "Licensed to the Apache Software Foundation (ASF) under one or more",
@@ -461,14 +494,14 @@ cat<<EOF >&3
   ],
   "nodes": [
 EOF
-    for n in $(seq 2 ${num_nodes}); do
-      if [[ ${n} -eq ${num_nodes} ]]; then
-        suffix=""
-      else
-        suffix=","
-      fi
-      local node=$(printf ducker%02d ${n})
-cat<<EOF >&3
+	for n in $(seq 2 ${num_nodes}); do
+		if [[ ${n} -eq ${num_nodes} ]]; then
+			suffix=""
+		else
+			suffix=","
+		fi
+		local node=$(printf ducker%02d ${n})
+		cat <<EOF >&3
     {
       "externally_routable_ip": "${node}",
       "ssh_config": {
@@ -481,189 +514,211 @@ cat<<EOF >&3
       }
     }${suffix}
 EOF
-    done
-cat<<EOF >&3
+	done
+	cat <<EOF >&3
   ]
 }
 EOF
-    exec 3>&-
+	exec 3>&-
 }
 
 ducker_test() {
-    require_commands docker
-    docker inspect ducker01 &>/dev/null || \
-        die "ducker_test: the ducker01 instance appears to be down. Did you run 'ducker up'?"
-    declare -a test_name_args=()
-    local debug=0
-    while [[ $# -ge 1 ]]; do
-        case "${1}" in
-            -d|--debug) debug=1; shift;;
-            --) shift; break;;
-            *) test_name_args+=("${1}"); shift;;
-        esac
-    done
-    local ducktape_args=${*}
-    
-    [[ ${#test_name_args} -lt 1 ]] && \
-        die "ducker_test: you must supply at least one system test to run. Type --help for help."
-    local test_names=""
+	require_commands docker
+	docker inspect ducker01 &>/dev/null ||
+		die "ducker_test: the ducker01 instance appears to be down. Did you run 'ducker up'?"
+	declare -a test_name_args=()
+	local debug=0
+	while [[ $# -ge 1 ]]; do
+		case "${1}" in
+		-d | --debug)
+			debug=1
+			shift
+			;;
+		--)
+			shift
+			break
+			;;
+		*)
+			test_name_args+=("${1}")
+			shift
+			;;
+		esac
+	done
+	local ducktape_args=${*}
 
-    for test_name in ${test_name_args[*]}; do
-        local regex=".*\/kafkatest\/(.*)"
-        if [[ $test_name =~ $regex ]]; then
-            local kpath=${BASH_REMATCH[1]}
-            test_names="${test_names} ./tests/kafkatest/${kpath}"
-        else
-            test_names="${test_names} ${test_name}"
-        fi
-    done
-    
-    must_pushd "${kafka_dir}"
-    ( (test -f ./gradlew || gradle) && ./gradlew systemTestLibs ) || die "ducker_test: Failed to build system test libraries, please check the error log."
-    must_popd
-    if [[ "${debug}" -eq 1 ]]; then
-        local ducktape_cmd="python3 -m debugpy --listen 0.0.0.0:${debugpy_port} --wait-for-client /usr/local/bin/ducktape"
-    else
-        local ducktape_cmd="ducktape"
-    fi
+	[[ ${#test_name_args} -lt 1 ]] &&
+		die "ducker_test: you must supply at least one system test to run. Type --help for help."
+	local test_names=""
 
-    cmd="cd /opt/kafka-dev && ${ducktape_cmd} --cluster-file /opt/kafka-dev/tests/docker/build/cluster.json $test_names $ducktape_args"
-    echo "docker exec ducker01 bash -c \"${cmd}\""
-    exec docker exec --user=ducker ducker01 bash -c "${cmd}"
+	for test_name in ${test_name_args[*]}; do
+		local regex=".*\/kafkatest\/(.*)"
+		if [[ $test_name =~ $regex ]]; then
+			local kpath=${BASH_REMATCH[1]}
+			test_names="${test_names} ./tests/kafkatest/${kpath}"
+		else
+			test_names="${test_names} ${test_name}"
+		fi
+	done
+
+	must_pushd "${kafka_dir}"
+	( (test -f ./gradlew || gradle) && ./gradlew systemTestLibs) || die "ducker_test: Failed to build system test libraries, please check the error log."
+	must_popd
+	if [[ "${debug}" -eq 1 ]]; then
+		local ducktape_cmd="python3 -m debugpy --listen 0.0.0.0:${debugpy_port} --wait-for-client /usr/local/bin/ducktape"
+	else
+		local ducktape_cmd="ducktape"
+	fi
+
+	cmd="cd /opt/kafka-dev && ${ducktape_cmd} --cluster-file /opt/kafka-dev/tests/docker/build/cluster.json $test_names $ducktape_args"
+	echo "docker exec ducker01 bash -c \"${cmd}\""
+	exec docker exec --user=ducker ducker01 bash -c "${cmd}"
 }
 
 ducker_ssh() {
-    require_commands docker
-    [[ $# -eq 0 ]] && die "ducker_ssh: Please specify a container name to log into. \
+	require_commands docker
+	[[ $# -eq 0 ]] && die "ducker_ssh: Please specify a container name to log into. \
 Currently active containers: $(echo_running_container_names)"
-    local node_info="${1}"
-    shift
-    local guest_command="$*"
-    local user_name="ducker"
-    if [[ "${node_info}" =~ @ ]]; then
-        user_name="${node_info%%@*}"
-        local node_name="${node_info##*@}"
-    else
-        local node_name="${node_info}"
-    fi
-    local docker_flags=""
-    if [[ -z "${guest_command}" ]]; then
-        local docker_flags="${docker_flags} -t"
-        local guest_command_prefix=""
-        guest_command=bash
-    else
-        local guest_command_prefix="bash -c"
-    fi
-    if [[ "${node_name}" == "all" ]]; then
-        local nodes=$(echo_running_container_names)
-        [[ "${nodes}" == "(none)" ]] && die "ducker_ssh: can't locate any running ducker nodes."
-        for node in ${nodes}; do
-            docker exec --user=${user_name} -i ${docker_flags} "${node}" \
-                ${guest_command_prefix} "${guest_command}" || die "docker exec ${node} failed"
-        done
-    else
-        docker inspect --type=container -- "${node_name}" &>/dev/null || \
-            die "ducker_ssh: can't locate node ${node_name}. Currently running nodes: \
+	local node_info="${1}"
+	shift
+	local guest_command="$*"
+	local user_name="ducker"
+	if [[ "${node_info}" =~ @ ]]; then
+		user_name="${node_info%%@*}"
+		local node_name="${node_info##*@}"
+	else
+		local node_name="${node_info}"
+	fi
+	local docker_flags=""
+	if [[ -z "${guest_command}" ]]; then
+		local docker_flags="${docker_flags} -t"
+		local guest_command_prefix=""
+		guest_command=bash
+	else
+		local guest_command_prefix="bash -c"
+	fi
+	if [[ "${node_name}" == "all" ]]; then
+		local nodes=$(echo_running_container_names)
+		[[ "${nodes}" == "(none)" ]] && die "ducker_ssh: can't locate any running ducker nodes."
+		for node in ${nodes}; do
+			docker exec --user=${user_name} -i ${docker_flags} "${node}" \
+				${guest_command_prefix} "${guest_command}" || die "docker exec ${node} failed"
+		done
+	else
+		docker inspect --type=container -- "${node_name}" &>/dev/null ||
+			die "ducker_ssh: can't locate node ${node_name}. Currently running nodes: \
 $(echo_running_container_names)"
-        exec docker exec --user=${user_name} -i ${docker_flags} "${node_name}" \
-            ${guest_command_prefix} "${guest_command}"
-    fi
+		exec docker exec --user=${user_name} -i ${docker_flags} "${node_name}" \
+			${guest_command_prefix} "${guest_command}"
+	fi
 }
 
 # Echo all the running Ducker container names, or (none) if there are no running Ducker containers.
 echo_running_container_names() {
-    node_names="$(docker ps -f=network=ducknet -q --format '{{.Names}}' | sort)"
-    if [[ -z "${node_names}" ]]; then
-        echo "(none)"
-    else
-        echo ${node_names//$'\n'/ }
-    fi
+	node_names="$(docker ps -f=network=ducknet -q --format '{{.Names}}' | sort)"
+	if [[ -z "${node_names}" ]]; then
+		echo "(none)"
+	else
+		echo ${node_names//$'\n'/ }
+	fi
 }
 
 ducker_down() {
-    require_commands docker
-    local verbose=1
-    local force_str=""
-    while [[ $# -ge 1 ]]; do
-        case "${1}" in
-            -q|--quiet) verbose=0; shift;;
-            -f|--force) force_str="-f"; shift;;
-            *) die "ducker_down: unexpected command-line argument ${1}";;
-        esac
-    done
-    local running_containers
-    running_containers="$(docker ps -f=network=ducknet -q)"
-    [[ $? -eq 0 ]]  || die "ducker_down: docker command failed.  Is the docker daemon running?"
-    running_containers=${running_containers//$'\n'/ }
-    local all_containers="$(docker ps -a -f=network=ducknet -q)"
-    all_containers=${all_containers//$'\n'/ }
-    if [[ -z "${all_containers}" ]]; then
-        maybe_echo "${verbose}" "No ducker containers found."
-        return
-    fi
-    verbose_flag=""
-    if [[ ${verbose} == 1 ]]; then
-        verbose_flag="-v"
-    fi
-    if [[ -n "${running_containers}" ]]; then
-        must_do ${verbose_flag} docker kill "${running_containers}"
-    fi
-    must_do ${verbose_flag} docker rm ${force_str} "${all_containers}"
-    must_do ${verbose_flag} -o rm -f -- "${ducker_dir}/build/node_hosts" "${ducker_dir}/build/cluster.json"
-    if docker network inspect ducknet &>/dev/null; then
-        must_do -v docker network rm ducknet
-    fi
-    maybe_echo "${verbose}" "ducker_down: removed $(count ${all_containers}) containers."
+	require_commands docker
+	local verbose=1
+	local force_str=""
+	while [[ $# -ge 1 ]]; do
+		case "${1}" in
+		-q | --quiet)
+			verbose=0
+			shift
+			;;
+		-f | --force)
+			force_str="-f"
+			shift
+			;;
+		*) die "ducker_down: unexpected command-line argument ${1}" ;;
+		esac
+	done
+	local running_containers
+	running_containers="$(docker ps -f=network=ducknet -q)"
+	[[ $? -eq 0 ]] || die "ducker_down: docker command failed.  Is the docker daemon running?"
+	running_containers=${running_containers//$'\n'/ }
+	local all_containers="$(docker ps -a -f=network=ducknet -q)"
+	all_containers=${all_containers//$'\n'/ }
+	if [[ -z "${all_containers}" ]]; then
+		maybe_echo "${verbose}" "No ducker containers found."
+		return
+	fi
+	verbose_flag=""
+	if [[ ${verbose} == 1 ]]; then
+		verbose_flag="-v"
+	fi
+	if [[ -n "${running_containers}" ]]; then
+		must_do ${verbose_flag} docker kill "${running_containers}"
+	fi
+	must_do ${verbose_flag} docker rm ${force_str} "${all_containers}"
+	must_do ${verbose_flag} -o rm -f -- "${ducker_dir}/build/node_hosts" "${ducker_dir}/build/cluster.json"
+	if docker network inspect ducknet &>/dev/null; then
+		must_do -v docker network rm ducknet
+	fi
+	maybe_echo "${verbose}" "ducker_down: removed $(count ${all_containers}) containers."
 }
 
 ducker_purge() {
-    require_commands docker
-    local force_str=""
-    while [[ $# -ge 1 ]]; do
-        case "${1}" in
-            -f|--force) force_str="-f"; shift;;
-            *) die "ducker_purge: unknown argument ${1}";;
-        esac
-    done
-    echo "** ducker_purge: attempting to locate ducker images to purge"
-    local images
-    images=$(docker images -q -a -f label=ducker.creator)
-    [[ $? -ne 0 ]] && die "docker images command failed"
-    images=${images//$'\n'/ }
-    declare -a purge_images=()
-    if [[ -z "${images}" ]]; then
-        echo "** ducker_purge: no images found to purge."
-        exit 0
-    fi
-    echo "** ducker_purge: images to delete:"
-    for image in ${images}; do
-        echo -n "${image} "
-        docker inspect --format='{{.Config.Labels}} {{.Created}}' --type=image "${image}"
-        [[ $? -ne 0 ]] && die "docker inspect ${image} failed"
-    done
-    ask_yes_no "Delete these docker images? [y/n]"
-    [[ "${_return}" -eq 0 ]] && exit 0
-    must_do -v -o docker rmi ${force_str} ${images}
+	require_commands docker
+	local force_str=""
+	while [[ $# -ge 1 ]]; do
+		case "${1}" in
+		-f | --force)
+			force_str="-f"
+			shift
+			;;
+		*) die "ducker_purge: unknown argument ${1}" ;;
+		esac
+	done
+	echo "** ducker_purge: attempting to locate ducker images to purge"
+	local images
+	images=$(docker images -q -a -f label=ducker.creator)
+	[[ $? -ne 0 ]] && die "docker images command failed"
+	images=${images//$'\n'/ }
+	declare -a purge_images=()
+	if [[ -z "${images}" ]]; then
+		echo "** ducker_purge: no images found to purge."
+		exit 0
+	fi
+	echo "** ducker_purge: images to delete:"
+	for image in ${images}; do
+		echo -n "${image} "
+		docker inspect --format='{{.Config.Labels}} {{.Created}}' --type=image "${image}"
+		[[ $? -ne 0 ]] && die "docker inspect ${image} failed"
+	done
+	ask_yes_no "Delete these docker images? [y/n]"
+	[[ "${_return}" -eq 0 ]] && exit 0
+	must_do -v -o docker rmi ${force_str} ${images}
 }
 
 # Parse command-line arguments
 [[ $# -lt 1 ]] && usage 0
 # Display the help text if -h or --help appears in the command line
 for arg in ${@}; do
-    case "${arg}" in
-        -h|--help) usage 0;;
-        --) break;;
-        *);;
-    esac
+	case "${arg}" in
+	-h | --help) usage 0 ;;
+	--) break ;;
+	*) ;;
+	esac
 done
 action="${1}"
 shift
 case "${action}" in
-    help) usage 0;;
+help) usage 0 ;;
 
-    up|test|ssh|down|purge)
-        ducker_${action} "${@}"; exit 0;;
+up | test | ssh | down | purge)
+	ducker_${action} "${@}"
+	exit 0
+	;;
 
-    *)  echo "Unknown command '${action}'.  Type '${script_path} --help' for usage information."
-        exit 1;;
+*)
+	echo "Unknown command '${action}'.  Type '${script_path} --help' for usage information."
+	exit 1
+	;;
 esac
