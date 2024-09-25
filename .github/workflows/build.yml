@@ -128,12 +128,12 @@ jobs:
           set +e
           ./.github/scripts/thread-dump.sh &
           timeout ${TIMEOUT_MINUTES}m ./gradlew --build-cache --continue --no-scan \
-          -PtestLoggingEvents=started,passed,skipped,failed \
-          -PmaxParallelForks=2 \
-          -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
-          -PcommitId=xxxxxxxxxxxxxxxx \
-          -Pkafka.test.catalog.file=${{ steps.load-catalog.outputs.test-catalog }}
-          test
+            -PtestLoggingEvents=started,passed,skipped,failed \
+            -PmaxParallelForks=2 \
+            -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
+            -PcommitId=xxxxxxxxxxxxxxxx \
+            -Pkafka.test.catalog.file=${{ steps.load-catalog.outputs.test-catalog }} \
+            test
           exitcode="$?"
           echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
       - name: Archive JUnit reports
