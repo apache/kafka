@@ -1049,7 +1049,7 @@ public class GroupMetadataManager {
      * @return A boolean indicating whether it's valid to online downgrade the consumer group.
      */
     private boolean validateOnlineDowngrade(ConsumerGroup consumerGroup) {
-        if (!consumerGroup.allMembersUseClassic()) {
+        if (!consumerGroup.allMembersUseClassicProtocol()) {
             return false;
         } else if (consumerGroup.isEmpty()) {
             log.debug("Skip downgrading the consumer group {} to classic group because it's empty.",
@@ -1060,6 +1060,32 @@ public class GroupMetadataManager {
                 consumerGroup.groupId());
             return false;
         } else if (consumerGroup.numMembers() > classicGroupMaxSize) {
+            log.info("Cannot downgrade consumer group {} to classic group because its group size is greater than classic group max size.",
+                consumerGroup.groupId());
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Validates the online downgrade if a consumer member is fenced from the consumer group.
+     *
+     * @param consumerGroup The ConsumerGroup.
+     * @param memberId      The fenced member id.
+     * @return A boolean indicating whether it's valid to online downgrade the consumer group.
+     */
+    private boolean validateOnlineDowngradeWithFencedMember(ConsumerGroup consumerGroup, String memberId) {
+        if (!consumerGroup.allMembersUseClassicProtocolExcept(memberId)) {
+            return false;
+        } else if (consumerGroup.numMembers() <= 1) {
+            log.debug("Skip downgrading the consumer group {} to classic group because it's empty.",
+                consumerGroup.groupId());
+            return false;
+        } else if (!consumerGroupMigrationPolicy.isDowngradeEnabled()) {
+            log.info("Cannot downgrade consumer group {} to classic group because the online downgrade is disabled.",
+                consumerGroup.groupId());
+            return false;
+        } else if (consumerGroup.numMembers() - 1 > classicGroupMaxSize) {
             log.info("Cannot downgrade consumer group {} to classic group because its group size is greater than classic group max size.",
                 consumerGroup.groupId());
             return false;
@@ -1126,10 +1152,7 @@ public class GroupMetadataManager {
 
         classicGroup.allMembers().forEach(member -> rescheduleClassicGroupMemberHeartbeat(classicGroup, member));
 
-        // Trigger a rebalance if group is not stable.
-        if (!STABLE.toString().equals(consumerGroup.stateAsString())) {
-            prepareRebalance(classicGroup, String.format("Downgrade group %s from consumer to classic.", classicGroup.groupId()));
-        }
+        prepareRebalance(classicGroup, String.format("Downgrade group %s from consumer to classic.", classicGroup.groupId()));
 
         CompletableFuture<Void> appendFuture = new CompletableFuture<>();
         appendFuture.exceptionally(__ -> {
@@ -2070,7 +2093,7 @@ public class GroupMetadataManager {
 
                 // Maybe downgrade the consumer group if the last member using the
                 // consumer protocol is replaced by the joining member.
-                scheduleConsumerGroupDowngradeTimeout(groupId);
+                scheduleConsumerGroupDowngradeTimeout(group);
             }
         });
 
@@ -2765,16 +2788,18 @@ public class GroupMetadataManager {
             records.add(newConsumerGroupSubscriptionMetadataRecord(group.groupId(), subscriptionMetadata));
         }
 
-        // We bump the group epoch.
-        int groupEpoch = group.groupEpoch() + 1;
-        records.add(newConsumerGroupEpochRecord(group.groupId(), groupEpoch));
+        // We bump the group epoch if the group doesn't need a downgrade.
+        if (!validateOnlineDowngradeWithFencedMember(group, member.memberId())) {
+            int groupEpoch = group.groupEpoch() + 1;
+            records.add(newConsumerGroupEpochRecord(group.groupId(), groupEpoch));
+        }
 
         cancelTimers(group.groupId(), member.memberId());
 
         CompletableFuture<Void> appendFuture = new CompletableFuture<>();
         appendFuture.whenComplete((__, t) -> {
             if (t == null) {
-                scheduleConsumerGroupDowngradeTimeout(group.groupId());
+                scheduleConsumerGroupDowngradeTimeout(group);
             }
         });
 
@@ -3156,24 +3181,19 @@ public class GroupMetadataManager {
     /**
      * Maybe schedules the downgrade timeout for the consumer group.
      *
-     * @param groupId The group id to downgrade.
+     * @param consumerGroup The group to downgrade.
      */
     private void scheduleConsumerGroupDowngradeTimeout(
-        String groupId
+        ConsumerGroup consumerGroup
     ) {
-        try {
-            ConsumerGroup consumerGroup = consumerGroup(groupId);
-            if (validateOnlineDowngrade(consumerGroup)) {
-                timer.scheduleIfAbsent(
-                    consumerGroupDowngradeKey(groupId),
-                    0,
-                    TimeUnit.MILLISECONDS,
-                    true,
-                    () -> consumerGroupDowngradeOperation(groupId)
-                );
-            }
-        } catch (GroupIdNotFoundException e) {
-            log.debug("Cannot schedule the downgrade timeout {} because the group doesn't exist or it's not a consumer group.");
+        if (validateOnlineDowngrade(consumerGroup)) {
+            timer.scheduleIfAbsent(
+                consumerGroupDowngradeKey(consumerGroup.groupId()),
+                0,
+                TimeUnit.MILLISECONDS,
+                true,
+                () -> consumerGroupDowngradeOperation(consumerGroup.groupId())
+            );
         }
     }
 
@@ -3800,7 +3820,7 @@ public class GroupMetadataManager {
                             );
                         }
                     });
-                    scheduleConsumerGroupDowngradeTimeout(groupId);
+                    scheduleConsumerGroupDowngradeTimeout(consumerGroup);
                     break;
 
                 case CLASSIC:

@@ -10895,7 +10895,7 @@ public class GroupMetadataManagerTest {
             STABLE,
             context.time,
             context.metrics,
-            11,
+            10,
             Optional.of(ConsumerProtocol.PROTOCOL_TYPE),
             Optional.of("range"),
             Optional.of(memberId1),
@@ -10929,7 +10929,7 @@ public class GroupMetadataManagerTest {
         );
         assertRecordsEquals(expectedRecords, downgradeTimeout.result.records());
 
-        verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.ASSIGNING, null);
+        verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.STABLE, null);
         verify(context.metrics, times(1)).onClassicGroupStateTransition(null, STABLE);
 
         // The new classic member 1 has a heartbeat timeout.
@@ -11047,7 +11047,6 @@ public class GroupMetadataManagerTest {
         }));
 
         context.commit();
-        ConsumerGroup consumerGroup = context.groupMetadataManager.consumerGroup(groupId);
 
         // A new member using classic protocol with the same instance id joins, scheduling the downgrade.
         JoinGroupRequestData joinRequest = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
@@ -11165,10 +11164,11 @@ public class GroupMetadataManagerTest {
         ScheduledTimeout<Void, CoordinatorRecord> groupJoinTimeout = context.timer.timeout(
             classicGroupJoinKey(groupId)
         );
+        assertNotNull(groupJoinTimeout);
 
-        // No rebalance is triggered. The group is stable.
+        // A new rebalance is triggered.
         ClassicGroup classicGroup = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId, false);
-        assertTrue(classicGroup.isInState(STABLE));
+        assertTrue(classicGroup.isInState(PREPARING_REBALANCE));
     }
 
     @Test
@@ -11300,7 +11300,7 @@ public class GroupMetadataManagerTest {
             STABLE,
             context.time,
             context.metrics,
-            11,
+            10,
             Optional.of(ConsumerProtocol.PROTOCOL_TYPE),
             Optional.of("range"),
             Optional.of(memberId1),
@@ -11334,7 +11334,7 @@ public class GroupMetadataManagerTest {
 
         assertRecordsEquals(expectedRecords, downgradeTimeout.result.records());
 
-        verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.ASSIGNING, null);
+        verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.STABLE, null);
         verify(context.metrics, times(1)).onClassicGroupStateTransition(null, STABLE);
 
         // The new classic member 1 has a heartbeat timeout.
@@ -11510,7 +11510,7 @@ public class GroupMetadataManagerTest {
             STABLE,
             context.time,
             context.metrics,
-            12,
+            11,
             Optional.of(ConsumerProtocol.PROTOCOL_TYPE),
             Optional.of("range"),
             Optional.of(memberId1),
@@ -11544,7 +11544,7 @@ public class GroupMetadataManagerTest {
         );
         assertRecordsEquals(expectedRecords, downgradeTimeout.result.records());
 
-        verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.ASSIGNING, null);
+        verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.RECONCILING, null);
         verify(context.metrics, times(1)).onClassicGroupStateTransition(null, STABLE);
 
         // The new classic member 1 has a heartbeat timeout.
