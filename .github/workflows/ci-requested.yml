@@ -20,11 +20,8 @@ on:
     workflows: [CI]
     types:
       - requested
-  pull_request_target:
+  pull_request:
     types: [ labeled, unlabeled ]
-
-permissions:
-  actions: write
 
 jobs:
   check-pr-labels:
@@ -63,10 +60,10 @@ jobs:
           fi
           echo "PR_NUMBER=$PR_NUMBER" >> "$GITHUB_ENV"
           echo "RUN_ID=$RUN_ID" >> "$GITHUB_ENV"
-      - name: Check PR Labels (pull_request_target)
+      - name: Check PR Labels (pull_request)
         id: check-pr-labels-2
         if: |
-          github.event_name == 'pull_request_target' &&
+          github.event_name == 'pull_request' &&
           github.event.action == 'labeled'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
