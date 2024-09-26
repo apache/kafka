@@ -140,13 +140,6 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
         this.topicPartition = Objects.requireNonNull(topicPartition);
     }
 
-    public void incrementNumClassicGroups(ClassicGroupState state) {
-        AtomicLong counter = classicGroupGauges.get(state);
-        if (counter != null) {
-            counter.incrementAndGet();
-        }
-    }
-
     /**
      * Increment the number of offsets.
      */
@@ -176,18 +169,6 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
     public void decrementNumOffsets() {
         synchronized (numOffsetsTimelineGaugeCounter.timelineLong) {
             numOffsetsTimelineGaugeCounter.timelineLong.decrement();
-        }
-    }
-
-    /**
-     * Decrement the number of classic groups.
-     *
-     * @param state the classic group state.
-     */
-    public void decrementNumClassicGroups(ClassicGroupState state) {
-        AtomicLong counter = classicGroupGauges.get(state);
-        if (counter != null) {
-            counter.decrementAndGet();
         }
     }
 
@@ -306,56 +287,6 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
             }
             gaugeCounter.atomicLong.set(value);
         });
-    }
-
-    /**
-     * Called when a classic group's state has changed. Increment/decrement
-     * the counter accordingly.
-     *
-     * @param oldState The previous state. null value means that it's a new group.
-     * @param newState The next state. null value means that the group has been removed.
-     */
-    public void onClassicGroupStateTransition(
-        ClassicGroupState oldState,
-        ClassicGroupState newState
-    ) {
-        if (newState != null) {
-            switch (newState) {
-                case PREPARING_REBALANCE:
-                    incrementNumClassicGroups(ClassicGroupState.PREPARING_REBALANCE);
-                    break;
-                case COMPLETING_REBALANCE:
-                    incrementNumClassicGroups(ClassicGroupState.COMPLETING_REBALANCE);
-                    break;
-                case STABLE:
-                    incrementNumClassicGroups(ClassicGroupState.STABLE);
-                    break;
-                case DEAD:
-                    incrementNumClassicGroups(ClassicGroupState.DEAD);
-                    break;
-                case EMPTY:
-                    incrementNumClassicGroups(ClassicGroupState.EMPTY);
-            }
-        }
-
-        if (oldState != null) {
-            switch (oldState) {
-                case PREPARING_REBALANCE:
-                    decrementNumClassicGroups(ClassicGroupState.PREPARING_REBALANCE);
-                    break;
-                case COMPLETING_REBALANCE:
-                    decrementNumClassicGroups(ClassicGroupState.COMPLETING_REBALANCE);
-                    break;
-                case STABLE:
-                    decrementNumClassicGroups(ClassicGroupState.STABLE);
-                    break;
-                case DEAD:
-                    decrementNumClassicGroups(ClassicGroupState.DEAD);
-                    break;
-                case EMPTY:
-                    decrementNumClassicGroups(ClassicGroupState.EMPTY);
-            }
-        }
     }
 
     /**

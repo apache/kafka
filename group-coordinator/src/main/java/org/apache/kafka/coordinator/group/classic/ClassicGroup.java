@@ -1013,7 +1013,6 @@ public class ClassicGroup implements Group {
         previousState = state;
         state = groupState;
         currentStateTimestamp = Optional.of(time.milliseconds());
-        metrics.onClassicGroupStateTransition(previousState, state);
     }
 
     /**

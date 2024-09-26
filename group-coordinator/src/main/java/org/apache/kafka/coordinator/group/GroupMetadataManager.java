@@ -868,7 +868,6 @@ public class GroupMetadataManager {
             ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
             groups.put(groupId, consumerGroup);
             metrics.onConsumerGroupStateTransition(null, consumerGroup.state());
-            metrics.onClassicGroupStateTransition(EMPTY, null);
             return consumerGroup;
         } else {
             throw new IllegalStateException(String.format("Group %s is not a consumer group", groupId));
@@ -901,7 +900,6 @@ public class GroupMetadataManager {
         if (group == null) {
             ClassicGroup classicGroup = new ClassicGroup(logContext, groupId, ClassicGroupState.EMPTY, time, metrics);
             groups.put(groupId, classicGroup);
-            metrics.onClassicGroupStateTransition(null, classicGroup.currentState());
             return classicGroup;
         } else {
             if (group.type() == CLASSIC) {
@@ -1108,17 +1106,11 @@ public class GroupMetadataManager {
         // Set the appendFuture to prevent the records from being replayed.
         removeGroup(consumerGroup.groupId());
         groups.put(consumerGroup.groupId(), classicGroup);
-        metrics.onClassicGroupStateTransition(null, classicGroup.currentState());
 
         classicGroup.allMembers().forEach(member -> rescheduleClassicGroupMemberHeartbeat(classicGroup, member));
         prepareRebalance(classicGroup, String.format("Downgrade group %s from consumer to classic.", classicGroup.groupId()));
 
-        CompletableFuture<Void> appendFuture = new CompletableFuture<>();
-        appendFuture.exceptionally(__ -> {
-            metrics.onClassicGroupStateTransition(classicGroup.currentState(), null);
-            return null;
-        });
-        return new CoordinatorResult<>(records, response, appendFuture, false);
+        return new CoordinatorResult<>(records, response, null, false);
     }
 
     /**
@@ -1204,8 +1196,7 @@ public class GroupMetadataManager {
                     metrics.onConsumerGroupStateTransition(consumerGroup.state(), null);
                     break;
                 case CLASSIC:
-                    ClassicGroup classicGroup = (ClassicGroup) group;
-                    metrics.onClassicGroupStateTransition(classicGroup.currentState(), null);
+                    // The classic group size counter is implemented as scheduled task.
                     break;
                 case SHARE:
                     // Nothing for now, but we may want to add metrics in the future.
@@ -3910,10 +3901,7 @@ public class GroupMetadataManager {
             );
 
             loadedMembers.forEach(member -> classicGroup.add(member, null));
-            Group prevGroup = groups.put(groupId, classicGroup);
-            if (prevGroup == null) {
-                metrics.onClassicGroupStateTransition(null, classicGroup.currentState());
-            }
+            groups.put(groupId, classicGroup);
 
             classicGroup.setSubscribedTopics(
                 classicGroup.computeSubscribedTopics()

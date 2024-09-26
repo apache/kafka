@@ -9502,30 +9502,6 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testOnClassicGroupStateTransition() {
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .build();
-
-        // Creating a classic group should increment metric.
-        ClassicGroup group = context.createClassicGroup("group-id");
-        verify(context.metrics, times(1)).onClassicGroupStateTransition(null, EMPTY);
-
-        // Replaying a new group should not increment metric as the group was already created.
-        context.replay(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, Collections.emptyMap(), MetadataVersion.LATEST_PRODUCTION));
-        verify(context.metrics, times(1)).onClassicGroupStateTransition(null, EMPTY);
-
-        // Loading a tombstone should remove group and decrement metric.
-        context.createClassicGroup("group-id");
-        context.replay(GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord("group-id"));
-        verify(context.metrics, times(1)).onClassicGroupStateTransition(EMPTY, null);
-        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.group("group-id"));
-
-        // Replaying a tombstone for a group that has already been deleted should not decrement metric.
-        context.replay(GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord("group-id"));
-        verify(context.metrics, times(1)).onClassicGroupStateTransition(EMPTY, null);
-    }
-
-    @Test
     public void testOnClassicGroupStateTransitionOnLoading() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
@@ -9546,9 +9522,6 @@ public class GroupMetadataManagerTest {
         IntStream.range(0, 4).forEach(__ ->
             context.replay(GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord("group-id"))
         );
-
-        verify(context.metrics, times(1)).onClassicGroupStateTransition(null, EMPTY);
-        verify(context.metrics, times(1)).onClassicGroupStateTransition(EMPTY, null);
     }
 
     @Test
@@ -10927,7 +10900,6 @@ public class GroupMetadataManagerTest {
         assertRecordsEquals(expectedRecords.subList(7, 10), result.records().subList(7, 10));
 
         verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.STABLE, null);
-        verify(context.metrics, times(1)).onClassicGroupStateTransition(null, STABLE);
 
         // The new classic member 1 has a heartbeat timeout.
         ScheduledTimeout<Void, CoordinatorRecord> heartbeatTimeout = context.timer.timeout(
@@ -10943,14 +10915,6 @@ public class GroupMetadataManagerTest {
         // A new rebalance is triggered.
         ClassicGroup classicGroup = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId, false);
         assertTrue(classicGroup.isInState(PREPARING_REBALANCE));
-
-        // Simulate a failed write to the log.
-        result.appendFuture().completeExceptionally(new NotLeaderOrFollowerException());
-        context.rollback();
-
-        // The group is reverted back to the consumer group.
-        assertEquals(consumerGroup, context.groupMetadataManager.consumerGroup(groupId));
-        verify(context.metrics, times(1)).onClassicGroupStateTransition(PREPARING_REBALANCE, null);
     }
 
     @Test
@@ -11119,7 +11083,6 @@ public class GroupMetadataManagerTest {
         assertRecordsEquals(expectedRecords.subList(7, 10), timeout.result.records().subList(7, 10));
 
         verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.STABLE, null);
-        verify(context.metrics, times(1)).onClassicGroupStateTransition(null, STABLE);
 
         // The new classic member 1 has a heartbeat timeout.
         ScheduledTimeout<Void, CoordinatorRecord> heartbeatTimeout = context.timer.timeout(
@@ -11332,7 +11295,6 @@ public class GroupMetadataManagerTest {
         assertRecordsEquals(expectedRecords.subList(7, 10), timeout.result.records().subList(7, 10));
 
         verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.RECONCILING, null);
-        verify(context.metrics, times(1)).onClassicGroupStateTransition(null, STABLE);
 
         // The new classic member 1 has a heartbeat timeout.
         ScheduledTimeout<Void, CoordinatorRecord> heartbeatTimeout = context.timer.timeout(
