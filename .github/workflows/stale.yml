@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: 'Handle stale PRs'
+name: 'Stale PRs'
 on:
   schedule:
     - cron: '30 3 * * *'    # Run at 3:30 UTC nightly
@@ -42,11 +42,14 @@ jobs:
         with:
           debug-only: ${{ inputs.dryRun || false }}
           operations-per-run: ${{ inputs.operationsPerRun || 100 }}
-          days-before-stale: 1
+          days-before-stale: 7
           days-before-close: -1
           only-pr-labels: 'triage'
           stale-pr-label: 'needs-attention'
-          stale-pr-message: ''
+          stale-pr-message: |
+            A label of 'needs-attention' was automatically added to this PR in order to raise the
+            attention of the committers. Once this issue has been triaged, the `triage` label
+            should be removed to prevent this automation from happening again.
 
   stale:
     runs-on: ubuntu-latest
