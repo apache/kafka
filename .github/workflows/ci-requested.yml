@@ -1,0 +1,57 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: CI Requested
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types:
+      - requested
+
+
+jobs:
+  check-pr-labels:
+    # Skip this workflow if the CI run was skipped or cancelled
+    runs-on: ubuntu-latest
+    steps:
+      - name: Env
+        run: printenv
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials:
+            false
+      - name: Check PR Labels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          gh pr view $PR_NUMBER --json labels -q '.labels[].name' | grep -q 'ci-approved'
+          exitcode="$?"
+          if [ $exitcode -ne 0 ]; then
+            echo "No ci-approved label set on PR #$PR_NUMBER. Will not auto-approve.";
+            exit 0;
+          else
+            echo "Found 'ci-approved' label on PR #$PR_NUMBER. Auto-approving...";
+          fi
+          gh api --method POST \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            /repos/$REPOSITORY/actions/runs/$RUN_ID/approve
