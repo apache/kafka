@@ -280,6 +280,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.controller_quorum = None # will define below if necessary
         self.isolated_controller_quorum = None # will define below if necessary
         self.configured_for_zk_migration = False
+        self.dynamicRaftQuorum = False
 
         # Set use_new_coordinator based on context and arguments.
         # If not specified, the default config is used.
