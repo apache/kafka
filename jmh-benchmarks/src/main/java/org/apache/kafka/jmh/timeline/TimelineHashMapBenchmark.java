@@ -78,7 +78,7 @@ public class TimelineHashMapBenchmark {
             int key = (int) (0xffffffff & ((i * 2862933555777941757L) + 3037000493L));
             if (j > 10 && key % 3 == 0) {
                 snapshotRegistry.deleteSnapshotsUpTo(epoch - 1000);
-                snapshotRegistry.getOrCreateSnapshot(epoch);
+                snapshotRegistry.idempotentCreateSnapshot(epoch);
                 j = 0;
             } else {
                 j++;

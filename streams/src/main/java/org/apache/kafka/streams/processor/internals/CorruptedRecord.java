@@ -28,7 +28,7 @@ import java.util.Objects;
 public class CorruptedRecord extends StampedRecord {
 
     CorruptedRecord(final ConsumerRecord<byte[], byte[]> rawRecord) {
-        super(rawRecord, ConsumerRecord.NO_TIMESTAMP, rawRecord);
+        super(rawRecord, ConsumerRecord.NO_TIMESTAMP);
     }
 
     @Override

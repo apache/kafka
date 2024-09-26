@@ -869,7 +869,8 @@ public class ConnectWorkerIntegrationTest {
         log.info("Trying to reconfigure connector while Kafka cluster is down");
         assertTimeoutException(
                 () -> connect.configureConnector(CONNECTOR_NAME, connectorConfig2),
-                "flushing updates to the status topic"
+                "flushing updates to the status topic",
+                true
         );
         log.info("Restarting Kafka cluster");
         connect.kafka().restartOnlyBrokers();
@@ -887,18 +888,21 @@ public class ConnectWorkerIntegrationTest {
         log.info("Deleting Kafka Connect config topic");
         connect.kafka().deleteTopic(configTopic);
 
-        // Try to delete the connector, which should fail with a slightly-different timeout error
+        // Try to reconfigure the connector, which should fail with a slightly-different timeout error
         log.info("Trying to reconfigure connector after config topic has been deleted");
         assertTimeoutException(
-                () -> connect.deleteConnector(CONNECTOR_NAME),
-                "removing the config for connector " + CONNECTOR_NAME + " from the config topic"
+                () -> connect.configureConnector(CONNECTOR_NAME, connectorConfig1),
+                "writing a config for connector " + CONNECTOR_NAME + " to the config topic",
+                true
         );
 
-        // The worker should still be blocked on the same operation
-        log.info("Trying again to reconfigure connector after config topic has been deleted");
+        // The worker should still be blocked on the same operation, and the timeout should occur
+        // immediately
+        log.info("Trying to delete connector after config topic has been deleted");
         assertTimeoutException(
-                () -> connect.configureConnector(CONNECTOR_NAME, connectorConfig1),
-                "removing the config for connector " + CONNECTOR_NAME + " from the config topic"
+                () -> connect.deleteConnector(CONNECTOR_NAME),
+                "writing a config for connector " + CONNECTOR_NAME + " to the config topic",
+                false
         );
     }
 
@@ -940,11 +944,13 @@ public class ConnectWorkerIntegrationTest {
         }
     }
 
-    private void assertTimeoutException(Runnable operation, String expectedStageDescription) throws InterruptedException {
+    private void assertTimeoutException(Runnable operation, String expectedStageDescription, boolean wait) throws InterruptedException {
         connect.requestTimeout(1_000);
         AtomicReference<Throwable> latestError = new AtomicReference<>();
 
-        // Wait for the specific operation against the Connect cluster to time out
+        // If requested, wait for the specific operation against the Connect cluster to time out
+        // Otherwise, assert that the operation times out immediately
+        long timeoutMs = wait ? 30_000L : 0L;
         waitForCondition(
                 () -> {
                     try {
@@ -966,7 +972,7 @@ public class ConnectWorkerIntegrationTest {
                         return true;
                     }
                 },
-                30_000,
+                timeoutMs,
                 () -> {
                     String baseMessage = "REST request did not time out with expected error message in time. ";
                     Throwable t = latestError.get();

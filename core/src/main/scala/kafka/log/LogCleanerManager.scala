@@ -17,16 +17,17 @@
 
 package kafka.log
 
+import java.lang.{Long => JLong}
 import java.io.File
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import kafka.common.LogCleaningAbortedException
-import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils.CoreUtils._
 import kafka.utils.{Logging, Pool}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
@@ -114,7 +115,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
             partitions.iterator.map { tp =>
               Option(logs.get(tp)).map {
                 log =>
-                  val lastCleanOffset = lastClean.get(tp)
+                  val lastCleanOffset: Option[Long] = lastClean.get(tp)
                   val offsetsToClean = cleanableOffsets(log, lastCleanOffset, now)
                   val (_, uncleanableBytes) = calculateCleanableBytes(log, offsetsToClean.firstDirtyOffset, offsetsToClean.firstUncleanableDirtyOffset)
                   uncleanableBytes
@@ -144,7 +145,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     inLock(lock) {
       checkpoints.values.flatMap(checkpoint => {
         try {
-          checkpoint.read()
+          checkpoint.read().asScala.map{ case (tp, offset) => tp -> Long2long(offset) }
         } catch {
           case e: KafkaStorageException =>
             error(s"Failed to access checkpoint file ${checkpoint.file.getName} in dir ${checkpoint.file.getParentFile.getAbsolutePath}", e)
@@ -376,13 +377,13 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
    * @param partitionToRemove             The TopicPartition to be removed
    */
   def updateCheckpoints(dataDir: File,
-                        partitionToUpdateOrAdd: Option[(TopicPartition, Long)] = None,
+                        partitionToUpdateOrAdd: Option[(TopicPartition, JLong)] = None,
                         partitionToRemove: Option[TopicPartition] = None): Unit = {
     inLock(lock) {
       val checkpoint = checkpoints(dataDir)
       if (checkpoint != null) {
         try {
-          val currentCheckpoint = checkpoint.read().filter { case (tp, _) => logs.keys.contains(tp) }.toMap
+          val currentCheckpoint = checkpoint.read().asScala.filter { case (tp, _) => logs.keys.contains(tp) }.toMap
           // remove the partition offset if any
           var updatedCheckpoint = partitionToRemove match {
             case Some(topicPartition) => currentCheckpoint - topicPartition
@@ -394,7 +395,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
             case None => updatedCheckpoint
           }
 
-          checkpoint.write(updatedCheckpoint)
+          checkpoint.write(updatedCheckpoint.asJava)
         } catch {
           case e: KafkaStorageException =>
             error(s"Failed to access checkpoint file ${checkpoint.file.getName} in dir ${checkpoint.file.getParentFile.getAbsolutePath}", e)
@@ -409,7 +410,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   def alterCheckpointDir(topicPartition: TopicPartition, sourceLogDir: File, destLogDir: File): Unit = {
     inLock(lock) {
       try {
-        checkpoints.get(sourceLogDir).flatMap(_.read().get(topicPartition)) match {
+        checkpoints.get(sourceLogDir).flatMap(_.read().asScala.get(topicPartition)) match {
           case Some(offset) =>
             debug(s"Removing the partition offset data in checkpoint file for '$topicPartition' " +
               s"from ${sourceLogDir.getAbsoluteFile} directory.")
@@ -448,14 +449,16 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   /**
    * Truncate the checkpointed offset for the given partition if its checkpointed offset is larger than the given offset
    */
-  def maybeTruncateCheckpoint(dataDir: File, topicPartition: TopicPartition, offset: Long): Unit = {
+  def maybeTruncateCheckpoint(dataDir: File, topicPartition: TopicPartition, offset: JLong): Unit = {
     inLock(lock) {
       if (logs.get(topicPartition).config.compact) {
         val checkpoint = checkpoints(dataDir)
         if (checkpoint != null) {
           val existing = checkpoint.read()
-          if (existing.getOrElse(topicPartition, 0L) > offset)
-            checkpoint.write(mutable.Map() ++= existing += topicPartition -> offset)
+          if (existing.getOrDefault(topicPartition, 0L) > offset) {
+            existing.put(topicPartition, offset)
+            checkpoint.write(existing)
+          }
         }
       }
     }

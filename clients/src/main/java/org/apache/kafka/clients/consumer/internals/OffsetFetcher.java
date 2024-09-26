@@ -66,7 +66,7 @@ public class OffsetFetcher {
     private final SubscriptionState subscriptions;
     private final ConsumerNetworkClient client;
     private final Time time;
-    private final long requestTimeoutMs;
+    private final int requestTimeoutMs;
     private final IsolationLevel isolationLevel;
     private final OffsetsForLeaderEpochClient offsetsForLeaderEpochClient;
     private final ApiVersions apiVersions;
@@ -78,7 +78,7 @@ public class OffsetFetcher {
                          SubscriptionState subscriptions,
                          Time time,
                          long retryBackoffMs,
-                         long requestTimeoutMs,
+                         int requestTimeoutMs,
                          IsolationLevel isolationLevel,
                          ApiVersions apiVersions) {
         this.log = logContext.logger(getClass());
@@ -391,8 +391,9 @@ public class OffsetFetcher {
                                                                   final Map<TopicPartition, ListOffsetsPartition> timestampsToSearch,
                                                                   boolean requireTimestamp) {
         ListOffsetsRequest.Builder builder = ListOffsetsRequest.Builder
-                .forConsumer(requireTimestamp, isolationLevel, false)
-                .setTargetTimes(ListOffsetsRequest.toListOffsetsTopics(timestampsToSearch));
+                .forConsumer(requireTimestamp, isolationLevel)
+                .setTargetTimes(ListOffsetsRequest.toListOffsetsTopics(timestampsToSearch))
+                .setTimeoutMs(requestTimeoutMs);
 
         log.debug("Sending ListOffsetRequest {} to broker {}", builder, node);
         return client.send(node, builder)

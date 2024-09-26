@@ -17,8 +17,10 @@
 
 package org.apache.kafka.tools;
 
+import kafka.test.ClusterConfig;
 import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterConfigProperty;
+import kafka.test.annotation.ClusterTemplate;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.junit.ClusterTestExtensions;
@@ -31,23 +33,36 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.server.config.ServerLogConfigs;
+import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig;
+import org.apache.kafka.server.log.remote.storage.LocalTieredStorage;
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static kafka.test.annotation.Type.CO_KRAFT;
+import static kafka.test.annotation.Type.KRAFT;
+import static kafka.test.annotation.Type.ZK;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -70,15 +85,41 @@ public class GetOffsetShellTest {
         return "topic" + i;
     }
 
+    private String getRemoteLogStorageEnabledTopicName(int i) {
+        return "topicRLS" + i;
+    }
+
     private void setUp() {
+        setupTopics(this::getTopicName, Collections.emptyMap());
+        sendProducerRecords(this::getTopicName);
+    }
+
+    private void setUpRemoteLogTopics() {
+        // In this method, we'll create 4 topics and produce records to the log like this:
+        // topicRLS1 -> 1 segment
+        // topicRLS2 -> 2 segments (1 local log segment + 1 segment in the remote storage)
+        // topicRLS3 -> 3 segments (1 local log segment + 2 segments in the remote storage)
+        // topicRLS4 -> 4 segments (1 local log segment + 3 segments in the remote storage)
+        Map<String, String> rlsConfigs = new HashMap<>();
+        rlsConfigs.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true");
+        rlsConfigs.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "1");
+        rlsConfigs.put(TopicConfig.SEGMENT_BYTES_CONFIG, "100");
+        setupTopics(this::getRemoteLogStorageEnabledTopicName, rlsConfigs);
+        sendProducerRecords(this::getRemoteLogStorageEnabledTopicName);
+    }
+
+    private void setupTopics(Function<Integer, String> topicName, Map<String, String> configs) {
         try (Admin admin = cluster.createAdminClient()) {
             List<NewTopic> topics = new ArrayList<>();
 
-            IntStream.range(0, topicCount + 1).forEach(i -> topics.add(new NewTopic(getTopicName(i), i, (short) 1)));
+            IntStream.range(0, topicCount + 1).forEach(i ->
+                    topics.add(new NewTopic(topicName.apply(i), i, (short) 1).configs(configs)));
 
             admin.createTopics(topics);
         }
+    }
 
+    private void sendProducerRecords(Function<Integer, String> topicName) {
         Properties props = new Properties();
         props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
@@ -86,13 +127,32 @@ public class GetOffsetShellTest {
 
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
             IntStream.range(0, topicCount + 1)
-                .forEach(i -> IntStream.range(0, i * i)
-                        .forEach(msgCount -> {
-                            assertDoesNotThrow(() -> producer.send(
-                                    new ProducerRecord<>(getTopicName(i), msgCount % i, null, "val" + msgCount)).get());
-                        })
-                );
+                    .forEach(i -> IntStream.range(0, i * i)
+                            .forEach(msgCount -> assertDoesNotThrow(() -> producer.send(
+                                    new ProducerRecord<>(topicName.apply(i), msgCount % i, null, "val" + msgCount)).get())));
         }
+    }
+
+    private static List<ClusterConfig> withRemoteStorage() {
+        Map<String, String> serverProperties = new HashMap<>();
+        serverProperties.put(RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP, "1");
+        serverProperties.put(RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP, "1");
+        serverProperties.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true");
+        serverProperties.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, LocalTieredStorage.class.getName());
+        serverProperties.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP, "1000");
+        serverProperties.put(ServerLogConfigs.LOG_CLEANUP_INTERVAL_MS_CONFIG, "1000");
+        serverProperties.put(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG, "100");
+        serverProperties.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, "EXTERNAL");
+
+        return Collections.singletonList(
+                // we set REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP to EXTERNAL, so we need to
+                // align listener name here as KafkaClusterTestKit (KRAFT/CO_KRAFT) the default
+                // broker listener name is EXTERNAL while in ZK it is PLAINTEXT
+                ClusterConfig.defaultBuilder()
+                        .setTypes(Stream.of(ZK, KRAFT, CO_KRAFT).collect(Collectors.toSet()))
+                        .setServerProperties(serverProperties)
+                        .setListenerName("EXTERNAL")
+                        .build());
     }
 
     private void createConsumerAndPoll() {
@@ -271,6 +331,59 @@ public class GetOffsetShellTest {
             offsets.forEach(
                     row -> assertTrue(row.offset >= 0 && row.offset <= Integer.parseInt(row.name.replace("topic", "")))
             );
+        }
+    }
+
+    @ClusterTemplate("withRemoteStorage")
+    public void testGetOffsetsByEarliestLocalSpec() throws InterruptedException {
+        setUp();
+        setUpRemoteLogTopics();
+
+        for (String time : new String[] {"-4", "earliest-local"}) {
+            // test topics disable remote log storage
+            // as remote log disabled, broker return the same result as earliest offset
+            TestUtils.waitForCondition(() ->
+                    Arrays.asList(
+                            new Row("topic1", 0, 0L),
+                            new Row("topic2", 0, 0L),
+                            new Row("topic3", 0, 0L),
+                            new Row("topic4", 0, 0L))
+                            .equals(executeAndParse("--topic-partitions", "topic\\d+.*:0", "--time", time)),
+                    "testGetOffsetsByEarliestLocalSpec get topics with remote log disabled result not match");
+
+            // test topics enable remote log storage
+            TestUtils.waitForCondition(() ->
+                    Arrays.asList(
+                            new Row("topicRLS1", 0, 0L),
+                            new Row("topicRLS2", 0, 1L),
+                            new Row("topicRLS3", 0, 2L),
+                            new Row("topicRLS4", 0, 3L))
+                            .equals(executeAndParse("--topic-partitions", "topicRLS.*:0", "--time", time)),
+                    "testGetOffsetsByEarliestLocalSpec get topics with remote log enabled result not match");
+        }
+    }
+
+    @ClusterTemplate("withRemoteStorage")
+    public void testGetOffsetsByLatestTieredSpec() throws InterruptedException {
+        setUp();
+        setUpRemoteLogTopics();
+
+        for (String time : new String[] {"-5", "latest-tiered"}) {
+            // test topics disable remote log storage
+            // as remote log not enabled, broker return unknown offset for each topic partition and these
+            // unknown offsets are ignored by GetOffsetShell hence we have empty result here.
+            assertEquals(Collections.emptyList(),
+                    executeAndParse("--topic-partitions", "topic\\d+:0", "--time", time));
+
+            // test topics enable remote log storage
+            // topicRLS1 has no result because there's no log segments being uploaded to the remote storage
+            TestUtils.waitForCondition(() ->
+                    Arrays.asList(
+                            new Row("topicRLS2", 0, 0L),
+                            new Row("topicRLS3", 0, 1L),
+                            new Row("topicRLS4", 0, 2L))
+                            .equals(executeAndParse("--topic-partitions", "topicRLS.*:0", "--time", time)),
+                    "testGetOffsetsByLatestTieredSpec result not match");
         }
     }
 

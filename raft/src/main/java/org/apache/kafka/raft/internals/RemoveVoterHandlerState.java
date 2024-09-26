@@ -17,13 +17,11 @@
 package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.common.message.RemoveRaftVoterResponseData;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Timer;
-import org.apache.kafka.raft.RaftUtil;
 
 import java.util.concurrent.CompletableFuture;
 
-public final class RemoveVoterHandlerState implements AutoCloseable {
+public final class RemoveVoterHandlerState {
     private final long lastOffset;
     private final Timer timeout;
     private final CompletableFuture<RemoveRaftVoterResponseData> future = new CompletableFuture<>();
@@ -44,10 +42,5 @@ public final class RemoveVoterHandlerState implements AutoCloseable {
 
     public long lastOffset() {
         return lastOffset;
-    }
-
-    @Override
-    public void close() {
-        future.complete(RaftUtil.removeVoterResponse(Errors.NOT_LEADER_OR_FOLLOWER, null));
     }
 }

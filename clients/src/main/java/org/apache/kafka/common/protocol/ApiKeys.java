@@ -123,8 +123,8 @@ public enum ApiKeys {
     SHARE_GROUP_DESCRIBE(ApiMessageType.SHARE_GROUP_DESCRIBE),
     SHARE_FETCH(ApiMessageType.SHARE_FETCH),
     SHARE_ACKNOWLEDGE(ApiMessageType.SHARE_ACKNOWLEDGE),
-    ADD_RAFT_VOTER(ApiMessageType.ADD_RAFT_VOTER),
-    REMOVE_RAFT_VOTER(ApiMessageType.REMOVE_RAFT_VOTER),
+    ADD_RAFT_VOTER(ApiMessageType.ADD_RAFT_VOTER, false, RecordBatch.MAGIC_VALUE_V0, true),
+    REMOVE_RAFT_VOTER(ApiMessageType.REMOVE_RAFT_VOTER, false, RecordBatch.MAGIC_VALUE_V0, true),
     UPDATE_RAFT_VOTER(ApiMessageType.UPDATE_RAFT_VOTER),
     INITIALIZE_SHARE_GROUP_STATE(ApiMessageType.INITIALIZE_SHARE_GROUP_STATE, true),
     READ_SHARE_GROUP_STATE(ApiMessageType.READ_SHARE_GROUP_STATE, true),
@@ -286,7 +286,7 @@ public enum ApiKeys {
         b.append("<th>Key</th>\n");
         b.append("</tr>");
         clientApis().stream()
-            .filter(apiKey -> !apiKey.messageType.latestVersionUnstable())
+            .filter(apiKey -> apiKey.toApiVersion(false).isPresent())
             .forEach(apiKey -> {
                 b.append("<tr>\n");
                 b.append("<td>");

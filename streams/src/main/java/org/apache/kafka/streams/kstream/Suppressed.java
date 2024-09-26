@@ -124,7 +124,7 @@ public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
         /**
          * Disable the changelog for this suppression's internal buffer.
          * This will turn off fault-tolerance for the suppression, and will result in data loss in the event of a rebalance.
-         * By default the changelog is enabled.
+         * By default, the changelog is enabled.
          * @return this
          */
         BC withLoggingDisabled();
@@ -144,7 +144,7 @@ public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
     /**
      * Configure the suppression to emit only the "final results" from the window.
      *
-     * By default all Streams operators emit results whenever new results are available.
+     * By default, all Streams operators emit results whenever new results are available.
      * This includes windowed operations.
      *
      * This configuration will instead emit just one result per key for each window, guaranteeing
@@ -167,7 +167,7 @@ public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
 
     /**
      * Configure the suppression to wait {@code timeToWaitForMoreEvents} amount of time after receiving a record
-     * before emitting it further downstream. If another record for the same key arrives in the mean time, it replaces
+     * before emitting it further downstream. If another record for the same key arrives in the meantime, it replaces
      * the first record in the buffer but does <em>not</em> re-start the timer.
      *
      * @param timeToWaitForMoreEvents The amount of time to wait, per record, for new events.

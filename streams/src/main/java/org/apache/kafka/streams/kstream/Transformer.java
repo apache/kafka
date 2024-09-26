@@ -47,7 +47,9 @@ import java.time.Duration;
  * @see ValueTransformer
  * @see KStream#map(KeyValueMapper)
  * @see KStream#flatMap(KeyValueMapper)
+ * @deprecated Since 4.0. Use {@link org.apache.kafka.streams.processor.api.Processor api.Processor} instead.
  */
+@Deprecated
 public interface Transformer<K, V, R> {
 
     /**

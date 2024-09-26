@@ -20,11 +20,17 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured;
 import org.apache.kafka.common.config.ConfigException;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.File;
 import java.util.Collections;
 import java.util.Map;
+import java.util.stream.Stream;
 
+import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -62,6 +68,23 @@ public class AccessTokenRetrieverFactoryTest extends OAuthBearerTest {
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
         Map<String, Object> jaasConfig = Collections.emptyMap();
         assertThrowsWithMessage(ConfigException.class, () -> AccessTokenRetrieverFactory.create(configs, jaasConfig), "that doesn't exist");
+    }
+
+    @ParameterizedTest
+    @MethodSource("urlencodeHeaderSupplier")
+    public void testUrlencodeHeader(Map<String, Object> configs, boolean expectedValue) {
+        ConfigurationUtils cu = new ConfigurationUtils(configs);
+        boolean actualValue = AccessTokenRetrieverFactory.validateUrlencodeHeader(cu);
+        assertEquals(expectedValue, actualValue);
+    }
+
+    private static Stream<Arguments> urlencodeHeaderSupplier() {
+        return Stream.of(
+            Arguments.of(Collections.emptyMap(), DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE),
+            Arguments.of(Collections.singletonMap(SASL_OAUTHBEARER_HEADER_URLENCODE, null), DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE),
+            Arguments.of(Collections.singletonMap(SASL_OAUTHBEARER_HEADER_URLENCODE, true), true),
+            Arguments.of(Collections.singletonMap(SASL_OAUTHBEARER_HEADER_URLENCODE, false), false)
+        );
     }
 
 }

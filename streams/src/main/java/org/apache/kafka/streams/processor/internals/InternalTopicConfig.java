@@ -66,7 +66,7 @@ public abstract class InternalTopicConfig {
      * @param additionalRetentionMs - added to retention to allow for clock drift etc
      * @return Properties to be used when creating the topic
      */
-    public abstract Map<String, String> getProperties(final Map<String, String> defaultProperties, final long additionalRetentionMs);
+    public abstract Map<String, String> properties(final Map<String, String> defaultProperties, final long additionalRetentionMs);
 
     public boolean hasEnforcedNumberOfPartitions() {
         return enforceNumberOfPartitions;

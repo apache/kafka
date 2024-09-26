@@ -80,8 +80,10 @@
   <subpackage name="log.remote">
     <allow pkg="org.apache.kafka.server.common" />
     <allow pkg="org.apache.kafka.server.log.remote" />
+    <allow pkg="org.apache.kafka.server.log.remote.quota" />
     <allow pkg="org.apache.kafka.server.metrics" />
     <allow pkg="org.apache.kafka.storage.internals" />
+    <allow pkg="org.apache.kafka.storage.log.metrics" />
     <allow pkg="kafka.log" />
     <allow pkg="kafka.cluster" />
     <allow pkg="kafka.server" />
@@ -119,6 +121,9 @@
       <allow pkg="org.apache.kafka.clients"/>
       <allow pkg="org.apache.kafka.metadata" />
     </subpackage>
+    <subpackage name="server">
+      <allow pkg="kafka.test" />
+    </subpackage>
   </subpackage>
 
   <subpackage name="admin">
@@ -128,6 +133,7 @@
     <allow pkg="kafka.server"/>
     <allow pkg="kafka.zk"/>
     <allow pkg="org.apache.kafka.clients.admin"/>
+    <allow pkg="org.apache.kafka.coordinator.group"/>
     <allow pkg="org.apache.kafka.metadata.authorizer"/>
     <allow pkg="org.apache.kafka.security"/>
     <allow pkg="org.apache.kafka.server"/>
@@ -136,5 +142,11 @@
     <allow pkg="kafka.test"/>
     <allow pkg="kafka.test.annotation"/>
     <allow pkg="kafka.test.junit"/>
+  </subpackage>
+
+  <subpackage name="security">
+    <allow pkg="org.apache.commons" />
+    <allow pkg="org.apache.directory" />
+    <allow pkg="org.apache.mina.core.service" />
   </subpackage>
 </import-control>

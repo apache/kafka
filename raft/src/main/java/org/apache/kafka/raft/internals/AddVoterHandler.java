@@ -29,6 +29,8 @@ import org.apache.kafka.raft.Endpoints;
 import org.apache.kafka.raft.LeaderState;
 import org.apache.kafka.raft.LogOffsetMetadata;
 import org.apache.kafka.raft.RaftUtil;
+import org.apache.kafka.raft.ReplicaKey;
+import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.server.common.KRaftVersion;
 
 import org.slf4j.Logger;
@@ -87,12 +89,12 @@ public final class AddVoterHandler {
         Endpoints voterEndpoints,
         long currentTimeMs
     ) {
-        // Check if there are any pending add or remove voter requests
+        // Check if there are any pending voter change requests
         if (leaderState.isOperationPending(currentTimeMs)) {
             return CompletableFuture.completedFuture(
                 RaftUtil.addVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
-                    "Request timed out waiting for leader to handle previous add or remove voter request"
+                    "Request timed out waiting for leader to handle previous voter change request"
                 )
             );
         }

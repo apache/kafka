@@ -45,6 +45,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.raft.{Endpoints, FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, QuorumConfig, RaftClient, ReplicatedLog}
 import org.apache.kafka.server.ProcessRole
+import org.apache.kafka.server.common.Features
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.util.{FileLock, KafkaScheduler}
 import org.apache.kafka.server.fault.FaultHandler
@@ -153,7 +154,7 @@ class KafkaRaftManager[T](
   threadNamePrefixOpt: Option[String],
   val controllerQuorumVotersFuture: CompletableFuture[JMap[Integer, InetSocketAddress]],
   bootstrapServers: JCollection[InetSocketAddress],
-  controllerListeners: Endpoints,
+  localListeners: Endpoints,
   fatalFaultHandler: FaultHandler
 ) extends RaftManager[T] with Logging {
 
@@ -234,16 +235,19 @@ class KafkaRaftManager[T](
       time,
       expirationService,
       logContext,
+      // Controllers should always flush the log on replication because they may become voters
+      config.processRoles.contains(ProcessRole.ControllerRole),
       clusterId,
       bootstrapServers,
-      controllerListeners,
+      localListeners,
+      Features.KRAFT_VERSION.supportedVersionRange(),
       raftConfig
     )
   }
 
   private def buildNetworkChannel(): KafkaNetworkChannel = {
     val (listenerName, netClient) = buildNetworkClient()
-    new KafkaNetworkChannel(time, listenerName, netClient, config.quorumRequestTimeoutMs, threadNamePrefix)
+    new KafkaNetworkChannel(time, listenerName, netClient, config.quorumConfig.requestTimeoutMs, threadNamePrefix)
   }
 
   private def createDataDir(): File = {
@@ -309,7 +313,7 @@ class KafkaRaftManager[T](
       reconnectBackoffMsMs,
       Selectable.USE_DEFAULT_BUFFER_SIZE,
       config.socketReceiveBufferBytes,
-      config.quorumRequestTimeoutMs,
+      config.quorumConfig.requestTimeoutMs,
       config.connectionSetupTimeoutMs,
       config.connectionSetupTimeoutMaxMs,
       time,

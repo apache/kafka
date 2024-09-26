@@ -19,6 +19,80 @@
 
 <script id="upgrade-template" type="text/x-handlebars-template">
 
+<h4><a id="upgrade_4_0_0" href="#upgrade_4_0_0">Upgrading to 4.0.0 from any version 0.8.x through 3.9.x</a></h4>
+    <h5><a id="upgrade_400_notable" href="#upgrade_400_notable">Notable changes in 4.0.0</a></h5>
+    <ul>
+        <li>A number of deprecated classes, methods,configurations and tools have been removed from the <code>clients</code>, <code>connect</code>, <code>core</code> and <code>tools</code> modules:</li>
+        <ul>
+            <li> The original MirrorMaker (MM1) and related classes have been removed. Please use the Connect-based
+                MirrorMaker (MM2), as described in the
+                <a href="/{{version}}/documentation/#georeplication">Geo-Replication section</a>.
+            </li>
+            <li>
+                The <code>kafka.common.MessageReader</code> class has been removed. Please use the
+                <a href="/{{version}}/javadoc/org/apache/kafka/tools/api/RecordReader.html"><code>org.apache.kafka.tools.api.RecordReader</code></a>
+                interface to build custom readers for the <code>kafka-console-producer</code> tool.
+            </li>
+            <li> Remove <code>use.incremental.alter.configs</code>. The modified behavior is identical to the previous <code>required</code> configuration,
+                therefore users should ensure that target broker is at least 2.3.0
+            </li>
+            <li> Remove <code>delegation.token.master.key</code>. please use <code>delegation.token.secret.key</code> instead of it.
+            </li>
+            <li>
+                The <code>kafka.tools.DefaultMessageFormatter</code> class has been removed. Please use the <code>org.apache.kafka.tools.consumer.DefaultMessageFormatter</code> class instead.
+            </li>
+            <li>
+                The <code>kafka.tools.LoggingMessageFormatter</code> class has been removed. Please use the <code>org.apache.kafka.tools.consumer.LoggingMessageFormatter</code> class instead.
+            </li>
+            <li>
+                The <code>kafka.tools.NoOpMessageFormatter</code> class has been removed. Please use the <code>org.apache.kafka.tools.consumer.NoOpMessageFormatter</code> class instead.
+            </li>
+            <li>
+                The <code>--whitelist</code> option was removed from the <code>kafka-console-consumer</code> command line tool.
+                Please use <code>--include</code> instead.
+            </li>
+            <li>
+                The <code>--whitelist</code> and <code>--blacklist</code> options were removed from the <code>org.apache.kafka.connect.transforms.ReplaceField</code>.
+                Please use <code>--include</code> and <code>--exclude</code> instead.
+            </li>
+            <li>
+                The <code>--delete-config</code> option in the <code>kafka-topics</code> command line tool has been deprecated.
+            </li>
+            <li>
+                The <code>metrics.jmx.blacklist</code> was removed from the <code>org.apache.kafka.common.metrics.JmxReporter</code>
+                Please use <code>metrics.jmx.exclude</code> instead.
+            </li>
+            <li>
+                The <code>metrics.jmx.whitelist</code> was removed from the <code>org.apache.kafka.common.metrics.JmxReporter</code>
+                Please use <code>metrics.jmx.include</code> instead.
+            </li>
+        </ul>
+    </ul>
+
+<h4><a id="upgrade_3_9_0" href="#upgrade_3_9_0">Upgrading to 3.9.0 from any version 0.8.x through 3.8.x</a></h4>
+    <h5><a id="upgrade_390_notable" href="#upgrade_390_notable">Notable changes in 3.9.0</a></h5>
+    <ul>
+        <li>In case you run your Kafka clusters with no execution permission for the <code>/tmp</code> partition, Kafka will not work properly. It might either refuse to start or fail
+            when producing and consuming messages. This is due to the compression libraries <code>zstd-jni</code> and <code>snappy</code>.
+            To remediate this problem you need to pass the following JVM flags to Kafka <code>ZstdTempFolder</code> and <code>org.xerial.snappy.tempdir</code> pointing to a directory with execution permissions.
+            For example, this could be done via the <code>KAFKA_OPTS</code> environment variable like follows: <code>export KAFKA_OPTS="-DZstdTempFolder=/opt/kafka/tmp -Dorg.xerial.snappy.tempdir=/opt/kafka/tmp"</code>.
+	    This is a known issue for version 3.8.0 as well.
+        </li>
+        <li><code>unclean.leader.election.enable</code> config is supported in KRaft. Compared with ZK mode, there is one behavior change in KRaft mode
+            when dynamically enabling <code>unclean.leader.election.enable</code> config. Please check
+            <a href="https://kafka.apache.org/documentation/#brokerconfigs_unclean.leader.election.enable">here</a> for more details.</li>
+        <li>Tiered storage is now a production ready feature. You can check
+            <a href="https://cwiki.apache.org/confluence/display/KAFKA/Kafka+Tiered+Storage+GA+Release+Notes">Kafka Tiered Storage GA Release Notes</a> for more details.
+            The below enhancements are added in this release.
+            <ul>
+                <li>In KRaft mode, the tiered storage feature can be dynamically disabled and then re-enabled on topic level.
+                    See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-950%3A++Tiered+Storage+Disablement">KIP-950</a> for more details.</li>
+                <li>With the tiered storage quota feature, users can define a maximum limit on the rate at which log segments are transferred to or retrieved from the remote storage.
+                    See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-956+Tiered+Storage+Quotas">KIP-956</a> for more details.</li>
+            </ul>
+        </li>
+    </ul>
+
 <h4><a id="upgrade_3_8_0" href="#upgrade_3_8_0">Upgrading to 3.8.0 from any version 0.8.x through 3.7.x</a></h4>
 
     <h5><a id="upgrade_380_notable" href="#upgrade_380_notable">Notable changes in 3.8.0</a></h5>
