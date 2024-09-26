@@ -596,9 +596,9 @@ primary->secondary.topics = foobar-topic, quux-.*</code></pre>
   </p>
 
   <ul>
-	  <li><a href="https://github.com/apache/kafka/blob/trunk/connect/mirror/src/main/java/org/apache/kafka/connect/mirror/MirrorMakerConfig.java">MirrorMakerConfig</a>, <a href="https://github.com/apache/kafka/blob/trunk/connect/mirror/src/main/java/org/apache/kafka/connect/mirror/MirrorConnectorConfig.java">MirrorConnectorConfig</a></li>
-	  <li><a href="https://github.com/apache/kafka/blob/trunk/connect/mirror/src/main/java/org/apache/kafka/connect/mirror/DefaultTopicFilter.java">DefaultTopicFilter</a> for topics, <a href="https://github.com/apache/kafka/blob/trunk/connect/mirror/src/main/java/org/apache/kafka/connect/mirror/DefaultGroupFilter.java">DefaultGroupFilter</a> for consumer groups</li>
-	  <li>Example configuration settings in <a href="https://github.com/apache/kafka/blob/trunk/config/connect-mirror-maker.properties">connect-mirror-maker.properties</a>, <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-382%3A+MirrorMaker+2.0">KIP-382: MirrorMaker 2.0</a></li>
+    <li><a href="https://github.com/apache/kafka/blob/trunk/connect/mirror/src/main/java/org/apache/kafka/connect/mirror/MirrorMakerConfig.java">MirrorMakerConfig</a>, <a href="https://github.com/apache/kafka/blob/trunk/connect/mirror/src/main/java/org/apache/kafka/connect/mirror/MirrorConnectorConfig.java">MirrorConnectorConfig</a></li>
+    <li><a href="https://github.com/apache/kafka/blob/trunk/connect/mirror/src/main/java/org/apache/kafka/connect/mirror/DefaultTopicFilter.java">DefaultTopicFilter</a> for topics, <a href="https://github.com/apache/kafka/blob/trunk/connect/mirror/src/main/java/org/apache/kafka/connect/mirror/DefaultGroupFilter.java">DefaultGroupFilter</a> for consumer groups</li>
+    <li>Example configuration settings in <a href="https://github.com/apache/kafka/blob/trunk/config/connect-mirror-maker.properties">connect-mirror-maker.properties</a>, <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-382%3A+MirrorMaker+2.0">KIP-382: MirrorMaker 2.0</a></li>
   </ul>
 
   <h5 class="anchor-heading"><a id="georeplication-config-syntax" class="anchor-link"></a><a href="#georeplication-config-syntax">Configuration File Syntax</a></h5>
@@ -681,28 +681,28 @@ us-east.admin.bootstrap.servers = broker8-secondary:9092</code></pre>
 
   <p>
     Exactly-once semantics are supported for dedicated MirrorMaker clusters as of version 3.5.0.</p>
-  
+
   <p>
     For new MirrorMaker clusters, set the <code>exactly.once.source.support</code> property to enabled for all targeted Kafka clusters that should be written to with exactly-once semantics. For example, to enable exactly-once for writes to cluster <code>us-east</code>, the following configuration can be used:
   </p>
 
 <pre><code class="language-text">us-east.exactly.once.source.support = enabled</code></pre>
-  
+
   <p>
     For existing MirrorMaker clusters, a two-step upgrade is necessary. Instead of immediately setting the <code>exactly.once.source.support</code> property to enabled, first set it to <code>preparing</code> on all nodes in the cluster. Once this is complete, it can be set to <code>enabled</code> on all nodes in the cluster, in a second round of restarts.
   </p>
-  
+
   <p>
     In either case, it is also necessary to enable intra-cluster communication between the MirrorMaker nodes, as described in  <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-710%3A+Full+support+for+distributed+mode+in+dedicated+MirrorMaker+2.0+clusters">KIP-710</a>. To do this, the <code>dedicated.mode.enable.internal.rest</code> property must be set to <code>true</code>. In addition, many of the REST-related  <a href="https://kafka.apache.org/documentation/#connectconfigs">configuration properties available for Kafka Connect</a> can be specified the MirrorMaker config. For example, to enable intra-cluster communication in MirrorMaker cluster with each node listening on port 8080 of their local machine, the following should be added to the MirrorMaker config file:
   </p>
 
 <pre><code class="language-text">dedicated.mode.enable.internal.rest = true
 listeners = http://localhost:8080</code></pre>
-  
+
   <p><b>
     Note that, if intra-cluster communication is enabled in production environments, it is highly recommended to secure the REST servers brought up by each MirrorMaker node. See the <a href="https://kafka.apache.org/documentation/#connectconfigs">configuration properties for Kafka Connect</a> for information on how this can be accomplished.
   </b></p>
-  
+
   <p>
     It is also recommended to filter records from aborted transactions out from replicated data when running MirrorMaker. To do this, ensure that the consumer used to read from source clusters is configured with <code>isolation.level</code> set to <code>read_committed</code>. If replicating data from cluster <code>us-west</code>, this can be done for all replication flows that read from that cluster by adding the following to the MirrorMaker config file:
   </p>
@@ -1934,12 +1934,12 @@ NodeId  LogEndOffset    Lag     LastFetchTimestamp      LastCaughtUpTimestamp   
       <tr>
         <td>RemoteLogManager Avg Broker Fetch Throttle Time</td>
         <td>The average time in millis remote fetches was throttled by a broker</td>
-        <td>kafka.server:type=RemoteLogManager, name=remote-fetch-throttle-time-avg	</td>
+        <td>kafka.server:type=RemoteLogManager, name=remote-fetch-throttle-time-avg</td>
       </tr>
       <tr>
         <td>RemoteLogManager Max Broker Fetch Throttle Time</td>
         <td>The max time in millis remote fetches was throttled by a broker</td>
-        <td>kafka.server:type=RemoteLogManager, name=remote-fetch-throttle-time-max	</td>
+        <td>kafka.server:type=RemoteLogManager, name=remote-fetch-throttle-time-max</td>
       </tr>
       <tr>
         <td>RemoteLogManager Avg Broker Copy Throttle Time</td>
@@ -2055,7 +2055,7 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
   </tr>
   <tr>
     <td>Latest Metadata Snapshot Age</td>
-    <td>The interval in milliseconds since the latest snapshot that the node has generated. 
+    <td>The interval in milliseconds since the latest snapshot that the node has generated.
     If none have been generated yet, this is approximately the time delta since the process was started.</td>
     <td>kafka.server:type=SnapshotEmitter,name=LatestSnapshotGeneratedAgeMs</td>
   </tr>
@@ -2160,7 +2160,7 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
   </tr>
   <tr>
     <td>ZooKeeper Write Behind Lag</td>
-    <td>The amount of lag in records that ZooKeeper is behind relative to the highest committed record in the metadata log. 
+    <td>The amount of lag in records that ZooKeeper is behind relative to the highest committed record in the metadata log.
     This metric will only be reported by the active KRaft controller.</td>
     <td>kafka.controller:type=KafkaController,name=ZkWriteBehindLag</td>
   </tr>
@@ -2176,7 +2176,7 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
   </tr>
   <tr>
     <td>Timed-out Broker Heartbeat Count</td>
-    <td>The number of broker heartbeats that timed out on this controller since the process was started. Note that only 
+    <td>The number of broker heartbeats that timed out on this controller since the process was started. Note that only
     active controllers handle heartbeats, so only they will see increases in this metric.</td>
     <td>kafka.controller:type=KafkaController,name=TimedOutBrokerHeartbeatCount</td>
   </tr>
@@ -2192,7 +2192,7 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
   </tr>
   <tr>
     <td>Number Of New Controller Elections</td>
-    <td>Counts the number of times this node has seen a new controller elected. A transition to the "no leader" state 
+    <td>Counts the number of times this node has seen a new controller elected. A transition to the "no leader" state
     is not counted here. If the same controller as before becomes active, that still counts.</td>
     <td>kafka.controller:type=KafkaController,name=NewActiveControllersCount</td>
   </tr>
@@ -3723,7 +3723,7 @@ customized state stores; for built-in state stores, currently we have:
 
   <h4 class="anchor-heading"><a id="zkversion" class="anchor-link"></a><a href="#zkversion">Stable version</a></h4>
   The current stable branch is 3.8. Kafka is regularly updated to include the latest release in the 3.8 series.
-  
+
   <h4 class="anchor-heading"><a id="zk_depr" class="anchor-link"></a><a href="#zk_depr">ZooKeeper Deprecation</a></h4>
   <p>With the release of Apache Kafka 3.5, Zookeeper is now marked deprecated. Removal of ZooKeeper is planned in the next major release of Apache Kafka (version 4.0),
      which is scheduled to happen no sooner than April 2024. During the deprecation phase, ZooKeeper is still supported for metadata management of Kafka clusters,
@@ -3732,12 +3732,9 @@ customized state stores; for built-in state stores, currently we have:
 
     <h5 class="anchor-heading"><a id="zk_depr_migration" class="anchor-link"></a><a href="#zk_drep_migration">Migration</a></h5>
     <p>Users are recommended to begin planning for migration to KRaft and also begin testing to provide any feedback. Refer to <a href="#kraft_zk_migration">ZooKeeper to KRaft Migration</a> for details on how to perform a live migration from ZooKeeper to KRaft and current limitations.</p>
-	
+
     <h5 class="anchor-heading"><a id="zk_depr_3xsupport" class="anchor-link"></a><a href="#zk_depr_3xsupport">3.x and ZooKeeper Support</a></h5>
     <p>The final 3.x minor release, that supports ZooKeeper mode, will receive critical bug fixes and security fixes for 12 months after its release.</p>
-	
-    <h5 class="anchor-heading"><a id="zk_depr_timeline" class="anchor-link"></a><a href="#zk_depr_timeline">ZooKeeper and KRaft timeline</a></h5>
-    <p>For details and updates on tentative timelines for ZooKeeper removal and planned KRaft feature releases, refer to <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-833%3A+Mark+KRaft+as+Production+Ready">KIP-833</a>.</p>
 
 <h4 class="anchor-heading"><a id="zkops" class="anchor-link"></a><a href="#zkops">Operationalizing ZooKeeper</a></h4>
   Operationally, we do the following for a healthy ZooKeeper installation:
@@ -3776,24 +3773,76 @@ customized state stores; for built-in state stores, currently we have:
 
   <p>A Kafka admin will typically select 3 or 5 servers for this role, depending on factors like cost and the number of concurrent failures your system should withstand without availability impact. A majority of the controllers must be alive in order to maintain availability. With 3 controllers, the cluster can tolerate 1 controller failure; with 5 controllers, the cluster can tolerate 2 controller failures.</p>
 
-  <p>All of the servers in a Kafka cluster discover the quorum voters using the <code>controller.quorum.voters</code> property. This identifies the quorum controller servers that should be used. All the controllers must be enumerated. Each controller is identified with their <code>id</code>, <code>host</code> and <code>port</code> information. For example:</p>
+  <p>All of the servers in a Kafka cluster discover the active controller using the <code>controller.quorum.bootstrap.servers</code> property. All the controllers should be enumerated in this property. Each controller is identified with their <code>host</code> and <code>port</code> information. For example:</p>
 
-  <pre><code class="language-bash">controller.quorum.voters=id1@host1:port1,id2@host2:port2,id3@host3:port3</code></pre>
+  <pre><code class="language-bash">controller.quorum.bootstrap.servers=host1:port1,host2:port2,host3:port3</code></pre>
 
   <p>If a Kafka cluster has 3 controllers named controller1, controller2 and controller3, then controller1 may have the following configuration:</p>
 
   <pre><code class="language-bash">process.roles=controller
 node.id=1
 listeners=CONTROLLER://controller1.example.com:9093
-controller.quorum.voters=1@controller1.example.com:9093,2@controller2.example.com:9093,3@controller3.example.com:9093</code></pre>
+controller.quorum.bootstrap.servers=controller1.example.com:9093,controller2.example.com:9093,controller3.example.com:9093
+controller.listener.names=CONTROLLER</code></pre>
 
-  <p>Every broker and controller must set the <code>controller.quorum.voters</code> property. The node ID supplied in the <code>controller.quorum.voters</code> property must match the corresponding id on the controller servers. For example, on controller1, node.id must be set to 1, and so forth. Each node ID must be unique across all the servers in a particular cluster. No two servers can have the same node ID regardless of their <code>process.roles</code> values.
+  <p>Every broker and controller must set the <code>controller.quorum.bootstrap.servers</code> property.
 
-  <h4 class="anchor-heading"><a id="kraft_storage" class="anchor-link"></a><a href="#kraft_storage">Storage Tool</a></h4>
+  <h4 class="anchor-heading"><a id="kraft_storage" class="anchor-link"></a><a href="#kraft_storage">Provisioning Nodes</a></h4>
   <p></p>
   The <code>kafka-storage.sh random-uuid</code> command can be used to generate a cluster ID for your new cluster. This cluster ID must be used when formatting each server in the cluster with the <code>kafka-storage.sh format</code> command.
 
   <p>This is different from how Kafka has operated in the past. Previously, Kafka would format blank storage directories automatically, and also generate a new cluster ID automatically. One reason for the change is that auto-formatting can sometimes obscure an error condition. This is particularly important for the metadata log maintained by the controller and broker servers. If a majority of the controllers were able to start with an empty log directory, a leader might be able to be elected with missing committed data.</p>
+
+  <h5 class="anchor-heading"><a id="kraft_storage_standalone" class="anchor-link"></a><a href="#kraft_storage_standalone">Bootstrap a Standalone Controller</a></h5>
+  The recommended method for creating a new KRaft controller cluster is to bootstrap it with one voter and dynamically <a href="#kraft_reconfig_add">add the rest of the controllers</a>. Bootstrapping the first controller can be done with the following CLI command:
+
+  <pre><code class="language-bash">$ bin/kafka-storage format --cluster-id &lt;cluster-id&gt; --standalone --config controller.properties</code></pre>
+
+  This command will 1) create a meta.properties file in metadata.log.dir with a randomly generated directory.id, 2) create a snapshot at 00000000000000000000-0000000000.checkpoint with the necessary control records (KRaftVersionRecord and VotersRecord) to make this Kafka node the only voter for the quorum.
+
+  <h5 class="anchor-heading"><a id="kraft_storage_voters" class="anchor-link"></a><a href="#kraft_storage_voters">Bootstrap with Multiple Controllers</a></h5>
+  The KRaft cluster metadata partition can also be bootstrapped with more than one voter. This can be done by using the --initial-controllers flag:
+
+  <pre><code class="language-bash">cluster-id=$(kafka-storage random-uuid)
+controller-0-uuid=$(kafka-storage random-uuid)
+controller-1-uuid=$(kafka-storage random-uuid)
+controller-2-uuid=$(kafka-storage random-uuid)
+
+# In each controller execute
+kafka-storage format --cluster-id ${cluster-id} \
+                     --initial-controllers "0@controller-0:1234:${controller-0-uuid},1@controller-1:1234:${controller-1-uuid},2@controller-2:1234:${controller-2-uuid}" \
+                     --config controller.properties</code></pre>
+
+This command is similar to the standalone version but the snapshot at 00000000000000000000-0000000000.checkpoint will instead contain a VotersRecord that includes information for all of the controllers specified in --initial-controllers. It is important that the value of this flag is the same in all of the controllers with the same cluster id.
+
+In the replica description 0@controller-0:1234:3Db5QLSqSZieL3rJBUUegA, 0 is the replica id, 3Db5QLSqSZieL3rJBUUegA is the replica directory id, controller-0 is the replica's host and 1234 is the replica's port.
+
+  <h5 class="anchor-heading"><a id="kraft_storage_observers" class="anchor-link"></a><a href="#kraft_storage_observers">Formatting Brokers and New Controllers</a></h5>
+  When provisioning new broker and controller nodes that we want to add to an existing Kafka cluster, use the <code>kafka-storage.sh format</code> command without the --standalone or --initial-controllers flags.
+
+  <pre><code class="language-bash">$ bin/kafka-storage format --cluster-id &lt;cluster-id&gt; --config server.properties</code></pre>
+
+  <h4 class="anchor-heading"><a id="kraft_reconfig" class="anchor-link"></a><a href="#kraft_reconfig">Controller membership changes</a></h4>
+
+  <h5 class="anchor-heading"><a id="kraft_reconfig_add" class="anchor-link"></a><a href="#kraft_reconfig_add">Add New Controller</a></h5>
+  If the KRaft Controller cluster already exists, the cluster can be expanded by first provisioning a new controller using the <a href="#kraft_storage_observers">kafka-storage tool</a> and starting the controller.
+
+  After starting the controller, the replication to the new controller can be monitored using the <code>kafka-metadata-quorum describe --replication</code> command. Once the new controller has caught up to the active controller, it can be added to the cluster using the <code>kafka-metadata-quorum add-controller</code> command.
+
+  When using broker endpoints use the --bootstrap-server flag:
+  <pre><code class="language-bash">$ bin/kafka-metadata-quorum --command-config controller.properties --bootstrap-server localhost:9092 add-controller</code></pre>
+
+  When using controller endpoints use the --bootstrap-controller flag:
+  <pre><code class="language-bash">$ bin/kafka-metadata-quorum --command-config controller.properties --bootstrap-controller localhost:9092 add-controller</code></pre>
+
+  <h5 class="anchor-heading"><a id="kraft_reconfig_remove" class="anchor-link"></a><a href="#kraft_reconfig_remove">Remove Controller</a></h5>
+  If the KRaft Controller cluster already exists, the cluster can be shrunk using the <code>kafka-metadata-quorum remove-controller</code> command. Until KIP-996: Pre-vote has been implemented and released, it is recommended to shutdown the controller that will be removed before running the remove-controller command.
+
+  When using broker endpoints use the --bootstrap-server flag:
+  <pre><code class="language-bash">$ bin/kafka-metadata-quorum --bootstrap-server localhost:9092 remove-controller --controller-id &lt;id&gt; --controller-directory-id &lt;directory-id&gt;</code></pre>
+
+  When using controller endpoints use the --bootstrap-controller flag:
+  <pre><code class="language-bash">$ bin/kafka-metadata-quorum --bootstrap-controller localhost:9092 remove-controller --controller-id &lt;id&gt; --controller-directory-id &lt;directory-id&gt;</code></pre>
 
   <h4 class="anchor-heading"><a id="kraft_debug" class="anchor-link"></a><a href="#kraft_debug">Debugging</a></h4>
 
@@ -3808,8 +3857,12 @@ LeaderEpoch:            2
 HighWatermark:          10
 MaxFollowerLag:         0
 MaxFollowerLagTimeMs:   -1
-CurrentVoters:          [3000,3001,3002]
-CurrentObservers:       [0,1,2]</code></pre>
+CurrentVoters:          [{"id": 3000, "directoryId": "ILZ5MPTeRWakmJu99uBJCA", "endpoints": ["CONTROLLER://localhost:9093"]},
+                         {"id": 3001, "directoryId": "b-DwmhtOheTqZzPoh52kfA", "endpoints": ["CONTROLLER://localhost:9094"]},
+                         {"id": 3002, "directoryId": "g42deArWBTRM5A1yuVpMCg", "endpoints": ["CONTROLLER://localhost:9095"]}]
+CurrentObservers:       [{"id": 0, "directoryId": "3Db5QLSqSZieL3rJBUUegA"},
+                         {"id": 1, "directoryId": "UegA3Db5QLSqSZieL3rJBU"},
+                         {"id": 2, "directoryId": "L3rJBUUegA3Db5QLSqSZie"}]</code></pre>
 
   <h5 class="anchor-heading"><a id="kraft_dump_log" class="anchor-link"></a><a href="#kraft_dump_log">Dump Log Tool</a></h5>
 
@@ -3940,7 +3993,7 @@ foo
   <pre><code class="language-text"># Sample KRaft cluster controller.properties listening on 9093
 process.roles=controller
 node.id=3000
-controller.quorum.voters=3000@localhost:9093
+controller.quorum.bootstrap.servers=localhost:9093
 controller.listener.names=CONTROLLER
 listeners=CONTROLLER://:9093
 
@@ -3955,6 +4008,8 @@ inter.broker.listener.name=PLAINTEXT
 
 # Other configs ...</code></pre>
 
+  <p>The new standalone controller in the example configuration above should be formatted using the <code>kafka-storage format --standalone</code>command.</p>
+
   <p><em>Note: The KRaft cluster <code>node.id</code> values must be different from any existing ZK broker <code>broker.id</code>.
   In KRaft-mode, the brokers and controllers share the same Node ID namespace.</em></p>
 
@@ -3967,7 +4022,7 @@ inter.broker.listener.name=PLAINTEXT
 
   <ul>
     <li><a href="#brokerconfigs_broker.id">broker.id</a>: Ensure <code>broker.id</code> is set to a non-negative integer even if <code>broker.id.generation.enable</code> is enabled (default is enabled). Additionally, ensure <code>broker.id</code> does not exceed <code>reserved.broker.max.id</code> to avoid failure.</li>
-    <li><a href="#brokerconfigs_controller.quorum.voters">controller.quorum.voters</a></li>
+    <li><a href="#brokerconfigs_controller.quorum.bootstrap.servers">controller.quorum.bootstrap.servers</a></li>
     <li><a href="#brokerconfigs_controller.listener.names">controller.listener.names</a></li>
     <li>The controller.listener.name should also be added to <a href="#brokerconfigs_listener.security.protocol.map">listener.security.property.map</a></li>
     <li><a href="#brokerconfigs_zookeeper.metadata.migration.enable">zookeeper.metadata.migration.enable</a></li>
@@ -3991,7 +4046,7 @@ zookeeper.metadata.migration.enable=true
 zookeeper.connect=localhost:2181
 
 # KRaft controller quorum configuration
-controller.quorum.voters=3000@localhost:9093
+controller.quorum.bootstrap.servers=localhost:9093
 controller.listener.names=CONTROLLER</code></pre>
 
   <p>
@@ -4039,7 +4094,7 @@ listener.security.protocol.map=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
 # zookeeper.connect=localhost:2181
 
 # Keep the KRaft controller quorum configuration
-controller.quorum.voters=3000@localhost:9093
+controller.quorum.bootstrap.servers=localhost:9093
 controller.listener.names=CONTROLLER</code></pre>
 
   <p>
@@ -4060,7 +4115,7 @@ controller.listener.names=CONTROLLER</code></pre>
   <pre><code class="language-text"># Sample KRaft cluster controller.properties listening on 9093
 process.roles=controller
 node.id=3000
-controller.quorum.voters=3000@localhost:9093
+controller.quorum.bootstrap.servers=localhost:9093
 controller.listener.names=CONTROLLER
 listeners=CONTROLLER://:9093
 
@@ -4135,7 +4190,7 @@ listeners=CONTROLLER://:9093
             </li>
             <li>
               On each broker, remove the <code>zookeeper.metadata.migration.enable</code>,
-              <code>controller.listener.names</code>, and <code>controller.quorum.voters</code>
+              <code>controller.listener.names</code>, and <code>controller.quorum.bootstrap.servers</code>
               configurations, and replace <code>node.id</code> with <code>broker.id</code>.
               Then perform a rolling restart of all brokers.
             </li>
@@ -4172,7 +4227,7 @@ listeners=CONTROLLER://:9093
             </li>
             <li>
               On each broker, remove the <code>zookeeper.metadata.migration.enable</code>,
-              <code>controller.listener.names</code>, and <code>controller.quorum.voters</code>
+              <code>controller.listener.names</code>, and <code>controller.quorum.bootstrap.servers</code>
               configurations.
               Then perform a second rolling restart of all brokers.
             </li>
@@ -4191,7 +4246,7 @@ listeners=CONTROLLER://:9093
             </li>
             <li>
               Make sure that on the first cluster roll, <code>zookeeper.metadata.migration.enable</code> remains set to
-              </code>true</code>. <b>Do not set it to false until the second cluster roll.</b>
+              <code>true</code>. <b>Do not set it to false until the second cluster roll.</b>
             </li>
           </ul>
         </td>

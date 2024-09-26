@@ -54,6 +54,7 @@ import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler.ProductionExceptionHandlerResponse;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler.SerializationExceptionOrigin;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
@@ -160,7 +161,6 @@ public class RecordCollectorTest {
             config,
             processId + "-StreamThread-1",
             clientSupplier,
-            null,
             processId,
             logContext,
             Time.SYSTEM
@@ -1347,15 +1347,40 @@ public class RecordCollectorTest {
 
         collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, sinkNodeName, context, streamPartitioner);
 
-        // With default handler which returns FAIL, flush() throws StreamsException with TimeoutException cause,
-        // otherwise it would throw a TaskCorruptedException with null cause
+        final TaskCorruptedException thrown = assertThrows(TaskCorruptedException.class, collector::flush);
+        assertThat(
+            thrown.getMessage(),
+            equalTo("Tasks [0_0] are corrupted and hence need to be re-initialized")
+        );
+    }
+
+    @Test
+    public void shouldThrowStreamsExceptionOnUnknownTopicOrPartitionExceptionWhenExceptionHandlerReturnsFail() {
+        final KafkaException exception = new TimeoutException("KABOOM!", new UnknownTopicOrPartitionException());
+        final RecordCollector collector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            getExceptionalStreamsProducerOnSend(exception),
+            new ProductionExceptionHandlerMock(
+                Optional.of(ProductionExceptionHandlerResponse.FAIL),
+                context,
+                sinkNodeName,
+                taskId
+            ),
+            streamsMetrics,
+            topology
+        );
+
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, sinkNodeName, context, streamPartitioner);
+
+        // With custom handler which returns FAIL, flush() throws StreamsException with TimeoutException cause
         final StreamsException thrown = assertThrows(StreamsException.class, collector::flush);
         assertEquals(exception, thrown.getCause());
         assertThat(
             thrown.getMessage(),
             equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
-                    "\norg.apache.kafka.common.errors.TimeoutException: KABOOM!" +
-                    "\nException handler choose to FAIL the processing, no more records would be sent.")
+                "\norg.apache.kafka.common.errors.TimeoutException: KABOOM!" +
+                "\nException handler choose to FAIL the processing, no more records would be sent.")
         );
     }
 
@@ -1382,6 +1407,42 @@ public class RecordCollectorTest {
     }
 
     @Test
+    public void shouldTreatRetryAsFailForNonRetriableException() {
+        try (final LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(RecordCollectorImpl.class)) {
+            final RuntimeException exception = new RuntimeException("KABOOM!");
+            final RecordCollector collector = new RecordCollectorImpl(
+                logContext,
+                taskId,
+                getExceptionalStreamsProducerOnSend(exception),
+                new ProductionExceptionHandlerMock(
+                    Optional.of(ProductionExceptionHandlerResponse.RETRY),
+                    context,
+                    sinkNodeName,
+                    taskId
+                ),
+                streamsMetrics,
+                topology
+            );
+
+            collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, sinkNodeName, context, streamPartitioner);
+
+            final StreamsException thrown = assertThrows(StreamsException.class, collector::flush);
+            assertEquals(exception, thrown.getCause());
+            assertThat(
+                thrown.getMessage(),
+                equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
+                    "\njava.lang.RuntimeException: KABOOM!" +
+                    "\nException handler choose to FAIL the processing, no more records would be sent.")
+            );
+
+            assertThat(
+                logCaptureAppender.getMessages().get(0),
+                equalTo("test ProductionExceptionHandler returned RETRY for a non-retriable exception. Will treat it as FAIL.")
+            );
+        }
+    }
+
+    @Test
     public void shouldNotAbortTxnOnEOSCloseDirtyIfNothingSent() {
         final AtomicBoolean functionCalled = new AtomicBoolean(false);
         final RecordCollector collector = new RecordCollectorImpl(
@@ -1401,7 +1462,6 @@ public class RecordCollectorTest {
                         };
                     }
                 },
-                taskId,
                 processId,
                 logContext,
                 Time.SYSTEM
@@ -1434,7 +1494,6 @@ public class RecordCollectorTest {
                         };
                     }
                 },
-                null,
                 null,
                 logContext,
                 Time.SYSTEM
@@ -1470,7 +1529,6 @@ public class RecordCollectorTest {
                         return mockProducer;
                     }
                 },
-                taskId,
                 processId,
                 logContext,
                 Time.SYSTEM
@@ -1578,6 +1636,98 @@ public class RecordCollectorTest {
             assertInstanceOf(RuntimeException.class, exception.getCause());
             assertEquals("KABOOM!", exception.getCause().getMessage());
         }
+    }
+
+    @Test
+    public void shouldNotFailIfContextIsNotAvailableOnSerializationError() {
+        try (final ErrorStringSerializer errorSerializer = new ErrorStringSerializer()) {
+            final RecordCollector collector = new RecordCollectorImpl(
+                logContext,
+                taskId,
+                streamsProducer,
+                productionExceptionHandler,
+                streamsMetrics,
+                topology
+            );
+
+            assertThrows(
+                StreamsException.class, // should not crash with NullPointerException
+                () -> collector.send(
+                    topic,
+                    "key",
+                    "val",
+                    null,
+                    0,
+                    null,
+                    errorSerializer,
+                    stringSerializer,
+                    sinkNodeName,
+                    null // pass `null` context for testing
+                )
+            );
+        }
+    }
+    
+    @Test
+    public void shouldNotFailIfRecordContextIsNotAvailableOnSerializationError() {
+        try (final ErrorStringSerializer errorSerializer = new ErrorStringSerializer()) {
+            final RecordCollector collector = new RecordCollectorImpl(
+                logContext,
+                taskId,
+                streamsProducer,
+                productionExceptionHandler,
+                streamsMetrics,
+                topology
+            );
+
+            // RecordContext is null when writing into a changelog topic
+            context.setRecordContext(null);
+            assertThrows(
+                StreamsException.class, // should not crash with NullPointerException
+                () -> collector.send(topic, "key", "val", null, 0, null, errorSerializer, stringSerializer, sinkNodeName, context)
+            );
+        }
+    }
+
+    @Test
+    public void shouldNotFailIfContextIsNotAvailableOnSendError() {
+        final RecordCollector collector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            getExceptionalStreamsProducerOnSend(new RuntimeException("Kaboom!")),
+            productionExceptionHandler,
+            streamsMetrics,
+            topology
+        );
+
+        collector.send(
+            topic,
+            "key",
+            "val",
+            null,
+            0,
+            null,
+            stringSerializer,
+            stringSerializer,
+            sinkNodeName,
+            null // pass `null` context for testing
+        );
+    }
+
+    @Test
+    public void shouldNotFailIfRecordContextIsNotAvailableOnSendError() {
+        final RecordCollector collector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            getExceptionalStreamsProducerOnSend(new RuntimeException("Kaboom!")),
+            productionExceptionHandler,
+            streamsMetrics,
+            topology
+        );
+
+        // RecordContext is null when writing into a changelog topic
+        context.setRecordContext(null);
+        collector.send(topic, "key", "val", null, 0, null, stringSerializer, stringSerializer, sinkNodeName, context);
     }
 
     @Test
@@ -1789,7 +1939,6 @@ public class RecordCollectorTest {
                 }
             },
             null,
-            null,
             logContext,
             Time.SYSTEM
         );
@@ -1810,7 +1959,6 @@ public class RecordCollectorTest {
                     };
                 }
             },
-            null,
             null,
             logContext,
             Time.SYSTEM
@@ -1900,6 +2048,7 @@ public class RecordCollectorTest {
             return response.orElse(null);
         }
 
+        @SuppressWarnings("rawtypes")
         @Override
         public ProductionExceptionHandlerResponse handleSerializationException(final ErrorHandlerContext context,
                                                                                final ProducerRecord record,

@@ -875,7 +875,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             else:
                 self.controller_quorum_voters = ','.join(["%s@%s" % (self.controller_quorum.idx(node) + first_node_id - 1,
                                                                      bootstrap_server)
-                                                          for bootstrap_server in controller_quorum_bootstrap_servers])
+                                                          for bootstrap_server in controller_quorum_bootstrap_servers.split(',')])
             # define controller.listener.names
             self.controller_listener_names = ','.join(self.controller_listener_name_list(node))
             # define sasl.mechanism.controller.protocol to match the isolated quorum if one exists
