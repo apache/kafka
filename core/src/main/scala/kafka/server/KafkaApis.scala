@@ -1189,7 +1189,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else {
       replicaManager.fetchOffset(authorizedRequestInfo, offsetRequest.duplicatePartitions().asScala,
         offsetRequest.isolationLevel(), offsetRequest.replicaId(), clientId, correlationId, version,
-        buildErrorResponse, sendV1ResponseCallback)
+        buildErrorResponse, sendV1ResponseCallback, offsetRequest.timeoutMs())
     }
   }
 
