@@ -14,10 +14,10 @@
 package kafka.api
 
 import java.io.IOException
-import java.net.ServerSocket
 import java.util.Properties
 
 import kafka.utils.TestUtils
+import org.apache.kafka.common.network.NetworkContext
 
 /**
  * DO NOT USE THESE UTILITIES UNLESS YOU ABSOLUTELY MUST
@@ -29,7 +29,7 @@ import kafka.utils.TestUtils
 object FixedPortTestUtils {
   def choosePorts(count: Int): Seq[Int] = {
     try {
-      val sockets = (0 until count).map(_ => new ServerSocket(0))
+      val sockets = (0 until count).map(_ => NetworkContext.serverFactory().createServerSocket(0))
       val ports = sockets.map(_.getLocalPort())
       sockets.foreach(_.close())
       ports

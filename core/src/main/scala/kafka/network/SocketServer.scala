@@ -20,7 +20,7 @@ package kafka.network
 import java.io.IOException
 import java.net._
 import java.nio.ByteBuffer
-import java.nio.channels.{Selector => NSelector, _}
+import java.nio.channels._
 import java.util
 import java.util.Optional
 import java.util.concurrent._
@@ -38,7 +38,7 @@ import org.apache.kafka.common.memory.{MemoryPool, SimpleMemoryPool}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.stats.{Avg, CumulativeSum, Meter, Rate}
 import org.apache.kafka.common.network.KafkaChannel.ChannelMuteEvent
-import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, ClientInformation, KafkaChannel, ListenerName, ListenerReconfigurable, NetworkSend, Selectable, Send, Selector => KSelector}
+import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, ClientInformation, KafkaChannel, ListenerName, ListenerReconfigurable, NetworkContext, NetworkSend, Selectable, Send, Selector => KSelector}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{ApiVersionsRequest, RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -591,7 +591,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
   private val recvBufferSize = config.socketReceiveBufferBytes
   private val listenBacklogSize = config.socketListenBacklogSize
 
-  private val nioSelector = NSelector.open()
+  private val nioSelector = NetworkContext.provider().openSelector()
 
   // If the port is configured as 0, we are using a wildcard port, so we need to open the socket
   // before we can find out what port we have. If it is set to a nonzero value, defer opening
@@ -726,7 +726,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
         new InetSocketAddress(port)
       else
         new InetSocketAddress(host, port)
-    val serverChannel = ServerSocketChannel.open()
+    val serverChannel = NetworkContext.provider().openServerSocketChannel()
     try {
       serverChannel.configureBlocking(false)
       if (recvBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)

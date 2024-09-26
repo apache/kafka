@@ -64,7 +64,7 @@ class EchoServer extends Thread {
                 this.serverSocket.setSoTimeout(SO_TIMEOUT_MS);
                 break;
             case PLAINTEXT:
-                this.serverSocket = new ServerSocket(0);
+                this.serverSocket = NetworkContext.serverFactory().createServerSocket(0);
                 this.sslFactory = null;
                 break;
             default:

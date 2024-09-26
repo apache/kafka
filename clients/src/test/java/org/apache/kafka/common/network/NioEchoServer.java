@@ -111,7 +111,7 @@ public class NioEchoServer extends Thread {
         setDaemon(true);
         ServerSocketChannel serverSocketChannel = null;
         try {
-            serverSocketChannel = ServerSocketChannel.open();
+            serverSocketChannel = NetworkContext.provider().openServerSocketChannel();
             this.serverSocketChannel = serverSocketChannel;
             serverSocketChannel.configureBlocking(false);
             serverSocketChannel.socket().bind(new InetSocketAddress(serverHost, 0));
@@ -393,7 +393,7 @@ public class NioEchoServer extends Thread {
             java.nio.channels.Selector acceptSelector = null;
 
             try {
-                acceptSelector = java.nio.channels.Selector.open();
+                acceptSelector = NetworkContext.provider().openSelector();
                 serverSocketChannel.register(acceptSelector, SelectionKey.OP_ACCEPT);
                 while (serverSocketChannel.isOpen()) {
                     if (acceptSelector.select(1000) > 0) {

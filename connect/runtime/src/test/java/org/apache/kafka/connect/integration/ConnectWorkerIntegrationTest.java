@@ -19,6 +19,7 @@ package org.apache.kafka.connect.integration;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.provider.FileConfigProvider;
+import org.apache.kafka.common.network.NetworkContext;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.data.Struct;
@@ -51,6 +52,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -1469,7 +1471,7 @@ public class ConnectWorkerIntegrationTest {
         // on a different random free port the second time it is started. Note that we can only use the static port
         // because we have a single broker setup in this test.
         int listenerPort;
-        try (ServerSocket s = new ServerSocket(0)) {
+        try (ServerSocket s = NetworkContext.serverFactory().createServerSocket(0)) {
             listenerPort = s.getLocalPort();
         }
         brokerProps.put(SocketServerConfigs.LISTENERS_CONFIG, String.format("EXTERNAL://localhost:%d,CONTROLLER://localhost:0", listenerPort));

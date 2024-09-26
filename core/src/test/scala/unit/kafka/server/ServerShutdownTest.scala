@@ -31,7 +31,7 @@ import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.network.{ListenerName, NetworkContext}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.LeaderAndIsrRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -268,7 +268,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
 
     try {
       // Set up a server to accept a connection and receive one byte from the first request. No response is sent.
-      serverSocket = new ServerSocket(0)
+      serverSocket = NetworkContext.serverFactory.createServerSocket(0)
       val receiveFuture = executor.submit(new Runnable {
         override def run(): Unit = {
           val socket = serverSocket.accept()
