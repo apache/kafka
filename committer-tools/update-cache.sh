@@ -25,7 +25,7 @@ key=$(
     --jq '.[].key'
 )
 
-cut --delimiter '-' --fields 5 <<< "$key"
+cut -d '-' -f 5 <<< "$key"
 
 if ! git config --get alias.update-cache >/dev/null; then
   this_path=$(realpath "$0")
