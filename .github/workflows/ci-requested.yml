@@ -42,6 +42,7 @@ jobs:
           persist-credentials:
             false
       - name: Check PR Labels (workflow_run)
+        id: check-pr-labels-1
         if: |
           github.event_name == 'workflow_run' && 
           github.event.workflow_run.event == 'pull_request' &&
@@ -64,6 +65,7 @@ jobs:
           echo "PR_NUMBER=$PR_NUMBER" >> "$GITHUB_ENV"
           echo "RUN_ID=$RUN_ID" >> "$GITHUB_ENV"
       - name: Check PR Labels (pull_request_target)
+        id: check-pr-labels-2
         if: |
           github.event_name == 'pull_request_target' &&
           github.event.action == 'labeled'
@@ -73,6 +75,7 @@ jobs:
           SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set +e
+          
           gh pr view $PR_NUMBER --json labels -q '.labels[].name' | grep -q 'ci-approved'
           exitcode="$?"
           if [ $exitcode -ne 0 ]; then
@@ -81,20 +84,17 @@ jobs:
           else
             echo "Found 'ci-approved' label on PR #$PR_NUMBER. Auto-approving...";
           fi
+          
           RUN_ID=$(gh run list -L 1 -c $SHA -s action_required --json workflowDatabaseId --jq '.[].workflowDatabaseId')
+          if [ -z "$RUN_ID" ]; then
+            echo "No workflow run found for SHA $SHA";
+            exit 0;
+          fi;
+          
           echo "PR_NUMBER=$PR_NUMBER" >> "$GITHUB_ENV"
           echo "RUN_ID=$RUN_ID" >> "$GITHUB_ENV"
-      - name: Set Outputs
-        id: set-outputs
-        run: |
-          echo "pr-number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
-          echo "run-id=$RUN_ID" >> "$GITHUB_OUTPUT"
-
-  approve-workflow:
-    needs: check-pr-labels
-    runs-on: ubuntu-latest
-    steps:
       - name: Approve Workflow Run
+        if: env.RUN_ID != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPOSITORY: ${{ github.repository }}
