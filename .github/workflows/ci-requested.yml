@@ -98,7 +98,7 @@ jobs:
         run: |
           echo "Approving workflow run $RUN_ID for PR $PR_NUMBER";
           
-          gh api --method POST \
+          gh api --verbose --method POST \
             -H 'Accept: application/vnd.github+json' \
             -H 'X-GitHub-Api-Version: 2022-11-28' \
             /repos/$REPOSITORY/actions/runs/$RUN_ID/approve
