@@ -3473,6 +3473,34 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
         }
     }
 
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class)
+    public void testPollSendsRequestToJoin(GroupProtocol groupProtocol) throws InterruptedException {
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        initMetadata(client, Collections.singletonMap(topic, 1));
+        Node node = metadata.fetch().nodes().get(0);
+
+        client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
+        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata,
+                assignor, true, groupInstanceId);
+        consumer.subscribe(singletonList(topic));
+        assertFalse(groupProtocol == GroupProtocol.CLASSIC ?
+                        requestGenerated(client, ApiKeys.JOIN_GROUP) :
+                        requestGenerated(client, ApiKeys.CONSUMER_GROUP_HEARTBEAT),
+                "KafkaConsumer#subscribe should not send " + (groupProtocol == GroupProtocol.CLASSIC ? "JoinGroup" : "Heartbeat") + " request");
+
+        consumer.poll(Duration.ZERO);
+        TestUtils.waitForCondition(() -> groupProtocol == GroupProtocol.CLASSIC ?
+                requestGenerated(client, ApiKeys.JOIN_GROUP) :
+                requestGenerated(client, ApiKeys.CONSUMER_GROUP_HEARTBEAT),
+                "Expected " + (groupProtocol == GroupProtocol.CLASSIC ? "JoinGroup" : "Heartbeat") + " request");
+    }
+
+    private boolean requestGenerated(MockClient client, ApiKeys apiKey) {
+        return client.requests().stream().anyMatch(request -> request.requestBuilder().apiKey().equals(apiKey));
+    }
+
     private static final List<String> CLIENT_IDS = new ArrayList<>();
     public static class DeserializerForClientId implements Deserializer<byte[]> {
         @Override
