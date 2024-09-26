@@ -63,11 +63,11 @@ public class StateBatchUtilTest {
         static List<PersisterStateBatch> singleBatch(
             long firstOffset,
             long lastOffset,
-            byte deliveryState,
-            short deliveryCount
+            int deliveryState,
+            int deliveryCount
         ) {
             return Collections.singletonList(
-                new PersisterStateBatch(firstOffset, lastOffset, deliveryState, deliveryCount)
+                new PersisterStateBatch(firstOffset, lastOffset, (byte) deliveryState, (short) deliveryCount)
             );
         }
 
@@ -77,10 +77,10 @@ public class StateBatchUtilTest {
             MultiBatchBuilder addBatch(
                 long firstOffset,
                 long lastOffset,
-                byte deliveryState,
-                short deliveryCount
+                int deliveryState,
+                int deliveryCount
             ) {
-                batchList.add(new PersisterStateBatch(firstOffset, lastOffset, deliveryState, deliveryCount));
+                batchList.add(new PersisterStateBatch(firstOffset, lastOffset, (byte) deliveryState, (short) deliveryCount));
                 return this;
             }
 
@@ -103,17 +103,17 @@ public class StateBatchUtilTest {
         return Stream.of(
             new BatchTestHolder(
                 "Current batches with start offset midway are pruned.",
-                BatchTestHolder.singleBatch(100, 130, (byte) 0, (short) 1),
+                BatchTestHolder.singleBatch(100, 130, 0, 1),
                 Collections.emptyList(),
-                BatchTestHolder.singleBatch(120, 130, (byte) 0, (short) 1),
+                BatchTestHolder.singleBatch(120, 130, 0, 1),
                 120
             ),
 
             new BatchTestHolder(
                 "New batches with start offset midway are pruned.",
                 Collections.emptyList(),
-                BatchTestHolder.singleBatch(100, 130, (byte) 0, (short) 1),
-                BatchTestHolder.singleBatch(120, 130, (byte) 0, (short) 1),
+                BatchTestHolder.singleBatch(100, 130, 0, 1),
+                BatchTestHolder.singleBatch(120, 130, 0, 1),
                 120
             ),
 
@@ -132,57 +132,57 @@ public class StateBatchUtilTest {
             // same state
             new BatchTestHolder(
                 "Same state. Last and candidate have same first and last offset.",
-                BatchTestHolder.singleBatch(100, 110, (byte) 0, (short) 1),
-                BatchTestHolder.singleBatch(100, 110, (byte) 0, (short) 1),
-                BatchTestHolder.singleBatch(100, 110, (byte) 0, (short) 1),
+                BatchTestHolder.singleBatch(100, 110, 0, 1),
+                BatchTestHolder.singleBatch(100, 110, 0, 1),
+                BatchTestHolder.singleBatch(100, 110, 0, 1),
                 -1
             ),
 
             new BatchTestHolder(
                 "Same state. Last and candidate have same first offset, candidate last offset strictly smaller.",
-                BatchTestHolder.singleBatch(100, 110, (byte) 0, (short) 1),
-                BatchTestHolder.singleBatch(100, 105, (byte) 0, (short) 1),
-                BatchTestHolder.singleBatch(100, 110, (byte) 0, (short) 1),
+                BatchTestHolder.singleBatch(100, 110, 0, 1),
+                BatchTestHolder.singleBatch(100, 105, 0, 1),
+                BatchTestHolder.singleBatch(100, 110, 0, 1),
                 -1
             ),
 
             new BatchTestHolder(
                 "Same state. Last and candidate have same first offset, candidate last offset strictly larger.",
-                BatchTestHolder.singleBatch(100, 110, (byte) 0, (short) 1),
-                BatchTestHolder.singleBatch(100, 115, (byte) 0, (short) 1),
-                BatchTestHolder.singleBatch(100, 115, (byte) 0, (short) 1),
+                BatchTestHolder.singleBatch(100, 110, 0, 1),
+                BatchTestHolder.singleBatch(100, 115, 0, 1),
+                BatchTestHolder.singleBatch(100, 115, 0, 1),
                 -1
             ),
 
             new BatchTestHolder(
                 "Same state. Candidate first offset strictly larger and last offset strictly smaller than last.",
-                BatchTestHolder.singleBatch(100, 110, (byte) 0, (short) 1),
-                BatchTestHolder.singleBatch(105, 108, (byte) 0, (short) 1),
-                BatchTestHolder.singleBatch(100, 110, (byte) 0, (short) 1),
+                BatchTestHolder.singleBatch(100, 110, 0, 1),
+                BatchTestHolder.singleBatch(105, 108, 0, 1),
+                BatchTestHolder.singleBatch(100, 110, 0, 1),
                 -1
             ),
 
             new BatchTestHolder(
                 "Same state. Candidate first offset strictly larger and last offset equal to last.",
-                BatchTestHolder.singleBatch(100, 110, (byte) 0, (short) 1),
-                BatchTestHolder.singleBatch(105, 110, (byte) 0, (short) 1),
-                BatchTestHolder.singleBatch(100, 110, (byte) 0, (short) 1),
+                BatchTestHolder.singleBatch(100, 110, 0, 1),
+                BatchTestHolder.singleBatch(105, 110, 0, 1),
+                BatchTestHolder.singleBatch(100, 110, 0, 1),
                 -1
             ),
 
             new BatchTestHolder(
                 "Same state. Candidate first offset strictly larger and last offset strictly larger than last.",
-                BatchTestHolder.singleBatch(100, 110, (byte) 0, (short) 1),
-                BatchTestHolder.singleBatch(105, 115, (byte) 0, (short) 1),
-                BatchTestHolder.singleBatch(100, 115, (byte) 0, (short) 1),
+                BatchTestHolder.singleBatch(100, 110, 0, 1),
+                BatchTestHolder.singleBatch(105, 115, 0, 1),
+                BatchTestHolder.singleBatch(100, 115, 0, 1),
                 -1
             ),
 
             new BatchTestHolder(
                 "Same state. Candidate first offset is last first offset + 1 (contiguous).",
-                BatchTestHolder.singleBatch(100, 110, (byte) 0, (short) 1),
-                BatchTestHolder.singleBatch(111, 115, (byte) 0, (short) 1),
-                BatchTestHolder.singleBatch(100, 115, (byte) 0, (short) 1),
+                BatchTestHolder.singleBatch(100, 110, 0, 1),
+                BatchTestHolder.singleBatch(111, 115, 0, 1),
+                BatchTestHolder.singleBatch(100, 115, 0, 1),
                 -1
             )
         );
@@ -193,34 +193,34 @@ public class StateBatchUtilTest {
             new BatchTestHolder(
                 "Handle overlapping batches within each list.",
                 BatchTestHolder.multiBatch()
-                    .addBatch(100, 110, (byte) 0, (short) 1)
-                    .addBatch(121, 130, (byte) 0, (short) 1)
-                    .addBatch(105, 115, (byte) 0, (short) 1) // overlap with 1st batch
-                    .addBatch(123, 125, (byte) 0, (short) 1)  // overlap with 2nd batch
+                    .addBatch(100, 110, 0, 1)
+                    .addBatch(121, 130, 0, 1)
+                    .addBatch(105, 115, 0, 1) // overlap with 1st batch
+                    .addBatch(123, 125, 0, 1)  // overlap with 2nd batch
                     .build(),  //[(100-115, 0, 1), (121-130, 0, 1)]
                 BatchTestHolder.multiBatch()
-                    .addBatch(111, 119, (byte) 2, (short) 2)
-                    .addBatch(116, 123, (byte) 2, (short) 2)  // overlap with first batch
+                    .addBatch(111, 119, 2, 2)
+                    .addBatch(116, 123, 2, 2)  // overlap with first batch
                     .build(),       // ,  //[(111-123, 2, 2)]
                 BatchTestHolder.multiBatch()
-                    .addBatch(100, 110, (byte) 0, (short) 1)
-                    .addBatch(111, 123, (byte) 2, (short) 2)
-                    .addBatch(124, 130, (byte) 0, (short) 1)
+                    .addBatch(100, 110, 0, 1)
+                    .addBatch(111, 123, 2, 2)
+                    .addBatch(124, 130, 0, 1)
                     .build(),
                 -1
             ),
 
             new BatchTestHolder(
                 "Handle overlapping batches with different priority.",
-                BatchTestHolder.singleBatch(100, 110, (byte) 0, (short) 1),  //[(100-115, 0, 1), (121-130, 0, 1)]
+                BatchTestHolder.singleBatch(100, 110, 0, 1),  //[(100-115, 0, 1), (121-130, 0, 1)]
                 BatchTestHolder.multiBatch()
-                    .addBatch(101, 105, (byte) 1, (short) 2)
-                    .addBatch(101, 115, (byte) 2, (short) 2)
-                    .addBatch(101, 120, (byte) 3, (short) 2)  //[(111-123, 2, 2)]
+                    .addBatch(101, 105, 1, 2)
+                    .addBatch(101, 115, 2, 2)
+                    .addBatch(101, 120, 3, 2)  //[(111-123, 2, 2)]
                     .build(),
                 BatchTestHolder.multiBatch()
-                    .addBatch(100, 100, (byte) 0, (short) 1)
-                    .addBatch(101, 120, (byte) 3, (short) 2)
+                    .addBatch(100, 100, 0, 1)
+                    .addBatch(101, 120, 3, 2)
                     .build(),
                 -1
             ),
@@ -228,34 +228,34 @@ public class StateBatchUtilTest {
             new BatchTestHolder(
                 "Handle overlapping batches within each list with pruning.",
                 BatchTestHolder.multiBatch()
-                    .addBatch(100, 110, (byte) 0, (short) 1)
-                    .addBatch(121, 130, (byte) 0, (short) 1)
-                    .addBatch(105, 115, (byte) 0, (short) 1) // overlap with 1st batch //[(100-115, 0, 1), (121-130, 0, 1)]
+                    .addBatch(100, 110, 0, 1)
+                    .addBatch(121, 130, 0, 1)
+                    .addBatch(105, 115, 0, 1) // overlap with 1st batch //[(100-115, 0, 1), (121-130, 0, 1)]
                     .build(),
                 BatchTestHolder.multiBatch()
-                    .addBatch(111, 119, (byte) 2, (short) 2)
-                    .addBatch(116, 123, (byte) 2, (short) 2)  // overlap with first batch //[(111-123, 2, 2)]
+                    .addBatch(111, 119, 2, 2)
+                    .addBatch(116, 123, 2, 2)  // overlap with first batch //[(111-123, 2, 2)]
                     .build(),
                 BatchTestHolder.multiBatch()
-                    .addBatch(120, 123, (byte) 2, (short) 2)
-                    .addBatch(124, 130, (byte) 0, (short) 1)
+                    .addBatch(120, 123, 2, 2)
+                    .addBatch(124, 130, 0, 1)
                     .build(),
                 120
             ),
 
             new BatchTestHolder(
                 "Multiple higher state batch updates.",
-                BatchTestHolder.singleBatch(111, 120, (byte) 0, (short) 1),
+                BatchTestHolder.singleBatch(111, 120, 0, 1),
                 BatchTestHolder.multiBatch()
-                    .addBatch(111, 113, (byte) 0, (short) 2)
-                    .addBatch(114, 114, (byte) 2, (short) 1)
-                    .addBatch(115, 119, (byte) 0, (short) 2)  //[(111-123, 2, 2)]
+                    .addBatch(111, 113, 0, 2)
+                    .addBatch(114, 114, 2, 1)
+                    .addBatch(115, 119, 0, 2)  //[(111-123, 2, 2)]
                     .build(),
                 BatchTestHolder.multiBatch()
-                    .addBatch(111, 113, (byte) 0, (short) 2)
-                    .addBatch(114, 114, (byte) 2, (short) 1)
-                    .addBatch(115, 119, (byte) 0, (short) 2)
-                    .addBatch(120, 120, (byte) 0, (short) 1)
+                    .addBatch(111, 113, 0, 2)
+                    .addBatch(114, 114, 2, 1)
+                    .addBatch(115, 119, 0, 2)
+                    .addBatch(120, 120, 0, 1)
                     .build(),
                 -1
             )
@@ -267,115 +267,115 @@ public class StateBatchUtilTest {
             // different states
             new BatchTestHolder(
                 "Candidate higher state. Candidate first offset and last offset match last.",
-                BatchTestHolder.singleBatch(100, 110, (byte) 0, (short) 1),
-                BatchTestHolder.singleBatch(100, 110, (byte) 0, (short) 2),
-                BatchTestHolder.singleBatch(100, 110, (byte) 0, (short) 2),
+                BatchTestHolder.singleBatch(100, 110, 0, 1),
+                BatchTestHolder.singleBatch(100, 110, 0, 2),
+                BatchTestHolder.singleBatch(100, 110, 0, 2),
                 -1
             ),
 
             new BatchTestHolder(
                 "Candidate lower state. Candidate first offset and last offset match last.",
-                BatchTestHolder.singleBatch(100, 110, (byte) 0, (short) 3),
-                BatchTestHolder.singleBatch(100, 110, (byte) 0, (short) 1),
-                BatchTestHolder.singleBatch(100, 110, (byte) 0, (short) 3),
+                BatchTestHolder.singleBatch(100, 110, 0, 3),
+                BatchTestHolder.singleBatch(100, 110, 0, 1),
+                BatchTestHolder.singleBatch(100, 110, 0, 3),
                 -1
             ),
 
             new BatchTestHolder(
                 "Candidate higher state. Candidate first offset same and last offset smaller than last.",
-                BatchTestHolder.singleBatch(100, 110, (byte) 0, (short) 1),
-                BatchTestHolder.singleBatch(100, 105, (byte) 0, (short) 2),
+                BatchTestHolder.singleBatch(100, 110, 0, 1),
+                BatchTestHolder.singleBatch(100, 105, 0, 2),
                 BatchTestHolder.multiBatch()
-                    .addBatch(100, 105, (byte) 0, (short) 2)
-                    .addBatch(106, 110, (byte) 0, (short) 1)
+                    .addBatch(100, 105, 0, 2)
+                    .addBatch(106, 110, 0, 1)
                     .build(),
                 -1
             ),
 
             new BatchTestHolder(
                 "Candidate lower state. Candidate first offset same and last offset smaller than last.",
-                BatchTestHolder.singleBatch(100, 110, (byte) 0, (short) 3),
-                BatchTestHolder.singleBatch(100, 105, (byte) 0, (short) 1),
-                BatchTestHolder.singleBatch(100, 110, (byte) 0, (short) 3),
+                BatchTestHolder.singleBatch(100, 110, 0, 3),
+                BatchTestHolder.singleBatch(100, 105, 0, 1),
+                BatchTestHolder.singleBatch(100, 110, 0, 3),
                 -1
             ),
 
             new BatchTestHolder(
                 "Candidate higher state. Candidate first offset same and last offset strictly larger than last.",
-                BatchTestHolder.singleBatch(100, 110, (byte) 0, (short) 1),
-                BatchTestHolder.singleBatch(100, 115, (byte) 0, (short) 2),
-                BatchTestHolder.singleBatch(100, 115, (byte) 0, (short) 2),
+                BatchTestHolder.singleBatch(100, 110, 0, 1),
+                BatchTestHolder.singleBatch(100, 115, 0, 2),
+                BatchTestHolder.singleBatch(100, 115, 0, 2),
                 -1
             ),
 
             new BatchTestHolder(
                 "Candidate lower state. Candidate first offset same and last offset strictly larger than last.",
-                BatchTestHolder.singleBatch(100, 110, (byte) 0, (short) 3),
-                BatchTestHolder.singleBatch(100, 115, (byte) 0, (short) 1),
+                BatchTestHolder.singleBatch(100, 110, 0, 3),
+                BatchTestHolder.singleBatch(100, 115, 0, 1),
                 BatchTestHolder.multiBatch()
-                    .addBatch(100, 110, (byte) 0, (short) 3)
-                    .addBatch(111, 115, (byte) 0, (short) 1)
+                    .addBatch(100, 110, 0, 3)
+                    .addBatch(111, 115, 0, 1)
                     .build(),
                 -1
             ),
 
             new BatchTestHolder(
                 "Candidate higher state. Candidate first offset strictly larger and last offset strictly smaller than last.",
-                BatchTestHolder.singleBatch(100, 115, (byte) 0, (short) 1),
-                BatchTestHolder.singleBatch(105, 110, (byte) 1, (short) 1),
+                BatchTestHolder.singleBatch(100, 115, 0, 1),
+                BatchTestHolder.singleBatch(105, 110, 1, 1),
                 BatchTestHolder.multiBatch()
-                    .addBatch(100, 104, (byte) 0, (short) 1)
-                    .addBatch(105, 110, (byte) 1, (short) 1)
-                    .addBatch(111, 115, (byte) 0, (short) 1)
+                    .addBatch(100, 104, 0, 1)
+                    .addBatch(105, 110, 1, 1)
+                    .addBatch(111, 115, 0, 1)
                     .build(),
                 -1
             ),
 
             new BatchTestHolder(
                 "Candidate lower state. Candidate first offset strictly larger and last offset strictly smaller than last.",
-                BatchTestHolder.singleBatch(100, 115, (byte) 1, (short) 1),
-                BatchTestHolder.singleBatch(105, 110, (byte) 0, (short) 1),
-                BatchTestHolder.singleBatch(100, 115, (byte) 1, (short) 1),
+                BatchTestHolder.singleBatch(100, 115, 1, 1),
+                BatchTestHolder.singleBatch(105, 110, 0, 1),
+                BatchTestHolder.singleBatch(100, 115, 1, 1),
                 -1
             ),
 
             new BatchTestHolder(
                 "Candidate higher state. Candidate first offset strictly larger and last offset same as last.",
-                BatchTestHolder.singleBatch(100, 110, (byte) 0, (short) 1),
-                BatchTestHolder.singleBatch(105, 110, (byte) 0, (short) 2),
+                BatchTestHolder.singleBatch(100, 110, 0, 1),
+                BatchTestHolder.singleBatch(105, 110, 0, 2),
                 BatchTestHolder.multiBatch()
-                    .addBatch(100, 104, (byte) 0, (short) 1)
-                    .addBatch(105, 110, (byte) 0, (short) 2)
+                    .addBatch(100, 104, 0, 1)
+                    .addBatch(105, 110, 0, 2)
                     .build(),
                 -1
             ),
 
             new BatchTestHolder(
                 "Candidate lower state. Candidate first offset strictly larger and last offset same as last.",
-                BatchTestHolder.singleBatch(100, 110, (byte) 0, (short) 2),
-                BatchTestHolder.singleBatch(105, 110, (byte) 0, (short) 1),
-                BatchTestHolder.singleBatch(100, 110, (byte) 0, (short) 2),
+                BatchTestHolder.singleBatch(100, 110, 0, 2),
+                BatchTestHolder.singleBatch(105, 110, 0, 1),
+                BatchTestHolder.singleBatch(100, 110, 0, 2),
                 -1
             ),
 
             new BatchTestHolder(
                 "Candidate higher state. Candidate first and last offsets strictly larger than last.",
-                BatchTestHolder.singleBatch(100, 110, (byte) 0, (short) 1),
-                BatchTestHolder.singleBatch(105, 115, (byte) 0, (short) 2),
+                BatchTestHolder.singleBatch(100, 110, 0, 1),
+                BatchTestHolder.singleBatch(105, 115, 0, 2),
                 BatchTestHolder.multiBatch()
-                    .addBatch(100, 104, (byte) 0, (short) 1)
-                    .addBatch(105, 115, (byte) 0, (short) 2)
+                    .addBatch(100, 104, 0, 1)
+                    .addBatch(105, 115, 0, 2)
                     .build(),
                 -1
             ),
 
             new BatchTestHolder(
                 "Candidate lower state. Candidate first and last offsets strictly larger than last.",
-                BatchTestHolder.singleBatch(100, 110, (byte) 0, (short) 2),
-                BatchTestHolder.singleBatch(105, 115, (byte) 0, (short) 1),
+                BatchTestHolder.singleBatch(100, 110, 0, 2),
+                BatchTestHolder.singleBatch(105, 115, 0, 1),
                 BatchTestHolder.multiBatch()
-                    .addBatch(100, 110, (byte) 0, (short) 2)
-                    .addBatch(111, 115, (byte) 0, (short) 1)
+                    .addBatch(100, 110, 0, 2)
+                    .addBatch(111, 115, 0, 1)
                     .build(),
                 -1
             )
