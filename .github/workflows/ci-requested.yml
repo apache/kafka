@@ -70,7 +70,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          SHA: ${{ github.event.pull_requests.head.sha }}
+          SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set +e
           gh pr view $PR_NUMBER --json labels -q '.labels[].name' | grep -q 'ci-approved'
