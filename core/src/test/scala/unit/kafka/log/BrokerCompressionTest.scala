@@ -23,8 +23,8 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
-import org.apache.kafka.server.log.storage.FetchIsolation
 import org.apache.kafka.server.record.BrokerCompressionType
+import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats

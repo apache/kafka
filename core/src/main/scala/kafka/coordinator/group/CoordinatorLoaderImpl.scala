@@ -25,7 +25,7 @@ import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader.{LoadSummary, UnknownRecordTypeException}
 import org.apache.kafka.coordinator.common.runtime.{CoordinatorLoader, CoordinatorPlayback, Deserializer}
-import org.apache.kafka.server.log.storage.FetchIsolation
+import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.KafkaScheduler
 
 import java.nio.ByteBuffer

@@ -48,7 +48,7 @@ import org.apache.kafka.server.common.{ApiMessageAndVersion, KRaftVersion}
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteLogSegmentMetadataUpdate, RemoteLogSegmentState, RemotePartitionDeleteMetadata, RemotePartitionDeleteState}
-import org.apache.kafka.server.log.storage.FetchIsolation
+import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.snapshot.RecordsSnapshotWriter
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}

@@ -42,7 +42,7 @@ import org.apache.kafka.metadata.storage.Formatter
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.common.KRaftVersion
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
-import org.apache.kafka.server.log.storage.{FetchIsolation, FetchParams, FetchPartitionData}
+import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
 import org.apache.kafka.server.util.{MockTime, ShutdownableThread}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFailureChannel}
 import org.junit.jupiter.api.Assertions._

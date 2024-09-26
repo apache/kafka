@@ -34,9 +34,9 @@ import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPar
 import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch, RequestLocal}
 import org.apache.kafka.server.common.MetadataVersion.IBP_0_10_0_IV0
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
-import org.apache.kafka.server.log.storage.FetchIsolation
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.record.BrokerCompressionType
+import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.checkpoint.{LeaderEpochCheckpointFile, PartitionMetadataFile}
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache

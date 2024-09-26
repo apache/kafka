@@ -30,11 +30,11 @@ import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.requests.FetchRequest;
-import org.apache.kafka.server.log.storage.FetchIsolation;
-import org.apache.kafka.server.log.storage.FetchParams;
-import org.apache.kafka.server.log.storage.FetchPartitionData;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.ShareFetchData;
+import org.apache.kafka.server.storage.log.FetchIsolation;
+import org.apache.kafka.server.storage.log.FetchParams;
+import org.apache.kafka.server.storage.log.FetchPartitionData;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;

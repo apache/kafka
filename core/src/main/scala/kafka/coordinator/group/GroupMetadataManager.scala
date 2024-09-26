@@ -48,8 +48,8 @@ import org.apache.kafka.coordinator.group.OffsetConfig
 import org.apache.kafka.coordinator.group.generated.{GroupMetadataValue, OffsetCommitKey, OffsetCommitValue, GroupMetadataKey => GroupMetadataKeyData}
 import org.apache.kafka.server.common.{MetadataVersion, RequestLocal}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_1_IV0, IBP_2_1_IV0, IBP_2_1_IV1, IBP_2_3_IV0}
-import org.apache.kafka.server.log.storage.FetchIsolation
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.kafka.storage.internals.log.{AppendOrigin, VerificationGuard}
 

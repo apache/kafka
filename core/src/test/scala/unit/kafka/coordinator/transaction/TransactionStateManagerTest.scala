@@ -37,7 +37,7 @@ import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion, RequestLocal, TransactionVersion}
 import org.apache.kafka.server.common.TransactionVersion.{TV_0, TV_2}
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogKey
-import org.apache.kafka.server.log.storage.FetchIsolation
+import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.MockScheduler
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LogConfig, LogOffsetMetadata}
 import org.junit.jupiter.api.Assertions._

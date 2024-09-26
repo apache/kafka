@@ -37,7 +37,7 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.LeaderAndIsr
 import org.apache.kafka.server.common.{MetadataVersion, RequestLocal}
 import org.apache.kafka.server.config.ReplicationConfigs
-import org.apache.kafka.server.log.storage.{FetchIsolation, FetchParams}
+import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams}
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
