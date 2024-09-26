@@ -13,22 +13,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: CI Requested
+name: PR Labeled
 
 on:
-  workflow_run:
-    workflows: [CI]
+  pull_request_target:
     types:
-      - requested
+      - labeled
 
 jobs:
-  check-pr-labels:
+  approve-workflow-run:
     # Even though job conditionals are difficult to debug, this will reduce the number of unnecessary runs
-    if: |
-      github.event_name == 'workflow_run' && 
-      github.event.workflow_run.event == 'pull_request' &&
-      github.event.workflow_run.status == 'completed' && 
-      github.event.workflow_run.conclusion == 'action_required'
+    if:
+      github.event_name == 'pull_request_target' &&
+      github.event.action == 'labeled' &&
+      github.event.label.name == 'ci-approved'
     runs-on: ubuntu-latest
     steps:
       - name: Env
@@ -40,27 +38,26 @@ jobs:
         with:
           persist-credentials:
             false
-      - name: Check PR Labels
-        id: check-pr-labels
+      - name: Find Workflow Run ID
+        id: find-run-id
         if: |
-          github.event_name == 'workflow_run' && 
-          github.event.workflow_run.event == 'pull_request' &&
-          github.event.workflow_run.status == 'completed' && 
-          github.event.workflow_run.conclusion == 'action_required'
+          github.event_name == 'pull_request_target' &&
+          github.event.action == 'labeled' &&
+          github.event.label.name == 'ci-approved'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
-          RUN_ID: ${{ github.event.workflow_run.id }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set +e
-          gh pr view $PR_NUMBER --json labels -q '.labels[].name' | grep -q 'ci-approved'
-          exitcode="$?"
-          if [ $exitcode -ne 0 ]; then
-            echo "No ci-approved label set on PR #$PR_NUMBER. Will not auto-approve.";
+          echo "Found 'ci-approved' label on PR #$PR_NUMBER.";
+          RUN_ID=$(gh run list -L 1 -c $SHA -s action_required --json databaseId --jq '.[].databaseId')
+          if [ -z "$RUN_ID" ]; then
+            echo "No workflow run found for SHA $SHA";
             exit 0;
           else
-            echo "Found 'ci-approved' label on PR #$PR_NUMBER. Auto-approving workflow run $RUN_ID.";
-          fi
+            echo "Auto-approving workflow run $RUN_ID.";
+          fi;
           echo "PR_NUMBER=$PR_NUMBER" >> "$GITHUB_ENV"
           echo "RUN_ID=$RUN_ID" >> "$GITHUB_ENV"
       - name: Approve Workflow Run
