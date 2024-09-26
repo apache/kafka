@@ -1617,10 +1617,25 @@ public class ConsumerMembershipManagerTest {
     }
 
     @Test
-    public void testOnSubscriptionUpdatedTransitionsToJoiningOnlyIfNotInGroup() {
+    public void testOnSubscriptionUpdatedDoesNotTransitionToJoiningIfInGroup() {
         ConsumerMembershipManager membershipManager = createMemberInStableState();
         membershipManager.onSubscriptionUpdated();
+        assertTrue(membershipManager.subscriptionUpdated());
+        membershipManager.onConsumerPoll();
         verify(membershipManager, never()).transitionToJoining();
+        assertFalse(membershipManager.subscriptionUpdated());
+    }
+
+    @Test
+    public void testOnSubscriptionUpdatedTransitionsToJoiningOnPollIfNotInGroup() {
+        ConsumerMembershipManager membershipManager = createMembershipManager(null);
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+        membershipManager.onSubscriptionUpdated();
+        verify(membershipManager, never()).transitionToJoining();
+        assertTrue(membershipManager.subscriptionUpdated());
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+        membershipManager.onConsumerPoll();
+        verify(membershipManager).transitionToJoining();
     }
 
     @Test
