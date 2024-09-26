@@ -16,7 +16,7 @@
   */
 package kafka.api
 
-import kafka.security.JaasModule
+import kafka.security.{JaasModule, JaasTestUtils}
 import kafka.security.JaasTestUtils._
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.isAclSecure
@@ -27,15 +27,17 @@ import org.apache.kafka.common.network.ConnectionMode
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.security.plain.PlainAuthenticateCallback
+import org.apache.kafka.test.TestSslUtils
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
 
 import java.security.AccessController
-import java.util.{Collections, Properties}
+import java.util.{Collections, Optional, Properties}
 import javax.security.auth.Subject
 import javax.security.auth.callback._
 import javax.security.auth.login.AppConfigurationEntry
 import scala.collection.Seq
+import scala.compat.java8.OptionConverters
 import scala.jdk.CollectionConverters._
 
 object SaslPlainSslEndToEndAuthorizationTest {
@@ -141,8 +143,9 @@ class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
   // Generate SSL certificates for clients since we are enabling TLS mutual authentication
   // in this test for the SASL_SSL listener.
   override def clientSecurityProps(certAlias: String): Properties = {
-    TestUtils.securityConfigs(ConnectionMode.CLIENT, securityProtocol, trustStoreFile, certAlias, TestUtils.SslCertificateCn,
-      clientSaslProperties, needsClientCert = Some(true))
+    JaasTestUtils.securityConfigs(ConnectionMode.CLIENT, securityProtocol, OptionConverters.toJava(trustStoreFile),
+      certAlias, JaasTestUtils.SSL_CERTIFICATE_CN, OptionConverters.toJava(clientSaslProperties),
+      TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS, Optional.of(true))
   }
 
   /**

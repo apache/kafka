@@ -15,8 +15,8 @@ package kafka.api
 import java.util
 import java.util.concurrent._
 import java.util.Properties
-
 import com.yammer.metrics.core.Gauge
+import kafka.security.JaasTestUtils
 import kafka.security.authorizer.AclAuthorizer
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.CreateAclsResult
@@ -35,6 +35,7 @@ import org.junit.jupiter.api.{AfterEach, Test}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
+import scala.compat.java8.OptionConverters
 
 object SslAdminIntegrationTest {
   @volatile var semaphore: Option[Semaphore] = None
@@ -284,16 +285,16 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
 
   // Override the CN to create a principal based on it
   override def superuserSecurityProps(certAlias: String): Properties = {
-    val props = TestUtils.securityConfigs(ConnectionMode.CLIENT, securityProtocol, trustStoreFile, certAlias, SslAdminIntegrationTest.superuserCn,
-      clientSaslProperties)
+    val props = JaasTestUtils.securityConfigs(ConnectionMode.CLIENT, securityProtocol, OptionConverters.toJava(trustStoreFile),
+      certAlias, SslAdminIntegrationTest.superuserCn, OptionConverters.toJava(clientSaslProperties))
     props.remove(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG)
     props
   }
 
   // Override the CN to create a principal based on it
   override def clientSecurityProps(certAlias: String): Properties = {
-    val props = TestUtils.securityConfigs(ConnectionMode.CLIENT, securityProtocol, trustStoreFile, certAlias, SslAdminIntegrationTest.clientCn,
-      clientSaslProperties)
+    val props = JaasTestUtils.securityConfigs(ConnectionMode.CLIENT, securityProtocol, OptionConverters.toJava(trustStoreFile),
+      certAlias, SslAdminIntegrationTest.clientCn, OptionConverters.toJava(clientSaslProperties))
     props.remove(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG)
     props
   }
