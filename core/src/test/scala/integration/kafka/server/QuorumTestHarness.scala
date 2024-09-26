@@ -161,7 +161,7 @@ class QuorumTestHarnessFaultHandlerFactory(
 }
 
 @Tag("integration")
-abstract class QuorumTestHarness extends Logging {
+class QuorumTestHarness extends Logging {
   val zkConnectionTimeout = 10000
   val zkSessionTimeout = 15000 // Allows us to avoid ZK session expiration due to GC up to 2/3 * 15000ms = 10 secs
   val zkMaxInFlightRequests = Int.MaxValue

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
-import kafka.server.KafkaServer;
+import kafka.server.KafkaBroker;
 import kafka.server.MetadataCache;
 
 import org.apache.kafka.clients.admin.Admin;
@@ -935,7 +935,7 @@ public class IntegrationTestUtils {
     }
 
     @SuppressWarnings("WeakerAccess")
-    public static void waitForTopicPartitions(final List<KafkaServer> servers,
+    public static void waitForTopicPartitions(final List<KafkaBroker> servers,
                                               final List<TopicPartition> partitions,
                                               final long timeout) throws InterruptedException {
         final long end = System.currentTimeMillis() + timeout;
@@ -948,7 +948,7 @@ public class IntegrationTestUtils {
         }
     }
 
-    private static void waitUntilMetadataIsPropagated(final List<KafkaServer> servers,
+    private static void waitUntilMetadataIsPropagated(final List<KafkaBroker> servers,
                                                      final String topic,
                                                      final int partition,
                                                      final long timeout) throws InterruptedException {
@@ -956,10 +956,10 @@ public class IntegrationTestUtils {
             topic, partition, timeout);
 
         retryOnExceptionWithTimeout(timeout, () -> {
-            final List<KafkaServer> emptyPartitionInfos = new ArrayList<>();
-            final List<KafkaServer> invalidBrokerIds = new ArrayList<>();
+            final List<KafkaBroker> emptyPartitionInfos = new ArrayList<>();
+            final List<KafkaBroker> invalidBrokerIds = new ArrayList<>();
 
-            for (final KafkaServer server : servers) {
+            for (final KafkaBroker server : servers) {
                 final MetadataCache metadataCache = server.dataPlaneRequestProcessor().metadataCache();
                 final Option<UpdateMetadataPartitionState> partitionInfo =
                     metadataCache.getPartitionInfo(topic, partition);

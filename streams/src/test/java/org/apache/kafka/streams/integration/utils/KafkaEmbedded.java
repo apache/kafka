@@ -17,8 +17,10 @@
 package org.apache.kafka.streams.integration.utils;
 
 import kafka.cluster.EndPoint;
+import kafka.server.KafkaBroker;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
+import kafka.server.QuorumTestHarness;
 import kafka.utils.TestUtils;
 
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -74,17 +76,19 @@ public class KafkaEmbedded {
      *               currently.
      */
     @SuppressWarnings({"WeakerAccess", "this-escape"})
-    public KafkaEmbedded(final Properties config, final MockTime time) throws IOException {
+    public KafkaEmbedded(
+        final Properties config,
+        final MockTime time,
+        final QuorumTestHarness quorum
+    ) throws IOException {
         tmpFolder = org.apache.kafka.test.TestUtils.tempDirectory();
         logDir = org.apache.kafka.test.TestUtils.tempDirectory(tmpFolder.toPath(), "log");
         effectiveConfig = effectiveConfigFrom(config);
         final boolean loggingEnabled = true;
         final KafkaConfig kafkaConfig = new KafkaConfig(effectiveConfig, loggingEnabled);
-        log.debug("Starting embedded Kafka broker (with log.dirs={} and ZK ensemble at {}) ...",
-            logDir, zookeeperConnect());
+        log.debug("Starting embedded Kafka broker (with log.dirs={})...", logDir);
         kafka = TestUtils.createServer(kafkaConfig, time);
-        log.debug("Startup of embedded Kafka broker at {} completed (with ZK ensemble at {}) ...",
-            brokerList(), zookeeperConnect());
+        log.debug("Startup of embedded Kafka broker at {} completed ...", brokerList());
     }
 
     /**
@@ -118,19 +122,9 @@ public class KafkaEmbedded {
         return endPoint.host() + ":" + endPoint.port();
     }
 
-
-    /**
-     * The ZooKeeper connection string aka `zookeeper.connect`.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public String zookeeperConnect() {
-        return effectiveConfig.getProperty("zookeeper.connect", DEFAULT_ZK_CONNECT);
-    }
-
     @SuppressWarnings("WeakerAccess")
     public void stopAsync() {
-        log.debug("Shutting down embedded Kafka broker at {} (with ZK ensemble at {}) ...",
-                  brokerList(), zookeeperConnect());
+        log.debug("Shutting down embedded Kafka broker at {} ...", brokerList());
         kafka.shutdown();
     }
 
@@ -143,8 +137,7 @@ public class KafkaEmbedded {
         } catch (final IOException e) {
             throw new RuntimeException(e);
         }
-        log.debug("Shutdown of embedded Kafka broker at {} completed (with ZK ensemble at {}) ...",
-            brokerList(), zookeeperConnect());
+        log.debug("Shutdown of embedded Kafka broker at {} completed ...", brokerList());
     }
 
     /**
@@ -217,7 +210,7 @@ public class KafkaEmbedded {
     }
 
     @SuppressWarnings("WeakerAccess")
-    public KafkaServer kafkaServer() {
+    public KafkaBroker kafkaServer() {
         return kafka;
     }
 }

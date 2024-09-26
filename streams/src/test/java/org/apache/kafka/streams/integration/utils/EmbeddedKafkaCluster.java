@@ -16,19 +16,19 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
-import kafka.server.KafkaServer;
-import kafka.zk.EmbeddedZookeeper;
+import kafka.server.KafkaBroker;
+import kafka.server.QuorumTestHarness;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.network.SocketServerConfigs;
-import org.apache.kafka.server.config.ConfigType;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
-import org.apache.kafka.server.config.ZkConfigs;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.test.TestCondition;
@@ -39,6 +39,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -47,6 +48,8 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Runs an in-memory, "embedded" Kafka cluster with 1 ZooKeeper instance and supplied number of Kafka brokers.
@@ -57,7 +60,7 @@ public class EmbeddedKafkaCluster {
     private static final int DEFAULT_BROKER_PORT = 0; // 0 results in a random port being selected
     private static final int TOPIC_CREATION_TIMEOUT = 30000;
     private static final int TOPIC_DELETION_TIMEOUT = 30000;
-    private EmbeddedZookeeper zookeeper = null;
+    private QuorumTestHarness quorum;
     private final KafkaEmbedded[] brokers;
 
     private final Properties brokerConfig;
@@ -101,6 +104,7 @@ public class EmbeddedKafkaCluster {
             throw new IllegalArgumentException("Size of brokerConfigOverrides " + brokerConfigOverrides.size()
                 + " must match broker number " + numBrokers);
         }
+        quorum = new QuorumTestHarness();
         brokers = new KafkaEmbedded[numBrokers];
         this.brokerConfig = brokerConfig;
         time = new MockTime(mockTimeMillisStart, mockTimeNanoStart);
@@ -112,11 +116,9 @@ public class EmbeddedKafkaCluster {
      */
     public void start() throws IOException {
         log.debug("Initiating embedded Kafka cluster startup");
-        log.debug("Starting a ZooKeeper instance");
-        zookeeper = new EmbeddedZookeeper();
-        log.debug("ZooKeeper instance is running at {}", zKConnectString());
+        log.debug("Starting a controller instance");
+        quorum.newKRaftQuorum(brokerConfig);
 
-        brokerConfig.put(ZkConfigs.ZK_CONNECT_CONFIG, zKConnectString());
         putIfAbsent(brokerConfig, SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:" + DEFAULT_BROKER_PORT);
         putIfAbsent(brokerConfig, ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, true);
         putIfAbsent(brokerConfig, CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, 2 * 1024 * 1024L);
@@ -136,10 +138,9 @@ public class EmbeddedKafkaCluster {
             if (brokerConfigOverrides != null && brokerConfigOverrides.size() > i) {
                 effectiveConfig.putAll(brokerConfigOverrides.get(i));
             }
-            brokers[i] = new KafkaEmbedded(effectiveConfig, time);
+            brokers[i] = new KafkaEmbedded(effectiveConfig, time, quorum);
 
-            log.debug("Kafka instance is running at {}, connected to ZooKeeper at {}",
-                brokers[i].brokerList(), brokers[i].zookeeperConnect());
+            log.debug("Kafka instance is running at {}", brokers[i].brokerList());
         }
     }
 
@@ -173,17 +174,7 @@ public class EmbeddedKafkaCluster {
         for (final KafkaEmbedded broker : brokers) {
             broker.awaitStoppedAndPurge();
         }
-        zookeeper.shutdown();
-    }
-
-    /**
-     * The ZooKeeper connection string aka `zookeeper.connect` in `hostnameOrIp:port` format.
-     * Example: `127.0.0.1:2181`.
-     * <p>
-     * You can use this to e.g. tell Kafka brokers how to connect to this instance.
-     */
-    public String zKConnectString() {
-        return "127.0.0.1:" + zookeeper.port();
+        quorum.tearDown();
     }
 
     /**
@@ -354,8 +345,8 @@ public class EmbeddedKafkaCluster {
         }
     }
 
-    private List<KafkaServer> brokers() {
-        final List<KafkaServer> servers = new ArrayList<>();
+    private List<KafkaBroker> brokers() {
+        final List<KafkaBroker> servers = new ArrayList<>();
         for (final KafkaEmbedded broker : brokers) {
             servers.add(broker.kafkaServer());
         }
@@ -363,15 +354,32 @@ public class EmbeddedKafkaCluster {
     }
 
     public Properties getLogConfig(final String topic) {
-        return brokers[0].kafkaServer().zkClient().getEntityConfigs(ConfigType.TOPIC, topic);
+        final Properties props = new Properties();
+        try (final Admin adminClient = brokers[0].createAdminClient()) {
+            final ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
+            try {
+                final Map<ConfigResource, Config> results =
+                    adminClient.describeConfigs(Arrays.asList(resource)).all().get(10, TimeUnit.MINUTES);
+                results.getOrDefault(resource, new Config(Arrays.asList())).entries().forEach(
+                    e -> props.setProperty(e.name(), e.value()));
+            } catch (final ExecutionException e) {
+                throw new RuntimeException(e.getCause());
+            } catch (final InterruptedException | TimeoutException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        return props;
     }
 
     public Set<String> getAllTopicsInCluster() {
-        final scala.collection.Iterator<String> topicsIterator = brokers[0].kafkaServer().zkClient().getAllTopicsInCluster(false).iterator();
-        final Set<String> topics = new HashSet<>();
-        while (topicsIterator.hasNext()) {
-            topics.add(topicsIterator.next());
+        try (final Admin adminClient = brokers[0].createAdminClient()) {
+            try {
+                return adminClient.listTopics().names().get(10, TimeUnit.MINUTES);
+            } catch (final ExecutionException e) {
+                throw new RuntimeException(e.getCause());
+            } catch (final InterruptedException | TimeoutException e) {
+                throw new RuntimeException(e);
+            }
         }
-        return topics;
     }
 }
