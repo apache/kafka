@@ -132,6 +132,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
@@ -846,7 +847,7 @@ public class AsyncKafkaConsumerTest {
             subscriptions,
             "group-id",
             "client-id"));
-        doThrow(new KafkaException()).when(consumer).processBackgroundEvents(any(), any());
+        doThrow(new KafkaException()).when(consumer).processBackgroundEvents();
         assertThrows(KafkaException.class, () -> consumer.close(Duration.ZERO));
         verifyUnsubscribeEvent(subscriptions);
         // Close operation should carry on even if the unsubscribe fails
@@ -1205,17 +1206,36 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testCloseWithInterruptUsingDefaultTimeout() {
         SubscriptionState subscriptions = mock(SubscriptionState.class);
+        ConsumerRebalanceListenerInvoker rebalanceListenerInvoker = mock(ConsumerRebalanceListenerInvoker.class);
         consumer = spy(newConsumer(
             mock(FetchBuffer.class),
             mock(ConsumerInterceptors.class),
-            mock(ConsumerRebalanceListenerInvoker.class),
+            rebalanceListenerInvoker,
             subscriptions,
             "group-id",
             "client-id"));
 
+        AtomicBoolean wasInterrupted = new AtomicBoolean();
+        MockRebalanceListener consumerRebalanceListener = new MockRebalanceListener() {
+
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                super.onPartitionsRevoked(partitions);
+                wasInterrupted.compareAndSet(false, Thread.currentThread().isInterrupted());
+            }
+        };
+
+        consumer.subscribe(Collections.singleton("topic-1"), consumerRebalanceListener);
+
         // This future is completed when the ConsumerRebalanceListener has been invoked and the
         // ConsumerRebalanceListenerCallbackCompletedEvent has been enqueued.
         CompletableFuture<Void> crlCallbackCompletedFuture = new CompletableFuture<>();
+
+        doAnswer(invocation -> {
+            SortedSet<TopicPartition> partitions = invocation.getArgument(0);
+            consumerRebalanceListener.onPartitionsRevoked(partitions);
+            return null;
+        }).when(rebalanceListenerInvoker).invokePartitionsRevoked(any());
 
         doAnswer(invocation -> {
             // When an UnsubscribeEvent is enqueued, don't complete it immediately. Instead, enqueue the 'rebalance
@@ -1252,6 +1272,8 @@ public class AsyncKafkaConsumerTest {
             Thread.interrupted();
         }
 
+        assertEquals(1, consumerRebalanceListener.revokedCount);
+        assertTrue(wasInterrupted.get());
         verifyUnsubscribeEvent(subscriptions);
         verify(applicationEventHandler).add(any(ConsumerRebalanceListenerCallbackCompletedEvent.class));
     }
@@ -1828,11 +1850,11 @@ public class AsyncKafkaConsumerTest {
     }
 
     /**
-     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(Future, Timer) processBackgroundEvents}
+     * Tests {@link AsyncKafkaConsumer#waitForUnsubscribe(CompletableFuture, boolean, Timer)}
      * handles the case where the {@link Future} takes a bit of time to complete, but does within the timeout.
      */
     @Test
-    public void testProcessBackgroundEventsWithInitialDelay() throws Exception {
+    public void testWaitForUnsubscribeWithInitialDelay() throws Exception {
         consumer = newConsumer();
         Timer timer = time.timer(1000);
         CompletableFuture<?> future = mock(CompletableFuture.class);
@@ -1854,25 +1876,25 @@ public class AsyncKafkaConsumerTest {
             return null;
         }).when(future).get(any(Long.class), any(TimeUnit.class));
 
-        consumer.processBackgroundEvents(future, timer);
+        consumer.waitForUnsubscribe(future, false, timer);
 
         // 800 is the 1000 ms timeout (above) minus the 200 ms delay for the two incremental timeouts/retries.
         assertEquals(800, timer.remainingMs());
     }
 
     /**
-     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(Future, Timer) processBackgroundEvents}
+     * Tests {@link AsyncKafkaConsumer#waitForUnsubscribe(CompletableFuture, boolean, Timer)}
      * handles the case where the {@link Future} is already complete when invoked, so it doesn't have to wait.
      */
     @Test
-    public void testProcessBackgroundEventsWithoutDelay() {
+    public void testWaitForUnsubscribeWithoutDelay() {
         consumer = newConsumer();
         Timer timer = time.timer(1000);
 
         // Create a future that is already completed.
         CompletableFuture<?> future = CompletableFuture.completedFuture(null);
 
-        consumer.processBackgroundEvents(future, timer);
+        consumer.waitForUnsubscribe(future, false, timer);
 
         // Because we didn't need to perform a timed get, we should still have every last millisecond
         // of our initial timeout.
@@ -1880,11 +1902,11 @@ public class AsyncKafkaConsumerTest {
     }
 
     /**
-     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(Future, Timer) processBackgroundEvents}
+     * Tests {@link AsyncKafkaConsumer#waitForUnsubscribe(CompletableFuture, boolean, Timer)}
      * handles the case where the {@link Future} does not complete within the timeout.
      */
     @Test
-    public void testProcessBackgroundEventsTimesOut() throws Exception {
+    public void testWaitForUnsubscribeTimesOut() throws Exception {
         consumer = newConsumer();
         Timer timer = time.timer(1000);
         CompletableFuture<?> future = mock(CompletableFuture.class);
@@ -1895,7 +1917,7 @@ public class AsyncKafkaConsumerTest {
             throw new java.util.concurrent.TimeoutException("Intentional timeout");
         }).when(future).get(any(Long.class), any(TimeUnit.class));
 
-        assertThrows(TimeoutException.class, () -> consumer.processBackgroundEvents(future, timer));
+        assertThrows(TimeoutException.class, () -> consumer.waitForUnsubscribe(future, anyBoolean(), timer));
 
         // Because we forced our mocked future to continuously time out, we should have no time remaining.
         assertEquals(0, timer.remainingMs());
@@ -1967,7 +1989,7 @@ public class AsyncKafkaConsumerTest {
         // Check that an unsubscribe event was generated, and that the consumer waited for it to
         // complete processing background events.
         verify(applicationEventHandler).add(any(UnsubscribeEvent.class));
-        verify(consumer).processBackgroundEvents(any(), any());
+        verify(consumer).waitForUnsubscribe(any(), anyBoolean(), any());
 
         // The consumer should not clear the assignment in the app thread. The unsubscribe
         // event is the one responsible for updating the assignment in the background when it
