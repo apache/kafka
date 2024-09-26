@@ -1987,7 +1987,7 @@ public class GroupMetadataManager {
 
             if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
                 if (log.isDebugEnabled()) {
-                    log.info("[GroupId {}] Computed new subscription metadata: {}.",
+                    log.debug("[GroupId {}] Computed new subscription metadata: {}.",
                         groupId, subscriptionMetadata);
                 }
                 bumpGroupEpoch = true;
