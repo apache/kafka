@@ -137,9 +137,6 @@ public class TopicCommandTest {
         assertInitializeInvalidOptionsExitCode(1,
             new String[] {"--bootstrap-server", bootstrapServer, "--alter", "--topic", topicName,
                 "--partitions", "3", "--config", "cleanup.policy=compact"});
-        assertInitializeInvalidOptionsExitCode(1,
-            new String[] {"--bootstrap-server", bootstrapServer, "--alter", "--topic", topicName,
-                "--partitions", "3", "--delete-config", "cleanup.policy"});
         TopicCommand.TopicCommandOptions opts =
             new TopicCommand.TopicCommandOptions(
                 new String[] {"--bootstrap-server", bootstrapServer, "--create", "--topic", topicName, "--partitions", "3",

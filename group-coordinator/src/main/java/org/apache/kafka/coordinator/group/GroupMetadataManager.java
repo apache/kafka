@@ -1280,6 +1280,7 @@ public class GroupMetadataManager {
         throwIfEmptyString(request.groupId(), "GroupId can't be empty.");
         throwIfEmptyString(request.instanceId(), "InstanceId can't be empty.");
         throwIfEmptyString(request.rackId(), "RackId can't be empty.");
+        throwIfNotNull(request.subscribedTopicRegex(), "SubscribedTopicRegex is not supported yet.");
 
         if (request.memberEpoch() > 0 || request.memberEpoch() == LEAVE_GROUP_MEMBER_EPOCH) {
             throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
@@ -1685,7 +1686,9 @@ public class GroupMetadataManager {
      * @param clientId              The client id.
      * @param clientHost            The client host.
      * @param subscribedTopicNames  The list of subscribed topic names from the request
-     *                              of null.
+     *                              or null.
+     * @param subscribedTopicRegex  The regular expression based subscription from the request
+     *                              or null.
      * @param assignorName          The assignor name from the request or null.
      * @param ownedTopicPartitions  The list of owned partitions from the request or null.
      *
@@ -1702,6 +1705,7 @@ public class GroupMetadataManager {
         String clientId,
         String clientHost,
         List<String> subscribedTopicNames,
+        String subscribedTopicRegex,
         String assignorName,
         List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions
     ) throws ApiException {
@@ -1749,6 +1753,7 @@ public class GroupMetadataManager {
             .maybeUpdateRebalanceTimeoutMs(ofSentinel(rebalanceTimeoutMs))
             .maybeUpdateServerAssignorName(Optional.ofNullable(assignorName))
             .maybeUpdateSubscribedTopicNames(Optional.ofNullable(subscribedTopicNames))
+            .maybeUpdateSubscribedTopicRegex(Optional.ofNullable(subscribedTopicRegex))
             .setClientId(clientId)
             .setClientHost(clientHost)
             .setClassicMemberMetadata(null)
@@ -3159,6 +3164,7 @@ public class GroupMetadataManager {
                 context.clientId(),
                 context.clientAddress.toString(),
                 request.subscribedTopicNames(),
+                request.subscribedTopicRegex(),
                 request.serverAssignor(),
                 request.topicPartitions()
             );
@@ -4043,7 +4049,7 @@ public class GroupMetadataManager {
         if (!group.hasAllMembersJoined()) {
             log.debug("Cannot complete join phase of group {} because not all the members have rejoined. " +
                 "Members={}, AwaitingJoinResponses={}, PendingJoinMembers={}.",
-                group.groupId(), group.numMembers(), group.numAwaitingJoinResponse(), group.numPendingJoinMembers());
+                group.groupId(), group.numMembers(), group.numAwaitingJoinResponse(), String.join(",", group.pendingJoinMembers()));
             return EMPTY_RESULT;
         }
 
