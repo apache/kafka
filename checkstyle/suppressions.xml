@@ -50,6 +50,7 @@
     <!-- server tests -->
     <suppress checks="MethodLength|JavaNCSS|NPath" files="DescribeTopicPartitionsRequestHandlerTest.java"/>
     <suppress checks="CyclomaticComplexity" files="ListConsumerGroupTest.java"/>
+    <suppress checks="ClassFanOutComplexity|CyclomaticComplexity|MethodLength|ParameterNumber|JavaNCSS|ImportControl" files="RequestConvertToJson.java"/>
 
     <!-- Clients -->
     <suppress id="dontUseSystemExit"
