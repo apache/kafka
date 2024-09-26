@@ -1793,8 +1793,10 @@ public class GroupMetadataManager {
             );
 
             if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
-                log.info("[GroupId {}] Computed new subscription metadata: {}.",
-                    groupId, subscriptionMetadata);
+                if (log.isDebugEnabled()) {
+                    log.debug("[GroupId {}] Computed new subscription metadata: {}.",
+                        groupId, subscriptionMetadata);
+                }
                 bumpGroupEpoch = true;
                 records.add(newConsumerGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
             }
@@ -1984,8 +1986,10 @@ public class GroupMetadataManager {
             );
 
             if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
-                log.info("[GroupId {}] Computed new subscription metadata: {}.",
-                    groupId, subscriptionMetadata);
+                if (log.isDebugEnabled()) {
+                    log.info("[GroupId {}] Computed new subscription metadata: {}.",
+                        groupId, subscriptionMetadata);
+                }
                 bumpGroupEpoch = true;
                 records.add(newConsumerGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
             }
@@ -2350,13 +2354,13 @@ public class GroupMetadataManager {
             records.add(newConsumerGroupMemberSubscriptionRecord(groupId, updatedMember));
 
             if (!updatedMember.subscribedTopicNames().equals(member.subscribedTopicNames())) {
-                log.info("[GroupId {}] Member {} updated its subscribed topics to: {}.",
+                log.debug("[GroupId {}] Member {} updated its subscribed topics to: {}.",
                     groupId, memberId, updatedMember.subscribedTopicNames());
                 return true;
             }
 
             if (!updatedMember.subscribedTopicRegex().equals(member.subscribedTopicRegex())) {
-                log.info("[GroupId {}] Member {} updated its subscribed regex to: {}.",
+                log.debug("[GroupId {}] Member {} updated its subscribed regex to: {}.",
                     groupId, memberId, updatedMember.subscribedTopicRegex());
                 return true;
             }
@@ -2432,10 +2436,12 @@ public class GroupMetadataManager {
         if (!updatedMember.equals(member)) {
             records.add(newConsumerGroupCurrentAssignmentRecord(groupId, updatedMember));
 
-            log.info("[GroupId {}] Member {} new assignment state: epoch={}, previousEpoch={}, state={}, "
-                     + "assignedPartitions={} and revokedPartitions={}.",
-                groupId, updatedMember.memberId(), updatedMember.memberEpoch(), updatedMember.previousMemberEpoch(), updatedMember.state(),
-                assignmentToString(updatedMember.assignedPartitions()), assignmentToString(updatedMember.partitionsPendingRevocation()));
+            if (log.isDebugEnabled()) {
+                log.debug("[GroupId {}] Member {} new assignment state: epoch={}, previousEpoch={}, state={}, "
+                        + "assignedPartitions={} and revokedPartitions={}.",
+                    groupId, updatedMember.memberId(), updatedMember.memberEpoch(), updatedMember.previousMemberEpoch(), updatedMember.state(),
+                    assignmentToString(updatedMember.assignedPartitions()), assignmentToString(updatedMember.partitionsPendingRevocation()));
+            }
 
             // Schedule/cancel the rebalance timeout if the member uses the consumer protocol.
             // The members using classic protocol only have join timer and sync timer.
