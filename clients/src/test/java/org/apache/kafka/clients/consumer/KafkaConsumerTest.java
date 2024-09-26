@@ -2574,10 +2574,6 @@ public class KafkaConsumerTest {
         return request.get();
     }
 
-    private boolean requestGenerated(MockClient client, ApiKeys apiKey) {
-        return client.requests().stream().anyMatch(request -> request.requestBuilder().apiKey().equals(apiKey));
-    }
-
     private KafkaConsumer<String, String> consumerWithPendingAuthenticationError(GroupProtocol groupProtocol,
                                                                                  final Time time) {
         ConsumerMetadata metadata = createMetadata(subscription);
