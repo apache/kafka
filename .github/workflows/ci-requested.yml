@@ -26,14 +26,26 @@ on:
 
 jobs:
   check-pr-labels:
-    # To reduce unnecessary runs, only actually run this job if
-
+    # Even though job conditionals are difficult to debug, this will reduce the number of unnecessary runs
+    if: |
+      (github.event_name == 'workflow_run' && 
+       github.event.workflow_run.event == 'pull_request' &&
+       github.event.workflow_run.status == 'completed' && 
+       github.event.workflow_run.conclusion == 'action_required') ||
+      (github.event_name == 'pull_request_target' &&
+       github.event.action == 'labeled' &&
+       github.event.label.name == 'ci-approved')
     runs-on: ubuntu-latest
     steps:
       - name: Env
         run: printenv
         env:
           GITHUB_CONTEXT: ${{ toJson(github) }}
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials:
+            false
       - name: Check PR Labels (workflow_run)
         id: check-pr-labels-1
         if: |
