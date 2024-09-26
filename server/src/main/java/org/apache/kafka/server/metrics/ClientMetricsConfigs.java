@@ -123,6 +123,7 @@ public class ClientMetricsConfigs extends AbstractConfig {
         validateProperties(properties);
     }
 
+    @SuppressWarnings("unchecked")
     private static void validateProperties(Properties properties) {
         // Make sure that all the properties are valid
         properties.forEach((key, value) -> {
@@ -143,7 +144,7 @@ public class ClientMetricsConfigs extends AbstractConfig {
 
         // Make sure that client match patterns are valid by parsing them.
         if (properties.containsKey(CLIENT_MATCH_PATTERN)) {
-            List<String> patterns = Arrays.asList(properties.getProperty(CLIENT_MATCH_PATTERN).split(","));
+            List<String> patterns = (List<String>) ConfigDef.parseType(CLIENT_MATCH_PATTERN, properties.getProperty(CLIENT_MATCH_PATTERN), Type.LIST);
             // Parse the client matching patterns to validate if the patterns are valid.
             parseMatchingPatterns(patterns);
         }
