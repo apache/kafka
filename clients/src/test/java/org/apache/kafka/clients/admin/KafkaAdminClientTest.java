@@ -453,7 +453,8 @@ public class KafkaAdminClientTest {
     public void testDisableJmxReporter() {
         Properties props = new Properties();
         props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        props.setProperty(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG, "");
+        props.setProperty(AdminClientConfig.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false");
+        props.setProperty(CommonClientConfigs.ENABLE_METRICS_PUSH_CONFIG, "false");
         KafkaAdminClient admin = (KafkaAdminClient) AdminClient.create(props);
         assertTrue(admin.metrics.reporters().isEmpty());
         admin.close();
@@ -464,8 +465,9 @@ public class KafkaAdminClientTest {
         Properties props = new Properties();
         props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG, "org.apache.kafka.common.metrics.JmxReporter");
+        props.setProperty(CommonClientConfigs.ENABLE_METRICS_PUSH_CONFIG, "true");
         KafkaAdminClient admin = (KafkaAdminClient) AdminClient.create(props);
-        assertEquals(1, admin.metrics.reporters().size());
+        assertEquals(2, admin.metrics.reporters().size());
         admin.close();
     }
 
