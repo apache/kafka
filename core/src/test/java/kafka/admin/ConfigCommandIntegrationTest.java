@@ -367,11 +367,13 @@ public class ConfigCommandIntegrationTest {
         try (Admin client = cluster.createAdminClient()) {
             // Add config
             Map<String, String> configs = new HashMap<>();
-            configs.put("metrics", "");
+            configs.put("metrics", "org.apache.kafka.producer.");
             configs.put("interval.ms", "6000");
             alterAndVerifyClientMetricsConfig(client, defaultClientMetricsName, configs);
 
             // Delete config
+            configs.put("metrics", "");
+            configs.put("interval.ms", "300000");
             deleteAndVerifyClientMetricsConfigValue(client, defaultClientMetricsName, configs);
 
             // Unknown config configured should fail
