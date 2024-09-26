@@ -17,8 +17,6 @@
 
 package org.apache.kafka.jmh.common;
 
-import kafka.network.RequestConvertToJson;
-
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.network.Send;
@@ -27,6 +25,7 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ByteBufferChannel;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.network.RequestConvertToJson;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;

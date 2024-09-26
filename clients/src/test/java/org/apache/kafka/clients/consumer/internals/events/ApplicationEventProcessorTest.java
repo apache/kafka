@@ -126,7 +126,6 @@ public class ApplicationEventProcessorTest {
 
     private static Stream<Arguments> applicationEvents() {
         return Stream.of(
-                Arguments.of(new PollEvent(100)),
                 Arguments.of(new AsyncCommitEvent(new HashMap<>())),
                 Arguments.of(new SyncCommitEvent(new HashMap<>(), 500)),
                 Arguments.of(new CheckAndUpdatePositionsEvent(500)),
@@ -206,6 +205,30 @@ public class ApplicationEventProcessorTest {
 
         ExecutionException e = assertThrows(ExecutionException.class, () -> event.future().get());
         assertInstanceOf(IllegalStateException.class, e.getCause());
+    }
+
+    @Test
+    public void testPollEvent() {
+        PollEvent event = new PollEvent(12345);
+
+        setupProcessor(true);
+        when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
+        processor.process(event);
+        verify(commitRequestManager).updateAutoCommitTimer(12345);
+        verify(membershipManager).onConsumerPoll();
+        verify(heartbeatRequestManager).resetPollTimer(12345);
+    }
+
+    @Test
+    public void testSubscriptionChangeEvent() {
+        SubscriptionChangeEvent event = new SubscriptionChangeEvent();
+
+        setupProcessor(true);
+        when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
+        processor.process(event);
+        verify(membershipManager).onSubscriptionUpdated();
+        // verify member state doesn't transition to JOINING.
+        verify(membershipManager, never()).onConsumerPoll();
     }
 
     private List<NetworkClientDelegate.UnsentRequest> mockCommitResults() {
