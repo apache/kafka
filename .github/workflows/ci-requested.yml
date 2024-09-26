@@ -21,22 +21,19 @@ on:
     types:
       - requested
   pull_request_target:
-    types: [ labeled ]
+    types:
+      - labeled
 
 jobs:
   check-pr-labels:
-    # Only run for workflows needing approval
+    # To reduce unnecessary runs, only actually run this job if
+
     runs-on: ubuntu-latest
     steps:
       - name: Env
         run: printenv
         env:
           GITHUB_CONTEXT: ${{ toJson(github) }}
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          persist-credentials:
-            false
       - name: Check PR Labels (workflow_run)
         id: check-pr-labels-1
         if: |
@@ -64,7 +61,8 @@ jobs:
         id: check-pr-labels-2
         if: |
           github.event_name == 'pull_request_target' &&
-          github.event.action == 'labeled'
+          github.event.action == 'labeled' &&
+          contains(github.event.pull_request.labels.*.name, 'ci-approved')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -78,13 +76,15 @@ jobs:
             echo "No ci-approved label set on PR #$PR_NUMBER. Will not auto-approve.";
             exit 0;
           else
-            echo "Found 'ci-approved' label on PR #$PR_NUMBER. Auto-approving...";
+            echo "Found 'ci-approved' label on PR #$PR_NUMBER.";
           fi
           
           RUN_ID=$(gh run list -L 1 -c $SHA -s action_required --json databaseId --jq '.[].databaseId')
           if [ -z "$RUN_ID" ]; then
             echo "No workflow run found for SHA $SHA";
             exit 0;
+          else
+            echo "Auto-approving workflow run $RUN_ID.";
           fi;
           
           echo "PR_NUMBER=$PR_NUMBER" >> "$GITHUB_ENV"
@@ -96,8 +96,7 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           echo "Approving workflow run $RUN_ID for PR $PR_NUMBER";
-          
-          gh api --verbose --method POST \
+          gh api --method POST \
             -H 'Accept: application/vnd.github+json' \
             -H 'X-GitHub-Api-Version: 2022-11-28' \
             /repos/$REPOSITORY/actions/runs/$RUN_ID/approve
