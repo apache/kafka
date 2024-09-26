@@ -504,9 +504,9 @@ public class SharePartition {
      *
      * @param memberId           The member id of the client that is fetching the record.
      * @param fetchPartitionData The fetched records for the share partition.
-     * @return A future which is completed when the records are acquired.
+     * @return The acquired records for the share partition.
      */
-    public CompletableFuture<List<AcquiredRecords>> acquire(
+    public List<AcquiredRecords> acquire(
         String memberId,
         FetchPartitionData fetchPartitionData
     ) {
@@ -514,7 +514,7 @@ public class SharePartition {
         RecordBatch lastBatch = fetchPartitionData.records.lastBatch().orElse(null);
         if (lastBatch == null) {
             // Nothing to acquire.
-            return CompletableFuture.completedFuture(Collections.emptyList());
+            return Collections.emptyList();
         }
 
         // We require the first batch of records to get the base offset. Stop parsing further
@@ -540,8 +540,8 @@ public class SharePartition {
             if (subMap.isEmpty()) {
                 log.trace("No cached data exists for the share partition for requested fetch batch: {}-{}",
                     groupId, topicIdPartition);
-                return CompletableFuture.completedFuture(Collections.singletonList(
-                    acquireNewBatchRecords(memberId, firstBatch.baseOffset(), lastBatch.lastOffset())));
+                return Collections.singletonList(
+                    acquireNewBatchRecords(memberId, firstBatch.baseOffset(), lastBatch.lastOffset()));
             }
 
             log.trace("Overlap exists with in-flight records. Acquire the records if available for"
@@ -611,7 +611,7 @@ public class SharePartition {
                 result.add(acquireNewBatchRecords(memberId, subMap.lastEntry().getValue().lastOffset() + 1,
                     lastBatch.lastOffset()));
             }
-            return CompletableFuture.completedFuture(result);
+            return result;
         } finally {
             lock.writeLock().unlock();
         }

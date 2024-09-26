@@ -83,11 +83,11 @@ public class ShareFetchUtilsTest {
         when(sp1.nextFetchOffset()).thenReturn((long) 3);
 
         when(sp0.acquire(any(), any())).thenReturn(
-                CompletableFuture.completedFuture(Collections.singletonList(new ShareFetchResponseData.AcquiredRecords()
-                        .setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1))));
+                Collections.singletonList(new ShareFetchResponseData.AcquiredRecords()
+                        .setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)));
         when(sp1.acquire(any(), any())).thenReturn(
-                CompletableFuture.completedFuture(Collections.singletonList(new ShareFetchResponseData.AcquiredRecords()
-                        .setFirstOffset(100).setLastOffset(103).setDeliveryCount((short) 1))));
+                Collections.singletonList(new ShareFetchResponseData.AcquiredRecords()
+                        .setFirstOffset(100).setLastOffset(103).setDeliveryCount((short) 1)));
 
         doNothing().when(sp1).updateCacheAndOffsets(any(Long.class));
         doNothing().when(sp0).updateCacheAndOffsets(any(Long.class));
@@ -120,11 +120,9 @@ public class ShareFetchUtilsTest {
         responseData.put(tp1, new FetchPartitionData(Errors.NONE, 0L, 100L,
                 records1, Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
-        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> result =
+        Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData =
                 ShareFetchUtils.processFetchResponse(shareFetchData, responseData, partitionCacheMap, mock(ReplicaManager.class));
 
-        assertTrue(result.isDone());
-        Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData = result.join();
         assertEquals(2, resultData.size());
         assertTrue(resultData.containsKey(tp0));
         assertTrue(resultData.containsKey(tp1));
@@ -157,8 +155,8 @@ public class ShareFetchUtilsTest {
         when(sp0.nextFetchOffset()).thenReturn((long) 3);
         when(sp1.nextFetchOffset()).thenReturn((long) 3);
 
-        when(sp0.acquire(any(), any())).thenReturn(CompletableFuture.completedFuture(Collections.emptyList()));
-        when(sp1.acquire(any(), any())).thenReturn(CompletableFuture.completedFuture(Collections.emptyList()));
+        when(sp0.acquire(any(), any())).thenReturn(Collections.emptyList());
+        when(sp1.acquire(any(), any())).thenReturn(Collections.emptyList());
 
         doNothing().when(sp1).updateCacheAndOffsets(any(Long.class));
         doNothing().when(sp0).updateCacheAndOffsets(any(Long.class));
@@ -179,11 +177,9 @@ public class ShareFetchUtilsTest {
         responseData.put(tp1, new FetchPartitionData(Errors.NONE, 0L, 0L,
                 MemoryRecords.EMPTY, Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
-        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> result =
+        Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData =
                 ShareFetchUtils.processFetchResponse(shareFetchData, responseData, partitionCacheMap, mock(ReplicaManager.class));
 
-        assertTrue(result.isDone());
-        Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData = result.join();
         assertEquals(2, resultData.size());
         assertTrue(resultData.containsKey(tp0));
         assertTrue(resultData.containsKey(tp1));
@@ -228,13 +224,13 @@ public class ShareFetchUtilsTest {
         when(sp1.nextFetchOffset()).thenReturn((long) 4, (long) 4);
 
         when(sp0.acquire(anyString(), any(FetchPartitionData.class))).thenReturn(
-                CompletableFuture.completedFuture(Collections.emptyList()),
-                CompletableFuture.completedFuture(Collections.singletonList(new ShareFetchResponseData.AcquiredRecords()
-                        .setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1))));
+                Collections.emptyList(),
+                Collections.singletonList(new ShareFetchResponseData.AcquiredRecords()
+                        .setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)));
         when(sp1.acquire(anyString(), any(FetchPartitionData.class))).thenReturn(
-                CompletableFuture.completedFuture(Collections.singletonList(new ShareFetchResponseData.AcquiredRecords()
-                        .setFirstOffset(100).setLastOffset(103).setDeliveryCount((short) 1))),
-                CompletableFuture.completedFuture(Collections.emptyList()));
+                Collections.singletonList(new ShareFetchResponseData.AcquiredRecords()
+                        .setFirstOffset(100).setLastOffset(103).setDeliveryCount((short) 1)),
+                Collections.emptyList());
 
         doNothing().when(sp1).updateCacheAndOffsets(any(Long.class));
         doNothing().when(sp0).updateCacheAndOffsets(any(Long.class));
@@ -252,11 +248,9 @@ public class ShareFetchUtilsTest {
         responseData1.put(tp1, new FetchPartitionData(Errors.NONE, 0L, 0L,
                 records1, Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
-        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> result1 =
+        Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData1 =
                 ShareFetchUtils.processFetchResponse(shareFetchData, responseData1, partitionCacheMap, replicaManager);
 
-        assertTrue(result1.isDone());
-        Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData1 = result1.join();
         assertEquals(2, resultData1.size());
         assertTrue(resultData1.containsKey(tp0));
         assertTrue(resultData1.containsKey(tp1));
@@ -283,11 +277,9 @@ public class ShareFetchUtilsTest {
         responseData2.put(tp1, new FetchPartitionData(Errors.NONE, 0L, 0L,
                 MemoryRecords.EMPTY, Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
-        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> result2 =
+        Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData2 =
                 ShareFetchUtils.processFetchResponse(shareFetchData, responseData2, partitionCacheMap, replicaManager);
 
-        assertTrue(result2.isDone());
-        Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData2 = result2.join();
         assertEquals(2, resultData2.size());
         assertTrue(resultData2.containsKey(tp0));
         assertTrue(resultData2.containsKey(tp1));

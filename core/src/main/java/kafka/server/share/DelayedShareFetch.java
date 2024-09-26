@@ -22,6 +22,7 @@ import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.ShareFetchData;
@@ -119,18 +120,11 @@ public class DelayedShareFetch extends DelayedOperation {
             });
 
             log.trace("Data successfully retrieved by replica manager: {}", responseData);
-            ShareFetchUtils.processFetchResponse(shareFetchData, responseData, partitionCacheMap, replicaManager)
-                .whenComplete((result, throwable) -> {
-                    if (throwable != null) {
-                        log.error("Error processing fetch response for share partitions", throwable);
-                        shareFetchData.future().completeExceptionally(throwable);
-                    } else {
-                        shareFetchData.future().complete(result);
-                    }
-                    // Releasing the lock to move ahead with the next request in queue.
-                    releasePartitionLocks(shareFetchData.groupId(), topicPartitionData.keySet());
-                });
-
+            Map<TopicIdPartition, ShareFetchResponseData.PartitionData> result =
+                ShareFetchUtils.processFetchResponse(shareFetchData, responseData, partitionCacheMap, replicaManager);
+            shareFetchData.future().complete(result);
+            // Releasing the lock to move ahead with the next request in queue.
+            releasePartitionLocks(shareFetchData.groupId(), topicPartitionData.keySet());
         } catch (Exception e) {
             // Release the locks acquired for the partitions in the share fetch request in case there is an exception
             log.error("Error processing delayed share fetch request", e);
