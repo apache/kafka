@@ -118,6 +118,7 @@ public class ServerSideAssignorBenchmark {
 
     private static final int NUMBER_OF_RACKS = 3;
 
+    /** The number of homogeneous subgroups to create for the heterogeneous subscription case. */
     private static final int MAX_BUCKET_COUNT = 5;
 
     private GroupSpec groupSpec;
