@@ -93,6 +93,7 @@ public class ClusterControlManager {
         private FeatureControlManager featureControl = null;
         private boolean zkMigrationEnabled = false;
         private BrokerUncleanShutdownHandler brokerUncleanShutdownHandler = null;
+        private String interBrokerListenerName = "PLAINTEXT";
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -139,6 +140,11 @@ public class ClusterControlManager {
             return this;
         }
 
+        Builder setInterBrokerListenerName(String interBrokerListenerName) {
+            this.interBrokerListenerName = interBrokerListenerName;
+            return this;
+        }
+
         ClusterControlManager build() {
             if (logContext == null) {
                 logContext = new LogContext();
@@ -166,7 +172,8 @@ public class ClusterControlManager {
                 replicaPlacer,
                 featureControl,
                 zkMigrationEnabled,
-                brokerUncleanShutdownHandler
+                brokerUncleanShutdownHandler,
+                interBrokerListenerName
             );
         }
     }
@@ -261,6 +268,11 @@ public class ClusterControlManager {
     private final BrokerUncleanShutdownHandler brokerUncleanShutdownHandler;
 
     /**
+     * The statically configured inter-broker listener name.
+     */
+    private final String interBrokerListenerName;
+
+    /**
      * Maps controller IDs to controller registrations.
      */
     private final TimelineHashMap<Integer, ControllerRegistration> controllerRegistrations;
@@ -279,7 +291,8 @@ public class ClusterControlManager {
         ReplicaPlacer replicaPlacer,
         FeatureControlManager featureControl,
         boolean zkMigrationEnabled,
-        BrokerUncleanShutdownHandler brokerUncleanShutdownHandler
+        BrokerUncleanShutdownHandler brokerUncleanShutdownHandler,
+        String interBrokerListenerName
     ) {
         this.logContext = logContext;
         this.clusterId = clusterId;
@@ -296,6 +309,7 @@ public class ClusterControlManager {
         this.controllerRegistrations = new TimelineHashMap<>(snapshotRegistry, 0);
         this.directoryToBroker = new TimelineHashMap<>(snapshotRegistry, 0);
         this.brokerUncleanShutdownHandler = brokerUncleanShutdownHandler;
+        this.interBrokerListenerName = interBrokerListenerName;
     }
 
     ReplicaPlacer replicaPlacer() {
@@ -375,6 +389,13 @@ public class ClusterControlManager {
         if (!request.isMigratingZkBroker() && featureControl.inPreMigrationMode()) {
             throw new BrokerIdNotRegisteredException("Controller is in pre-migration mode and cannot register KRaft " +
                 "brokers until the metadata migration is complete.");
+        }
+
+        if (request.isMigratingZkBroker()) {
+            if (request.listeners().find(interBrokerListenerName) == null) {
+                throw new InvalidRegistrationException("Broker does not have the current inter.broker.listener " +
+                        interBrokerListenerName);
+            }
         }
 
         if (featureControl.metadataVersion().isDirectoryAssignmentSupported()) {
