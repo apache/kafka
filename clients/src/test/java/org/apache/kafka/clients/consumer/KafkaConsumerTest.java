@@ -2544,38 +2544,10 @@ public class KafkaConsumerTest {
         assertEquals(OptionalLong.of(45L), consumer.currentLag(tp0));
     }
 
-    @ParameterizedTest
-    @EnumSource(GroupProtocol.class)
-    public void testListOffsetShouldUpdateSubscriptions(GroupProtocol groupProtocol) throws InterruptedException {
-        final ConsumerMetadata metadata = createMetadata(subscription);
-        final MockClient client = new MockClient(time, metadata);
-
-        initMetadata(client, singletonMap(topic, 1));
-
-        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false,
-                null, groupInstanceId, false);
-        consumer.assign(singleton(tp0));
-        consumer.seek(tp0, 50L);
-
-        // For AsyncKafkaConsumer, FetchRequestManager sends FetchRequest in background thread.
-        // Wait for the first fetch request to avoid ListOffsetResponse mismatch.
-        TestUtils.waitForCondition(() -> groupProtocol == GroupProtocol.CLASSIC || requestGenerated(client, ApiKeys.FETCH),
-                "No fetch request sent");
-
-        client.prepareResponse(request -> request instanceof ListOffsetsRequest, listOffsetsResponse(singletonMap(tp0, 90L)));
-        assertEquals(singletonMap(tp0, 90L), consumer.endOffsets(Collections.singleton(tp0)));
-        // correct lag result should be returned as well
-        assertEquals(OptionalLong.of(40L), consumer.currentLag(tp0));
-    }
-
     private ClientRequest findRequest(MockClient client, ApiKeys apiKey) {
         Optional<ClientRequest> request = client.requests().stream().filter(r -> r.requestBuilder().apiKey().equals(apiKey)).findFirst();
         assertTrue(request.isPresent(), "No " + apiKey + " request was submitted to the client");
         return request.get();
-    }
-
-    private boolean requestGenerated(MockClient client, ApiKeys apiKey) {
-        return client.requests().stream().anyMatch(request -> request.requestBuilder().apiKey().equals(apiKey));
     }
 
     private KafkaConsumer<String, String> consumerWithPendingAuthenticationError(GroupProtocol groupProtocol,

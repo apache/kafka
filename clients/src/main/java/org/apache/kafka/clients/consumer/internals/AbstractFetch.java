@@ -31,6 +31,7 @@ import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.FetchMetadata;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.utils.BufferSupplier;
@@ -315,26 +316,6 @@ public abstract class AbstractFetch implements Closeable {
     }
 
     /**
-     * Return the list of <em>fetchable</em> partitions, which are the set of partitions to which we are subscribed,
-     * but <em>excluding</em> any partitions for which we still have buffered data. The idea is that since the user
-     * has yet to process the data for the partition that has already been fetched, we should not go send for more data
-     * until the previously-fetched data has been processed.
-     *
-     * @return {@link Set} of {@link TopicPartition topic partitions} for which we should fetch data
-     */
-    private Set<TopicPartition> fetchablePartitions() {
-        // This is the set of partitions we have in our buffer
-        Set<TopicPartition> buffered = fetchBuffer.bufferedPartitions();
-
-        // This is the test that returns true if the partition is *not* buffered
-        Predicate<TopicPartition> isNotBuffered = tp -> !buffered.contains(tp);
-
-        // Return all partitions that are in an otherwise fetchable state *and* for which we don't already have some
-        // messages sitting in our buffer.
-        return new HashSet<>(subscriptions.fetchablePartitions(isNotBuffered));
-    }
-
-    /**
      * Determine from which replica to read: the <i>preferred</i> or the <i>leader</i>. The preferred replica is used
      * iff:
      *
@@ -408,12 +389,16 @@ public abstract class AbstractFetch implements Closeable {
         long currentTimeMs = time.milliseconds();
         Map<String, Uuid> topicIds = metadata.topicIds();
 
-        for (TopicPartition partition : fetchablePartitions()) {
+        // This is the set of partitions we have in our buffer
+        Set<TopicPartition> buffered = fetchBuffer.bufferedPartitions();
+
+        // This is the test that returns true if the partition is *not* buffered
+        Predicate<TopicPartition> isNotBuffered = tp -> !buffered.contains(tp);
+
+        for (TopicPartition partition : subscriptions.fetchablePartitions(isNotBuffered)) {
+            // In the first loop, find all partitions that are in an otherwise fetchable state *and* for which there
+            // isn't already buffered data waiting.
             SubscriptionState.FetchPosition position = subscriptions.position(partition);
-
-            if (position == null)
-                throw new IllegalStateException("Missing position for fetchable partition " + partition);
-
             Optional<Node> leaderOpt = position.currentLeader.leader;
 
             if (!leaderOpt.isPresent()) {
@@ -434,26 +419,75 @@ public abstract class AbstractFetch implements Closeable {
             } else if (nodesWithPendingFetchRequests.contains(node.id())) {
                 log.trace("Skipping fetch for partition {} because previous request to {} has not been processed", partition, node);
             } else {
-                // if there is a leader and no in-flight requests, issue a new fetch
-                FetchSessionHandler.Builder builder = fetchable.computeIfAbsent(node, k -> {
-                    FetchSessionHandler fetchSessionHandler = sessionHandlers.computeIfAbsent(node.id(), n -> new FetchSessionHandler(logContext, n));
-                    return fetchSessionHandler.newBuilder();
-                });
                 Uuid topicId = topicIds.getOrDefault(partition.topic(), Uuid.ZERO_UUID);
-                FetchRequest.PartitionData partitionData = new FetchRequest.PartitionData(topicId,
-                        position.offset,
-                        FetchRequest.INVALID_LOG_START_OFFSET,
-                        fetchConfig.fetchSize,
-                        position.currentLeader.epoch,
-                        Optional.empty());
-                builder.add(partition, partitionData);
-
-                log.debug("Added {} fetch request for partition {} at position {} to node {}", fetchConfig.isolationLevel,
-                        partition, position, node);
+                addPartitionDataToFetchRequest(fetchable, node, partition, position, topicId, fetchConfig.fetchSize);
             }
         }
 
+        for (TopicPartition partition : buffered) {
+            // In the second loop, iterate over all partitions with buffered data. If the criteria below is met,
+            // these partitions will be included in the request with a nominal fetch size of 1 byte. These are
+            // included in the fetch requests so that partitions with buffered data aren't inadvertently put into
+            // the "remove" set of the FetchRequest, whereby they are removed from the broker's fetch session. In
+            // some cases this could lead to the eviction of the fetch session.
+            if (!subscriptions.isAssigned(partition)) {
+                // It's possible that a partition with buffered data from a previous request is now no longer
+                // assigned to the consumer, in which case just skip this partition.
+                continue;
+            }
+
+            SubscriptionState.FetchPosition position = subscriptions.position(partition);
+            Optional<Node> leaderOpt = position.currentLeader.leader;
+
+            if (!leaderOpt.isPresent())
+                continue;
+
+            // Use the preferred read replica if set, otherwise the partition's leader
+            Node node = selectReadReplica(partition, leaderOpt.get(), currentTimeMs);
+
+            if (!fetchable.containsKey(node)) {
+                // If the for loop above did not end up including this node, there's no need to make a request
+                // just for the sake of the buffered partition.
+                continue;
+            }
+
+            FetchSessionHandler fsh = sessionHandler(node.id());
+
+            if (fsh == null || fsh.sessionId() == FetchMetadata.INVALID_SESSION_ID) {
+                // If there's no pre-existing fetch session OR it has an invalid session ID, that means that a
+                // FULL request is being created, in which case don't add it to the requests.
+                continue;
+            }
+
+            Uuid topicId = topicIds.getOrDefault(partition.topic(), Uuid.ZERO_UUID);
+            addPartitionDataToFetchRequest(fetchable, node, partition, position, topicId, 1);
+        }
+
         return fetchable.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().build()));
+    }
+
+    private void addPartitionDataToFetchRequest(Map<Node, FetchSessionHandler.Builder> fetchable,
+                                                Node node,
+                                                TopicPartition partition,
+                                                SubscriptionState.FetchPosition position,
+                                                Uuid topicId,
+                                                int fetchSize) {
+        // if there is a leader and no in-flight requests, issue a new fetch
+        FetchSessionHandler.Builder builder = fetchable.computeIfAbsent(node, k -> {
+            FetchSessionHandler fetchSessionHandler = sessionHandlers.computeIfAbsent(node.id(), n -> new FetchSessionHandler(logContext, n));
+            return fetchSessionHandler.newBuilder();
+        });
+        FetchRequest.PartitionData partitionData = new FetchRequest.PartitionData(
+            topicId,
+            position.offset,
+            FetchRequest.INVALID_LOG_START_OFFSET,
+            fetchSize,
+            position.currentLeader.epoch,
+            Optional.empty());
+        builder.add(partition, partitionData);
+
+        log.debug("Added {} fetch request for partition {} at position {} to node {}", fetchConfig.isolationLevel,
+            partition, position, node);
     }
 
     // Visible for testing
