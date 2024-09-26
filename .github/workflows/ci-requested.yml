@@ -41,12 +41,6 @@ jobs:
           persist-credentials:
             false
       - name: Check PR Labels
-        id: check-pr-labels
-        if: |
-          github.event_name == 'workflow_run' && 
-          github.event.workflow_run.event == 'pull_request' &&
-          github.event.workflow_run.status == 'completed' && 
-          github.event.workflow_run.conclusion == 'action_required'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RUN_ID: ${{ github.event.workflow_run.id }}

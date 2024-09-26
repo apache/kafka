@@ -39,14 +39,13 @@ jobs:
           persist-credentials:
             false
       - name: Find Workflow Run ID
-        id: find-run-id
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ github.event.number }}
           SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set +e
-          echo "Found 'ci-approved' label on PR #$PR_NUMBER.";
+          echo "Found 'ci-approved' label on PR #$PR_NUMBER."
           RUN_ID=$(gh run list -L 1 -c $SHA -s action_required --json databaseId --jq '.[].databaseId')
           if [ -z "$RUN_ID" ]; then
             echo "No workflow run found for SHA $SHA";
