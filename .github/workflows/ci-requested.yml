@@ -20,12 +20,13 @@ on:
     workflows: [CI]
     types:
       - requested
+  pull_request_target:
+    types: [ labeled, unlabeled ]
 
 
 jobs:
   check-pr-labels:
-    # Skip this workflow if the CI run was skipped or cancelled
-    if: github.event.workflow_run.event == 'pull_request'
+    # Only run for workflows needing approval
     runs-on: ubuntu-latest
     steps:
       - name: Env
@@ -37,13 +38,20 @@ jobs:
         with:
           persist-credentials:
             false
-      - name: Check PR Labels
+      - name: Conditional Workflow Approval
+        if: |
+          github.event_name == 'workflow_run' && (
+            github.event.workflow_run.event == 'pull_request' &&
+            github.event.workflow_run.status == 'completed' && 
+            github.event.workflow_run.conclusion == 'action_required'
+          )
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
           RUN_ID: ${{ github.event.workflow_run.id }}
           REPOSITORY: ${{ github.repository }}
         run: |
+          set +e
           gh pr view $PR_NUMBER --json labels -q '.labels[].name' | grep -q 'ci-approved'
           exitcode="$?"
           if [ $exitcode -ne 0 ]; then
