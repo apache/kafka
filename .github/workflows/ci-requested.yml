@@ -25,6 +25,7 @@ on:
 jobs:
   check-pr-labels:
     # Skip this workflow if the CI run was skipped or cancelled
+    if: github.event.workflow_run.event == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Env
