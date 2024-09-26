@@ -54,16 +54,19 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
     private final ListOffsetsOptions options;
     private final Logger log;
     private final AdminApiLookupStrategy<TopicPartition> lookupStrategy;
+    private final int defaultApiTimeoutMs;
 
     public ListOffsetsHandler(
         Map<TopicPartition, Long> offsetTimestampsByPartition,
         ListOffsetsOptions options,
-        LogContext logContext
+        LogContext logContext,
+        int defaultApiTimeoutMs
     ) {
         this.offsetTimestampsByPartition = offsetTimestampsByPartition;
         this.options = options;
         this.log = logContext.logger(ListOffsetsHandler.class);
         this.lookupStrategy = new PartitionLeaderStrategy(logContext, false);
+        this.defaultApiTimeoutMs = defaultApiTimeoutMs;
     }
 
     @Override
@@ -101,12 +104,14 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
             .stream()
             .anyMatch(key -> offsetTimestampsByPartition.get(key) == ListOffsetsRequest.LATEST_TIERED_TIMESTAMP);
 
+        int timeoutMs = options.timeoutMs() != null ? options.timeoutMs() : defaultApiTimeoutMs;
         return ListOffsetsRequest.Builder.forConsumer(true,
                         options.isolationLevel(),
                         supportsMaxTimestamp,
                         requireEarliestLocalTimestamp,
                         requireTieredStorageTimestamp)
-                .setTargetTimes(new ArrayList<>(topicsByName.values()));
+                .setTargetTimes(new ArrayList<>(topicsByName.values()))
+                .setTimeoutMs(timeoutMs);
     }
 
     @Override

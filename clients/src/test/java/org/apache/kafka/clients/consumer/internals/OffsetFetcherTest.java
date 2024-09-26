@@ -112,6 +112,7 @@ public class OffsetFetcherTest {
     private final int validLeaderEpoch = 0;
     private final MetadataResponse initialUpdateResponse =
         RequestTestUtils.metadataUpdateWithIds(1, singletonMap(topicName, 4), topicIds);
+    private final int requestTimeoutMs = 30000;
 
     private final long retryBackoffMs = 100;
     private MockTime time = new MockTime(1);
@@ -245,6 +246,7 @@ public class OffsetFetcherTest {
 
         client.prepareResponse(body -> {
             ListOffsetsRequest request = (ListOffsetsRequest) body;
+            assertEquals(requestTimeoutMs, request.timeoutMs());
             return request.isolationLevel() == isolationLevel;
         }, listOffsetResponse(Errors.NONE, 1L, 5L));
         offsetFetcher.resetPositionsIfNeeded();
@@ -1641,6 +1643,7 @@ public class OffsetFetcherTest {
             ListOffsetsRequest req = (ListOffsetsRequest) body;
             ListOffsetsTopic topic = req.topics().get(0);
             ListOffsetsPartition partition = topic.partitions().get(0);
+            assertEquals(requestTimeoutMs, req.timeoutMs());
             return tp0.topic().equals(topic.name())
                     && tp0.partition() == partition.partitionIndex()
                     && timestamp == partition.timestamp()
@@ -1712,7 +1715,6 @@ public class OffsetFetcherTest {
                               SubscriptionState subscriptionState,
                               LogContext logContext) {
         buildDependencies(metricConfig, metadataExpireMs, subscriptionState, logContext);
-        long requestTimeoutMs = 30000;
         offsetFetcher = new OffsetFetcher(logContext,
                 consumerClient,
                 metadata,

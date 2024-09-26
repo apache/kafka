@@ -87,7 +87,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
 
     private final Set<ListOffsetsRequestState> requestsToRetry;
     private final List<NetworkClientDelegate.UnsentRequest> requestsToSend;
-    private final long requestTimeoutMs;
+    private final int requestTimeoutMs;
     private final Time time;
     private final ApiVersions apiVersions;
     private final NetworkClientDelegate networkClientDelegate;
@@ -115,7 +115,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                                  final IsolationLevel isolationLevel,
                                  final Time time,
                                  final long retryBackoffMs,
-                                 final long requestTimeoutMs,
+                                 final int requestTimeoutMs,
                                  final long defaultApiTimeoutMs,
                                  final ApiVersions apiVersions,
                                  final NetworkClientDelegate networkClientDelegate,
@@ -609,7 +609,8 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
             List<NetworkClientDelegate.UnsentRequest> unsentRequests) {
         ListOffsetsRequest.Builder builder = ListOffsetsRequest.Builder
                 .forConsumer(requireTimestamps, isolationLevel)
-                .setTargetTimes(ListOffsetsRequest.toListOffsetsTopics(targetTimes));
+                .setTargetTimes(ListOffsetsRequest.toListOffsetsTopics(targetTimes))
+                .setTimeoutMs(requestTimeoutMs);
 
         log.debug("Creating ListOffset request {} for broker {} to reset positions", builder,
                 node);
