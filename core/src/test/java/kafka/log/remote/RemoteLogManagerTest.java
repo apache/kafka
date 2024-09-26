@@ -1630,13 +1630,10 @@ public class RemoteLogManagerTest {
         FileRecords.TimestampAndOffset expectedRemoteResult = new FileRecords.TimestampAndOffset(timestamp + 999, 999, Optional.of(Integer.MAX_VALUE));
         Partition mockFollowerPartition = mockPartition(tpId);
 
-        LogSegment logSegment = mock(LogSegment.class);
-        mockLogSegment(logSegment, 50L, timestamp, null);
-        LogSegment logSegment1 = mock(LogSegment.class);
-        mockLogSegment(logSegment1, 100L, timestamp + 1, expectedLocalResult);
+        LogSegment logSegment = mockLogSegment(50L, timestamp, null);
+        LogSegment logSegment1 = mockLogSegment(100L, timestamp + 1, expectedLocalResult);
         when(mockLog.logSegments()).thenReturn(Arrays.asList(logSegment, logSegment1));
         when(mockLog.logEndOffset()).thenReturn(300L);
-
         remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
                 partition -> Optional.of(mockLog),
                 (topicPartition, offset) -> currentLogStartOffset.set(offset),
@@ -1666,20 +1663,21 @@ public class RemoteLogManagerTest {
 
         // Move the local log start offset to 101L, now message with (timestamp + 1) does not exist in the local log and
         // the indexes needs to be fetched from the remote storage
-        mockLogSegment(logSegment1, 101L, timestamp + 1, expectedLocalResult);
+        when(logSegment1.baseOffset()).thenReturn(101L);
         assertEquals(Optional.of(expectedRemoteResult), remoteLogManager.findOffsetByTimestamp(tp, timestamp + 1, 0L, cache));
     }
 
-    private void mockLogSegment(LogSegment logSegment,
-                                long baseOffset,
-                                long largestTimestamp,
-                                FileRecords.TimestampAndOffset timestampAndOffset) throws IOException {
+    private LogSegment mockLogSegment(long baseOffset,
+                                      long largestTimestamp,
+                                      FileRecords.TimestampAndOffset timestampAndOffset) throws IOException {
+        LogSegment logSegment = mock(LogSegment.class);
         when(logSegment.baseOffset()).thenReturn(baseOffset);
         when(logSegment.largestTimestamp()).thenReturn(largestTimestamp);
         if (timestampAndOffset != null) {
             when(logSegment.findOffsetByTimestamp(anyLong(), anyLong()))
                     .thenReturn(Optional.of(timestampAndOffset));
         }
+        return logSegment;
     }
 
     @Test
