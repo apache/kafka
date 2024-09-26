@@ -17,14 +17,10 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.UpdateFeaturesResponseData;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
 
-import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -62,19 +58,4 @@ public class UpdateFeaturesResponseTest {
         assertEquals(2, errorCounts.get(Errors.UNKNOWN_SERVER_ERROR).intValue());
         assertEquals(1, errorCounts.get(Errors.FEATURE_UPDATE_FAILED).intValue());
     }
-
-    @ParameterizedTest
-    @ApiKeyVersionsSource(apiKey = ApiKeys.UPDATE_FEATURES)
-    public void testTopLevelError(short version) {
-        Errors error = Errors.FEATURE_UPDATE_FAILED;
-        Map<String, ApiError> updateErrors = new HashMap<>();
-        updateErrors.put("metadata.version", ApiError.NONE);
-        updateErrors.put("group.version", new ApiError(error, "update failed"));
-
-        UpdateFeaturesResponse response = UpdateFeaturesResponse.createWithErrors(version, ApiError.NONE, updateErrors, 0);
-
-        Errors expectedError = version > 1 ? error : Errors.NONE;
-        assertEquals(expectedError, response.topLevelError().error());
-    }
-
 }

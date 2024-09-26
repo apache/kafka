@@ -3603,16 +3603,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     def sendResponseCallback(errors: Either[ApiError, Map[String, ApiError]]): Unit = {
       def createResponse(throttleTimeMs: Int): UpdateFeaturesResponse = {
         errors match {
-          // Hard-code version to 1 since version 2 will not be implemented for 4.0 as this is a ZK specific code path.
           case Left(topLevelError) =>
             UpdateFeaturesResponse.createWithErrors(
-              1,
               topLevelError,
               Collections.emptyMap(),
               throttleTimeMs)
           case Right(featureUpdateErrors) =>
             UpdateFeaturesResponse.createWithErrors(
-              1,
               ApiError.NONE,
               featureUpdateErrors.asJava,
               throttleTimeMs)

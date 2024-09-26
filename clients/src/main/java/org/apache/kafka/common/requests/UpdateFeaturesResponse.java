@@ -26,8 +26,6 @@ import org.apache.kafka.common.protocol.Errors;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
-import java.util.stream.Stream;
 
 /**
  * Possible error codes:
@@ -84,31 +82,17 @@ public class UpdateFeaturesResponse extends AbstractResponse {
         return new UpdateFeaturesResponse(new UpdateFeaturesResponseData(new ByteBufferAccessor(buffer), version));
     }
 
-    public static UpdateFeaturesResponse createWithErrors(short version, ApiError topLevelError, Map<String, ApiError> updateErrors, int throttleTimeMs) {
+    public static UpdateFeaturesResponse createWithErrors(ApiError topLevelError, Map<String, ApiError> updateErrors, int throttleTimeMs) {
         final UpdatableFeatureResultCollection results = new UpdatableFeatureResultCollection();
-        Optional<Map.Entry<String, ApiError>> errorEntry = Optional.empty();
-        if (version > 1) {
-            Stream<Map.Entry<String, ApiError>> errorEntries = updateErrors.entrySet().stream().filter(entry ->
-                    !entry.getValue().error().equals(Errors.NONE));
-            errorEntry = errorEntries.findFirst();
+        for (final Map.Entry<String, ApiError> updateError : updateErrors.entrySet()) {
+            final String feature = updateError.getKey();
+            final ApiError error = updateError.getValue();
+            final UpdatableFeatureResult result = new UpdatableFeatureResult();
+            result.setFeature(feature)
+                .setErrorCode(error.error().code())
+                .setErrorMessage(error.message());
+            results.add(result);
         }
-
-        if (errorEntry.isPresent()) {
-            String errorFeatureName = errorEntry.get().getKey();
-            ApiError topError = errorEntry.get().getValue();
-            String errorString = errorFeatureName + ":" + topError.error().exceptionName() + " (" + topError.message() + ")";
-            topLevelError = new ApiError(topError.error(),
-                    "The update failed for all features since the following feature had an error: " + errorString);
-        } else {
-            updateErrors.forEach((featureName, error) ->
-                    results.add(
-                            new UpdatableFeatureResult()
-                                    .setFeature(featureName)
-                                    .setErrorCode(error.error().code())
-                                    .setErrorMessage(error.message()))
-            );
-        }
-
         final UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData()
             .setThrottleTimeMs(throttleTimeMs)
             .setErrorCode(topLevelError.error().code())
