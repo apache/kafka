@@ -711,11 +711,11 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     completedAcknowledgements.forEach((tip, acks) -> {
                         Errors ackErrorCode = acks.getAcknowledgeErrorCode();
                         if (ackErrorCode == null) {
-                            result.put(tip, null);
+                            result.put(tip, Optional.empty());
                         } else {
                             ApiException exception = ackErrorCode.exception();
                             if (exception == null) {
-                                result.put(tip, null);
+                                result.put(tip, Optional.empty());
                             } else {
                                 result.put(tip, Optional.of(ackErrorCode.exception()));
                             }

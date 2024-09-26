@@ -193,6 +193,8 @@ public class TransactionManager {
     private volatile ProducerIdAndEpoch producerIdAndEpoch;
     private volatile boolean transactionStarted = false;
     private volatile boolean epochBumpRequired = false;
+    private volatile long latestFinalizedFeaturesEpoch = -1;
+    private volatile boolean isTransactionV2Enabled = false;
 
     private enum State {
         UNINITIALIZED,
@@ -310,6 +312,7 @@ public class TransactionManager {
         throwIfPendingState("beginTransaction");
         maybeFailWithError();
         transitionTo(State.IN_TRANSACTION);
+        maybeUpdateTransactionV2Enabled();
     }
 
     public synchronized TransactionalRequestResult beginCommit() {
@@ -423,6 +426,21 @@ public class TransactionManager {
 
     public boolean isTransactional() {
         return transactionalId != null;
+    }
+
+    // Check all the finalized features from apiVersions to whether the transaction V2 is enabled.
+    public synchronized void maybeUpdateTransactionV2Enabled() {
+        if (latestFinalizedFeaturesEpoch >= apiVersions.getMaxFinalizedFeaturesEpoch()) {
+            return;
+        }
+        ApiVersions.FinalizedFeaturesInfo info = apiVersions.getFinalizedFeaturesInfo();
+        latestFinalizedFeaturesEpoch = info.finalizedFeaturesEpoch;
+        Short transactionVersion = info.finalizedFeatures.get("transaction.version");
+        isTransactionV2Enabled = transactionVersion != null && transactionVersion >= 2;
+    }
+
+    public boolean isTransactionV2Enabled() {
+        return isTransactionV2Enabled;
     }
 
     synchronized boolean hasPartitionsToAdd() {
