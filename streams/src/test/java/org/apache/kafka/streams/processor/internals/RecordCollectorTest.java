@@ -729,7 +729,6 @@ public class RecordCollectorTest {
     @Test
     public void shouldForwardFlushToStreamsProducer() {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
-        when(streamsProducer.eosEnabled()).thenReturn(false);
         doNothing().when(streamsProducer).flush();
         when(streamsProducer.sendException()).thenReturn(new AtomicReference<>(null));
         final ProcessorTopology topology = mock(ProcessorTopology.class);
@@ -750,7 +749,6 @@ public class RecordCollectorTest {
     @Test
     public void shouldForwardFlushToStreamsProducerEosEnabled() {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
-        when(streamsProducer.eosEnabled()).thenReturn(true);
         when(streamsProducer.sendException()).thenReturn(new AtomicReference<>(null));
         doNothing().when(streamsProducer).flush();
         final ProcessorTopology topology = mock(ProcessorTopology.class);
@@ -779,7 +777,6 @@ public class RecordCollectorTest {
 
     private void shouldClearOffsetsOnClose(final boolean clean) {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
-        when(streamsProducer.eosEnabled()).thenReturn(true);
         when(streamsProducer.sendException()).thenReturn(new AtomicReference<>(null));
         final long offset = 1234L;
         final RecordMetadata metadata = new RecordMetadata(
@@ -831,7 +828,6 @@ public class RecordCollectorTest {
     @Test
     public void shouldNotAbortTxOnCloseCleanIfEosEnabled() {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
-        when(streamsProducer.eosEnabled()).thenReturn(true);
         when(streamsProducer.sendException()).thenReturn(new AtomicReference<>(null));
         final ProcessorTopology topology = mock(ProcessorTopology.class);
         
