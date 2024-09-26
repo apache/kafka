@@ -68,6 +68,11 @@ jobs:
           ./gradlew --build-cache --info  \
           ${{ inputs.is-public-fork && '--no-scan' || '--scan' }} \
           check -x test
+      - name: Annotate Rat errors
+        if: ${{ failure() }}
+        run: python .github/scripts/rat.py
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
       - name: Archive check reports
         if: always()
         uses: actions/upload-artifact@v4
