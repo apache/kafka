@@ -63,6 +63,7 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.AbstractMap;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
@@ -203,6 +204,9 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask<SourceRecord, 
 
     // Visible for testing
     List<SourceRecord> toSend;
+    SourceRecord lastErredSourceRecord;
+    AbstractMap.SimpleEntry<SourceRecord, ProducerRecord<byte[], byte[]>> lastErredConvertedRecordMap;
+
     protected Map<String, String> taskConfig;
     protected boolean started = false;
     private volatile boolean producerClosed = false;
@@ -395,16 +399,24 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask<SourceRecord, 
                 toSend.isEmpty() ? null : new SourceRecordWriteCounter(toSend.size(), sourceTaskMetricsGroup);
         for (final SourceRecord preTransformRecord : toSend) {
             ProcessingContext<SourceRecord> context = new ProcessingContext<>(preTransformRecord);
-            final SourceRecord record = transformationChain.apply(context, preTransformRecord);
-            final ProducerRecord<byte[], byte[]> producerRecord = convertTransformedRecord(context, record);
-            if (producerRecord == null || context.failed()) {
-                counter.skipRecord();
-                recordDropped(preTransformRecord);
-                processed++;
-                continue;
+            final ProducerRecord<byte[], byte[]> producerRecord;
+            final SourceRecord transformedRecord;
+            if (preTransformRecord.equals(lastErredSourceRecord)) {
+                producerRecord = lastErredConvertedRecordMap.getValue();
+                transformedRecord = lastErredConvertedRecordMap.getKey();
+                lastErredConvertedRecordMap = null;
+                lastErredSourceRecord = null;
+            } else {
+                transformedRecord = transformationChain.apply(context, preTransformRecord);
+                producerRecord = convertTransformedRecord(context, transformedRecord);
+                if (producerRecord == null || context.failed()) {
+                    counter.skipRecord();
+                    recordDropped(preTransformRecord);
+                    processed++;
+                    continue;
+                }
             }
-
-            log.trace("{} Appending record to the topic {} with key {}, value {}", this, record.topic(), record.key(), record.value());
+            log.trace("{} Appending record to the topic {} with key {}, value {}", this, transformedRecord.topic(), transformedRecord.key(), transformedRecord.value());
             Optional<SubmittedRecords.SubmittedRecord> submittedRecord = prepareToSendRecord(preTransformRecord, producerRecord);
             try {
                 final String topic = producerRecord.topic();
@@ -442,6 +454,8 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask<SourceRecord, 
                 log.warn("{} Failed to send record to topic '{}' and partition '{}'. Backing off before retrying: ",
                         this, producerRecord.topic(), producerRecord.partition(), e);
                 toSend = toSend.subList(processed, toSend.size());
+                lastErredSourceRecord = preTransformRecord;
+                lastErredConvertedRecordMap = new AbstractMap.SimpleEntry<>(transformedRecord, producerRecord);
                 submittedRecord.ifPresent(SubmittedRecords.SubmittedRecord::drop);
                 counter.retryRemaining();
                 return false;
