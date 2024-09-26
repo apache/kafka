@@ -64,7 +64,7 @@ import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializ
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.{PasswordEncoder, PasswordEncoderConfigs}
-import org.apache.kafka.server.config.{ConfigType, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ZkConfigs}
+import org.apache.kafka.server.config.{ConfigType, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms, ZkConfigs}
 import org.apache.kafka.server.metrics.{KafkaYammerMetrics, MetricConfigs}
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.ShutdownableThread
@@ -576,6 +576,13 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
     // Verify that produce/consume worked throughout this test without any retries in producer
     stopAndVerifyProduceConsume(producerThread, consumerThread)
+
+    servers.foreach(_.shutdown())
+    servers.foreach(_.awaitShutdown())
+    servers.foreach(_.startup())
+
+    // Verify dynamic config persists a server restart
+    verifyThreads("kafka-log-cleaner-thread-", countPerBroker = 2)
   }
 
   @ParameterizedTest
@@ -668,8 +675,10 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
     val log = servers.head.logManager.getLog(new TopicPartition(topic, 0)).getOrElse(throw new IllegalStateException("Log not found"))
     TestUtils.waitUntilTrue(() => log.config.segmentSize == 4000, "Existing topic config using defaults not updated")
+    val KafkaConfigToLogConfigName: Map[String, String] =
+      ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.asScala.map { case (k, v) => (v, k) }
     props.asScala.foreach { case (k, v) =>
-      val logConfigName = DynamicLogConfig.KafkaConfigToLogConfigName(k)
+      val logConfigName = KafkaConfigToLogConfigName(k)
       val expectedValue = if (k == ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG) s"[$v]" else v
       assertEquals(expectedValue, log.config.originals.get(logConfigName).toString,
         s"Not reconfigured $logConfigName for existing log")

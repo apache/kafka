@@ -359,6 +359,9 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     @Override
     public void onControllerChange(LeaderAndEpoch newLeaderAndEpoch) {
         curLeaderAndEpoch = newLeaderAndEpoch;
+        if (migrationState.equals(MigrationDriverState.UNINITIALIZED)) {
+            eventQueue.append(new RecoverMigrationStateFromZKEvent());
+        }
         eventQueue.append(new KRaftLeaderEvent(newLeaderAndEpoch));
     }
 
@@ -519,8 +522,8 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             KRaftMigrationDriver.this.image = image;
             String metadataType = isSnapshot ? "snapshot" : "delta";
 
-            if (migrationState.equals(MigrationDriverState.INACTIVE)) {
-                // No need to log anything if this node is not the active controller
+            if (EnumSet.of(MigrationDriverState.UNINITIALIZED, MigrationDriverState.INACTIVE).contains(migrationState)) {
+                // No need to log anything if this node is not the active controller or the driver has not initialized
                 completionHandler.accept(null);
                 return;
             }

@@ -528,7 +528,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  @ValueSource(strings = Array("zk", "kraft"))
   def testAbortTransaction(quorum: String): Unit = {
     client = createAdminClient
     val tp = new TopicPartition("topic1", 0)
@@ -538,7 +538,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       val configs = new util.HashMap[String, Object]()
       configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, plaintextBootstrapServers(brokers))
       configs.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString)
-      if (quorum == "kraft+kip848")
+      if (quorum == "kraft")
         configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, ConsumerProtocol.PROTOCOL_TYPE)
       val consumer = new KafkaConsumer(configs, new ByteArrayDeserializer, new ByteArrayDeserializer)
       try {
@@ -662,6 +662,71 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     client.deleteTopics(TopicCollection.ofTopicIds(topicIds.asJava)).all.get()
     waitForTopics(client, List(), topics)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteTopicsWithOptionTimeoutMs(quorum: String): Unit = {
+    client = createInvalidAdminClient()
+
+    try {
+      val timeoutOption = new DeleteTopicsOptions().timeoutMs(0)
+      val exception = assertThrows(classOf[ExecutionException], () =>
+        client.deleteTopics(Seq("test-topic").asJava, timeoutOption).all().get())
+      assertInstanceOf(classOf[TimeoutException], exception.getCause)
+    } finally client.close(time.Duration.ZERO)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testListTopicsWithOptionTimeoutMs(quorum: String): Unit = {
+    client = createInvalidAdminClient()
+
+    try {
+      val timeoutOption = new ListTopicsOptions().timeoutMs(0)
+      val exception = assertThrows(classOf[ExecutionException], () =>
+        client.listTopics(timeoutOption).names().get())
+      assertInstanceOf(classOf[TimeoutException], exception.getCause)
+    } finally client.close(time.Duration.ZERO)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testListTopicsWithOptionListInternal(quorum: String): Unit = {
+    client = createAdminClient
+
+    val topicNames = client.listTopics(new ListTopicsOptions().listInternal(true)).names().get()
+    assertFalse(topicNames.isEmpty, "Expected to see internal topics")
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDescribeTopicsWithOptionPartitionSizeLimitPerResponse(quorum: String): Unit = {
+    client = createAdminClient
+
+    val testTopics = Seq("test-topic")
+    client.createTopics(testTopics.map(new NewTopic(_, 3, 1.toShort)).asJava).all.get()
+    waitForTopics(client, testTopics, List())
+
+    val topics = client.describeTopics(testTopics.asJava, new DescribeTopicsOptions().partitionSizeLimitPerResponse(1)).allTopicNames().get()
+    assertEquals(1, topics.size())
+    assertEquals(3, topics.get("test-topic").partitions().size())
+
+    client.deleteTopics(testTopics.asJava).all().get()
+    waitForTopics(client, List(), testTopics)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDescribeTopicsWithOptionTimeoutMs(quorum: String): Unit = {
+    client = createInvalidAdminClient()
+
+    try {
+      val timeoutOption = new DescribeTopicsOptions().timeoutMs(0)
+      val exception = assertThrows(classOf[ExecutionException], () =>
+        client.describeTopics(Seq("test-topic").asJava, timeoutOption).allTopicNames().get())
+      assertInstanceOf(classOf[TimeoutException], exception.getCause)
+    } finally client.close(time.Duration.ZERO)
   }
 
   /**
@@ -1006,7 +1071,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft+kip848"))
+  @ValueSource(strings = Array("kraft"))
   def testIncrementalAlterAndDescribeGroupConfigs(quorum: String): Unit = {
     client = createAdminClient
     val group = "describe-alter-configs-group"

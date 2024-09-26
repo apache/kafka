@@ -117,7 +117,6 @@ import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE;
-import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
@@ -476,7 +475,6 @@ public class TopologyTestDriver implements Closeable {
         }
     }
 
-    @SuppressWarnings("deprecation")
     private void setupTask(final StreamsConfig streamsConfig,
                            final StreamsMetricsImpl streamsMetrics,
                            final ThreadCache cache,
@@ -492,7 +490,7 @@ public class TopologyTestDriver implements Closeable {
             final ProcessorStateManager stateManager = new ProcessorStateManager(
                 TASK_ID,
                 Task.TaskType.ACTIVE,
-                StreamsConfig.EXACTLY_ONCE.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)),
+                StreamsConfig.EXACTLY_ONCE_V2.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)),
                 logContext,
                 stateDirectory,
                 new MockChangelogRegister(),
@@ -503,12 +501,12 @@ public class TopologyTestDriver implements Closeable {
                 logContext,
                 TASK_ID,
                 testDriverProducer,
-                streamsConfig.defaultProductionExceptionHandler(),
+                streamsConfig.productionExceptionHandler(),
                 streamsMetrics,
                 processorTopology
             );
 
-            final InternalProcessorContext context = new ProcessorContextImpl(
+            final InternalProcessorContext<?, ?> context = new ProcessorContextImpl(
                 TASK_ID,
                 streamsConfig,
                 stateManager,
@@ -626,7 +624,7 @@ public class TopologyTestDriver implements Closeable {
     }
 
     private void commit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-        if (processingMode == EXACTLY_ONCE_ALPHA || processingMode == EXACTLY_ONCE_V2) {
+        if (processingMode == EXACTLY_ONCE_V2) {
             testDriverProducer.commitTransaction(offsets, new ConsumerGroupMetadata("dummy-app-id"));
         } else {
             consumer.commitSync(offsets);
@@ -1167,24 +1165,14 @@ public class TopologyTestDriver implements Closeable {
     }
 
     static class MockChangelogRegister implements ChangelogRegister {
-        private final Set<TopicPartition> restoringPartitions = new HashSet<>();
+        @Override
+        public void register(final TopicPartition partition, final ProcessorStateManager stateManager) { }
 
         @Override
-        public void register(final TopicPartition partition, final ProcessorStateManager stateManager) {
-            restoringPartitions.add(partition);
-        }
+        public void register(final Set<TopicPartition> changelogPartitions, final ProcessorStateManager stateManager) { }
 
         @Override
-        public void register(final Set<TopicPartition> changelogPartitions, final ProcessorStateManager stateManager) {
-            for (final TopicPartition changelogPartition : changelogPartitions) {
-                register(changelogPartition, stateManager);
-            }
-        }
-
-        @Override
-        public void unregister(final Collection<TopicPartition> partitions) {
-            restoringPartitions.removeAll(partitions);
-        }
+        public void unregister(final Collection<TopicPartition> partitions) { }
     }
 
     static class MockTime implements Time {
@@ -1390,7 +1378,7 @@ public class TopologyTestDriver implements Closeable {
                                   final KafkaClientSupplier clientSupplier,
                                   final LogContext logContext,
                                   final Time time) {
-            super(config, "TopologyTestDriver-StreamThread-1", clientSupplier, new TaskId(0, 0), UUID.randomUUID(), logContext, time);
+            super(config, "TopologyTestDriver-StreamThread-1", clientSupplier, UUID.randomUUID(), logContext, time);
         }
 
         @Override

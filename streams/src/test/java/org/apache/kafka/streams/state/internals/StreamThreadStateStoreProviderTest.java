@@ -437,17 +437,16 @@ public class StreamThreadStateStoreProviderTest {
                 streamsConfig,
                 "threadId",
                 clientSupplier,
-                new TaskId(0, 0),
                 UUID.randomUUID(),
                 logContext,
                 Time.SYSTEM
             ),
-            streamsConfig.defaultProductionExceptionHandler(),
+            streamsConfig.productionExceptionHandler(),
             new MockStreamsMetrics(metrics),
             topology
         );
         final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(metrics);
-        final InternalProcessorContext context = new ProcessorContextImpl(
+        final InternalProcessorContext<?, ?> context = new ProcessorContextImpl(
             taskId,
             streamsConfig,
             stateManager,

@@ -260,9 +260,6 @@ class KafkaServer(
 
         /* generate brokerId */
         config._brokerId = getOrGenerateBrokerId(initialMetaPropsEnsemble)
-        // Currently, we are migrating from ZooKeeper to KRaft. If broker.id.generation.enable is set to true,
-        // we must ensure that the nodeId synchronizes with the broker.id to prevent the nodeId from being -1,
-        // which would result in a failure during the migration.
         config._nodeId = config.brokerId
         logContext = new LogContext(s"[KafkaServer id=${config.brokerId}] ")
         this.logIdent = logContext.logPrefix
@@ -432,7 +429,7 @@ class KafkaServer(
           logger.info("Successfully deleted local metadata log. It will be re-created.")
 
           // If the ZK broker is in migration mode, start up a RaftManager to learn about the new KRaft controller
-          val quorumVoters = QuorumConfig.parseVoterConnections(config.quorumVoters)
+          val quorumVoters = QuorumConfig.parseVoterConnections(config.quorumConfig.voters)
           raftManager = new KafkaRaftManager[ApiMessageAndVersion](
             metaPropsEnsemble.clusterId().get(),
             config,
@@ -445,7 +442,7 @@ class KafkaServer(
             metrics,
             threadNamePrefix,
             CompletableFuture.completedFuture(quorumVoters),
-            QuorumConfig.parseBootstrapServers(config.quorumBootstrapServers),
+            QuorumConfig.parseBootstrapServers(config.quorumConfig.bootstrapServers),
             // Endpoint information is only needed for KRaft controllers (voters). ZK brokers
             // (observers) can never be KRaft controllers
             Endpoints.empty(),
@@ -534,7 +531,8 @@ class KafkaServer(
           Some(adminManager),
           Some(kafkaController),
           groupCoordinator,
-          transactionCoordinator
+          transactionCoordinator,
+          None
         )
 
         /* Get the authorizer and initialize it if one is specified.*/
@@ -586,6 +584,7 @@ class KafkaServer(
           replicaManager = replicaManager,
           groupCoordinator = groupCoordinator,
           txnCoordinator = transactionCoordinator,
+          shareCoordinator = None,  //share coord only supported in kraft mode
           autoTopicCreationManager = autoTopicCreationManager,
           brokerId = config.brokerId,
           config = config,

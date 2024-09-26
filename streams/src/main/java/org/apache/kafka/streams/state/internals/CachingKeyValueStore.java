@@ -413,8 +413,7 @@ public class CachingKeyValueStore
     @Override
     public KeyValueIterator<Bytes, byte[]> all() {
         validateStoreOpen();
-        final KeyValueIterator<Bytes, byte[]> storeIterator =
-            new DelegatingPeekingKeyValueIterator<>(this.name(), wrapped().all());
+        final KeyValueIterator<Bytes, byte[]> storeIterator = wrapped().all();
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = context.cache().all(cacheName);
         return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator, true);
     }
@@ -432,8 +431,7 @@ public class CachingKeyValueStore
     @Override
     public KeyValueIterator<Bytes, byte[]> reverseAll() {
         validateStoreOpen();
-        final KeyValueIterator<Bytes, byte[]> storeIterator =
-            new DelegatingPeekingKeyValueIterator<>(this.name(), wrapped().reverseAll());
+        final KeyValueIterator<Bytes, byte[]> storeIterator = wrapped().reverseAll();
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = context.cache().reverseAll(cacheName);
         return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator, false);
     }
