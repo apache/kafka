@@ -49,7 +49,7 @@ jobs:
           github.event.workflow_run.conclusion == 'action_required'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RUN_ID: ${{ github.event.workflow_run.head_branch }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
           HEAD_REPO: ${{ github.event.workflow_run.head_repository.owner.login }}
         # Caution! This is a bit hacky. The GH documentation shows that the workflow_run event should include a list
