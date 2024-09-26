@@ -52,13 +52,23 @@ jobs:
           RUN_ID: ${{ github.event.workflow_run.head_branch }}
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
           HEAD_REPO: ${{ github.event.workflow_run.head_repository.owner.login }}
+        # Caution! This is a bit hacky. The GH documentation shows that the workflow_run event should include a list
+        # of referencing pull_requests. I think this might only be the case for pull requests originating from the
+        # base repository. To deal with fork PRs, we need to query the API for PRs for the owner's branch. This
+        # code assumes that the fork repo owner is the same as the organization for the "org:branch" syntax used
+        # in the query. Also, only the first matching PR from that org will be considered.
         run: |
           set +e
-          gh api \
+          PR_NUMBER=$(gh api \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             /repos/${{ github.repository }}/pulls?head=$HEAD_REPO:$HEAD_BRANCH \
-            --jq '.[].labels[].name' | grep -q ci-approved
+            --jq '.[0].number')
+          if [ -z "$PR_NUMBER" ]; then
+            echo "Could not find the PR that triggered this workflow request";
+            exit 1;
+          fi
+          gh pr view $PR_NUMBER --json labels -q '.labels[].name' | grep -q 'ci-approved'
           exitcode="$?"
           if [ $exitcode -ne 0 ]; then
             echo "No ci-approved label set on PR #$PR_NUMBER. Will not auto-approve.";
