@@ -379,16 +379,6 @@ public class FeatureControlManager {
         return new FinalizedControllerFeatures(features, epoch);
     }
 
-    /**
-     * Tests if the controller should be preventing metadata updates due to being in the PRE_MIGRATION
-     * state. If the controller does not yet support migrations (before 3.4-IV0), then the migration state
-     * will be NONE and this will return false. Once the controller has been upgraded to a version that supports
-     * migrations, then this method checks if the migration state is equal to PRE_MIGRATION.
-     */
-    boolean inPreMigrationMode() {
-        return migrationControlState.get().equals(ZkMigrationState.PRE_MIGRATION);
-    }
-
     public void replay(FeatureLevelRecord record) {
         VersionRange range = quorumFeatures.localSupportedFeature(record.name());
         if (!range.contains(record.featureLevel())) {

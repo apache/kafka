@@ -97,7 +97,6 @@ public class PartitionChangeBuilder {
     private List<Integer> uncleanShutdownReplicas;
     private Election election = Election.ONLINE;
     private LeaderRecoveryState targetLeaderRecoveryState;
-    private boolean zkMigrationEnabled;
     private boolean eligibleLeaderReplicasEnabled;
     private DefaultDirProvider defaultDirProvider;
 
@@ -118,7 +117,6 @@ public class PartitionChangeBuilder {
         this.partitionId = partitionId;
         this.isAcceptableLeader = isAcceptableLeader;
         this.metadataVersion = metadataVersion;
-        this.zkMigrationEnabled = false;
         this.eligibleLeaderReplicasEnabled = false;
         this.minISR = minISR;
 
@@ -176,11 +174,6 @@ public class PartitionChangeBuilder {
 
     public PartitionChangeBuilder setTargetLeaderRecoveryState(LeaderRecoveryState targetLeaderRecoveryState) {
         this.targetLeaderRecoveryState = targetLeaderRecoveryState;
-        return this;
-    }
-
-    public PartitionChangeBuilder setZkMigrationEnabled(boolean zkMigrationEnabled) {
-        this.zkMigrationEnabled = zkMigrationEnabled;
         return this;
     }
 
@@ -394,17 +387,11 @@ public class PartitionChangeBuilder {
      * the PartitionChangeRecord.
      */
     void triggerLeaderEpochBumpForIsrShrinkIfNeeded(PartitionChangeRecord record) {
-        if (!(metadataVersion.isLeaderEpochBumpRequiredOnIsrShrink() || zkMigrationEnabled)) {
-            // We only need to bump the leader epoch on an ISR shrink in two cases:
-            //
-            // 1. In older metadata versions before 3.6, there was a bug (KAFKA-15021) in the
-            //    broker replica manager that required that the leader epoch be bumped whenever
-            //    the ISR shrank. (This was never necessary for EXPANSIONS, only SHRINKS.)
-            //
-            // 2. During ZK migration, we bump the leader epoch during all ISR shrinks, in order
-            // to maintain compatibility with migrating brokers that are still in ZK mode.
-            //
-            // If we're not in either case, we can exit here.
+        if (!metadataVersion.isLeaderEpochBumpRequiredOnIsrShrink()) {
+            // We only need to bump the leader epoch on an ISR shrink in older metadata versions
+            // before 3.6, where there was a bug (KAFKA-15021) in the broker replica manager that
+            // required that the leader epoch be bumped whenever the ISR shrank. (This was never
+            // necessary for EXPANSIONS, only SHRINKS.)
             return;
         }
         if (record.leader() != NO_LEADER_CHANGE) {
