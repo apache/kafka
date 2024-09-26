@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.share;
+package org.apache.kafka.server.share.acknowledge;
 
 import java.util.List;
 

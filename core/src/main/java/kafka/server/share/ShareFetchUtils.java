@@ -23,6 +23,8 @@ import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
+import org.apache.kafka.server.share.SharePartitionKey;
+import org.apache.kafka.server.share.fetch.ShareFetchData;
 import org.apache.kafka.storage.internals.log.FetchPartitionData;
 
 import org.slf4j.Logger;
@@ -45,20 +47,20 @@ public class ShareFetchUtils {
     // Process the replica manager fetch response to update share partitions and futures. We acquire the fetched data
     // from share partitions.
     static CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> processFetchResponse(
-            SharePartitionManager.ShareFetchPartitionData shareFetchPartitionData,
+            ShareFetchData shareFetchData,
             Map<TopicIdPartition, FetchPartitionData> responseData,
-            Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap,
+            Map<SharePartitionKey, SharePartition> partitionCacheMap,
             ReplicaManager replicaManager
     ) {
         Map<TopicIdPartition, CompletableFuture<ShareFetchResponseData.PartitionData>> futures = new HashMap<>();
         responseData.forEach((topicIdPartition, fetchPartitionData) -> {
 
-            SharePartition sharePartition = partitionCacheMap.get(new SharePartitionManager.SharePartitionKey(
-                    shareFetchPartitionData.groupId(), topicIdPartition));
-            futures.put(topicIdPartition, sharePartition.acquire(shareFetchPartitionData.memberId(), fetchPartitionData)
+            SharePartition sharePartition = partitionCacheMap.get(new SharePartitionKey(
+                shareFetchData.groupId(), topicIdPartition));
+            futures.put(topicIdPartition, sharePartition.acquire(shareFetchData.memberId(), fetchPartitionData)
                     .handle((acquiredRecords, throwable) -> {
                         log.trace("Acquired records for topicIdPartition: {} with share fetch data: {}, records: {}",
-                                topicIdPartition, shareFetchPartitionData, acquiredRecords);
+                                topicIdPartition, shareFetchData, acquiredRecords);
                         ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
                                 .setPartitionIndex(topicIdPartition.partition());
 
