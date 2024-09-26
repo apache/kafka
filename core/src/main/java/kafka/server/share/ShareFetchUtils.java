@@ -60,12 +60,14 @@ public class ShareFetchUtils {
                 shareFetchData.groupId(), topicIdPartition));
             ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
                 .setPartitionIndex(topicIdPartition.partition())
-                .setErrorCode(fetchPartitionData.error.code())
-                .setRecords(null)
-                .setAcquiredRecords(Collections.emptyList())
                 .setAcknowledgeErrorCode(Errors.NONE.code());
 
             if (fetchPartitionData.error.code() != Errors.NONE.code()) {
+                partitionData
+                    .setRecords(null)
+                    .setErrorCode(fetchPartitionData.error.code())
+                    .setAcquiredRecords(Collections.emptyList());
+
                 // In case we get OFFSET_OUT_OF_RANGE error, that's because the Log Start Offset is later than the fetch offset.
                 // So, we would update the start and end offset of the share partition and still return an empty
                 // response and let the client retry the fetch. This way we do not lose out on the data that
@@ -83,11 +85,10 @@ public class ShareFetchUtils {
                 // Maybe, in the future, check if no records are acquired, and we want to retry
                 // replica manager fetch. Depends on the share partition manager implementation,
                 // if we want parallel requests for the same share partition or not.
-                partitionData.setPartitionIndex(topicIdPartition.partition())
+                partitionData
                     .setRecords(fetchPartitionData.records)
                     .setErrorCode(fetchPartitionData.error.code())
-                    .setAcquiredRecords(acquiredRecords)
-                    .setAcknowledgeErrorCode(Errors.NONE.code());
+                    .setAcquiredRecords(acquiredRecords);
             }
             response.put(topicIdPartition, partitionData);
         });
