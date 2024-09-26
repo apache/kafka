@@ -42,12 +42,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.processingMode;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.taskProducerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.threadProducerClientId;
 
 class ActiveTaskCreator {
@@ -111,7 +109,6 @@ class ActiveTaskCreator {
                 applicationConfig,
                 threadId,
                 clientSupplier,
-                null,
                 processId,
                 logContext,
                 time);
@@ -197,7 +194,6 @@ class ActiveTaskCreator {
                 applicationConfig,
                 threadId,
                 clientSupplier,
-                taskId,
                 null,
                 logContext,
                 time
@@ -317,15 +313,8 @@ class ActiveTaskCreator {
         return ClientUtils.producerMetrics(producers);
     }
 
-    Set<String> producerClientIds() {
-        if (threadProducer != null) {
-            return Collections.singleton(threadProducerClientId(threadId));
-        } else {
-            return taskProducers.keySet()
-                                .stream()
-                                .map(taskId -> taskProducerClientId(threadId, taskId))
-                                .collect(Collectors.toSet());
-        }
+    String producerClientIds() {
+        return threadProducerClientId(threadId);
     }
 
     private LogContext getLogContext(final TaskId taskId) {
