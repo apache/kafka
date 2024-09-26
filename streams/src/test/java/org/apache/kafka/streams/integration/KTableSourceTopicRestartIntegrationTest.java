@@ -120,9 +120,7 @@ public class KTableSourceTopicRestartIntegrationTest {
     @Test
     public void shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosDisabled() throws Exception {
         try {
-            streams = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
-            streams.start();
-
+            streams = IntegrationTestUtils.getRunningStreams(STREAMS_CONFIG, streamsBuilder, false);
             produceKeyValues("a", "b", "c");
 
             assertNumberValuesRead(readKeyValues, expectedInitialResultsMap, "Table did not read all values");
@@ -132,6 +130,8 @@ public class KTableSourceTopicRestartIntegrationTest {
             // the state restore listener will append one record to the log
             streams.setGlobalStateRestoreListener(new UpdatingSourceTopicOnRestoreStartStateRestoreListener());
             streams.start();
+            TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING,
+                    "KafkaStreams not running in time");
 
             produceKeyValues("f", "g", "h");
 
@@ -149,8 +149,7 @@ public class KTableSourceTopicRestartIntegrationTest {
         STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
 
         try {
-            streams = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
-            streams.start();
+            streams = IntegrationTestUtils.getRunningStreams(STREAMS_CONFIG, streamsBuilder,  false);
 
             produceKeyValues("a", "b", "c");
 
@@ -161,6 +160,7 @@ public class KTableSourceTopicRestartIntegrationTest {
             // the state restore listener will append one record to the log
             streams.setGlobalStateRestoreListener(new UpdatingSourceTopicOnRestoreStartStateRestoreListener());
             streams.start();
+            TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, "KafkaStreams not running in time");
 
             produceKeyValues("f", "g", "h");
 
@@ -176,16 +176,14 @@ public class KTableSourceTopicRestartIntegrationTest {
     @Test
     public void shouldRestoreAndProgressWhenTopicNotWrittenToDuringRestoration() throws Exception {
         try {
-            streams = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
-            streams.start();
+            streams = IntegrationTestUtils.getStartedStreams(STREAMS_CONFIG, streamsBuilder, false);
 
             produceKeyValues("a", "b", "c");
 
             assertNumberValuesRead(readKeyValues, expectedInitialResultsMap, "Table did not read all values");
 
             streams.close();
-            streams = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
-            streams.start();
+            streams = IntegrationTestUtils.getRunningStreams(STREAMS_CONFIG, streamsBuilder, false);
 
             produceKeyValues("f", "g", "h");
 

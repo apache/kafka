@@ -98,7 +98,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
     }
 
     @Test
-    public void shouldNotAllowToResetWhileStreamsIsRunning(final TestInfo testInfo) {
+    public void shouldNotAllowToResetWhileStreamsIsRunning(final TestInfo testInfo) throws InterruptedException {
         final String appID = IntegrationTestUtils.safeUniqueTestName(testInfo);
         final String[] parameters = new String[] {
             "--application-id", appID,
@@ -114,6 +114,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         // RUN
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
         streams.start();
+        TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, "KafkaStreams not starting in time");
 
         final int exitCode = new StreamsResetter().execute(parameters, cleanUpConfig);
         assertEquals(1, exitCode);
@@ -194,6 +195,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         // Run
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
         streams.start();
+        TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, "KafkaStreams not starting in time");
         final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
 
         streams.close();
@@ -214,6 +216,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
         // RE-RUN
         streams.start();
+        TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, "KafkaStreams not running in time");
         final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
         streams.close();
 
@@ -229,6 +232,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         // RUN
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
         streams.start();
+        TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, "KafkaStreams not running in time");
         final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
 
         streams.close();
@@ -252,6 +256,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
         // RE-RUN
         streams.start();
+        TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, "KafkaStreams not running in time");
         final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 5);
         streams.close();
 
@@ -270,6 +275,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         // RUN
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
         streams.start();
+        TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, "KafkaStreams not running in time");
         final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
 
         streams.close();
@@ -298,6 +304,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
         // RE-RUN
         streams.start();
+        TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, "KafkaStreams not running in time");
         final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
         streams.close();
 
@@ -315,6 +322,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         // RUN
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
         streams.start();
+        TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, "KafkaStreams not running in time");
         final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
 
         streams.close();
@@ -338,6 +346,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
         // RE-RUN
         streams.start();
+        TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, "KafkaStreams not running in time");
         final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
         streams.close();
 

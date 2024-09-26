@@ -18,6 +18,7 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -141,7 +142,7 @@ public class StandbyTaskEOSMultiRebalanceIntegrationTest {
                         CLUSTER.bootstrapServers(),
                         IntegerSerializer.class,
                         IntegerSerializer.class,
-                        new Properties()
+                        new Properties() {{ put(ProducerConfig.ACKS_CONFIG, "all"); } }
                 ),
                 10L + time
         );

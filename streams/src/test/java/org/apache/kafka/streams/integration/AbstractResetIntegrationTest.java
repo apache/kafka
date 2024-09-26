@@ -200,6 +200,7 @@ public abstract class AbstractResetIntegrationTest {
         // RUN
         streams = new KafkaStreams(setupTopologyWithIntermediateTopic(true, OUTPUT_TOPIC_2), streamsConfig);
         streams.start();
+        TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, "KafkaStreams not running in time");
         IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
 
         streams.close();
@@ -273,6 +274,7 @@ public abstract class AbstractResetIntegrationTest {
         // RUN
         streams = new KafkaStreams(setupTopologyWithIntermediateTopic(useRepartitioned, OUTPUT_TOPIC_2), streamsConfig);
         streams.start();
+        TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, "KafkaStreams not running in time");
         final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
         // receive only first values to make sure intermediate user topic is not consumed completely
         // => required to test "seekToEnd" for intermediate topics
