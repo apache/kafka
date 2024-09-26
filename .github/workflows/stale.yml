@@ -42,9 +42,9 @@ jobs:
         with:
           debug-only: ${{ inputs.dryRun || false }}
           operations-per-run: ${{ inputs.operationsPerRun || 100 }}
-          days-before-stale: 7
+          days-before-stale: 3
           days-before-close: -1
-          only-pr-labels: 'triage'
+          any-of-pr-labels: 'triage'
           stale-pr-label: 'needs-attention'
           stale-pr-message: ''
 
