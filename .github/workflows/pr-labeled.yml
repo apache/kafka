@@ -40,10 +40,6 @@ jobs:
             false
       - name: Find Workflow Run ID
         id: find-run-id
-        if: |
-          github.event_name == 'pull_request_target' &&
-          github.event.action == 'labeled' &&
-          github.event.label.name == 'ci-approved'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
