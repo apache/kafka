@@ -11041,8 +11041,8 @@ public class GroupMetadataManagerTest {
 
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
             {
-                put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
-                put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 2, mkMapOfPartitionRacks(2)));
+                put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6));
+                put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 2));
             }
         }));
 
