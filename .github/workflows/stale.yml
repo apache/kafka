@@ -35,6 +35,19 @@ permissions:
   pull-requests: write
 
 jobs:
+  needs-attention:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          debug-only: ${{ inputs.dryRun || false }}
+          operations-per-run: ${{ inputs.operationsPerRun || 100 }}
+          days-before-stale: 7
+          days-before-close: -1
+          only-pr-labels: 'triage'
+          stale-pr-label: 'needs-attention'
+          stale-pr-message: ''
+
   stale:
     runs-on: ubuntu-latest
     steps:
