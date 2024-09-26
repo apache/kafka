@@ -25,10 +25,10 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.FetchRequest;
+import org.apache.kafka.server.log.storage.FetchIsolation;
+import org.apache.kafka.server.log.storage.FetchParams;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.ShareFetchData;
-import org.apache.kafka.storage.internals.log.FetchIsolation;
-import org.apache.kafka.storage.internals.log.FetchParams;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;

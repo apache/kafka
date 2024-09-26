@@ -32,6 +32,7 @@ import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.log.storage.FetchPartitionData;
 import org.apache.kafka.server.share.GroupTopicPartitionData;
 import org.apache.kafka.server.share.PartitionAllData;
 import org.apache.kafka.server.share.PartitionErrorData;
@@ -46,7 +47,6 @@ import org.apache.kafka.server.share.WriteShareGroupStateParameters;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
-import org.apache.kafka.storage.internals.log.FetchPartitionData;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

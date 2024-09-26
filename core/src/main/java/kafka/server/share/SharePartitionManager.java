@@ -38,6 +38,7 @@ import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.log.storage.FetchParams;
 import org.apache.kafka.server.share.CachedSharePartition;
 import org.apache.kafka.server.share.Persister;
 import org.apache.kafka.server.share.SharePartitionKey;
@@ -53,7 +54,6 @@ import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
-import org.apache.kafka.storage.internals.log.FetchParams;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
