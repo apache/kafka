@@ -332,7 +332,6 @@ public class KafkaStreamsTelemetryIntegrationTest {
 
     private Properties props(final Properties extraProperties) {
         final Properties streamsConfiguration = new Properties();
-
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
@@ -342,7 +341,6 @@ public class KafkaStreamsTelemetryIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_CLIENT_SUPPLIER_CONFIG, TestClientSupplier.class);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.putAll(extraProperties);
-
         streamsConfigurations.add(streamsConfiguration);
 
         return streamsConfiguration;
