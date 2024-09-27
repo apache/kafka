@@ -81,7 +81,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.UUID;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
@@ -434,10 +433,8 @@ public class StreamThreadStateStoreProviderTest {
             logContext,
             taskId,
             new StreamsProducer(
-                streamsConfig,
-                "threadId",
-                clientSupplier,
-                UUID.randomUUID(),
+                StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
+                clientSupplier.getProducer(streamsConfig.originals()),
                 logContext,
                 Time.SYSTEM
             ),

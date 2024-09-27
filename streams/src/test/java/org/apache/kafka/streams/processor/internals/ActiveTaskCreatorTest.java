@@ -310,6 +310,7 @@ public class ActiveTaskCreatorTest {
             new MockTime(),
             mockClientSupplier,
             "clientId-StreamThread-0",
+            0,
             uuid,
             new LogContext().logger(ActiveTaskCreator.class),
             false,
