@@ -106,7 +106,7 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#commitSync(Map, Duration)
      */
-    void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets, final Duration timeout);
+    void commitSync( Map<TopicPartition, OffsetAndMetadata> offsets,  Duration timeout);
     /**
      * @see KafkaConsumer#commitAsync()
      */
@@ -150,7 +150,7 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#position(TopicPartition, Duration)
      */
-    long position(TopicPartition partition, final Duration timeout);
+    long position(TopicPartition partition,  Duration timeout);
 
     /**
      * @see KafkaConsumer#committed(TopicPartition)
@@ -162,7 +162,7 @@ public interface Consumer<K, V> extends Closeable {
      * @see KafkaConsumer#committed(TopicPartition, Duration)
      */
     @Deprecated
-    OffsetAndMetadata committed(TopicPartition partition, final Duration timeout);
+    OffsetAndMetadata committed(TopicPartition partition,  Duration timeout);
 
     /**
      * @see KafkaConsumer#committed(Set)
@@ -172,7 +172,7 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#committed(Set, Duration)
      */
-    Map<TopicPartition, OffsetAndMetadata> committed(Set<TopicPartition> partitions, final Duration timeout);
+    Map<TopicPartition, OffsetAndMetadata> committed(Set<TopicPartition> partitions,  Duration timeout);
 
     /**
      * See {@link KafkaConsumer#clientInstanceId(Duration)}}
@@ -267,7 +267,7 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#enforceRebalance(String)
      */
-    void enforceRebalance(final String reason);
+    void enforceRebalance( String reason);
 
     /**
      * @see KafkaConsumer#close()
