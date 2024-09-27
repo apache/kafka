@@ -173,8 +173,7 @@ public class FeatureControlManager {
     ControllerResult<Map<String, ApiError>> updateFeatures(
         Map<String, Short> updates,
         Map<String, FeatureUpdate.UpgradeType> upgradeTypes,
-        boolean validateOnly,
-        short requestVersion
+        boolean validateOnly
     ) {
         TreeMap<String, ApiError> results = new TreeMap<>();
         List<ApiMessageAndVersion> records =
@@ -188,7 +187,7 @@ public class FeatureControlManager {
         for (Entry<String, Short> entry : updates.entrySet()) {
             ApiError error = updateFeature(entry.getKey(), entry.getValue(),
                 upgradeTypes.getOrDefault(entry.getKey(), FeatureUpdate.UpgradeType.UPGRADE), records, proposedUpdatedVersions);
-            if (requestVersion > 1 && !error.error().equals(Errors.NONE)) {
+            if (!error.error().equals(Errors.NONE)) {
                 return ControllerResult.of(Collections.emptyList(), Collections.singletonMap(entry.getKey(), error));
             }
             results.put(entry.getKey(), error);

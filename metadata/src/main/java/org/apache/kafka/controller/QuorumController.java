@@ -151,7 +151,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.stream.Stream;
 
 import static java.util.concurrent.TimeUnit.MICROSECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -2303,16 +2302,12 @@ public final class QuorumController implements Controller {
                 upgradeTypes.put(featureName, FeatureUpdate.UpgradeType.fromCode(featureUpdate.upgradeType()));
                 updates.put(featureName, featureUpdate.maxVersionLevel());
             });
-            return featureControl.updateFeatures(updates, upgradeTypes, request.validateOnly(), context.requestHeader().requestApiVersion());
+            return featureControl.updateFeatures(updates, upgradeTypes, request.validateOnly());
         }).thenApply(result -> {
             UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData();
             responseData.setResults(new UpdateFeaturesResponseData.UpdatableFeatureResultCollection(result.size()));
-            Optional<Entry<String, ApiError>> errorEntry = Optional.empty();
-            if (context.requestHeader().requestApiVersion() > 1) {
-                Stream<Entry<String, ApiError>> errorEntries = result.entrySet().stream().filter(entry ->
-                        !entry.getValue().error().equals(Errors.NONE));
-                errorEntry = errorEntries.findFirst();
-            }
+            Optional<Entry<String, ApiError>> errorEntry = result.entrySet().stream().filter(entry ->
+                !entry.getValue().error().equals(Errors.NONE)).findFirst();
                 
             if (errorEntry.isPresent()) {
                 String errorFeatureName = errorEntry.get().getKey();
@@ -2320,7 +2315,7 @@ public final class QuorumController implements Controller {
                 String errorString = errorFeatureName + ":" + topError.error().exceptionName() + " (" + topError.message() + ")";
                 responseData.setErrorCode(topError.error().code());
                 responseData.setErrorMessage("The update failed for all features since the following feature had an error: " + errorString);
-            } else {
+            } else if (context.requestHeader().requestApiVersion() <= 1) {
                 result.forEach((featureName, error) ->
                     responseData.results().add(
                         new UpdateFeaturesResponseData.UpdatableFeatureResult()

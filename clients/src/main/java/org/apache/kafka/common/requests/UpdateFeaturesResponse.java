@@ -52,8 +52,10 @@ public class UpdateFeaturesResponse extends AbstractResponse {
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
         updateErrorCounts(errorCounts, Errors.forCode(data.errorCode()));
-        for (UpdatableFeatureResult result : data.results()) {
-            updateErrorCounts(errorCounts, Errors.forCode(result.errorCode()));
+        if (data.results() != null) {
+            for (UpdatableFeatureResult result : data.results()) {
+                updateErrorCounts(errorCounts, Errors.forCode(result.errorCode()));
+            }
         }
         return errorCounts;
     }
@@ -84,14 +86,16 @@ public class UpdateFeaturesResponse extends AbstractResponse {
 
     public static UpdateFeaturesResponse createWithErrors(ApiError topLevelError, Map<String, ApiError> updateErrors, int throttleTimeMs) {
         final UpdatableFeatureResultCollection results = new UpdatableFeatureResultCollection();
-        for (final Map.Entry<String, ApiError> updateError : updateErrors.entrySet()) {
-            final String feature = updateError.getKey();
-            final ApiError error = updateError.getValue();
-            final UpdatableFeatureResult result = new UpdatableFeatureResult();
-            result.setFeature(feature)
-                .setErrorCode(error.error().code())
-                .setErrorMessage(error.message());
-            results.add(result);
+        if (topLevelError.error() == Errors.NONE) {
+            for (final Map.Entry<String, ApiError> updateError : updateErrors.entrySet()) {
+                final String feature = updateError.getKey();
+                final ApiError error = updateError.getValue();
+                final UpdatableFeatureResult result = new UpdatableFeatureResult();
+                result.setFeature(feature)
+                        .setErrorCode(error.error().code())
+                        .setErrorMessage(error.message());
+                results.add(result);
+            }
         }
         final UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData()
             .setThrottleTimeMs(throttleTimeMs)
