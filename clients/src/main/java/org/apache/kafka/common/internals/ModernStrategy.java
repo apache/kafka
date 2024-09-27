@@ -32,13 +32,13 @@ import javax.security.auth.Subject;
  * a sunset date, and are expected to be available past the removal of the SecurityManager.
  */
 @SuppressWarnings("unchecked")
-class ModernStrategy extends ReflectiveStrategy {
+class ModernStrategy implements SecurityManagerCompatibility {
 
     private final Method current;
     private final Method callAs;
 
     // Visible for testing
-    ModernStrategy(Loader loader) throws NoSuchMethodException, ClassNotFoundException {
+    ModernStrategy(ReflectiveStrategy.Loader loader) throws NoSuchMethodException, ClassNotFoundException {
         Class<?> subject = loader.loadClass(Subject.class.getName());
         current = subject.getDeclaredMethod("current");
         // Note that the Subject class isn't deprecated or removed, so reference it as an argument type.
@@ -54,11 +54,11 @@ class ModernStrategy extends ReflectiveStrategy {
 
     @Override
     public Subject current() {
-        return (Subject) invoke(current, null);
+        return (Subject) ReflectiveStrategy.invoke(current, null);
     }
 
     @Override
     public <T> T callAs(Subject subject, Callable<T> action) throws CompletionException {
-        return (T) invokeChecked(callAs, CompletionException.class, null, subject, action);
+        return (T) ReflectiveStrategy.invokeChecked(callAs, CompletionException.class, null, subject, action);
     }
 }

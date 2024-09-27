@@ -33,7 +33,7 @@ import javax.security.auth.Subject;
  * <p>This class is expected to be instantiable in JRE >=8 until the removal finally takes place.
  */
 @SuppressWarnings("unchecked")
-class LegacyStrategy extends ReflectiveStrategy {
+class LegacyStrategy implements SecurityManagerCompatibility {
 
     private final Method doPrivileged;
     private final Method getContext;
@@ -41,7 +41,7 @@ class LegacyStrategy extends ReflectiveStrategy {
     private final Method doAs;
 
     // Visible for testing
-    LegacyStrategy(Loader loader) throws ClassNotFoundException, NoSuchMethodException {
+    LegacyStrategy(ReflectiveStrategy.Loader loader) throws ClassNotFoundException, NoSuchMethodException {
         Class<?> accessController = loader.loadClass("java.security.AccessController");
         doPrivileged = accessController.getDeclaredMethod("doPrivileged", PrivilegedAction.class);
         getContext = accessController.getDeclaredMethod("getContext");
@@ -55,14 +55,14 @@ class LegacyStrategy extends ReflectiveStrategy {
 
     @Override
     public <T> T doPrivileged(PrivilegedAction<T> action) {
-        return (T) invoke(doPrivileged, null, action);
+        return (T) ReflectiveStrategy.invoke(doPrivileged, null, action);
     }
 
     /**
      * @return the result of AccessController.getContext(), of type AccessControlContext
      */
     private Object getContext() {
-        return invoke(getContext, null);
+        return ReflectiveStrategy.invoke(getContext, null);
     }
 
     /**
@@ -70,7 +70,7 @@ class LegacyStrategy extends ReflectiveStrategy {
      * @return The result of Subject.getSubject(AccessControlContext)
      */
     private Subject getSubject(Object context) {
-        return (Subject) invoke(getSubject, null, context);
+        return (Subject) ReflectiveStrategy.invoke(getSubject, null, context);
     }
 
     @Override
@@ -82,7 +82,7 @@ class LegacyStrategy extends ReflectiveStrategy {
      * @return The result of Subject.doAs(Subject, PrivilegedExceptionAction)
      */
     private <T> T doAs(Subject subject, PrivilegedExceptionAction<T> action) throws PrivilegedActionException {
-        return (T) invokeChecked(doAs, PrivilegedActionException.class, null, subject, action);
+        return (T) ReflectiveStrategy.invokeChecked(doAs, PrivilegedActionException.class, null, subject, action);
     }
 
     @Override

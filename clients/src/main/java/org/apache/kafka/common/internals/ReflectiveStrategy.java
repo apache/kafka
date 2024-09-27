@@ -20,11 +20,11 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
 /**
- * A strategy which uses reflection to access methods without requiring them at compile-time.
+ * Utility methods for strategies which use reflection to access methods without requiring them at compile-time.
  */
-abstract class ReflectiveStrategy implements SecurityManagerCompatibility {
+class ReflectiveStrategy {
 
-    Object invoke(Method method, Object obj, Object... args) {
+    static Object invoke(Method method, Object obj, Object... args) {
         try {
             return method.invoke(obj, args);
         } catch (IllegalAccessException e) {
@@ -39,7 +39,7 @@ abstract class ReflectiveStrategy implements SecurityManagerCompatibility {
         }
     }
 
-    <T extends Exception> Object invokeChecked(Method method, Class<T> ex, Object obj, Object... args) throws T {
+    static <T extends Exception> Object invokeChecked(Method method, Class<T> ex, Object obj, Object... args) throws T {
         try {
             return method.invoke(obj, args);
         } catch (IllegalAccessException e) {
