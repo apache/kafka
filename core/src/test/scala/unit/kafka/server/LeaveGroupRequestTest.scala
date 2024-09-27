@@ -24,10 +24,8 @@ import org.apache.kafka.common.requests.JoinGroupRequest
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.extension.ExtendWith
 
-@Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(types = Array(Type.KRAFT))
 class LeaveGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {

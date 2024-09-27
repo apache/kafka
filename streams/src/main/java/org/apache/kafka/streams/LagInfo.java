@@ -40,7 +40,7 @@ public class LagInfo {
      * Get the current maximum offset on the store partition's changelog topic, that has been successfully written into
      * the store partition's state store.
      *
-     * @return current consume offset for standby/restoring store partitions &amp;   simply endoffset for active store partition replicas
+     * @return current consume offset for standby/restoring store partitions &amp; simply end offset for active store partition replicas
      */
     public long currentOffsetPosition() {
         return this.currentOffsetPosition;
