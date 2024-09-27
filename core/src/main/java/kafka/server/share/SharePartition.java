@@ -1579,9 +1579,7 @@ public class SharePartition {
 
             if (lastKeyToRemove != -1) {
                 NavigableMap<Long, InFlightBatch> subMap = cachedState.subMap(firstKeyToRemove, true, lastKeyToRemove, true);
-                for (Long key : subMap.keySet()) {
-                    cachedState.remove(key);
-                }
+                subMap.clear();
             }
         } finally {
             lock.writeLock().unlock();
