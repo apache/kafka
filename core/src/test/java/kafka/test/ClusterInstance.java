@@ -74,7 +74,6 @@ public interface ClusterInstance {
     /**
      * Return the set of all controller IDs configured for this test. For kraft, this
      * will return only the nodes which have the "controller" role enabled in `process.roles`.
-     * For zookeeper, this will return all broker IDs since they are all eligible controllers.
      */
     Set<Integer> controllerIds();
 
@@ -92,16 +91,9 @@ public interface ClusterInstance {
     ListenerName clientListener();
 
     /**
-     * The listener for the kraft cluster controller configured by controller.listener.names. In ZK-based clusters, return Optional.empty
+     * The listener for the kraft cluster controller configured by controller.listener.names.
      */
     default Optional<ListenerName> controllerListenerName() {
-        return Optional.empty();
-    }
-
-    /**
-     * The listener for the zk controller configured by control.plane.listener.name. In Raft-based clusters, return Optional.empty
-     */
-    default Optional<ListenerName> controlPlaneListenerName() {
         return Optional.empty();
     }
 
@@ -116,8 +108,7 @@ public interface ClusterInstance {
     String bootstrapControllers();
 
     /**
-     * A collection of all brokers in the cluster. In ZK-based clusters this will also include the broker which is
-     * acting as the controller (since ZK controllers serve both broker and controller roles).
+     * A collection of all brokers in the cluster.
      */
     default Collection<SocketServer> brokerSocketServers() {
         return brokers().values().stream()
@@ -126,8 +117,7 @@ public interface ClusterInstance {
     }
 
     /**
-     * A collection of all controllers in the cluster. For ZK-based clusters, this will return the broker which is also
-     * currently the active controller. For Raft-based clusters, this will return all controller servers.
+     * A collection of all controllers in the cluster.
      */
     Collection<SocketServer> controllerSocketServers();
 

@@ -31,7 +31,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.network.SocketServerConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.extension.ExtendWith
-import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled}
 
 import java.net.Socket
 import java.util.Collections
@@ -60,7 +60,7 @@ object SaslApiVersionsRequestTest {
 
     List(ClusterConfig.defaultBuilder
       .setSecurityProtocol(securityProtocol)
-      .setTypes(Set(Type.ZK).asJava)
+      .setTypes(Set(Type.KRAFT).asJava)
       .setSaslServerProperties(saslServerProperties)
       .setSaslClientProperties(saslClientProperties)
       .setServerProperties(serverProperties)
@@ -68,6 +68,7 @@ object SaslApiVersionsRequestTest {
   }
 }
 
+@Disabled("TODO: KAFKA-17631 - Convert SaslApiVersionsRequestTest to kraft")
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class SaslApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersionsRequestTest(cluster) {
   private var sasl: SaslSetup = _

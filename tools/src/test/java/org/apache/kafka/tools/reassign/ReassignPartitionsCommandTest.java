@@ -81,7 +81,6 @@ import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_2_7_IV1;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV0;
 import static org.apache.kafka.server.config.QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG;
 import static org.apache.kafka.server.config.QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG;
@@ -133,7 +132,6 @@ public class ReassignPartitionsCommandTest {
     }
 
     @ClusterTests({
-            @ClusterTest(types = {Type.ZK}, metadataVersion = IBP_2_7_IV1),
             @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, metadataVersion = IBP_3_3_IV0)
     })
     public void testReassignmentWithAlterPartitionDisabled() throws Exception {
@@ -146,11 +144,6 @@ public class ReassignPartitionsCommandTest {
     }
 
     @ClusterTests({
-            @ClusterTest(types = {Type.ZK}, serverProperties = {
-                    @ClusterConfigProperty(id = 1, key = INTER_BROKER_PROTOCOL_VERSION_CONFIG, value = "2.7-IV1"),
-                    @ClusterConfigProperty(id = 2, key = INTER_BROKER_PROTOCOL_VERSION_CONFIG, value = "2.7-IV1"),
-                    @ClusterConfigProperty(id = 3, key = INTER_BROKER_PROTOCOL_VERSION_CONFIG, value = "2.7-IV1"),
-            }),
             @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
                     @ClusterConfigProperty(id = 1, key = INTER_BROKER_PROTOCOL_VERSION_CONFIG, value = "3.3-IV0"),
                     @ClusterConfigProperty(id = 2, key = INTER_BROKER_PROTOCOL_VERSION_CONFIG, value = "3.3-IV0"),
@@ -416,7 +409,7 @@ public class ReassignPartitionsCommandTest {
     /**
      * Test moving partitions between directories.
      */
-    @ClusterTest(types = {Type.ZK, Type.KRAFT})
+    @ClusterTest(types = {Type.KRAFT})
     public void testLogDirReassignment() throws Exception {
         createTopics();
         TopicPartition topicPartition = new TopicPartition("foo", 0);
@@ -464,7 +457,7 @@ public class ReassignPartitionsCommandTest {
         }
     }
 
-    @ClusterTest(types = {Type.ZK, Type.KRAFT})
+    @ClusterTest(types = {Type.KRAFT})
     public void testAlterLogDirReassignmentThrottle() throws Exception {
         createTopics();
         TopicPartition topicPartition = new TopicPartition("foo", 0);

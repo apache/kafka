@@ -37,11 +37,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static kafka.test.annotation.Type.CO_KRAFT;
-import static kafka.test.annotation.Type.ZK;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG;
@@ -51,26 +48,24 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_
 /**
  * The old test framework {@link kafka.api.BaseConsumerTest#getTestQuorumAndGroupProtocolParametersAll} test for the following cases:
  * <ul>
- *     <li>(ZK / KRAFT servers) with (group.coordinator.new.enable=false) with (classic group protocol) = 2 cases</li>
+ *     <li>(KRAFT servers) with (group.coordinator.new.enable=false) with (classic group protocol) = 1 cases</li>
  *     <li>(KRAFT server) with (group.coordinator.new.enable=true) with (classic group protocol) = 1 case</li>
  *     <li>(KRAFT server) with (group.coordinator.new.enable=true) with (consumer group protocol) = 1 case</li>
  * </ul>
  * <p>
  * The new test framework run seven cases for the following cases:
  * <ul>
- *     <li>(ZK / KRAFT / CO_KRAFT servers) with (group.coordinator.new.enable=false) with (classic group protocol) = 3 cases</li>
+ *     <li>(KRAFT / CO_KRAFT servers) with (group.coordinator.new.enable=false) with (classic group protocol) = 2 cases</li>
  *     <li>(KRAFT / CO_KRAFT servers) with (group.coordinator.new.enable=true) with (classic group protocol) = 2 cases</li>
  *     <li>(KRAFT / CO_KRAFT servers) with (group.coordinator.new.enable=true) with (consumer group protocol) = 2 cases</li>
  * </ul>
  * <p>
  * We can reduce the number of cases as same as the old test framework by using the following methods:
  * <ul>
- *     <li>{@link #forKRaftGroupCoordinator} for the case of (consumer group protocol)</li>
  *     <li>(CO_KRAFT servers) with (group.coordinator.new.enable=true) with (classic / consumer group protocols) = 2 cases</li>
  * </ul>
  * <ul>
- *     <li>{@link #forZkGroupCoordinator} for the case of (classic group protocol)</li>
- *     <li>(ZK / KRAFT servers) with (group.coordinator.new.enable=false) with (classic group protocol) = 2 cases</li>
+ *     <li>(KRAFT servers) with (group.coordinator.new.enable=false) with (classic group protocol) = 1 cases</li>
  * </ul>
  */
 class ConsumerGroupCommandTestUtils {
@@ -79,12 +74,6 @@ class ConsumerGroupCommandTestUtils {
     }
 
     static List<ClusterConfig> generator() {
-        return Stream
-            .concat(forKRaftGroupCoordinator().stream(), forZkGroupCoordinator().stream())
-            .collect(Collectors.toList());
-    }
-
-    static List<ClusterConfig> forKRaftGroupCoordinator() {
         Map<String, String> serverProperties = new HashMap<>();
         serverProperties.put(OFFSETS_TOPIC_PARTITIONS_CONFIG, "1");
         serverProperties.put(OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
@@ -96,21 +85,6 @@ class ConsumerGroupCommandTestUtils {
                 .setTypes(Collections.singleton(CO_KRAFT))
                 .setServerProperties(serverProperties)
                 .setTags(Collections.singletonList("kraftGroupCoordinator"))
-                .build());
-    }
-
-    static List<ClusterConfig> forZkGroupCoordinator() {
-        Map<String, String> serverProperties = new HashMap<>();
-        serverProperties.put(OFFSETS_TOPIC_PARTITIONS_CONFIG, "1");
-        serverProperties.put(OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
-        serverProperties.put(GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "1000");
-        serverProperties.put(CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, "500");
-        serverProperties.put(CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, "500");
-
-        return Collections.singletonList(ClusterConfig.defaultBuilder()
-                .setTypes(Collections.singleton(ZK))
-                .setServerProperties(serverProperties)
-                .setTags(Collections.singletonList("zkGroupCoordinator"))
                 .build());
     }
 

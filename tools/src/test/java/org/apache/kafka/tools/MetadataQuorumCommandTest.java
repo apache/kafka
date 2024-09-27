@@ -23,7 +23,6 @@ import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
 
 import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -33,14 +32,11 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(value = ClusterTestExtensions.class)
@@ -52,9 +48,9 @@ class MetadataQuorumCommandTest {
      * 3. Fewer brokers than controllers
      */
     @ClusterTests({
-        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 2, controllers = 2),
-        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 2, controllers = 1),
-        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 1, controllers = 2),
+        @ClusterTest(brokers = 2, controllers = 2),
+        @ClusterTest(brokers = 2, controllers = 1),
+        @ClusterTest(brokers = 1, controllers = 2),
     })
     public void testDescribeQuorumReplicationSuccessful(ClusterInstance cluster) throws InterruptedException {
         cluster.waitForReadyBrokers();
@@ -94,9 +90,9 @@ class MetadataQuorumCommandTest {
      * 3. Fewer brokers than controllers
      */
     @ClusterTests({
-        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 2, controllers = 2),
-        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 2, controllers = 1),
-        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 1, controllers = 2),
+        @ClusterTest(brokers = 2, controllers = 2),
+        @ClusterTest(brokers = 2, controllers = 1),
+        @ClusterTest(brokers = 1, controllers = 2),
     })
     public void testDescribeQuorumStatusSuccessful(ClusterInstance cluster) throws InterruptedException {
         cluster.waitForReadyBrokers();
@@ -135,7 +131,7 @@ class MetadataQuorumCommandTest {
         }
     }
 
-    @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT})
+    @ClusterTest
     public void testOnlyOneBrokerAndOneController(ClusterInstance cluster) {
         String statusOutput = ToolsTestUtils.captureStandardOut(() ->
             MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--status")
@@ -155,19 +151,6 @@ class MetadataQuorumCommandTest {
         File tmpfile = TestUtils.tempFile(AdminClientConfig.SECURITY_PROTOCOL_CONFIG + "=SSL_PLAINTEXT");
         assertEquals(1, MetadataQuorumCommand.mainNoExit("--bootstrap-server", "localhost:9092",
                         "--command-config", tmpfile.getAbsolutePath(), "describe", "--status"));
-    }
-
-    @ClusterTest(types = {Type.ZK})
-    public void testDescribeQuorumInZkMode(ClusterInstance cluster) {
-        assertInstanceOf(UnsupportedVersionException.class, assertThrows(
-                ExecutionException.class,
-                () -> MetadataQuorumCommand.execute("--bootstrap-server", cluster.bootstrapServers(), "describe", "--status")
-        ).getCause());
-
-        assertInstanceOf(UnsupportedVersionException.class, assertThrows(
-                ExecutionException.class,
-                () -> MetadataQuorumCommand.execute("--bootstrap-server", cluster.bootstrapServers(), "describe", "--replication")
-        ).getCause());
     }
 
     @ClusterTest(types = {Type.CO_KRAFT})

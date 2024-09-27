@@ -82,10 +82,6 @@ public class ListConsumerGroupTest {
         return ConsumerGroupCommandTestUtils.generator();
     }
 
-    private static List<ClusterConfig> consumerProtocolOnlyGenerator() {
-        return ConsumerGroupCommandTestUtils.forKRaftGroupCoordinator();
-    }
-
     private List<GroupProtocol> supportedGroupProtocols() {
         return new ArrayList<>(clusterInstance.supportedGroupProtocols());
     }
@@ -243,7 +239,7 @@ public class ListConsumerGroupTest {
         }
     }
 
-    @ClusterTemplate("consumerProtocolOnlyGenerator")
+    @ClusterTemplate("defaultGenerator")
     public void testListConsumerGroupsWithTypesConsumerProtocol() throws Exception {
         GroupProtocol groupProtocol = GroupProtocol.CONSUMER;
         String topic = TOPIC_PREFIX + groupProtocol.name;
@@ -415,7 +411,7 @@ public class ListConsumerGroupTest {
         }
     }
 
-    @ClusterTemplate("consumerProtocolOnlyGenerator")
+    @ClusterTemplate("defaultGenerator")
     public void testListGroupCommandConsumerProtocol() throws Exception {
         GroupProtocol groupProtocol = GroupProtocol.CONSUMER;
         String topic = TOPIC_PREFIX + groupProtocol.name;

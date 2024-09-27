@@ -14,7 +14,7 @@ This annotation has fields for a set of cluster types and number of brokers, as 
 Arbitrary server properties can also be provided in the annotation:
 
 ```java
-@ClusterTest(types = {Type.Zk}, securityProtocol = "PLAINTEXT", properties = {
+@ClusterTest(types = {Type.KRAFT}, securityProtocol = "PLAINTEXT", properties = {
   @ClusterProperty(key = "inter.broker.protocol.version", value = "2.7-IV2"),
   @ClusterProperty(key = "socket.send.buffer.bytes", value = "10240"),
 })
