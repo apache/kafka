@@ -111,7 +111,7 @@ public class PersisterStateBatchCombiner {
                 // prev:        ------   -------    -------      -------   -------   --------    -------
                 // candidate:   ------   ----       ----------     ---        ----       -------        -------
                 handleSameStateOverlap(prev, candidate);
-            } else if (candidate.firstOffset() <= prev.lastOffset()) { // diff state and non-contiguous overlap
+            } else { // diff state and non-contiguous overlap
                 // overlap and diff state
                 // covers:
                 // case:        1        2*          3            4          5           6             7*
@@ -204,7 +204,7 @@ public class PersisterStateBatchCombiner {
      */
     private void pruneBatches() {
         if (startOffset != -1) {
-            List<PersisterStateBatch> retainedBatches = new ArrayList<>(combinedBatchList);
+            List<PersisterStateBatch> retainedBatches = new ArrayList<>(combinedBatchList.size());
             combinedBatchList.forEach(batch -> {
                 if (batch.lastOffset() < startOffset) {
                     // batch is expired, skip current iteration
