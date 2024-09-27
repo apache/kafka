@@ -29,7 +29,7 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class StateBatchUtilTest {
+public class PersisterStateBatchCombinerTest {
     static class BatchTestHolder {
         final String testName;
         final List<PersisterStateBatch> curList;
@@ -43,7 +43,7 @@ public class StateBatchUtilTest {
                         List<PersisterStateBatch> newList,
                         List<PersisterStateBatch> expectedResult,
                         long startOffset) {
-            this(testName, curList, newList, expectedResult, startOffset, true);
+            this(testName, curList, newList, expectedResult, startOffset, false);
         }
 
         BatchTestHolder(String testName,
@@ -62,12 +62,12 @@ public class StateBatchUtilTest {
 
         static List<PersisterStateBatch> singleBatch(
             long firstOffset,
-            long lastOffset,
+            long prevOffset,
             int deliveryState,
             int deliveryCount
         ) {
             return Collections.singletonList(
-                new PersisterStateBatch(firstOffset, lastOffset, (byte) deliveryState, (short) deliveryCount)
+                new PersisterStateBatch(firstOffset, prevOffset, (byte) deliveryState, (short) deliveryCount)
             );
         }
 
@@ -76,11 +76,11 @@ public class StateBatchUtilTest {
 
             MultiBatchBuilder addBatch(
                 long firstOffset,
-                long lastOffset,
+                long prevOffset,
                 int deliveryState,
                 int deliveryCount
             ) {
-                batchList.add(new PersisterStateBatch(firstOffset, lastOffset, (byte) deliveryState, (short) deliveryCount));
+                batchList.add(new PersisterStateBatch(firstOffset, prevOffset, (byte) deliveryState, (short) deliveryCount));
                 return this;
             }
 
@@ -131,7 +131,7 @@ public class StateBatchUtilTest {
         return Stream.of(
             // same state
             new BatchTestHolder(
-                "Same state. Last and candidate have same first and last offset.",
+                "Same state. prev and candidate have same first and prev offset.",
                 BatchTestHolder.singleBatch(100, 110, 0, 1),
                 BatchTestHolder.singleBatch(100, 110, 0, 1),
                 BatchTestHolder.singleBatch(100, 110, 0, 1),
@@ -139,7 +139,7 @@ public class StateBatchUtilTest {
             ),
 
             new BatchTestHolder(
-                "Same state. Last and candidate have same first offset, candidate last offset strictly smaller.",
+                "Same state. prev and candidate have same first offset, candidate prev offset strictly smaller.",
                 BatchTestHolder.singleBatch(100, 110, 0, 1),
                 BatchTestHolder.singleBatch(100, 105, 0, 1),
                 BatchTestHolder.singleBatch(100, 110, 0, 1),
@@ -147,7 +147,7 @@ public class StateBatchUtilTest {
             ),
 
             new BatchTestHolder(
-                "Same state. Last and candidate have same first offset, candidate last offset strictly larger.",
+                "Same state. prev and candidate have same first offset, candidate prev offset strictly larger.",
                 BatchTestHolder.singleBatch(100, 110, 0, 1),
                 BatchTestHolder.singleBatch(100, 115, 0, 1),
                 BatchTestHolder.singleBatch(100, 115, 0, 1),
@@ -155,15 +155,16 @@ public class StateBatchUtilTest {
             ),
 
             new BatchTestHolder(
-                "Same state. Candidate first offset strictly larger and last offset strictly smaller than last.",
+                "Same state. Candidate first offset strictly larger and prev offset strictly smaller than prev.",
                 BatchTestHolder.singleBatch(100, 110, 0, 1),
                 BatchTestHolder.singleBatch(105, 108, 0, 1),
                 BatchTestHolder.singleBatch(100, 110, 0, 1),
-                -1
+                -1,
+                true
             ),
 
             new BatchTestHolder(
-                "Same state. Candidate first offset strictly larger and last offset equal to last.",
+                "Same state. Candidate first offset strictly larger and prev offset equal to prev.",
                 BatchTestHolder.singleBatch(100, 110, 0, 1),
                 BatchTestHolder.singleBatch(105, 110, 0, 1),
                 BatchTestHolder.singleBatch(100, 110, 0, 1),
@@ -171,7 +172,7 @@ public class StateBatchUtilTest {
             ),
 
             new BatchTestHolder(
-                "Same state. Candidate first offset strictly larger and last offset strictly larger than last.",
+                "Same state. Candidate first offset strictly larger and prev offset strictly larger than prev.",
                 BatchTestHolder.singleBatch(100, 110, 0, 1),
                 BatchTestHolder.singleBatch(105, 115, 0, 1),
                 BatchTestHolder.singleBatch(100, 115, 0, 1),
@@ -179,7 +180,7 @@ public class StateBatchUtilTest {
             ),
 
             new BatchTestHolder(
-                "Same state. Candidate first offset is last first offset + 1 (contiguous).",
+                "Same state. Candidate first offset is prev first offset + 1 (contiguous).",
                 BatchTestHolder.singleBatch(100, 110, 0, 1),
                 BatchTestHolder.singleBatch(111, 115, 0, 1),
                 BatchTestHolder.singleBatch(100, 115, 0, 1),
@@ -266,7 +267,7 @@ public class StateBatchUtilTest {
         return Stream.of(
             // different states
             new BatchTestHolder(
-                "Candidate higher state. Candidate first offset and last offset match last.",
+                "Candidate higher state. Candidate first offset and prev offset match prev.",
                 BatchTestHolder.singleBatch(100, 110, 0, 1),
                 BatchTestHolder.singleBatch(100, 110, 0, 2),
                 BatchTestHolder.singleBatch(100, 110, 0, 2),
@@ -274,7 +275,7 @@ public class StateBatchUtilTest {
             ),
 
             new BatchTestHolder(
-                "Candidate lower state. Candidate first offset and last offset match last.",
+                "Candidate lower state. Candidate first offset and prev offset match prev.",
                 BatchTestHolder.singleBatch(100, 110, 0, 3),
                 BatchTestHolder.singleBatch(100, 110, 0, 1),
                 BatchTestHolder.singleBatch(100, 110, 0, 3),
@@ -282,7 +283,7 @@ public class StateBatchUtilTest {
             ),
 
             new BatchTestHolder(
-                "Candidate higher state. Candidate first offset same and last offset smaller than last.",
+                "Candidate higher state. Candidate first offset same and prev offset smaller than prev.",
                 BatchTestHolder.singleBatch(100, 110, 0, 1),
                 BatchTestHolder.singleBatch(100, 105, 0, 2),
                 BatchTestHolder.multiBatch()
@@ -293,7 +294,7 @@ public class StateBatchUtilTest {
             ),
 
             new BatchTestHolder(
-                "Candidate lower state. Candidate first offset same and last offset smaller than last.",
+                "Candidate lower state. Candidate first offset same and prev offset smaller than prev.",
                 BatchTestHolder.singleBatch(100, 110, 0, 3),
                 BatchTestHolder.singleBatch(100, 105, 0, 1),
                 BatchTestHolder.singleBatch(100, 110, 0, 3),
@@ -301,7 +302,7 @@ public class StateBatchUtilTest {
             ),
 
             new BatchTestHolder(
-                "Candidate higher state. Candidate first offset same and last offset strictly larger than last.",
+                "Candidate higher state. Candidate first offset same and prev offset strictly larger than prev.",
                 BatchTestHolder.singleBatch(100, 110, 0, 1),
                 BatchTestHolder.singleBatch(100, 115, 0, 2),
                 BatchTestHolder.singleBatch(100, 115, 0, 2),
@@ -309,7 +310,7 @@ public class StateBatchUtilTest {
             ),
 
             new BatchTestHolder(
-                "Candidate lower state. Candidate first offset same and last offset strictly larger than last.",
+                "Candidate lower state. Candidate first offset same and prev offset strictly larger than prev.",
                 BatchTestHolder.singleBatch(100, 110, 0, 3),
                 BatchTestHolder.singleBatch(100, 115, 0, 1),
                 BatchTestHolder.multiBatch()
@@ -320,7 +321,7 @@ public class StateBatchUtilTest {
             ),
 
             new BatchTestHolder(
-                "Candidate higher state. Candidate first offset strictly larger and last offset strictly smaller than last.",
+                "Candidate higher state. Candidate first offset strictly larger and prev offset strictly smaller than prev.",
                 BatchTestHolder.singleBatch(100, 115, 0, 1),
                 BatchTestHolder.singleBatch(105, 110, 1, 1),
                 BatchTestHolder.multiBatch()
@@ -332,7 +333,7 @@ public class StateBatchUtilTest {
             ),
 
             new BatchTestHolder(
-                "Candidate lower state. Candidate first offset strictly larger and last offset strictly smaller than last.",
+                "Candidate lower state. Candidate first offset strictly larger and prev offset strictly smaller than prev.",
                 BatchTestHolder.singleBatch(100, 115, 1, 1),
                 BatchTestHolder.singleBatch(105, 110, 0, 1),
                 BatchTestHolder.singleBatch(100, 115, 1, 1),
@@ -340,7 +341,7 @@ public class StateBatchUtilTest {
             ),
 
             new BatchTestHolder(
-                "Candidate higher state. Candidate first offset strictly larger and last offset same as last.",
+                "Candidate higher state. Candidate first offset strictly larger and prev offset same as prev.",
                 BatchTestHolder.singleBatch(100, 110, 0, 1),
                 BatchTestHolder.singleBatch(105, 110, 0, 2),
                 BatchTestHolder.multiBatch()
@@ -351,7 +352,7 @@ public class StateBatchUtilTest {
             ),
 
             new BatchTestHolder(
-                "Candidate lower state. Candidate first offset strictly larger and last offset same as last.",
+                "Candidate lower state. Candidate first offset strictly larger and prev offset same as prev.",
                 BatchTestHolder.singleBatch(100, 110, 0, 2),
                 BatchTestHolder.singleBatch(105, 110, 0, 1),
                 BatchTestHolder.singleBatch(100, 110, 0, 2),
@@ -359,7 +360,7 @@ public class StateBatchUtilTest {
             ),
 
             new BatchTestHolder(
-                "Candidate higher state. Candidate first and last offsets strictly larger than last.",
+                "Candidate higher state. Candidate first and prev offsets strictly larger than prev.",
                 BatchTestHolder.singleBatch(100, 110, 0, 1),
                 BatchTestHolder.singleBatch(105, 115, 0, 2),
                 BatchTestHolder.multiBatch()
@@ -370,7 +371,7 @@ public class StateBatchUtilTest {
             ),
 
             new BatchTestHolder(
-                "Candidate lower state. Candidate first and last offsets strictly larger than last.",
+                "Candidate lower state. Candidate first and prev offsets strictly larger than prev.",
                 BatchTestHolder.singleBatch(100, 110, 0, 2),
                 BatchTestHolder.singleBatch(105, 115, 0, 1),
                 BatchTestHolder.multiBatch()
@@ -387,10 +388,11 @@ public class StateBatchUtilTest {
     public void testStateBatchCombineDifferentStates(BatchTestHolder test) {
         if (test.shouldRun) {
             assertEquals(test.expectedResult,
-                StateBatchUtil.combineStateBatches(
+                new PersisterStateBatchCombiner(
                     test.curList,
                     test.newList,
-                    test.startOffset),
+                    test.startOffset)
+                    .combineStateBatches(),
                 test.testName
             );
         }
@@ -401,10 +403,11 @@ public class StateBatchUtilTest {
     public void testStateBatchCombineSameState(BatchTestHolder test) {
         if (test.shouldRun) {
             assertEquals(test.expectedResult,
-                StateBatchUtil.combineStateBatches(
+                new PersisterStateBatchCombiner(
                     test.curList,
                     test.newList,
-                    test.startOffset),
+                    test.startOffset)
+                    .combineStateBatches(),
                 test.testName
             );
         }
@@ -415,10 +418,11 @@ public class StateBatchUtilTest {
     public void testStateBatchCombineComplexCases(BatchTestHolder test) {
         if (test.shouldRun) {
             assertEquals(test.expectedResult,
-                StateBatchUtil.combineStateBatches(
+                new PersisterStateBatchCombiner(
                     test.curList,
                     test.newList,
-                    test.startOffset),
+                    test.startOffset)
+                    .combineStateBatches(),
                 test.testName
             );
         }
@@ -429,10 +433,11 @@ public class StateBatchUtilTest {
     public void testStateBatchCombineCornerCases(BatchTestHolder test) {
         if (test.shouldRun) {
             assertEquals(test.expectedResult,
-                StateBatchUtil.combineStateBatches(
+                new PersisterStateBatchCombiner(
                     test.curList,
                     test.newList,
-                    test.startOffset),
+                    test.startOffset)
+                    .combineStateBatches(),
                 test.testName
             );
         }

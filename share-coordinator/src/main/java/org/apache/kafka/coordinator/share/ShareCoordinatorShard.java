@@ -291,12 +291,13 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
             // Since the number of update records for this share part key exceeds snapshotUpdateRecordsPerSnapshot,
             // we should be creating a share snapshot record.
-            List<PersisterStateBatch> batchesToAdd = StateBatchUtil.combineStateBatches(
+            List<PersisterStateBatch> batchesToAdd = new PersisterStateBatchCombiner(
                 shareStateMap.get(key).stateBatches(),
                 partitionData.stateBatches().stream()
                     .map(PersisterStateBatch::from)
                     .collect(Collectors.toList()),
-                newStartOffset);
+                newStartOffset)
+                .combineStateBatches();
 
             recordList = Collections.singletonList(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
                 groupId, topicData.topicId(), partitionData.partition(),
@@ -534,9 +535,10 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             .setStateEpoch(soFar.stateEpoch())
             .setStartOffset(newStartOffset)
             .setLeaderEpoch(newLeaderEpoch)
-            .setStateBatches(StateBatchUtil.combineStateBatches(currentBatches, newData.stateBatches().stream()
-                .map(StateBatchUtil::toPersisterStateBatch)
-                .collect(Collectors.toList()), newStartOffset))
+            .setStateBatches(new PersisterStateBatchCombiner(currentBatches, newData.stateBatches().stream()
+                .map(ShareCoordinatorShard::toPersisterStateBatch)
+                .collect(Collectors.toList()), newStartOffset)
+                .combineStateBatches())
             .build();
     }
 
@@ -546,5 +548,20 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         } else {
             return apiMessageAndVersion.message();
         }
+    }
+
+    /**
+     * Converts a {@link ShareUpdateValue.StateBatch} type state batch to {@link PersisterStateBatch}
+     *
+     * @param batch - The object representing {@link ShareUpdateValue.StateBatch}
+     * @return {@link PersisterStateBatch}
+     */
+    private static PersisterStateBatch toPersisterStateBatch(ShareUpdateValue.StateBatch batch) {
+        return new PersisterStateBatch(
+            batch.firstOffset(),
+            batch.lastOffset(),
+            batch.deliveryState(),
+            batch.deliveryCount()
+        );
     }
 }
