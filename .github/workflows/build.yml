@@ -90,7 +90,7 @@ jobs:
 
   test:
     needs: validate
-    if: ! inputs.is-draft
+    if: ${{ ! inputs.is-draft }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
