@@ -20,8 +20,6 @@ import org.HdrHistogram.Histogram;
 import org.HdrHistogram.Recorder;
 import org.HdrHistogram.ValueRecorder;
 
-import java.util.concurrent.atomic.AtomicReference;
-
 /**
  * <p>A wrapper on top of the HdrHistogram API. It handles writing to the histogram by delegating
  * to an internal {@link ValueRecorder} implementation, and reading from the histogram by
@@ -35,6 +33,7 @@ public final class HdrHistogram {
 
     private static final long DEFAULT_MAX_SNAPSHOT_AGE_MS = 1000L;
 
+    private final Object lock = new Object();
     /**
      * The duration (in millis) after which the latest histogram snapshot is considered outdated and
      * subsequent calls to {@link #latestHistogram(long)} will result in the snapshot being recreated.
@@ -54,7 +53,7 @@ public final class HdrHistogram {
      * The latest snapshot of the internal HdrHistogram. Automatically updated by
      * {@link #latestHistogram(long)} if older than {@link #maxSnapshotAgeMs}.
      */
-    private final AtomicReference<Timestamped<Histogram>> timestampedHistogramSnapshot;
+    private volatile Timestamped<Histogram> timestampedHistogramSnapshot;
 
     public HdrHistogram(
         long highestTrackableValue,
@@ -70,19 +69,20 @@ public final class HdrHistogram {
     ) {
         this.maxSnapshotAgeMs = maxSnapshotAgeMs;
         recorder = new Recorder(highestTrackableValue, numberOfSignificantValueDigits);
-        this.timestampedHistogramSnapshot = new AtomicReference<>(new Timestamped<>(0, null));
+        this.timestampedHistogramSnapshot = new Timestamped<>(0, null);
     }
 
     private Histogram latestHistogram(long now) {
-        Timestamped<Histogram> latest = timestampedHistogramSnapshot.get();
-        while (now - latest.timestamp > maxSnapshotAgeMs) {
-            Histogram currentSnapshot = recorder.getIntervalHistogram();
-            boolean updatedLatest = timestampedHistogramSnapshot.compareAndSet(
-                latest, new Timestamped<>(now, currentSnapshot));
-
-            latest = timestampedHistogramSnapshot.get();
-            if (updatedLatest) {
-                break;
+        Timestamped<Histogram> latest = timestampedHistogramSnapshot;
+        if (now - latest.timestamp > maxSnapshotAgeMs) {
+            // Double-checked locking ensures that the thread that extracts the histogram data is
+            // the one that updates the internal snapshot.
+            synchronized (lock) {
+                latest = timestampedHistogramSnapshot;
+                if (now - latest.timestamp > maxSnapshotAgeMs) {
+                    latest = new Timestamped<>(now, recorder.getIntervalHistogram());
+                    timestampedHistogramSnapshot = latest;
+                }
             }
         }
         return latest.value;
