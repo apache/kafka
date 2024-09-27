@@ -954,7 +954,6 @@ project(':share') {
 
   dependencies {
     implementation project(':server-common')
-    implementation project(':storage')
 
     implementation libs.slf4jApi
 

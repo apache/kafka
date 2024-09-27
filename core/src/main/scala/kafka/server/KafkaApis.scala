@@ -79,7 +79,8 @@ import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.share.context.ShareFetchContext
 import org.apache.kafka.server.share.ErroneousAndValidPartitionData
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, FetchParams, FetchPartitionData}
+import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
+import org.apache.kafka.storage.internals.log.AppendOrigin
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import java.lang.{Long => JLong}

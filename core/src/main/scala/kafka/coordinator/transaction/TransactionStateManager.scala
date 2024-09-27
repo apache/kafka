@@ -39,8 +39,9 @@ import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, Transacti
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.record.BrokerCompressionType
+import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.Scheduler
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation}
+import org.apache.kafka.storage.internals.log.AppendOrigin
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable

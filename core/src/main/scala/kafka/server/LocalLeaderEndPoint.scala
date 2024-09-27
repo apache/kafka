@@ -29,7 +29,7 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, RequestUtils}
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.common.OffsetAndEpoch
-import org.apache.kafka.storage.internals.log.{FetchIsolation, FetchParams, FetchPartitionData}
+import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
 
 import java.util
 import java.util.Optional
