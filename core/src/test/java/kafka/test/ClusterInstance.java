@@ -184,6 +184,12 @@ public interface ClusterInstance {
 
     void startBroker(int brokerId);
 
+    default void restart() throws Exception {
+        restart(Collections.emptyMap());
+    }
+
+    void restart(Map<Integer, Map<String, Object>> perServerConfigOverrides) throws Exception;
+
     //---------------------------[wait]---------------------------//
 
     default void waitTopicDeletion(String topic) throws InterruptedException {

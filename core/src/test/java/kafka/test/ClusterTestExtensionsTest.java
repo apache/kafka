@@ -255,6 +255,34 @@ public class ClusterTestExtensionsTest {
         Assertions.assertTrue(clusterInstance.brokers().containsKey(0));
     }
 
+    @ClusterTest(types = {Type.ZK, Type.CO_KRAFT, Type.KRAFT}, serverProperties = {
+        @ClusterConfigProperty(key = "offset.storage.replication.factor", value = "1"),
+    })
+    public void testRestartWithOverriddenConfig(ClusterInstance clusterInstance) throws Exception {
+        clusterInstance.restart(Collections.singletonMap(-1, Collections.singletonMap("default.replication.factor", 2)));
+        clusterInstance.waitForReadyBrokers();
+        clusterInstance.brokers().values().forEach(broker -> {
+            Assertions.assertEquals(2, broker.config().getInt("default.replication.factor"));
+        });
+        clusterInstance.controllers().values().forEach(controller -> {
+            Assertions.assertEquals(2, controller.config().getInt("default.replication.factor"));
+        });
+    }
+
+    @ClusterTest(types = {Type.ZK, Type.CO_KRAFT, Type.KRAFT}, serverProperties = {
+            @ClusterConfigProperty(key = "offset.storage.replication.factor", value = "1"),
+    })
+    public void testRestartWithoutOverriddenConfig(ClusterInstance clusterInstance) throws Exception {
+        clusterInstance.restart();
+        clusterInstance.waitForReadyBrokers();
+        clusterInstance.brokers().values().forEach(broker -> {
+            Assertions.assertEquals(1, broker.config().getInt("default.replication.factor"));
+        });
+        clusterInstance.controllers().values().forEach(controller -> {
+            Assertions.assertEquals(1, controller.config().getInt("default.replication.factor"));
+        });
+    }
+
 
     @ClusterTest(types = {Type.ZK, Type.CO_KRAFT, Type.KRAFT}, brokers = 4)
     public void testVerifyTopicDeletion(ClusterInstance clusterInstance) throws Exception {

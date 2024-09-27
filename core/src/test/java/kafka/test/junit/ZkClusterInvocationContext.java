@@ -21,6 +21,7 @@ import kafka.api.IntegrationTestHarness;
 import kafka.network.SocketServer;
 import kafka.server.ControllerServer;
 import kafka.server.KafkaBroker;
+import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.test.ClusterConfig;
 import kafka.test.ClusterInstance;
@@ -204,6 +205,18 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         @Override
         public void startBroker(int brokerId) {
             findBrokerOrThrow(brokerId).startup();
+        }
+
+        @Override
+        public void restart(Map<Integer, Map<String, Object>> perServerConfigOverrides) throws Exception {
+            brokers().values().forEach(KafkaBroker::shutdown);
+            brokers().forEach((id, broker) -> {
+                Map<String, Object> config = broker.config().originals();
+                config.putAll(perServerConfigOverrides.getOrDefault(-1, Collections.emptyMap()));
+                config.putAll(perServerConfigOverrides.getOrDefault(id, Collections.emptyMap()));
+                broker.config().updateCurrentConfig(new KafkaConfig(config));
+            });
+            brokers().values().forEach(KafkaBroker::startup);
         }
 
         @Override
