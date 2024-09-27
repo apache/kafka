@@ -43,8 +43,11 @@ inputs:
     description: "The name of the status check"
     required: true
   state:
-    description: "The state of the check. Can be one of: error, failure, pending, success"
+    description: "The status of the check. Can be one of: queued, in_progress, completed, waiting, requested, pending"
     required: true
+  conclusion:
+    description: "Required if status is 'completed'. Can be one of: action_required, cancelled, failure, neutral, success, skipped, stale, timed_out"
+    required: false
 
 runs:
   using: "composite"
@@ -55,7 +58,9 @@ runs:
         GH_TOKEN: ${{ inputs.gh-token }}
       run: |
         gh api --method POST -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" \
-        /repos/${{ inputs.repository }}/statuses/${{ inputs.commit_sha }} \
-        -f "state=${{ inputs.state }}" -f "target_url=${{ inputs.url }}" \
-        -f "description=${{ inputs.description }}" \
-        -f "context=${{ inputs.context }}"
+        /repos/${{ inputs.repository }}/check-runs \
+        -f "head_sha=${{ inputs.commit_sha }}" \
+        -f "status=${{ inputs.state }}" \
+        -f "details_url=${{ inputs.url }}" \
+        -f "output[title]=${{ inputs.description }}" \
+        -f "name=${{ inputs.context }}"
