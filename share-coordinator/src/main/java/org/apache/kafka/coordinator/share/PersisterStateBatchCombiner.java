@@ -58,6 +58,27 @@ public class PersisterStateBatchCombiner {
         }
     }
 
+    /**
+     * Algorithm: Merge current state batches and new batches into a single non-overlapping batch list.
+     * Input: batchesSoFar, newBatches, startOffset
+     * Output: combined list with non-overlapping batches (finalBatchList)
+     * <p>
+     * - Add both currentBatches and newBatches into a single list combinedBatchList
+     * - Remove/prune any batches from the combinedBatchList:
+     * -    if batch.lastOffset < startOffset then remove batch from combinedBatchList
+     * -    else if batch.firstOffset > startOffset then we will keep the batch
+     * -    else if batch.firstOffset <= startOffset <= batch.lastOffset then keep [startOffset, batch.lastOffset] part only and discard rest.
+     * - create a treeset sortedBatches using pruned combinedBatchList
+     * - do repeat until all batches in sortedSet are non-overlapping:
+     * -    find first 2 overlapping batches in sortedBatches set, say, prev and candidate.
+     * -    remove any non-overlapping batches from sortedBatches encountered during the find operation and add them to a finalBatchList
+     * -    based on various conditions of offset overlap and batch state differences combine the batches or
+     *      create new batches, if required, and add to the sortedSet.
+     * - done
+     * - return the finalBatchList
+     *
+     * @return list of {@link PersisterStateBatch} representing non-overlapping combined batches
+     */
     public List<PersisterStateBatch> combineStateBatches() {
         pruneBatches();
         mergeBatches();
@@ -106,6 +127,15 @@ public class PersisterStateBatchCombiner {
         finalBatchList.addAll(sortedBatches);   // some non overlapping batches might have remained
     }
 
+    /**
+     * Compares the non-offset state of 2 batches i.e. the deliveryCount and deliverState.
+     * <p>
+     * Uses standard compareTo contract x < y => +int, x > y => -int, x == y => 0
+     *
+     * @param b1 - {@link PersisterStateBatch} to compare
+     * @param b2 - {@link PersisterStateBatch} to compare
+     * @return int representing comparison result.
+     */
     private int compareBatchState(PersisterStateBatch b1, PersisterStateBatch b2) {
         int deltaCount = Short.compare(b1.deliveryCount(), b2.deliveryCount());
 
@@ -122,6 +152,19 @@ public class PersisterStateBatchCombiner {
         return deltaCount;
     }
 
+    /**
+     * Accepts a sorted set of state batches and finds the first 2 batches which overlap.
+     * Overlap means that they have some offsets in common or, they are contiguous with the same state.
+     * <p>
+     * Along with the 2 overlapping batches, also returns a list of non overlapping intervals
+     * prefixing them. For example:
+     * ----- ----  ----- -----      -----
+     *                      ------
+     * <---------------> <-------->
+     * non-overlapping   1st overlapping pair
+     *
+     * @return object representing the overlap state
+     */
     private BatchOverlapState getOverlappingState() {
         if (sortedBatches == null || sortedBatches.isEmpty()) {
             return BatchOverlapState.EMPTY;
@@ -152,6 +195,13 @@ public class PersisterStateBatchCombiner {
         finalBatchList.addAll(nonOverlappingBatches);
     }
 
+    /**
+     * Accepts a list of {@link PersisterStateBatch} and checks:
+     * - last offset is < start offset => batch is removed
+     * - first offset > start offset => batch is preserved
+     * - start offset intersects the batch => part of batch before start offset is removed and
+     * the part after it is preserved.
+     */
     private void pruneBatches() {
         if (startOffset != -1) {
             List<PersisterStateBatch> retainedBatches = new ArrayList<>(combinedBatchList);
