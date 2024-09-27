@@ -59,7 +59,6 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
-
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -104,6 +103,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.StoreQueryParameters.fromNameAndType;
+import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.REPLACE_THREAD;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getRunningStreams;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
@@ -1074,8 +1074,8 @@ public class QueryableStateIntegrationTest {
 
     }
 
+
     @Test
-    @Deprecated //A single thread should no longer die
     public void shouldAllowToQueryAfterThreadDied() throws Exception {
         final AtomicBoolean beforeFailure = new AtomicBoolean(true);
         final AtomicBoolean failed = new AtomicBoolean(false);
@@ -1084,77 +1084,72 @@ public class QueryableStateIntegrationTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> input = builder.stream(streamOne);
         input
-            .groupByKey()
-            .reduce((value1, value2) -> {
-                if (value1.length() > 1) {
-                    if (beforeFailure.compareAndSet(true, false)) {
-                        throw new RuntimeException("Injected test exception");
+                .groupByKey()
+                .reduce((value1, value2) -> {
+                    if (value1.length() > 1) {
+                        if (beforeFailure.compareAndSet(true, false)) {
+                            throw new RuntimeException("Injected test exception");
+                        }
                     }
-                }
-                return value1 + value2;
-            }, Materialized.as(storeName))
-            .toStream()
-            .to(outputTopic);
+                    return value1 + value2;
+                }, Materialized.as(storeName))
+                .toStream()
+                .to(outputTopic);
 
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
-        kafkaStreams.setUncaughtExceptionHandler((t, e) -> failed.set(true));
+        kafkaStreams.setUncaughtExceptionHandler(exception -> REPLACE_THREAD);
 
         startApplicationAndWaitUntilRunning(kafkaStreams);
 
         IntegrationTestUtils.produceKeyValuesSynchronously(
-            streamOne,
-            Arrays.asList(
-                KeyValue.pair("a", "1"),
-                KeyValue.pair("a", "2"),
-                KeyValue.pair("b", "3"),
-                KeyValue.pair("b", "4")),
-            TestUtils.producerConfig(
-                CLUSTER.bootstrapServers(),
-                StringSerializer.class,
-                StringSerializer.class,
-                new Properties()),
-            mockTime);
+                streamOne,
+                Arrays.asList(
+                        KeyValue.pair("a", "1"),
+                        KeyValue.pair("a", "2"),
+                        KeyValue.pair("b", "3"),
+                        KeyValue.pair("b", "4")),
+                TestUtils.producerConfig(
+                        CLUSTER.bootstrapServers(),
+                        StringSerializer.class,
+                        StringSerializer.class,
+                        new Properties()),
+                mockTime);
 
         final int maxWaitMs = 30000;
 
         final ReadOnlyKeyValueStore<String, String> store =
-            IntegrationTestUtils.getStore(storeName, kafkaStreams, keyValueStore());
+                IntegrationTestUtils.getStore(storeName, kafkaStreams, keyValueStore());
 
         TestUtils.waitForCondition(
-            () -> "12".equals(store.get("a")) && "34".equals(store.get("b")),
-            maxWaitMs,
-            "wait for agg to be <a,12> and <b,34>");
+                () -> "12".equals(store.get("a")) && "34".equals(store.get("b")),
+                maxWaitMs,
+                "wait for agg to be <a,12> and <b,34>");
 
         IntegrationTestUtils.produceKeyValuesSynchronously(
-            streamOne,
-            Collections.singleton(KeyValue.pair("a", "5")),
-            TestUtils.producerConfig(
-                CLUSTER.bootstrapServers(),
-                StringSerializer.class,
-                StringSerializer.class,
-                new Properties()),
-            mockTime);
-
-        TestUtils.waitForCondition(
-            failed::get,
-            maxWaitMs,
-            "wait for thread to fail");
+                streamOne,
+                Collections.singleton(KeyValue.pair("a", "5")),
+                TestUtils.producerConfig(
+                        CLUSTER.bootstrapServers(),
+                        StringSerializer.class,
+                        StringSerializer.class,
+                        new Properties()),
+                mockTime);
 
         final ReadOnlyKeyValueStore<String, String> store2 =
-            IntegrationTestUtils.getStore(storeName, kafkaStreams, keyValueStore());
+                IntegrationTestUtils.getStore(storeName, kafkaStreams, keyValueStore());
 
         try {
             TestUtils.waitForCondition(
-                () -> ("125".equals(store2.get("a"))
-                    || "1225".equals(store2.get("a"))
-                    || "12125".equals(store2.get("a")))
-                    &&
-                    ("34".equals(store2.get("b"))
-                    || "344".equals(store2.get("b"))
-                    || "3434".equals(store2.get("b"))),
-                maxWaitMs,
-                "wait for agg to be <a,125>||<a,1225>||<a,12125> and <b,34>||<b,344>||<b,3434>");
+                    () -> ("125".equals(store2.get("a"))
+                            || "1225".equals(store2.get("a"))
+                            || "12125".equals(store2.get("a")))
+                            &&
+                            ("34".equals(store2.get("b"))
+                                    || "344".equals(store2.get("b"))
+                                    || "3434".equals(store2.get("b"))),
+                    maxWaitMs,
+                    "wait for agg to be <a,125>||<a,1225>||<a,12125> and <b,34>||<b,344>||<b,3434>");
         } catch (final Throwable t) {
             throw new RuntimeException("Store content is a: " + store2.get("a") + "; b: " + store2.get("b"), t);
         }
