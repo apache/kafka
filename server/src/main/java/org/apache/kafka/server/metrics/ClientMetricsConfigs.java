@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -132,10 +133,14 @@ public class ClientMetricsConfigs extends AbstractConfig {
             }
         });
 
+        Map<String, String> propertiesMap = new HashMap<>(properties.size());
+        properties.forEach((key, value) -> propertiesMap.put((String) key, (String) value));
+        Map<String, Object> parsed = CONFIG.parse(propertiesMap);
+
         // Make sure that push interval is between 100ms and 1 hour.
-        if (properties.containsKey(PUSH_INTERVAL_MS)) {
-            Integer pushIntervalMs = (Integer) ConfigDef.parseType(PUSH_INTERVAL_MS, properties.getProperty(PUSH_INTERVAL_MS), Type.INT);
-            if (pushIntervalMs == null || pushIntervalMs < MIN_INTERVAL_MS || pushIntervalMs > MAX_INTERVAL_MS) {
+        if (parsed.containsKey(PUSH_INTERVAL_MS)) {
+            Integer pushIntervalMs = (Integer) parsed.get(PUSH_INTERVAL_MS);
+            if (pushIntervalMs < MIN_INTERVAL_MS || pushIntervalMs > MAX_INTERVAL_MS) {
                 String msg = String.format("Invalid value %s for %s, interval must be between 100 and 3600000 (1 hour)",
                     pushIntervalMs, PUSH_INTERVAL_MS);
                 throw new InvalidRequestException(msg);
@@ -144,7 +149,7 @@ public class ClientMetricsConfigs extends AbstractConfig {
 
         // Make sure that client match patterns are valid by parsing them.
         if (properties.containsKey(CLIENT_MATCH_PATTERN)) {
-            List<String> patterns = (List<String>) ConfigDef.parseType(CLIENT_MATCH_PATTERN, properties.getProperty(CLIENT_MATCH_PATTERN), Type.LIST);
+            List<String> patterns = (List<String>) parsed.get(CLIENT_MATCH_PATTERN);
             // Parse the client matching patterns to validate if the patterns are valid.
             parseMatchingPatterns(patterns);
         }
