@@ -288,7 +288,6 @@ public class GlobalStreamThread extends Thread {
 
             return;
         }
-        setState(RUNNING);
 
         boolean wipeStateStore = false;
         try {
@@ -400,7 +399,7 @@ public class GlobalStreamThread extends Thread {
                     topology,
                     globalProcessorContext,
                     stateMgr,
-                    config.defaultDeserializationExceptionHandler(),
+                    config.deserializationExceptionHandler(),
                     time,
                     config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG)
                 ),
@@ -423,6 +422,7 @@ public class GlobalStreamThread extends Thread {
                 );
             }
 
+            setState(RUNNING);
             return stateConsumer;
         } catch (final StreamsException fatalException) {
             closeStateConsumer(stateConsumer, false);

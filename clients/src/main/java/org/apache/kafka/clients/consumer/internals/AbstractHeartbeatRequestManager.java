@@ -307,6 +307,7 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
         resetHeartbeatState();
         membershipManager().onHeartbeatFailure(exception instanceof RetriableException);
         if (exception instanceof RetriableException) {
+            coordinatorRequestManager.handleCoordinatorDisconnect(exception, responseTimeMs);
             String message = String.format("%s failed because of the retriable exception. Will retry in %s ms: %s",
                 heartbeatRequestName(),
                 heartbeatRequestState.remainingBackoffMs(responseTimeMs),

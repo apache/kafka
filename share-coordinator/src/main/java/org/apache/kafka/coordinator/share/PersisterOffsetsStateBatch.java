@@ -18,7 +18,8 @@
 package org.apache.kafka.coordinator.share;
 
 import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
-import org.apache.kafka.server.group.share.PersisterStateBatch;
+import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
+import org.apache.kafka.server.share.PersisterStateBatch;
 
 import java.util.Objects;
 
@@ -56,6 +57,15 @@ public class PersisterOffsetsStateBatch {
     }
 
     public static PersisterOffsetsStateBatch from(WriteShareGroupStateRequestData.StateBatch batch) {
+        return new PersisterOffsetsStateBatch(
+            batch.firstOffset(),
+            batch.lastOffset(),
+            batch.deliveryState(),
+            batch.deliveryCount()
+        );
+    }
+
+    public static PersisterOffsetsStateBatch from(ShareUpdateValue.StateBatch batch) {
         return new PersisterOffsetsStateBatch(
             batch.firstOffset(),
             batch.lastOffset(),
