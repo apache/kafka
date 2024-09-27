@@ -194,13 +194,13 @@ public class PersisterStateBatchCombiner {
 
     private void handleDiffStateOverlap(PersisterStateBatch prev, PersisterStateBatch candidate) {
         if (candidate.firstOffset() == prev.firstOffset()) {
-            handleDiffStateOverlapFirstOffsetAlign(prev, candidate);
+            handleDiffStateOverlapFirstOffsetAligned(prev, candidate);
         } else {    // candidate.firstOffset() > prev.firstOffset()
             handleDiffStateOverlapFirstOffsetNotAligned(prev, candidate);
         }
     }
 
-    private void handleDiffStateOverlapFirstOffsetAlign(PersisterStateBatch prev, PersisterStateBatch candidate) {
+    private void handleDiffStateOverlapFirstOffsetAligned(PersisterStateBatch prev, PersisterStateBatch candidate) {
         if (candidate.lastOffset() == prev.lastOffset()) {  // case 1
             // candidate can never have lower or equal priority
             // since sortedBatches order takes that into account.
