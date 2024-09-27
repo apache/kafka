@@ -37,9 +37,8 @@ jobs:
     permissions:
       pull-requests: write
     steps:
-      - run: gh pr edit "$NUMBER" --add-label "$LABELS"
+      - run: gh pr edit "$NUMBER" --add-label triage
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           NUMBER: ${{ github.event.pull_request.number }}
-          LABELS: triage
