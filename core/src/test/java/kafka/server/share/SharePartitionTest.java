@@ -45,11 +45,11 @@ import org.apache.kafka.server.share.ReadShareGroupStateResult;
 import org.apache.kafka.server.share.TopicData;
 import org.apache.kafka.server.share.WriteShareGroupStateResult;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
+import org.apache.kafka.server.storage.log.FetchPartitionData;
 import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
-import org.apache.kafka.storage.internals.log.FetchPartitionData;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
