@@ -37,9 +37,9 @@ jobs:
       gradle-cache-write-only: ${{ github.ref == 'refs/heads/trunk' }}
       is-public-fork: ${{ github.event.pull_request.head.repo.fork || false }}
       is-draft: |
-        github.event_name == 'pull_request' && (
-          github.event.pull_request.draft ||
-          contains(github.event.pull_request.title, 'WIP')
-        )
+        ${{ github.event_name == 'pull_request' && (
+              github.event.pull_request.draft ||
+              contains(github.event.pull_request.title, 'WIP')
+        ) }}
     secrets:
       inherit
