@@ -85,10 +85,17 @@ public class ShareFetchUtils {
                 // Maybe, in the future, check if no records are acquired, and we want to retry
                 // replica manager fetch. Depends on the share partition manager implementation,
                 // if we want parallel requests for the same share partition or not.
-                partitionData
-                    .setRecords(fetchPartitionData.records)
-                    .setErrorCode(fetchPartitionData.error.code())
-                    .setAcquiredRecords(acquiredRecords);
+                if (acquiredRecords.isEmpty()) {
+                    partitionData
+                        .setRecords(null)
+                        .setErrorCode(Errors.NONE.code())
+                        .setAcquiredRecords(Collections.emptyList());
+                } else {
+                    partitionData
+                        .setRecords(fetchPartitionData.records)
+                        .setErrorCode(fetchPartitionData.error.code())
+                        .setAcquiredRecords(acquiredRecords);
+                }
             }
             response.put(topicIdPartition, partitionData);
         });

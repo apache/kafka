@@ -52,6 +52,7 @@ import scala.Option;
 
 import static kafka.server.share.SharePartitionManagerTest.PARTITION_MAX_BYTES;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -292,6 +293,56 @@ public class ShareFetchUtilsTest {
         // the updateCacheAndOffsets calls should remain the same as the previous case.
         Mockito.verify(sp0, times(1)).updateCacheAndOffsets(any(Long.class));
         Mockito.verify(sp1, times(0)).updateCacheAndOffsets(any(Long.class));
+    }
+
+    @Test
+    public void testProcessFetchResponseWhenNoRecordsAreAcquired() {
+        String groupId = "grp";
+        Uuid fooId = Uuid.randomUuid();
+
+        TopicIdPartition tp0 = new TopicIdPartition(fooId, new TopicPartition("foo", 0));
+        Map<TopicIdPartition, Integer> partitionMaxBytes = Collections.singletonMap(tp0, PARTITION_MAX_BYTES);
+
+        SharePartition sp0 = Mockito.mock(SharePartition.class);
+        Map<SharePartitionKey, SharePartition> partitionCacheMap = Collections.singletonMap(new SharePartitionKey(groupId, tp0), sp0);
+
+        ShareFetchData shareFetchData = new ShareFetchData(
+            new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, 0,
+                1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()),
+            groupId, Uuid.randomUuid().toString(), new CompletableFuture<>(), partitionMaxBytes);
+
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+
+        // Mock the replicaManager.fetchOffsetForTimestamp method to return a timestamp and offset for the topic partition.
+        FileRecords.TimestampAndOffset timestampAndOffset = new FileRecords.TimestampAndOffset(100L, 1L, Optional.empty());
+        doReturn(new OffsetResultHolder(Option.apply(timestampAndOffset), Option.empty())).when(replicaManager).fetchOffsetForTimestamp(any(TopicPartition.class), anyLong(), any(), any(), anyBoolean());
+
+        when(sp0.nextFetchOffset()).thenReturn((long) 0);
+        when(sp0.acquire(anyString(), any(FetchPartitionData.class))).thenReturn(Collections.emptyList());
+        doNothing().when(sp0).updateCacheAndOffsets(any(Long.class));
+
+        MemoryRecords records = MemoryRecords.withRecords(Compression.NONE,
+            new SimpleRecord("0".getBytes(), "v".getBytes()),
+            new SimpleRecord("1".getBytes(), "v".getBytes()),
+            new SimpleRecord("2".getBytes(), "v".getBytes()),
+            new SimpleRecord(null, "value".getBytes()));
+
+        Map<TopicIdPartition, FetchPartitionData> responseData = Collections.singletonMap(
+            tp0, new FetchPartitionData(Errors.OFFSET_OUT_OF_RANGE, 0L, 0L,
+                records, Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData =
+            ShareFetchUtils.processFetchResponse(shareFetchData, responseData, partitionCacheMap, replicaManager);
+
+        assertEquals(1, resultData.size());
+        assertTrue(resultData.containsKey(tp0));
+        assertEquals(0, resultData.get(tp0).partitionIndex());
+        assertNull(resultData.get(tp0).records());
+        assertTrue(resultData.get(tp0).acquiredRecords().isEmpty());
+        assertEquals(Errors.NONE.code(), resultData.get(tp0).errorCode());
+
+        Mockito.verify(sp0, times(1)).updateCacheAndOffsets(any(Long.class));
     }
 
 }
