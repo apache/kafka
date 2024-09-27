@@ -179,9 +179,8 @@ class DelegationTokenManagerZk(config: KafkaConfig,
         val issueTimeStamp = time.milliseconds
         val maxLifeTime = if (maxLifeTimeMs <= 0) tokenMaxLifetime else Math.min(maxLifeTimeMs, tokenMaxLifetime)
 
-        val isOverflowed = checkTimestampOverflow(issueTimeStamp, maxLifeTime)
-        val maxLifeTimeStamp = if (isOverflowed) Long.MaxValue else issueTimeStamp + maxLifeTime
-        val expiryTimeStamp = if (isOverflowed) Long.MaxValue else Math.min(maxLifeTimeStamp, issueTimeStamp + defaultTokenRenewTime)
+        val maxLifeTimeStamp = sum(issueTimeStamp, maxLifeTime)
+        val expiryTimeStamp = Math.min(maxLifeTimeStamp, sum(issueTimeStamp, defaultTokenRenewTime))
 
         val tokenInfo = new TokenInformation(tokenId, owner, tokenRequester, renewers.asJava, issueTimeStamp, maxLifeTimeStamp, expiryTimeStamp)
 
@@ -194,8 +193,8 @@ class DelegationTokenManagerZk(config: KafkaConfig,
     }
   }
 
-  private def checkTimestampOverflow(issueTimeStamp: Long, maxLifeTime: Long) = {
-    issueTimeStamp > Long.MaxValue - maxLifeTime || issueTimeStamp > Long.MaxValue - defaultTokenRenewTime
+  private def sum(now: Long, duration: Long): Long = {
+    if (now > Long.MaxValue - duration) Long.MaxValue else now + duration
   }
 
   /**

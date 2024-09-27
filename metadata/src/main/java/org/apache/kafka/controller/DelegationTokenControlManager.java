@@ -188,8 +188,8 @@ public class DelegationTokenControlManager {
             maxLifeTime = Math.min(maxLifeTime, requestData.maxLifetimeMs());
         }
 
-        long maxTimestamp = calculateMaxTimestamp(now, maxLifeTime);
-        long expiryTimestamp = calculateExpiryTimestamp(now, maxLifeTime, Math.min(maxTimestamp, now + tokenDefaultRenewLifetimeMs));
+        long maxTimestamp = sum(now, maxLifeTime);
+        long expiryTimestamp = Math.min(maxTimestamp, sum(now, tokenDefaultRenewLifetimeMs));
 
         String tokenId = Uuid.randomUuid().toString();
 
@@ -224,14 +224,6 @@ public class DelegationTokenControlManager {
 
         records.add(new ApiMessageAndVersion(newDelegationTokenData.toRecord(), (short) 0));
         return ControllerResult.atomicOf(records, responseData);
-    }
-
-    private long calculateExpiryTimestamp(long now, long maxLifeTime, long maxTimestamp) {
-        return checkTimestampOverflow(now, maxLifeTime) ? Long.MAX_VALUE : maxTimestamp;
-    }
-
-    private long calculateMaxTimestamp(long now, long maxLifeTime) {
-        return calculateExpiryTimestamp(now, maxLifeTime, now + maxLifeTime);
     }
 
     public ControllerResult<RenewDelegationTokenResponseData> renewDelegationToken(
@@ -364,7 +356,7 @@ public class DelegationTokenControlManager {
         log.info("Replayed RemoveDelegationTokenRecord for {}.", record.tokenId());
     }
 
-    private boolean checkTimestampOverflow(long now, long maxLifeTime) {
-        return now > Long.MAX_VALUE - maxLifeTime || now > Long.MAX_VALUE - tokenDefaultRenewLifetimeMs;
+    private long sum(long now, long duration) {
+        return now > Long.MAX_VALUE - duration ? Long.MAX_VALUE : now + duration;
     }
 }
