@@ -41,12 +41,12 @@ import org.apache.kafka.server.share.PartitionStateBatchData;
 import org.apache.kafka.server.share.Persister;
 import org.apache.kafka.server.share.PersisterStateBatch;
 import org.apache.kafka.server.share.ReadShareGroupStateParameters;
-import org.apache.kafka.server.share.ShareAcknowledgementBatch;
 import org.apache.kafka.server.share.TopicData;
 import org.apache.kafka.server.share.WriteShareGroupStateParameters;
+import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
+import org.apache.kafka.server.storage.log.FetchPartitionData;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
-import org.apache.kafka.storage.internals.log.FetchPartitionData;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
