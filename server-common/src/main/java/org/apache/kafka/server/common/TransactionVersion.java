@@ -49,6 +49,10 @@ public enum TransactionVersion implements FeatureVersion {
         return featureLevel;
     }
 
+    public static TransactionVersion fromFeatureLevel(short version) {
+        return (TransactionVersion) Features.TRANSACTION_VERSION.fromFeatureLevel(version, true);
+    }
+
     @Override
     public String featureName() {
         return FEATURE_NAME;
@@ -62,5 +66,15 @@ public enum TransactionVersion implements FeatureVersion {
     @Override
     public Map<String, Short> dependencies() {
         return dependencies;
+    }
+
+    // Transactions V1 enables log version 0 (flexible fields)
+    public short transactionLogValueVersion() {
+        return (short) (featureLevel >= 1 ? 1 : 0);
+    }
+
+    // Transactions V2 enables epoch bump on commit/abort.
+    public boolean supportsEpochBump() {
+        return featureLevel >= 2;
     }
 }
