@@ -78,7 +78,8 @@ jobs:
           url: '${{ github.event.workflow_run.html_url }}'
           description: 'Could not find build scan'
           context: 'Gradle Build Scan / Java ${{ matrix.java }}'
-          state: 'error'
+          state: 'completed'
+          conclusion: 'skipped'
       - name: Publish Scan
         id: publish-build-scan
         if: ${{ steps.download-build-scan.outcome == 'success' }}
@@ -106,7 +107,8 @@ jobs:
           url: '${{ github.event.repository.html_url }}/actions/runs/${{ github.run_id }}'
           description: 'The build scan failed to be published'
           context: 'Gradle Build Scan / Java ${{ matrix.java }}'
-          state: 'error'
+          state: 'completed'
+          conclusion: 'failure'
       - name: Update Status Check
         if: ${{ steps.publish-build-scan.outcome == 'success' }}
         uses: ./.github/actions/gh-api-update-status
@@ -117,4 +119,5 @@ jobs:
           url: ${{ steps.publish-build-scan.outputs.build-scan-url }}
           description: 'The build scan was successfully published'
           context: 'Gradle Build Scan / Java ${{ matrix.java }}'
-          state: 'success'
+          state: 'completed'
+          conclusion: 'success'
