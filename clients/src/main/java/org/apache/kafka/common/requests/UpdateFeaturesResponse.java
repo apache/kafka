@@ -52,10 +52,8 @@ public class UpdateFeaturesResponse extends AbstractResponse {
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
         updateErrorCounts(errorCounts, Errors.forCode(data.errorCode()));
-        if (data.results() != null) {
-            for (UpdatableFeatureResult result : data.results()) {
-                updateErrorCounts(errorCounts, Errors.forCode(result.errorCode()));
-            }
+        for (UpdatableFeatureResult result : data.results()) {
+            updateErrorCounts(errorCounts, Errors.forCode(result.errorCode()));
         }
         return errorCounts;
     }
