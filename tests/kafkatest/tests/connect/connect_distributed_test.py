@@ -468,7 +468,7 @@ class ConnectDistributedTest(Test):
 
         self.setup_services(num_workers=3)
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
-        self.cc.start(mode=ConnectServiceBase.STARTUP_MODE_JOIN)
+        self.cc.start()
 
         worker = self.cc.nodes[0]
         initial_loggers = self.cc.get_all_loggers(worker)
