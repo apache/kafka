@@ -87,8 +87,8 @@ public class RangeSetTest {
     @Test
     void testToArrayWithArrayParameter() {
         RangeSet rangeSet = new RangeSet(5, 10);
-        Integer[] inputArray = new Integer[5];
-        Integer[] expectedArray = {5, 6, 7, 8, 9};
+        Integer[] inputArray = new Integer[7];
+        Integer[] expectedArray = {5, 6, 7, 8, 9, null, null};
         assertArrayEquals(expectedArray, rangeSet.toArray(inputArray));
     }
 
