@@ -87,20 +87,6 @@ Usage:
 python refresh_collaborators.py
 ```
 
-## Approve GitHub Action Workflows
-
-This script allows a committer to approve GitHub Action workflow runs from 
-non-committers. It fetches the latest 20 workflow runs that are in the 
-`action_required` state and prompts the user to approve the run.
-
-> This script requires the `gh` tool
-
-Usage:
-
-```bash
-python approve-workflows.py
-```
-
 ## Find Hanging Tests
 
 This script is used to infer hanging tests from the Gradle output. It looks for
