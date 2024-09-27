@@ -1460,6 +1460,36 @@ public class KafkaProducerTest {
     }
 
     @Test
+    public void testCommitTransactionWithIgnoreSendErrorsAndRecordTooLargeException() throws Exception {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        configs.put(ProducerConfig.MAX_REQUEST_SIZE_CONFIG, 1000);
+        Time time = new MockTime(1);
+        MetadataResponse initialUpdateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
+        ProducerMetadata metadata = mock(ProducerMetadata.class);
+        MockClient client = new MockClient(time, metadata);
+        client.updateMetadata(initialUpdateResponse);
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
+        client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
+
+        when(metadata.fetch()).thenReturn(onePartitionCluster);
+
+        String largeString = IntStream.range(0, 1000).mapToObj(i -> "*").collect(Collectors.joining());
+        ProducerRecord<String, String> largeRecord = new ProducerRecord<>(topic, "large string", largeString);
+
+        try (KafkaProducer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+                new StringSerializer(), metadata, client, null, time)) {
+            producer.initTransactions();
+
+            client.prepareResponse(endTxnResponse(Errors.NONE));
+            producer.beginTransaction();
+            TestUtils.assertFutureError(producer.send(largeRecord, null, KafkaProducer.TxnSendOption.IGNORE_SEND_ERRORS), RecordTooLargeException.class);
+            assertDoesNotThrow(producer::commitTransaction);
+        }
+    }
+
+    @Test
     public void testCommitTransactionWithMetadataTimeoutForMissingTopic() throws Exception {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
@@ -1493,6 +1523,43 @@ public class KafkaProducerTest {
 
             TestUtils.assertFutureError(producer.send(record), TimeoutException.class);
             assertThrows(KafkaException.class, producer::commitTransaction);
+        }
+    }
+
+    @Test
+    public void testCommitTransactionWithIgnoreSendErrorsAndMetadataTimeoutForMissingTopic() throws Exception {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 60000);
+
+        // Create a record for a not-yet-created topic
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
+        ProducerMetadata metadata = mock(ProducerMetadata.class);
+
+        MockTime mockTime = new MockTime();
+
+        MockClient client = new MockClient(mockTime, metadata);
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
+        client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
+
+        AtomicInteger invocationCount = new AtomicInteger(0);
+        when(metadata.fetch()).then(invocation -> {
+            invocationCount.incrementAndGet();
+            if (invocationCount.get() > 5) {
+                mockTime.setCurrentTimeMs(mockTime.milliseconds() + 70000);
+            }
+
+            return emptyCluster;
+        });
+
+        try (KafkaProducer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+                new StringSerializer(), metadata, client, null, mockTime)) {
+            producer.initTransactions();
+            producer.beginTransaction();
+
+            TestUtils.assertFutureError(producer.send(record, null, KafkaProducer.TxnSendOption.IGNORE_SEND_ERRORS), TimeoutException.class);
+            assertDoesNotThrow(producer::commitTransaction);
         }
     }
 
@@ -1534,6 +1601,43 @@ public class KafkaProducerTest {
     }
 
     @Test
+    public void testCommitTransactionWithIgnoreSendErrorsAndMetadataTimeoutForPartitionOutOfRange() throws Exception {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 60000);
+
+        // Create a record with a partition higher than the initial (outdated) partition range
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, 2, null, "value");
+        ProducerMetadata metadata = mock(ProducerMetadata.class);
+
+        MockTime mockTime = new MockTime();
+
+        MockClient client = new MockClient(mockTime, metadata);
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
+        client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
+
+        AtomicInteger invocationCount = new AtomicInteger(0);
+        when(metadata.fetch()).then(invocation -> {
+            invocationCount.incrementAndGet();
+            if (invocationCount.get() > 5) {
+                mockTime.setCurrentTimeMs(mockTime.milliseconds() + 70000);
+            }
+
+            return onePartitionCluster;
+        });
+
+        try (KafkaProducer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+                new StringSerializer(), metadata, client, null, mockTime)) {
+            producer.initTransactions();
+            producer.beginTransaction();
+
+            TestUtils.assertFutureError(producer.send(record, null, KafkaProducer.TxnSendOption.IGNORE_SEND_ERRORS), TimeoutException.class);
+            assertDoesNotThrow(producer::commitTransaction);
+        }
+    }
+
+    @Test
     public void testCommitTransactionWithSendToInvalidTopic() throws Exception {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
@@ -1569,6 +1673,45 @@ public class KafkaProducerTest {
 
             TestUtils.assertFutureError(producer.send(record), InvalidTopicException.class);
             assertThrows(KafkaException.class, producer::commitTransaction);
+        }
+    }
+
+    @Test
+    public void testCommitTransactionWithIgnoerSendErrorsAndSendToInvalidTopic() throws Exception {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, "15000");
+
+        Time time = new MockTime();
+        MetadataResponse initialUpdateResponse = RequestTestUtils.metadataUpdateWith(1, emptyMap());
+        ProducerMetadata metadata = newMetadata(0, 0, Long.MAX_VALUE);
+        metadata.updateWithCurrentRequestVersion(initialUpdateResponse, false, time.milliseconds());
+
+        MockClient client = new MockClient(time, metadata);
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
+        client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
+
+        String invalidTopicName = "topic abc"; // Invalid topic name due to space
+        ProducerRecord<String, String> record = new ProducerRecord<>(invalidTopicName, "HelloKafka");
+
+        List<MetadataResponse.TopicMetadata> topicMetadata = new ArrayList<>();
+        topicMetadata.add(new MetadataResponse.TopicMetadata(Errors.INVALID_TOPIC_EXCEPTION,
+                invalidTopicName, false, Collections.emptyList()));
+        MetadataResponse updateResponse =  RequestTestUtils.metadataResponse(
+                new ArrayList<>(initialUpdateResponse.brokers()),
+                initialUpdateResponse.clusterId(),
+                initialUpdateResponse.controller().id(),
+                topicMetadata);
+        client.prepareMetadataUpdate(updateResponse);
+
+        try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+                new StringSerializer(), metadata, client, null, time)) {
+            producer.initTransactions();
+            producer.beginTransaction();
+
+            TestUtils.assertFutureError(producer.send(record, null, KafkaProducer.TxnSendOption.IGNORE_SEND_ERRORS), InvalidTopicException.class);
+            assertDoesNotThrow(producer::commitTransaction);
         }
     }
 
