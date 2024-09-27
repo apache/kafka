@@ -25,7 +25,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.ShareFetchData;
-import org.apache.kafka.storage.internals.log.FetchPartitionData;
+import org.apache.kafka.server.storage.log.FetchPartitionData;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,12 +49,13 @@ import scala.runtime.BoxedUnit;
  */
 public class DelayedShareFetch extends DelayedOperation {
 
+    private static final Logger log = LoggerFactory.getLogger(DelayedShareFetch.class);
+
     private final ShareFetchData shareFetchData;
     private final ReplicaManager replicaManager;
     private final Map<SharePartitionKey, SharePartition> partitionCacheMap;
-    private Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionDataFromTryComplete = new LinkedHashMap<>();
 
-    private static final Logger log = LoggerFactory.getLogger(DelayedShareFetch.class);
+    private Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionDataFromTryComplete;
 
     DelayedShareFetch(
             ShareFetchData shareFetchData,
@@ -64,6 +65,7 @@ public class DelayedShareFetch extends DelayedOperation {
         this.shareFetchData = shareFetchData;
         this.replicaManager = replicaManager;
         this.partitionCacheMap = partitionCacheMap;
+        this.topicPartitionDataFromTryComplete = new LinkedHashMap<>();
     }
 
     @Override
