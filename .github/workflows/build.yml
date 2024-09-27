@@ -30,10 +30,6 @@ on:
         description: "Is this CI run from a public fork?"
         default: true
         type: boolean
-      is-draft:
-        description: "Is this CI run from a draft PR?"
-        default: false
-        type: boolean
 
 jobs:
   validate:
@@ -43,11 +39,21 @@ jobs:
       matrix:
         java: [ 21, 17, 11, 8 ]
     name: Compile and Check Java ${{ matrix.java }}
+    outputs:
+      is-draft: ${{ steps.check-draft-pr.outputs.is-draft }}
     steps:
       - name: Env
         run: printenv
         env:
           GITHUB_CONTEXT: ${{ toJson(github) }}
+      - name: Check for Draft PR
+        id: check-draft-pr
+        if: |
+          github.event_name == 'pull_request' && (
+            github.event.pull_request.draft ||
+            contains(github.event.pull_request.title, 'WIP')
+          )
+        run: echo "is-draft=true" >> "$GITHUB_OUTPUT"
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -90,7 +96,7 @@ jobs:
 
   test:
     needs: validate
-    if: ${{ ! inputs.is-draft }}
+    if: ${{ ! needs.validate.outputs.is-draft }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
