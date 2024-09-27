@@ -84,6 +84,7 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
         requireSchema(schema, "updating schema metadata");
         final boolean isArray = schema.type() == Schema.Type.ARRAY;
         final boolean isMap = schema.type() == Schema.Type.MAP;
+        final boolean isStruct = value instanceof Struct;
         final Schema updatedSchema = new ConnectSchema(
                 schema.type(),
                 schema.isOptional(),
@@ -92,7 +93,7 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
                 schemaVersion != null ? schemaVersion : schema.version(),
                 schema.doc(),
                 schema.parameters(),
-                schema.fields(),
+                isStruct ? schema.fields() : null,
                 isMap ? schema.keySchema() : null,
                 isMap || isArray ? schema.valueSchema() : null
         );

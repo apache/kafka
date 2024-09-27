@@ -207,6 +207,26 @@ public class SetSchemaMetadataTest {
         assertEquals(AppInfoParser.getVersion(), xform.version());
     }
 
+    @Test
+    public void schemaMetadataUpdateWithPrimitiveType() {
+        final Map<String, String> props = new HashMap<>();
+        props.put("schema.name", "foo");
+        props.put("schema.version", "42");
+
+        xform.configure(props);
+
+        final Schema schema = Schema.STRING_SCHEMA;
+        final String value = "test-string";
+
+        final SinkRecord record = new SinkRecord("", 0, null, null, schema, value, 0);
+
+        final SinkRecord updatedRecord = xform.apply(record);
+
+        assertEquals("foo", updatedRecord.valueSchema().name());
+        assertEquals(Integer.valueOf(42), updatedRecord.valueSchema().version());
+        assertEquals(value, updatedRecord.value());
+    }
+
     protected void assertMatchingSchema(Struct value, Schema schema) {
         assertSame(schema, value.schema());
         assertEquals(schema.name(), value.schema().name());
