@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -391,6 +392,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
 
         @Override
         public Admin getAdmin(final Map<String, Object> config) {
+            assertTrue((Boolean) config.get(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG));
             final TestingMetricsInterceptingAdminClient adminClient = new TestingMetricsInterceptingAdminClient(config);
             INTERCEPTING_ADMIN_CLIENTS.add(adminClient);
             return adminClient;
