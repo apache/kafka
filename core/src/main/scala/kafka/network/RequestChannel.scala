@@ -25,7 +25,7 @@ import com.typesafe.scalalogging.Logger
 import com.yammer.metrics.core.Meter
 import kafka.network
 import kafka.server.KafkaConfig
-import kafka.utils.{Logging, NotNothing, Pool}
+import kafka.utils.{Logging, Pool}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.memory.MemoryPool
@@ -39,7 +39,6 @@ import org.apache.kafka.common.utils.{Sanitizer, Time}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
 import java.util
-import scala.annotation.nowarn
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
@@ -170,7 +169,7 @@ object RequestChannel extends Logging {
       s"$forwardDescription$header -- ${loggableRequest.toString(details)}"
     }
 
-    def body[T <: AbstractRequest](implicit classTag: ClassTag[T], @nowarn("cat=unused") nn: NotNothing[T]): T = {
+    def body[T <: AbstractRequest](implicit classTag: ClassTag[T]): T = {
       bodyAndSize.request match {
         case r: T => r
         case r =>

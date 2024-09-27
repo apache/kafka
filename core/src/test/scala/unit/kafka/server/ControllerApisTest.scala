@@ -21,7 +21,7 @@ import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.test.MockController
-import kafka.utils.{MockTime, NotNothing}
+import kafka.utils.MockTime
 import org.apache.kafka.clients.admin.AlterConfigOp
 import org.apache.kafka.common.Uuid.ZERO_UUID
 import org.apache.kafka.common.acl.AclOperation
@@ -65,7 +65,6 @@ import java.util.Collections.{singleton, singletonList, singletonMap}
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit}
 import java.util.concurrent.atomic.AtomicReference
 import java.util.{Collections, Properties}
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
@@ -1081,8 +1080,7 @@ class ControllerApisTest {
     request: AbstractRequest,
     controllerApis: ControllerApis
   )(
-    implicit classTag: ClassTag[T],
-    @nowarn("cat=unused") nn: NotNothing[T]
+    implicit classTag: ClassTag[T]
   ): T = {
     val req = buildRequest(request)
 

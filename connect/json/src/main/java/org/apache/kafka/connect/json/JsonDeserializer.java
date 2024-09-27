@@ -36,7 +36,7 @@ public class JsonDeserializer implements Deserializer<JsonNode> {
      * Default constructor needed by Kafka
      */
     public JsonDeserializer() {
-        this(Collections.emptySet(), JsonNodeFactory.withExactBigDecimals(true));
+        this(Collections.emptySet(), new JsonNodeFactory(true));
     }
 
     /**

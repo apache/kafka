@@ -326,10 +326,9 @@ object ReplicationQuotasTestRig {
 
     def append(message: String): Unit = {
       val stream = Files.newOutputStream(log.toPath, StandardOpenOption.CREATE, StandardOpenOption.APPEND)
-      new PrintWriter(stream) {
-        append(message)
-        close
-      }
+      val writer = new PrintWriter(stream)
+      writer.append(message)
+      writer.close()
     }
 
     def path(): String = {
