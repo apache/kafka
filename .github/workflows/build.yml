@@ -28,8 +28,12 @@ on:
         type: string
       is-public-fork:
         description: "Is this CI run from a public fork?"
-        default: "true"
-        type: string
+        default: true
+        type: boolean
+      is-draft:
+        description: "Is this CI run from a draft PR?"
+        default: false
+        type: boolean
 
 jobs:
   validate:
@@ -86,6 +90,7 @@ jobs:
 
   test:
     needs: validate
+    if: ! inputs.is-draft
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
