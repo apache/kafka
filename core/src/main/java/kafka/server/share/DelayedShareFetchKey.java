@@ -19,19 +19,17 @@ package kafka.server.share;
 import kafka.server.DelayedOperationKey;
 
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.server.share.SharePartitionKey;
 
 import java.util.Objects;
 
 /**
  * A key for delayed operations that fetch data for share consumers.
  */
-public class DelayedShareFetchKey implements DelayedOperationKey {
-    private final String groupId;
-    private final TopicIdPartition topicIdPartition;
+public class DelayedShareFetchKey extends SharePartitionKey implements DelayedOperationKey {
 
     DelayedShareFetchKey(String groupId, TopicIdPartition topicIdPartition) {
-        this.groupId = groupId;
-        this.topicIdPartition = topicIdPartition;
+        super(groupId, topicIdPartition);
     }
 
     @Override

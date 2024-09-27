@@ -713,6 +713,10 @@ public abstract class TopicCommand {
 
         private final ArgumentAcceptingOptionSpec<String> configOpt;
 
+        /**
+         * @deprecated since 4.0 and should not be used any longer.
+         */
+        @Deprecated
         private final ArgumentAcceptingOptionSpec<String> deleteConfigOpt;
 
         private final ArgumentAcceptingOptionSpec<Integer> partitionsOpt;
@@ -782,7 +786,7 @@ public abstract class TopicCommand {
                 .describedAs("name=value")
                 .ofType(String.class);
 
-            deleteConfigOpt = parser.accepts("delete-config", "This option is no longer supported.")
+            deleteConfigOpt = parser.accepts("delete-config", "This option is no longer supported and has been deprecated since 4.0")
                 .withRequiredArg()
                 .describedAs("name")
                 .ofType(String.class);
@@ -962,6 +966,10 @@ public abstract class TopicCommand {
             if (actions != 1)
                 CommandLineUtils.printUsageAndExit(parser, "Command must include exactly one action: --list, --describe, --create, --alter or --delete");
 
+            if (has(deleteConfigOpt)) {
+                System.err.println("delete-config option is no longer supported and deprecated since version 4.0. The config will be fully removed in future releases.");
+            }
+
             checkRequiredArgs();
             checkInvalidArgs();
         }
@@ -989,8 +997,6 @@ public abstract class TopicCommand {
         private void checkInvalidArgs() {
             // check invalid args
             CommandLineUtils.checkInvalidArgs(parser, options, configOpt, invalidOptions(Arrays.asList(alterOpt, createOpt)));
-            CommandLineUtils.checkInvalidArgs(parser, options, deleteConfigOpt,
-                invalidOptions(new HashSet<>(Arrays.asList(bootstrapServerOpt)), Arrays.asList(alterOpt)));
             CommandLineUtils.checkInvalidArgs(parser, options, partitionsOpt, invalidOptions(Arrays.asList(alterOpt, createOpt)));
             CommandLineUtils.checkInvalidArgs(parser, options, replicationFactorOpt, invalidOptions(Arrays.asList(createOpt)));
             CommandLineUtils.checkInvalidArgs(parser, options, replicaAssignmentOpt, invalidOptions(Arrays.asList(alterOpt, createOpt)));
