@@ -39,6 +39,8 @@ jobs:
       )
     outputs:
       is-draft: 'true'
+    steps:
+      - run: echo "PR is a Draft"
 
   build:
     needs: check-draft-pr
