@@ -98,7 +98,7 @@ public class ChangeLoggingKeyValueBytesStoreTest {
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.Long(),
-            new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
+            new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
             streamsConfig,
             () -> collector,
             new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),

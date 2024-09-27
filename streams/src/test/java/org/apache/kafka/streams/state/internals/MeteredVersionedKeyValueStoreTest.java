@@ -27,7 +27,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -112,7 +111,7 @@ public class MeteredVersionedKeyValueStoreTest {
     @BeforeEach
     public void setUp() {
         when(inner.name()).thenReturn(STORE_NAME);
-        when(context.metrics()).thenReturn(new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, mockTime));
+        when(context.metrics()).thenReturn(new StreamsMetricsImpl(metrics, "test", mockTime));
         when(context.applicationId()).thenReturn(APPLICATION_ID);
         when(context.taskId()).thenReturn(TASK_ID);
 

@@ -162,10 +162,8 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public StreamsMetricsImpl(final Metrics metrics,
                               final String clientId,
-                              final String builtInMetricsVersion,
                               final Time time) {
         Objects.requireNonNull(metrics, "Metrics cannot be null");
-        Objects.requireNonNull(builtInMetricsVersion, "Built-in metrics version cannot be null");
         this.metrics = metrics;
         this.clientId = clientId;
         version = Version.LATEST;
