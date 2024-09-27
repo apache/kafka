@@ -104,7 +104,7 @@ public class StandbyTaskEOSIntegrationTest {
         inputTopic = "input-" + safeTestName;
         outputTopic = "output-" + safeTestName;
         storeName = "store-" + safeTestName;
-        CLUSTER.deleteTopicsAndWait(inputTopic, outputTopic, appId + "-KSTREAM-AGGREGATE-STATE-STORE-0000000001-changelog");
+        CLUSTER.deleteTopics(inputTopic, outputTopic, appId + "-KSTREAM-AGGREGATE-STATE-STORE-0000000001-changelog");
         CLUSTER.createTopic(inputTopic, 1, 3);
         CLUSTER.createTopic(outputTopic, 1, 3);
     }

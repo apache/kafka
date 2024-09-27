@@ -153,7 +153,7 @@ public class RangeQueryIntegrationTest {
 
     @AfterEach
     public void cleanup() throws InterruptedException {
-        CLUSTER.deleteAllTopicsAndWait(120000);
+        CLUSTER.deleteAllTopics();
     }
 
     @ParameterizedTest

@@ -2528,6 +2528,7 @@ project(':streams') {
     // testCompileOnly prevents streams from exporting a dependency on test-utils, which would cause a dependency cycle
     testCompileOnly project(':streams:test-utils')
 
+    testImplementation project(':metadata')
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':server')
     testImplementation project(':core')

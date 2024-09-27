@@ -68,7 +68,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         // expiration of connections by the brokers to avoid errors when `AdminClient` sends requests after potentially
         // very long sleep times
         brokerProps.put(SocketServerConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG, -1L);
-        CLUSTER = new EmbeddedKafkaCluster(1, brokerProps);
+        CLUSTER = new EmbeddedKafkaCluster(3, brokerProps);
     }
 
     @BeforeAll
@@ -98,7 +98,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
     }
 
     @Test
-    public void shouldNotAllowToResetWhileStreamsIsRunning(final TestInfo testInfo) {
+    public void shouldNotAllowToResetWhileStreamsIsRunning(final TestInfo testInfo) throws Exception {
         final String appID = IntegrationTestUtils.safeUniqueTestName(testInfo);
         final String[] parameters = new String[] {
             "--application-id", appID,
@@ -113,7 +113,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
         // RUN
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
-        streams.start();
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
         final int exitCode = new StreamsResetter().execute(parameters, cleanUpConfig);
         assertEquals(1, exitCode);
@@ -193,7 +193,8 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
         // Run
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
-        streams.start();
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+
         final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
 
         streams.close();
@@ -213,7 +214,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         assertInternalTopicsGotDeleted(null);
 
         // RE-RUN
-        streams.start();
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
         final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
         streams.close();
 
@@ -228,7 +229,8 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
         // RUN
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
-        streams.start();
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+
         final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
 
         streams.close();
@@ -251,7 +253,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         resetFile.deleteOnExit();
 
         // RE-RUN
-        streams.start();
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
         final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 5);
         streams.close();
 
@@ -269,7 +271,8 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
         // RUN
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
-        streams.start();
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+
         final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
 
         streams.close();
@@ -297,7 +300,8 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         resetFile.deleteOnExit();
 
         // RE-RUN
-        streams.start();
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+
         final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
         streams.close();
 
@@ -314,7 +318,8 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
         // RUN
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
-        streams.start();
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+
         final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
 
         streams.close();
@@ -337,7 +342,8 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         resetFile.deleteOnExit();
 
         // RE-RUN
-        streams.start();
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+
         final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
         streams.close();
 

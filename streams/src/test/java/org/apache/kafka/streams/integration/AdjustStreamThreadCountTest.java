@@ -107,7 +107,7 @@ public class AdjustStreamThreadCountTest {
         builder = new StreamsBuilder();
         builder.stream(inputTopic);
 
-        properties  = mkObjectProperties(
+        properties = mkObjectProperties(
             mkMap(
                 mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
                 mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),

@@ -379,7 +379,7 @@ public class IQv2StoreIntegrationTest {
         throws InterruptedException, IOException, ExecutionException, TimeoutException {
 
         CLUSTER.start();
-        CLUSTER.deleteAllTopicsAndWait(60 * 1000L);
+        CLUSTER.deleteAllTopics();
         final int partitions = 2;
         CLUSTER.createTopic(INPUT_TOPIC_NAME, partitions, 1);
 
