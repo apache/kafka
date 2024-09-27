@@ -1857,6 +1857,7 @@ public class StreamsConfig extends AbstractConfig {
 
         // add client id with stream client id prefix
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
+        props.put(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, true);
 
         return props;
     }

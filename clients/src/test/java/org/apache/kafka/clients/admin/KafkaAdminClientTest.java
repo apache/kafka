@@ -235,6 +235,7 @@ import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -445,7 +446,7 @@ public class KafkaAdminClientTest {
         MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) admin.metrics.reporters().get(0);
 
         assertEquals(admin.getClientId(), mockMetricsReporter.clientId);
-        assertEquals(1, admin.metrics.reporters().size());
+        assertEquals(2, admin.metrics.reporters().size());
         admin.close();
     }
 
@@ -465,9 +466,21 @@ public class KafkaAdminClientTest {
         Properties props = new Properties();
         props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG, "org.apache.kafka.common.metrics.JmxReporter");
-        props.setProperty(CommonClientConfigs.ENABLE_METRICS_PUSH_CONFIG, "true");
+        KafkaAdminClient admin = (KafkaAdminClient) AdminClient.create(props);
+        assertEquals(1, admin.metrics.reporters().size());
+        admin.close();
+    }
+
+    @Test
+    public void testExplicitlyEnableTelemetryReporter() {
+        Properties props = new Properties();
+        props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG, "org.apache.kafka.common.metrics.JmxReporter");
+        props.setProperty(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, "true");
         KafkaAdminClient admin = (KafkaAdminClient) AdminClient.create(props);
         assertEquals(2, admin.metrics.reporters().size());
+        //ClientTelemetryReporter always added after metrics reporters created with JmxReporter
+        assertInstanceOf(ClientTelemetryReporter.class, admin.metrics.reporters().get(1));
         admin.close();
     }
 
