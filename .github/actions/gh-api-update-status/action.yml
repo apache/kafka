@@ -50,7 +50,7 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Update Check
+    - if: inputs.conclusion == ''
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.gh-token }}
@@ -60,5 +60,20 @@ runs:
         -f "head_sha=${{ inputs.commit_sha }}" \
         -f "status=${{ inputs.state }}" \
         -f "details_url=${{ inputs.url }}" \
-        -f "output[title]=${{ inputs.description }}" \
+        -f "output[title]=${{ inputs.context }}" \
+        -f "output[summary]=${{ inputs.description }}" \
+        -f "name=${{ inputs.context }}"
+    - if: inputs.conclusion != ''
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.gh-token }}
+      run: |
+        gh api --method POST -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" \
+        /repos/${{ inputs.repository }}/check-runs \
+        -f "head_sha=${{ inputs.commit_sha }}" \
+        -f "status=${{ inputs.state }}" \
+        -f "conclusion=${{ inputs.conclusion }}" \
+        -f "details_url=${{ inputs.url }}" \
+        -f "output[title]=${{ inputs.context }}" \
+        -f "output[summary]=${{ inputs.description }}" \
         -f "name=${{ inputs.context }}"
