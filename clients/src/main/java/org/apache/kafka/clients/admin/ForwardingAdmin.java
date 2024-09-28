@@ -309,6 +309,11 @@ public class ForwardingAdmin implements Admin {
     }
 
     @Override
+    public ListGroupsResult listGroups(ListGroupsOptions options) {
+        return delegate.listGroups(options);
+    }
+
+    @Override
     public Map<MetricName, ? extends Metric> metrics() {
         return delegate.metrics();
     }

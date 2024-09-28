@@ -19,7 +19,9 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo;
 import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.ElectionType;
+import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -717,6 +719,13 @@ public class MockAdminClient extends AdminClient {
         }
 
         return new DescribeDelegationTokenResult(future);
+    }
+
+    @Override
+    public synchronized ListGroupsResult listGroups(ListGroupsOptions options) {
+        KafkaFutureImpl<Collection<Object>> future = new KafkaFutureImpl<>();
+        future.complete(groupConfigs.keySet().stream().map(g -> new GroupListing(g, GroupType.CONSUMER, ConsumerProtocol.PROTOCOL_TYPE)).collect(Collectors.toList()));
+        return new ListGroupsResult(future);
     }
 
     @Override

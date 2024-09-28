@@ -17,20 +17,36 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.KafkaFuture;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
+
+import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.Collection;
-
 /**
- * The result of the {@link Admin#listShareGroups(ListShareGroupsOptions)} call.
+ * Options for {@link Admin#listGroups()}.
  * <p>
  * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
-public class ListShareGroupsResult extends AbstractListGroupsResult<ShareGroupListing> {
+public class ListGroupsOptions extends AbstractOptions<ListGroupsOptions> {
 
-    ListShareGroupsResult(KafkaFuture<Collection<Object>> future) {
-        super(future);
+    private Set<GroupType> types = Collections.emptySet();
+
+    /**
+     * If types is set, only groups of these types will be returned by listGroups().
+     * Otherwise, all groups are returned.
+     */
+    public ListGroupsOptions withTypes(Set<GroupType> types) {
+        this.types = (types == null || types.isEmpty()) ? Collections.emptySet() : new HashSet<>(types);
+        return this;
+    }
+
+    /**
+     * Returns the list of group types that are requested or empty if no types have been specified.
+     */
+    public Set<GroupType> types() {
+        return types;
     }
 }

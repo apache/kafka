@@ -23,14 +23,14 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import java.util.Collection;
 
 /**
- * The result of the {@link Admin#listShareGroups(ListShareGroupsOptions)} call.
+ * The result of the {@link Admin#listGroups()} call.
  * <p>
  * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
-public class ListShareGroupsResult extends AbstractListGroupsResult<ShareGroupListing> {
+public class ListGroupsResult extends AbstractListGroupsResult<GroupListing> {
 
-    ListShareGroupsResult(KafkaFuture<Collection<Object>> future) {
+    ListGroupsResult(KafkaFuture<Collection<Object>> future) {
         super(future);
     }
 }

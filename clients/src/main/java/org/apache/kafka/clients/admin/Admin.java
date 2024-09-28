@@ -1022,6 +1022,26 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
+     * List the groups available in the cluster with the default options.
+     *
+     * <p>This is a convenience method for {@link #listGroups(ListGroupsOptions)} with default options.
+     * See the overload for more details.
+     *
+     * @return The ListGroupsResult.
+     */
+    default ListGroupsResult listGroups() {
+        return listGroups(new ListGroupsOptions());
+    }
+
+    /**
+     * List the groups available in the cluster.
+     *
+     * @param options The options to use when listing the groups.
+     * @return The ListGroupsResult.
+     */
+    ListGroupsResult listGroups(ListGroupsOptions options);
+
+    /**
      * Elect a replica as leader for topic partitions.
      * <p>
      * This is a convenience method for {@link #electLeaders(ElectionType, Set, ElectLeadersOptions)}

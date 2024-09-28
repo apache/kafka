@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.ShareGroupState;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
@@ -29,8 +30,7 @@ import java.util.Optional;
  * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
-public class ShareGroupListing {
-    private final String groupId;
+public class ShareGroupListing extends GroupListing {
     private final Optional<ShareGroupState> state;
 
     /**
@@ -49,15 +49,8 @@ public class ShareGroupListing {
      * @param state The state of the share group
      */
     public ShareGroupListing(String groupId, Optional<ShareGroupState> state) {
-        this.groupId = groupId;
+        super(groupId, GroupType.SHARE, "share");
         this.state = Objects.requireNonNull(state);
-    }
-
-    /**
-     * The id of the share group.
-     */
-    public String groupId() {
-        return groupId;
     }
 
     /**
@@ -69,15 +62,14 @@ public class ShareGroupListing {
 
     @Override
     public String toString() {
-        return "(" +
-            "groupId='" + groupId + '\'' +
+        return "(" + toStringBase() +
             ", state=" + state +
             ')';
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(groupId, state);
+        return super.hashCode() + Objects.hash(state);
     }
 
     @Override
@@ -85,7 +77,7 @@ public class ShareGroupListing {
         if (this == o) return true;
         if (!(o instanceof ShareGroupListing)) return false;
         ShareGroupListing that = (ShareGroupListing) o;
-        return Objects.equals(groupId, that.groupId) &&
+        return super.equals(o) &&
             Objects.equals(state, that.state);
     }
 }
