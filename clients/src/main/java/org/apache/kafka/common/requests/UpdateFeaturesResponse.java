@@ -26,6 +26,7 @@ import org.apache.kafka.common.protocol.Errors;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Possible error codes:
@@ -82,16 +83,13 @@ public class UpdateFeaturesResponse extends AbstractResponse {
         return new UpdateFeaturesResponse(new UpdateFeaturesResponseData(new ByteBufferAccessor(buffer), version));
     }
 
-    public static UpdateFeaturesResponse createWithErrors(ApiError topLevelError, Map<String, ApiError> updateErrors, int throttleTimeMs) {
+    public static UpdateFeaturesResponse createWithErrors(ApiError topLevelError, Set<String> updates, int throttleTimeMs) {
         final UpdatableFeatureResultCollection results = new UpdatableFeatureResultCollection();
         if (topLevelError.error() == Errors.NONE) {
-            for (final Map.Entry<String, ApiError> updateError : updateErrors.entrySet()) {
-                final String feature = updateError.getKey();
-                final ApiError error = updateError.getValue();
+            for (final String feature : updates) {
                 final UpdatableFeatureResult result = new UpdatableFeatureResult();
                 result.setFeature(feature)
-                        .setErrorCode(error.error().code())
-                        .setErrorMessage(error.message());
+                        .setErrorCode(Errors.NONE.code());
                 results.add(result);
             }
         }

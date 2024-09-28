@@ -44,7 +44,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
-import java.util.TreeMap;
 import java.util.function.Consumer;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_RECORD;
@@ -170,12 +169,11 @@ public class FeatureControlManager {
         this.clusterSupportDescriber = clusterSupportDescriber;
     }
 
-    ControllerResult<Map<String, ApiError>> updateFeatures(
+    ControllerResult<ApiError> updateFeatures(
         Map<String, Short> updates,
         Map<String, FeatureUpdate.UpgradeType> upgradeTypes,
         boolean validateOnly
     ) {
-        TreeMap<String, ApiError> results = new TreeMap<>();
         List<ApiMessageAndVersion> records =
                 BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
 
@@ -188,15 +186,14 @@ public class FeatureControlManager {
             ApiError error = updateFeature(entry.getKey(), entry.getValue(),
                 upgradeTypes.getOrDefault(entry.getKey(), FeatureUpdate.UpgradeType.UPGRADE), records, proposedUpdatedVersions);
             if (!error.error().equals(Errors.NONE)) {
-                return ControllerResult.of(Collections.emptyList(), Collections.singletonMap(entry.getKey(), error));
+                return ControllerResult.of(Collections.emptyList(), error);
             }
-            results.put(entry.getKey(), error);
         }
 
         if (validateOnly) {
-            return ControllerResult.of(Collections.emptyList(), results);
+            return ControllerResult.of(Collections.emptyList(), ApiError.NONE);
         } else {
-            return ControllerResult.atomicOf(records, results);
+            return ControllerResult.atomicOf(records, ApiError.NONE);
         }
     }
 
@@ -255,12 +252,10 @@ public class FeatureControlManager {
         } else {
             // Validate dependencies for features that are not metadata.version
             try {
-                if (newVersion != 0) {
-                    Features.validateVersion(
-                        // Allow unstable feature versions is true because the version range is already checked above.
-                        Features.featureFromName(featureName).fromFeatureLevel(newVersion, true),
-                        proposedUpdatedVersions);
-                }
+                Features.validateVersion(
+                    // Allow unstable feature versions is true because the version range is already checked above.
+                    Features.featureFromName(featureName).fromFeatureLevel(newVersion, true),
+                    proposedUpdatedVersions);
             } catch (IllegalArgumentException e) {
                 return invalidUpdateVersion(featureName, newVersion, e.getMessage());
             }

@@ -2314,24 +2314,18 @@ public final class QuorumController implements Controller {
             return featureControl.updateFeatures(updates, upgradeTypes, request.validateOnly());
         }).thenApply(result -> {
             UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData();
-            responseData.setResults(new UpdateFeaturesResponseData.UpdatableFeatureResultCollection(result.size()));
-            Optional<Entry<String, ApiError>> errorEntry = result.entrySet().stream().filter(entry ->
-                !entry.getValue().error().equals(Errors.NONE)).findFirst();
                 
-            if (errorEntry.isPresent()) {
-                String errorFeatureName = errorEntry.get().getKey();
-                ApiError topError = errorEntry.get().getValue();
-                String errorString = errorFeatureName + ":" + topError.error().exceptionName() + " (" + topError.message() + ")";
-                responseData.setErrorCode(topError.error().code());
-                responseData.setErrorMessage("The update failed for all features since the following feature had an error: " + errorString);
+            if (result != ApiError.NONE) {
+                responseData.setErrorCode(result.error().code());
+                responseData.setErrorMessage("The update failed for all features since the following feature had an error: " + result.message());
             } else if (context.requestHeader().requestApiVersion() <= 1) {
-                result.forEach((featureName, error) ->
+                responseData.setResults(new UpdateFeaturesResponseData.UpdatableFeatureResultCollection(request.featureUpdates().size()));
+                request.featureUpdates().forEach(featureName ->
                     responseData.results().add(
                         new UpdateFeaturesResponseData.UpdatableFeatureResult()
-                            .setFeature(featureName)
-                            .setErrorCode(error.error().code())
-                            .setErrorMessage(error.message()))
-                );
+                            .setFeature(featureName.feature())
+                            .setErrorCode(Errors.NONE.code())
+                ));
             }
             return responseData;
         });
