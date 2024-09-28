@@ -30,15 +30,20 @@ key="$(
     --json 'key' \
     --jq '.[].key'
 )"
+
 sha="$(cut -d '-' -f 5 <<< "$key")"
 
-git fetch origin trunk > /dev/null
-if ! git rev-parse --verify "$sha" >/dev/null; then
+git fetch origin trunk &> /dev/null
+
+if ! git rev-parse --verify "$sha" &> /dev/null; then
   printf '\e[33m%s\n%s\e[0m\n' \
   "Cannot update 'trunk-cached' because SHA $sha" \
   "does not exist locally. Please update your remote and try again."
 else
   git switch trunk-cached > /dev/null || git switch -c trunk-cached > /dev/null
-  git merge --ff-only "$sha"
-  printf '\n%s\n' "Local branch 'trunk-cached' updated to $sha."
+  if git merge --ff-only "$sha"; then
+    printf '\n%s\n' "Local branch 'trunk-cached' successfully updated to $sha."
+  else
+    printf '\n\e[31m%s\e[0m\n' "Failed to fast-forward merge 'trunk-cached' to commit $sha."
+  fi
 fi
