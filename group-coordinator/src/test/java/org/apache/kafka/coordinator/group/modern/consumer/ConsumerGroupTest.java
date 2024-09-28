@@ -58,7 +58,6 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpersTest.mkMapOfPartitionRacks;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -655,7 +654,7 @@ public class ConsumerGroupTest {
         // Compute while taking into account member 1.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1)))
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 consumerGroup.computeSubscribedTopicNames(null, member1),
@@ -670,7 +669,7 @@ public class ConsumerGroupTest {
         // It should return foo now.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1)))
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 consumerGroup.computeSubscribedTopicNames(null, null),
@@ -692,8 +691,8 @@ public class ConsumerGroupTest {
         // Compute while taking into account member 2.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1))),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2)))
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 consumerGroup.computeSubscribedTopicNames(null, member2),
@@ -708,8 +707,8 @@ public class ConsumerGroupTest {
         // It should return foo and bar.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1))),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2)))
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 consumerGroup.computeSubscribedTopicNames(null, null),
@@ -721,7 +720,7 @@ public class ConsumerGroupTest {
         // Compute while taking into account removal of member 2.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1)))
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 consumerGroup.computeSubscribedTopicNames(member2, null),
@@ -733,7 +732,7 @@ public class ConsumerGroupTest {
         // Removing member1 results in returning bar.
         assertEquals(
             mkMap(
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2)))
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 consumerGroup.computeSubscribedTopicNames(member1, null),
@@ -745,9 +744,9 @@ public class ConsumerGroupTest {
         // Compute while taking into account member 3.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1))),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2))),
-                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3, mkMapOfPartitionRacks(3)))
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
+                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 consumerGroup.computeSubscribedTopicNames(null, member3),
@@ -762,9 +761,9 @@ public class ConsumerGroupTest {
         // It should return foo, bar and zar.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1))),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2))),
-                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3, mkMapOfPartitionRacks(3)))
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
+                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 consumerGroup.computeSubscribedTopicNames(null, null),
@@ -786,7 +785,7 @@ public class ConsumerGroupTest {
         // Compute while taking into account removal of member 2 and member 3.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1)))
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 consumerGroup.computeSubscribedTopicNames(new HashSet<>(Arrays.asList(member2, member3))),
@@ -798,8 +797,8 @@ public class ConsumerGroupTest {
         // Compute while taking into account removal of member 1.
         assertEquals(
             mkMap(
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2))),
-                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3, mkMapOfPartitionRacks(3)))
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
+                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 consumerGroup.computeSubscribedTopicNames(Collections.singleton(member1)),
@@ -811,9 +810,9 @@ public class ConsumerGroupTest {
         // It should return foo, bar and zar.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1))),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2))),
-                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3, mkMapOfPartitionRacks(3)))
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
+                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 consumerGroup.computeSubscribedTopicNames(Collections.emptySet()),
@@ -1220,8 +1219,8 @@ public class ConsumerGroupTest {
 
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1))),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2)))
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 consumerGroup.computeSubscribedTopicNames(null, null),

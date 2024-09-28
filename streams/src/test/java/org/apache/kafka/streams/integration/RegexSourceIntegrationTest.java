@@ -196,7 +196,7 @@ public class RegexSourceIntegrationTest {
 
             streams.close();
         } finally {
-            CLUSTER.deleteTopicsAndWait("TEST-TOPIC-1", "TEST-TOPIC-2");
+            CLUSTER.deleteTopics("TEST-TOPIC-1", "TEST-TOPIC-2");
         }
     }
 
@@ -248,7 +248,7 @@ public class RegexSourceIntegrationTest {
 
             streams.close();
         } finally {
-            CLUSTER.deleteTopicsAndWait(topic1, topic2);
+            CLUSTER.deleteTopics(topic1, topic2);
         }
     }
 
@@ -290,7 +290,7 @@ public class RegexSourceIntegrationTest {
             streams.start();
             TestUtils.waitForCondition(() -> assignedTopics.equals(expectedFirstAssignment), STREAM_TASKS_NOT_UPDATED);
         } finally {
-            CLUSTER.deleteTopicAndWait("TEST-TOPIC-A");
+            CLUSTER.deleteTopic("TEST-TOPIC-A");
         }
 
         TestUtils.waitForCondition(() -> assignedTopics.equals(expectedSecondAssignment), STREAM_TASKS_NOT_UPDATED);

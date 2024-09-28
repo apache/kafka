@@ -127,9 +127,9 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         private final String childName;
         private final long timestamp;
         private final Headers headers;
-        private final KeyValue keyValue;
+        private final KeyValue<?, ?> keyValue;
 
-        private CapturedForward(final KeyValue keyValue, final To to, final Headers headers) {
+        private CapturedForward(final KeyValue<?, ?> keyValue, final To to, final Headers headers) {
             if (keyValue == null) {
                 throw new IllegalArgumentException();
             }
@@ -165,7 +165,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
          *
          * @return A key/value pair. Not null.
          */
-        @SuppressWarnings({"WeakerAccess", "unused"})
+        @SuppressWarnings({"WeakerAccess", "unused", "rawtypes"})
         public KeyValue keyValue() {
             return keyValue;
         }
@@ -242,7 +242,6 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         this.metrics = new StreamsMetricsImpl(
             new Metrics(metricConfig),
             threadId,
-            streamsConfig.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG),
             Time.SYSTEM
         );
         TaskMetrics.droppedRecordsSensor(threadId, taskId.toString(), metrics);
@@ -458,7 +457,6 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         return (S) stateStores.get(name);
     }
 
-    @SuppressWarnings("deprecation") // removing #schedule(final long intervalMs,...) will fix this
     @Override
     public Cancellable schedule(final Duration interval,
                                 final PunctuationType type,
