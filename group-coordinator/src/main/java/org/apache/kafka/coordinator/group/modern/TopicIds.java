@@ -69,7 +69,8 @@ public class TopicIds implements Set<Uuid> {
     /**
      * A base implementation of TopicResolver.
      *
-     * Provides an implementation of equals and hashCode based on the underlying TopicsImage.
+     * Provides an implementation of equals, hashCode and toString based on the underlying
+     * TopicsImage.
      */
     public abstract static class BaseTopicResolver implements TopicResolver {
         protected final TopicsImage image;
@@ -98,6 +99,11 @@ public class TopicIds implements Set<Uuid> {
         @Override
         public int hashCode() {
             return image.hashCode();
+        }
+
+        @Override
+        public String toString() {
+            return getClass().getName() + "(image=" + image + ")";
         }
     }
 
