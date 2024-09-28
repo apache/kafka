@@ -139,6 +139,8 @@ object StorageTool extends Logging {
     if (namespace.getBoolean("standalone")) {
       formatter.setInitialVoters(createStandaloneDynamicVoters(config))
     }
+    Option(namespace.getList("add_scram")).
+      foreach(scramArgs => formatter.setScramArguments(scramArgs.asInstanceOf[util.List[String]]))
     configToLogDirectories(config).foreach(formatter.addDirectory(_))
     formatter.run()
   }
