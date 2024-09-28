@@ -1312,15 +1312,15 @@ public class ConfigCommandTest {
                 assertEquals(resourceName, res.name());
                 return describeResult;
             }
-
             @Override
-            public synchronized AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options) {
+            public synchronized AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs,
+                                                                           AlterConfigsOptions options) {
                 assertEquals(1, configs.size());
-                Map.Entry<ConfigResource, Config> entry = configs.entrySet().iterator().next();
+                Entry<ConfigResource, Collection<AlterConfigOp>> entry = configs.entrySet().iterator().next();
                 ConfigResource res = entry.getKey();
-                Config config = entry.getValue();
+                Collection<AlterConfigOp> alterConfigOps = entry.getValue();
                 assertEquals(ConfigResource.Type.BROKER, res.type());
-                config.entries().forEach(e -> brokerConfigs.put(e.name(), e.value()));
+                alterConfigOps.forEach(op -> brokerConfigs.put(op.configEntry().name(), op.configEntry().value()));
                 return alterResult;
             }
         };
@@ -2273,11 +2273,6 @@ public class ConfigCommandTest {
 
         @Override
         public synchronized AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs, AlterConfigsOptions options) {
-            return mock(AlterConfigsResult.class);
-        }
-
-        @Override
-        public synchronized AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options) {
             return mock(AlterConfigsResult.class);
         }
 

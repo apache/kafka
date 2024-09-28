@@ -26,7 +26,7 @@ import kafka.utils._
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
-import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, Config, ConfigEntry}
+import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.{InvalidRequestException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.metrics.Quota
@@ -464,21 +464,6 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       val resource = new ConfigResource(ConfigResource.Type.TOPIC, "")
       val op = new AlterConfigOp(new ConfigEntry(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, "200000"), OpType.SET)
       val future = admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all
-      TestUtils.assertFutureExceptionTypeEquals(future, classOf[InvalidRequestException])
-    } finally {
-      admin.close()
-    }
-  }
-
-  @nowarn("cat=deprecation")
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testAlterDefaultTopicConfig(quorum: String): Unit = {
-    val admin = createAdminClient()
-    try {
-      val resource = new ConfigResource(ConfigResource.Type.TOPIC, "")
-      val config = new Config(Collections.singleton(new ConfigEntry(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, "200000")))
-      val future = admin.alterConfigs(Map(resource -> config).asJava).all
       TestUtils.assertFutureExceptionTypeEquals(future, classOf[InvalidRequestException])
     } finally {
       admin.close()

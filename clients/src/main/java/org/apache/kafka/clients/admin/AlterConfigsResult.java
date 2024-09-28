@@ -24,7 +24,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import java.util.Map;
 
 /**
- * The result of the {@link Admin#alterConfigs(Map)} call.
+ * The result of the {@link Admin#incrementalAlterConfigs(Map, AlterConfigsOptions)} call.
  *
  * The API of this class is evolving, see {@link Admin} for details.
  */
