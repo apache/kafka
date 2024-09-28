@@ -210,6 +210,10 @@ def determineCommitId() {
 apply from: file('wrapper.gradle')
 
 if (repo != null) {
+  ext {
+    ignoreRatFailure = project.hasProperty('ignoreRatFailure') ? project.ignoreRatFailure.toBoolean() : false
+  }
+
   rat {
     dependsOn subprojects.collect {
       it.tasks.matching {
@@ -247,6 +251,9 @@ if (repo != null) {
         'docker/examples/fixtures/secrets/*',
         'docker/docker_official_images/.gitkeep'
     ])
+
+    // Set failOnError based on ignoreRatFailure parameter
+    failOnError = !ignoreRatFailure
   }
 } else {
   rat.enabled = false

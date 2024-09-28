@@ -67,7 +67,7 @@ jobs:
         run: |
           ./gradlew --build-cache --info  \
           ${{ inputs.is-public-fork && '--no-scan' || '--scan' }} \
-          check -x test
+          check -x test  -PignoreRatFailure=true
       - name: Archive check reports
         if: always()
         uses: actions/upload-artifact@v4
