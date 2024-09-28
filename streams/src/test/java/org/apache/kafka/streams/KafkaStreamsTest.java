@@ -544,18 +544,14 @@ public class KafkaStreamsTest {
 
             // shutting down the global thread from "external" will yield an error in KafkaStreams
             waitForCondition(
-                () -> streams.state() == KafkaStreams.State.PENDING_ERROR,
-                "Thread never stopped."
-            );
-
-            waitForCondition(
                 () -> streams.state() == KafkaStreams.State.ERROR,
                 "Thread never stopped."
             );
 
             streams.close();
             assertEquals(streams.state(), KafkaStreams.State.ERROR, "KafkaStreams should remain in ERROR state after close.");
-            assertThat(appender.getMessages(), hasItem(containsString("ERROR")));
+            assertThat(appender.getMessages(), hasItem(containsString("State transition from RUNNING to PENDING_ERROR")));
+            assertThat(appender.getMessages(), hasItem(containsString("State transition from PENDING_ERROR to ERROR")));
         }
     }
 
