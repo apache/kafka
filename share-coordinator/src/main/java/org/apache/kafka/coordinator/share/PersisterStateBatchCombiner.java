@@ -48,9 +48,9 @@ public class PersisterStateBatchCombiner {
         if (soFarEmpty && newBatchesEmpty) {
             combinedBatchList = new ArrayList<>();
         } else if (soFarEmpty) {
-            combinedBatchList = newBatches;
+            combinedBatchList = new ArrayList<>(newBatches);    // new list as the original one could be unmodifiable
         } else if (newBatchesEmpty) {
-            combinedBatchList = batchesSoFar;
+            combinedBatchList = new ArrayList<>(batchesSoFar);  // new list as the original one could be unmodifiable
         } else {
             combinedBatchList = new ArrayList<>(batchesSoFar.size() + newBatches.size());
             combinedBatchList.addAll(batchesSoFar);
