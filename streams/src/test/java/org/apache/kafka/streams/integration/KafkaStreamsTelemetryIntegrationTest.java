@@ -26,6 +26,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -39,6 +40,7 @@ import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.telemetry.ClientTelemetry;
 import org.apache.kafka.server.telemetry.ClientTelemetryPayload;
 import org.apache.kafka.server.telemetry.ClientTelemetryReceiver;
+import org.apache.kafka.streams.ClientInstanceIds;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -64,6 +66,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -82,12 +85,12 @@ import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(600)
 @Tag("integration")
 public class KafkaStreamsTelemetryIntegrationTest {
-
     private static EmbeddedKafkaCluster cluster;
     private String appId;
     private String inputTopicTwoPartitions;
@@ -97,7 +100,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
     private final List<Properties> streamsConfigurations = new ArrayList<>();
     private static final List<MetricsInterceptingConsumer<byte[], byte[]>> INTERCEPTING_CONSUMERS = new ArrayList<>();
     private static final List<TestingMetricsInterceptingAdminClient> INTERCEPTING_ADMIN_CLIENTS = new ArrayList<>();
-    private static final int NUM_BROKERS = 1;
+    private static final int NUM_BROKERS = 3;
     private static final int FIRST_INSTANCE_CONSUMER = 0;
     private static final int SECOND_INSTANCE_CONSUMER = 1;
 
@@ -152,6 +155,26 @@ public class KafkaStreamsTelemetryIntegrationTest {
             assertDoesNotThrow(() -> embeddedConsumer.unregisterMetricFromSubscription(nonExitingMetric));
         }
     }
+
+    @Test
+    @DisplayName("End-to-end test validating metrics pushed to broker")
+    public void shouldPushMetricsToBroker() throws Exception {
+        final Properties properties = props(true);
+        final Topology topology = complexTopology();
+        try (final KafkaStreams streams = new KafkaStreams(topology, properties)) {
+            IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+
+            final ClientInstanceIds clientInstanceIds = streams.clientInstanceIds(Duration.ofSeconds(60));
+            final Uuid adminInstanceId = clientInstanceIds.adminInstanceId();
+            final Uuid mainConsumerInstanceId = clientInstanceIds.consumerInstanceIds().entrySet().stream()
+                    .filter(entry -> entry.getKey().endsWith("1-consumer"))
+                    .map(Map.Entry::getValue)
+                    .findFirst().get();
+            assertNotNull(adminInstanceId);
+            assertNotNull(mainConsumerInstanceId);
+        }
+    }
+
 
     @ParameterizedTest
     @MethodSource("singleAndMultiTaskParameters")

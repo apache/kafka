@@ -18,6 +18,7 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.MemberToRemove;
 import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions;
@@ -1006,7 +1007,9 @@ public class KafkaStreams implements AutoCloseable {
 
         // use client id instead of thread client id since this admin client may be shared among threads
         this.clientSupplier = clientSupplier;
-        adminClient = clientSupplier.getAdmin(applicationConfigs.getAdminConfigs(ClientUtils.adminClientId(clientId)));
+        final Map<String, Object> adminConfigs = applicationConfigs.getAdminConfigs(ClientUtils.adminClientId(clientId));
+        adminConfigs.put(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, true);
+        adminClient = clientSupplier.getAdmin(adminConfigs);
 
         log.info("Kafka Streams version: {}", ClientMetrics.version());
         log.info("Kafka Streams commit ID: {}", ClientMetrics.commitId());
