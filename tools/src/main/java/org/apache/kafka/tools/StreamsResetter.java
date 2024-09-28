@@ -59,6 +59,7 @@ import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 import joptsimple.OptionSpecBuilder;
 
+
 /**
  * {@link StreamsResetter} resets the processing state of a Kafka Streams application so that, for example,
  * you can reprocess its input from scratch.
@@ -93,7 +94,6 @@ public class StreamsResetter {
     private static final String USAGE = "This tool helps to quickly reset an application in order to reprocess "
             + "its data from scratch.\n"
             + "* This tool resets offsets of input topics to the earliest available offset (by default), or to a specific defined position"
-            + " and it skips to the end of intermediate topics (topics that are input and output topics, e.g., used by deprecated through() method).\n"
             + "* This tool deletes the internal topics that were created by Kafka Streams (topics starting with "
             + "\"<application.id>-\").\n"
             + "The tool finds these internal topics automatically. If the topics flagged automatically for deletion by "
@@ -577,8 +577,8 @@ public class StreamsResetter {
                 .ofType(String.class)
                 .withValuesSeparatedBy(',')
                 .describedAs("list");
-            intermediateTopicsOption = parser.accepts("intermediate-topics", "Comma-separated list of intermediate user topics (topics that are input and output topics, "
-                    + "e.g., used in the deprecated through() method). For these topics, the tool will skip to the end.")
+            intermediateTopicsOption = parser.accepts("intermediate-topics", "[deprecated] Comma-separated list of intermediate user topics (topics that are input and output topics). "
+                    + "For these topics, the tool will skip to the end.")
                 .withRequiredArg()
                 .ofType(String.class)
                 .withValuesSeparatedBy(',')
@@ -670,6 +670,7 @@ public class StreamsResetter {
         }
 
         public List<String> intermediateTopicsOption() {
+            System.out.println("intermediateTopicsOption is deprecated and will be removed in a future release");
             return options.valuesOf(intermediateTopicsOption);
         }
 
