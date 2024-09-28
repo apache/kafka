@@ -22,22 +22,23 @@ import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Objects;
 
 /**
- * Event to perform {@link AsyncKafkaConsumer#seekToBeginning(Collection)}
+ * Event to perform {@link AsyncKafkaConsumer#seekToBeginning(Collection)} and {@link AsyncKafkaConsumer#seekToEnd(Collection)}
  * in the background thread. This can avoid race conditions when subscription state is updated.
  */
 public class ResetOffsetEvent extends CompletableApplicationEvent<Boolean> {
 
     private final Collection<TopicPartition> topicPartitions;
 
-    private final OffsetResetStrategy offsetStrategy;
+    private final OffsetResetStrategy offsetResetStrategy;
 
-
-    public ResetOffsetEvent(Collection<TopicPartition> topicPartitions, OffsetResetStrategy offsetStrategy, long deadline) {
+    public ResetOffsetEvent(Collection<TopicPartition> topicPartitions, OffsetResetStrategy offsetResetStrategy, long deadline) {
         super(Type.RESET_OFFSET, deadline);
-        this.topicPartitions = topicPartitions;
-        this.offsetStrategy = offsetStrategy;
+        this.topicPartitions = Collections.unmodifiableCollection(topicPartitions);
+        this.offsetResetStrategy = Objects.requireNonNull(offsetResetStrategy);
     }
 
     public Collection<TopicPartition> topicPartitions() {
@@ -45,6 +46,11 @@ public class ResetOffsetEvent extends CompletableApplicationEvent<Boolean> {
     }
 
     public OffsetResetStrategy offsetResetStrategy() {
-        return offsetStrategy;
+        return offsetResetStrategy;
+    }
+
+    @Override
+    public String toStringBase() {
+        return super.toStringBase() + ", topicPartitions=" + topicPartitions + ", offsetStrategy=" + offsetResetStrategy;
     }
 }

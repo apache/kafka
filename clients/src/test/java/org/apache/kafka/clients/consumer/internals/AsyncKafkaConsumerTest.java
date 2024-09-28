@@ -1889,33 +1889,33 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testSeekToBeginning() {
         SubscriptionState subscriptions = mock(SubscriptionState.class);
-        TopicPartition topic = new TopicPartition("test", 0);
-        consumer = spy(newConsumer(
+        Collection<TopicPartition> topics = Collections.singleton(new TopicPartition("test", 0));
+        consumer = newConsumer(
                 mock(FetchBuffer.class),
                 new ConsumerInterceptors<>(Collections.emptyList()),
                 mock(ConsumerRebalanceListenerInvoker.class),
                 subscriptions,
                 "group-id",
-                "client-id"));
+                "client-id");
         completeResetOffsetEventSuccessfully();
-        consumer.seekToBeginning(Collections.singleton(topic));
-        verify(subscriptions).requestOffsetReset(Collections.singleton(topic), OffsetResetStrategy.EARLIEST);
+        consumer.seekToBeginning(topics);
+        verify(subscriptions).requestOffsetReset(topics, OffsetResetStrategy.EARLIEST);
     }
 
     @Test
     public void testSeekToEnd() {
         SubscriptionState subscriptions = mock(SubscriptionState.class);
-        TopicPartition topic = new TopicPartition("test", 0);
-        consumer = spy(newConsumer(
+        Collection<TopicPartition> topics = Collections.singleton(new TopicPartition("test", 0));
+        consumer = newConsumer(
                 mock(FetchBuffer.class),
                 new ConsumerInterceptors<>(Collections.emptyList()),
                 mock(ConsumerRebalanceListenerInvoker.class),
                 subscriptions,
                 "group-id",
-                "client-id"));
+                "client-id");
         completeResetOffsetEventSuccessfully();
-        consumer.seekToEnd(Collections.singleton(topic));
-        verify(subscriptions).requestOffsetReset(Collections.singleton(topic), OffsetResetStrategy.LATEST);
+        consumer.seekToEnd(topics);
+        verify(subscriptions).requestOffsetReset(topics, OffsetResetStrategy.LATEST);
     }
 
     private void verifyUnsubscribeEvent(SubscriptionState subscriptions) {
@@ -1976,9 +1976,11 @@ public class AsyncKafkaConsumerTest {
     private void completeResetOffsetEventSuccessfully() {
         doAnswer(invocation -> {
             ResetOffsetEvent event = invocation.getArgument(0);
-            consumer.subscriptions().requestOffsetReset(event.topicPartitions(), event.offsetResetStrategy());
-            return null;
-        }).when(applicationEventHandler).add(ArgumentMatchers.isA(ResetOffsetEvent.class));
+            // Collections.unmodifiedCollection does not support hashcode compare so we need to create a new one
+            Collection<TopicPartition> partitions = Collections.singleton(event.topicPartitions().iterator().next());
+            consumer.subscriptions().requestOffsetReset(partitions, event.offsetResetStrategy());
+            return true;
+        }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ResetOffsetEvent.class));
     }
 
     private void completeCommitAsyncApplicationEventSuccessfully() {
