@@ -183,7 +183,7 @@ public class BootstrapControllersIntegrationTest {
                             () -> result.all().get(1, TimeUnit.MINUTES));
             assertNotNull(exception.getCause());
             assertEquals(InvalidUpdateVersionException.class, exception.getCause().getClass());
-            assertTrue(exception.getCause().getMessage().endsWith("does not support this feature.)"),
+            assertTrue(exception.getCause().getMessage().endsWith("does not support this feature."),
                     "expected message to end with 'does not support this feature', but it was: " +
                             exception.getCause().getMessage());
         }
