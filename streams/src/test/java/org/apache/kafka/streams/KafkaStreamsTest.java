@@ -547,13 +547,14 @@ public class KafkaStreamsTest {
                 () -> streams.state() == KafkaStreams.State.PENDING_ERROR,
                 "Thread never stopped."
             );
-            streams.close();
 
             waitForCondition(
                 () -> streams.state() == KafkaStreams.State.ERROR,
                 "Thread never stopped."
             );
 
+            streams.close();
+            assertEquals(streams.state(), KafkaStreams.State.ERROR, "KafkaStreams should remain in ERROR state after close.");
             assertThat(appender.getMessages(), hasItem(containsString("ERROR")));
         }
     }
