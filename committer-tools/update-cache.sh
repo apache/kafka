@@ -33,7 +33,7 @@ key="$(
 
 sha="$(cut -d '-' -f 5 <<< "$key")"
 
-git fetch origin trunk &> /dev/null
+git fetch --all &> /dev/null
 
 if ! git rev-parse --verify "$sha" &> /dev/null; then
   printf '\e[33m%s\n%s\e[0m\n' \
