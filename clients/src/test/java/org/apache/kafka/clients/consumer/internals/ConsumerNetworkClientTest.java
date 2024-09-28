@@ -328,7 +328,6 @@ public class ConsumerNetworkClientTest {
                 else
                     return false;
             }
-
             @Override
             public boolean connectionFailed(Node node) {
                 return disconnected.get();
