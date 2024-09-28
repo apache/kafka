@@ -72,7 +72,7 @@ public class TopicIds implements Set<Uuid> {
      * Provides an implementation of equals, hashCode and toString based on the underlying
      * TopicsImage.
      */
-    public abstract static class BaseTopicResolver implements TopicResolver {
+    private abstract static class BaseTopicResolver implements TopicResolver {
         protected final TopicsImage image;
 
         public BaseTopicResolver(
