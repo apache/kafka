@@ -75,6 +75,7 @@ import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.test.MockConsumerInterceptor;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -1903,6 +1904,36 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    public void testSeekToBeginningWithException() {
+        SubscriptionState subscriptions = mock(SubscriptionState.class);
+        Collection<TopicPartition> topics = Collections.singleton(new TopicPartition("test", 0));
+        consumer = newConsumer(
+                mock(FetchBuffer.class),
+                new ConsumerInterceptors<>(Collections.emptyList()),
+                mock(ConsumerRebalanceListenerInvoker.class),
+                subscriptions,
+                "group-id",
+                "client-id");
+        completeResetOffsetEventExceptionally(new TimeoutException());
+        Assertions.assertThrows(TimeoutException.class, () -> consumer.seekToBeginning(topics));
+    }
+
+    @Test
+    public void testSeekToEndWithException() {
+        SubscriptionState subscriptions = mock(SubscriptionState.class);
+        Collection<TopicPartition> topics = Collections.singleton(new TopicPartition("test", 0));
+        consumer = newConsumer(
+                mock(FetchBuffer.class),
+                new ConsumerInterceptors<>(Collections.emptyList()),
+                mock(ConsumerRebalanceListenerInvoker.class),
+                subscriptions,
+                "group-id",
+                "client-id");
+        completeResetOffsetEventExceptionally(new TimeoutException());
+        Assertions.assertThrows(TimeoutException.class, () -> consumer.seekToEnd(topics));
+    }
+
+    @Test
     public void testSeekToEnd() {
         SubscriptionState subscriptions = mock(SubscriptionState.class);
         Collection<TopicPartition> topics = Collections.singleton(new TopicPartition("test", 0));
@@ -1981,6 +2012,10 @@ public class AsyncKafkaConsumerTest {
             consumer.subscriptions().requestOffsetReset(partitions, event.offsetResetStrategy());
             return true;
         }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ResetOffsetEvent.class));
+    }
+
+    private void completeResetOffsetEventExceptionally(Exception ex) {
+        doThrow(ex).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ResetOffsetEvent.class));
     }
 
     private void completeCommitAsyncApplicationEventSuccessfully() {
