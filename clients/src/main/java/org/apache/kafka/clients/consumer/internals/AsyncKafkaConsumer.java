@@ -830,8 +830,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         acquireAndEnsureOpen();
         try {
-            cachedSubscriptionHasAllFetchPositions = false;
-            applicationEventHandler.add(new ResetOffsetEvent(partitions, OffsetResetStrategy.EARLIEST));
+            Timer timer = time.timer(defaultApiTimeoutMs);
+            ResetOffsetEvent resetOffsetEvent = new ResetOffsetEvent(partitions, OffsetResetStrategy.EARLIEST,
+                    calculateDeadlineMs(timer));
+            cachedSubscriptionHasAllFetchPositions = applicationEventHandler.addAndGet(resetOffsetEvent);
         } finally {
             release();
         }
@@ -844,8 +846,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         acquireAndEnsureOpen();
         try {
-            cachedSubscriptionHasAllFetchPositions = false;
-            applicationEventHandler.add(new ResetOffsetEvent(partitions, OffsetResetStrategy.LATEST));
+            Timer timer = time.timer(defaultApiTimeoutMs);
+            ResetOffsetEvent resetOffsetEvent = new ResetOffsetEvent(partitions, OffsetResetStrategy.LATEST,
+                    calculateDeadlineMs(timer));
+            cachedSubscriptionHasAllFetchPositions = applicationEventHandler.addAndGet(resetOffsetEvent);
         } finally {
             release();
         }
@@ -865,14 +869,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             Timer timer = time.timer(timeout);
             do {
-                // The {@link seekToBeginning} and {@link seekToEnd} update subscription state position in background.
-                // When {@link cachedSubscriptionHasAllFetchPositions} is false, there may have {@link ResetOffsetEvent}, which means
-                // current subscription valid position is not reliable. We should update fetch position in the background thread.
-                if (cachedSubscriptionHasAllFetchPositions) {
-                    SubscriptionState.FetchPosition position = subscriptions.validPosition(partition);
-                    if (position != null) {
-                        return position.offset;
-                    }
+                SubscriptionState.FetchPosition position = subscriptions.validPosition(partition);
+                if (position != null) {
+                    return position.offset;
                 }
 
                 updateFetchPositions(timer);

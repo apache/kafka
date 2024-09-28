@@ -27,15 +27,15 @@ import java.util.Collection;
  * Event to perform {@link AsyncKafkaConsumer#seekToBeginning(Collection)}
  * in the background thread. This can avoid race conditions when subscription state is updated.
  */
-public class ResetOffsetEvent extends ApplicationEvent {
+public class ResetOffsetEvent extends CompletableApplicationEvent<Boolean> {
 
     private final Collection<TopicPartition> topicPartitions;
 
     private final OffsetResetStrategy offsetStrategy;
 
 
-    public ResetOffsetEvent(Collection<TopicPartition> topicPartitions, OffsetResetStrategy offsetStrategy) {
-        super(Type.RESET_OFFSET);
+    public ResetOffsetEvent(Collection<TopicPartition> topicPartitions, OffsetResetStrategy offsetStrategy, long deadline) {
+        super(Type.RESET_OFFSET, deadline);
         this.topicPartitions = topicPartitions;
         this.offsetStrategy = offsetStrategy;
     }

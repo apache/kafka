@@ -264,6 +264,8 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         Collection<TopicPartition> parts = event.topicPartitions().isEmpty() ?
                 subscriptions.assignedPartitions() : event.topicPartitions();
         subscriptions.requestOffsetReset(parts, event.offsetResetStrategy());
+        CompletableFuture<Boolean> future = requestManagers.offsetsRequestManager.updateFetchPositions(event.deadlineMs());
+        future.whenComplete(complete(event.future()));
     }
 
     /**
