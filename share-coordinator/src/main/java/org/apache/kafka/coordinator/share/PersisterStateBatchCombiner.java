@@ -64,16 +64,21 @@ public class PersisterStateBatchCombiner {
      * Output: combined list with non-overlapping batches (finalBatchList)
      * <p>
      * - Add both currentBatches and newBatches into a single list combinedBatchList
+     * - if combinedBatchList.size() <= 1 return combinedBatchList
+     * <p>
      * - Remove/prune any batches from the combinedBatchList:
      * -    if batch.lastOffset < startOffset then remove batch from combinedBatchList
      * -    else if batch.firstOffset > startOffset then we will keep the batch
      * -    else if batch.firstOffset <= startOffset <= batch.lastOffset then keep [startOffset, batch.lastOffset] part only and discard rest.
+     * <p>
      * - create a treeset sortedBatches using pruned combinedBatchList
-     * - do repeat until all batches in sortedSet are non-overlapping:
-     * -    find first 2 overlapping batches in sortedBatches set, say, prev and candidate.
-     * -    remove any non-overlapping batches from sortedBatches encountered during the find operation and add them to a finalBatchList
+     * - find first 2 mergeable batches in sortedBatches set, say, prev and candidate.
+     * - remove any non-overlapping batches from sortedBatches encountered during the find operation and add them to a finalBatchList
+     * - do repeat until a mergeable pair is not found:
      * -    based on various conditions of offset overlap and batch state differences combine the batches or
-     *      create new batches, if required, and add to the sortedSet.
+     *      create new batches, if required, and add to the sortedBatches.
+     * -    find first 2 mergeable batches in sortedBatches set, say, prev and candidate.
+     * -    remove any non-mergeable batches from sortedBatches encountered during the find operation and add them to a finalBatchList
      * - done
      * - return the finalBatchList
      *
@@ -93,9 +98,9 @@ public class PersisterStateBatchCombiner {
 
         sortedBatches = new TreeSet<>(combinedBatchList);
 
-        BatchOverlapState overlapState = getOverlappingState();
+        MergeCandidatePair overlapState = getMergeCandidatePair();
 
-        while (overlapState != BatchOverlapState.EMPTY) {
+        while (overlapState != MergeCandidatePair.EMPTY) {
             PersisterStateBatch prev = overlapState.prev();
             PersisterStateBatch candidate = overlapState.candidate();
 
@@ -104,15 +109,17 @@ public class PersisterStateBatchCombiner {
             sortedBatches.remove(prev);
             sortedBatches.remove(candidate);
 
-            if (compareBatchState(candidate, prev) == 0) {  // same state and overlap or contiguous
+            if (compareBatchDeliveryInfo(candidate, prev) == 0) {  // same state and overlap or contiguous
                 // overlap and same state (prev.firstOffset <= candidate.firstOffset) due to sort
                 // covers:
                 // case:        1        2          3            4          5           6          7 (contiguous)
                 // prev:        ------   -------    -------      -------   -------   --------    -------
                 // candidate:   ------   ----       ----------     ---        ----       -------        -------
-                handleSameStateOverlap(prev, candidate);
-            } else { // diff state and non-contiguous overlap
-                // overlap and diff state
+                handleSameStateMerge(prev, candidate);  // pair can be contiguous or overlapping
+            } else {
+                // If we reach here then it is guaranteed that the batch pair is overlapping and
+                // non-contiguous because getMergeCandidatePair only returns contiguous pair if
+                // the constituents have the same delivery count and state.
                 // covers:
                 // case:        1        2*          3            4          5           6             7*
                 // prev:        ------   -------    -------      -------    -------     --------      ------
@@ -122,7 +129,7 @@ public class PersisterStateBatchCombiner {
                 // * not possible with treeset
                 handleDiffStateOverlap(prev, candidate);
             }
-            overlapState = getOverlappingState();
+            overlapState = getMergeCandidatePair();
         }
         finalBatchList.addAll(sortedBatches);   // some non overlapping batches might have remained
     }
@@ -136,7 +143,7 @@ public class PersisterStateBatchCombiner {
      * @param b2 - {@link PersisterStateBatch} to compare
      * @return int representing comparison result.
      */
-    private int compareBatchState(PersisterStateBatch b1, PersisterStateBatch b2) {
+    private int compareBatchDeliveryInfo(PersisterStateBatch b1, PersisterStateBatch b2) {
         int deltaCount = Short.compare(b1.deliveryCount(), b2.deliveryCount());
 
         // Delivery state could be:
@@ -153,11 +160,11 @@ public class PersisterStateBatchCombiner {
     }
 
     /**
-     * Accepts a sorted set of state batches and finds the first 2 batches which overlap.
-     * Overlap means that they have some offsets in common or, they are contiguous with the same state.
+     * Accepts a sorted set of state batches and finds the first 2 batches which can be merged.
+     * Merged implies that they have some offsets in common or, they are contiguous with the same state.
      * <p>
-     * Along with the 2 overlapping batches, also returns a list of non overlapping intervals
-     * prefixing them. For example:
+     * Any non-mergeable batches prefixing a good mergeable pair are removed from the sortedBatches.
+     * For example:
      * ----- ----  ----- -----      -----
      *                      ------
      * <---------------> <-------->
@@ -165,9 +172,9 @@ public class PersisterStateBatchCombiner {
      *
      * @return object representing the overlap state
      */
-    private BatchOverlapState getOverlappingState() {
+    private MergeCandidatePair getMergeCandidatePair() {
         if (sortedBatches == null || sortedBatches.isEmpty()) {
-            return BatchOverlapState.EMPTY;
+            return MergeCandidatePair.EMPTY;
         }
         Iterator<PersisterStateBatch> iter = sortedBatches.iterator();
         PersisterStateBatch prev = iter.next();
@@ -175,9 +182,9 @@ public class PersisterStateBatchCombiner {
         while (iter.hasNext()) {
             PersisterStateBatch candidate = iter.next();
             if (candidate.firstOffset() <= prev.lastOffset() || // overlap
-                prev.lastOffset() + 1 == candidate.firstOffset() && compareBatchState(prev, candidate) == 0) {  // contiguous
-                updateBatchesState(nonOverlapping);
-                return new BatchOverlapState(
+                prev.lastOffset() + 1 == candidate.firstOffset() && compareBatchDeliveryInfo(prev, candidate) == 0) {  // contiguous
+                updateBatchContainers(nonOverlapping);
+                return new MergeCandidatePair(
                     prev,
                     candidate
                 );
@@ -186,11 +193,11 @@ public class PersisterStateBatchCombiner {
             prev = candidate;
         }
 
-        updateBatchesState(nonOverlapping);
-        return BatchOverlapState.EMPTY;
+        updateBatchContainers(nonOverlapping);
+        return MergeCandidatePair.EMPTY;
     }
 
-    private void updateBatchesState(List<PersisterStateBatch> nonOverlappingBatches) {
+    private void updateBatchContainers(List<PersisterStateBatch> nonOverlappingBatches) {
         nonOverlappingBatches.forEach(sortedBatches::remove);
         finalBatchList.addAll(nonOverlappingBatches);
     }
@@ -230,7 +237,7 @@ public class PersisterStateBatchCombiner {
         }
     }
 
-    private void handleSameStateOverlap(PersisterStateBatch prev, PersisterStateBatch candidate) {
+    private void handleSameStateMerge(PersisterStateBatch prev, PersisterStateBatch candidate) {
         sortedBatches.add(new PersisterStateBatch(
             prev.firstOffset(),
             // cover cases
@@ -262,7 +269,7 @@ public class PersisterStateBatchCombiner {
             // case 3
             // --------
             // -----------
-            if (compareBatchState(candidate, prev) < 0) {
+            if (compareBatchDeliveryInfo(candidate, prev) < 0) {
                 sortedBatches.add(prev);
                 sortedBatches.add(new PersisterStateBatch(
                     prev.lastOffset() + 1,
@@ -290,7 +297,7 @@ public class PersisterStateBatchCombiner {
     private void handleDiffStateOverlapPrevSwallowsCandidate(PersisterStateBatch prev, PersisterStateBatch candidate) {
         // --------
         //   ----
-        if (compareBatchState(candidate, prev) < 0) {
+        if (compareBatchDeliveryInfo(candidate, prev) < 0) {
             sortedBatches.add(prev);
         } else {
             sortedBatches.add(new PersisterStateBatch(
@@ -314,7 +321,7 @@ public class PersisterStateBatchCombiner {
     private void handleDiffStateOverlapLastOffsetAligned(PersisterStateBatch prev, PersisterStateBatch candidate) {
         // --------
         //    -----
-        if (compareBatchState(candidate, prev) < 0) {
+        if (compareBatchDeliveryInfo(candidate, prev) < 0) {
             sortedBatches.add(prev);
         } else {
             sortedBatches.add(new PersisterStateBatch(
@@ -331,7 +338,7 @@ public class PersisterStateBatchCombiner {
     private void handleDiffStateOverlapCandidateOffsetsLarger(PersisterStateBatch prev, PersisterStateBatch candidate) {
         //   -------
         //      -------
-        if (compareBatchState(candidate, prev) < 0) {
+        if (compareBatchDeliveryInfo(candidate, prev) < 0) {
             sortedBatches.add(prev);
 
             sortedBatches.add(new PersisterStateBatch(
@@ -357,12 +364,12 @@ public class PersisterStateBatchCombiner {
      * Holder class for intermediate state
      * used in the batch merge algorithm.
      */
-    static class BatchOverlapState {
+    static class MergeCandidatePair {
         private final PersisterStateBatch prev;
         private final PersisterStateBatch candidate;
-        public static final BatchOverlapState EMPTY = new BatchOverlapState(null, null);
+        public static final MergeCandidatePair EMPTY = new MergeCandidatePair(null, null);
 
-        public BatchOverlapState(
+        public MergeCandidatePair(
             PersisterStateBatch prev,
             PersisterStateBatch candidate
         ) {
@@ -381,8 +388,8 @@ public class PersisterStateBatchCombiner {
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
-            if (!(o instanceof BatchOverlapState)) return false;
-            BatchOverlapState that = (BatchOverlapState) o;
+            if (!(o instanceof MergeCandidatePair)) return false;
+            MergeCandidatePair that = (MergeCandidatePair) o;
             return Objects.equals(prev, that.prev) && Objects.equals(candidate, that.candidate);
         }
 
