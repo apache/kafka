@@ -16,6 +16,12 @@
 # specific language governing permissions and limitations
 # under the License.
 
+if ! git config --get alias.update-cache >/dev/null; then
+  printf '\e[36m%s\n\n  %s\n\e[0m\n' \
+    'Hint: you can create a Git alias to execute this script. Example:' \
+    "git config alias.update-cache '!bash $(realpath "$0")'"
+fi
+
 key=$(
   gh cache list \
     --key 'gradle-home-v1|Linux-X64|test' \
@@ -26,10 +32,3 @@ key=$(
 )
 
 cut -d '-' -f 5 <<< "$key"
-
-if ! git config --get alias.update-cache >/dev/null; then
-  this_path=$(realpath "$0")
-  git config alias.update-cache "!bash $this_path"
-  echo
-  echo "Now, you can use 'git update-cache' as alias to execute this script."
-fi
