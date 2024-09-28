@@ -81,7 +81,8 @@ public class RecordCollectorImpl implements RecordCollector {
     private final Sensor droppedRecordsSensor;
     private final Map<String, Sensor> producedSensorByTopic = new HashMap<>();
 
-    private final AtomicReference<KafkaException> sendException = new AtomicReference<>(null);
+    // we get `sendException` from "singleton" `StreamsProducer` to share it across all instances of `RecordCollectorImpl`
+    private final AtomicReference<KafkaException> sendException;
 
     /**
      * @throws StreamsException fatal error that should cause the thread to die (from producer.initTxn)
@@ -95,6 +96,7 @@ public class RecordCollectorImpl implements RecordCollector {
         this.log = logContext.logger(getClass());
         this.taskId = taskId;
         this.streamsProducer = streamsProducer;
+        this.sendException = streamsProducer.sendException();
         this.productionExceptionHandler = productionExceptionHandler;
         this.streamsMetrics = streamsMetrics;
 

@@ -48,6 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
@@ -71,6 +72,9 @@ public class StreamsProducer {
     private boolean transactionInFlight = false;
     private boolean transactionInitialized = false;
     private double oldProducerTotalBlockedTime = 0;
+    // we have a single `StreamsProducer` per thread, and thus a single `sendException` instance,
+    // which we share across all tasks, ie, all `RecordCollectorImpl`
+    private final AtomicReference<KafkaException> sendException = new AtomicReference<>(null);
 
     public StreamsProducer(final ProcessingMode processingMode,
                            final Producer<byte[], byte[]> producer,
@@ -196,6 +200,10 @@ public class StreamsProducer {
                 );
             }
         }
+    }
+
+    AtomicReference<KafkaException> sendException() {
+        return sendException;
     }
 
     Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record,
