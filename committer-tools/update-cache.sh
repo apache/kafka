@@ -41,7 +41,7 @@ if ! git rev-parse --verify "$sha" &> /dev/null; then
   "does not exist locally. Please update your remote and try again."
 else
   git switch trunk-cached &> /dev/null || git switch -c trunk-cached &> /dev/null
-  if git merge --ff-only "$sha" &> /dev/null; then
+  if git merge "$sha" &> /dev/null; then
     printf '%s\n' "Local branch 'trunk-cached' successfully updated to $sha."
   else
     printf '\e[31m%s\e[0m\n' "Failed to fast-forward merge 'trunk-cached' to commit $sha."
