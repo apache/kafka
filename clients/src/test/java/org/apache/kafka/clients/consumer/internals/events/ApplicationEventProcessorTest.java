@@ -182,7 +182,7 @@ public class ApplicationEventProcessorTest {
 
     @Test
     public void testResetOffsetEvent() {
-        Collection<TopicPartition> tp = Collections.singleton(new TopicPartition("topic", 0));
+        Collection<TopicPartition> tp = Collections.unmodifiableCollection(Collections.singleton(new TopicPartition("topic", 0)));
         OffsetResetStrategy strategy = OffsetResetStrategy.EARLIEST;
         ResetOffsetEvent event = new ResetOffsetEvent(tp, strategy, calculateDeadlineMs(time, 100));
 
