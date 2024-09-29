@@ -261,11 +261,14 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private void process(final ResetOffsetEvent event) {
-        Collection<TopicPartition> parts = event.topicPartitions().isEmpty() ?
-                subscriptions.assignedPartitions() : event.topicPartitions();
-        subscriptions.requestOffsetReset(parts, event.offsetResetStrategy());
-        CompletableFuture<Boolean> future = requestManagers.offsetsRequestManager.updateFetchPositions(event.deadlineMs());
-        future.whenComplete(complete(event.future()));
+        try {
+            Collection<TopicPartition> parts = event.topicPartitions().isEmpty() ?
+                    subscriptions.assignedPartitions() : event.topicPartitions();
+            subscriptions.requestOffsetReset(parts, event.offsetResetStrategy());
+            event.future().complete(null);
+        } catch (Exception e) {
+            event.future().completeExceptionally(e);
+        }
     }
 
     /**

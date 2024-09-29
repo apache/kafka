@@ -833,7 +833,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             Timer timer = time.timer(defaultApiTimeoutMs);
             ResetOffsetEvent resetOffsetEvent = new ResetOffsetEvent(partitions, OffsetResetStrategy.EARLIEST,
                     calculateDeadlineMs(timer));
-            cachedSubscriptionHasAllFetchPositions = applicationEventHandler.addAndGet(resetOffsetEvent);
+            applicationEventHandler.addAndGet(resetOffsetEvent);
         } finally {
             release();
         }
@@ -849,7 +849,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             Timer timer = time.timer(defaultApiTimeoutMs);
             ResetOffsetEvent resetOffsetEvent = new ResetOffsetEvent(partitions, OffsetResetStrategy.LATEST,
                     calculateDeadlineMs(timer));
-            cachedSubscriptionHasAllFetchPositions = applicationEventHandler.addAndGet(resetOffsetEvent);
+            applicationEventHandler.addAndGet(resetOffsetEvent);
         } finally {
             release();
         }
