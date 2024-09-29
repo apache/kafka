@@ -28,6 +28,7 @@ import org.apache.kafka.clients.admin.FenceProducersOptions;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.coordinator.transaction.TransactionStateManagerConfig;
@@ -36,10 +37,8 @@ import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 
-import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-import java.time.Duration;
 import java.util.Collections;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
@@ -47,7 +46,6 @@ import java.util.concurrent.ExecutionException;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 @ClusterTestDefaults(serverProperties = {
         @ClusterConfigProperty(key = ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, value = "false"),
@@ -63,8 +61,6 @@ public class AdminFenceProducersIntegrationTest {
     private static final String INCORRECT_BROKER_PORT = "225";
     private static final ProducerRecord<byte[], byte[]> RECORD = new ProducerRecord<>(TOPIC_NAME, null, new byte[1]);
     private final ClusterInstance clusterInstance;
-    private Admin adminClient;
-    private KafkaProducer<byte[], byte[]> producer;
 
     AdminFenceProducersIntegrationTest(ClusterInstance clusterInstance) {
         this.clusterInstance = clusterInstance;
@@ -85,74 +81,65 @@ public class AdminFenceProducersIntegrationTest {
     void testFenceAfterProducerCommit() throws Exception {
         clusterInstance.createTopic(TOPIC_NAME, 1, (short) 1);
 
-        producer = createProducer();
-        producer.initTransactions();
-        producer.beginTransaction();
-        producer.send(RECORD).get();
-        producer.commitTransaction();
-
-        adminClient = clusterInstance.createAdminClient();
-        adminClient.fenceProducers(Collections.singletonList(TXN_ID)).all().get();
-
-        producer.beginTransaction();
-        try {
+        try (KafkaProducer<byte[], byte[]> producer = createProducer();
+             Admin adminClient = clusterInstance.createAdminClient()) {
+            producer.initTransactions();
+            producer.beginTransaction();
             producer.send(RECORD).get();
-            fail("expected ProducerFencedException");
-        } catch (ProducerFencedException e) {
-            // expected
-        } catch (ExecutionException e) {
-            assertInstanceOf(ProducerFencedException.class, e.getCause());
+            producer.commitTransaction();
+
+            adminClient.fenceProducers(Collections.singletonList(TXN_ID)).all().get();
+
+            producer.beginTransaction();
+            ExecutionException exceptionDuringSend = assertThrows(
+                    ExecutionException.class,
+                    () -> producer.send(RECORD).get(), "expected ProducerFencedException"
+            );
+            assertInstanceOf(ProducerFencedException.class, exceptionDuringSend.getCause());
+
+            assertThrows(ProducerFencedException.class, producer::commitTransaction);
         }
-
-        assertThrows(ProducerFencedException.class, producer::commitTransaction);
-
-        adminClient.close();
-        producer.close();
     }
 
     @ClusterTest
-    @Timeout(30)
     void testFenceProducerTimeoutMs() {
         Properties config = new Properties();
         config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:" + INCORRECT_BROKER_PORT);
-        adminClient = clusterInstance.createAdminClient(config);
-        try {
-            ExecutionException e = assertThrows(ExecutionException.class, () ->
-                    adminClient.fenceProducers(Collections.singletonList(TXN_ID), new FenceProducersOptions().timeoutMs(0)).all().get());
-            assertInstanceOf(TimeoutException.class, e.getCause());
-        } finally {
-            adminClient.close(Duration.ofSeconds(0));
-        }
 
+        try (Admin adminClient = clusterInstance.createAdminClient(config)) {
+            ExecutionException exception = assertThrows(
+                    ExecutionException.class, () ->
+                            adminClient.fenceProducers(Collections.singletonList(TXN_ID), new FenceProducersOptions().timeoutMs(0)).all().get());
+            assertInstanceOf(TimeoutException.class, exception.getCause());
+        }
     }
 
     @ClusterTest
     void testFenceBeforeProducerCommit() throws Exception {
         clusterInstance.createTopic(TOPIC_NAME, 1, (short) 1);
-        producer = createProducer();
-        producer.initTransactions();
-        producer.beginTransaction();
-        producer.send(RECORD).get();
 
-        adminClient = clusterInstance.createAdminClient();
-        adminClient.fenceProducers(Collections.singletonList(TXN_ID)).all().get();
+        try (KafkaProducer<byte[], byte[]> producer = createProducer();
+             Admin adminClient = clusterInstance.createAdminClient()) {
 
-        try {
+            producer.initTransactions();
+            producer.beginTransaction();
             producer.send(RECORD).get();
-            fail("expected Exception");
-        } catch (ExecutionException e) {
-            assertTrue(e.getCause() instanceof ProducerFencedException ||
-                            e.getCause() instanceof InvalidProducerEpochException,
-                    "Unexpected ExecutionException cause " + e.getCause());
-        }
 
-        try {
-            producer.commitTransaction();
-            fail("expected Exception");
-        } catch (ProducerFencedException | InvalidProducerEpochException e) {
-            // expected
+            adminClient.fenceProducers(Collections.singletonList(TXN_ID)).all().get();
+
+            ExecutionException exceptionDuringSend = assertThrows(
+                    ExecutionException.class, () ->
+                            producer.send(RECORD).get(), "expected ProducerFencedException"
+            );
+            assertTrue(exceptionDuringSend.getCause() instanceof ProducerFencedException ||
+                    exceptionDuringSend.getCause() instanceof InvalidProducerEpochException);
+
+            ApiException exceptionDuringCommit = assertThrows(
+                    ApiException.class,
+                    producer::commitTransaction, "Expected Exception"
+            );
+            assertTrue(exceptionDuringCommit instanceof ProducerFencedException ||
+                    exceptionDuringCommit instanceof InvalidProducerEpochException);
         }
-        adminClient.close();
-        producer.close();
     }
 }
