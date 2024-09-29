@@ -75,7 +75,6 @@ import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.test.MockConsumerInterceptor;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -1915,7 +1914,7 @@ public class AsyncKafkaConsumerTest {
                 "group-id",
                 "client-id");
         completeResetOffsetEventExceptionally(new TimeoutException());
-        Assertions.assertThrows(TimeoutException.class, () -> consumer.seekToBeginning(topics));
+        assertThrows(TimeoutException.class, () -> consumer.seekToBeginning(topics));
     }
 
     @Test
@@ -1930,7 +1929,7 @@ public class AsyncKafkaConsumerTest {
                 "group-id",
                 "client-id");
         completeResetOffsetEventExceptionally(new TimeoutException());
-        Assertions.assertThrows(TimeoutException.class, () -> consumer.seekToEnd(topics));
+        assertThrows(TimeoutException.class, () -> consumer.seekToEnd(topics));
     }
 
     @Test

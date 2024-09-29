@@ -240,7 +240,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.empty();
 
     // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
-    // and record there is a resetOffsetEvent in background thread.
     private boolean cachedSubscriptionHasAllFetchPositions;
     private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
     private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
@@ -863,9 +862,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             Timer timer = time.timer(timeout);
             do {
                 SubscriptionState.FetchPosition position = subscriptions.validPosition(partition);
-                if (position != null) {
+                if (position != null)
                     return position.offset;
-                }
 
                 updateFetchPositions(timer);
                 timer.update();
