@@ -26,8 +26,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
-import java.util
-import java.util.Properties
+import java.util.{Properties, stream}
 import java.util.concurrent.atomic.AtomicInteger
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -117,38 +116,29 @@ object BaseConsumerTest {
   // * KRaft and the classic group protocol
   // * KRaft and the consumer group protocol
   def getTestQuorumAndGroupProtocolParametersAll() : java.util.stream.Stream[Arguments] = {
-    util.Arrays.stream(Array(
-        Arguments.of("zk", "classic"),
-        Arguments.of("kraft", "classic"),
-        Arguments.of("kraft", "consumer")
-    ))
+    stream.Stream.of(
+      Arguments.of("zk", "classic"),
+      Arguments.of("kraft", "classic"),
+      Arguments.of("kraft", "consumer")
+    )
   }
-
-  // In Scala 2.12, it is necessary to disambiguate the java.util.stream.Stream.of() method call
-  // in the case where there's only a single Arguments in the list. The following commented-out
-  // method works in Scala 2.13, but not 2.12. For this reason, tests which run against just a
-  // single combination are written using @CsvSource rather than the more elegant @MethodSource. 
-  // def getTestQuorumAndGroupProtocolParametersZkOnly() : java.util.stream.Stream[Arguments] = {
-  //   java.util.stream.Stream.of(
-  //       Arguments.of("zk", "classic"))
-  // }
 
   // For tests that only work with the classic group protocol, we want to test the following combinations:
   // * ZooKeeper and the classic group protocol
   // * KRaft and the classic group protocol
   def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly() : java.util.stream.Stream[Arguments] = {
-    util.Arrays.stream(Array(
-        Arguments.of("zk", "classic"),
-        Arguments.of("kraft", "classic")
-    ))
+    stream.Stream.of(
+      Arguments.of("zk", "classic"),
+      Arguments.of("kraft", "classic")
+    )
   }
 
   // For tests that only work with the consumer group protocol, we want to test the following combination:
   // * KRaft and the consumer group protocol
-  def getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly(): java.util.stream.Stream[Arguments] = {
-    util.Arrays.stream(Array(
-        Arguments.of("kraft", "consumer")
-    ))
+  def getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly(): stream.Stream[Arguments] = {
+    stream.Stream.of(
+      Arguments.of("kraft", "consumer")
+    )
   }
 
   val updateProducerCount = new AtomicInteger()

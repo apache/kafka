@@ -135,7 +135,7 @@ class CoreUtilsTest extends Logging {
     try {
       Await.result(Future.traverse(1 to count) { _ =>
         Future {
-          CoreUtils.atomicGetOrUpdate(map, 0, {
+          map.getOrElseUpdate(0, {
             createdCount.incrementAndGet
             new AtomicInteger
           }).incrementAndGet()

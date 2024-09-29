@@ -19,7 +19,6 @@ package kafka.server
 import com.yammer.metrics.core.Gauge
 import kafka.cluster.BrokerEndPoint
 import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
-import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.TestUtils
 import org.apache.kafka.common.message.FetchResponseData.PartitionData
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
@@ -255,7 +254,7 @@ class AbstractFetcherManagerTest {
       fetcherManager.resizeThreadPool(newFetcherSize)
 
       val ownedPartitions = mutable.Set.empty[TopicPartition]
-      fetcherManager.fetcherThreadMap.forKeyValue { (brokerIdAndFetcherId, fetcherThread) =>
+      fetcherManager.fetcherThreadMap.foreachEntry { (brokerIdAndFetcherId, fetcherThread) =>
         val fetcherId = brokerIdAndFetcherId.fetcherId
         val brokerId = brokerIdAndFetcherId.brokerId
 
