@@ -40,9 +40,8 @@ if ! git show "$sha" &> /dev/null; then
   "Cannot update 'trunk-cached' because SHA $sha" \
   "does not exist locally. Please update your remote and try again."
 else
-  git switch trunk-cached &> /dev/null || git switch -c trunk-cached &> /dev/null
-  if git merge "$sha" &> /dev/null; then
-    printf '%s\n' "Local branch 'trunk-cached' successfully updated to $sha."
+  if git branch -f trunk-cached "$sha" &> /dev/null; then
+    printf '%s\n' "Local branch 'trunk-cached' successfully updated to $(head -c 10 <<< "$sha")."
   else
     printf '\e[31m%s\e[0m\n' "Failed to fast-forward merge 'trunk-cached' to commit $sha."
   fi
