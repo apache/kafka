@@ -234,9 +234,7 @@ class OffsetFetcherUtils {
         Set<TopicPartition> partitions = subscriptionState.partitionsNeedingReset(time.milliseconds());
         final Map<TopicPartition, Long> offsetResetTimestamps = new HashMap<>();
         for (final TopicPartition partition : partitions) {
-            Long timestamp = offsetResetStrategyTimestamp(partition);
-            if (timestamp != null)
-                offsetResetTimestamps.put(partition, timestamp);
+            offsetResetTimestamps.put(partition, offsetResetStrategyTimestamp(partition));
         }
 
         return offsetResetTimestamps;
@@ -286,7 +284,7 @@ class OffsetFetcherUtils {
         return offsetsResults;
     }
 
-    private Long offsetResetStrategyTimestamp(final TopicPartition partition) {
+    private long offsetResetStrategyTimestamp(final TopicPartition partition) {
         OffsetResetStrategy strategy = subscriptionState.resetStrategy(partition);
         if (strategy == OffsetResetStrategy.EARLIEST)
             return ListOffsetsRequest.EARLIEST_TIMESTAMP;

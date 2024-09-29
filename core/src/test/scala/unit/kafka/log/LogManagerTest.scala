@@ -42,12 +42,14 @@ import org.mockito.Mockito.{doAnswer, doNothing, mock, never, spy, times, verify
 import java.io._
 import java.lang.{Long => JLong}
 import java.nio.file.Files
+import java.nio.file.attribute.PosixFilePermission
 import java.util
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, Future}
 import java.util.{Collections, Optional, OptionalLong, Properties}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.{FileLock, KafkaScheduler, MockTime, Scheduler}
-import org.apache.kafka.storage.internals.log.{CleanerConfig, FetchDataInfo, FetchIsolation, LogConfig, LogDirFailureChannel, LogStartOffsetIncrementReason, ProducerStateManagerConfig, RemoteIndexCache}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, FetchDataInfo, LogConfig, LogDirFailureChannel, LogStartOffsetIncrementReason, ProducerStateManagerConfig, RemoteIndexCache}
 import org.apache.kafka.storage.internals.checkpoint.{CleanShutdownFileHandler, OffsetCheckpointFile}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.function.Executable
@@ -264,7 +266,7 @@ class LogManagerTest {
       invocation.callRealMethod().asInstanceOf[UnifiedLog]
       loadLogCalled = loadLogCalled + 1
     }.when(logManager).loadLog(any[File], any[Boolean], any[util.Map[TopicPartition, JLong]], any[util.Map[TopicPartition, JLong]],
-      any[LogConfig], any[Map[String, LogConfig]], any[ConcurrentMap[String, Int]], any[UnifiedLog => Boolean]())
+      any[LogConfig], any[Map[String, LogConfig]], any[ConcurrentMap[String, Integer]], any[UnifiedLog => Boolean]())
 
     val t = new Thread() {
       override def run(): Unit = { logManager.startup(Set.empty) }
@@ -367,7 +369,7 @@ class LogManagerTest {
     assertTrue(log.numberOfSegments > 1, "There should be more than one segment now.")
     log.updateHighWatermark(log.logEndOffset)
 
-    log.logSegments.forEach(_.log.file.setLastModified(time.milliseconds))
+    log.logSegments.forEach(s => s.log.file.setLastModified(time.milliseconds))
 
     time.sleep(maxLogAgeMs + 1)
     assertEquals(1, log.numberOfSegments, "Now there should only be only one segment in the index.")
@@ -466,7 +468,7 @@ class LogManagerTest {
     val numSegments = log.numberOfSegments
     assertTrue(log.numberOfSegments > 1, "There should be more than one segment now.")
 
-    log.logSegments.forEach(_.log.file.setLastModified(time.milliseconds))
+    log.logSegments.forEach(s => s.log.file.setLastModified(time.milliseconds))
 
     time.sleep(maxLogAgeMs + 1)
     assertEquals(numSegments, log.numberOfSegments, "number of segments shouldn't have changed")
@@ -539,7 +541,7 @@ class LogManagerTest {
       true
     }
 
-    logManager.loadLog(log.dir, hadCleanShutdown = true, Collections.emptyMap[TopicPartition, JLong], Collections.emptyMap[TopicPartition, JLong], logConfig, Map.empty, new ConcurrentHashMap[String, Int](),  providedIsStray)
+    logManager.loadLog(log.dir, hadCleanShutdown = true, Collections.emptyMap[TopicPartition, JLong], Collections.emptyMap[TopicPartition, JLong], logConfig, Map.empty, new ConcurrentHashMap[String, Integer](),  providedIsStray)
     assertEquals(1, invokedCount)
     assertTrue(
       logDir.listFiles().toSet
@@ -874,7 +876,7 @@ class LogManagerTest {
   private def verifyRemainingSegmentsToRecoverMetric(spyLogManager: LogManager,
                                                      logDirs: Seq[File],
                                                      recoveryThreadsPerDataDir: Int,
-                                                     mockMap: ConcurrentHashMap[String, Int],
+                                                     mockMap: ConcurrentHashMap[String, Integer],
                                                      expectedParams: Map[String, Int]): Unit = {
     val logManagerClassName = classOf[LogManager].getSimpleName
     // get all `remainingSegmentsToRecover` metrics
@@ -942,7 +944,7 @@ class LogManagerTest {
     assertEquals(2, spyLogManager.liveLogDirs.size)
 
     val mockTime = new MockTime()
-    val mockMap = mock(classOf[ConcurrentHashMap[String, Int]])
+    val mockMap = mock(classOf[ConcurrentHashMap[String, Integer]])
     val mockBrokerTopicStats = mock(classOf[BrokerTopicStats])
     val expectedSegmentsPerLog = 2
 
@@ -978,7 +980,7 @@ class LogManagerTest {
         numRemainingSegments = mockMap)
 
     }.when(spyLogManager).loadLog(any[File], any[Boolean], any[util.Map[TopicPartition, JLong]], any[util.Map[TopicPartition, JLong]],
-      any[LogConfig], any[Map[String, LogConfig]], any[ConcurrentMap[String, Int]], any[UnifiedLog => Boolean]())
+      any[LogConfig], any[Map[String, LogConfig]], any[ConcurrentMap[String, Integer]], any[UnifiedLog => Boolean]())
 
     // do nothing for removeLogRecoveryMetrics for metrics verification
     doNothing().when(spyLogManager).removeLogRecoveryMetrics()
@@ -987,7 +989,7 @@ class LogManagerTest {
     spyLogManager.startup(Set.empty)
 
     // make sure log recovery metrics are added and removed
-    verify(spyLogManager, times(1)).addLogRecoveryMetrics(any[ConcurrentMap[String, Int]], any[ConcurrentMap[String, Int]])
+    verify(spyLogManager, times(1)).addLogRecoveryMetrics(any[ConcurrentMap[String, Int]], any[ConcurrentMap[String, Integer]])
     verify(spyLogManager, times(1)).removeLogRecoveryMetrics()
 
     // expected 1 log in each log dir since we created 2 partitions with 2 log dirs
@@ -1016,7 +1018,7 @@ class LogManagerTest {
     spyLogManager.startup(Set.empty)
 
     // make sure log recovery metrics are added and removed once
-    verify(spyLogManager, times(1)).addLogRecoveryMetrics(any[ConcurrentMap[String, Int]], any[ConcurrentMap[String, Int]])
+    verify(spyLogManager, times(1)).addLogRecoveryMetrics(any[ConcurrentMap[String, Int]], any[ConcurrentMap[String, Integer]])
     verify(spyLogManager, times(1)).removeLogRecoveryMetrics()
 
     verifyLogRecoverMetricsRemoved(spyLogManager)
@@ -1392,6 +1394,33 @@ class LogManagerTest {
     val stopScheduler: Executable = () => scheduler.shutdown()
     assertTimeoutPreemptively(Duration.ofMillis(5000), stopLogManager)
     assertTimeoutPreemptively(Duration.ofMillis(5000), stopScheduler)
+  }
+
+  /**
+   * This test simulates an offline log directory by removing write permissions from the directory.
+   * It verifies that the LogManager continues to operate without failure in this scenario.
+   * For more details, refer to KAFKA-17356.
+   */
+  @Test
+  def testInvalidLogDirNotFailLogManager(): Unit = {
+    logManager.shutdown()
+    val permissions = Files.getPosixFilePermissions(logDir.toPath)
+    // Remove write permissions for user, group, and others
+    permissions.remove(PosixFilePermission.OWNER_WRITE)
+    permissions.remove(PosixFilePermission.GROUP_WRITE)
+    permissions.remove(PosixFilePermission.OTHERS_WRITE)
+    Files.setPosixFilePermissions(logDir.toPath, permissions)
+
+    try {
+      logManager = assertDoesNotThrow(() => createLogManager())
+      assertEquals(0, logManager.dirLocks.size)
+    } finally {
+      // Add write permissions back to make file cleanup passed
+      permissions.add(PosixFilePermission.OWNER_WRITE)
+      permissions.add(PosixFilePermission.GROUP_WRITE)
+      permissions.add(PosixFilePermission.OTHERS_WRITE)
+      Files.setPosixFilePermissions(logDir.toPath, permissions)
+    }
   }
 }
 
