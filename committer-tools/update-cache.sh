@@ -43,6 +43,6 @@ else
   if git branch -f trunk-cached "$sha" &> /dev/null; then
     printf '%s\n' "Local branch 'trunk-cached' successfully updated to $(head -c 10 <<< "$sha")."
   else
-    printf '\e[31m%s\e[0m\n' "Failed to fast-forward merge 'trunk-cached' to commit $sha."
+    printf '\e[31m%s\e[0m\n' "Failed to update ref for 'trunk-cached' and commit $(head -c 10 <<< "$sha")."
   fi
 fi
