@@ -68,11 +68,11 @@ public class AdminFenceProducersIntegrationTest {
 
     private KafkaProducer<byte[], byte[]> createProducer() {
         Properties config = new Properties();
-        config.putIfAbsent(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
+        config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
         config.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, TXN_ID);
         config.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, "2000");
-        config.putIfAbsent(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
-        config.putIfAbsent(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
+        config.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
+        config.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
 
         return new KafkaProducer<>(config);
     }
