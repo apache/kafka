@@ -122,6 +122,9 @@ ext {
     if (name == "compileTestJava" || name == "compileTestScala")
       options.compilerArgs << "-parameters"
   }
+
+  // Determines if the Rat plugin should ignore failures based on the 'ignoreRatFailure' property
+  ignoreRatFailure = project.hasProperty('ignoreRatFailure') ? project.ignoreRatFailure.toBoolean() : false
 }
 
 allprojects {
@@ -210,10 +213,6 @@ def determineCommitId() {
 apply from: file('wrapper.gradle')
 
 if (repo != null) {
-  ext {
-    ignoreRatFailure = project.hasProperty('ignoreRatFailure') ? project.ignoreRatFailure.toBoolean() : false
-  }
-
   rat {
     dependsOn subprojects.collect {
       it.tasks.matching {

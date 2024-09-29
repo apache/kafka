@@ -79,6 +79,7 @@ if __name__ == "__main__":
 
     if total_unapproved_licenses == 0:
         print(f"All {total_approved_licenses} files have approved licenses. No unapproved licenses found.")
+        exit(0)
     else:
         print(f"{total_approved_licenses} approved licenses")
         print(f"{total_unapproved_licenses} unapproved licenses")
@@ -88,4 +89,4 @@ if __name__ == "__main__":
             rel_path = os.path.relpath(file, workspace_path)
             print(f"::notice file={rel_path},title=Unapproved License::File with unapproved license")
 
-    exit(1 if total_unapproved_licenses > 0 else 0)
+        exit(1)
