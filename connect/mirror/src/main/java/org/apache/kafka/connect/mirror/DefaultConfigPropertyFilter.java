@@ -82,8 +82,7 @@ public class DefaultConfigPropertyFilter implements ConfigPropertyFilter {
 
 
         ConfigPropertyFilterConfig(Map<String, ?> props) {
-            super(DEF, ConfigUtils.translateDeprecatedConfigs(props, new String[][]{
-                {CONFIG_PROPERTIES_EXCLUDE_CONFIG}}), false);
+            super(DEF, props, false);
         }
 
         Pattern excludePattern() {

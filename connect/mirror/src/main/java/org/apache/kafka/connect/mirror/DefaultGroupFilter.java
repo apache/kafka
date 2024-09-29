@@ -75,8 +75,7 @@ public class DefaultGroupFilter implements GroupFilter {
                     GROUPS_EXCLUDE_DOC);
 
         GroupFilterConfig(Map<String, ?> props) {
-            super(DEF, ConfigUtils.translateDeprecatedConfigs(props, new String[][]{
-                {GROUPS_EXCLUDE_CONFIG}}), false);
+            super(DEF, props, false);
         }
 
         Pattern includePattern() {
