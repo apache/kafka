@@ -72,6 +72,9 @@ public class MirrorClientConfig extends AbstractConfig {
     public static final String CONSUMER_CLIENT_PREFIX = "consumer.";
     public static final String PRODUCER_CLIENT_PREFIX = "producer.";
 
+    public static final String HEARTBEATS_TOPIC_NAME = "default.replication.policy.heartbeats.topic.name";
+    public static final String HEARTBEATS_TOPIC_NAME_DOC = "Name of the heartbeats topic (It is discarded if the " + REPLICATION_POLICY_CLASS + " is set to anything else but " + REPLICATION_POLICY_CLASS_DEFAULT + ").";
+    public static final String HEARTBEATS_TOPIC_NAME_DEFAULT = ReplicationPolicy.DEFAULT_HEARTBEATS_TOPIC_NAME;
     MirrorClientConfig(Map<?, ?> props) {
         super(CONFIG_DEF, props, Utils.castToStringObjectMap(props), true);
     }
@@ -166,6 +169,12 @@ public class MirrorClientConfig extends AbstractConfig {
             in(Utils.enumOptions(SecurityProtocol.class)),
             Importance.MEDIUM,
             CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+        .define(
+                HEARTBEATS_TOPIC_NAME,
+                ConfigDef.Type.STRING,
+                HEARTBEATS_TOPIC_NAME_DEFAULT,
+                ConfigDef.Importance.LOW,
+                HEARTBEATS_TOPIC_NAME_DOC)
         .withClientSslSupport()
         .withClientSaslSupport();
 }
