@@ -372,7 +372,13 @@ public class KafkaClusterTestKit implements AutoCloseable {
         this.baseDirectory = baseDirectory;
         this.faultHandlerFactory = faultHandlerFactory;
     }
+    public MockFaultHandler exposedFatalFaultHandler() {
+        return faultHandlerFactory.fatalFaultHandler();
+    }
 
+    public MockFaultHandler exposedNonFatalFaultHandler() {
+        return faultHandlerFactory.nonFatalFaultHandler();
+    }
     public void format() throws Exception {
         List<Future<?>> futures = new ArrayList<>();
         try {

@@ -33,6 +33,7 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class KafkaClusterTestKitTest {
     @ParameterizedTest
@@ -68,6 +69,20 @@ public class KafkaClusterTestKitTest {
                 .build())
         );
         assertEquals("Invalid negative value for numBrokerNodes", e.getMessage());
+    }
+    @Test
+    public void testExposedFaultHandlers() {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+                new TestKitNodes.Builder()
+                        .setNumBrokerNodes(1)
+                        .setNumControllerNodes(1)
+                        .build()).build()) {
+
+            assertNotNull(cluster.exposedFatalFaultHandler(), "Fatal fault handler should not be null");
+            assertNotNull(cluster.exposedNonFatalFaultHandler(), "Non-fatal fault handler should not be null");
+        } catch (Exception e) {
+            fail("Failed to initialize cluster", e);
+        }
     }
 
     @Test
