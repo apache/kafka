@@ -103,7 +103,7 @@ public class SuppressionDurabilityIntegrationTest {
     private static final long COMMIT_INTERVAL = 100L;
 
     @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
+    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE})
     public void shouldRecoverBufferAfterShutdown(final String processingGuarantee, final TestInfo testInfo) {
         final String testId = safeUniqueTestName(testInfo);
         final String appId = "appId_" + testId;

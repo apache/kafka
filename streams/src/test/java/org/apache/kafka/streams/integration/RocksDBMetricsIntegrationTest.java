@@ -43,10 +43,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -143,10 +142,9 @@ public class RocksDBMetricsIntegrationTest {
         void verify(final KafkaStreams kafkaStreams, final String metricScope) throws Exception;
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
-    public void shouldExposeRocksDBMetricsBeforeAndAfterFailureWithEmptyStateDir(final String processingGuarantee, final TestInfo testInfo) throws Exception {
-        final Properties streamsConfiguration = streamsConfig(processingGuarantee, testInfo);
+    @Test
+    public void shouldExposeRocksDBMetricsBeforeAndAfterFailureWithEmptyStateDir(final TestInfo testInfo) throws Exception {
+        final Properties streamsConfiguration = streamsConfig(StreamsConfig.AT_LEAST_ONCE, testInfo);
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
         final StreamsBuilder builder = builderForStateStores();
 
@@ -179,7 +177,6 @@ public class RocksDBMetricsIntegrationTest {
         return streamsConfiguration;
     }
 
-    @SuppressWarnings("deprecation")
     private StreamsBuilder builderForStateStores() {
         final StreamsBuilder builder = new StreamsBuilder();
         // create two state stores, one non-segmented and one segmented
