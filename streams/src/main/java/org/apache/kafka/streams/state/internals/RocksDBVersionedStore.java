@@ -191,8 +191,8 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         final byte[] rawLatestValueAndTimestamp = latestValueStore.get(key);
         if (rawLatestValueAndTimestamp != null) {
             return new VersionedRecord<>(
-                LatestValueFormatter.getValue(rawLatestValueAndTimestamp),
-                LatestValueFormatter.getTimestamp(rawLatestValueAndTimestamp)
+                LatestValueFormatter.value(rawLatestValueAndTimestamp),
+                LatestValueFormatter.timestamp(rawLatestValueAndTimestamp)
             );
         } else {
             return null;
@@ -210,12 +210,12 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             // still be returned (i.e., the latest record version per key never expires).
             final byte[] rawLatestValueAndTimestamp = latestValueStore.get(key);
             if (rawLatestValueAndTimestamp != null) {
-                final long latestTimestamp = LatestValueFormatter.getTimestamp(rawLatestValueAndTimestamp);
+                final long latestTimestamp = LatestValueFormatter.timestamp(rawLatestValueAndTimestamp);
                 if (latestTimestamp <= asOfTimestamp) {
                     // latest value satisfies timestamp bound
                     return new VersionedRecord<>(
-                            LatestValueFormatter.getValue(rawLatestValueAndTimestamp),
-                            latestTimestamp
+                        LatestValueFormatter.value(rawLatestValueAndTimestamp),
+                        latestTimestamp
                     );
                 }
             }
@@ -230,9 +230,9 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         // first check the latest value store
         final byte[] rawLatestValueAndTimestamp = latestValueStore.get(key);
         if (rawLatestValueAndTimestamp != null) {
-            final long latestTimestamp = LatestValueFormatter.getTimestamp(rawLatestValueAndTimestamp);
+            final long latestTimestamp = LatestValueFormatter.timestamp(rawLatestValueAndTimestamp);
             if (latestTimestamp <= asOfTimestamp) {
-                return new VersionedRecord<>(LatestValueFormatter.getValue(rawLatestValueAndTimestamp), latestTimestamp);
+                return new VersionedRecord<>(LatestValueFormatter.value(rawLatestValueAndTimestamp), latestTimestamp);
             }
         }
 
@@ -241,14 +241,14 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         for (final LogicalKeyValueSegment segment : segments) {
             final byte[] rawSegmentValue = segment.get(key);
             if (rawSegmentValue != null) {
-                final long nextTs = RocksDBVersionedStoreSegmentValueFormatter.getNextTimestamp(rawSegmentValue);
+                final long nextTs = RocksDBVersionedStoreSegmentValueFormatter.nextTimestamp(rawSegmentValue);
                 if (nextTs <= asOfTimestamp) {
                     // this segment contains no data for the queried timestamp, so earlier segments
                     // cannot either
                     return null;
                 }
 
-                if (RocksDBVersionedStoreSegmentValueFormatter.getMinTimestamp(rawSegmentValue) > asOfTimestamp) {
+                if (RocksDBVersionedStoreSegmentValueFormatter.minTimestamp(rawSegmentValue) > asOfTimestamp) {
                     // the segment only contains data for after the queried timestamp. skip and
                     // continue the search to earlier segments. as an optimization, this code
                     // could be updated to skip forward to the segment containing the minTimestamp
@@ -474,7 +474,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         /**
          * @return the contents of the latest value store, for the given key
          */
-        byte[] getLatestValue(Bytes key);
+        byte[] latestValue(Bytes key);
 
         /**
          * Puts the provided key and value into the latest value store.
@@ -496,7 +496,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
          * timestamp bound, in reverse order by segment id (and time), i.e., such that
          * the most recent segment is first
          */
-        List<T> getReverseSegments(long timestampFrom);
+        List<T> reversedSegments(long timestampFrom);
 
         /**
          * @return the segment id associated with the provided timestamp
@@ -510,7 +510,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     class RocksDBVersionedStoreClient implements VersionedStoreClient<LogicalKeyValueSegment> {
 
         @Override
-        public byte[] getLatestValue(final Bytes key) {
+        public byte[] latestValue(final Bytes key) {
             return latestValueStore.get(key);
         }
 
@@ -530,7 +530,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         }
 
         @Override
-        public List<LogicalKeyValueSegment> getReverseSegments(final long timestampFrom) {
+        public List<LogicalKeyValueSegment> reversedSegments(final long timestampFrom) {
             return segmentStores.segments(timestampFrom, Long.MAX_VALUE, false);
         }
 
@@ -668,9 +668,9 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         // that the segment should be inserted into the latest value store.
         long foundTs = SENTINEL_TIMESTAMP;
 
-        final byte[] rawLatestValueAndTimestamp = versionedStoreClient.getLatestValue(key);
+        final byte[] rawLatestValueAndTimestamp = versionedStoreClient.latestValue(key);
         if (rawLatestValueAndTimestamp != null) {
-            final long latestValueStoreTimestamp = LatestValueFormatter.getTimestamp(rawLatestValueAndTimestamp);
+            final long latestValueStoreTimestamp = LatestValueFormatter.timestamp(rawLatestValueAndTimestamp);
             if (timestamp >= latestValueStoreTimestamp) {
                 // new record belongs in the latest value store
                 if (timestamp > latestValueStoreTimestamp) {
@@ -692,7 +692,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                     // is expired.) so, there is nothing to do for this step if `segment == null`,
                     // but we do still update the latest value store with the new record below.
                     if (segment != null) {
-                        final byte[] rawValueToMove = LatestValueFormatter.getValue(rawLatestValueAndTimestamp);
+                        final byte[] rawValueToMove = LatestValueFormatter.value(rawLatestValueAndTimestamp);
                         final byte[] rawSegmentValue = segment.get(key);
                         if (rawSegmentValue == null) {
                             segment.put(
@@ -734,11 +734,11 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         // initialize with current foundTs value
         long foundTs = prevFoundTs;
 
-        final List<T> segments = versionedStoreClient.getReverseSegments(timestamp);
+        final List<T> segments = versionedStoreClient.reversedSegments(timestamp);
         for (final T segment : segments) {
             final byte[] rawSegmentValue = segment.get(key);
             if (rawSegmentValue != null) {
-                final long foundNextTs = RocksDBVersionedStoreSegmentValueFormatter.getNextTimestamp(rawSegmentValue);
+                final long foundNextTs = RocksDBVersionedStoreSegmentValueFormatter.nextTimestamp(rawSegmentValue);
                 if (foundNextTs <= timestamp) {
                     // this segment (and all earlier segments) does not contain records affected by
                     // this put. insert into the segment specified by foundTs (i.e., the next
@@ -746,7 +746,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                     return new PutStatus(false, foundTs);
                 }
 
-                final long foundMinTs = RocksDBVersionedStoreSegmentValueFormatter.getMinTimestamp(rawSegmentValue);
+                final long foundMinTs = RocksDBVersionedStoreSegmentValueFormatter.minTimestamp(rawSegmentValue);
                 if (foundMinTs <= timestamp) {
                     // the record being inserted belongs in this segment.
                     // insert and conclude the procedure.
@@ -906,7 +906,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                     );
                 } else {
                     // insert as latest, since foundTs = sentinel means nothing later exists
-                    if (RocksDBVersionedStoreSegmentValueFormatter.getNextTimestamp(rawSegmentValue) == timestamp) {
+                    if (RocksDBVersionedStoreSegmentValueFormatter.nextTimestamp(rawSegmentValue) == timestamp) {
                         // next timestamp equal to put() timestamp already represents a tombstone,
                         // so no additional insertion is needed in this case
                         return foundTs;
@@ -914,7 +914,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                     final SegmentValue segmentValue
                             = RocksDBVersionedStoreSegmentValueFormatter.deserialize(rawSegmentValue);
                     segmentValue.insertAsLatest(
-                            RocksDBVersionedStoreSegmentValueFormatter.getNextTimestamp(rawSegmentValue),
+                            RocksDBVersionedStoreSegmentValueFormatter.nextTimestamp(rawSegmentValue),
                             timestamp,
                             null
                     );
@@ -948,7 +948,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                                 .serialize()
                 );
             } else {
-                final long foundNextTs = RocksDBVersionedStoreSegmentValueFormatter.getNextTimestamp(rawSegmentValue);
+                final long foundNextTs = RocksDBVersionedStoreSegmentValueFormatter.nextTimestamp(rawSegmentValue);
                 if (foundNextTs <= timestamp) {
                     // insert as latest. this case is possible if the found segment is "degenerate"
                     // (cf RocksDBVersionedStoreSegmentValueFormatter.java for details) as older
@@ -980,7 +980,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
          * @return the timestamp, from the latest value store value bytes (representing value
          * and timestamp)
          */
-        static long getTimestamp(final byte[] rawLatestValueAndTimestamp) {
+        static long timestamp(final byte[] rawLatestValueAndTimestamp) {
             return ByteBuffer.wrap(rawLatestValueAndTimestamp).getLong();
         }
 
@@ -988,7 +988,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
          * @return the actual record value, from the latest value store value bytes (representing
          * value and timestamp)
          */
-        static byte[] getValue(final byte[] rawLatestValueAndTimestamp) {
+        static byte[] value(final byte[] rawLatestValueAndTimestamp) {
             final byte[] rawValue = new byte[rawLatestValueAndTimestamp.length - TIMESTAMP_SIZE];
             System.arraycopy(rawLatestValueAndTimestamp, TIMESTAMP_SIZE, rawValue, 0, rawValue.length);
             return rawValue;

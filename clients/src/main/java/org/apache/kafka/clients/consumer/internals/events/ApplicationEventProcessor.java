@@ -34,11 +34,13 @@ import org.apache.kafka.common.utils.LogContext;
 
 import org.slf4j.Logger;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 /**
  * An {@link EventProcessor} that is created and executes in the {@link ConsumerNetworkThread network thread}
@@ -81,10 +83,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 process((FetchCommittedOffsetsEvent) event);
                 return;
 
-            case NEW_TOPICS_METADATA_UPDATE:
-                process((NewTopicsMetadataUpdateRequestEvent) event);
-                return;
-
             case ASSIGNMENT_CHANGE:
                 process((AssignmentChangeEvent) event);
                 return;
@@ -101,12 +99,8 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 process((ListOffsetsEvent) event);
                 return;
 
-            case RESET_POSITIONS:
-                process((ResetPositionsEvent) event);
-                return;
-
-            case VALIDATE_POSITIONS:
-                process((ValidatePositionsEvent) event);
+            case CHECK_AND_UPDATE_POSITIONS:
+                process((CheckAndUpdatePositionsEvent) event);
                 return;
 
             case SUBSCRIPTION_CHANGE:
@@ -149,6 +143,10 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 process((ShareAcknowledgeOnCloseEvent) event);
                 return;
 
+            case SEEK_UNVALIDATED:
+                process((SeekUnvalidatedEvent) event);
+                return;
+
             default:
                 log.warn("Application event type {} was not expected", event.type());
         }
@@ -157,9 +155,15 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     private void process(final PollEvent event) {
         if (requestManagers.commitRequestManager.isPresent()) {
             requestManagers.commitRequestManager.ifPresent(m -> m.updateAutoCommitTimer(event.pollTimeMs()));
-            requestManagers.consumerHeartbeatRequestManager.ifPresent(hrm -> hrm.resetPollTimer(event.pollTimeMs()));
+            requestManagers.consumerHeartbeatRequestManager.ifPresent(hrm -> {
+                hrm.membershipManager().onConsumerPoll();
+                hrm.resetPollTimer(event.pollTimeMs());
+            });
         } else {
-            requestManagers.shareHeartbeatRequestManager.ifPresent(hrm -> hrm.resetPollTimer(event.pollTimeMs()));
+            requestManagers.shareHeartbeatRequestManager.ifPresent(hrm -> {
+                hrm.membershipManager().onConsumerPoll();
+                hrm.resetPollTimer(event.pollTimeMs());
+            });
         }
     }
 
@@ -194,21 +198,26 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         future.whenComplete(complete(event.future()));
     }
 
-    private void process(final NewTopicsMetadataUpdateRequestEvent ignored) {
-        metadata.requestUpdateForNewTopics();
-    }
-
     /**
      * Commit all consumed if auto-commit is enabled. Note this will trigger an async commit,
      * that will not be retried if the commit request fails.
      */
     private void process(final AssignmentChangeEvent event) {
-        if (!requestManagers.commitRequestManager.isPresent()) {
-            return;
+        if (requestManagers.commitRequestManager.isPresent()) {
+            CommitRequestManager manager = requestManagers.commitRequestManager.get();
+            manager.updateAutoCommitTimer(event.currentTimeMs());
+            manager.maybeAutoCommitAsync();
         }
-        CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        manager.updateAutoCommitTimer(event.currentTimeMs());
-        manager.maybeAutoCommitAsync();
+
+        log.info("Assigned to partition(s): {}", event.partitions().stream().map(TopicPartition::toString).collect(Collectors.joining(", ")));
+        try {
+            if (subscriptions.assignFromUser(new HashSet<>(event.partitions())))
+                metadata.requestUpdateForNewTopics();
+
+            event.future().complete(null);
+        } catch (Exception e) {
+            event.future().completeExceptionally(e);
+        }
     }
 
     /**
@@ -252,13 +261,12 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         }
     }
 
-    private void process(final ResetPositionsEvent event) {
-        CompletableFuture<Void> future = requestManagers.offsetsRequestManager.resetPositionsIfNeeded();
-        future.whenComplete(complete(event.future()));
-    }
-
-    private void process(final ValidatePositionsEvent event) {
-        CompletableFuture<Void> future = requestManagers.offsetsRequestManager.validatePositionsIfNeeded();
+    /**
+     * Check if all assigned partitions have fetch positions. If there are missing positions, fetch offsets and use
+     * them to update positions in the subscription state.
+     */
+    private void process(final CheckAndUpdatePositionsEvent event) {
+        CompletableFuture<Boolean> future = requestManagers.offsetsRequestManager.updateFetchPositions(event.deadlineMs());
         future.whenComplete(complete(event.future()));
     }
 
@@ -405,5 +413,19 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 );
             }
         };
+    }
+
+    private void process(final SeekUnvalidatedEvent event) {
+        try {
+            SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
+                    event.offset(),
+                    event.offsetEpoch(),
+                    metadata.currentLeader(event.partition())
+            );
+            subscriptions.seekUnvalidated(event.partition(), newPosition);
+            event.future().complete(null);
+        } catch (Exception e) {
+            event.future().completeExceptionally(e);
+        }
     }
 }

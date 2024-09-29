@@ -115,7 +115,7 @@ public class DefaultTaskManagerTest {
         public void run() {
             while (!shutdownRequested.get()) {
                 try {
-                    taskManager.awaitProcessableTasks();
+                    taskManager.awaitProcessableTasks(shutdownRequested::get);
                 } catch (final InterruptedException ignored) {
                 }
                 awaitDone.countDown();

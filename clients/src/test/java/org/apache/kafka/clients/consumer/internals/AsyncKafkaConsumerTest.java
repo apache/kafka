@@ -34,6 +34,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandle
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.AsyncCommitEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.CheckAndUpdatePositionsEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundEvent;
@@ -43,13 +44,11 @@ import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
-import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
-import org.apache.kafka.clients.consumer.internals.events.ResetPositionsEvent;
+import org.apache.kafka.clients.consumer.internals.events.SeekUnvalidatedEvent;
 import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeEvent;
-import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsEvent;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -90,6 +89,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -182,12 +182,6 @@ public class AsyncKafkaConsumerTest {
         return newConsumer(props);
     }
 
-    @SuppressWarnings("UnusedReturnValue")
-    private AsyncKafkaConsumer<String, String> newConsumerWithEmptyGroupId() {
-        final Properties props = requiredConsumerConfigAndGroupId("");
-        return newConsumer(props);
-    }
-
     private AsyncKafkaConsumer<String, String> newConsumer(Properties props) {
         final ConsumerConfig config = new ConsumerConfig(props);
         return newConsumer(config);
@@ -243,12 +237,6 @@ public class AsyncKafkaConsumerTest {
         consumer = newConsumer();
         completeUnsubscribeApplicationEventSuccessfully();
         assertDoesNotThrow(() -> consumer.close());
-    }
-
-    @Test
-    public void testInvalidGroupId() {
-        KafkaException e = assertThrows(KafkaException.class, this::newConsumerWithEmptyGroupId);
-        assertInstanceOf(InvalidGroupIdException.class, e.getCause());
     }
 
     @Test
@@ -397,10 +385,10 @@ public class AsyncKafkaConsumerTest {
         final int partition = 3;
         final TopicPartition tp = new TopicPartition(topicName, partition);
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
-        Map<TopicPartition, OffsetAndMetadata> offsets = mkMap(mkEntry(tp, new OffsetAndMetadata(1)));
-        completeFetchedCommittedOffsetApplicationEventSuccessfully(offsets);
+        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
         completeCommitSyncApplicationEventSuccessfully();
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+        completeAssignmentChangeEventSuccessfully();
         consumer.assign(singleton(tp));
 
         consumer.wakeup();
@@ -419,10 +407,10 @@ public class AsyncKafkaConsumerTest {
             consumer.wakeup();
             return Fetch.empty();
         }).doAnswer(invocation -> Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
-        Map<TopicPartition, OffsetAndMetadata> offsets = mkMap(mkEntry(tp, new OffsetAndMetadata(1)));
-        completeFetchedCommittedOffsetApplicationEventSuccessfully(offsets);
+        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
         completeCommitSyncApplicationEventSuccessfully();
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+        completeAssignmentChangeEventSuccessfully();
         consumer.assign(singleton(tp));
 
         assertThrows(WakeupException.class, () -> consumer.poll(Duration.ofMinutes(1)));
@@ -443,10 +431,10 @@ public class AsyncKafkaConsumerTest {
             consumer.wakeup();
             return Fetch.forPartition(tp, records, true);
         }).when(fetchCollector).collectFetch(Mockito.any(FetchBuffer.class));
-        Map<TopicPartition, OffsetAndMetadata> offsets = mkMap(mkEntry(tp, new OffsetAndMetadata(1)));
-        completeFetchedCommittedOffsetApplicationEventSuccessfully(offsets);
+        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
         completeCommitSyncApplicationEventSuccessfully();
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+        completeAssignmentChangeEventSuccessfully();
         consumer.assign(singleton(tp));
 
         // since wakeup() is called when the non-empty fetch is returned the wakeup should be ignored
@@ -462,6 +450,7 @@ public class AsyncKafkaConsumerTest {
         final int partition = 3;
         final TopicPartition tp = new TopicPartition(topicName, partition);
         doAnswer(invocation -> Fetch.empty()).when(fetchCollector).collectFetch(Mockito.any(FetchBuffer.class));
+        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
         SortedSet<TopicPartition> sortedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         sortedPartitions.add(tp);
         CompletableBackgroundEvent<Void> e = new ConsumerRebalanceListenerCallbackNeededEvent(ON_PARTITIONS_REVOKED, sortedPartitions);
@@ -504,8 +493,7 @@ public class AsyncKafkaConsumerTest {
         final int partition = 3;
         final TopicPartition tp = new TopicPartition(topicName, partition);
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
-        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(tp, new OffsetAndMetadata(1));
-        completeFetchedCommittedOffsetApplicationEventSuccessfully(offsets);
+        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
         doReturn(cluster).when(metadata).fetch();
         doReturn(Collections.singleton(topicName)).when(cluster).topics();
@@ -537,10 +525,10 @@ public class AsyncKafkaConsumerTest {
         );
         doReturn(Fetch.forPartition(tp, records, true))
             .when(fetchCollector).collectFetch(any(FetchBuffer.class));
-        Map<TopicPartition, OffsetAndMetadata> offsets = mkMap(mkEntry(tp, new OffsetAndMetadata(1)));
-        completeFetchedCommittedOffsetApplicationEventSuccessfully(offsets);
+        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
         completeCommitSyncApplicationEventSuccessfully();
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+        completeAssignmentChangeEventSuccessfully();
         consumer.assign(singleton(tp));
 
         consumer.poll(Duration.ZERO);
@@ -583,151 +571,6 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    public void testOffsetFetchStoresPendingEvent() {
-        consumer = newConsumer();
-        long timeoutMs = 0;
-        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
-        consumer.assign(Collections.singleton(new TopicPartition("topic1", 0)));
-
-        // The first attempt at poll() creates an event, enqueues it, but its Future does not complete within the
-        // timeout, leaving a pending fetch.
-        consumer.poll(Duration.ofMillis(timeoutMs));
-        verify(applicationEventHandler).add(any(FetchCommittedOffsetsEvent.class));
-        CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> event = getLastEnqueuedEvent();
-        assertThrows(TimeoutException.class, () -> ConsumerUtils.getResult(event.future(), time.timer(timeoutMs)));
-        assertTrue(consumer.hasPendingOffsetFetchEvent());
-
-        clearInvocations(applicationEventHandler);
-
-        // For the second attempt, the event is reused, so first verify that another FetchCommittedOffsetsEvent
-        // was not enqueued. On this attempt the Future returns successfully, clearing the pending fetch.
-        event.future().complete(Collections.emptyMap());
-        consumer.poll(Duration.ofMillis(timeoutMs));
-        verify(applicationEventHandler, never()).add(any(FetchCommittedOffsetsEvent.class));
-        assertDoesNotThrow(() -> ConsumerUtils.getResult(event.future(), time.timer(timeoutMs)));
-        assertFalse(consumer.hasPendingOffsetFetchEvent());
-    }
-
-    @Test
-    public void testOffsetFetchDoesNotReuseMismatchedPendingEvent() {
-        consumer = newConsumer();
-        long timeoutMs = 0;
-        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
-
-        // The first attempt at poll() retrieves data for partition 0 of the topic. poll() creates an event,
-        // enqueues it, but its Future does not complete within the timeout, leaving a pending fetch.
-        consumer.assign(Collections.singleton(new TopicPartition("topic1", 0)));
-        consumer.poll(Duration.ofMillis(timeoutMs));
-        verify(applicationEventHandler).add(any(FetchCommittedOffsetsEvent.class));
-        CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> event1 = getLastEnqueuedEvent();
-        assertThrows(TimeoutException.class, () -> ConsumerUtils.getResult(event1.future(), time.timer(timeoutMs)));
-        assertTrue(consumer.hasPendingOffsetFetchEvent());
-
-        clearInvocations(applicationEventHandler);
-
-        // For the second attempt, the set of partitions is reassigned, causing the pending offset to be replaced.
-        // Verify that another FetchCommittedOffsetsEvent is enqueued.
-        consumer.assign(Collections.singleton(new TopicPartition("topic1", 1)));
-        consumer.poll(Duration.ofMillis(timeoutMs));
-        verify(applicationEventHandler).add(any(FetchCommittedOffsetsEvent.class));
-        CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> event2 = getLastEnqueuedEvent();
-        assertNotEquals(event1, event2);
-        assertThrows(TimeoutException.class, () -> ConsumerUtils.getResult(event2.future(), time.timer(timeoutMs)));
-        assertTrue(consumer.hasPendingOffsetFetchEvent());
-
-        clearInvocations(applicationEventHandler);
-
-        // For the third attempt, the event from attempt 2 is reused, so there should not have been another
-        // FetchCommittedOffsetsEvent enqueued. The Future is completed to make it return successfully in poll().
-        // This will finally clear out the pending fetch.
-        event2.future().complete(Collections.emptyMap());
-        consumer.poll(Duration.ofMillis(timeoutMs));
-        verify(applicationEventHandler, never()).add(any(FetchCommittedOffsetsEvent.class));
-        assertDoesNotThrow(() -> ConsumerUtils.getResult(event2.future(), time.timer(timeoutMs)));
-        assertFalse(consumer.hasPendingOffsetFetchEvent());
-    }
-
-    @Test
-    public void testOffsetFetchDoesNotReuseExpiredPendingEvent() {
-        consumer = newConsumer();
-        long timeoutMs = 0;
-        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
-        consumer.assign(Collections.singleton(new TopicPartition("topic1", 0)));
-
-        // The first attempt at poll() creates an event, enqueues it, but its Future does not complete within
-        // the timeout, leaving a pending fetch.
-        consumer.poll(Duration.ofMillis(timeoutMs));
-        verify(applicationEventHandler).add(any(FetchCommittedOffsetsEvent.class));
-        CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> event1 = getLastEnqueuedEvent();
-        assertThrows(TimeoutException.class, () -> ConsumerUtils.getResult(event1.future(), time.timer(timeoutMs)));
-        assertTrue(consumer.hasPendingOffsetFetchEvent());
-
-        clearInvocations(applicationEventHandler);
-
-        // Sleep past the event's expiration, causing the poll() to *not* reuse the pending fetch. A new event
-        // is created and added to the application event queue.
-        time.sleep(event1.deadlineMs() - time.milliseconds());
-        consumer.poll(Duration.ofMillis(timeoutMs));
-        verify(applicationEventHandler).add(any(FetchCommittedOffsetsEvent.class));
-        CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> event2 = getLastEnqueuedEvent();
-        assertNotEquals(event1, event2);
-        assertThrows(TimeoutException.class, () -> ConsumerUtils.getResult(event2.future(), time.timer(timeoutMs)));
-        assertTrue(consumer.hasPendingOffsetFetchEvent());
-    }
-
-    @Test
-    public void testOffsetFetchTimeoutExceptionKeepsPendingEvent() {
-        consumer = newConsumer();
-        long timeoutMs = 0;
-        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
-        consumer.assign(Collections.singleton(new TopicPartition("topic1", 0)));
-
-        consumer.poll(Duration.ofMillis(timeoutMs));
-        verify(applicationEventHandler).add(any(FetchCommittedOffsetsEvent.class));
-        CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> event = getLastEnqueuedEvent();
-        assertTrue(consumer.hasPendingOffsetFetchEvent());
-
-        event.future().completeExceptionally(new TimeoutException("Test error"));
-        assertDoesNotThrow(() -> consumer.poll(Duration.ofMillis(timeoutMs)));
-        assertTrue(consumer.hasPendingOffsetFetchEvent());
-    }
-
-    @Test
-    public void testOffsetFetchInterruptExceptionKeepsPendingEvent() {
-        consumer = newConsumer();
-        long timeoutMs = 0;
-        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
-        consumer.assign(Collections.singleton(new TopicPartition("topic1", 0)));
-
-        consumer.poll(Duration.ofMillis(timeoutMs));
-        verify(applicationEventHandler).add(any(FetchCommittedOffsetsEvent.class));
-        CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> event = getLastEnqueuedEvent();
-        assertTrue(consumer.hasPendingOffsetFetchEvent());
-
-        event.future().completeExceptionally(new InterruptException("Test error"));
-        assertThrows(InterruptException.class, () -> consumer.poll(Duration.ofMillis(timeoutMs)));
-        assertTrue(Thread.interrupted());
-        assertTrue(consumer.hasPendingOffsetFetchEvent());
-    }
-
-    @Test
-    public void testOffsetFetchUnexpectedExceptionClearsPendingEvent() {
-        consumer = newConsumer();
-        long timeoutMs = 0;
-        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
-        consumer.assign(Collections.singleton(new TopicPartition("topic1", 0)));
-
-        consumer.poll(Duration.ofMillis(timeoutMs));
-        verify(applicationEventHandler).add(any(FetchCommittedOffsetsEvent.class));
-        CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> event = getLastEnqueuedEvent();
-        assertTrue(consumer.hasPendingOffsetFetchEvent());
-
-        event.future().completeExceptionally(new NullPointerException("Test error"));
-        assertThrows(KafkaException.class, () -> consumer.poll(Duration.ofMillis(timeoutMs)));
-        assertFalse(consumer.hasPendingOffsetFetchEvent());
-    }
-
-    @Test
     public void testCommitSyncLeaderEpochUpdate() {
         consumer = newConsumer();
         final TopicPartition t0 = new TopicPartition("t0", 2);
@@ -737,6 +580,7 @@ public class AsyncKafkaConsumerTest {
         topicPartitionOffsets.put(t1, new OffsetAndMetadata(20L, Optional.of(1), ""));
         completeCommitSyncApplicationEventSuccessfully();
 
+        completeAssignmentChangeEventSuccessfully();
         consumer.assign(Arrays.asList(t0, t1));
 
         assertDoesNotThrow(() -> consumer.commitSync(topicPartitionOffsets));
@@ -768,7 +612,9 @@ public class AsyncKafkaConsumerTest {
         when(metadata.currentLeader(t1)).thenReturn(
             new LeaderAndEpoch(Optional.of(
                 new Node(1, "host", 9000)), Optional.of(1)));
+        completeAssignmentChangeEventSuccessfully();
         consumer.assign(Arrays.asList(t0, t1));
+        completeSeekUnvalidatedEventSuccessfully();
         consumer.seek(t0, 10);
         consumer.seek(t1, 20);
 
@@ -799,10 +645,11 @@ public class AsyncKafkaConsumerTest {
         consumer = newConsumer(config);
         completeCommitAsyncApplicationEventExceptionally(Errors.FENCED_INSTANCE_ID.exception());
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
-        completeFetchedCommittedOffsetApplicationEventSuccessfully(mkMap());
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
         final TopicPartition tp = new TopicPartition("foo", 0);
+        completeAssignmentChangeEventSuccessfully();
         consumer.assign(Collections.singleton(tp));
+        completeSeekUnvalidatedEventSuccessfully();
         consumer.seek(tp, 20);
 
         assertDoesNotThrow(() -> consumer.commitAsync());
@@ -821,10 +668,11 @@ public class AsyncKafkaConsumerTest {
         consumer = newConsumer(config);
         completeCommitAsyncApplicationEventExceptionally(Errors.FENCED_INSTANCE_ID.exception());
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
-        completeFetchedCommittedOffsetApplicationEventSuccessfully(mkMap());
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
         final TopicPartition tp = new TopicPartition("foo", 0);
+        completeAssignmentChangeEventSuccessfully();
         consumer.assign(Collections.singleton(tp));
+        completeSeekUnvalidatedEventSuccessfully();
         consumer.seek(tp, 20);
 
         assertDoesNotThrow(() -> consumer.commitAsync());
@@ -890,7 +738,9 @@ public class AsyncKafkaConsumerTest {
 
         // Commit async (incomplete)
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+        completeAssignmentChangeEventSuccessfully();
         consumer.assign(Collections.singleton(tp));
+        completeSeekUnvalidatedEventSuccessfully();
         consumer.seek(tp, 20);
         consumer.commitAsync();
 
@@ -917,10 +767,11 @@ public class AsyncKafkaConsumerTest {
         consumer = newConsumer(config);
         completeCommitAsyncApplicationEventExceptionally(Errors.FENCED_INSTANCE_ID.exception());
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
-        completeFetchedCommittedOffsetApplicationEventSuccessfully(mkMap());
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
         final TopicPartition tp = new TopicPartition("foo", 0);
+        completeAssignmentChangeEventSuccessfully();
         consumer.assign(Collections.singleton(tp));
+        completeSeekUnvalidatedEventSuccessfully();
         consumer.seek(tp, 20);
 
         assertDoesNotThrow(() -> consumer.commitAsync());
@@ -935,8 +786,9 @@ public class AsyncKafkaConsumerTest {
         MockCommitCallback callback = new MockCommitCallback();
         completeCommitAsyncApplicationEventSuccessfully();
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
-        completeFetchedCommittedOffsetApplicationEventSuccessfully(mkMap());
+        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
 
+        completeAssignmentChangeEventSuccessfully();
         consumer.assign(Collections.singleton(new TopicPartition("foo", 0)));
         assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
         assertMockCommitCallbackInvoked(() -> consumer.poll(Duration.ZERO),
@@ -1013,6 +865,7 @@ public class AsyncKafkaConsumerTest {
             "client-id");
         consumer.subscribe(singleton("topic"), mock(ConsumerRebalanceListener.class));
         subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
+        completeSeekUnvalidatedEventSuccessfully();
         subscriptions.seek(new TopicPartition("topic", 0), 100);
         consumer.commitSyncAllConsumed(time.timer(100));
         verify(applicationEventHandler).add(any(SyncCommitEvent.class));
@@ -1030,6 +883,7 @@ public class AsyncKafkaConsumerTest {
             "client-id");
         consumer.subscribe(singleton("topic"), mock(ConsumerRebalanceListener.class));
         subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
+        completeSeekUnvalidatedEventSuccessfully();
         subscriptions.seek(new TopicPartition("topic", 0), 100);
         verify(applicationEventHandler, never()).add(any(SyncCommitEvent.class));
     }
@@ -1062,11 +916,11 @@ public class AsyncKafkaConsumerTest {
     public void testAssign() {
         consumer = newConsumer();
         final TopicPartition tp = new TopicPartition("foo", 3);
+        completeAssignmentChangeEventSuccessfully();
         consumer.assign(singleton(tp));
         assertTrue(consumer.subscription().isEmpty());
         assertTrue(consumer.assignment().contains(tp));
-        verify(applicationEventHandler).add(any(AssignmentChangeEvent.class));
-        verify(applicationEventHandler).add(any(NewTopicsMetadataUpdateRequestEvent.class));
+        verify(applicationEventHandler).addAndGet(any(AssignmentChangeEvent.class));
     }
 
     @Test
@@ -1285,8 +1139,10 @@ public class AsyncKafkaConsumerTest {
     public void testNoWakeupInCloseCommit() {
         TopicPartition tp = new TopicPartition("topic1", 0);
         consumer = newConsumer();
+        completeAssignmentChangeEventSuccessfully();
         consumer.assign(Collections.singleton(tp));
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+        completeSeekUnvalidatedEventSuccessfully();
         consumer.seek(tp, 10);
         consumer.wakeup();
 
@@ -1314,7 +1170,9 @@ public class AsyncKafkaConsumerTest {
         // Commit async (incomplete)
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
         final TopicPartition tp = new TopicPartition("foo", 0);
+        completeAssignmentChangeEventSuccessfully();
         consumer.assign(Collections.singleton(tp));
+        completeSeekUnvalidatedEventSuccessfully();
         consumer.seek(tp, 20);
 
         consumer.commitAsync();
@@ -1331,7 +1189,9 @@ public class AsyncKafkaConsumerTest {
         // Commit async (complete)
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
         final TopicPartition tp = new TopicPartition("foo", 0);
+        completeAssignmentChangeEventSuccessfully();
         consumer.assign(Collections.singleton(tp));
+        completeSeekUnvalidatedEventSuccessfully();
         consumer.seek(tp, 20);
         completeCommitAsyncApplicationEventSuccessfully();
         consumer.commitAsync(cb);
@@ -1425,25 +1285,6 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    public void testRefreshCommittedOffsetsSuccess() {
-        consumer = newConsumer();
-        completeCommitSyncApplicationEventSuccessfully();
-        TopicPartition partition = new TopicPartition("t1", 1);
-        Set<TopicPartition> partitions = Collections.singleton(partition);
-        Map<TopicPartition, OffsetAndMetadata> committedOffsets = Collections.singletonMap(partition, new OffsetAndMetadata(10L));
-        testRefreshCommittedOffsetsSuccess(partitions, committedOffsets);
-    }
-
-    @Test
-    public void testRefreshCommittedOffsetsSuccessButNoCommittedOffsetsFound() {
-        consumer = newConsumer();
-        TopicPartition partition = new TopicPartition("t1", 1);
-        Set<TopicPartition> partitions = Collections.singleton(partition);
-        Map<TopicPartition, OffsetAndMetadata> committedOffsets = Collections.emptyMap();
-        testRefreshCommittedOffsetsSuccess(partitions, committedOffsets);
-    }
-
-    @Test
     public void testRefreshCommittedOffsetsShouldNotResetIfFailedWithTimeout() {
         consumer = newConsumer();
         testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout(true);
@@ -1475,7 +1316,12 @@ public class AsyncKafkaConsumerTest {
 
         assertTrue(consumer.subscription().isEmpty());
         assertTrue(consumer.assignment().isEmpty());
-        verify(applicationEventHandler).add(ArgumentMatchers.isA(UnsubscribeEvent.class));
+        ArgumentCaptor<UnsubscribeEvent> eventCaptor = ArgumentCaptor.forClass(UnsubscribeEvent.class);
+        verify(applicationEventHandler).add(eventCaptor.capture());
+
+        // check the deadline is set to the default API timeout
+        long deadline = time.milliseconds() + (int) ConsumerConfig.configDef().defaultValues().get(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
+        assertTrue(eventCaptor.getValue().deadlineMs() <= deadline);
     }
 
     @Test
@@ -1670,6 +1516,7 @@ public class AsyncKafkaConsumerTest {
             assertEquals(expectedException.get().getMessage(), exception.getMessage());
             assertEquals(expectedException.get().getCause(), exception.getCause());
         } else {
+            when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
             assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
         }
 
@@ -1730,6 +1577,7 @@ public class AsyncKafkaConsumerTest {
         final KafkaException expectedException = new KafkaException("Nobody expects the Spanish Inquisition");
         final ErrorEvent errorEvent = new ErrorEvent(expectedException);
         backgroundEventQueue.add(errorEvent);
+        completeAssignmentChangeEventSuccessfully();
         consumer.assign(singletonList(new TopicPartition("topic", 0)));
         final KafkaException exception = assertThrows(KafkaException.class, () -> consumer.poll(Duration.ZERO));
 
@@ -1748,6 +1596,7 @@ public class AsyncKafkaConsumerTest {
         final KafkaException expectedException2 = new KafkaException("Spam, Spam, Spam");
         final ErrorEvent errorEvent2 = new ErrorEvent(expectedException2);
         backgroundEventQueue.add(errorEvent2);
+        completeAssignmentChangeEventSuccessfully();
         consumer.assign(singletonList(new TopicPartition("topic", 0)));
         final KafkaException exception = assertThrows(KafkaException.class, () -> consumer.poll(Duration.ZERO));
 
@@ -1824,16 +1673,6 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    public void testGroupIdEmpty() {
-        testInvalidGroupId("");
-    }
-
-    @Test
-    public void testGroupIdOnlyWhitespaces() {
-        testInvalidGroupId("       ");
-    }
-
-    @Test
     public void testEnsurePollEventSentOnConsumerPoll() {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
         consumer = newConsumer(
@@ -1849,22 +1688,11 @@ public class AsyncKafkaConsumerTest {
         doAnswer(invocation -> Fetch.forPartition(tp, records, true))
                 .when(fetchCollector)
                 .collectFetch(Mockito.any(FetchBuffer.class));
+        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
 
         consumer.subscribe(singletonList("topic1"));
         consumer.poll(Duration.ofMillis(100));
         verify(applicationEventHandler).add(any(PollEvent.class));
-    }
-
-    private void testInvalidGroupId(final String groupId) {
-        final Properties props = requiredConsumerConfigAndGroupId(groupId);
-        final ConsumerConfig config = new ConsumerConfig(props);
-
-        final Exception exception = assertThrows(
-            KafkaException.class,
-            () -> consumer = newConsumer(config)
-        );
-
-        assertEquals("Failed to construct kafka consumer", exception.getMessage());
     }
 
     private Properties requiredConsumerConfigAndGroupId(final String groupId) {
@@ -1876,45 +1704,15 @@ public class AsyncKafkaConsumerTest {
     private void testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout(boolean committedOffsetsEnabled) {
         completeFetchedCommittedOffsetApplicationEventExceptionally(new TimeoutException());
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
 
+        completeAssignmentChangeEventSuccessfully();
         consumer.assign(singleton(new TopicPartition("t1", 1)));
 
         consumer.poll(Duration.ZERO);
 
         verify(applicationEventHandler, atLeast(1))
-            .addAndGet(ArgumentMatchers.isA(ValidatePositionsEvent.class));
-
-        if (committedOffsetsEnabled) {
-            // Verify there was an FetchCommittedOffsets event and no ResetPositions event
-            verify(applicationEventHandler, atLeast(1))
-                .add(ArgumentMatchers.isA(FetchCommittedOffsetsEvent.class));
-            verify(applicationEventHandler, never())
-                .addAndGet(ArgumentMatchers.isA(ResetPositionsEvent.class));
-        } else {
-            // Verify there was not any FetchCommittedOffsets event but there should be a ResetPositions
-            verify(applicationEventHandler, never())
-                .add(ArgumentMatchers.isA(FetchCommittedOffsetsEvent.class));
-            verify(applicationEventHandler, atLeast(1))
-                .addAndGet(ArgumentMatchers.isA(ResetPositionsEvent.class));
-        }
-    }
-
-    private void testRefreshCommittedOffsetsSuccess(Set<TopicPartition> partitions,
-                                                    Map<TopicPartition, OffsetAndMetadata> committedOffsets) {
-        completeFetchedCommittedOffsetApplicationEventSuccessfully(committedOffsets);
-        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
-        doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
-
-        consumer.assign(partitions);
-
-        consumer.poll(Duration.ZERO);
-
-        verify(applicationEventHandler, atLeast(1))
-            .addAndGet(ArgumentMatchers.isA(ValidatePositionsEvent.class));
-        verify(applicationEventHandler, atLeast(1))
-            .add(ArgumentMatchers.isA(FetchCommittedOffsetsEvent.class));
-        verify(applicationEventHandler, atLeast(1))
-            .addAndGet(ArgumentMatchers.isA(ResetPositionsEvent.class));
+            .addAndGet(ArgumentMatchers.isA(CheckAndUpdatePositionsEvent.class));
     }
 
     @Test
@@ -1941,6 +1739,7 @@ public class AsyncKafkaConsumerTest {
         }).doAnswer(invocation ->
             Fetch.forPartition(tp, records, true)
         ).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
 
         // And then poll for up to 10000ms, which should return 2 records without timing out
         ConsumerRecords<?, ?> returnedRecords = consumer.poll(Duration.ofMillis(10000));
@@ -2035,9 +1834,9 @@ public class AsyncKafkaConsumerTest {
         final int partition = 3;
         final TopicPartition tp = new TopicPartition(topicName, partition);
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
-        Map<TopicPartition, OffsetAndMetadata> offsets = mkMap(mkEntry(tp, new OffsetAndMetadata(1)));
-        completeFetchedCommittedOffsetApplicationEventSuccessfully(offsets);
+        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+        completeAssignmentChangeEventSuccessfully();
         consumer.assign(singleton(tp));
 
         // interrupt the thread and call poll
@@ -2072,6 +1871,7 @@ public class AsyncKafkaConsumerTest {
         consumer = newConsumer();
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
         consumer.subscribe(Collections.singletonList("topic"));
+        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
         consumer.poll(Duration.ZERO);
         verify(backgroundEventReaper).reap(time.milliseconds());
     }
@@ -2180,6 +1980,29 @@ public class AsyncKafkaConsumerTest {
             event.future().complete(null);
             return null;
         }).when(applicationEventHandler).add(ArgumentMatchers.isA(UnsubscribeEvent.class));
+    }
+
+    private void completeAssignmentChangeEventSuccessfully() {
+        doAnswer(invocation -> {
+            AssignmentChangeEvent event = invocation.getArgument(0);
+            consumer.subscriptions().assignFromUser(new HashSet<>(event.partitions()));
+            event.future().complete(null);
+            return null;
+        }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(AssignmentChangeEvent.class));
+    }
+
+    private void completeSeekUnvalidatedEventSuccessfully() {
+        doAnswer(invocation -> {
+            SeekUnvalidatedEvent event = invocation.getArgument(0);
+            SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
+                    event.offset(),
+                    event.offsetEpoch(),
+                    metadata.currentLeader(event.partition())
+            );
+            consumer.subscriptions().seekUnvalidated(event.partition(), newPosition);
+            event.future().complete(null);
+            return null;
+        }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(SeekUnvalidatedEvent.class));
     }
 
     private void forceCommitCallbackInvocation() {

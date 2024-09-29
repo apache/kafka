@@ -384,7 +384,7 @@ public class LeaderState<T> implements EpochState {
     }
 
     public boolean isReplicaCaughtUp(ReplicaKey replicaKey, long currentTimeMs) {
-        // In summary, let's consider a replica caughed up for add voter, if they
+        // In summary, let's consider a replica caught up for add voter, if they
         // have fetched within the last hour
         long anHourInMs = TimeUnit.HOURS.toMillis(1);
         return Optional.ofNullable(observerStates.get(replicaKey))
@@ -678,6 +678,9 @@ public class LeaderState<T> implements EpochState {
 
             // Make sure that the replica key in the replica state matches the voter's
             state.setReplicaKey(voterNode.voterKey());
+
+            // Make sure that the listeners are updated
+            state.updateListeners(voterNode.listeners());
             newVoterStates.put(state.replicaKey.id(), state);
         }
         voterStates = newVoterStates;
@@ -752,8 +755,12 @@ public class LeaderState<T> implements EpochState {
             this.replicaKey = replicaKey;
         }
 
+        void updateListeners(Endpoints listeners) {
+            this.listeners = listeners;
+        }
+
         void clearListeners() {
-            this.listeners = Endpoints.empty();
+            updateListeners(Endpoints.empty());
         }
 
         boolean matchesKey(ReplicaKey replicaKey) {

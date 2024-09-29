@@ -25,9 +25,9 @@
   }, {
     "pattern":"\\Qkafka/kafka-version.properties\\E"
   }, {
-    "pattern":"\\Qlinux/amd64/libzstd-jni-1.5.6-4.so\\E"
+    "pattern":"\\Qlinux/amd64/libzstd-jni-1.5.6-6.so\\E"
   }, {
-    "pattern":"\\Qlinux/aarch64/libzstd-jni-1.5.6-4.so\\E"
+    "pattern":"\\Qlinux/aarch64/libzstd-jni-1.5.6-6.so\\E"
   }, {
     "pattern":"\\Qnet/jpountz/util/linux/amd64/liblz4-java.so\\E"
   }, {

@@ -27,10 +27,12 @@ public class JoinedInternal<K, VLeft, VRight> extends Joined<K, VLeft, VRight>  
         super(joined);
     }
 
+    @SuppressWarnings("deprecation")
     public Duration gracePeriod() {
         return gracePeriod;
     }
 
+    @SuppressWarnings("deprecation")
     public Serde<K> keySerde() {
         return keySerde;
     }

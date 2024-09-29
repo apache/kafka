@@ -25,7 +25,6 @@ import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -83,8 +82,7 @@ public class ConsumerGroupBuilder {
                         subscriptionMetadata.put(topicName, new TopicMetadata(
                             topicImage.id(),
                             topicImage.name(),
-                            topicImage.partitions().size(),
-                            Collections.emptyMap()
+                            topicImage.partitions().size()
                         ));
                     }
                 })
