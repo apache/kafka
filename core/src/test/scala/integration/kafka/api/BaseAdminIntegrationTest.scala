@@ -218,16 +218,18 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     }
   }
 
+  def modifyControllerConfigs(configs: Seq[Properties]): Unit = {}
+
   override def kraftControllerConfigs(testInfo: TestInfo): Seq[Properties] = {
     val controllerConfig = new Properties()
     val controllerConfigs = Seq(controllerConfig)
     modifyConfigs(controllerConfigs)
+    modifyControllerConfigs(controllerConfigs)
     controllerConfigs
   }
 
   def createConfig: util.Map[String, Object] = {
     val config = new util.HashMap[String, Object]
-    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "20000")
     config.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "40000")
     config

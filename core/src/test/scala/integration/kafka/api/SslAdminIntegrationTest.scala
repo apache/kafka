@@ -19,22 +19,27 @@ import com.yammer.metrics.core.Gauge
 import kafka.security.JaasTestUtils
 import kafka.security.authorizer.AclAuthorizer
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.CreateAclsResult
+import org.apache.kafka.clients.admin.{AdminClientConfig, CreateAclsResult}
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, SecurityProtocol, SslAuthenticationContext}
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.common.network.ConnectionMode
+import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.metadata.authorizer.{ClusterMetadataAuthorizer, StandardAuthorizer}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
-import org.junit.jupiter.api.{AfterEach, Test}
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
-import scala.collection.mutable
+import scala.collection.{mutable, Seq}
 import scala.compat.java8.OptionConverters
 
 object SslAdminIntegrationTest {
@@ -45,31 +50,18 @@ object SslAdminIntegrationTest {
   val serverUser = "server"
   val clientCn = "client"
 
-  class TestableAclAuthorizer extends AclAuthorizer {
-    override def createAcls(requestContext: AuthorizableRequestContext,
-                            aclBindings: util.List[AclBinding]): util.List[_ <: CompletionStage[AclCreateResult]] = {
-      lastUpdateRequestContext = Some(requestContext)
-      execute[AclCreateResult](aclBindings.size, () => super.createAcls(requestContext, aclBindings))
-    }
-
-    override def deleteAcls(requestContext: AuthorizableRequestContext,
-                            aclBindingFilters: util.List[AclBindingFilter]): util.List[_ <: CompletionStage[AclDeleteResult]] = {
-      lastUpdateRequestContext = Some(requestContext)
-      execute[AclDeleteResult](aclBindingFilters.size, () => super.deleteAcls(requestContext, aclBindingFilters))
-    }
-
-    private def execute[T](batchSize: Int, action: () => util.List[_ <: CompletionStage[T]]): util.List[CompletableFuture[T]] = {
+  trait ExecutableAuthorizer {
+    def execute[T](batchSize: Int, action: () => util.List[_ <: CompletionStage[T]]): util.List[CompletableFuture[T]] = {
       val futures = (0 until batchSize).map(_ => new CompletableFuture[T]).toList
       val runnable = new Runnable {
         override def run(): Unit = {
           semaphore.foreach(_.acquire())
           try {
             action.apply().asScala.zip(futures).foreach { case (baseFuture, resultFuture) =>
-              baseFuture.whenComplete { (result, exception) =>
-                if (exception != null)
-                  resultFuture.completeExceptionally(exception)
-                else
-                  resultFuture.complete(result)
+              try {
+                resultFuture.complete(baseFuture.toCompletableFuture.get())
+              } catch  {
+                case e: Throwable => resultFuture.completeExceptionally(e)
               }
             }
           } finally {
@@ -82,6 +74,36 @@ object SslAdminIntegrationTest {
         case None => runnable.run()
       }
       futures.asJava
+    }
+  }
+
+  class TestableAclAuthorizer extends AclAuthorizer with ExecutableAuthorizer {
+
+    override def createAcls(requestContext: AuthorizableRequestContext,
+                            aclBindings: util.List[AclBinding]): util.List[_ <: CompletionStage[AclCreateResult]] = {
+      lastUpdateRequestContext = Some(requestContext)
+      execute[AclCreateResult](aclBindings.size, () => super.createAcls(requestContext, aclBindings))
+    }
+
+    override def deleteAcls(requestContext: AuthorizableRequestContext,
+                            aclBindingFilters: util.List[AclBindingFilter]): util.List[_ <: CompletionStage[AclDeleteResult]] = {
+      lastUpdateRequestContext = Some(requestContext)
+      execute[AclDeleteResult](aclBindingFilters.size, () => super.deleteAcls(requestContext, aclBindingFilters))
+    }
+  }
+
+  class TestableStandardAuthorizer extends StandardAuthorizer with ClusterMetadataAuthorizer with ExecutableAuthorizer {
+
+    override def createAcls(requestContext: AuthorizableRequestContext,
+                            aclBindings: util.List[AclBinding]): util.List[_ <: CompletionStage[AclCreateResult]] = {
+      lastUpdateRequestContext = Some(requestContext)
+      execute[AclCreateResult](aclBindings.size, () => super.createAcls(requestContext, aclBindings))
+    }
+
+    override def deleteAcls(requestContext: AuthorizableRequestContext,
+                            aclBindingFilters: util.List[AclBindingFilter]): util.List[_ <: CompletionStage[AclDeleteResult]] = {
+      lastUpdateRequestContext = Some(requestContext)
+      execute[AclDeleteResult](aclBindingFilters.size, () => super.deleteAcls(requestContext, aclBindingFilters))
     }
   }
 
@@ -111,11 +133,14 @@ object SslAdminIntegrationTest {
 
 class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
   override val zkAuthorizerClassName: String = classOf[SslAdminIntegrationTest.TestableAclAuthorizer].getName
+  override val kraftAuthorizerClassName: String = classOf[SslAdminIntegrationTest.TestableStandardAuthorizer].getName
 
   this.serverConfig.setProperty(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required")
   this.serverConfig.setProperty(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[SslAdminIntegrationTest.TestPrincipalBuilder].getName)
   override protected def securityProtocol = SecurityProtocol.SSL
   override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, SslAdminIntegrationTest.serverUser)
+
+  private val extraControllerSecurityProtocol = SecurityProtocol.SSL
 
   override def setUpSasl(): Unit = {
     SslAdminIntegrationTest.semaphore = None
@@ -123,6 +148,15 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     SslAdminIntegrationTest.lastUpdateRequestContext = None
 
     startSasl(jaasSections(List.empty, None, ZkSasl))
+  }
+
+  override def modifyControllerConfigs(configs: Seq[Properties]): Unit = {
+    JaasTestUtils.sslConfigs(ConnectionMode.SERVER, false, OptionConverters.toJava(trustStoreFile), s"controller")
+      .forEach((k, v) => configs.foreach(c => c.put(k, v)))
+  }
+
+  override def extraControllerSecurityProtocols(): Seq[SecurityProtocol] = {
+    Seq(extraControllerSecurityProtocol)
   }
 
   @AfterEach
@@ -135,13 +169,15 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     super.tearDown()
   }
 
-  @Test
-  def testAclUpdatesUsingSynchronousAuthorizer(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAclUpdatesUsingSynchronousAuthorizer(quorum: String): Unit = {
     verifyAclUpdates()
   }
 
-  @Test
-  def testAclUpdatesUsingAsynchronousAuthorizer(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAclUpdatesUsingAsynchronousAuthorizer(quorum: String): Unit = {
     SslAdminIntegrationTest.executor = Some(Executors.newSingleThreadExecutor)
     verifyAclUpdates()
   }
@@ -150,31 +186,36 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
    * Verify that ACL updates using synchronous authorizer are performed synchronously
    * on request threads without any performance overhead introduced by a purgatory.
    */
-  @Test
-  def testSynchronousAuthorizerAclUpdatesBlockRequestThreads(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testSynchronousAuthorizerAclUpdatesBlockRequestThreads(quorum: String): Unit = {
     val testSemaphore = new Semaphore(0)
     SslAdminIntegrationTest.semaphore = Some(testSemaphore)
     waitForNoBlockedRequestThreads()
 
+    useBoostrapControllers()
     // Queue requests until all threads are blocked. ACL create requests are sent to least loaded
     // node, so we may need more than `numRequestThreads` requests to block all threads.
     val aclFutures = mutable.Buffer[CreateAclsResult]()
-    while (blockedRequestThreads.size < numRequestThreads) {
+    // In KRaft mode, ACL creation is handled exclusively by controller servers, not brokers.
+    // Therefore, only the number of controller I/O threads is relevant in this context.
+    val numReqThreads = if (isKRaftTest()) controllerServers.head.config.numIoThreads * controllerServers.size else numRequestThreads
+    while (blockedRequestThreads.size < numReqThreads) {
       aclFutures += createAdminClient.createAcls(List(acl2).asJava)
-      assertTrue(aclFutures.size < numRequestThreads * 10,
-        s"Request threads not blocked numRequestThreads=$numRequestThreads blocked=$blockedRequestThreads")
+      assertTrue(aclFutures.size < numReqThreads * 10,
+        s"Request threads not blocked numRequestThreads=$numReqThreads blocked=$blockedRequestThreads aclFutures=${aclFutures.size}")
     }
     assertEquals(0, purgatoryMetric("NumDelayedOperations"))
     assertEquals(0, purgatoryMetric("PurgatorySize"))
 
     // Verify that operations on other clients are blocked
-    val describeFuture = createAdminClient.describeCluster().clusterId()
-    assertFalse(describeFuture.isDone)
+    val listPartitionReassignmentsFuture = createAdminClient.listPartitionReassignments().reassignments()
+    assertFalse(listPartitionReassignmentsFuture.isDone)
 
     // Release the semaphore and verify that all requests complete
     testSemaphore.release(aclFutures.size)
     waitForNoBlockedRequestThreads()
-    assertNotNull(describeFuture.get(10, TimeUnit.SECONDS))
+    assertNotNull(listPartitionReassignmentsFuture.get(10, TimeUnit.SECONDS))
     // If any of the requests time out since we were blocking the threads earlier, retry the request.
     val numTimedOut = aclFutures.count { future =>
       try {
@@ -197,19 +238,25 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
    * Verify that ACL updates using an asynchronous authorizer are completed asynchronously
    * using a purgatory, enabling other requests to be processed even when ACL updates are blocked.
    */
-  @Test
-  def testAsynchronousAuthorizerAclUpdatesDontBlockRequestThreads(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAsynchronousAuthorizerAclUpdatesDontBlockRequestThreads(quorum: String): Unit = {
     SslAdminIntegrationTest.executor = Some(Executors.newSingleThreadExecutor)
     val testSemaphore = new Semaphore(0)
     SslAdminIntegrationTest.semaphore = Some(testSemaphore)
 
     waitForNoBlockedRequestThreads()
 
-    val aclFutures = (0 until numRequestThreads).map(_ => createAdminClient.createAcls(List(acl2).asJava))
+    useBoostrapControllers()
+    // In KRaft mode, ACL creation is handled exclusively by controller servers, not brokers.
+    // Therefore, only the number of controller I/O threads is relevant in this context.
+    val numReqThreads = if (isKRaftTest()) controllerServers.head.config.numIoThreads * controllerServers.size else numRequestThreads
+    val aclFutures = (0 until numReqThreads).map(_ => createAdminClient.createAcls(List(acl2).asJava))
+
     waitForNoBlockedRequestThreads()
     assertTrue(aclFutures.forall(future => !future.all.isDone))
     // Other requests should succeed even though ACL updates are blocked
-    assertNotNull(createAdminClient.describeCluster().clusterId().get(10, TimeUnit.SECONDS))
+    assertNotNull(createAdminClient.listPartitionReassignments().reassignments().get(10, TimeUnit.SECONDS))
     TestUtils.waitUntilTrue(() => purgatoryMetric("PurgatorySize") > 0, "PurgatorySize metrics not updated")
     TestUtils.waitUntilTrue(() => purgatoryMetric("NumDelayedOperations") > 0, "NumDelayedOperations metrics not updated")
 
@@ -238,6 +285,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     val testSemaphore = new Semaphore(0)
     SslAdminIntegrationTest.semaphore = Some(testSemaphore)
 
+    useBoostrapControllers()
     client = createAdminClient
     val results = client.createAcls(List(acl2, acl3).asJava).values
     assertEquals(Set(acl2, acl3), results.keySet().asScala)
@@ -267,7 +315,10 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     requestThreads.filter(_.getState == Thread.State.WAITING).toList
   }
 
-  private def numRequestThreads = servers.head.config.numIoThreads * servers.size
+  private def numRequestThreads = {
+    if (isKRaftTest()) brokers.head.config.numIoThreads * (brokers.size + controllerServers.size)
+    else servers.head.config.numIoThreads * servers.size
+  }
 
   private def waitForNoBlockedRequestThreads(): Unit = {
     val (blockedThreads, _) = TestUtils.computeUntilTrue(blockedRequestThreads)(_.isEmpty)
@@ -297,5 +348,20 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
       certAlias, SslAdminIntegrationTest.clientCn, OptionConverters.toJava(clientSaslProperties))
     props.remove(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG)
     props
+  }
+
+  private def useBoostrapControllers(): Unit = {
+    if (isKRaftTest()) {
+      val controllerListenerName = ListenerName.forSecurityProtocol(extraControllerSecurityProtocol)
+      val config = controllerServers.map { s =>
+        val listener = s.config.effectiveAdvertisedControllerListeners
+          .find(_.listenerName == controllerListenerName)
+          .getOrElse(sys.error(s"Could not find listener with name $controllerListenerName"))
+        Utils.formatAddress(listener.host, s.socketServer.boundPort(controllerListenerName))
+      }.mkString(",")
+
+      adminClientConfig.remove(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG)
+      adminClientConfig.put(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, config)
+    }
   }
 }
