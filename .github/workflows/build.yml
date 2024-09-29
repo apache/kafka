@@ -58,18 +58,18 @@ jobs:
           gradle-cache-read-only: ${{ inputs.gradle-cache-read-only }}
           gradle-cache-write-only: ${{ inputs.gradle-cache-write-only }}
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
-        - name: Compile and validate
-          # Gradle flags
-          # --build-cache:            Let Gradle restore the build cache
-          # --info:                   For now, we'll generate lots of logs while setting up the GH Actions
-          # --scan:                   Publish the build scan. This will only work on PRs from apache/kafka and trunk
-          # --no-scan:                For public fork PRs, we won't attempt to publish the scan
-          # -PignoreRatFailure=true:  Ignore failures from the Rat plugin
-          run: |
-            ./gradlew --build-cache --info  \
-            ${{ inputs.is-public-fork && '--no-scan' || '--scan' }} \
-            -PignoreRatFailure=true  \
-            check -x test
+      - name: Compile and validate
+        # Gradle flags
+        # --build-cache:            Let Gradle restore the build cache
+        # --info:                   For now, we'll generate lots of logs while setting up the GH Actions
+        # --scan:                   Publish the build scan. This will only work on PRs from apache/kafka and trunk
+        # --no-scan:                For public fork PRs, we won't attempt to publish the scan
+        # -PignoreRatFailure=true:  Ignore failures from the Rat plugin
+        run: |
+          ./gradlew --build-cache --info  \
+          ${{ inputs.is-public-fork && '--no-scan' || '--scan' }} \
+          -PignoreRatFailure=true  \
+          check -x test
       - name: Archive check reports
         if: always()
         uses: actions/upload-artifact@v4
