@@ -35,7 +35,7 @@ sha="$(cut -d '-' -f 5 <<< "$key")"
 
 git fetch &> /dev/null
 
-if ! git rev-parse --verify "$sha" &> /dev/null; then
+if ! git show "$sha" &> /dev/null; then
   printf '\e[33m%s\n%s\e[0m\n' \
   "Cannot update 'trunk-cached' because SHA $sha" \
   "does not exist locally. Please update your remote and try again."
