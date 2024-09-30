@@ -24,6 +24,10 @@
     <ul>
         <li>A number of deprecated classes, methods,configurations and tools have been removed from the <code>clients</code>, <code>connect</code>, <code>core</code> and <code>tools</code> modules:</li>
         <ul>
+            <li>
+                Scala 2.12 support has been removed in Apache Kafka 4.0
+                See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308218">KIP-751</a> for more details
+            </li>
             <li> The original MirrorMaker (MM1) and related classes have been removed. Please use the Connect-based
                 MirrorMaker (MM2), as described in the
                 <a href="/{{version}}/documentation/#georeplication">Geo-Replication section</a>.
