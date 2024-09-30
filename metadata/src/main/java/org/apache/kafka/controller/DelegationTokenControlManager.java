@@ -315,9 +315,7 @@ public class DelegationTokenControlManager {
         } else if (myTokenInformation.maxTimestamp() < now || myTokenInformation.expiryTimestamp() < now) {
             responseData.setErrorCode(DELEGATION_TOKEN_EXPIRED.code());
         }  else {
-            long expiryTimestamp = now > Long.MAX_VALUE - requestData.expiryTimePeriodMs()
-                    ? Long.MAX_VALUE
-                    : Math.min(myTokenInformation.maxTimestamp(), now + requestData.expiryTimePeriodMs());
+            long expiryTimestamp = Math.min(myTokenInformation.maxTimestamp(), sum(now, requestData.expiryTimePeriodMs()));
 
             responseData
                 .setErrorCode(NONE.code())
