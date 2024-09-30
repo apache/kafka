@@ -150,6 +150,13 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     startSasl(jaasSections(List.empty, None, ZkSasl))
   }
 
+  override def createConfig: util.Map[String, Object] = {
+    val config = new util.HashMap[String, Object]
+    config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "20000")
+    config.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "40000")
+    config
+  }
+
   override def modifyControllerConfigs(configs: Seq[Properties]): Unit = {
     JaasTestUtils.sslConfigs(ConnectionMode.SERVER, false, OptionConverters.toJava(trustStoreFile), s"controller")
       .forEach((k, v) => configs.foreach(c => c.put(k, v)))
