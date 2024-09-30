@@ -30,9 +30,9 @@ jobs:
     - uses: actions/labeler@v5
       with:
         configuration-path: .github/configs/labeler.yml
-    - name: check MINOR label
+    - name: check small label
       env:
         GH_TOKEN: ${{ github.token }}
         PR_NUM: ${{github.event.number}}
       run: |
-        ./.github/scripts/label_minor.sh
+        ./.github/scripts/label_small.sh
