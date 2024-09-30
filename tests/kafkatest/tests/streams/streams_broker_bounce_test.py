@@ -153,7 +153,7 @@ class StreamsBrokerBounceTest(Test):
         # Setup phase
 
         self.kafka = KafkaService(self.test_context, num_nodes=3, zk=None, topics=self.topics,
-                                  controller_num_nodes_override=1, dynamicRaftQuorum=True)
+                                  controller_num_nodes_override=1)
         self.kafka.start()
 
         # allow some time for topics to be created
