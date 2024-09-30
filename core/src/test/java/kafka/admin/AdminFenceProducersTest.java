@@ -55,14 +55,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         @ClusterConfigProperty(key = TransactionStateManagerConfig.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_CONFIG, value = "2000")
 })
 @ExtendWith(ClusterTestExtensions.class)
-public class AdminFenceProducersIntegrationTest {
+public class AdminFenceProducersTest {
     private static final String TOPIC_NAME = "mytopic";
     private static final String TXN_ID = "mytxnid";
     private static final String INCORRECT_BROKER_PORT = "225";
     private static final ProducerRecord<byte[], byte[]> RECORD = new ProducerRecord<>(TOPIC_NAME, null, new byte[1]);
     private final ClusterInstance clusterInstance;
 
-    AdminFenceProducersIntegrationTest(ClusterInstance clusterInstance) {
+    AdminFenceProducersTest(ClusterInstance clusterInstance) {
         this.clusterInstance = clusterInstance;
     }
 

@@ -223,7 +223,7 @@
     <suppress checks="ImportControl" files="FetchResponseData.java"/>
     <suppress checks="ImportControl" files="RecordsSerdeTest.java"/>
     <suppress checks="ImportControl" files="ClientTelemetryTest.java"/>
-    <suppress checks="ImportControl" files="AdminFenceProducersIntegrationTest.java"/>
+    <suppress checks="ImportControl" files="AdminFenceProducersTest.java"/>
 
     <!-- Streams tests -->
     <suppress checks="ClassFanOutComplexity"
