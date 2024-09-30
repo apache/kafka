@@ -28,10 +28,10 @@ import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.timeline.SnapshotRegistry;
+import org.apache.kafka.timeline.TimelineHashMap;
 
 import com.yammer.metrics.core.MetricsRegistry;
 
-import org.apache.kafka.timeline.TimelineHashMap;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
