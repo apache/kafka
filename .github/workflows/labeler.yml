@@ -28,39 +28,24 @@ jobs:
     - uses: actions/labeler@v5
       with:
         configuration-path: .github/configs/labeler.yml
-    - uses: actions/checkout@v4
-      with:
-        ref: ${{ github.event.pull_request.head.sha }}
-    - name: Compare trunk and PR
+    - name: check MINOR label
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        BASE_COMMIT="${{ github.event.pull_request.base.sha }}"
-        HEAD_COMMIT="${{ github.event.pull_request.head.sha }}"
-
-        summary=$(git diff --stat $BASE_COMMIT $HEAD_COMMIT | tail -n 1)
-        echo "summary $summary"
+        pr_diff=$(gh pr diff ${{ github.event.number }} -R $GITHUB_REPOSITORY)
+        echo "$pr_diff"
 
         min_size=100
-        insertions=0
-        deletions=0
+        insertions=$(printf "$pr_diff" | grep '^+' | wc -l)
+        deletions=$(printf "$pr_diff" | grep '^-' | wc -l)
 
-        if [[ $summary =~ ([0-9]+)\ files?\ changed(,)?\ ([0-9]+)\ insertions?\(\+\)(,)?\ ([0-9]+)\ deletions?\(-\) ]]; then
-            files_changed=${BASH_REMATCH[1]}
-            insertions=${BASH_REMATCH[3]}
-            deletions=${BASH_REMATCH[5]}
-        elif [[ $summary =~ ([0-9]+)\ files?\ changed(,)?\ ([0-9]+)\ insertions?\(\+\) ]]; then
-            files_changed=${BASH_REMATCH[1]}
-            insertions=${BASH_REMATCH[3]}
-        elif [[ $summary =~ ([0-9]+)\ files?\ changed(,)?\ ([0-9]+)\ deletions?\(-\) ]]; then
-            files_changed=${BASH_REMATCH[1]}
-            deletions=${BASH_REMATCH[3]}
-        fi
+        echo "insertions $insertions"
+        echo "deletions $deletions"
 
         total_changes=$((insertions + deletions))
         if [ "$total_changes" -lt "$min_size" ]; then
             gh api   -H "Accept: application/vnd.github+json"  \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            /repos/$GITHUB_REPOSITORY/issues/${{ github.event.number }}/labels -f "labels[]=mirror"
+            /repos/$GITHUB_REPOSITORY/issues/${{ github.event.number }}/labels -f "labels[]=MINOR"
         fi
         
