@@ -30,13 +30,11 @@ import org.apache.kafka.common.requests.{ConsumerGroupHeartbeatRequest, Consumer
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.server.common.Features
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNotNull}
-import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.extension.ExtendWith
 
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
 
-@Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 

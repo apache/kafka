@@ -36,7 +36,9 @@
   // This is the earliest log start offset in the local log. (KIP-405).
   //
   // Version 9 enables listing offsets by last tiered offset (KIP-1005).
-  "validVersions": "0-9",
+  //
+  // Version 10 enables async remote list offsets support (KIP-1075)
+  "validVersions": "0-10",
   "flexibleVersions": "6+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "2+", "ignorable": true,

@@ -41,6 +41,7 @@
             <li><a href="#protocol_types">Protocol Primitive Types</a>
             <li><a href="#protocol_grammar">Notes on reading the request format grammars</a>
             <li><a href="#protocol_common">Common Request and Response Structure</a>
+            <li><a href="#protocol_headers">Request and Response Headers</a>
             <li><a href="#protocol_recordbatch">Record Batch</a>
         </ul>
     </li>
@@ -190,6 +191,9 @@ Kafka request. SASL/GSSAPI authentication is performed starting with this packet
 <tr><td>message_size</td><td>The message_size field gives the size of the subsequent request or response message in bytes. The client can read requests by first reading this 4 byte size as an integer N, and then reading and parsing the subsequent N bytes of the request.</td></tr>
 </table>
 
+<h5 class="anchor-heading"><a id="protocol_headers" class="anchor-link"></a><a href="#protocol_headers">Request and Response Headers</a></h5>
+<p>Different request and response versions require different versions of the corresponding headers. These header versions are specified below together with API message descriptions.</p>
+
 <h5 class="anchor-heading"><a id="protocol_recordbatch" class="anchor-link"></a><a href="#protocol_recordbatch">Record Batch</a></h5>
 <p>A description of the record batch format can be found <a href="/documentation/#recordbatch">here</a>.</p>
 
@@ -206,6 +210,14 @@ Kafka request. SASL/GSSAPI authentication is performed starting with this packet
 <h4 class="anchor-heading"><a id="protocol_messages" class="anchor-link"></a><a href="#protocol_messages">The Messages</a></h4>
 
 <p>This section gives details on each of the individual API Messages, their usage, their binary format, and the meaning of their fields.</p>
+
+<p>The message consists of the header and body:</p>
+<pre>
+Message => RequestOrResponseHeader Body
+</pre>
+
+<p><code>RequestOrResponseHeader</code> is the versioned request or response header. <code>Body</code> is the message-specific body.</p>
+
 <!--#include virtual="generated/protocol_messages.html" -->
 
 <h4 class="anchor-heading"><a id="protocol_philosophy" class="anchor-link"></a><a href="#protocol_philosophy">Some Common Philosophical Questions</a></h4>

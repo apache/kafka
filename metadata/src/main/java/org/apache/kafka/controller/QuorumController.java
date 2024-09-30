@@ -225,6 +225,7 @@ public final class QuorumController implements Controller {
         private long delegationTokenExpiryTimeMs;
         private long delegationTokenExpiryCheckIntervalMs;
         private long uncleanLeaderElectionCheckIntervalMs = TimeUnit.MINUTES.toMillis(5);
+        private String interBrokerListenerName = "PLAINTEXT";
 
         public Builder(int nodeId, String clusterId) {
             this.nodeId = nodeId;
@@ -380,6 +381,11 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setInterBrokerListenerName(String interBrokerListenerName) {
+            this.interBrokerListenerName = interBrokerListenerName;
+            return this;
+        }
+
         public QuorumController build() throws Exception {
             if (raftClient == null) {
                 throw new IllegalStateException("You must set a raft client.");
@@ -437,7 +443,8 @@ public final class QuorumController implements Controller {
                     delegationTokenExpiryTimeMs,
                     delegationTokenExpiryCheckIntervalMs,
                     eligibleLeaderReplicasEnabled,
-                    uncleanLeaderElectionCheckIntervalMs
+                    uncleanLeaderElectionCheckIntervalMs,
+                    interBrokerListenerName
                 );
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
@@ -1058,7 +1065,10 @@ public final class QuorumController implements Controller {
                         int epoch = batch.epoch();
                         List<ApiMessageAndVersion> messages = batch.records();
 
-                        if (isActive) {
+                        if (messages.isEmpty()) {
+                            log.debug("Skipping handling commit for batch with no data records with offset {} and epoch {}.", offset, epoch);
+                            offsetControl.handleCommitBatchMetrics(batch);
+                        } else if (isActive) {
                             // If the controller is active, the records were already replayed,
                             // so we don't need to do it here.
                             log.debug("Completing purgatory items up to offset {} and epoch {}.", offset, epoch);
@@ -1068,9 +1078,6 @@ public final class QuorumController implements Controller {
                             offsetControl.handleCommitBatch(batch);
                             deferredEventQueue.completeUpTo(offsetControl.lastStableOffset());
                             deferredUnstableEventQueue.completeUpTo(offsetControl.lastCommittedOffset());
-
-                            // The active controller can delete up to the current committed offset.
-                            snapshotRegistry.deleteSnapshotsUpTo(offsetControl.lastStableOffset());
                         } else {
                             // If the controller is a standby, replay the records that were
                             // created by the active controller.
@@ -1868,7 +1875,8 @@ public final class QuorumController implements Controller {
         long delegationTokenExpiryTimeMs,
         long delegationTokenExpiryCheckIntervalMs,
         boolean eligibleLeaderReplicasEnabled,
-        long uncleanLeaderElectionCheckIntervalMs
+        long uncleanLeaderElectionCheckIntervalMs,
+        String interBrokerListenerName
     ) {
         this.nonFatalFaultHandler = nonFatalFaultHandler;
         this.fatalFaultHandler = fatalFaultHandler;
@@ -1925,6 +1933,7 @@ public final class QuorumController implements Controller {
             setFeatureControlManager(featureControl).
             setZkMigrationEnabled(zkMigrationEnabled).
             setBrokerUncleanShutdownHandler(this::handleUncleanBrokerShutdown).
+            setInterBrokerListenerName(interBrokerListenerName).
             build();
         this.producerIdControlManager = new ProducerIdControlManager.Builder().
             setLogContext(logContext).
