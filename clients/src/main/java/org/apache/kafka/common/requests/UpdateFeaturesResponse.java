@@ -89,7 +89,8 @@ public class UpdateFeaturesResponse extends AbstractResponse {
             for (final String feature : updates) {
                 final UpdatableFeatureResult result = new UpdatableFeatureResult();
                 result.setFeature(feature)
-                        .setErrorCode(Errors.NONE.code());
+                    .setErrorCode(topLevelError.error().code())
+                    .setErrorMessage(topLevelError.message());
                 results.add(result);
             }
         }
