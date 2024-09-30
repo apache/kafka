@@ -519,6 +519,23 @@ public class SharePartition {
         String memberId,
         FetchPartitionData fetchPartitionData
     ) {
+        return acquire(memberId, Integer.MAX_VALUE, fetchPartitionData);
+    }
+
+    /**
+     * Acquire the fetched records for the share partition. The acquired records are added to the
+     * in-flight records and the next fetch offset is updated to the next offset that should be
+     * fetched from the leader.
+     *
+     * @param memberId           The member id of the client that is fetching the record.
+     * @param fetchPartitionData The fetched records for the share partition.
+     * @return The acquired records for the share partition.
+     */
+    public List<AcquiredRecords> acquire(
+        String memberId,
+        int maxFetchRecords,
+        FetchPartitionData fetchPartitionData
+    ) {
         log.trace("Received acquire request for share partition: {}-{} memberId: {}", groupId, topicIdPartition, memberId);
         RecordBatch lastBatch = fetchPartitionData.records.lastBatch().orElse(null);
         if (lastBatch == null) {
@@ -549,17 +566,30 @@ public class SharePartition {
             if (subMap.isEmpty()) {
                 log.trace("No cached data exists for the share partition for requested fetch batch: {}-{}",
                     groupId, topicIdPartition);
-                return Collections.singletonList(
-                    acquireNewBatchRecords(memberId, firstBatch.baseOffset(), lastBatch.lastOffset()));
+                List<AcquiredRecords> result = Collections.singletonList(
+                    acquireNewBatchRecords(memberId, firstBatch.baseOffset(), lastBatch.lastOffset(), maxFetchRecords));
+                log.info("[APM] - Fetch Partition Data: {}", fetchPartitionData);
+                log.info("[APM] - Cache State: {}", cachedState);
+                log.info("[APM] - Acquired Records: {}", result);
+                log.info("[APM] - next fetch offset: {}", nextFetchOffset());
+
+                return result;
             }
 
             log.trace("Overlap exists with in-flight records. Acquire the records if available for"
                 + " the share partition: {}-{}", groupId, topicIdPartition);
             List<AcquiredRecords> result = new ArrayList<>();
+            // The acquired count is used to track the number of records acquired for the request.
+            int acquiredCount = 0;
             // The fetched records are already part of the in-flight records. The records might
             // be available for re-delivery hence try acquiring same. The request batches could
             // be an exact match, subset or span over multiple already fetched batches.
             for (Map.Entry<Long, InFlightBatch> entry : subMap.entrySet()) {
+                // If the acquired count is equal to the max fetch records then break the loop.
+                if (acquiredCount >= maxFetchRecords) {
+                    break;
+                }
+
                 InFlightBatch inFlightBatch = entry.getValue();
                 // Compute if the batch is a full match.
                 boolean fullMatch = checkForFullMatch(inFlightBatch, firstBatch.baseOffset(), lastBatch.lastOffset());
@@ -585,7 +615,8 @@ public class SharePartition {
                         // the offsets state in the in-flight batch.
                         inFlightBatch.maybeInitializeOffsetStateUpdate();
                     }
-                    acquireSubsetBatchRecords(memberId, firstBatch.baseOffset(), lastBatch.lastOffset(), inFlightBatch, result);
+                    acquireSubsetBatchRecords(memberId, firstBatch.baseOffset(), lastBatch.lastOffset(), inFlightBatch, result, maxFetchRecords - acquiredCount);
+                    acquiredCount += result.size();
                     continue;
                 }
 
@@ -596,30 +627,42 @@ public class SharePartition {
                     continue;
                 }
 
-                InFlightState updateResult = inFlightBatch.tryUpdateBatchState(RecordState.ACQUIRED, true, maxDeliveryCount, memberId);
-                if (updateResult == null) {
-                    log.info("Unable to acquire records for the batch: {} in share partition: {}-{}",
-                        inFlightBatch, groupId, topicIdPartition);
-                    continue;
-                }
-                // Schedule acquisition lock timeout for the batch.
-                AcquisitionLockTimerTask acquisitionLockTimeoutTask = scheduleAcquisitionLockTimeout(memberId, inFlightBatch.firstOffset(), inFlightBatch.lastOffset());
-                // Set the acquisition lock timeout task for the batch.
-                inFlightBatch.updateAcquisitionLockTimeout(acquisitionLockTimeoutTask);
+                if (maxFetchRecords - acquiredCount > inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1) {
+                    acquiredCount += (int) (inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1);
+                    InFlightState updateResult = inFlightBatch.tryUpdateBatchState(RecordState.ACQUIRED, true, maxDeliveryCount, memberId);
+                    if (updateResult == null) {
+                      log.info("Unable to acquire records for the batch: {} in share partition: {}-{}",
+                          inFlightBatch, groupId, topicIdPartition);
+                      continue;
+                    }
+                    // Schedule acquisition lock timeout for the batch.
+                    AcquisitionLockTimerTask acquisitionLockTimeoutTask = scheduleAcquisitionLockTimeout(memberId, inFlightBatch.firstOffset(), inFlightBatch.lastOffset());
+                    // Set the acquisition lock timeout task for the batch.
+                    inFlightBatch.updateAcquisitionLockTimeout(acquisitionLockTimeoutTask);
 
-                result.add(new AcquiredRecords()
-                    .setFirstOffset(inFlightBatch.firstOffset())
-                    .setLastOffset(inFlightBatch.lastOffset())
-                    .setDeliveryCount((short) inFlightBatch.batchDeliveryCount()));
+                    result.add(new AcquiredRecords()
+                        .setFirstOffset(inFlightBatch.firstOffset())
+                        .setLastOffset(inFlightBatch.lastOffset())
+                        .setDeliveryCount((short) inFlightBatch.batchDeliveryCount()));
+                } else {
+                    inFlightBatch.maybeInitializeOffsetStateUpdate();
+                    acquireSubsetBatchRecords(memberId, firstBatch.baseOffset(), lastBatch.lastOffset(), inFlightBatch, result, maxFetchRecords - acquiredCount);
+                    acquiredCount += result.size();
+                }
             }
 
             // Some of the request offsets are not found in the fetched batches. Acquire the
             // missing records as well.
-            if (subMap.lastEntry().getValue().lastOffset() < lastBatch.lastOffset()) {
+            if (acquiredCount < maxFetchRecords && subMap.lastEntry().getValue().lastOffset() < lastBatch.lastOffset()) {
                 log.trace("There exists another batch which needs to be acquired as well");
                 result.add(acquireNewBatchRecords(memberId, subMap.lastEntry().getValue().lastOffset() + 1,
-                    lastBatch.lastOffset()));
+                    lastBatch.lastOffset(), maxFetchRecords - acquiredCount));
             }
+
+            log.info("[APM] - Fetch Partition Data: {}", fetchPartitionData);
+            log.info("[APM] - Cache State: {}", cachedState);
+            log.info("[APM] - Acquired Records: {}", result);
+            log.info("[APM] - next fetch offset: {}", nextFetchOffset());
             return result;
         } finally {
             lock.writeLock().unlock();
@@ -1059,28 +1102,42 @@ public class SharePartition {
     private AcquiredRecords acquireNewBatchRecords(
         String memberId,
         long firstOffset,
-        long lastOffset
+        long lastOffset,
+        int maxMessages
     ) {
         lock.writeLock().lock();
         try {
+            // If same batch is fetched and previous batch is removed from the cache then we need to
+            // update the batch first offset to endOffset.
+            long firstAcquiredOffset = firstOffset;
+            if (cachedState.isEmpty()) {
+                firstAcquiredOffset = endOffset;
+            }
+
+            // Check how many messages can be acquired from the batch.
+            long lastAcquiredOffset = lastOffset;
+            if (maxMessages < (lastAcquiredOffset - firstAcquiredOffset + 1)) {
+                lastAcquiredOffset = firstAcquiredOffset + maxMessages - 1;
+            }
+
             // Schedule acquisition lock timeout for the batch.
-            AcquisitionLockTimerTask timerTask = scheduleAcquisitionLockTimeout(memberId, firstOffset, lastOffset);
+            AcquisitionLockTimerTask timerTask = scheduleAcquisitionLockTimeout(memberId, firstAcquiredOffset, lastAcquiredOffset);
             // Add the new batch to the in-flight records along with the acquisition lock timeout task for the batch.
-            cachedState.put(firstOffset, new InFlightBatch(
+            cachedState.put(firstAcquiredOffset, new InFlightBatch(
                 memberId,
-                firstOffset,
-                lastOffset,
+                firstAcquiredOffset,
+                lastAcquiredOffset,
                 RecordState.ACQUIRED,
                 1,
                 timerTask));
             // if the cachedState was empty before acquiring the new batches then startOffset needs to be updated
-            if (cachedState.firstKey() == firstOffset)  {
-                startOffset = firstOffset;
+            if (cachedState.firstKey() == firstAcquiredOffset)  {
+                startOffset = firstAcquiredOffset;
             }
-            endOffset = lastOffset;
+            endOffset = lastAcquiredOffset;
             return new AcquiredRecords()
-                .setFirstOffset(firstOffset)
-                .setLastOffset(lastOffset)
+                .setFirstOffset(firstAcquiredOffset)
+                .setLastOffset(lastAcquiredOffset)
                 .setDeliveryCount((short) 1);
         } finally {
             lock.writeLock().unlock();
@@ -1092,11 +1149,19 @@ public class SharePartition {
         long requestFirstOffset,
         long requestLastOffset,
         InFlightBatch inFlightBatch,
-        List<AcquiredRecords> result
+        List<AcquiredRecords> result,
+        int maxMessages
     ) {
         lock.writeLock().lock();
         try {
+            int acquiredCount = 0;
             for (Map.Entry<Long, InFlightState> offsetState : inFlightBatch.offsetState.entrySet()) {
+                // If the acquired count is equal to the max messages then break the loop.
+                if (acquiredCount >= maxMessages) {
+                    // The max messages have been acquired.
+                    break;
+                }
+
                 // For the first batch which might have offsets prior to the request base
                 // offset i.e. cached batch of 10-14 offsets and request batch of 12-13.
                 if (offsetState.getKey() < requestFirstOffset) {
@@ -1128,6 +1193,7 @@ public class SharePartition {
                 // Update acquisition lock timeout task for the offset.
                 offsetState.getValue().updateAcquisitionLockTimeoutTask(acquisitionLockTimeoutTask);
 
+                acquiredCount += 1;
                 // TODO: Maybe we can club the continuous offsets here.
                 result.add(new AcquiredRecords()
                     .setFirstOffset(offsetState.getKey())

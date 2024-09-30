@@ -55,7 +55,12 @@ public class ShareFetchUtils {
             ReplicaManager replicaManager
     ) {
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> response = new HashMap<>();
-        responseData.forEach((topicIdPartition, fetchPartitionData) -> {
+
+        // Acquired records count for the share fetch request.
+        int acquiredRecordsCount = 0;
+        for (Map.Entry<TopicIdPartition, FetchPartitionData> entry : responseData.entrySet()) {
+            TopicIdPartition topicIdPartition = entry.getKey();
+            FetchPartitionData fetchPartitionData = entry.getValue();
 
             SharePartition sharePartition = sharePartitionManager.sharePartition(shareFetchData.groupId(), topicIdPartition);
             if (sharePartition == null) {
@@ -84,7 +89,7 @@ public class ShareFetchUtils {
                     partitionData.setErrorMessage(Errors.NONE.message());
                 }
             } else {
-                List<AcquiredRecords> acquiredRecords = sharePartition.acquire(shareFetchData.memberId(), fetchPartitionData);
+                List<AcquiredRecords> acquiredRecords = sharePartition.acquire(shareFetchData.memberId(), shareFetchData.maxFetchRecords() - acquiredRecordsCount, fetchPartitionData);
                 log.trace("Acquired records for topicIdPartition: {} with share fetch data: {}, records: {}",
                     topicIdPartition, shareFetchData, acquiredRecords);
                 // Maybe, in the future, check if no records are acquired, and we want to retry
@@ -98,10 +103,11 @@ public class ShareFetchUtils {
                     partitionData
                         .setRecords(fetchPartitionData.records)
                         .setAcquiredRecords(acquiredRecords);
+                    acquiredRecordsCount += acquiredRecords.size();
                 }
             }
             response.put(topicIdPartition, partitionData);
-        });
+        }
         return response;
     }
 

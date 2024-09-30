@@ -18,8 +18,10 @@ package org.apache.kafka.server.storage.log;
 
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 
+import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -36,7 +38,7 @@ public class FetchPartitionData {
     public final OptionalInt preferredReadReplica;
     public final boolean isReassignmentFetch;
 
-    public FetchPartitionData(Errors error,
+  public FetchPartitionData(Errors error,
                               long highWatermark,
                               long logStartOffset,
                               Records records,
@@ -54,5 +56,29 @@ public class FetchPartitionData {
         this.abortedTransactions = abortedTransactions;
         this.preferredReadReplica = preferredReadReplica;
         this.isReassignmentFetch = isReassignmentFetch;
+    }
+
+    @Override
+    public String toString() {
+        Iterator<? extends RecordBatch> i = records.batches().iterator();
+        RecordBatch batch = null;
+        while (i.hasNext()) {
+            batch = i.next();
+        }
+        return "FetchPartitionData{" +
+            "error=" + error +
+            ", highWatermark=" + highWatermark +
+            ", logStartOffset=" + logStartOffset +
+            ", records=" + records +
+            ", records first offset=" + records.batches().iterator().next().baseOffset() +
+            ", records first batch last offset=" + records.batches().iterator().next().lastOffset() +
+            ", records last batch first offset=" + (batch != null ? batch.baseOffset() + "" : null) +
+            ", records last offset=" + (batch != null ? batch.lastOffset() + "" : null) +
+            ", divergingEpoch=" + divergingEpoch +
+            ", lastStableOffset=" + lastStableOffset +
+            ", abortedTransactions=" + abortedTransactions +
+            ", preferredReadReplica=" + preferredReadReplica +
+            ", isReassignmentFetch=" + isReassignmentFetch +
+            '}';
     }
 }
