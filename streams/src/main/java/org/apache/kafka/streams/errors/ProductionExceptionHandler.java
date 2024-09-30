@@ -46,7 +46,6 @@ public interface ProductionExceptionHandler extends Configurable {
      * @param record The record that failed to produce
      * @param exception The exception that occurred during production
      */
-    @SuppressWarnings("deprecation")
     default ProductionExceptionHandlerResponse handle(final ErrorHandlerContext context,
                                                       final ProducerRecord<byte[], byte[]> record,
                                                       final Exception exception) {
@@ -76,7 +75,6 @@ public interface ProductionExceptionHandler extends Configurable {
      * @param exception the exception that occurred during serialization
      * @param origin    the origin of the serialization exception
      */
-    @SuppressWarnings("deprecation")
     default ProductionExceptionHandlerResponse handleSerializationException(final ErrorHandlerContext context,
                                                                             final ProducerRecord record,
                                                                             final Exception exception,
@@ -85,18 +83,37 @@ public interface ProductionExceptionHandler extends Configurable {
     }
 
     enum ProductionExceptionHandlerResponse {
-        /* continue processing */
+        /** Continue processing.
+         *
+         * <p> For this case, output records which could not be written successfully are lost.
+         * Use this option only if you can tolerate data loss.
+         */
         CONTINUE(0, "CONTINUE"),
-        /* fail processing */
-        FAIL(1, "FAIL");
+        /** Fail processing.
+         *
+         * <p> Kafka Streams will raise an exception and the {@code StreamsThread} will fail.
+         * No offsets (for {@link org.apache.kafka.streams.StreamsConfig#AT_LEAST_ONCE at-least-once}) or transactions
+         * (for {@link org.apache.kafka.streams.StreamsConfig#EXACTLY_ONCE_V2 exactly-once}) will be committed.
+         */
+        FAIL(1, "FAIL"),
+        /** Retry the failed operation.
+         *
+         * <p> Retrying might imply that a {@link TaskCorruptedException} exception is thrown, and that the retry
+         * is started from the last committed offset.
+         *
+         * <p> <b>NOTE:</b> {@code RETRY} is only a valid return value for
+         * {@link org.apache.kafka.common.errors.RetriableException retriable exceptions}.
+         * If {@code RETRY} is returned for a non-retriable exception it will be interpreted as {@link #FAIL}.
+         */
+        RETRY(2, "RETRY");
 
         /**
-         * an english description of the api--this is for debugging and can change
+         * An english description for the used option. This is for debugging only and may change.
          */
         public final String name;
 
         /**
-         * the permanent and immutable id of an API--this can't change ever
+         * The permanent and immutable id for the used option. This can't change ever.
          */
         public final int id;
 
@@ -108,9 +125,9 @@ public interface ProductionExceptionHandler extends Configurable {
     }
 
     enum SerializationExceptionOrigin {
-        /* serialization exception occurred during serialization of the key */
+        /** Serialization exception occurred during serialization of the key. */
         KEY,
-        /* serialization exception occurred during serialization of the value */
+        /** Serialization exception occurred during serialization of the value. */
         VALUE
     }
 }

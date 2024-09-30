@@ -73,12 +73,14 @@ import org.apache.kafka.coordinator.group.{Group, GroupCoordinator}
 import org.apache.kafka.coordinator.share.ShareCoordinator
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.server.common.{GroupVersion, MetadataVersion, RequestLocal}
+import org.apache.kafka.server.common.{GroupVersion, MetadataVersion, RequestLocal, TransactionVersion}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_11_0_IV0, IBP_2_3_IV0}
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.share.context.ShareFetchContext
-import org.apache.kafka.server.share.{ErroneousAndValidPartitionData, ShareAcknowledgementBatch}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, FetchParams, FetchPartitionData}
+import org.apache.kafka.server.share.ErroneousAndValidPartitionData
+import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch
+import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
+import org.apache.kafka.storage.internals.log.AppendOrigin
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import java.lang.{Long => JLong}
@@ -1206,7 +1208,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else {
       replicaManager.fetchOffset(authorizedRequestInfo, offsetRequest.duplicatePartitions().asScala,
         offsetRequest.isolationLevel(), offsetRequest.replicaId(), clientId, correlationId, version,
-        buildErrorResponse, sendV1ResponseCallback)
+        buildErrorResponse, sendV1ResponseCallback, offsetRequest.timeoutMs())
     }
   }
 
@@ -2315,7 +2317,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val transactionalId = endTxnRequest.data.transactionalId
 
     if (authHelper.authorize(request.context, WRITE, TRANSACTIONAL_ID, transactionalId)) {
-      def sendResponseCallback(error: Errors): Unit = {
+      def sendResponseCallback(error: Errors, newProducerId: Long, newProducerEpoch: Short): Unit = {
         def createResponse(requestThrottleMs: Int): AbstractResponse = {
           val finalError =
             if (endTxnRequest.version < 2 && error == Errors.PRODUCER_FENCED) {
@@ -2327,6 +2329,8 @@ class KafkaApis(val requestChannel: RequestChannel,
             }
           val responseBody = new EndTxnResponse(new EndTxnResponseData()
             .setErrorCode(finalError.code)
+            .setProducerId(newProducerId)
+            .setProducerEpoch(newProducerEpoch)
             .setThrottleTimeMs(requestThrottleMs))
           trace(s"Completed ${endTxnRequest.data.transactionalId}'s EndTxnRequest " +
             s"with committed: ${endTxnRequest.data.committed}, " +
@@ -2336,10 +2340,14 @@ class KafkaApis(val requestChannel: RequestChannel,
         requestHelper.sendResponseMaybeThrottle(request, createResponse)
       }
 
+      // If the request is version 4, we know the client supports transaction version 2.
+      val clientTransactionVersion = if (endTxnRequest.version() > 4) TransactionVersion.TV_2 else TransactionVersion.TV_0
+
       txnCoordinator.handleEndTransaction(endTxnRequest.data.transactionalId,
         endTxnRequest.data.producerId,
         endTxnRequest.data.producerEpoch,
         endTxnRequest.result(),
+        clientTransactionVersion,
         sendResponseCallback,
         requestLocal)
     } else

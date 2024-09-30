@@ -39,8 +39,9 @@ import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, Transacti
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.record.BrokerCompressionType
+import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.Scheduler
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation}
+import org.apache.kafka.storage.internals.log.AppendOrigin
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -101,8 +102,10 @@ class TransactionStateManager(brokerId: Int,
     TransactionStateManagerConfig.METRICS_GROUP,
     "The avg time it took to load the partitions in the last 30sec"), new Avg())
 
-  private[transaction] def usesFlexibleRecords(): Boolean = {
-    metadataCache.features().finalizedFeatures().getOrDefault(TransactionVersion.FEATURE_NAME, 0.toShort) > 0
+  private[transaction] def transactionVersionLevel(): TransactionVersion = {
+    val version = TransactionVersion.fromFeatureLevel(metadataCache.features().finalizedFeatures().getOrDefault(
+      TransactionVersion.FEATURE_NAME, 0.toShort))
+    version
   }
 
   // visible for testing only
@@ -624,7 +627,7 @@ class TransactionStateManager(brokerId: Int,
 
     // generate the message for this transaction metadata
     val keyBytes = TransactionLog.keyToBytes(transactionalId)
-    val valueBytes = TransactionLog.valueToBytes(newMetadata, usesFlexibleRecords())
+    val valueBytes = TransactionLog.valueToBytes(newMetadata, transactionVersionLevel())
     val timestamp = time.milliseconds()
 
     val records = MemoryRecords.withRecords(TransactionLog.EnforcedCompression, new SimpleRecord(timestamp, keyBytes, valueBytes))
