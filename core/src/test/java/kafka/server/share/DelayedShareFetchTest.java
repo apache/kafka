@@ -16,7 +16,6 @@
  */
 package kafka.server.share;
 
-import kafka.server.DelayedActionQueue;
 import kafka.server.DelayedOperationPurgatory;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicaQuota;
@@ -29,11 +28,11 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.ShareFetchData;
+import org.apache.kafka.server.storage.log.FetchIsolation;
+import org.apache.kafka.server.storage.log.FetchParams;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
-import org.apache.kafka.server.storage.log.FetchIsolation;
-import org.apache.kafka.server.storage.log.FetchParams;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,6 +47,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import scala.jdk.javaapi.CollectionConverters;
 
@@ -356,13 +356,15 @@ public class DelayedShareFetchTest {
             new CompletableFuture<>(), partitionMaxBytes2);
 
         doAnswer(invocation -> buildLogReadResult(Collections.singleton(tp1))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+        // Counter for checking the number of times replicaManager.addCompleteDelayedShareFetchPurgatoryAction is called in the test.
+        AtomicInteger counter = new AtomicInteger();
+        doAnswer(invocationOnMock -> counter.addAndGet(1)).when(replicaManager).addCompleteDelayedShareFetchPurgatoryAction(
+            CollectionConverters.asScala(Collections.singleton(tp1)).toSeq(), groupId, delayedShareFetchPurgatory);
 
-        DelayedActionQueue delayedActionQueue = spy(new DelayedActionQueue());
         DelayedShareFetch delayedShareFetch2 = DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetchData2)
             .withReplicaManager(replicaManager)
             .withPartitionCacheMap(partitionCacheMap)
-            .withDelayedActionQueue(delayedActionQueue)
             .withDelayedShareFetchPurgatory(delayedShareFetchPurgatory)
             .build();
 
@@ -372,26 +374,21 @@ public class DelayedShareFetchTest {
         when(sp1.acquire(any(), any())).thenReturn(CompletableFuture.completedFuture(
             Collections.singletonList(new ShareFetchResponseData.AcquiredRecords().setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1))));
 
-        // run() method calls forceComplete followed by onExpiration. Since tp1 is common in between delayed share fetch
-        // requests, it should add a "check and complete" action for request key tp1 on the purgatory. When onExpiration
-        // gets called, then the delayedShareFetch1 should also be completed.
-        delayedShareFetch2.run();
+        // when forceComplete is called for delayedShareFetch2, since tp1 is common in between delayed share fetch
+        // requests, it should add a "check and complete" action for request key tp1 on the purgatory.
+        delayedShareFetch2.forceComplete();
         assertTrue(delayedShareFetch2.isCompleted());
         assertTrue(shareFetchData2.future().isDone());
-        Mockito.verify(replicaManager, times(2)).readFromLog(
+        Mockito.verify(replicaManager, times(1)).readFromLog(
             any(), any(), any(ReplicaQuota.class), anyBoolean());
-        assertTrue(delayedShareFetch1.isCompleted());
-        Mockito.verify(delayedActionQueue, times(1)).tryCompleteActions();
-        assertTrue(shareFetchData1.future().isDone());
-        // Only 1 watch key should be present in the purgatory corresponding to tp0. The entry corresponding to tp2 would have been completed.
-        assertEquals(1, delayedShareFetchPurgatory.watched());
+        assertFalse(delayedShareFetch1.isCompleted());
+        assertEquals(1, counter.get());
     }
 
     static class DelayedShareFetchBuilder {
         ShareFetchData shareFetchData = mock(ShareFetchData.class);
         private ReplicaManager replicaManager = mock(ReplicaManager.class);
         private Map<SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
-        private DelayedActionQueue delayedActionsQueue = mock(DelayedActionQueue.class);
         private DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = mock(DelayedOperationPurgatory.class);
 
         DelayedShareFetchBuilder withShareFetchData(ShareFetchData shareFetchData) {
@@ -409,11 +406,6 @@ public class DelayedShareFetchTest {
             return this;
         }
 
-        DelayedShareFetchBuilder withDelayedActionQueue(DelayedActionQueue delayedActionsQueue) {
-            this.delayedActionsQueue = delayedActionsQueue;
-            return this;
-        }
-
         DelayedShareFetchBuilder withDelayedShareFetchPurgatory(DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory) {
             this.delayedShareFetchPurgatory = delayedShareFetchPurgatory;
             return this;
@@ -428,7 +420,6 @@ public class DelayedShareFetchTest {
                 shareFetchData,
                 replicaManager,
                 partitionCacheMap,
-                delayedActionsQueue,
                 delayedShareFetchPurgatory);
         }
     }

@@ -16,7 +16,6 @@
  */
 package kafka.server.share;
 
-import kafka.server.DelayedActionQueue;
 import kafka.server.DelayedOperation;
 import kafka.server.DelayedOperationPurgatory;
 import kafka.server.LogReadResult;
@@ -56,7 +55,6 @@ public class DelayedShareFetch extends DelayedOperation {
     private final ShareFetchData shareFetchData;
     private final ReplicaManager replicaManager;
     private final Map<SharePartitionKey, SharePartition> partitionCacheMap;
-    private final DelayedActionQueue delayedActionQueue;
     private final DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory;
 
     private Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionDataFromTryComplete;
@@ -65,24 +63,17 @@ public class DelayedShareFetch extends DelayedOperation {
             ShareFetchData shareFetchData,
             ReplicaManager replicaManager,
             Map<SharePartitionKey, SharePartition> partitionCacheMap,
-            DelayedActionQueue delayedActionQueue,
             DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory) {
         super(shareFetchData.fetchParams().maxWaitMs, Option.empty());
         this.shareFetchData = shareFetchData;
         this.replicaManager = replicaManager;
         this.partitionCacheMap = partitionCacheMap;
-        this.delayedActionQueue = delayedActionQueue;
         this.delayedShareFetchPurgatory = delayedShareFetchPurgatory;
         this.topicPartitionDataFromTryComplete = new LinkedHashMap<>();
     }
 
-    /**
-     * Complete the delayed share fetch actions that were added to the queue. Since onExpiration serves as a callback for
-     * forceComplete, it should not lead to infinite call stack.
-     */
     @Override
     public void onExpiration() {
-        delayedActionQueue.tryCompleteActions();
     }
 
     /**
@@ -148,12 +139,7 @@ public class DelayedShareFetch extends DelayedOperation {
                     // then we should check if there is a pending share fetch request for the topic-partition and complete it.
                     // We add the action to delayed actions queue to avoid an infinite call stack, which could happen if
                     // we directly call delayedShareFetchPurgatory.checkAndComplete
-                    delayedActionQueue.add(() -> {
-                        result.keySet().forEach(topicIdPartition ->
-                            delayedShareFetchPurgatory.checkAndComplete(
-                                new DelayedShareFetchKey(shareFetchData.groupId(), topicIdPartition)));
-                        return BoxedUnit.UNIT;
-                    });
+                    replicaManager.addCompleteDelayedShareFetchPurgatoryAction(CollectionConverters.asScala(result.keySet()).toSeq(), shareFetchData.groupId(), delayedShareFetchPurgatory);
                 });
 
         } catch (Exception e) {

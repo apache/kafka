@@ -16,7 +16,6 @@
  */
 package kafka.server.share;
 
-import kafka.server.DelayedActionQueue;
 import kafka.server.DelayedOperationPurgatory;
 import kafka.server.LogReadResult;
 import kafka.server.ReplicaManager;
@@ -2298,7 +2297,6 @@ public class SharePartitionManagerTest {
         private Metrics metrics = new Metrics();
         private ConcurrentLinkedQueue<ShareFetchData> fetchQueue = new ConcurrentLinkedQueue<>();
         private DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = mock(DelayedOperationPurgatory.class);
-        private final DelayedActionQueue delayedActionsQueue = mock(DelayedActionQueue.class);
 
         private SharePartitionManagerBuilder withReplicaManager(ReplicaManager replicaManager) {
             this.replicaManager = replicaManager;
@@ -2361,8 +2359,7 @@ public class SharePartitionManagerTest {
                     MAX_IN_FLIGHT_MESSAGES,
                     persister,
                     metrics,
-                    delayedShareFetchPurgatory,
-                    delayedActionsQueue);
+                    delayedShareFetchPurgatory);
         }
     }
 }
