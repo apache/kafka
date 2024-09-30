@@ -32,6 +32,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.internals.SecurityManagerCompatibility;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Quota;
@@ -98,7 +99,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.security.PrivilegedAction;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -330,19 +330,15 @@ public class RemoteLogManager implements Closeable {
         }
     }
 
-    @SuppressWarnings("removal")
     RemoteStorageManager createRemoteStorageManager() {
-        return java.security.AccessController.doPrivileged(new PrivilegedAction<RemoteStorageManager>() {
-            private final String classPath = rlmConfig.remoteStorageManagerClassPath();
-
-            public RemoteStorageManager run() {
-                if (classPath != null && !classPath.trim().isEmpty()) {
-                    ChildFirstClassLoader classLoader = new ChildFirstClassLoader(classPath, this.getClass().getClassLoader());
-                    RemoteStorageManager delegate = createDelegate(classLoader, rlmConfig.remoteStorageManagerClassName());
-                    return new ClassLoaderAwareRemoteStorageManager(delegate, classLoader);
-                } else {
-                    return createDelegate(this.getClass().getClassLoader(), rlmConfig.remoteStorageManagerClassName());
-                }
+        return SecurityManagerCompatibility.get().doPrivileged(() -> {
+            final String classPath = rlmConfig.remoteStorageManagerClassPath();
+            if (classPath != null && !classPath.trim().isEmpty()) {
+                ChildFirstClassLoader classLoader = new ChildFirstClassLoader(classPath, this.getClass().getClassLoader());
+                RemoteStorageManager delegate = createDelegate(classLoader, rlmConfig.remoteStorageManagerClassName());
+                return (RemoteStorageManager) new ClassLoaderAwareRemoteStorageManager(delegate, classLoader);
+            } else {
+                return createDelegate(this.getClass().getClassLoader(), rlmConfig.remoteStorageManagerClassName());
             }
         });
     }
@@ -353,19 +349,15 @@ public class RemoteLogManager implements Closeable {
         remoteLogStorageManager.configure(rsmProps);
     }
 
-    @SuppressWarnings("removal")
     RemoteLogMetadataManager createRemoteLogMetadataManager() {
-        return java.security.AccessController.doPrivileged(new PrivilegedAction<RemoteLogMetadataManager>() {
-            private final String classPath = rlmConfig.remoteLogMetadataManagerClassPath();
-
-            public RemoteLogMetadataManager run() {
-                if (classPath != null && !classPath.trim().isEmpty()) {
-                    ClassLoader classLoader = new ChildFirstClassLoader(classPath, this.getClass().getClassLoader());
-                    RemoteLogMetadataManager delegate = createDelegate(classLoader, rlmConfig.remoteLogMetadataManagerClassName());
-                    return new ClassLoaderAwareRemoteLogMetadataManager(delegate, classLoader);
-                } else {
-                    return createDelegate(this.getClass().getClassLoader(), rlmConfig.remoteLogMetadataManagerClassName());
-                }
+        return SecurityManagerCompatibility.get().doPrivileged(() -> {
+            final String classPath = rlmConfig.remoteLogMetadataManagerClassPath();
+            if (classPath != null && !classPath.trim().isEmpty()) {
+                ClassLoader classLoader = new ChildFirstClassLoader(classPath, this.getClass().getClassLoader());
+                RemoteLogMetadataManager delegate = createDelegate(classLoader, rlmConfig.remoteLogMetadataManagerClassName());
+                return (RemoteLogMetadataManager) new ClassLoaderAwareRemoteLogMetadataManager(delegate, classLoader);
+            } else {
+                return createDelegate(this.getClass().getClassLoader(), rlmConfig.remoteLogMetadataManagerClassName());
             }
         });
     }
