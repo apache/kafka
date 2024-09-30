@@ -93,7 +93,7 @@ jobs:
           GITHUB_WORKSPACE: ${{ github.workspace }}
 
   integrate:
-    if: is-public-fork
+    if: inputs.is-public-fork
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
