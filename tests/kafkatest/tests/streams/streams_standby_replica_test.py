@@ -47,7 +47,7 @@ class StreamsStandbyTask(BaseStreamsTest):
                                                  })
 
     @cluster(num_nodes=10)
-    @matrix(metadata_quorum=[quorum.isolated_kraft], use_new_coordinator=[True, False])
+    @matrix(metadata_quorum=[quorum.combined_kraft], use_new_coordinator=[True, False])
     def test_standby_tasks_rebalance(self, metadata_quorum, use_new_coordinator=False):
         # TODO KIP-441: consider rewriting the test for HighAvailabilityTaskAssignor
         configs = self.get_configs(
