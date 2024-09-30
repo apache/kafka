@@ -3581,7 +3581,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               Collections.emptySet(),
               throttleTimeMs)
           case Right(featureUpdateErrors) =>
-            // This is response is not correct, but since this is ZK specific code it will be removed in 4.0
+            // This response is not correct, but since this is ZK specific code it will be removed in 4.0
             UpdateFeaturesResponse.createWithErrors(
               ApiError.NONE,
               featureUpdateErrors.asJava.keySet(),

@@ -85,7 +85,6 @@ import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
@@ -2314,7 +2313,8 @@ public final class QuorumController implements Controller {
             return featureControl.updateFeatures(updates, upgradeTypes, request.validateOnly());
         }).thenApply(result -> {
             UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData();
-                
+
+            // Only specify per feature responses if the error is None and request version is less than or equal to 1.
             if (result != ApiError.NONE) {
                 responseData.setErrorCode(result.error().code());
                 responseData.setErrorMessage("The update failed for all features since the following feature had an error: " + result.message());
@@ -2324,7 +2324,8 @@ public final class QuorumController implements Controller {
                     responseData.results().add(
                         new UpdateFeaturesResponseData.UpdatableFeatureResult()
                             .setFeature(featureName.feature())
-                            .setErrorCode(Errors.NONE.code())
+                            .setErrorCode(result.error().code())
+                            .setErrorMessage(result.error().message())
                 ));
             }
             return responseData;

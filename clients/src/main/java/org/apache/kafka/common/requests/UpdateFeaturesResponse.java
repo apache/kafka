@@ -85,7 +85,7 @@ public class UpdateFeaturesResponse extends AbstractResponse {
 
     public static UpdateFeaturesResponse createWithErrors(ApiError topLevelError, Set<String> updates, int throttleTimeMs) {
         final UpdatableFeatureResultCollection results = new UpdatableFeatureResultCollection();
-        if (topLevelError.error() == Errors.NONE) {
+        if (topLevelError == ApiError.NONE) {
             for (final String feature : updates) {
                 final UpdatableFeatureResult result = new UpdatableFeatureResult();
                 result.setFeature(feature)

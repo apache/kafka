@@ -6324,18 +6324,19 @@ public class KafkaAdminClientTest {
     }
 
     private void testUpdateFeatures(Map<String, FeatureUpdate> featureUpdates,
-                                    ApiError topLevelError) throws Exception {
+                                    ApiError topLevelError,
+                                    Set<String> updates) throws Exception {
         try (final AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().prepareResponse(
                 body -> body instanceof UpdateFeaturesRequest,
-                UpdateFeaturesResponse.createWithErrors(topLevelError, Utils.mkSet(), 0));
+                UpdateFeaturesResponse.createWithErrors(topLevelError, updates, 0));
             final Map<String, KafkaFuture<Void>> futures = env.adminClient().updateFeatures(
                 featureUpdates,
                 new UpdateFeaturesOptions().timeoutMs(10000)).values();
             for (final Map.Entry<String, KafkaFuture<Void>> entry : futures.entrySet()) {
                 final KafkaFuture<Void> future = entry.getValue();
                 if (topLevelError.error() == Errors.NONE) {
-                    // If any update fails, we should have a top level error. The future should be successful.
+                    // Since the top level error was NONE, each future should be successful.
                     future.get();
                 } else {
                     final ExecutionException e = assertThrows(ExecutionException.class, future::get);
@@ -6346,20 +6347,24 @@ public class KafkaAdminClientTest {
         }
     }
 
-    @Test
-    public void testUpdateFeaturesDuringSuccess() throws Exception {
+    @ParameterizedTest
+    @ValueSource(shorts = {1, 2})
+    public void testUpdateFeaturesDuringSuccess(short version) throws Exception {
         final Map<String, FeatureUpdate> updates = makeTestFeatureUpdates();
-        testUpdateFeatures(updates, ApiError.NONE);
+        // Only v1 and below specifies error codes per feature for NONE error.
+        Set<String> features = version <= 1 ? updates.keySet() : Utils.mkSet();
+        testUpdateFeatures(updates, ApiError.NONE, features);
     }
 
     @Test
     public void testUpdateFeaturesTopLevelError() throws Exception {
         final Map<String, FeatureUpdate> updates = makeTestFeatureUpdates();
-        testUpdateFeatures(updates, new ApiError(Errors.INVALID_REQUEST));
+        testUpdateFeatures(updates, new ApiError(Errors.INVALID_REQUEST), Utils.mkSet());
     }
 
-    @Test
-    public void testUpdateFeaturesHandleNotControllerException() throws Exception {
+    @ParameterizedTest
+    @ValueSource(shorts = {1, 2})
+    public void testUpdateFeaturesHandleNotControllerException(short version) throws Exception {
         try (final AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().prepareResponseFrom(
                 request -> request instanceof UpdateFeaturesRequest,
@@ -6373,11 +6378,13 @@ public class KafkaAdminClientTest {
                 env.cluster().clusterResource().clusterId(),
                 controllerId,
                 Collections.emptyList()));
+            // Only v1 and below specifies error codes per feature for NONE error.
+            Set<String> features = version <= 1 ? Utils.mkSet("test_feature_1", "test_feature_2") : Utils.mkSet();
             env.kafkaClient().prepareResponseFrom(
                 request -> request instanceof UpdateFeaturesRequest,
                 UpdateFeaturesResponse.createWithErrors(
                     ApiError.NONE,
-                    Utils.mkSet("test_feature_1", "test_feature_2"),
+                    features,
                     0),
                 env.cluster().nodeById(controllerId));
             final KafkaFuture<Void> future = env.adminClient().updateFeatures(
