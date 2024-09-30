@@ -111,7 +111,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@SuppressWarnings("deprecation")
 @Tag("integration")
 @Timeout(600)
 public class EosIntegrationTest {
@@ -163,8 +162,7 @@ public class EosIntegrationTest {
     @BeforeEach
     public void createTopics() throws Exception {
         applicationId = "appId-" + TEST_NUMBER.getAndIncrement();
-        CLUSTER.deleteTopicsAndWait(
-            60_000L,
+        CLUSTER.deleteTopics(
             SINGLE_PARTITION_INPUT_TOPIC, MULTI_PARTITION_INPUT_TOPIC,
             SINGLE_PARTITION_THROUGH_TOPIC, MULTI_PARTITION_THROUGH_TOPIC,
             SINGLE_PARTITION_OUTPUT_TOPIC, MULTI_PARTITION_OUTPUT_TOPIC);
@@ -1033,6 +1031,7 @@ public class EosIntegrationTest {
         return data;
     }
 
+    @SuppressWarnings("deprecation")
     // the threads should no longer fail one thread one at a time
     private KafkaStreams getKafkaStreams(final String dummyHostName,
                                          final boolean withState,
