@@ -96,6 +96,27 @@ public class PersisterStateBatch implements Comparable {
             ")";
     }
 
+    /**
+     * Compares 2 PersisterStateBatches in various dimensions.
+     * The priority of the dimensions are:
+     * - firstOffset
+     * - lastOffset
+     * - deliveryCount
+     * - deliveryState
+     * <p>
+     * Does not check all dimensions in every case. The first dimension
+     * check resulting in non-zero comparison result is returned.
+     * <p>
+     * In case the 2 objects are equal, all 4 dimension comparisons must
+     * be 0.
+     * <p>
+     * This method could be used for storing PersisterStateBatch objects
+     * in containers which allow a Comparator argument or various sort algorithms
+     * in the java library.
+     *
+     * @param o - object representing another PersisterStateBatch
+     * @return -INT, 0, +INT based on "this" being smaller, equal or larger than the argument.
+     */
     @Override
     public int compareTo(Object o) {
         PersisterStateBatch that = (PersisterStateBatch) o;
