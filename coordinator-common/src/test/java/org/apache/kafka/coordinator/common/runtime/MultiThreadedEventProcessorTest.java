@@ -446,7 +446,7 @@ public class MultiThreadedEventProcessorTest {
             // e1 poll time
             verify(mockRuntimeMetrics, times(1)).recordEventQueueTime(500L);
             // e1 processing time + e2 enqueue time
-            verify(mockRuntimeMetrics, times(1)).recordEventQueueProcessingTime(7000L);
+            verify(mockRuntimeMetrics, times(1)).recordEventProcessingTime(7000L);
 
             // Second event (e2)
 

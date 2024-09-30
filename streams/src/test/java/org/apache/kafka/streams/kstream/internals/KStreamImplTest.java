@@ -515,33 +515,6 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("named can't be null"));
     }
 
-    @Deprecated // specifically testing the deprecated variant
-    @Test
-    public void shouldNotAllowNullTopicOnThrough() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.through(null));
-        assertThat(exception.getMessage(), equalTo("topic can't be null"));
-    }
-
-    @Deprecated // specifically testing the deprecated variant
-    @Test
-    public void shouldNotAllowNullTopicOnThroughWithProduced() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.through(null, Produced.as("through")));
-        assertThat(exception.getMessage(), equalTo("topic can't be null"));
-    }
-
-    @Deprecated // specifically testing the deprecated variant
-    @Test
-    public void shouldNotAllowNullProducedOnThrough() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.through("topic", null));
-        assertThat(exception.getMessage(), equalTo("produced can't be null"));
-    }
-
     @Test
     public void shouldNotAllowNullTopicOnTo() {
         final NullPointerException exception = assertThrows(
@@ -1277,10 +1250,6 @@ public class KStreamImplTest {
         assertNull(((AbstractStream) stream1.merge(stream1)).keySerde());
         assertNull(((AbstractStream) stream1.merge(stream1)).valueSerde());
 
-        assertEquals(((AbstractStream) stream1.through("topic-3")).keySerde(), consumedInternal.keySerde());
-        assertEquals(((AbstractStream) stream1.through("topic-3")).valueSerde(), consumedInternal.valueSerde());
-        assertEquals(((AbstractStream) stream1.through("topic-3", Produced.with(mySerde, mySerde))).keySerde(), mySerde);
-        assertEquals(((AbstractStream) stream1.through("topic-3", Produced.with(mySerde, mySerde))).valueSerde(), mySerde);
 
         assertEquals(((AbstractStream) stream1.repartition()).keySerde(), consumedInternal.keySerde());
         assertEquals(((AbstractStream) stream1.repartition()).valueSerde(), consumedInternal.valueSerde());
@@ -1329,24 +1298,6 @@ public class KStreamImplTest {
         assertNull(((AbstractStream) stream1.leftJoin(table2, selector, joiner)).valueSerde());
     }
 
-    @Deprecated
-    @Test
-    public void shouldUseRecordMetadataTimestampExtractorWithThrough() {
-        final StreamsBuilder builder = new StreamsBuilder();
-        final KStream<String, String> stream1 = builder.stream(Arrays.asList("topic-1", "topic-2"), stringConsumed);
-        final KStream<String, String> stream2 = builder.stream(Arrays.asList("topic-3", "topic-4"), stringConsumed);
-
-        stream1.to("topic-5");
-        stream2.through("topic-6");
-
-        final ProcessorTopology processorTopology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").buildTopology();
-        assertThat(processorTopology.source("topic-6").getTimestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
-        assertNull(processorTopology.source("topic-4").getTimestampExtractor());
-        assertNull(processorTopology.source("topic-3").getTimestampExtractor());
-        assertNull(processorTopology.source("topic-2").getTimestampExtractor());
-        assertNull(processorTopology.source("topic-1").getTimestampExtractor());
-    }
-
     @Test
     public void shouldUseRecordMetadataTimestampExtractorWithRepartition() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -1357,27 +1308,11 @@ public class KStreamImplTest {
         stream2.repartition(Repartitioned.as("topic-6"));
 
         final ProcessorTopology processorTopology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").buildTopology();
-        assertThat(processorTopology.source("X-topic-6-repartition").getTimestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
-        assertNull(processorTopology.source("topic-4").getTimestampExtractor());
-        assertNull(processorTopology.source("topic-3").getTimestampExtractor());
-        assertNull(processorTopology.source("topic-2").getTimestampExtractor());
-        assertNull(processorTopology.source("topic-1").getTimestampExtractor());
-    }
-
-    @Deprecated
-    @Test
-    public void shouldSendDataThroughTopicUsingProduced() {
-        final StreamsBuilder builder = new StreamsBuilder();
-        final String input = "topic";
-        final KStream<String, String> stream = builder.stream(input, stringConsumed);
-        stream.through("through-topic", Produced.with(Serdes.String(), Serdes.String())).process(processorSupplier);
-
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            inputTopic.pipeInput("a", "b");
-        }
-        assertThat(processorSupplier.theCapturedProcessor().processed(), equalTo(Collections.singletonList(new KeyValueTimestamp<>("a", "b", 0))));
+        assertThat(processorTopology.source("X-topic-6-repartition").timestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
+        assertNull(processorTopology.source("topic-4").timestampExtractor());
+        assertNull(processorTopology.source("topic-3").timestampExtractor());
+        assertNull(processorTopology.source("topic-2").timestampExtractor());
+        assertNull(processorTopology.source("topic-1").timestampExtractor());
     }
 
     @Test
@@ -1455,9 +1390,9 @@ public class KStreamImplTest {
 
         for (final SourceNode<?, ?> sourceNode : topology.sources()) {
             if (sourceNode.name().equals(originalSourceNode.name())) {
-                assertNull(sourceNode.getTimestampExtractor());
+                assertNull(sourceNode.timestampExtractor());
             } else {
-                assertThat(sourceNode.getTimestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
+                assertThat(sourceNode.timestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
             }
         }
     }
@@ -1485,9 +1420,9 @@ public class KStreamImplTest {
 
         for (final SourceNode<?, ?> sourceNode : topology.sources()) {
             if (sourceNode.name().equals(originalSourceNode.name())) {
-                assertNull(sourceNode.getTimestampExtractor());
+                assertNull(sourceNode.timestampExtractor());
             } else {
-                assertThat(sourceNode.getTimestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
+                assertThat(sourceNode.timestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
             }
         }
     }

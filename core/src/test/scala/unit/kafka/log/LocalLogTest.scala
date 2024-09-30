@@ -20,6 +20,7 @@ package kafka.log
 import java.io.File
 import java.nio.channels.ClosedChannelException
 import java.nio.charset.StandardCharsets
+import java.util
 import java.util.regex.Pattern
 import java.util.Collections
 import kafka.server.KafkaConfig
@@ -30,7 +31,7 @@ import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.record.{MemoryRecords, Record, SimpleRecord}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.server.util.{MockTime, Scheduler}
-import org.apache.kafka.storage.internals.log.{FetchDataInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogSegment, LogSegments}
+import org.apache.kafka.storage.internals.log.{FetchDataInfo, LocalLog => JLocalLog, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogSegment, LogSegments}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -123,7 +124,7 @@ class LocalLogTest {
     log.roll()
     assertEquals(2, log.segments.numberOfSegments)
     assertFalse(logDir.listFiles.isEmpty)
-    val segmentsBeforeDelete = log.segments.values.asScala.toVector
+    val segmentsBeforeDelete = new util.ArrayList(log.segments.values)
     val deletedSegments = log.deleteAllSegments()
     assertTrue(log.segments.isEmpty)
     assertEquals(segmentsBeforeDelete, deletedSegments)
@@ -138,7 +139,7 @@ class LocalLogTest {
     assertEquals(1, log.segments.numberOfSegments)
     assertNotEquals(oldActiveSegment, log.segments.activeSegment)
     assertFalse(logDir.listFiles.isEmpty)
-    assertTrue(oldActiveSegment.hasSuffix(LocalLog.DeletedFileSuffix))
+    assertTrue(oldActiveSegment.hasSuffix(LogFileUtils.DELETED_FILE_SUFFIX))
   }
 
   @Test
@@ -306,17 +307,17 @@ class LocalLogTest {
 
     assertEquals(10L, log.segments.numberOfSegments)
 
-    val toDelete = log.segments.values.asScala.toVector
-    LocalLog.deleteSegmentFiles(toDelete, asyncDelete = asyncDelete, log.dir, log.topicPartition, log.config, log.scheduler, log.logDirFailureChannel, "")
+    val toDelete = log.segments.values
+    JLocalLog.deleteSegmentFiles(toDelete, asyncDelete, log.dir, log.topicPartition, log.config, log.scheduler, log.logDirFailureChannel, "")
     if (asyncDelete) {
-      toDelete.foreach {
+      toDelete.forEach {
         segment =>
           assertFalse(segment.deleted())
-          assertTrue(segment.hasSuffix(LocalLog.DeletedFileSuffix))
+          assertTrue(segment.hasSuffix(LogFileUtils.DELETED_FILE_SUFFIX))
       }
       mockTime.sleep(log.config.fileDeleteDelayMs + 1)
     }
-    toDelete.foreach(segment => assertTrue(segment.deleted()))
+    toDelete.forEach(segment => assertTrue(segment.deleted()))
   }
 
   @Test
@@ -339,7 +340,7 @@ class LocalLogTest {
     assertEquals(1, log.segments.numberOfSegments)
     assertEquals(newActiveSegment, log.segments.activeSegment)
     assertNotEquals(oldActiveSegment, log.segments.activeSegment)
-    assertTrue(oldActiveSegment.hasSuffix(LocalLog.DeletedFileSuffix))
+    assertTrue(oldActiveSegment.hasSuffix(LogFileUtils.DELETED_FILE_SUFFIX))
     assertEquals(newOffset, log.segments.activeSegment.baseOffset)
     assertEquals(0L, log.recoveryPoint)
     assertEquals(newOffset, log.logEndOffset)

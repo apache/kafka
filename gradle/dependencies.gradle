@@ -28,7 +28,7 @@ ext {
 
 // Add Scala version
 def defaultScala212Version = '2.12.19'
-def defaultScala213Version = '2.13.14'
+def defaultScala213Version = '2.13.15'
 if (hasProperty('scalaVersion')) {
   if (scalaVersion == '2.12') {
     versions["scala"] = defaultScala212Version
@@ -90,7 +90,7 @@ versions += [
   // gradle/resources/dependencycheck-suppressions.xml
   checkstyle: "8.36.2",
   commonsCli: "1.4",
-  commonsValidator: "1.7",
+  commonsValidator: "1.9.0",
   classgraph: "4.8.173",
   dropwizardMetrics: "4.1.12.1",
   gradle: "8.10",
@@ -160,8 +160,9 @@ versions += [
   zookeeper: "3.8.4",
   // When updating the zstd version, please do as well in docker/native/native-image-configs/resource-config.json
   // Also make sure the compression levels in org.apache.kafka.common.record.CompressionType are still valid
-  zstd: "1.5.6-4",
-  junitPlatform: "1.10.2"
+  zstd: "1.5.6-6",
+  junitPlatform: "1.10.2",
+  hdrHistogram: "2.2.2"
 ]
 
 libs += [
@@ -259,5 +260,6 @@ libs += [
   jfreechart: "jfreechart:jfreechart:$versions.jfreechart",
   mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",
   zstd: "com.github.luben:zstd-jni:$versions.zstd",
-  httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient"
+  httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient",
+  hdrHistogram: "org.hdrhistogram:HdrHistogram:$versions.hdrHistogram"
 ]

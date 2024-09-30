@@ -6284,7 +6284,7 @@ public class KafkaAdminClientTest {
             env.adminClient().listOffsets(Collections.singletonMap(tp0, OffsetSpec.earliestLocal()));
 
             TestUtils.waitForCondition(() -> env.kafkaClient().requests().stream().anyMatch(request ->
-                request.requestBuilder().apiKey().messageType == ApiMessageType.LIST_OFFSETS && request.requestBuilder().oldestAllowedVersion() == 9
+                request.requestBuilder().apiKey().messageType == ApiMessageType.LIST_OFFSETS && request.requestBuilder().oldestAllowedVersion() == 8
             ), "no listOffsets request has the expected oldestAllowedVersion");
         }
     }

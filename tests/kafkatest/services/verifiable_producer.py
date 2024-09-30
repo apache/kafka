@@ -23,7 +23,7 @@ from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import TopicPartition
 from kafkatest.services.verifiable_client import VerifiableClientMixin
 from kafkatest.utils import is_int, is_int_with_prefix
-from kafkatest.version import DEV_BRANCH
+from kafkatest.version import get_version, V_2_5_0, DEV_BRANCH
 from kafkatest.services.kafka.util import fix_opts_for_new_jvm
 
 
@@ -224,7 +224,12 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         cmd += fix_opts_for_new_jvm(node)
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % VerifiableProducer.LOG4J_CONFIG
         cmd += self.impl.exec_cmd(node)
-        cmd += " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol, True, self.offline_nodes))
+        version = get_version(node)
+        if version >= V_2_5_0:
+            server_option_flag = "--bootstrap-server"
+        else:
+            server_option_flag = "--broker-list"
+        cmd += " --topic %s %s %s" % (self.topic, server_option_flag, self.kafka.bootstrap_servers(self.security_config.security_protocol, True, self.offline_nodes))
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)
         if self.throughput > 0:

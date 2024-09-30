@@ -275,7 +275,7 @@ public class InternalTopologyBuilder {
             this.timestampExtractor = timestampExtractor;
         }
 
-        List<String> getTopics(final Collection<String> subscribedTopics) {
+        List<String> topics(final Collection<String> subscribedTopics) {
             // if it is subscribed via patterns, it is possible that the topic metadata has not been updated
             // yet and hence the map from source node to topics is stale, in this case we put the pattern as a place holder;
             // this should only happen for debugging since during runtime this function should always be called after the metadata has updated.
@@ -675,7 +675,7 @@ public class InternalTopologyBuilder {
         }
     }
 
-    public Long getHistoryRetention(final String storeName) {
+    public Long historyRetention(final String storeName) {
         return stateFactories.get(storeName).historyRetention();
     }
 
@@ -698,7 +698,7 @@ public class InternalTopologyBuilder {
         nodeGroups = null;
     }
 
-    public String getStoreForChangelogTopic(final String topicName) {
+    public String storeForChangelogTopic(final String topicName) {
         return changelogTopicToStore.get(topicName);
     }
 
@@ -1081,7 +1081,7 @@ public class InternalTopologyBuilder {
                                  final SourceNode<?, ?> node) {
 
         final List<String> topics = (sourceNodeFactory.pattern != null) ?
-            sourceNodeFactory.getTopics(subscriptionUpdates()) :
+            sourceNodeFactory.topics(subscriptionUpdates()) :
             sourceNodeFactory.topics;
 
         for (final String topic : topics) {
@@ -1115,7 +1115,7 @@ public class InternalTopologyBuilder {
                     if (storeFactory.loggingEnabled() && !storeToChangelogTopic.containsKey(stateStoreName)) {
                         final String prefix = topologyConfigs == null ?
                                 applicationId :
-                                ProcessorContextUtils.getPrefix(topologyConfigs.applicationConfigs.originals(), applicationId);
+                                ProcessorContextUtils.topicNamePrefix(topologyConfigs.applicationConfigs.originals(), applicationId);
                         final String changelogTopic =
                             ProcessorStateManager.storeChangelogTopic(prefix, stateStoreName, topologyName);
                         storeToChangelogTopic.put(stateStoreName, changelogTopic);
@@ -1264,7 +1264,7 @@ public class InternalTopologyBuilder {
         if (hasSubscriptionUpdates()) {
             for (final String nodeName : nodeToSourcePatterns.keySet()) {
                 final SourceNodeFactory<?, ?> sourceNode = (SourceNodeFactory<?, ?>) nodeFactories.get(nodeName);
-                final List<String> sourceTopics = sourceNode.getTopics(subscriptionUpdates);
+                final List<String> sourceTopics = sourceNode.topics(subscriptionUpdates);
                 //need to update nodeToSourceTopics and sourceTopicNames with topics matched from given regex
                 nodeToSourceTopics.put(nodeName, sourceTopics);
                 rawSourceTopicNames.addAll(sourceTopics);
@@ -1416,7 +1416,7 @@ public class InternalTopologyBuilder {
         }
         final String prefix = topologyConfigs == null ?
                                 applicationId :
-                                ProcessorContextUtils.getPrefix(topologyConfigs.applicationConfigs.originals(), applicationId);
+                                ProcessorContextUtils.topicNamePrefix(topologyConfigs.applicationConfigs.originals(), applicationId);
 
         if (hasNamedTopology()) {
             return prefix + "-" + topologyName + "-" + topic;

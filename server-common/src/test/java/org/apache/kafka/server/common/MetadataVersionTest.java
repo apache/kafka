@@ -17,6 +17,7 @@
 
 package org.apache.kafka.server.common;
 
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.record.RecordVersion;
 
 import org.junit.jupiter.api.Test;
@@ -194,6 +195,8 @@ class MetadataVersionTest {
 
         assertEquals(IBP_4_0_IV0, MetadataVersion.fromVersionString("4.0-IV0"));
         assertEquals(IBP_4_0_IV1, MetadataVersion.fromVersionString("4.0-IV1"));
+        assertEquals(IBP_4_0_IV2, MetadataVersion.fromVersionString("4.0-IV2"));
+        assertEquals(IBP_4_0_IV3, MetadataVersion.fromVersionString("4.0-IV3"));
     }
 
     @Test
@@ -257,6 +260,8 @@ class MetadataVersionTest {
         assertEquals("3.9", IBP_3_9_IV0.shortVersion());
         assertEquals("4.0", IBP_4_0_IV0.shortVersion());
         assertEquals("4.0", IBP_4_0_IV1.shortVersion());
+        assertEquals("4.0", IBP_4_0_IV2.shortVersion());
+        assertEquals("4.0", IBP_4_0_IV3.shortVersion());
     }
 
     @Test
@@ -309,6 +314,8 @@ class MetadataVersionTest {
         assertEquals("3.9-IV0", IBP_3_9_IV0.version());
         assertEquals("4.0-IV0", IBP_4_0_IV0.version());
         assertEquals("4.0-IV1", IBP_4_0_IV1.version());
+        assertEquals("4.0-IV2", IBP_4_0_IV2.version());
+        assertEquals("4.0-IV3", IBP_4_0_IV3.version());
     }
 
     @Test
@@ -376,7 +383,7 @@ class MetadataVersionTest {
     @ParameterizedTest
     @EnumSource(value = MetadataVersion.class)
     public void testIsElrSupported(MetadataVersion metadataVersion) {
-        assertEquals(metadataVersion.isAtLeast(IBP_4_0_IV0), metadataVersion.isElrSupported());
+        assertEquals(metadataVersion.isAtLeast(IBP_4_0_IV1), metadataVersion.isElrSupported());
     }
 
     @ParameterizedTest
@@ -466,6 +473,20 @@ class MetadataVersionTest {
             " to be less than the latest of " + MetadataVersion.latestTesting());
     }
 
+    /**
+     * We need to ensure that the latest production MV doesn't inadvertently rely on an unstable
+     * request version. Currently, the broker selects the version for some inter-broker RPCs based on the MV 
+     * rather than using the supported version from the ApiResponse.
+     */
+    @Test
+    public void testProductionMetadataDontUseUnstableApiVersion() {
+        MetadataVersion mv = MetadataVersion.latestProduction();
+        assertTrue(mv.listOffsetRequestVersion() <= ApiKeys.LIST_OFFSETS.latestVersion(false));
+        assertTrue(mv.fetchRequestVersion() <= ApiKeys.FETCH.latestVersion(false));
+        assertTrue(mv.offsetForLeaderEpochRequestVersion() <= ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(false));
+        assertTrue(mv.writeTxnMarkersRequestVersion() <= ApiKeys.WRITE_TXN_MARKERS.latestVersion(false));
+    }
+
     @Test
     public void assertLatestProductionIsProduction() {
         assertTrue(LATEST_PRODUCTION.isProduction());
@@ -474,5 +495,16 @@ class MetadataVersionTest {
     @Test
     public void assertLatestIsNotProduction() {
         assertFalse(MetadataVersion.latestTesting().isProduction());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
+    public void testListOffsetsValueVersion(MetadataVersion metadataVersion) {
+        final short expectedVersion = 10;
+        if (metadataVersion.isAtLeast(IBP_4_0_IV3)) {
+            assertEquals(expectedVersion, metadataVersion.listOffsetRequestVersion());
+        } else {
+            assertTrue(metadataVersion.listOffsetRequestVersion() < expectedVersion);
+        }
     }
 }

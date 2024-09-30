@@ -22,7 +22,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.BranchedKStream;
 import org.apache.kafka.streams.kstream.ForeachAction;
-import org.apache.kafka.streams.kstream.ForeachProcessor;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.JoinWindows;
@@ -56,7 +55,6 @@ import org.apache.kafka.streams.kstream.internals.graph.StreamTableJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamToTableNode;
 import org.apache.kafka.streams.kstream.internals.graph.UnoptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.UnoptimizableRepartitionNode.UnoptimizableRepartitionNodeBuilder;
-import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
@@ -68,7 +66,6 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDBTimeOrderedKeyValueBuffer;
 
-import java.lang.reflect.Array;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -103,10 +100,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     static final String SINK_NAME = "KSTREAM-SINK-";
 
     static final String REPARTITION_TOPIC_SUFFIX = "-repartition";
-
-    private static final String BRANCH_NAME = "KSTREAM-BRANCH-";
-
-    private static final String BRANCHCHILD_NAME = "KSTREAM-BRANCHCHILD-";
 
     private static final String FILTER_NAME = "KSTREAM-FILTER-";
 
@@ -450,45 +443,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             builder);
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private KStream<K, V>[] doBranch(final NamedInternal named,
-                                     final Predicate<? super K, ? super V>... predicates) {
-        Objects.requireNonNull(predicates, "predicates can't be a null array");
-        if (predicates.length == 0) {
-            throw new IllegalArgumentException("branch() requires at least one predicate");
-        }
-        for (final Predicate<? super K, ? super V> predicate : predicates) {
-            Objects.requireNonNull(predicate, "predicates can't be null");
-        }
-
-        final String branchName = named.orElseGenerateWithPrefix(builder, BRANCH_NAME);
-        final String[] childNames = new String[predicates.length];
-        for (int i = 0; i < predicates.length; i++) {
-            childNames[i] = named.suffixWithOrElseGet("-predicate-" + i, builder, BRANCHCHILD_NAME);
-        }
-
-        final ProcessorParameters processorParameters =
-            new ProcessorParameters<>(new KStreamBranch(Arrays.asList(predicates.clone()),
-                    Arrays.asList(childNames)), branchName);
-        final ProcessorGraphNode<K, V> branchNode =
-            new ProcessorGraphNode<>(branchName, processorParameters);
-
-        builder.addGraphNode(graphNode, branchNode);
-
-        final KStream<K, V>[] branchChildren = (KStream<K, V>[]) Array.newInstance(KStream.class, predicates.length);
-        for (int i = 0; i < predicates.length; i++) {
-            final ProcessorParameters innerProcessorParameters =
-                new ProcessorParameters<>(new PassThrough<K, V>(), childNames[i]);
-            final ProcessorGraphNode<K, V> branchChildNode =
-                new ProcessorGraphNode<>(childNames[i], innerProcessorParameters);
-
-            builder.addGraphNode(branchNode, branchChildNode);
-            branchChildren[i] = new KStreamImpl<>(childNames[i], keySerde, valueSerde, subTopologySourceNodes, repartitionRequired, branchChildNode, builder);
-        }
-
-        return branchChildren;
-    }
-
     @Override
     public BranchedKStream<K, V> split() {
         return new BranchedKStreamImpl<>(this, repartitionRequired, NamedInternal.empty());
@@ -541,39 +495,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             requireRepartitioning,
             mergeNode,
             builder);
-    }
-
-    @Deprecated
-    @Override
-    public KStream<K, V> through(final String topic) {
-        return through(topic, Produced.with(keySerde, valueSerde, null));
-    }
-
-    @Deprecated
-    @Override
-    public KStream<K, V> through(final String topic,
-                                 final Produced<K, V> produced) {
-        Objects.requireNonNull(topic, "topic can't be null");
-        Objects.requireNonNull(produced, "produced can't be null");
-
-        final ProducedInternal<K, V> producedInternal = new ProducedInternal<>(produced);
-        if (producedInternal.keySerde() == null) {
-            producedInternal.withKeySerde(keySerde);
-        }
-        if (producedInternal.valueSerde() == null) {
-            producedInternal.withValueSerde(valueSerde);
-        }
-        to(topic, producedInternal);
-
-        return builder.stream(
-            Collections.singleton(topic),
-            new ConsumedInternal<>(
-                producedInternal.keySerde(),
-                producedInternal.valueSerde(),
-                new FailOnInvalidTimestamp(),
-                null
-            )
-        );
     }
 
     @Override

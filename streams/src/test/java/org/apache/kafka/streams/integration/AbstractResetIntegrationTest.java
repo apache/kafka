@@ -150,7 +150,7 @@ public abstract class AbstractResetIntegrationTest {
 
     protected static final int STREAMS_CONSUMER_TIMEOUT = 2000;
     protected static final int CLEANUP_CONSUMER_TIMEOUT = 2000;
-    protected static final int TIMEOUT_MULTIPLIER = 15;
+    protected static final int TIMEOUT_MULTIPLIER = 30;
 
     void prepareTest(final TestInfo testInfo) throws Exception {
         final String appID = IntegrationTestUtils.safeUniqueTestName(testInfo);
@@ -159,7 +159,7 @@ public abstract class AbstractResetIntegrationTest {
 
         waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT);
 
-        cluster.deleteAllTopicsAndWait(120000);
+        cluster.deleteAllTopics();
         cluster.createTopics(INPUT_TOPIC, OUTPUT_TOPIC, OUTPUT_TOPIC_2, OUTPUT_TOPIC_2_RERUN);
 
         add10InputElements();
@@ -199,7 +199,7 @@ public abstract class AbstractResetIntegrationTest {
 
         // RUN
         streams = new KafkaStreams(setupTopologyWithIntermediateTopic(true, OUTPUT_TOPIC_2), streamsConfig);
-        streams.start();
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
         IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
 
         streams.close();
@@ -272,7 +272,7 @@ public abstract class AbstractResetIntegrationTest {
 
         // RUN
         streams = new KafkaStreams(setupTopologyWithIntermediateTopic(useRepartitioned, OUTPUT_TOPIC_2), streamsConfig);
-        streams.start();
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
         final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
         // receive only first values to make sure intermediate user topic is not consumed completely
         // => required to test "seekToEnd" for intermediate topics
@@ -301,7 +301,7 @@ public abstract class AbstractResetIntegrationTest {
         assertInternalTopicsGotDeleted(useRepartitioned ? null : INTERMEDIATE_USER_TOPIC);
 
         // RE-RUN
-        streams.start();
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
         final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
         final List<KeyValue<Long, Long>> resultRerun2 = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC_2_RERUN, 40);
         streams.close();
@@ -323,11 +323,10 @@ public abstract class AbstractResetIntegrationTest {
         cleanGlobal(!useRepartitioned, null, null, appID);
 
         if (!useRepartitioned) {
-            cluster.deleteTopicAndWait(INTERMEDIATE_USER_TOPIC);
+            cluster.deleteTopic(INTERMEDIATE_USER_TOPIC);
         }
     }
 
-    @SuppressWarnings("deprecation")
     private Topology setupTopologyWithIntermediateTopic(final boolean useRepartitioned,
                                                         final String outputTopic2) {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -349,7 +348,7 @@ public abstract class AbstractResetIntegrationTest {
             stream = builder.stream(INTERMEDIATE_USER_TOPIC);
         }
         stream.groupByKey()
-            .windowedBy(TimeWindows.of(ofMillis(35)).advanceBy(ofMillis(10)))
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(35)).advanceBy(ofMillis(10)))
             .count()
             .toStream()
             .map((key, value) -> new KeyValue<>(key.window().start() + key.window().end(), value))
@@ -421,7 +420,6 @@ public abstract class AbstractResetIntegrationTest {
     }
 
     protected void assertInternalTopicsGotDeleted(final String additionalExistingTopic) throws Exception {
-        // do not use list topics request, but read from the embedded cluster's zookeeper path directly to confirm
         if (additionalExistingTopic != null) {
             cluster.waitForRemainingTopics(30000, INPUT_TOPIC, OUTPUT_TOPIC, OUTPUT_TOPIC_2, OUTPUT_TOPIC_2_RERUN,
                     Topic.GROUP_METADATA_TOPIC_NAME, additionalExistingTopic);

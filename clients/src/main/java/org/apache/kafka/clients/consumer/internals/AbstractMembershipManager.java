@@ -23,11 +23,13 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.Time;
 
 import org.slf4j.Logger;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -42,6 +44,7 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.unmodifiableList;
@@ -50,13 +53,14 @@ import static java.util.Collections.unmodifiableList;
  * A stateful object tracking the state of a single member in relationship to a group:
  * <p/>
  * Responsible for:
- * <li>Keeping member state</li>
- * <li>Keeping assignment for the member</li>
- * <li>Computing assignment for the group if the member is required to do so<li/>
- * <p/>
- * The class variable R is the response data for the specific group's heartbeat RPC.
+ * <ul>
+ *   <li>Keeping member state</li>
+ *   <li>Keeping assignment for the member</li>
+ *   <li>Computing assignment for the group if the member is required to do so</li>
+ * </ul>
+ * The class variable R is the response for the specific group's heartbeat RPC.
  */
-public abstract class AbstractMembershipManager<R> implements RequestManager {
+public abstract class AbstractMembershipManager<R extends AbstractResponse> implements RequestManager {
 
     /**
      * TopicPartition comparator based on topic name and partition.
@@ -186,6 +190,12 @@ public abstract class AbstractMembershipManager<R> implements RequestManager {
     private final RebalanceMetricsManager metricsManager;
 
     private final Time time;
+
+    /**
+     * AtomicBoolean to track whether the subscription is updated.
+     * If it's true and subscription state is UNSUBSCRIBED, the next {@link #onConsumerPoll()} will change member state to JOINING.
+     */
+    private final AtomicBoolean subscriptionUpdated = new AtomicBoolean(false);
 
     /**
      * True if the poll timer has expired, signaled by a call to
@@ -456,14 +466,24 @@ public abstract class AbstractMembershipManager<R> implements RequestManager {
     }
 
     /**
-     * Join the group with the updated subscription, if the member is not part of it yet. If the
-     * member is already part of the group, this will only ensure that the updated subscription
+     * Set {@link #subscriptionUpdated} to true to indicate that the subscription has been updated.
+     * The next {@link #onConsumerPoll()} will join the group with the updated subscription, if the member is not part of it yet.
+     * If the member is already part of the group, this will only ensure that the updated subscription
      * is included in the next heartbeat request.
      * <p/>
      * Note that list of topics of the subscription is taken from the shared subscription state.
      */
     public void onSubscriptionUpdated() {
-        if (state == MemberState.UNSUBSCRIBED) {
+        subscriptionUpdated.compareAndSet(false, true);
+    }
+
+    /**
+     * Join the group if the member is not part of it yet. This function separates {@link #transitionToJoining}
+     * from the {@link #onSubscriptionUpdated} to fulfill the requirement of the "rebalances will only occur during an
+     * active call to {@link org.apache.kafka.clients.consumer.KafkaConsumer#poll(Duration)}"
+     */
+    public void onConsumerPoll() {
+        if (subscriptionUpdated.compareAndSet(true, false) && state == MemberState.UNSUBSCRIBED) {
             transitionToJoining();
         }
     }
@@ -1405,5 +1425,12 @@ public abstract class AbstractMembershipManager<R> implements RequestManager {
             long nextLocalEpoch = localEpoch + 1;
             return Optional.of(new LocalAssignment(nextLocalEpoch, assignment));
         }
+    }
+
+    /*
+     * Visible for testing.
+     */
+    boolean subscriptionUpdated() {
+        return subscriptionUpdated.get();
     }
 }

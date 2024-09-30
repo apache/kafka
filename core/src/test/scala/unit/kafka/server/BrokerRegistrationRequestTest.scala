@@ -34,16 +34,15 @@ import org.apache.kafka.common.{Node, Uuid}
 import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
-import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.extension.ExtendWith
 
+import java.util
 import java.util.Collections
 import java.util.concurrent.{CompletableFuture, TimeUnit, TimeoutException}
 
 /**
  * This test simulates a broker registering with the KRaft quorum under different configurations.
  */
-@Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class BrokerRegistrationRequestTest {
 
@@ -122,6 +121,13 @@ class BrokerRegistrationRequestTest {
       .setIncarnationId(Uuid.randomUuid())
       .setIsMigratingZkBroker(zkEpoch.isDefined)
       .setFeatures(features)
+      .setListeners(new BrokerRegistrationRequestData.ListenerCollection(util.Arrays.asList(
+        new BrokerRegistrationRequestData.Listener().
+          setName("EXTERNAL").
+          setHost("example.com").
+          setPort(8082).
+          setSecurityProtocol(SecurityProtocol.PLAINTEXT.id))
+            .iterator()))
 
     val resp = sendAndReceive[BrokerRegistrationRequest, BrokerRegistrationResponse](
       channelManager, new BrokerRegistrationRequest.Builder(req), 30000)

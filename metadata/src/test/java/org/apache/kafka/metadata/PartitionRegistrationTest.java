@@ -287,7 +287,7 @@ public class PartitionRegistrationTest {
         return Stream.of(
             MetadataVersion.IBP_3_7_IV1,
             MetadataVersion.IBP_3_7_IV2,
-            MetadataVersion.IBP_4_0_IV0
+            MetadataVersion.IBP_4_0_IV1
         ).map(Arguments::of);
     }
 
@@ -373,7 +373,7 @@ public class PartitionRegistrationTest {
             setPartitionEpoch(0);
         List<UnwritableMetadataException> exceptions = new ArrayList<>();
         ImageWriterOptions options = new ImageWriterOptions.Builder().
-            setMetadataVersion(MetadataVersion.IBP_4_0_IV0).
+            setMetadataVersion(MetadataVersion.IBP_4_0_IV1).
             setLossHandler(exceptions::add).
             build();
         assertEquals(new ApiMessageAndVersion(expectRecord, (short) 2), partitionRegistration.toRecord(topicID, 0, options));
