@@ -20,9 +20,9 @@ package kafka.server
 import java.net.InetAddress
 import java.util
 import java.util.concurrent.{ExecutionException, TimeUnit}
-import kafka.test.ClusterInstance
-import kafka.test.annotation.ClusterTest
-import kafka.test.junit.ClusterTestExtensions
+import org.apache.kafka.testkit.ClusterInstance
+import org.apache.kafka.testkit.annotation.ClusterTest
+import org.apache.kafka.testkit.junit.ClusterTestExtensions
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{ScramCredentialInfo, ScramMechanism, UserScramCredentialUpsertion}
 import org.apache.kafka.common.errors.{InvalidRequestException, UnsupportedVersionException}

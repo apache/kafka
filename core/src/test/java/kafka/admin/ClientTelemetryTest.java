@@ -17,12 +17,6 @@
 
 package kafka.admin;
 
-import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterConfigProperty;
-import kafka.test.annotation.ClusterTest;
-import kafka.test.annotation.Type;
-import kafka.test.junit.ClusterTestExtensions;
-
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -44,6 +38,11 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.server.telemetry.ClientTelemetry;
 import org.apache.kafka.server.telemetry.ClientTelemetryReceiver;
+import org.apache.kafka.testkit.ClusterInstance;
+import org.apache.kafka.testkit.annotation.ClusterConfigProperty;
+import org.apache.kafka.testkit.annotation.ClusterTest;
+import org.apache.kafka.testkit.annotation.Type;
+import org.apache.kafka.testkit.junit.ClusterTestExtensions;
 
 import org.junit.jupiter.api.extension.ExtendWith;
 

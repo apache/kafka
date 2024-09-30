@@ -17,12 +17,6 @@
 package kafka.admin;
 
 import kafka.admin.AclCommand.AclCommandOptions;
-import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterConfigProperty;
-import kafka.test.annotation.ClusterTest;
-import kafka.test.annotation.ClusterTestDefaults;
-import kafka.test.annotation.Type;
-import kafka.test.junit.ClusterTestExtensions;
 
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBindingFilter;
@@ -39,6 +33,12 @@ import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
 import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.testkit.ClusterInstance;
+import org.apache.kafka.testkit.annotation.ClusterConfigProperty;
+import org.apache.kafka.testkit.annotation.ClusterTest;
+import org.apache.kafka.testkit.annotation.ClusterTestDefaults;
+import org.apache.kafka.testkit.annotation.Type;
+import org.apache.kafka.testkit.junit.ClusterTestExtensions;
 
 import org.apache.log4j.Level;
 import org.junit.jupiter.api.Test;

@@ -17,9 +17,9 @@
 
 package kafka.server
 
-import kafka.test.ClusterInstance
-import kafka.test.annotation.{ClusterTest, ClusterTests, Type}
-import kafka.test.junit.ClusterTestExtensions
+import org.apache.kafka.testkit.ClusterInstance
+import org.apache.kafka.testkit.annotation.{ClusterTest, ClusterTests, Type}
+import org.apache.kafka.testkit.junit.ClusterTestExtensions
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.FeatureUpdate.UpgradeType
 import org.apache.kafka.clients.admin.{FeatureUpdate, UpdateFeaturesOptions}

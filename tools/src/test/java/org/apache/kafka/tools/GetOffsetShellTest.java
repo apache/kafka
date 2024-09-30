@@ -17,14 +17,6 @@
 
 package org.apache.kafka.tools;
 
-import kafka.test.ClusterConfig;
-import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterConfigProperty;
-import kafka.test.annotation.ClusterTemplate;
-import kafka.test.annotation.ClusterTest;
-import kafka.test.annotation.ClusterTestDefaults;
-import kafka.test.junit.ClusterTestExtensions;
-
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -43,6 +35,13 @@ import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMe
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorage;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.testkit.ClusterConfig;
+import org.apache.kafka.testkit.ClusterInstance;
+import org.apache.kafka.testkit.annotation.ClusterConfigProperty;
+import org.apache.kafka.testkit.annotation.ClusterTemplate;
+import org.apache.kafka.testkit.annotation.ClusterTest;
+import org.apache.kafka.testkit.annotation.ClusterTestDefaults;
+import org.apache.kafka.testkit.junit.ClusterTestExtensions;
 
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -60,8 +59,8 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import static kafka.test.annotation.Type.CO_KRAFT;
-import static kafka.test.annotation.Type.KRAFT;
+import static org.apache.kafka.testkit.annotation.Type.CO_KRAFT;
+import static org.apache.kafka.testkit.annotation.Type.KRAFT;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;

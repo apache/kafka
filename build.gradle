@@ -1062,6 +1062,7 @@ project(':core') {
     testImplementation project(':storage:storage-api').sourceSets.test.output
     testImplementation project(':server').sourceSets.test.output
     testImplementation project(':share').sourceSets.test.output
+    testImplementation project(':test-common').sourceSets.test.output
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
     testImplementation(libs.apacheda) {
@@ -1519,6 +1520,54 @@ project(':group-coordinator') {
 
   compileJava.dependsOn 'processMessages'
   srcJar.dependsOn 'processMessages'
+}
+
+project(':test-common') {
+  base {
+    archivesName = "kafka-test-common"
+  }
+
+  configurations {
+    generator
+  }
+
+  dependencies {
+    testImplementation libs.scalaJava8Compat
+    testImplementation project(':core')
+    testImplementation project(':clients')
+    testImplementation project(':group-coordinator')
+    testImplementation project(':server')
+    testImplementation project(':server-common')
+    testImplementation project(':storage')
+    testImplementation project(':metadata')
+    testImplementation project(':raft')
+    testImplementation libs.junitJupiter
+    testImplementation libs.mockitoCore
+    testImplementation libs.slf4jApi
+    testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = []
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/test/java"]
+      }
+    }
+  }
+
+  checkstyle {
+    checkstyleTest.enabled = false
+  }
+
+  javadoc {
+    enabled = false
+  }
 }
 
 project(':transaction-coordinator') {
@@ -2166,6 +2215,7 @@ project(':storage') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':test-common').sourceSets.test.output
     testImplementation project(':server')
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
@@ -2356,6 +2406,7 @@ project(':tools') {
     testImplementation project(':server').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':test-common').sourceSets.test.output
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':connect:api')
@@ -2476,7 +2527,6 @@ project(':shell') {
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
-    testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.junitJupiter
@@ -2534,6 +2584,7 @@ project(':streams') {
     testImplementation project(':core')
     testImplementation project(':tools')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':test-common').sourceSets.test.output
     testImplementation project(':storage')
     testImplementation project(':group-coordinator')
     testImplementation project(':transaction-coordinator')
@@ -3440,7 +3491,7 @@ project(':connect:runtime') {
     testImplementation project(':server')
     testImplementation project(':metadata')
     testImplementation project(':server-common')
-    testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':test-common').sourceSets.test.output
     testImplementation project(':server-common')
     testImplementation project(':server')
     testImplementation project(':group-coordinator')
@@ -3563,7 +3614,7 @@ project(':connect:file') {
     testImplementation project(':connect:runtime')
     testImplementation project(':connect:runtime').sourceSets.test.output
     testImplementation project(':core')
-    testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':test-common').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
   }
 
@@ -3664,7 +3715,7 @@ project(':connect:mirror') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':connect:runtime').sourceSets.test.output
     testImplementation project(':core')
-    testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':test-common').sourceSets.test.output
     testImplementation project(':server')
     testImplementation project(':server-common').sourceSets.test.output
 

@@ -102,9 +102,9 @@
     <allow pkg="org.apache.kafka.server.authorizer"/>
     <allow pkg="org.apache.kafka.server.common" />
     <allow pkg="org.apache.kafka.test" />
-    <allow pkg="kafka.testkit"/>
-    <allow pkg="kafka.test.annotation"/>
-    <allow pkg="kafka.test.junit"/>
+    <allow pkg="org.apache.kafka.testkit"/>
+    <allow pkg="org.apache.kafka.testkit.annotation"/>
+    <allow pkg="org.apache.kafka.testkit.junit"/>
     <allow pkg="kafka.network"/>
     <allow pkg="kafka.api"/>
     <allow pkg="kafka.server"/>
@@ -113,14 +113,6 @@
     <allow pkg="org.apache.kafka.clients.consumer"/>
     <allow pkg="org.apache.kafka.coordinator.group"/>
     <allow pkg="org.apache.kafka.coordinator.transaction"/>
-    <subpackage name="annotation">
-      <allow pkg="kafka.test"/>
-    </subpackage>
-    <subpackage name="junit">
-      <allow pkg="kafka.test"/>
-      <allow pkg="org.apache.kafka.clients"/>
-      <allow pkg="org.apache.kafka.metadata" />
-    </subpackage>
     <subpackage name="server">
       <allow pkg="kafka.test" />
     </subpackage>
@@ -139,9 +131,9 @@
     <allow pkg="org.apache.kafka.server"/>
     <allow pkg="org.apache.kafka.test"/>
     <allow pkg="org.apache.log4j"/>
-    <allow pkg="kafka.test"/>
-    <allow pkg="kafka.test.annotation"/>
-    <allow pkg="kafka.test.junit"/>
+    <allow pkg="org.apache.kafka.testkit"/>
+    <allow pkg="org.apache.kafka.testkit.annotation"/>
+    <allow pkg="org.apache.kafka.testkit.junit"/>
   </subpackage>
 
   <subpackage name="security">

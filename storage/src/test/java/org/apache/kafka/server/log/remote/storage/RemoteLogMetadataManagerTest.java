@@ -16,11 +16,6 @@
  */
 package org.apache.kafka.server.log.remote.storage;
 
-import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterTest;
-import kafka.test.annotation.ClusterTestDefaults;
-import kafka.test.junit.ClusterTestExtensions;
-
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -28,6 +23,10 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.log.remote.metadata.storage.RemoteLogMetadataManagerTestUtils;
 import org.apache.kafka.server.log.remote.metadata.storage.RemotePartitionMetadataStore;
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManager;
+import org.apache.kafka.testkit.ClusterInstance;
+import org.apache.kafka.testkit.annotation.ClusterTest;
+import org.apache.kafka.testkit.annotation.ClusterTestDefaults;
+import org.apache.kafka.testkit.junit.ClusterTestExtensions;
 
 import org.junit.jupiter.api.extension.ExtendWith;
 

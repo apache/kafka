@@ -17,8 +17,6 @@
 package org.apache.kafka.connect.util.clusters;
 
 import kafka.server.BrokerServer;
-import kafka.testkit.KafkaClusterTestKit;
-import kafka.testkit.TestKitNodes;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
@@ -54,6 +52,8 @@ import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.metadata.BrokerState;
 import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
+import org.apache.kafka.testkit.KafkaClusterTestKit;
+import org.apache.kafka.testkit.TestKitNodes;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

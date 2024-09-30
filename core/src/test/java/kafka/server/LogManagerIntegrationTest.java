@@ -16,12 +16,6 @@
  */
 package kafka.server;
 
-import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterTest;
-import kafka.test.annotation.Type;
-import kafka.test.junit.ClusterTestExtensions;
-import kafka.test.junit.RaftClusterInvocationContext;
-
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -39,6 +33,11 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.storage.internals.checkpoint.PartitionMetadataFile;
 import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.testkit.ClusterInstance;
+import org.apache.kafka.testkit.annotation.ClusterTest;
+import org.apache.kafka.testkit.annotation.Type;
+import org.apache.kafka.testkit.junit.ClusterTestExtensions;
+import org.apache.kafka.testkit.junit.RaftClusterInvocationContext;
 
 import org.junit.jupiter.api.extension.ExtendWith;
 

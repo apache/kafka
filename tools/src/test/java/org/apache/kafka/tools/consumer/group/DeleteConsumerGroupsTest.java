@@ -16,11 +16,6 @@
  */
 package org.apache.kafka.tools.consumer.group;
 
-import kafka.test.ClusterConfig;
-import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterTemplate;
-import kafka.test.junit.ClusterTestExtensions;
-
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -31,6 +26,10 @@ import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.testkit.ClusterConfig;
+import org.apache.kafka.testkit.ClusterInstance;
+import org.apache.kafka.testkit.annotation.ClusterTemplate;
+import org.apache.kafka.testkit.junit.ClusterTestExtensions;
 import org.apache.kafka.tools.ToolsTestUtils;
 
 import org.junit.jupiter.api.Test;

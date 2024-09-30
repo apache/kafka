@@ -18,10 +18,10 @@ package unit.kafka.server
 
 import kafka.network.SocketServer
 import kafka.server.{BrokerServer, ControllerServer, IntegrationTestUtils}
-import kafka.test.ClusterInstance
-import kafka.test.annotation.{ClusterTest, ClusterTestDefaults, Type}
-import kafka.test.junit.ClusterTestExtensions
-import kafka.test.junit.RaftClusterInvocationContext.RaftClusterInstance
+import org.apache.kafka.testkit.ClusterInstance
+import org.apache.kafka.testkit.annotation.{ClusterTest, ClusterTestDefaults, Type}
+import org.apache.kafka.testkit.junit.ClusterTestExtensions
+import org.apache.kafka.testkit.junit.RaftClusterInvocationContext.RaftClusterInstance
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._

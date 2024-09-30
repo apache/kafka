@@ -16,9 +16,9 @@
  */
 package kafka.server
 
-import kafka.test.ClusterInstance
-import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
-import kafka.test.junit.ClusterTestExtensions
+import org.apache.kafka.testkit.ClusterInstance
+import org.apache.kafka.testkit.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
+import org.apache.kafka.testkit.junit.ClusterTestExtensions
 import org.apache.kafka.common.message.DescribeGroupsResponseData.{DescribedGroup, DescribedGroupMember}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig

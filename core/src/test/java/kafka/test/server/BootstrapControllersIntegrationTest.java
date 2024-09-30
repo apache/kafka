@@ -17,13 +17,6 @@
 
 package kafka.test.server;
 
-import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterConfigProperty;
-import kafka.test.annotation.ClusterTest;
-import kafka.test.annotation.ClusterTestDefaults;
-import kafka.test.annotation.Type;
-import kafka.test.junit.ClusterTestExtensions;
-
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.Config;
@@ -61,6 +54,12 @@ import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.testkit.ClusterInstance;
+import org.apache.kafka.testkit.annotation.ClusterConfigProperty;
+import org.apache.kafka.testkit.annotation.ClusterTest;
+import org.apache.kafka.testkit.annotation.ClusterTestDefaults;
+import org.apache.kafka.testkit.annotation.Type;
+import org.apache.kafka.testkit.junit.ClusterTestExtensions;
 
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;

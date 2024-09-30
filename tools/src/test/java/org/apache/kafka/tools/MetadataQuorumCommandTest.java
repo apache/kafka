@@ -16,14 +16,13 @@
  */
 package org.apache.kafka.tools;
 
-import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterTest;
-import kafka.test.annotation.ClusterTests;
-import kafka.test.annotation.Type;
-import kafka.test.junit.ClusterTestExtensions;
-
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.testkit.ClusterInstance;
+import org.apache.kafka.testkit.annotation.ClusterTest;
+import org.apache.kafka.testkit.annotation.ClusterTests;
+import org.apache.kafka.testkit.annotation.Type;
+import org.apache.kafka.testkit.junit.ClusterTestExtensions;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

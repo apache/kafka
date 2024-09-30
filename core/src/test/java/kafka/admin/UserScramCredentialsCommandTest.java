@@ -16,13 +16,12 @@
  */
 package kafka.admin;
 
-import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterTest;
-import kafka.test.junit.ClusterTestExtensions;
-
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.testkit.ClusterInstance;
+import org.apache.kafka.testkit.annotation.ClusterTest;
+import org.apache.kafka.testkit.junit.ClusterTestExtensions;
 
 import org.junit.jupiter.api.extension.ExtendWith;
 

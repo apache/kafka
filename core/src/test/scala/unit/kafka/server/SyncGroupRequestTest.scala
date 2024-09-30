@@ -16,9 +16,9 @@
  */
 package kafka.server
 
-import kafka.test.ClusterInstance
-import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
-import kafka.test.junit.ClusterTestExtensions
+import org.apache.kafka.testkit.ClusterInstance
+import org.apache.kafka.testkit.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
+import org.apache.kafka.testkit.junit.ClusterTestExtensions
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol

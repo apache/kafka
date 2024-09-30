@@ -16,9 +16,9 @@
  */
 package kafka.server
 
-import kafka.test.ClusterInstance
-import kafka.test.annotation._
-import kafka.test.junit.ClusterTestExtensions
+import org.apache.kafka.testkit.ClusterInstance
+import org.apache.kafka.testkit.annotation._
+import org.apache.kafka.testkit.junit.ClusterTestExtensions
 import kafka.utils.TestUtils
 import org.apache.kafka.common.ShareGroupState
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData.DescribedGroup

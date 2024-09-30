@@ -20,7 +20,7 @@ package kafka.server
 import kafka.log.UnifiedLog
 import kafka.network.SocketServer
 import kafka.server.IntegrationTestUtils.connectAndReceive
-import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
+import org.apache.kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
 import org.apache.commons.io.FileUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType

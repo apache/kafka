@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.tools.consumer;
 
-import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterTest;
-import kafka.test.junit.ClusterTestExtensions;
-
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -52,6 +48,9 @@ import org.apache.kafka.coordinator.transaction.generated.TransactionLogKeyJsonC
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogValue;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogValueJsonConverter;
 import org.apache.kafka.server.util.MockTime;
+import org.apache.kafka.testkit.ClusterInstance;
+import org.apache.kafka.testkit.annotation.ClusterTest;
+import org.apache.kafka.testkit.junit.ClusterTestExtensions;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
