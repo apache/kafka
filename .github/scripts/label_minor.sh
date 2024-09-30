@@ -22,11 +22,7 @@ deletions=$(printf "$pr_diff" | grep '^-' | wc -l)
 
 total_changes=$((insertions + deletions))
 if [ "$total_changes" -lt "$min_size" ]; then
-    gh api -H "Accept: application/vnd.github+json"  \
-    -H "X-GitHub-Api-Version: 2022-11-28" \
-    /repos/$GITHUB_REPOSITORY/issues/$PR_NUM/labels -f "labels[]=minor"
+    gh issue edit $PR_NUM --add-label minor -R $GITHUB_REPOSITORY
 else
-  gh api -X Delete -H "Accept: application/vnd.github+json"  \
-      -H "X-GitHub-Api-Version: 2022-11-28" \
-      /repos/$GITHUB_REPOSITORY/issues/$PR_NUM/labels -f "labels[]=minor"
+    gh issue edit $PR_NUM --remove-label minor -R $GITHUB_REPOSITORY
 fi
