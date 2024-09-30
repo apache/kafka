@@ -62,7 +62,7 @@ object SslAdminIntegrationTest {
       execute[AclDeleteResult](aclBindingFilters.size, () => super.deleteAcls(requestContext, aclBindingFilters))
     }
 
-    def execute[T](batchSize: Int, action: () => util.List[_ <: CompletionStage[T]]): util.List[CompletableFuture[T]] = {
+    private def execute[T](batchSize: Int, action: () => util.List[_ <: CompletionStage[T]]): util.List[CompletableFuture[T]] = {
       val futures = (0 until batchSize).map(_ => new CompletableFuture[T]).toList
       val runnable = new Runnable {
         override def run(): Unit = {
