@@ -135,7 +135,7 @@ public class ClientTelemetryTest {
         try (Admin client = clusterInstance.createAdminClient()) {
             ConfigCommand.ConfigCommandOptions addOpts = new ConfigCommand.ConfigCommandOptions(toArray(alterOpts));
 
-            Throwable e = assertThrows(ExecutionException.class, () -> ConfigCommand.alterConfig(client, addOpts));
+            Throwable e = assertThrows(ExecutionException.class, () -> ConfigCommand.alterConfig(client, addOpts, true));
             assertTrue(e.getMessage().contains(InvalidConfigurationException.class.getSimpleName()));
         }
     }

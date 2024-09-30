@@ -302,6 +302,13 @@
         </li>
         <li>JBOD in KRaft is no longer in early access.</li>
         <li>Tiered Storage, which is still in early access, now supports clusters configured with multiple log directories (i.e. JBOD feature).</li>
+        <li>Tiered Storage now supports clusters configured with multiple log directories (i.e. JBOD feature).</li>
+        <!-- TODO move to 4.0 -->
+        <li>kafka-configs.sh now uses incrementalAlterConfigs API by default to alter broker configurations instead of the deprecated alterConfigs API,
+            and it will fall back to use deprecated alterConfigs API if the broker doesn't support incrementalAlterConfigs API, which means the broker version is prior to 2.3.x.
+            This new fallback approach is deprecated and will be removed in the next major release when incrementalAlterConfigs API is always used.
+            See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1011%3A+Use+incrementalAlterConfigs+when+updating+broker+configs+by+kafka-configs.sh">KIP-1011</a> for more details.
+        </li>
     </ul>
 
 <h4><a id="upgrade_3_7_1" href="#upgrade_3_7_1">Upgrading to 3.7.1 from any version 0.8.x through 3.6.x</a></h4>
