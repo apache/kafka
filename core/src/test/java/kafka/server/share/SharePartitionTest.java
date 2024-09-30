@@ -16,6 +16,7 @@
  */
 package kafka.server.share;
 
+import kafka.server.DelayedOperationPurgatory;
 import kafka.server.share.SharePartition.InFlightState;
 import kafka.server.share.SharePartition.RecordState;
 import kafka.server.share.SharePartition.SharePartitionState;
@@ -36,19 +37,19 @@ import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.server.group.share.NoOpShareStatePersister;
-import org.apache.kafka.server.group.share.PartitionFactory;
-import org.apache.kafka.server.group.share.Persister;
-import org.apache.kafka.server.group.share.PersisterStateBatch;
-import org.apache.kafka.server.group.share.ReadShareGroupStateResult;
-import org.apache.kafka.server.group.share.TopicData;
-import org.apache.kafka.server.group.share.WriteShareGroupStateResult;
-import org.apache.kafka.server.share.ShareAcknowledgementBatch;
+import org.apache.kafka.server.share.NoOpShareStatePersister;
+import org.apache.kafka.server.share.PartitionFactory;
+import org.apache.kafka.server.share.Persister;
+import org.apache.kafka.server.share.PersisterStateBatch;
+import org.apache.kafka.server.share.ReadShareGroupStateResult;
+import org.apache.kafka.server.share.TopicData;
+import org.apache.kafka.server.share.WriteShareGroupStateResult;
+import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
+import org.apache.kafka.server.storage.log.FetchPartitionData;
 import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
-import org.apache.kafka.storage.internals.log.FetchPartitionData;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -727,6 +728,7 @@ public class SharePartitionTest {
     @Test
     public void testMaybeAcquireAndReleaseFetchLock() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        sharePartition.maybeInitialize();
         assertTrue(sharePartition.maybeAcquireFetchLock());
         // Lock cannot be acquired again, as already acquired.
         assertFalse(sharePartition.maybeAcquireFetchLock());
@@ -4924,6 +4926,7 @@ public class SharePartitionTest {
         private int maxDeliveryCount = MAX_DELIVERY_COUNT;
         private int maxInflightMessages = MAX_IN_FLIGHT_MESSAGES;
         private Persister persister = NoOpShareStatePersister.getInstance();
+        private final DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = Mockito.mock(DelayedOperationPurgatory.class);
 
         private SharePartitionBuilder withMaxInflightMessages(int maxInflightMessages) {
             this.maxInflightMessages = maxInflightMessages;
@@ -4951,7 +4954,7 @@ public class SharePartitionTest {
 
         public SharePartition build() {
             return new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, maxInflightMessages, maxDeliveryCount,
-                acquisitionLockTimeoutMs, mockTimer, MOCK_TIME, persister);
+                acquisitionLockTimeoutMs, mockTimer, MOCK_TIME, persister, delayedShareFetchPurgatory);
         }
     }
 }

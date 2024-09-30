@@ -144,4 +144,10 @@
     <allow pkg="kafka.test.annotation"/>
     <allow pkg="kafka.test.junit"/>
   </subpackage>
+
+  <subpackage name="security">
+    <allow pkg="org.apache.commons" />
+    <allow pkg="org.apache.directory" />
+    <allow pkg="org.apache.mina.core.service" />
+  </subpackage>
 </import-control>

@@ -1637,6 +1637,7 @@ project(':share-coordinator') {
     implementation project(':metadata')
     implementation project(':server')
     implementation project(':server-common')
+    implementation project(':share')
     implementation libs.slf4jApi
     implementation libs.metrics
 
@@ -2370,6 +2371,12 @@ project(':tools') {
       exclude group: 'junit', module: 'junit'
     }
     testImplementation libs.reload4j
+    testImplementation libs.apachedsCoreApi
+    testImplementation libs.apachedsInterceptorKerberos
+    testImplementation libs.apachedsProtocolShared
+    testImplementation libs.apachedsProtocolKerberos
+    testImplementation libs.apachedsProtocolLdap
+    testImplementation libs.apachedsLdifPartition
 
     testRuntimeOnly libs.junitPlatformLanucher
   }
@@ -2521,6 +2528,7 @@ project(':streams') {
     // testCompileOnly prevents streams from exporting a dependency on test-utils, which would cause a dependency cycle
     testCompileOnly project(':streams:test-utils')
 
+    testImplementation project(':metadata')
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':server')
     testImplementation project(':core')
@@ -3189,6 +3197,7 @@ project(':jmh-benchmarks') {
     implementation project(':server')
     implementation project(':raft')
     implementation project(':clients')
+    implementation project(':coordinator-common')
     implementation project(':group-coordinator')
     implementation project(':group-coordinator:group-coordinator-api')
     implementation project(':metadata')

@@ -18,8 +18,12 @@ package kafka.log.remote;
 
 import kafka.cluster.EndPoint;
 import kafka.cluster.Partition;
+import kafka.log.AsyncOffsetReadFutureHolder;
 import kafka.log.UnifiedLog;
+import kafka.server.DelayedOperationPurgatory;
+import kafka.server.DelayedRemoteListOffsets;
 import kafka.server.StopPartition;
+import kafka.server.TopicPartitionOperationKey;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
@@ -64,12 +68,12 @@ import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.quota.QuotaType;
+import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
 import org.apache.kafka.storage.internals.log.AbortedTxn;
 import org.apache.kafka.storage.internals.log.EpochEntry;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
-import org.apache.kafka.storage.internals.log.FetchIsolation;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 import org.apache.kafka.storage.internals.log.LogSegment;
 import org.apache.kafka.storage.internals.log.OffsetIndex;
@@ -132,11 +136,13 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import scala.Option;
 import scala.collection.JavaConverters;
+import scala.util.Either;
 
 import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIR_CONFIG;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
@@ -200,6 +206,7 @@ public class RemoteLogManager implements Closeable {
 
     private volatile boolean remoteLogManagerConfigured = false;
     private final Timer remoteReadTimer;
+    private DelayedOperationPurgatory<DelayedRemoteListOffsets> delayedRemoteListOffsetsPurgatory;
 
     /**
      * Creates RemoteLogManager instance with the given arguments.
@@ -261,6 +268,10 @@ public class RemoteLogManager implements Closeable {
                 rlmConfig.remoteLogReaderThreads(),
                 rlmConfig.remoteLogReaderMaxPendingTasks()
         );
+    }
+
+    public void setDelayedOperationPurgatory(DelayedOperationPurgatory<DelayedRemoteListOffsets> delayedRemoteListOffsetsPurgatory) {
+        this.delayedRemoteListOffsetsPurgatory = delayedRemoteListOffsetsPurgatory;
     }
 
     public void resizeCacheSize(long remoteLogIndexFileCacheSize) {
@@ -586,7 +597,7 @@ public class RemoteLogManager implements Closeable {
         return remoteLogMetadataManager.remoteLogSegmentMetadata(new TopicIdPartition(topicId, topicPartition), epochForOffset, offset);
     }
 
-    private Optional<FileRecords.TimestampAndOffset> lookupTimestamp(RemoteLogSegmentMetadata rlsMetadata, long timestamp, long startingOffset)
+    Optional<FileRecords.TimestampAndOffset> lookupTimestamp(RemoteLogSegmentMetadata rlsMetadata, long timestamp, long startingOffset)
             throws RemoteStorageException, IOException {
         int startPos = indexCache.lookupTimestamp(rlsMetadata, timestamp, startingOffset);
 
@@ -620,9 +631,31 @@ public class RemoteLogManager implements Closeable {
         return leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH ? Optional.empty() : Optional.of(leaderEpoch);
     }
 
+    public AsyncOffsetReadFutureHolder<Either<Exception, Option<FileRecords.TimestampAndOffset>>> asyncOffsetRead(
+            TopicPartition topicPartition,
+            Long timestamp,
+            Long startingOffset,
+            LeaderEpochFileCache leaderEpochCache,
+            Supplier<Option<FileRecords.TimestampAndOffset>> searchLocalLog) {
+        CompletableFuture<Either<Exception, Option<FileRecords.TimestampAndOffset>>> taskFuture = new CompletableFuture<>();
+        Future<Void> jobFuture = remoteStorageReaderThreadPool.submit(
+                new RemoteLogOffsetReader(this, topicPartition, timestamp, startingOffset, leaderEpochCache, searchLocalLog, result -> {
+                    TopicPartitionOperationKey key = new TopicPartitionOperationKey(topicPartition.topic(), topicPartition.partition());
+                    taskFuture.complete(result);
+                    delayedRemoteListOffsetsPurgatory.checkAndComplete(key);
+                })
+        );
+        return new AsyncOffsetReadFutureHolder<>(jobFuture, taskFuture);
+    }
+
     /**
-     * Search the message offset in the remote storage based on timestamp and offset.
-     * <p>
+     * Search the message offset in the remote storage for the given timestamp and starting-offset.
+     * Once the target segment where the search to be performed is found:
+     * 1. If the target segment lies in the local storage (common segments that lies in both remote and local storage),
+     *    then the search will be performed in the local storage.
+     * 2. If the target segment is found only in the remote storage, then the search will be performed in the remote storage.
+     *
+     *  <p>
      * This method returns an option of TimestampOffset. The returned value is determined using the following ordered list of rules:
      * <p>
      * - If there are no messages in the remote storage, return Empty
@@ -646,12 +679,10 @@ public class RemoteLogManager implements Closeable {
         if (topicId == null) {
             throw new KafkaException("Topic id does not exist for topic partition: " + tp);
         }
-
         Optional<UnifiedLog> unifiedLogOptional = fetchLog.apply(tp);
         if (!unifiedLogOptional.isPresent()) {
             throw new KafkaException("UnifiedLog does not exist for topic partition: " + tp);
         }
-
         UnifiedLog unifiedLog = unifiedLogOptional.get();
 
         // Get the respective epoch in which the starting-offset exists.
@@ -660,7 +691,6 @@ public class RemoteLogManager implements Closeable {
         NavigableMap<Integer, Long> epochWithOffsets = buildFilteredLeaderEpochMap(leaderEpochCache.epochWithOffsets());
         while (maybeEpoch.isPresent()) {
             int epoch = maybeEpoch.getAsInt();
-
             // KAFKA-15802: Add a new API for RLMM to choose how to implement the predicate.
             // currently, all segments are returned and then iterated, and filtered
             Iterator<RemoteLogSegmentMetadata> iterator = remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition, epoch);
@@ -670,14 +700,24 @@ public class RemoteLogManager implements Closeable {
                     && rlsMetadata.endOffset() >= startingOffset
                     && isRemoteSegmentWithinLeaderEpochs(rlsMetadata, unifiedLog.logEndOffset(), epochWithOffsets)
                     && rlsMetadata.state().equals(RemoteLogSegmentState.COPY_SEGMENT_FINISHED)) {
-                    return lookupTimestamp(rlsMetadata, timestamp, startingOffset);
+                    // cache to avoid race conditions
+                    List<LogSegment> segmentsCopy = new ArrayList<>(unifiedLog.logSegments());
+                    if (segmentsCopy.isEmpty() || rlsMetadata.startOffset() < segmentsCopy.get(0).baseOffset()) {
+                        // search in remote-log
+                        return lookupTimestamp(rlsMetadata, timestamp, startingOffset);
+                    } else {
+                        // search in local-log
+                        for (LogSegment segment : segmentsCopy) {
+                            if (segment.largestTimestamp() >= timestamp) {
+                                return segment.findOffsetByTimestamp(timestamp, startingOffset);
+                            }
+                        }
+                    }
                 }
             }
-
             // Move to the next epoch if not found with the current epoch.
             maybeEpoch = leaderEpochCache.nextEpoch(epoch);
         }
-
         return Optional.empty();
     }
 
