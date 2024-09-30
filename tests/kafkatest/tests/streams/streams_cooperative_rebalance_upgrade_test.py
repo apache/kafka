@@ -57,8 +57,7 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
 
         self.kafka = KafkaService(self.test_context, num_nodes=3,
                                   zk=None, topics=self.topics,
-                                  controller_num_nodes_override=1,
-                                  dynamicRaftQuorum=True)
+                                  controller_num_nodes_override=1)
 
         self.producer = VerifiableProducer(self.test_context,
                                            1,
