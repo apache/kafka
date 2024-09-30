@@ -21,90 +21,21 @@ import java.net.InetAddress
 import java.nio.ByteBuffer
 import com.fasterxml.jackson.databind.node.{BooleanNode, DoubleNode, JsonNodeFactory, LongNode, ObjectNode, TextNode}
 import kafka.network
-import kafka.network.RequestConvertToJson.requestHeaderNode
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.network.{ClientInformation, ListenerName, NetworkSend}
-import org.apache.kafka.common.protocol.{ApiKeys, Errors, MessageUtil}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.network.RequestConvertToJson
 import org.apache.kafka.network.metrics.RequestChannelMetrics
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
 
 import java.util.Collections
-import scala.collection.mutable.ArrayBuffer
+import scala.compat.java8.OptionConverters._
 
 class RequestConvertToJsonTest {
-
-  @Test
-  def testAllRequestTypesHandled(): Unit = {
-    val unhandledKeys = ArrayBuffer[String]()
-    ApiKeys.values().foreach { key => {
-      val version: Short = key.latestVersion()
-      val message = key match {
-        case ApiKeys.DESCRIBE_ACLS =>
-          ApiMessageType.fromApiKey(key.id).newRequest().asInstanceOf[DescribeAclsRequestData]
-            .setPatternTypeFilter(1).setResourceTypeFilter(1).setPermissionType(1).setOperation(1)
-        case _ =>
-          ApiMessageType.fromApiKey(key.id).newRequest()
-      }
-
-      val bytes = MessageUtil.toByteBuffer(message, version)
-      val req = AbstractRequest.parseRequest(key, version, bytes).request
-      try {
-        RequestConvertToJson.request(req)
-      } catch {
-        case _ : IllegalStateException => unhandledKeys += key.toString
-      }
-    }}
-    assertEquals(ArrayBuffer.empty, unhandledKeys, "Unhandled request keys")
-  }
-
-  @Test
-  def testAllApiVersionsResponseHandled(): Unit = {
-
-    ApiKeys.values().foreach { key => {
-      val unhandledVersions = ArrayBuffer[java.lang.Short]()
-      key.allVersions().forEach { version => {
-        val message = key match {
-          // Specify top-level error handling for verifying compatibility across versions
-          case ApiKeys.DESCRIBE_LOG_DIRS =>
-            ApiMessageType.fromApiKey(key.id).newResponse().asInstanceOf[DescribeLogDirsResponseData]
-              .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code())
-          case _ =>
-            ApiMessageType.fromApiKey(key.id).newResponse()
-        }
-
-        val bytes = MessageUtil.toByteBuffer(message, version)
-        val response = AbstractResponse.parseResponse(key, bytes, version)
-        try {
-          RequestConvertToJson.response(response, version)
-        } catch {
-          case _ : IllegalStateException => unhandledVersions += version
-        }}
-      }
-      assertEquals(ArrayBuffer.empty, unhandledVersions, s"API: ${key.toString} - Unhandled request versions")
-    }}
-  }
-
-  @Test
-  def testAllResponseTypesHandled(): Unit = {
-    val unhandledKeys = ArrayBuffer[String]()
-    ApiKeys.values().foreach { key => {
-      val version: Short = key.latestVersion()
-      val message = ApiMessageType.fromApiKey(key.id).newResponse()
-      val bytes = MessageUtil.toByteBuffer(message, version)
-      val res = AbstractResponse.parseResponse(key, bytes, version)
-      try {
-        RequestConvertToJson.response(res, version)
-      } catch {
-        case _ : IllegalStateException => unhandledKeys += key.toString
-      }
-    }}
-    assertEquals(ArrayBuffer.empty, unhandledKeys, "Unhandled response keys")
-  }
 
   @Test
   def testRequestHeaderNode(): Unit = {
@@ -136,29 +67,16 @@ class RequestConvertToJsonTest {
   }
 
   @Test
-  def testClientInfoNode(): Unit = {
-    val clientInfo = new ClientInformation("name", "1")
-
-    val expectedNode = new ObjectNode(JsonNodeFactory.instance)
-    expectedNode.set("softwareName", new TextNode(clientInfo.softwareName))
-    expectedNode.set("softwareVersion", new TextNode(clientInfo.softwareVersion))
-
-    val actualNode = RequestConvertToJson.clientInfoNode(clientInfo)
-
-    assertEquals(expectedNode, actualNode)
-  }
-
-  @Test
   def testRequestDesc(): Unit = {
     val alterIsrRequest = new AlterPartitionRequest(new AlterPartitionRequestData(), 0)
     val req = request(alterIsrRequest)
 
     val expectedNode = new ObjectNode(JsonNodeFactory.instance)
     expectedNode.set("isForwarded", if (req.isForwarded) BooleanNode.TRUE else BooleanNode.FALSE)
-    expectedNode.set("requestHeader", requestHeaderNode(req.header))
+    expectedNode.set("requestHeader", RequestConvertToJson.requestHeaderNode(req.header))
     expectedNode.set("request", req.requestLog.getOrElse(new TextNode("")))
 
-    val actualNode = RequestConvertToJson.requestDesc(req.header, req.requestLog, req.isForwarded)
+    val actualNode = RequestConvertToJson.requestDesc(req.header, req.requestLog.asJava, req.isForwarded)
 
     assertEquals(expectedNode, actualNode)
   }
@@ -181,7 +99,7 @@ class RequestConvertToJsonTest {
     val temporaryMemoryBytes = 8
     val messageConversionsTimeMs = 9
 
-    val expectedNode = RequestConvertToJson.requestDesc(req.header, req.requestLog, req.isForwarded).asInstanceOf[ObjectNode]
+    val expectedNode = RequestConvertToJson.requestDesc(req.header, req.requestLog.asJava, req.isForwarded).asInstanceOf[ObjectNode]
     expectedNode.set("response", res.responseLog.getOrElse(new TextNode("")))
     expectedNode.set("connection", new TextNode(req.context.connectionId))
     expectedNode.set("totalTimeMs", new DoubleNode(totalTimeMs))
@@ -198,7 +116,7 @@ class RequestConvertToJsonTest {
     expectedNode.set("temporaryMemoryBytes", new LongNode(temporaryMemoryBytes))
     expectedNode.set("messageConversionsTime", new DoubleNode(messageConversionsTimeMs))
 
-    val actualNode = RequestConvertToJson.requestDescMetrics(req.header, req.requestLog, res.responseLog, req.context, req.session, req.isForwarded,
+    val actualNode = RequestConvertToJson.requestDescMetrics(req.header, req.requestLog.asJava, res.responseLog.asJava, req.context, req.session, req.isForwarded,
       totalTimeMs, requestQueueTimeMs, apiLocalTimeMs, apiRemoteTimeMs, apiThrottleTimeMs, responseQueueTimeMs,
       responseSendTimeMs, temporaryMemoryBytes, messageConversionsTimeMs).asInstanceOf[ObjectNode]
 

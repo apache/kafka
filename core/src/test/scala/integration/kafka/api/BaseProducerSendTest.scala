@@ -22,6 +22,7 @@ import java.nio.charset.StandardCharsets
 import java.util.{Collections, Properties}
 import java.util.concurrent.TimeUnit
 import kafka.integration.KafkaServerTestHarness
+import kafka.security.JaasTestUtils
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, NewPartitions}
@@ -29,7 +30,7 @@ import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.TimeoutException
-import org.apache.kafka.common.network.{ListenerName, ConnectionMode}
+import org.apache.kafka.common.network.{ConnectionMode, ListenerName}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{KafkaException, TopicPartition}
@@ -40,6 +41,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 import scala.collection.mutable
+import scala.compat.java8.OptionConverters
 import scala.concurrent.ExecutionException
 import scala.jdk.CollectionConverters._
 
@@ -70,12 +72,12 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     super.setUp(testInfo)
 
     admin = TestUtils.createAdminClient(brokers, listenerName,
-        TestUtils.securityConfigs(ConnectionMode.CLIENT,
+        JaasTestUtils.securityConfigs(ConnectionMode.CLIENT,
           securityProtocol,
-          trustStoreFile,
+          OptionConverters.toJava(trustStoreFile),
           "adminClient",
           TestUtils.SslCertificateCn,
-          clientSaslProperties))
+          OptionConverters.toJava(clientSaslProperties)))
 
     consumer = TestUtils.createConsumer(
       bootstrapServers(listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)),
