@@ -128,9 +128,9 @@ jobs:
           timeout ${TIMEOUT_MINUTES}m ./gradlew --build-cache --continue --no-scan \
           -PtestLoggingEvents=started,passed,skipped,failed \
           -PmaxParallelForks=2 \
-          -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
+          -PmaxTestRetries=3 -PmaxTestRetryFailures=20 \
           -PcommitId=xxxxxxxxxxxxxxxx \
-          test
+          quarantinedTest test
           exitcode="$?"
           echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
       - name: Archive JUnit reports

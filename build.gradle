@@ -496,12 +496,13 @@ subprojects {
 
     useJUnitPlatform {
       includeEngines 'junit-jupiter'
+      excludeTags 'quarantined'
     }
 
     develocity {
       testRetry {
-        maxRetries = userMaxTestRetries
-        maxFailures = userMaxTestRetryFailures
+        maxRetries = 1
+        maxFailures = 3
       }
     }
     
@@ -519,8 +520,72 @@ subprojects {
       if (ext.isGithubActions) {
         def dest = rootProject.layout.buildDirectory.dir("junit-xml/${project.name}").get().asFile
         println "Copy JUnit XML for ${project.name} to $dest"
-        ant.copy(todir: "$dest") {
+        ant.copy(todir: "$dest/test") {
           ant.fileset(dir: "${test.reports.junitXml.entryPoint}")
+        }
+
+        // If there were any test failures, we want to fail the task to prevent the failures
+        // from being cached.
+        if (ext.hadFailure) {
+          throw new GradleException("Failing this task since '${project.name}:${name}' had test failures.")
+        }
+      }
+    }
+  }
+
+  task quarantinedTest(type: Test, dependsOn: compileJava) {
+    ext {
+      isGithubActions = System.getenv('GITHUB_ACTIONS') != null
+      hadFailure = false  // Used to track if any tests failed, see afterSuite below
+    }
+
+    maxParallelForks = maxTestForks
+    ignoreFailures = userIgnoreFailures || ext.isGithubActions
+
+    maxHeapSize = defaultMaxHeapSize
+    jvmArgs = defaultJvmArgs
+
+    // KAFKA-17433 Used by deflake.yml github action to repeat individual tests
+    systemProperty("kafka.cluster.test.repeat", project.findProperty("kafka.cluster.test.repeat"))
+
+    testLogging {
+      events = userTestLoggingEvents ?: testLoggingEvents
+      showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
+      exceptionFormat = testExceptionFormat
+      displayGranularity = 0
+    }
+    logTestStdout.rehydrate(delegate, owner, this)()
+
+    useJUnitPlatform {
+      includeEngines 'junit-jupiter'
+      includeTags 'quarantined'
+    }
+
+    develocity {
+      testRetry {
+        maxRetries = userMaxTestRetries
+        maxFailures = userMaxTestRetryFailures
+      }
+    }
+
+    // As we process results, check if there were any test failures.
+    afterSuite { desc, result ->
+      if (result.resultType == TestResult.ResultType.FAILURE) {
+        ext.hadFailure = true
+      }
+    }
+
+    // This closure will copy JUnit XML files out of the sub-project's build directory and into
+    // a top-level build/junit-xml directory. This is necessary to avoid reporting on tests which
+    // were not run, but instead were restored via FROM-CACHE. See KAFKA-17479 for more details.
+    doLast {
+      if (ext.isGithubActions) {
+        def dest = rootProject.layout.buildDirectory.dir("junit-xml/${project.name}").get().asFile
+        println "Copy JUnit XML for ${project.name} to $dest"
+        ant.copy(todir: "$dest/quarantinedTest", failonerror: "false") {
+          ant.fileset(dir: "${quarantinedTest.reports.junitXml.entryPoint}") {
+            ant.include(name: "**/*.xml")
+          }
         }
 
         // If there were any test failures, we want to fail the task to prevent the failures

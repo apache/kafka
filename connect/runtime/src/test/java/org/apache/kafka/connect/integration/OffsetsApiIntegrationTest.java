@@ -331,6 +331,7 @@ public class OffsetsApiIntegrationTest {
         alterAndVerifySinkConnectorOffsets(baseSinkConnectorConfigs(), connect.kafka());
     }
 
+    @Tag("quarantined")
     @Test
     public void testAlterSinkConnectorOffsetsOverriddenConsumerGroupId() throws Exception {
         Map<String, String> connectorConfigs = baseSinkConnectorConfigs();
@@ -348,6 +349,7 @@ public class OffsetsApiIntegrationTest {
         }
     }
 
+    @Tag("quarantined")
     @Test
     public void testAlterSinkConnectorOffsetsDifferentKafkaClusterTargeted() throws Exception {
         EmbeddedKafkaCluster kafkaCluster = new EmbeddedKafkaCluster(1, new Properties());
