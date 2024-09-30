@@ -33,14 +33,10 @@ jobs:
         GH_TOKEN: ${{ github.token }}
       run: |
         pr_diff=$(gh pr diff ${{ github.event.number }} -R $GITHUB_REPOSITORY)
-        echo "$pr_diff"
 
         min_size=100
         insertions=$(printf "$pr_diff" | grep '^+' | wc -l)
         deletions=$(printf "$pr_diff" | grep '^-' | wc -l)
-
-        echo "insertions $insertions"
-        echo "deletions $deletions"
 
         total_changes=$((insertions + deletions))
         if [ "$total_changes" -lt "$min_size" ]; then
