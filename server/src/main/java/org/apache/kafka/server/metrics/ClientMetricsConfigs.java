@@ -132,12 +132,10 @@ public class ClientMetricsConfigs extends AbstractConfig {
             }
         });
 
-        Map<String, String> propertiesMap = new HashMap<>(properties.size());
-        properties.forEach((key, value) -> propertiesMap.put((String) key, (String) value));
-        Map<String, Object> parsed = CONFIG.parse(propertiesMap);
+        Map<String, Object> parsed = CONFIG.parse(properties);
 
         // Make sure that push interval is between 100ms and 1 hour.
-        if (parsed.containsKey(PUSH_INTERVAL_MS)) {
+        if (properties.containsKey(PUSH_INTERVAL_MS)) {
             Integer pushIntervalMs = (Integer) parsed.get(PUSH_INTERVAL_MS);
             if (pushIntervalMs < MIN_INTERVAL_MS || pushIntervalMs > MAX_INTERVAL_MS) {
                 String msg = String.format("Invalid value %s for %s, interval must be between 100 and 3600000 (1 hour)",
