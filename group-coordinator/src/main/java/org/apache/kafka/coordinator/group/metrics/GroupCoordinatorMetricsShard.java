@@ -20,18 +20,23 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetricsShard;
+import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.timeline.SnapshotRegistry;
+import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineLong;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
+
+import static org.apache.kafka.coordinator.group.Group.GroupType.CLASSIC;
 
 /**
  * This class is mapped to a single {@link org.apache.kafka.coordinator.group.GroupCoordinatorShard}. It will
@@ -44,6 +49,11 @@ import java.util.concurrent.atomic.AtomicLong;
 public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
 
     private static final Logger log = LoggerFactory.getLogger(GroupCoordinatorMetricsShard.class);
+
+    /**
+     * Hardcoded default value of the interval to update the classic group size counter.
+     */
+    private static final int DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS = 60 * 1000;
 
     /**
      * This class represents a gauge counter for this shard. The TimelineLong object represents a gauge backed by
@@ -66,6 +76,11 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
      * Classic group size gauge counters keyed by the metric name.
      */
     private final Map<ClassicGroupState, AtomicLong> classicGroupGauges;
+
+    /**
+     * The interval to update classicGroupGauges.
+     */
+    private final long classicGroupGaugesUpdateIntervalMs;
 
     /**
      * Consumer group size gauge counters keyed by the metric name.
@@ -113,6 +128,7 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
             Utils.mkEntry(ClassicGroupState.DEAD, new AtomicLong(0)),
             Utils.mkEntry(ClassicGroupState.EMPTY, new AtomicLong(0))
         );
+        this.classicGroupGaugesUpdateIntervalMs = DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS;
 
         this.consumerGroupGauges = Utils.mkMap(
             Utils.mkEntry(ConsumerGroupState.EMPTY,
@@ -138,6 +154,26 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
 
         this.globalSensors = Objects.requireNonNull(globalSensors);
         this.topicPartition = Objects.requireNonNull(topicPartition);
+    }
+
+    /**
+     * @return The interval to update classicGroupGauges.
+     */
+    public long classicGroupGaugesUpdateIntervalMs() {
+        return classicGroupGaugesUpdateIntervalMs;
+    }
+
+    /**
+     * Set the number of classic groups.
+     *
+     * @param state             The classic group state.
+     * @param numClassicGroups  The number of classic groups in the given state.
+     */
+    private void setNumClassicGroups(ClassicGroupState state, AtomicLong numClassicGroups) {
+        AtomicLong counter = classicGroupGauges.get(state);
+        if (counter != null) {
+            counter.getAndSet(numClassicGroups == null ? 0 : numClassicGroups.get());
+        }
     }
 
     /**
@@ -287,6 +323,31 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
             }
             gaugeCounter.atomicLong.set(value);
         });
+    }
+
+    /**
+     * The method is called every {@code classicGroupGaugesUpdateIntervalMs}.
+     * It updates the classic group gauges based on the soft state of the groups.
+     *
+     * @param groups The classic and consumer groups keyed by their name.
+     */
+    public void updateClassicGroupGauges(
+        TimelineHashMap<String, Group> groups
+    ) {
+        Map<String, AtomicLong> groupSizeCounter = new HashMap<>();
+        groups.forEach((__, group) -> {
+            if (group.type() == CLASSIC) {
+                String state = group.stateAsString();
+                groupSizeCounter.computeIfAbsent(state, k -> new AtomicLong(0L))
+                    .incrementAndGet();
+            }
+        });
+
+        setNumClassicGroups(ClassicGroupState.EMPTY, groupSizeCounter.get(ClassicGroupState.EMPTY.toString()));
+        setNumClassicGroups(ClassicGroupState.STABLE, groupSizeCounter.get(ClassicGroupState.STABLE.toString()));
+        setNumClassicGroups(ClassicGroupState.PREPARING_REBALANCE, groupSizeCounter.get(ClassicGroupState.PREPARING_REBALANCE.toString()));
+        setNumClassicGroups(ClassicGroupState.COMPLETING_REBALANCE, groupSizeCounter.get(ClassicGroupState.COMPLETING_REBALANCE.toString()));
+        setNumClassicGroups(ClassicGroupState.DEAD, groupSizeCounter.get(ClassicGroupState.DEAD.toString()));
     }
 
     /**

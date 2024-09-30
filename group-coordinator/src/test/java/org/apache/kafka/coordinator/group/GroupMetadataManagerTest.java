@@ -91,6 +91,7 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.server.common.MetadataVersion;
 
+import org.apache.kafka.timeline.TimelineHashMap;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -129,6 +130,7 @@ import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESU
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.appendGroupMetadataErrorToResponseError;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupHeartbeatKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupJoinKey;
+import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupSizeCounterKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupSyncKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupJoinKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupRebalanceTimeoutKey;
@@ -3574,6 +3576,35 @@ public class GroupMetadataManagerTest {
 
         // foo-1 should also have a revocation timeout in place.
         assertNotNull(context.timer.timeout(consumerGroupRebalanceTimeoutKey("foo", "foo-1")));
+
+        // The classic group size counter is scheduled.
+        assertEquals(
+            context.metrics.classicGroupGaugesUpdateIntervalMs(),
+            context.timer.timeout(classicGroupSizeCounterKey()).deadlineMs - context.time.milliseconds()
+        );
+    }
+
+    @Test
+    public void testScheduleClassicGroupSizeCounter() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // The classic group size counter is scheduled in onLoaded.
+        context.groupMetadataManager.onLoaded();
+
+        when(context.metrics.classicGroupGaugesUpdateIntervalMs()).thenReturn(60000L);
+
+        // Advance time to trigger updating the classic group counter.
+        List<ExpiredTimeout<Void, CoordinatorRecord>> timeouts = context.sleep(context.metrics.classicGroupGaugesUpdateIntervalMs() + 1);
+        assertEquals(1, timeouts.size());
+        assertEquals(classicGroupSizeCounterKey(), timeouts.get(0).key);
+        verify(context.metrics, times(1)).updateClassicGroupGauges(new TimelineHashMap<>(context.snapshotRegistry, 0));
+
+        // A new timer has been scheduled.
+        assertEquals(
+            context.metrics.classicGroupGaugesUpdateIntervalMs(),
+            context.timer.timeout(classicGroupSizeCounterKey()).deadlineMs - context.time.milliseconds()
+        );
     }
 
     @Test

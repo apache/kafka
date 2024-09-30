@@ -3782,6 +3782,7 @@ public class GroupMetadataManager {
                     break;
             }
         });
+        scheduleClassicGroupSizeCounter();
     }
 
     /**
@@ -3841,6 +3842,27 @@ public class GroupMetadataManager {
 
     public static String consumerGroupRebalanceTimeoutKey(String groupId, String memberId) {
         return "rebalance-timeout-" + groupId + "-" + memberId;
+    }
+
+    public static String classicGroupSizeCounterKey() {
+        return "classic-group-size-counter";
+    }
+
+    /**
+     * Schedules (or reschedules) the group size counter for the classic group.
+     */
+    private void scheduleClassicGroupSizeCounter() {
+        timer.schedule(
+            classicGroupSizeCounterKey(),
+            metrics.classicGroupGaugesUpdateIntervalMs(),
+            TimeUnit.MILLISECONDS,
+            true,
+            () -> {
+                metrics.updateClassicGroupGauges(groups);
+                scheduleClassicGroupSizeCounter();
+                return EMPTY_RESULT;
+            }
+        );
     }
 
     /**

@@ -20,18 +20,29 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.group.classic.ClassicGroup;
+import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import com.yammer.metrics.core.MetricsRegistry;
 
+import org.apache.kafka.timeline.TimelineHashMap;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.stream.IntStream;
 
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.COMPLETING_REBALANCE;
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.DEAD;
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.EMPTY;
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.PREPARING_REBALANCE;
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.STABLE;
 import static org.apache.kafka.coordinator.group.metrics.MetricsTestUtils.assertGaugeValue;
+import static org.apache.kafka.coordinator.group.metrics.MetricsTestUtils.metricName;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class GroupCoordinatorMetricsShardTest {
@@ -87,6 +98,67 @@ public class GroupCoordinatorMetricsShardTest {
         assertEquals(0, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.RECONCILING));
         assertEquals(0, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.STABLE));
         assertEquals(0, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.DEAD));
+    }
+
+    @Test
+    public void testUpdateClassicGroupGauges() {
+        MetricsRegistry registry = new MetricsRegistry();
+        Metrics metrics = new Metrics();
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        TopicPartition tp = new TopicPartition("__consumer_offsets", 0);
+        GroupCoordinatorMetrics coordinatorMetrics = new GroupCoordinatorMetrics(registry, metrics);
+        GroupCoordinatorMetricsShard shard = coordinatorMetrics.newMetricsShard(new SnapshotRegistry(new LogContext()), tp);
+        coordinatorMetrics.activateMetricsShard(shard);
+
+        LogContext logContext = new LogContext();
+        TimelineHashMap<String, Group> groups = new TimelineHashMap<>(snapshotRegistry, 5);
+        groups.put("group-0", new ConsumerGroup(snapshotRegistry, "group-0", shard));
+        ClassicGroup group1 = new ClassicGroup(logContext, "group-1", EMPTY, Time.SYSTEM, shard);
+        ClassicGroup group2 = new ClassicGroup(logContext, "group-2", EMPTY, Time.SYSTEM, shard);
+        ClassicGroup group3 = new ClassicGroup(logContext, "group-3", EMPTY, Time.SYSTEM, shard);
+        ClassicGroup group4 = new ClassicGroup(logContext, "group-4", EMPTY, Time.SYSTEM, shard);
+        groups.put(group1.groupId(), group1);
+        groups.put(group2.groupId(), group2);
+        groups.put(group3.groupId(), group3);
+        groups.put(group4.groupId(), group4);
+
+        shard.updateClassicGroupGauges(groups);
+        assertEquals(4, shard.numClassicGroups());
+
+        group1.transitionTo(PREPARING_REBALANCE);
+        group1.transitionTo(COMPLETING_REBALANCE);
+        group2.transitionTo(PREPARING_REBALANCE);
+        group3.transitionTo(DEAD);
+
+        shard.updateClassicGroupGauges(groups);
+        assertEquals(1, shard.numClassicGroups(ClassicGroupState.EMPTY));
+        assertEquals(1, shard.numClassicGroups(ClassicGroupState.PREPARING_REBALANCE));
+        assertEquals(1, shard.numClassicGroups(ClassicGroupState.COMPLETING_REBALANCE));
+        assertEquals(1, shard.numClassicGroups(ClassicGroupState.DEAD));
+        assertEquals(0, shard.numClassicGroups(STABLE));
+
+        group1.transitionTo(STABLE);
+        group2.transitionTo(COMPLETING_REBALANCE);
+        group4.transitionTo(DEAD);
+
+        shard.updateClassicGroupGauges(groups);
+        assertEquals(0, shard.numClassicGroups(ClassicGroupState.EMPTY));
+        assertEquals(0, shard.numClassicGroups(ClassicGroupState.PREPARING_REBALANCE));
+        assertEquals(1, shard.numClassicGroups(ClassicGroupState.COMPLETING_REBALANCE));
+        assertEquals(2, shard.numClassicGroups(ClassicGroupState.DEAD));
+        assertEquals(1, shard.numClassicGroups(ClassicGroupState.STABLE));
+
+        assertGaugeValue(
+            metrics,
+            metrics.metricName("group-count", "group-coordinator-metrics", Collections.singletonMap("protocol", "classic")),
+            4
+        );
+        assertGaugeValue(registry, metricName("GroupMetadataManager", "NumGroups"), 4);
+        assertGaugeValue(registry, metricName("GroupMetadataManager", "NumGroupsEmpty"), 0);
+        assertGaugeValue(registry, metricName("GroupMetadataManager", "NumGroupsPreparingRebalance"), 0);
+        assertGaugeValue(registry, metricName("GroupMetadataManager", "NumGroupsCompletingRebalance"), 1);
+        assertGaugeValue(registry, metricName("GroupMetadataManager", "NumGroupsDead"), 2);
+        assertGaugeValue(registry, metricName("GroupMetadataManager", "NumGroupsStable"), 1);
     }
 
     @Test

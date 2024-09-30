@@ -24,12 +24,14 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import com.yammer.metrics.core.MetricsRegistry;
 
+import org.apache.kafka.timeline.TimelineHashMap;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -37,6 +39,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.stream.IntStream;
 
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.EMPTY;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CONSUMER_GROUP_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.METRICS_GROUP;
@@ -164,6 +167,16 @@ public class GroupCoordinatorMetricsTest {
         coordinatorMetrics.activateMetricsShard(shard0);
         coordinatorMetrics.activateMetricsShard(shard1);
 
+        LogContext logContext = new LogContext();
+        TimelineHashMap<String, Group> groups0 = new TimelineHashMap<>(snapshotRegistry0, 4);
+        TimelineHashMap<String, Group> groups1 = new TimelineHashMap<>(snapshotRegistry1, 5);
+        IntStream.range(0, 4).forEach(i ->
+            groups0.put("group-" + i, new ClassicGroup(logContext, "group-" + i, EMPTY, Time.SYSTEM, shard0)));
+        IntStream.range(0, 5).forEach(i ->
+            groups1.put("group-" + i, new ClassicGroup(logContext, "group-" + i, EMPTY, Time.SYSTEM, shard1)));
+        shard0.updateClassicGroupGauges(groups0);
+        shard1.updateClassicGroupGauges(groups1);
+
         IntStream.range(0, 5).forEach(__ -> shard0.incrementNumConsumerGroups(ConsumerGroupState.ASSIGNING));
         IntStream.range(0, 5).forEach(__ -> shard1.incrementNumConsumerGroups(ConsumerGroupState.RECONCILING));
         IntStream.range(0, 3).forEach(__ -> shard1.decrementNumConsumerGroups(ConsumerGroupState.DEAD));
@@ -175,6 +188,15 @@ public class GroupCoordinatorMetricsTest {
         IntStream.range(0, 5).forEach(__ -> shard0.incrementNumShareGroups(ShareGroup.ShareGroupState.STABLE));
         IntStream.range(0, 5).forEach(__ -> shard1.incrementNumShareGroups(ShareGroup.ShareGroupState.EMPTY));
         IntStream.range(0, 3).forEach(__ -> shard1.decrementNumShareGroups(ShareGroup.ShareGroupState.DEAD));
+
+        assertEquals(4, shard0.numClassicGroups());
+        assertEquals(5, shard1.numClassicGroups());
+        assertGaugeValue(registry, metricName("GroupMetadataManager", "NumGroups"), 9);
+        assertGaugeValue(
+            metrics,
+            metrics.metricName("group-count", METRICS_GROUP, Collections.singletonMap("protocol", "classic")),
+            9
+        );
 
         snapshotRegistry0.idempotentCreateSnapshot(1000);
         snapshotRegistry1.idempotentCreateSnapshot(1500);
