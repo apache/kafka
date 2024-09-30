@@ -104,7 +104,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
           persist-credentials: false
       - name: Setup Gradle
         uses: ./.github/actions/setup-gradle
@@ -116,8 +115,7 @@ jobs:
       - name: Merge, Compile, and validate
         run: |
           git fetch origin trunk
-          git checkout -b trunk-integration-${{ github.run_id }} origin/trunk
-          git merge --squash ${{ github.ref }} -m ''
+          git merge origin/trunk
           ./gradlew --build-cache --info --no-scan check -x test
 
   test:
