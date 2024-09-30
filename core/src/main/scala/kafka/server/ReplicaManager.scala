@@ -858,7 +858,7 @@ class ReplicaManager(val config: KafkaConfig,
     def postVerificationCallback(newRequestLocal: RequestLocal,
                                  results: (Map[TopicPartition, Errors], Map[TopicPartition, VerificationGuard])): Unit = {
       val (preAppendErrors, verificationGuards) = results
-      val errorResults = preAppendErrors.map {
+      val errorResults: Map[TopicIdPartition, LogAppendResult] = preAppendErrors.map {
         case (topicPartition, error) =>
           // translate transaction coordinator errors to known producer response errors
           val customException =
@@ -882,7 +882,7 @@ class ReplicaManager(val config: KafkaConfig,
             hasCustomErrorMessage = customException.isDefined
           )
       }
-      val entriesWithoutErrorsPerPartition = entriesPerPartition.filter { case (key, _) => !errorResults.contains(key) }
+      val entriesWithoutErrorsPerPartition = entriesPerPartition.filter { case (key, _) => !errorResults.exists(_._1.topicPartition() == key.topicPartition()) }
 
       val preAppendPartitionResponses = buildProducePartitionStatus(errorResults).map { case (k, status) => k -> status.responseStatus }
 
