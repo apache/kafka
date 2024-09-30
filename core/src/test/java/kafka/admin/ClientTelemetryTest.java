@@ -128,9 +128,6 @@ public class ClientTelemetryTest {
         }
     }
 
-    private static String[] toArray(List<String>... lists) {
-        return Stream.of(lists).flatMap(List::stream).toArray(String[]::new);
-    }
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
     public void testIntervalMsParser(ClusterInstance clusterInstance) {
         List<String> alterOpts = asList("--bootstrap-server", clusterInstance.bootstrapServers(),
@@ -158,6 +155,10 @@ public class ClientTelemetryTest {
                             expectedName)));
             assertTrue(actualMetricsName.containsAll(expectedMetricsName));
         }
+    }
+
+    private static String[] toArray(List<String>... lists) {
+        return Stream.of(lists).flatMap(List::stream).toArray(String[]::new);
     }
 
     /**
