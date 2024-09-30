@@ -43,12 +43,11 @@ public class BrokerFeaturesTest {
 
     @Test
     public void testIncompatibilitiesDueToAbsentFeature() {
-        BrokerFeatures brokerFeatures = BrokerFeatures.createDefault(true);
         Map<String, SupportedVersionRange> newFeatures = new HashMap<>();
         newFeatures.put("test_feature_1", new SupportedVersionRange((short) 1, (short) 4));
         newFeatures.put("test_feature_2", new SupportedVersionRange((short) 1, (short) 3));
         Features<SupportedVersionRange> supportedFeatures = Features.supportedFeatures(newFeatures);
-        brokerFeatures.setSupportedFeatures(supportedFeatures);
+        BrokerFeatures brokerFeatures = BrokerFeatures.createDefault(true, supportedFeatures);
 
         Map<String, Short> compatibleFeatures = new HashMap<>();
         compatibleFeatures.put("test_feature_1", (short) 4);
@@ -65,12 +64,11 @@ public class BrokerFeaturesTest {
 
     @Test
     public void testIncompatibilitiesDueToIncompatibleFeature() {
-        BrokerFeatures brokerFeatures = BrokerFeatures.createDefault(true);
         Map<String, SupportedVersionRange> newFeatures = new HashMap<>();
         newFeatures.put("test_feature_1", new SupportedVersionRange((short) 1, (short) 4));
         newFeatures.put("test_feature_2", new SupportedVersionRange((short) 1, (short) 3));
         Features<SupportedVersionRange> supportedFeatures = Features.supportedFeatures(newFeatures);
-        brokerFeatures.setSupportedFeatures(supportedFeatures);
+        BrokerFeatures brokerFeatures = BrokerFeatures.createDefault(true, supportedFeatures);
 
         Map<String, Short> compatibleFeatures = new HashMap<>();
         compatibleFeatures.put("test_feature_1", (short) 3);
@@ -85,12 +83,11 @@ public class BrokerFeaturesTest {
 
     @Test
     public void testCompatibleFeatures() {
-        BrokerFeatures brokerFeatures = BrokerFeatures.createDefault(true);
         Map<String, SupportedVersionRange> newFeatures = new HashMap<>();
         newFeatures.put("test_feature_1", new SupportedVersionRange((short) 1, (short) 4));
         newFeatures.put("test_feature_2", new SupportedVersionRange((short) 1, (short) 3));
         Features<SupportedVersionRange> supportedFeatures = Features.supportedFeatures(newFeatures);
-        brokerFeatures.setSupportedFeatures(supportedFeatures);
+        BrokerFeatures brokerFeatures = BrokerFeatures.createDefault(true, supportedFeatures);
 
         Map<String, Short> compatibleFeatures = new HashMap<>();
         compatibleFeatures.put("test_feature_1", (short) 3);
@@ -103,13 +100,12 @@ public class BrokerFeaturesTest {
 
     @Test
     public void testDefaultFinalizedFeatures() {
-        BrokerFeatures brokerFeatures = BrokerFeatures.createDefault(true);
         Map<String, SupportedVersionRange> newFeatures = new HashMap<>();
         newFeatures.put("test_feature_1", new SupportedVersionRange((short) 1, (short) 4));
         newFeatures.put("test_feature_2", new SupportedVersionRange((short) 1, (short) 3));
         newFeatures.put("test_feature_3", new SupportedVersionRange((short) 3, (short) 7));
         Features<SupportedVersionRange> supportedFeatures = Features.supportedFeatures(newFeatures);
-        brokerFeatures.setSupportedFeatures(supportedFeatures);
+        BrokerFeatures brokerFeatures = BrokerFeatures.createDefault(true, supportedFeatures);
 
         Map<String, Short> expectedFeatures = new HashMap<>();
         expectedFeatures.put(MetadataVersion.FEATURE_NAME, MetadataVersion.latestTesting().featureLevel());

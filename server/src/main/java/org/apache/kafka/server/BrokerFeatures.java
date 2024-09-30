@@ -40,7 +40,7 @@ import static org.apache.kafka.server.common.Features.PRODUCTION_FEATURES;
  */
 public class BrokerFeatures {
 
-    private volatile Features<SupportedVersionRange> supportedFeatures;
+    private final Features<SupportedVersionRange> supportedFeatures;
     private static final Logger log = LoggerFactory.getLogger(BrokerFeatures.class);
 
     private BrokerFeatures(Features<SupportedVersionRange> supportedFeatures) {
@@ -49,6 +49,13 @@ public class BrokerFeatures {
 
     public static BrokerFeatures createDefault(boolean unstableFeatureVersionsEnabled) {
         return new BrokerFeatures(defaultSupportedFeatures(unstableFeatureVersionsEnabled));
+    }
+    
+    // only for testing
+    public static BrokerFeatures createDefault(boolean unstableFeatureVersionsEnabled, Features<SupportedVersionRange> newFeatures) {
+        Map<String, SupportedVersionRange> combined = new HashMap<>(defaultSupportedFeatures(unstableFeatureVersionsEnabled).features());
+        combined.putAll(newFeatures.features());
+        return new BrokerFeatures(Features.supportedFeatures(combined));
     }
 
     public static Map<String, VersionRange> createDefaultFeatureMap(BrokerFeatures features) {
@@ -90,13 +97,6 @@ public class BrokerFeatures {
     public static boolean hasIncompatibleFeatures(Features<SupportedVersionRange> supportedFeatures,
                                                   Map<String, Short> finalizedFeatures) {
         return !incompatibleFeatures(supportedFeatures, finalizedFeatures, false).isEmpty();
-    }
-
-    // For testing only
-    public void setSupportedFeatures(Features<SupportedVersionRange> newFeatures) {
-        Map<String, SupportedVersionRange> combined = new HashMap<>(supportedFeatures.features());
-        combined.putAll(newFeatures.features());
-        supportedFeatures = Features.supportedFeatures(combined);
     }
 
     /**
