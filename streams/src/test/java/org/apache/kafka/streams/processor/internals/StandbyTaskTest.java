@@ -81,7 +81,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -114,7 +113,7 @@ public class StandbyTaskTest {
 
     private final MockTime time = new MockTime();
     private final Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG), time);
-    private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, threadName, StreamsConfig.METRICS_LATEST, time);
+    private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, threadName, time);
 
     private File baseDir;
     private StreamsConfig config;
@@ -181,7 +180,6 @@ public class StandbyTaskTest {
     @Test
     public void shouldThrowLockExceptionIfFailedToLockStateDirectory() throws IOException {
         stateDirectory = mock(StateDirectory.class);
-        when(stateDirectory.canTryLock(any(), anyLong())).thenReturn(true);
         when(stateDirectory.lock(taskId)).thenReturn(false);
         when(stateManager.taskType()).thenReturn(TaskType.STANDBY);
 

@@ -367,7 +367,7 @@ public class TopicCommandTest {
                 .setBrokers(6)
                 .setServerProperties(serverProp)
                 .setPerServerProperties(rackInfo)
-                .setTypes(Stream.of(Type.ZK, Type.KRAFT).collect(Collectors.toSet()))
+                .setTypes(Stream.of(Type.KRAFT).collect(Collectors.toSet()))
                 .build()
         );
     }
