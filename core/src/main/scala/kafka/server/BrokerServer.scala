@@ -764,8 +764,7 @@ class BrokerServer(
 
       if (socketServer != null)
         CoreUtils.swallow(socketServer.shutdown(), this)
-      if (brokerTopicStats != null)
-        CoreUtils.swallow(brokerTopicStats.close(), this)
+      Utils.closeQuietly(brokerTopicStats, "broker topic stats")
       Utils.closeQuietly(sharePartitionManager, "share partition manager")
 
       isShuttingDown.set(false)
