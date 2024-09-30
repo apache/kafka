@@ -16,27 +16,15 @@
  */
 package kafka.admin;
 
-import kafka.cluster.Broker;
-import kafka.cluster.EndPoint;
 import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
-import kafka.test.junit.ZkClusterInvocationContext;
-import kafka.zk.AdminZkClient;
-import kafka.zk.BrokerInfo;
-import kafka.zk.KafkaZkClient;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConfigEntry;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
-import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.security.PasswordEncoder;
-import org.apache.kafka.server.common.MetadataVersion;
-import org.apache.kafka.server.config.ZooKeeperInternals;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -50,7 +38,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
@@ -77,7 +64,6 @@ import static org.apache.kafka.server.config.ReplicationConfigs.AUTO_LEADER_REBA
 import static org.apache.kafka.server.config.ServerConfigs.MESSAGE_MAX_BYTES_CONFIG;
 import static org.apache.kafka.server.config.ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -105,7 +91,7 @@ public class ConfigCommandIntegrationTest {
         this.cluster = cluster;
     }
 
-    @ClusterTest(types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT})
+    @ClusterTest
     public void testExitWithNonZeroStatusOnUpdatingUnallowedConfig() {
         assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
             "--entity-name", cluster.isKRaftTest() ? "0" : "1",
@@ -115,46 +101,7 @@ public class ConfigCommandIntegrationTest {
             errOut -> assertTrue(errOut.contains("Cannot update these configs dynamically: Set(security.inter.broker.protocol)"), errOut));
     }
 
-    @ClusterTest(types = {Type.ZK})
-    public void testExitWithNonZeroStatusOnZkCommandAlterUserQuota() {
-        assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
-            "--entity-type", "users",
-            "--entity-name", "admin",
-            "--alter", "--add-config", "consumer_byte_rate=20000")),
-            errOut -> assertTrue(errOut.contains("User configuration updates using ZooKeeper are only supported for SCRAM credential updates."), errOut));
-    }
-
-    @ClusterTest(types = {Type.ZK})
-    public void testExitWithNonZeroStatusOnZkCommandAlterGroup() {
-        assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
-                "--entity-type", "groups",
-                "--entity-name", "group",
-                "--alter", "--add-config", "consumer.session.timeout.ms=50000")),
-            errOut -> assertTrue(errOut.contains("Invalid entity type groups, the entity type must be one of users, brokers with a --zookeeper argument"), errOut));
-
-        // Test for the --group alias
-        assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
-                "--group", "group",
-                "--alter", "--add-config", "consumer.session.timeout.ms=50000")),
-            errOut -> assertTrue(errOut.contains("Invalid entity type groups, the entity type must be one of users, brokers with a --zookeeper argument"), errOut));
-    }
-
-    @ClusterTest(types = {Type.ZK})
-    public void testExitWithNonZeroStatusOnZkCommandAlterClientMetrics() {
-        assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
-                        "--entity-type", "client-metrics",
-                        "--entity-name", "cm",
-                        "--alter", "--add-config", "metrics=org.apache")),
-                errOut -> assertTrue(errOut.contains("Invalid entity type client-metrics, the entity type must be one of users, brokers with a --zookeeper argument"), errOut));
-
-        // Test for the --client-metrics alias
-        assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
-                        "--client-metrics", "cm",
-                        "--alter", "--add-config", "consumer.session.timeout.ms=50000")),
-                errOut -> assertTrue(errOut.contains("Invalid entity type client-metrics, the entity type must be one of users, brokers with a --zookeeper argument"), errOut));
-    }
-
-    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
+    @ClusterTest
     public void testNullStatusOnKraftCommandAlterUserQuota() {
         Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
             "--entity-type", "users",
@@ -165,7 +112,7 @@ public class ConfigCommandIntegrationTest {
         assertTrue(StringUtils.isBlank(message), message);
     }
 
-    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
+    @ClusterTest
     public void testNullStatusOnKraftCommandAlterGroup() {
         Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
             "--entity-type", "groups",
@@ -182,7 +129,7 @@ public class ConfigCommandIntegrationTest {
         assertTrue(StringUtils.isBlank(message), message);
     }
 
-    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
+    @ClusterTest
     public void testNullStatusOnKraftCommandAlterClientMetrics() {
         Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
                 "--entity-type", "client-metrics",
@@ -199,7 +146,7 @@ public class ConfigCommandIntegrationTest {
         assertTrue(StringUtils.isBlank(message), message);
     }
 
-    @ClusterTest(types = Type.ZK)
+    @ClusterTest
     public void testDynamicBrokerConfigUpdateUsingZooKeeper() throws Exception {
         cluster.shutdownBroker(0);
         String zkConnect = ((ZkClusterInvocationContext.ZkClusterInstance) cluster).getUnderlying().zkConnect();
@@ -209,11 +156,14 @@ public class ConfigCommandIntegrationTest {
         AdminZkClient adminZkClient = new AdminZkClient(zkClient, scala.None$.empty());
         List<String> alterOpts = asList("--zookeeper", zkConnect, "--entity-type", "brokers", "--alter");
 
-        // Add config
-        alterAndVerifyConfig(zkClient, adminZkClient, Optional.of(brokerId),
-                singletonMap(MESSAGE_MAX_BYTES_CONFIG, "110000"), alterOpts);
-        alterAndVerifyConfig(zkClient, adminZkClient, Optional.empty(),
-                singletonMap(MESSAGE_MAX_BYTES_CONFIG, "120000"), alterOpts);
+        try (Admin client = cluster.createAdminClient()) {
+            // Add config
+            alterAndVerifyConfig(client, adminZkClient, Optional.of(brokerId),
+                    singletonMap(MESSAGE_MAX_BYTES_CONFIG, "110000"), alterOpts);
+            alterAndVerifyConfig(zkClient, adminZkClient, Optional.empty(),
+                    singletonMap(MESSAGE_MAX_BYTES_CONFIG, "120000"), alterOpts);
+        }
+
 
         // Change config
         alterAndVerifyConfig(zkClient, adminZkClient, Optional.of(brokerId),
@@ -290,6 +240,7 @@ public class ConfigCommandIntegrationTest {
     }
 
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
+    @ClusterTest
     public void testDynamicBrokerConfigUpdateUsingKraft() throws Exception {
         List<String> alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
 
@@ -330,7 +281,7 @@ public class ConfigCommandIntegrationTest {
         }
     }
 
-    @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT})
+    @ClusterTest
     public void testGroupConfigUpdateUsingKraft() throws Exception {
         List<String> alterOpts = Stream.concat(entityOp(Optional.of(defaultGroupName)).stream(),
                         Stream.of("--entity-type", "groups", "--alter"))
@@ -387,7 +338,7 @@ public class ConfigCommandIntegrationTest {
         }
     }
 
-    @ClusterTest(types = {Type.ZK})
+    @ClusterTest
     public void testAlterReadOnlyConfigInZookeeperThenShouldFail() {
         cluster.shutdownBroker(0);
         String zkConnect = ((ZkClusterInvocationContext.ZkClusterInstance) cluster).getUnderlying().zkConnect();
@@ -407,6 +358,7 @@ public class ConfigCommandIntegrationTest {
     }
 
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
+    @ClusterTest
     public void testAlterReadOnlyConfigInKRaftThenShouldFail() {
         List<String> alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
 
@@ -423,7 +375,7 @@ public class ConfigCommandIntegrationTest {
         }
     }
 
-    @ClusterTest(types = {Type.ZK})
+    @ClusterTest
     public void testUpdateClusterWideConfigInZookeeperThenShouldSuccessful() {
         cluster.shutdownBroker(0);
         String zkConnect = ((ZkClusterInvocationContext.ZkClusterInstance) cluster).getUnderlying().zkConnect();
@@ -440,6 +392,7 @@ public class ConfigCommandIntegrationTest {
     }
 
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
+    @ClusterTest
     public void testUpdateClusterWideConfigInKRaftThenShouldSuccessful() throws Exception {
         List<String> alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
 
@@ -453,7 +406,7 @@ public class ConfigCommandIntegrationTest {
         }
     }
 
-    @ClusterTest(types = {Type.ZK})
+    @ClusterTest
     public void testUpdatePerBrokerConfigWithListenerNameInZookeeperThenShouldSuccessful() {
         cluster.shutdownBroker(0);
         String zkConnect = ((ZkClusterInvocationContext.ZkClusterInstance) cluster).getUnderlying().zkConnect();
@@ -481,6 +434,7 @@ public class ConfigCommandIntegrationTest {
     }
 
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
+    @ClusterTest
     public void testUpdatePerBrokerConfigWithListenerNameInKRaftThenShouldSuccessful() throws Exception {
         List<String> alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
         String listenerName = "listener.name.internal.";
@@ -497,7 +451,7 @@ public class ConfigCommandIntegrationTest {
         }
     }
 
-    @ClusterTest(types = {Type.ZK})
+    @ClusterTest
     public void testUpdatePerBrokerConfigInZookeeperThenShouldFail() {
         cluster.shutdownBroker(0);
         String zkConnect = ((ZkClusterInvocationContext.ZkClusterInstance) cluster).getUnderlying().zkConnect();
@@ -517,6 +471,7 @@ public class ConfigCommandIntegrationTest {
     }
 
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
+    @ClusterTest
     public void testUpdatePerBrokerConfigInKRaftThenShouldFail() {
         List<String> alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
 
@@ -548,9 +503,7 @@ public class ConfigCommandIntegrationTest {
     }
 
     private Stream<String> quorumArgs() {
-        return cluster.isKRaftTest()
-                ? Stream.of("--bootstrap-server", cluster.bootstrapServers())
-                : Stream.of("--zookeeper", ((ZkClusterInvocationContext.ZkClusterInstance) cluster).getUnderlying().zkConnect());
+        return Stream.of("--bootstrap-server", cluster.bootstrapServers());
     }
 
     private void verifyConfig(KafkaZkClient zkClient, Optional<String> brokerId, Map<String, String> config) {
