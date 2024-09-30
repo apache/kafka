@@ -133,7 +133,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -315,7 +314,6 @@ public class StreamTaskTest {
         // Clean up state directory created as part of setup
         stateDirectory.close();
         stateDirectory = mock(StateDirectory.class);
-        when(stateDirectory.canTryLock(any(), anyLong())).thenReturn(true);
         when(stateDirectory.lock(taskId)).thenReturn(false);
 
         task = createStatefulTask(createConfig("100"), false);

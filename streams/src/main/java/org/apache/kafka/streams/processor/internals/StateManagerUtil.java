@@ -93,24 +93,21 @@ final class StateManagerUtil {
         }
 
         final TaskId id = stateMgr.taskId();
-        if (!stateDirectory.canTryLock(id, System.currentTimeMillis())) {
-            log.trace("Task {} is still not allowed to retry acquiring the state directory lock", id);
-        } else if (!stateDirectory.lock(id)) {
+        if (!stateDirectory.lock(id)) {
             throw new LockException(String.format("%sFailed to lock the state directory for task %s", logPrefix, id));
-        } else {
-            log.debug("Acquired state directory lock");
-
-            final boolean storeDirsEmpty = stateDirectory.directoryForTaskIsEmpty(id);
-
-            stateMgr.registerStateStores(topology.stateStores(), processorContext);
-            log.debug("Registered state stores");
-
-            // We should only load checkpoint AFTER the corresponding state directory lock has been acquired and
-            // the state stores have been registered; we should not try to load at the state manager construction time.
-            // See https://issues.apache.org/jira/browse/KAFKA-8574
-            stateMgr.initializeStoreOffsetsFromCheckpoint(storeDirsEmpty);
-            log.debug("Initialized state stores");
         }
+        log.debug("Acquired state directory lock");
+
+        final boolean storeDirsEmpty = stateDirectory.directoryForTaskIsEmpty(id);
+
+        stateMgr.registerStateStores(topology.stateStores(), processorContext);
+        log.debug("Registered state stores");
+
+        // We should only load checkpoint AFTER the corresponding state directory lock has been acquired and
+        // the state stores have been registered; we should not try to load at the state manager construction time.
+        // See https://issues.apache.org/jira/browse/KAFKA-8574
+        stateMgr.initializeStoreOffsetsFromCheckpoint(storeDirsEmpty);
+        log.debug("Initialized state stores");
     }
 
     /**
