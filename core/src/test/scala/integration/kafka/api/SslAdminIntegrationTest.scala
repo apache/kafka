@@ -17,7 +17,6 @@ import java.util.concurrent._
 import java.util.Properties
 import com.yammer.metrics.core.Gauge
 import kafka.security.JaasTestUtils
-import kafka.security.authorizer.AclAuthorizer
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{AdminClientConfig, CreateAclsResult}
 import org.apache.kafka.common.acl._
@@ -39,7 +38,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
-import scala.collection.{mutable, Seq}
+import scala.collection.{Seq, mutable}
 import scala.compat.java8.OptionConverters
 
 object SslAdminIntegrationTest {
@@ -50,7 +49,19 @@ object SslAdminIntegrationTest {
   val serverUser = "server"
   val clientCn = "client"
 
-  trait ExecutableAuthorizer {
+  class TestableStandardAuthorizer extends StandardAuthorizer with ClusterMetadataAuthorizer {
+    override def createAcls(requestContext: AuthorizableRequestContext,
+                            aclBindings: util.List[AclBinding]): util.List[_ <: CompletionStage[AclCreateResult]] = {
+      lastUpdateRequestContext = Some(requestContext)
+      execute[AclCreateResult](aclBindings.size, () => super.createAcls(requestContext, aclBindings))
+    }
+
+    override def deleteAcls(requestContext: AuthorizableRequestContext,
+                            aclBindingFilters: util.List[AclBindingFilter]): util.List[_ <: CompletionStage[AclDeleteResult]] = {
+      lastUpdateRequestContext = Some(requestContext)
+      execute[AclDeleteResult](aclBindingFilters.size, () => super.deleteAcls(requestContext, aclBindingFilters))
+    }
+
     def execute[T](batchSize: Int, action: () => util.List[_ <: CompletionStage[T]]): util.List[CompletableFuture[T]] = {
       val futures = (0 until batchSize).map(_ => new CompletableFuture[T]).toList
       val runnable = new Runnable {
@@ -74,36 +85,6 @@ object SslAdminIntegrationTest {
         case None => runnable.run()
       }
       futures.asJava
-    }
-  }
-
-  class TestableAclAuthorizer extends AclAuthorizer with ExecutableAuthorizer {
-
-    override def createAcls(requestContext: AuthorizableRequestContext,
-                            aclBindings: util.List[AclBinding]): util.List[_ <: CompletionStage[AclCreateResult]] = {
-      lastUpdateRequestContext = Some(requestContext)
-      execute[AclCreateResult](aclBindings.size, () => super.createAcls(requestContext, aclBindings))
-    }
-
-    override def deleteAcls(requestContext: AuthorizableRequestContext,
-                            aclBindingFilters: util.List[AclBindingFilter]): util.List[_ <: CompletionStage[AclDeleteResult]] = {
-      lastUpdateRequestContext = Some(requestContext)
-      execute[AclDeleteResult](aclBindingFilters.size, () => super.deleteAcls(requestContext, aclBindingFilters))
-    }
-  }
-
-  class TestableStandardAuthorizer extends StandardAuthorizer with ClusterMetadataAuthorizer with ExecutableAuthorizer {
-
-    override def createAcls(requestContext: AuthorizableRequestContext,
-                            aclBindings: util.List[AclBinding]): util.List[_ <: CompletionStage[AclCreateResult]] = {
-      lastUpdateRequestContext = Some(requestContext)
-      execute[AclCreateResult](aclBindings.size, () => super.createAcls(requestContext, aclBindings))
-    }
-
-    override def deleteAcls(requestContext: AuthorizableRequestContext,
-                            aclBindingFilters: util.List[AclBindingFilter]): util.List[_ <: CompletionStage[AclDeleteResult]] = {
-      lastUpdateRequestContext = Some(requestContext)
-      execute[AclDeleteResult](aclBindingFilters.size, () => super.deleteAcls(requestContext, aclBindingFilters))
     }
   }
 
@@ -132,7 +113,6 @@ object SslAdminIntegrationTest {
 }
 
 class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
-  override val zkAuthorizerClassName: String = classOf[SslAdminIntegrationTest.TestableAclAuthorizer].getName
   override val kraftAuthorizerClassName: String = classOf[SslAdminIntegrationTest.TestableStandardAuthorizer].getName
 
   this.serverConfig.setProperty(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required")
@@ -177,13 +157,13 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testAclUpdatesUsingSynchronousAuthorizer(quorum: String): Unit = {
     verifyAclUpdates()
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testAclUpdatesUsingAsynchronousAuthorizer(quorum: String): Unit = {
     SslAdminIntegrationTest.executor = Some(Executors.newSingleThreadExecutor)
     verifyAclUpdates()
@@ -194,7 +174,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
    * on request threads without any performance overhead introduced by a purgatory.
    */
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testSynchronousAuthorizerAclUpdatesBlockRequestThreads(quorum: String): Unit = {
     val testSemaphore = new Semaphore(0)
     SslAdminIntegrationTest.semaphore = Some(testSemaphore)
@@ -206,7 +186,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     val aclFutures = mutable.Buffer[CreateAclsResult]()
     // In KRaft mode, ACL creation is handled exclusively by controller servers, not brokers.
     // Therefore, only the number of controller I/O threads is relevant in this context.
-    val numReqThreads = if (isKRaftTest()) controllerServers.head.config.numIoThreads * controllerServers.size else numRequestThreads
+    val numReqThreads = controllerServers.head.config.numIoThreads * controllerServers.size
     while (blockedRequestThreads.size < numReqThreads) {
       aclFutures += createAdminClient.createAcls(List(acl2).asJava)
       assertTrue(aclFutures.size < numReqThreads * 10,
@@ -246,7 +226,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
    * using a purgatory, enabling other requests to be processed even when ACL updates are blocked.
    */
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testAsynchronousAuthorizerAclUpdatesDontBlockRequestThreads(quorum: String): Unit = {
     SslAdminIntegrationTest.executor = Some(Executors.newSingleThreadExecutor)
     val testSemaphore = new Semaphore(0)
@@ -257,7 +237,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     useBoostrapControllers()
     // In KRaft mode, ACL creation is handled exclusively by controller servers, not brokers.
     // Therefore, only the number of controller I/O threads is relevant in this context.
-    val numReqThreads = if (isKRaftTest()) controllerServers.head.config.numIoThreads * controllerServers.size else numRequestThreads
+    val numReqThreads = controllerServers.head.config.numIoThreads * controllerServers.size
     val aclFutures = (0 until numReqThreads).map(_ => createAdminClient.createAcls(List(acl2).asJava))
 
     waitForNoBlockedRequestThreads()
@@ -323,8 +303,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
   }
 
   private def numRequestThreads = {
-    if (isKRaftTest()) brokers.head.config.numIoThreads * (brokers.size + controllerServers.size)
-    else servers.head.config.numIoThreads * servers.size
+    brokers.head.config.numIoThreads * (brokers.size + controllerServers.size)
   }
 
   private def waitForNoBlockedRequestThreads(): Unit = {
@@ -358,17 +337,15 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
   }
 
   private def useBoostrapControllers(): Unit = {
-    if (isKRaftTest()) {
-      val controllerListenerName = ListenerName.forSecurityProtocol(extraControllerSecurityProtocol)
-      val config = controllerServers.map { s =>
-        val listener = s.config.effectiveAdvertisedControllerListeners
-          .find(_.listenerName == controllerListenerName)
-          .getOrElse(sys.error(s"Could not find listener with name $controllerListenerName"))
-        Utils.formatAddress(listener.host, s.socketServer.boundPort(controllerListenerName))
-      }.mkString(",")
+    val controllerListenerName = ListenerName.forSecurityProtocol(extraControllerSecurityProtocol)
+    val config = controllerServers.map { s =>
+      val listener = s.config.effectiveAdvertisedControllerListeners
+        .find(_.listenerName == controllerListenerName)
+        .getOrElse(sys.error(s"Could not find listener with name $controllerListenerName"))
+      Utils.formatAddress(listener.host, s.socketServer.boundPort(controllerListenerName))
+    }.mkString(",")
 
-      adminClientConfig.remove(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG)
-      adminClientConfig.put(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, config)
-    }
+    adminClientConfig.remove(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG)
+    adminClientConfig.put(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, config)
   }
 }
