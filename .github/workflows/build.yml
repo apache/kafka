@@ -114,6 +114,7 @@ jobs:
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
       - name: Merge, Compile, and validate
         run: |
+          git fetch origin trunk
           git checkout -b trunk-integration-${{ github.run_id }} trunk
           git merge --squash ${{ github.ref }} -m ''
           ./gradlew --build-cache --info --no-scan check -x test
