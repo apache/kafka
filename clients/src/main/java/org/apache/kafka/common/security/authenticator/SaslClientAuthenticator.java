@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
+import org.apache.kafka.common.internals.SecurityManagerCompatibility;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
@@ -59,8 +60,6 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.security.Principal;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -70,6 +69,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.CompletionException;
 
 import javax.security.auth.Subject;
 import javax.security.sasl.Sasl;
@@ -215,7 +215,7 @@ public class SaslClientAuthenticator implements Authenticator {
     // visible for testing
     SaslClient createSaslClient() {
         try {
-            return Subject.doAs(subject, (PrivilegedExceptionAction<SaslClient>) () -> {
+            return SecurityManagerCompatibility.get().callAs(subject, () -> {
                 String[] mechs = {mechanism};
                 log.debug("Creating SaslClient: client={};service={};serviceHostname={};mechs={}",
                     clientPrincipalName, servicePrincipal, host, Arrays.toString(mechs));
@@ -225,7 +225,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 }
                 return retvalSaslClient;
             });
-        } catch (PrivilegedActionException e) {
+        } catch (CompletionException e) {
             throw new SaslAuthenticationException("Failed to create SaslClient with mechanism " + mechanism, e.getCause());
         }
     }
@@ -533,8 +533,8 @@ public class SaslClientAuthenticator implements Authenticator {
             if (isInitial && !saslClient.hasInitialResponse())
                 return saslToken;
             else
-                return Subject.doAs(subject, (PrivilegedExceptionAction<byte[]>) () -> saslClient.evaluateChallenge(saslToken));
-        } catch (PrivilegedActionException e) {
+                return SecurityManagerCompatibility.get().callAs(subject, () -> saslClient.evaluateChallenge(saslToken));
+        } catch (CompletionException e) {
             String error = "An error: (" + e + ") occurred when evaluating SASL token received from the Kafka Broker.";
             KerberosError kerberosError = KerberosError.fromException(e);
             // Try to provide hints to use about what went wrong so they can fix their configuration.
@@ -545,7 +545,7 @@ public class SaslClientAuthenticator implements Authenticator {
                     " Users must configure FQDN of kafka brokers when authenticating using SASL and" +
                     " `socketChannel.socket().getInetAddress().getHostName()` must match the hostname in `principal/hostname@realm`";
             }
-            //Unwrap the SaslException inside `PrivilegedActionException`
+            //Unwrap the SaslException
             Throwable cause = e.getCause();
             // Treat transient Kerberos errors as non-fatal SaslExceptions that are processed as I/O exceptions
             // and all other failures as fatal SaslAuthenticationException.
