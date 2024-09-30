@@ -492,7 +492,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     public Set<String> subscription() {
         acquireAndEnsureOpen();
         try {
-            return subscriptions.subscription();
+            return Collections.unmodifiableSet(subscriptions.subscription());
         } finally {
             release();
         }
@@ -594,7 +594,6 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             return ConsumerRecords.empty();
         } finally {
             kafkaShareConsumerMetrics.recordPollEnd(timer.currentTimeMs());
-            wakeupTrigger.clearTask();
             release();
         }
     }
@@ -612,6 +611,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
         // Wait a bit - this is where we will fetch records
         Timer pollTimer = time.timer(pollTimeout);
+        wakeupTrigger.setShareFetchAction(fetchBuffer);
+
         try {
             fetchBuffer.awaitNotEmpty(pollTimer);
         } catch (InterruptException e) {
@@ -619,6 +620,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             throw e;
         } finally {
             timer.update(pollTimer.currentTimeMs());
+            wakeupTrigger.clearTask();
         }
 
         return collect(Collections.emptyMap());
