@@ -43,11 +43,8 @@ import java.util.List;
 
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mockStatic;
@@ -88,7 +85,6 @@ public class StateManagerUtilTest {
     public void testRegisterStateStoreFailToLockStateDirectory() {
         when(topology.stateStores()).thenReturn(singletonList(new MockKeyValueStore("store", false)));
         when(stateManager.taskId()).thenReturn(taskId);
-        when(stateDirectory.canTryLock(any(), anyLong())).thenReturn(true);
         when(stateDirectory.lock(taskId)).thenReturn(false);
 
         final LockException thrown = assertThrows(LockException.class,
@@ -99,17 +95,6 @@ public class StateManagerUtilTest {
     }
 
     @Test
-    public void testRegisterStateStoreWhenTryLockIsNotAllowed() {
-        when(topology.stateStores()).thenReturn(singletonList(new MockKeyValueStore("store", false)));
-        when(stateManager.taskId()).thenReturn(taskId);
-        when(stateDirectory.canTryLock(any(), anyLong())).thenReturn(false);
-
-        assertDoesNotThrow(() -> StateManagerUtil.registerStateStores(logger, "logPrefix:",
-                        topology, stateManager, stateDirectory, processorContext));
-
-    }
-
-    @Test
     public void testRegisterStateStores() {
         final MockKeyValueStore store1 = new MockKeyValueStore("store1", false);
         final MockKeyValueStore store2 = new MockKeyValueStore("store2", false);
@@ -117,7 +102,6 @@ public class StateManagerUtilTest {
         final InOrder inOrder = inOrder(stateManager);
         when(topology.stateStores()).thenReturn(stateStores);
         when(stateManager.taskId()).thenReturn(taskId);
-        when(stateDirectory.canTryLock(any(), anyLong())).thenReturn(true);
         when(stateDirectory.lock(taskId)).thenReturn(true);
         when(stateDirectory.directoryForTaskIsEmpty(taskId)).thenReturn(true);
         when(topology.stateStores()).thenReturn(stateStores);
