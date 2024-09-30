@@ -20,10 +20,6 @@
 ext {
   versions = [:]
   libs = [:]
-
-  // Available if -PscalaVersion is used. This is useful when we want to support a Scala version that has
-  // a higher minimum Java requirement than Kafka.
-  availableScalaVersions = [ '2.13' ]
 }
 
 // Add Scala version

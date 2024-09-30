@@ -120,7 +120,7 @@ class TxnMarkerQueue(@volatile var destination: Node) extends Logging {
   }
 
   def addMarkers(txnTopicPartition: Int, pendingCompleteTxnAndMarker: PendingCompleteTxnAndMarkerEntry): Unit = {
-    val queue =markersPerTxnTopicPartition.getOrElseUpdate(txnTopicPartition, {
+    val queue = markersPerTxnTopicPartition.getOrElseUpdate(txnTopicPartition, {
       // Note that this may get called more than once if threads have a close race while adding new queue.
       info(s"Creating new marker queue for txn partition $txnTopicPartition to destination broker ${destination.id}")
       new LinkedBlockingQueue[PendingCompleteTxnAndMarkerEntry]()
