@@ -17,15 +17,12 @@
 package kafka.admin;
 
 import kafka.admin.AclCommand.AclCommandOptions;
-import kafka.security.authorizer.AclAuthorizer;
 import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterConfigProperty;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTestDefaults;
-import kafka.test.annotation.ClusterTests;
 import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
-import kafka.test.junit.ZkClusterInvocationContext;
 
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBindingFilter;
@@ -98,14 +95,17 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@ClusterTestDefaults(serverProperties = {
-        @ClusterConfigProperty(key = StandardAuthorizer.SUPER_USERS_CONFIG, value = "User:ANONYMOUS"),
-        @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = AclCommandTest.ACL_AUTHORIZER)
-})
+@ClusterTestDefaults(
+        types = {Type.KRAFT},
+        serverProperties = {
+            @ClusterConfigProperty(key = StandardAuthorizer.SUPER_USERS_CONFIG, value = "User:ANONYMOUS"),
+            @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = AclCommandTest.STANDARD_AUTHORIZER)}
+
+)
 @ExtendWith(ClusterTestExtensions.class)
 public class AclCommandTest {
     public static final String ACL_AUTHORIZER = "kafka.security.authorizer.AclAuthorizer";
-    private static final String STANDARD_AUTHORIZER = "org.apache.kafka.metadata.authorizer.StandardAuthorizer";
+    public static final String STANDARD_AUTHORIZER = "org.apache.kafka.metadata.authorizer.StandardAuthorizer";
     private static final String LOCALHOST = "localhost:9092";
     private static final String AUTHORIZER = "--authorizer";
     private static final String AUTHORIZER_PROPERTIES = AUTHORIZER + "-properties";
@@ -221,77 +221,38 @@ public class AclCommandTest {
                         }).collect(Collectors.toMap(Entry::getKey, Entry::getValue)));
             }};
 
-    @ClusterTest(types = {Type.ZK})
-    public void testAclCliWithAuthorizer(ClusterInstance cluster) throws InterruptedException {
-        testAclCli(cluster, zkArgs(cluster));
-    }
-
-    @ClusterTests({
-            @ClusterTest(types = {Type.ZK}),
-            @ClusterTest(types = {Type.KRAFT}, serverProperties = {
-                    @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = STANDARD_AUTHORIZER)
-            })
-    })
+    @ClusterTest
     public void testAclCliWithAdminAPI(ClusterInstance cluster) throws InterruptedException {
         testAclCli(cluster, adminArgs(cluster.bootstrapServers(), Optional.empty()));
     }
 
 
-    @ClusterTest(types = {Type.KRAFT}, serverProperties = {
-            @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = STANDARD_AUTHORIZER)
-    })
+    @ClusterTest
     public void testAclCliWithAdminAPIAndBootstrapController(ClusterInstance cluster) throws InterruptedException {
         testAclCli(cluster, adminArgsWithBootstrapController(cluster.bootstrapControllers(), Optional.empty()));
     }
 
-    @ClusterTests({
-            @ClusterTest(types = {Type.ZK}),
-            @ClusterTest(types = {Type.KRAFT}, serverProperties = {
-                    @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = STANDARD_AUTHORIZER)
-            })
-    })
+    @ClusterTest
     public void testAclCliWithMisusingBootstrapServerToController(ClusterInstance cluster) {
         assertThrows(RuntimeException.class, () -> testAclCli(cluster, adminArgsWithBootstrapController(cluster.bootstrapServers(), Optional.empty())));
     }
 
-    @ClusterTests({
-            @ClusterTest(types = {Type.ZK}),
-            @ClusterTest(types = {Type.KRAFT}, serverProperties = {
-                    @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = STANDARD_AUTHORIZER)
-            })
-    })
+    @ClusterTest
     public void testAclCliWithMisusingBootstrapControllerToServer(ClusterInstance cluster) {
         assertThrows(RuntimeException.class, () -> testAclCli(cluster, adminArgs(cluster.bootstrapControllers(), Optional.empty())));
     }
 
-    @ClusterTest(types = {Type.ZK})
-    public void testProducerConsumerCliWithAuthorizer(ClusterInstance cluster) throws InterruptedException {
-        testProducerConsumerCli(cluster, zkArgs(cluster));
-    }
-
-    @ClusterTests({
-            @ClusterTest(types = {Type.ZK}),
-            @ClusterTest(types = {Type.KRAFT}, serverProperties = {
-                    @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = STANDARD_AUTHORIZER)
-            })
-    })
+    @ClusterTest
     public void testProducerConsumerCliWithAdminAPI(ClusterInstance cluster) throws InterruptedException {
         testProducerConsumerCli(cluster, adminArgs(cluster.bootstrapServers(), Optional.empty()));
     }
 
-    @ClusterTest(types = {Type.KRAFT}, serverProperties = {
-            @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = STANDARD_AUTHORIZER)
-    })
+    @ClusterTest
     public void testProducerConsumerCliWithAdminAPIAndBootstrapController(ClusterInstance cluster) throws InterruptedException {
         testProducerConsumerCli(cluster, adminArgsWithBootstrapController(cluster.bootstrapControllers(), Optional.empty()));
     }
 
-    @ClusterTests({
-            @ClusterTest(types = {Type.ZK}),
-            @ClusterTest(types = {Type.KRAFT}, serverProperties = {
-                    @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = STANDARD_AUTHORIZER)
-            })
-    })
+    @ClusterTest
     public void testAclCliWithClientId(ClusterInstance cluster) throws IOException, InterruptedException {
         try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
             appender.setClassLogger(AppInfoParser.class, Level.WARN);
@@ -303,9 +264,7 @@ public class AclCommandTest {
         }
     }
 
-    @ClusterTest(types = {Type.KRAFT}, serverProperties = {
-            @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = STANDARD_AUTHORIZER)
-    })
+    @ClusterTest
     public void testAclCliWithClientIdAndBootstrapController(ClusterInstance cluster) throws IOException, InterruptedException {
         try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
             appender.setClassLogger(AppInfoParser.class, Level.WARN);
@@ -317,57 +276,22 @@ public class AclCommandTest {
         }
     }
 
-    @ClusterTest(types = {Type.ZK})
-    public void testAclsOnPrefixedResourcesWithAuthorizer(ClusterInstance cluster) throws InterruptedException {
-        testAclsOnPrefixedResources(cluster, zkArgs(cluster));
-    }
-
-    @ClusterTests({
-            @ClusterTest(types = {Type.ZK}),
-            @ClusterTest(types = {Type.KRAFT}, serverProperties = {
-                    @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = STANDARD_AUTHORIZER)
-            })
-    })
+    @ClusterTest
     public void testAclsOnPrefixedResourcesWithAdminAPI(ClusterInstance cluster) throws InterruptedException {
         testAclsOnPrefixedResources(cluster, adminArgs(cluster.bootstrapServers(), Optional.empty()));
     }
 
-    @ClusterTest(types = {Type.KRAFT}, serverProperties = {
-            @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = STANDARD_AUTHORIZER)
-    })
+    @ClusterTest
     public void testAclsOnPrefixedResourcesWithAdminAPIAndBootstrapController(ClusterInstance cluster) throws InterruptedException {
         testAclsOnPrefixedResources(cluster, adminArgsWithBootstrapController(cluster.bootstrapControllers(), Optional.empty()));
     }
 
-    @ClusterTest(types = {Type.ZK})
-    public void testInvalidAuthorizerProperty(ClusterInstance cluster) {
-        AclCommand.AuthorizerService aclCommandService = new AclCommand.AuthorizerService(
-                AclAuthorizer.class.getName(),
-                new AclCommandOptions(new String[]{AUTHORIZER_PROPERTIES, "zookeeper.connect " + zkConnect(cluster)})
-        );
-        assertThrows(IllegalArgumentException.class, aclCommandService::listAcls);
-    }
-
-    @ClusterTest(types = {Type.ZK})
-    public void testPatternTypesWithAuthorizer(ClusterInstance cluster) {
-        testPatternTypes(zkArgs(cluster));
-    }
-
-    @ClusterTests({
-            @ClusterTest(types = {Type.ZK}),
-            @ClusterTest(types = {Type.KRAFT}, serverProperties = {
-                    @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = STANDARD_AUTHORIZER)
-            })
-    })
+    @ClusterTest
     public void testPatternTypesWithAdminAPI(ClusterInstance cluster) {
         testPatternTypes(adminArgs(cluster.bootstrapServers(), Optional.empty()));
     }
 
-    @ClusterTests({
-            @ClusterTest(types = {Type.KRAFT}, serverProperties = {
-                    @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = STANDARD_AUTHORIZER)
-            })
-    })
+    @ClusterTest
     public void testPatternTypesWithAdminAPIAndBootstrapController(ClusterInstance cluster) {
         testPatternTypes(adminArgsWithBootstrapController(cluster.bootstrapControllers(), Optional.empty()));
     }
@@ -726,14 +650,6 @@ public class AclCommandTest {
     @SuppressWarnings("deprecation")
     private static <T> Set<T> asJavaSet(scala.collection.immutable.Set<T> scalaSet) {
         return JavaConverters.setAsJavaSet(scalaSet);
-    }
-
-    private String zkConnect(ClusterInstance cluster) {
-        return ((ZkClusterInvocationContext.ZkClusterInstance) cluster).getUnderlying().zkConnect();
-    }
-
-    private List<String> zkArgs(ClusterInstance cluster) {
-        return Arrays.asList("--authorizer-properties", "zookeeper.connect=" + zkConnect(cluster));
     }
 
     private void assertInitializeInvalidOptionsExitCodeAndMsg(List<String> args, String expectedMsg) {
