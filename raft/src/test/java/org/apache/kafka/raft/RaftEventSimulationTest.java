@@ -19,6 +19,7 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.metrics.Metrics;
@@ -35,6 +36,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.MockLog.LogBatch;
 import org.apache.kafka.raft.MockLog.LogEntry;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
+import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -536,7 +538,7 @@ public class RaftEventSimulationTest {
         final Random random;
         final AtomicInteger correlationIdCounter = new AtomicInteger();
         final MockTime time = new MockTime();
-        final Uuid clusterId = Uuid.randomUuid();
+        final String clusterId = Uuid.randomUuid().toString();
         final Map<Integer, Node> voters = new HashMap<>();
         final Map<Integer, PersistentState> nodes = new HashMap<>();
         final Map<Integer, RaftNode> running = new HashMap<>();
@@ -762,14 +764,14 @@ public class RaftEventSimulationTest {
                 .stream()
                 .collect(Collectors.toMap(Node::id, Cluster::nodeAddress));
 
-            QuorumConfig quorumConfig = new QuorumConfig(
-                REQUEST_TIMEOUT_MS,
-                RETRY_BACKOFF_MS,
-                ELECTION_TIMEOUT_MS,
-                ELECTION_JITTER_MS,
-                FETCH_TIMEOUT_MS,
-                LINGER_MS
-            );
+            Map<String, Integer> configMap = new HashMap<>();
+            configMap.put(QuorumConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_MS);
+            configMap.put(QuorumConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG, RETRY_BACKOFF_MS);
+            configMap.put(QuorumConfig.QUORUM_ELECTION_TIMEOUT_MS_CONFIG, ELECTION_TIMEOUT_MS);
+            configMap.put(QuorumConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG, ELECTION_JITTER_MS);
+            configMap.put(QuorumConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG, FETCH_TIMEOUT_MS);
+            configMap.put(QuorumConfig.QUORUM_LINGER_MS_CONFIG, LINGER_MS);
+            QuorumConfig quorumConfig = new QuorumConfig(new AbstractConfig(QuorumConfig.CONFIG_DEF, configMap));
             Metrics metrics = new Metrics(time);
 
             persistentState.log.reopen();
@@ -788,9 +790,11 @@ public class RaftEventSimulationTest {
                 time,
                 new MockExpirationService(time),
                 FETCH_MAX_WAIT_MS,
-                clusterId.toString(),
+                true,
+                clusterId,
                 Collections.emptyList(),
                 endpointsFromId(nodeId, channel.listenerName()),
+                Features.KRAFT_VERSION.supportedVersionRange(),
                 logContext,
                 random,
                 quorumConfig
@@ -996,9 +1000,9 @@ public class RaftEventSimulationTest {
                     fail("Non-monotonic update of epoch detected on node " + nodeId + ": " +
                             oldEpoch + " -> " + newEpoch);
                 }
-                cluster.ifRunning(nodeId, nodeState -> {
-                    assertEquals(newEpoch, nodeState.client.quorum().epoch());
-                });
+                cluster.ifRunning(nodeId, nodeState ->
+                    assertEquals(newEpoch, nodeState.client.quorum().epoch())
+                );
                 nodeEpochs.put(nodeId, newEpoch);
             }
         }
@@ -1300,9 +1304,9 @@ public class RaftEventSimulationTest {
             if (!filters.get(inflightRequest.sourceId).acceptInbound(inbound))
                 return;
 
-            cluster.nodeIfRunning(inflightRequest.sourceId).ifPresent(node -> {
-                node.channel.mockReceive(inbound);
-            });
+            cluster.nodeIfRunning(inflightRequest.sourceId).ifPresent(node ->
+                node.channel.mockReceive(inbound)
+            );
         }
 
         void filter(int nodeId, NetworkFilter filter) {

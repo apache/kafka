@@ -747,43 +747,6 @@ public interface KStream<K, V> {
     KStream<K, V> peek(final ForeachAction<? super K, ? super V> action, final Named named);
 
     /**
-     * Creates an array of {@code KStream} from this stream by branching the records in the original stream based on
-     * the supplied predicates.
-     * Each record is evaluated against the supplied predicates, and predicates are evaluated in order.
-     * Each stream in the result array corresponds position-wise (index) to the predicate in the supplied predicates.
-     * The branching happens on first-match: A record in the original stream is assigned to the corresponding result
-     * stream for the first predicate that evaluates to true, and is assigned to this stream only.
-     * A record will be dropped if none of the predicates evaluate to true.
-     * This is a stateless record-by-record operation.
-     *
-     * @param predicates the ordered list of {@link Predicate} instances
-     * @return multiple distinct substreams of this {@code KStream}
-     * @deprecated since 2.8. Use {@link #split()} instead.
-     */
-    @Deprecated
-    @SuppressWarnings("unchecked")
-    KStream<K, V>[] branch(final Predicate<? super K, ? super V>... predicates);
-
-    /**
-     * Creates an array of {@code KStream} from this stream by branching the records in the original stream based on
-     * the supplied predicates.
-     * Each record is evaluated against the supplied predicates, and predicates are evaluated in order.
-     * Each stream in the result array corresponds position-wise (index) to the predicate in the supplied predicates.
-     * The branching happens on first-match: A record in the original stream is assigned to the corresponding result
-     * stream for the first predicate that evaluates to true, and is assigned to this stream only.
-     * A record will be dropped if none of the predicates evaluate to true.
-     * This is a stateless record-by-record operation.
-     *
-     * @param named  a {@link Named} config used to name the processor in the topology
-     * @param predicates the ordered list of {@link Predicate} instances
-     * @return multiple distinct substreams of this {@code KStream}
-     * @deprecated since 2.8. Use {@link #split(Named)} instead.
-     */
-    @Deprecated
-    @SuppressWarnings("unchecked")
-    KStream<K, V>[] branch(final Named named, final Predicate<? super K, ? super V>... predicates);
-
-    /**
      * Split this stream into different branches. The returned {@link BranchedKStream} instance can be used for routing
      * the records to different branches depending on evaluation against the supplied predicates.
      * <p>
@@ -833,46 +796,6 @@ public interface KStream<K, V> {
      * @return a merged stream containing all records from this and the provided {@code KStream}
      */
     KStream<K, V> merge(final KStream<K, V> stream, final Named named);
-
-    /**
-     * Materialize this stream to a topic and creates a new {@code KStream} from the topic using default serializers,
-     * deserializers, and producer's default partitioning strategy.
-     * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
-     * started).
-     * <p>
-     * This is similar to calling {@link #to(String) #to(someTopicName)} and
-     * {@link StreamsBuilder#stream(String) StreamsBuilder#stream(someTopicName)}.
-     * Note that {@code through()} uses a hard coded {@link org.apache.kafka.streams.processor.FailOnInvalidTimestamp
-     * timestamp extractor} and does not allow to customize it, to ensure correct timestamp propagation.
-     *
-     * @param topic the topic name
-     * @return a {@code KStream} that contains the exact same (and potentially repartitioned) records as this {@code KStream}
-     * @deprecated since 2.6; use {@link #repartition()} instead
-     */
-    // TODO: when removed, update `StreamsResetter` description of --intermediate-topics
-    @Deprecated
-    KStream<K, V> through(final String topic);
-
-    /**
-     * Materialize this stream to a topic and creates a new {@code KStream} from the topic using the
-     * {@link Produced} instance for configuration of the {@link Serde key serde}, {@link Serde value serde},
-     * and {@link StreamPartitioner}.
-     * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
-     * started).
-     * <p>
-     * This is similar to calling {@link #to(String, Produced) to(someTopic, Produced.with(keySerde, valueSerde)}
-     * and {@link StreamsBuilder#stream(String, Consumed) StreamsBuilder#stream(someTopicName, Consumed.with(keySerde, valueSerde))}.
-     * Note that {@code through()} uses a hard coded {@link org.apache.kafka.streams.processor.FailOnInvalidTimestamp
-     * timestamp extractor} and does not allow to customize it, to ensure correct timestamp propagation.
-     *
-     * @param topic     the topic name
-     * @param produced  the options to use when producing to the topic
-     * @return a {@code KStream} that contains the exact same (and potentially repartitioned) records as this {@code KStream}
-     * @deprecated since 2.6; use {@link #repartition(Repartitioned)} instead
-     */
-    @Deprecated
-    KStream<K, V> through(final String topic,
-                          final Produced<K, V> produced);
 
     /**
      * Materialize this stream to an auto-generated repartition topic and create a new {@code KStream}

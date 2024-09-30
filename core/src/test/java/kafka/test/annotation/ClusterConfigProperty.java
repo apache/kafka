@@ -32,9 +32,6 @@ public @interface ClusterConfigProperty {
      * all controller/broker servers. Note that the "controller" here refers to the KRaft quorum controller.
      * The id can vary depending on the different {@link kafka.test.annotation.Type}.
      * <ul>
-     *  <li> Under {@link kafka.test.annotation.Type#ZK}, the broker id starts from
-     *  {@link kafka.testkit.TestKitNodes#BROKER_ID_OFFSET 0} and increases by 1
-     *  with each additional broker, and there is no controller server under this mode. </li>
      *  <li> Under {@link kafka.test.annotation.Type#KRAFT}, the broker id starts from
      *  {@link kafka.testkit.TestKitNodes#BROKER_ID_OFFSET 0}, the controller id
      *  starts from {@link kafka.testkit.TestKitNodes#CONTROLLER_ID_OFFSET 3000}

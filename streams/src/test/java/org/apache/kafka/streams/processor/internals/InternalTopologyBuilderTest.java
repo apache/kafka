@@ -25,6 +25,7 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.TopologyDescription;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
+import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateStore;
@@ -920,14 +921,14 @@ public class InternalTopologyBuilderTest {
         final Map<Subtopology, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.subtopologyToTopicsInfo();
         final InternalTopologyBuilder.TopicsInfo topicsInfo = topicGroups.values().iterator().next();
         final InternalTopicConfig topicConfig1 = topicsInfo.stateChangelogTopics.get("appId-store1-changelog");
-        final Map<String, String> properties1 = topicConfig1.getProperties(Collections.emptyMap(), 10000);
+        final Map<String, String> properties1 = topicConfig1.properties(Collections.emptyMap(), 10000);
         assertEquals(3, properties1.size());
         assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE, properties1.get(TopicConfig.CLEANUP_POLICY_CONFIG));
         assertEquals("40000", properties1.get(TopicConfig.RETENTION_MS_CONFIG));
         assertEquals("appId-store1-changelog", topicConfig1.name());
         assertInstanceOf(WindowedChangelogTopicConfig.class, topicConfig1);
         final InternalTopicConfig topicConfig2 = topicsInfo.stateChangelogTopics.get("appId-store2-changelog");
-        final Map<String, String> properties2 = topicConfig2.getProperties(Collections.emptyMap(), 10000);
+        final Map<String, String> properties2 = topicConfig2.properties(Collections.emptyMap(), 10000);
         assertEquals(3, properties2.size());
         assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE, properties2.get(TopicConfig.CLEANUP_POLICY_CONFIG));
         assertEquals("40000", properties2.get(TopicConfig.RETENTION_MS_CONFIG));
@@ -952,7 +953,7 @@ public class InternalTopologyBuilderTest {
         final Map<Subtopology, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.subtopologyToTopicsInfo();
         final InternalTopologyBuilder.TopicsInfo topicsInfo = topicGroups.values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-vstore-changelog");
-        final Map<String, String> properties = topicConfig.getProperties(Collections.emptyMap(), 10000);
+        final Map<String, String> properties = topicConfig.properties(Collections.emptyMap(), 10000);
         assertEquals(3, properties.size());
         assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT, properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
         assertEquals(Long.toString(60_000L + 24 * 60 * 60 * 1000L), properties.get(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG));
@@ -970,7 +971,7 @@ public class InternalTopologyBuilderTest {
         final Map<Subtopology, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.subtopologyToTopicsInfo();
         final InternalTopologyBuilder.TopicsInfo topicsInfo = topicGroups.values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-testStore-changelog");
-        final Map<String, String> properties = topicConfig.getProperties(Collections.emptyMap(), 10000);
+        final Map<String, String> properties = topicConfig.properties(Collections.emptyMap(), 10000);
         assertEquals(2, properties.size());
         assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT, properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
         assertEquals("appId-testStore-changelog", topicConfig.name());
@@ -985,7 +986,7 @@ public class InternalTopologyBuilderTest {
         builder.buildTopology();
         final InternalTopologyBuilder.TopicsInfo topicsInfo = builder.subtopologyToTopicsInfo().values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.repartitionSourceTopics.get("appId-foo");
-        final Map<String, String> properties = topicConfig.getProperties(Collections.emptyMap(), 10000);
+        final Map<String, String> properties = topicConfig.properties(Collections.emptyMap(), 10000);
         assertEquals(4, properties.size());
         assertEquals(String.valueOf(-1), properties.get(TopicConfig.RETENTION_MS_CONFIG));
         assertEquals(TopicConfig.CLEANUP_POLICY_DELETE, properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
@@ -1046,7 +1047,7 @@ public class InternalTopologyBuilderTest {
         topologyOverrides.put(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 1000L);
         topologyOverrides.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 15);
         topologyOverrides.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
-        topologyOverrides.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
+        topologyOverrides.put(StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
         topologyOverrides.put(StreamsConfig.DEFAULT_DSL_STORE_CONFIG, StreamsConfig.IN_MEMORY);
 
         final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
@@ -1066,6 +1067,25 @@ public class InternalTopologyBuilderTest {
         assertThat(topologyBuilder.topologyConfigs().parseStoreType(), equalTo(Materialized.StoreType.IN_MEMORY));
     }
 
+    @SuppressWarnings("deprecation")
+    @Test
+    public void newDeserializationExceptionHandlerConfigShouldOverwriteOldOne() {
+        final Properties topologyOverrides = new Properties();
+        topologyOverrides.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndFailExceptionHandler.class);
+        topologyOverrides.put(StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
+
+        final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
+        final InternalTopologyBuilder topologyBuilder = new InternalTopologyBuilder(
+            new TopologyConfig(
+                "my-topology",
+                config,
+                topologyOverrides)
+        );
+
+        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().deserializationExceptionHandler.getClass(), equalTo(LogAndContinueExceptionHandler.class));
+    }
+
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotOverrideGlobalStreamsConfigWhenGivenUnnamedTopologyProps() {
         final Properties streamsProps = StreamsTestUtils.getStreamsConfig();
@@ -1095,7 +1115,7 @@ public class InternalTopologyBuilderTest {
     public void shouldAddTimestampExtractorPerSource() {
         builder.addSource(null, "source", new MockTimestampExtractor(), null, null, "topic");
         final ProcessorTopology processorTopology = builder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig())).buildTopology();
-        assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
+        assertThat(processorTopology.source("topic").timestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
     @Test
@@ -1103,7 +1123,7 @@ public class InternalTopologyBuilderTest {
         final Pattern pattern = Pattern.compile("t.*");
         builder.addSource(null, "source", new MockTimestampExtractor(), null, null, pattern);
         final ProcessorTopology processorTopology = builder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig())).buildTopology();
-        assertThat(processorTopology.source(pattern.pattern()).getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
+        assertThat(processorTopology.source(pattern.pattern()).timestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
     @Test

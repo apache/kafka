@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -81,7 +82,7 @@ class BatchBuilderTest {
         assertEquals(compressionType, batch.compressionType());
         assertEquals(baseOffset, batch.baseOffset());
         assertEquals(logAppendTime, batch.maxTimestamp());
-        assertEquals(false, batch.isControlBatch());
+        assertFalse(batch.isControlBatch());
         assertEquals(leaderEpoch, batch.partitionLeaderEpoch());
 
         List<String> builtRecords = Utils.toList(batch).stream()

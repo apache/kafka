@@ -86,7 +86,7 @@ final class NotifyingRawSnapshotWriterTest {
         assertTrue(rawWriter.closed);
     }
 
-    class NoopRawSnapshotWriter implements RawSnapshotWriter {
+    static class NoopRawSnapshotWriter implements RawSnapshotWriter {
         boolean frozen = false;
         boolean closed = false;
 

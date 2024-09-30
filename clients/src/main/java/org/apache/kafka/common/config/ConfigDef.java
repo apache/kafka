@@ -766,14 +766,7 @@ public class ConfigDef {
                     if (value instanceof Class)
                         return value;
                     else if (value instanceof String) {
-                        ClassLoader contextOrKafkaClassLoader = Utils.getContextOrKafkaClassLoader();
-                        // Use loadClass here instead of Class.forName because the name we use here may be an alias
-                        // and not match the name of the class that gets loaded. If that happens, Class.forName can
-                        // throw an exception.
-                        Class<?> klass = contextOrKafkaClassLoader.loadClass(trimmed);
-                        // Invoke forName here with the true name of the requested class to cause class
-                        // initialization to take place.
-                        return Class.forName(klass.getName(), true, contextOrKafkaClassLoader);
+                        return Utils.loadClass(trimmed, Object.class);
                     } else
                         throw new ConfigException(name, value, "Expected a Class instance or class name.");
                 default:
@@ -1591,16 +1584,8 @@ public class ConfigDef {
      */
     private static Validator embeddedValidator(final String keyPrefix, final Validator base) {
         if (base == null) return null;
-        return new Validator() {
-            public void ensureValid(String name, Object value) {
-                base.ensureValid(name.substring(keyPrefix.length()), value);
-            }
-
-            @Override
-            public String toString() {
-                return base.toString();
-            }
-        };
+        return ConfigDef.LambdaValidator.with(
+            (name, value) -> base.ensureValid(name.substring(keyPrefix.length()), value), base::toString);
     }
 
     /**

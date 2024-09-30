@@ -26,7 +26,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
 
@@ -37,12 +36,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class PluginScannerTest {
 
-    private enum ScannerType { Reflection, ServiceLoader }
-
     @TempDir
     File pluginDir;
-
-    private Map<ScannerType, PluginScanner> scannerMap;
 
     static Stream<PluginScanner> parameters() {
         return Stream.of(new ReflectionScanner(), new ServiceLoaderScanner());
@@ -140,7 +135,6 @@ public class PluginScannerTest {
                 TestPlugins.pluginPath(TestPlugins.TestPlugin.READ_VERSION_FROM_RESOURCE_V1));
         assertFalse(versionedPluginResult.isEmpty());
         versionedPluginResult.forEach(pluginDesc -> assertEquals("1.0.0", pluginDesc.version()));
-
     }
 
     private PluginScanResult scan(PluginScanner scanner, Set<Path> pluginLocations) {

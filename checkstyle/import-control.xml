@@ -49,6 +49,7 @@
 
   <subpackage name="common">
     <allow class="org.apache.kafka.clients.consumer.ConsumerRecord" exact-match="true" />
+    <allow class="org.apache.kafka.clients.NodeApiVersions" exact-match="true" />
     <allow class="org.apache.kafka.common.message.ApiMessageType" exact-match="true" />
     <disallow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.common" exact-match="true" />
@@ -76,7 +77,10 @@
       <allow pkg="net.jpountz.xxhash" />
       <allow pkg="org.xerial.snappy" />
       <allow pkg="org.apache.kafka.common.compress" />
-      <allow class="org.apache.kafka.common.record.CompressionType" exact-match="true" />
+      <allow class="org.apache.kafka.common.record.CompressionType" />
+      <allow class="org.apache.kafka.common.record.CompressionType.GZIP" />
+      <allow class="org.apache.kafka.common.record.CompressionType.LZ4" />
+      <allow class="org.apache.kafka.common.record.CompressionType.ZSTD" />
       <allow class="org.apache.kafka.common.record.RecordBatch" exact-match="true" />
     </subpackage>
 
@@ -150,6 +154,7 @@
     </subpackage>
 
     <subpackage name="record">
+      <allow class="org.apache.kafka.common.config.ConfigDef.Range.between" exact-match="true" />
       <allow pkg="org.apache.kafka.common.compress" />
       <allow pkg="org.apache.kafka.common.header" />
       <allow pkg="org.apache.kafka.common.record" />
@@ -267,6 +272,7 @@
     <allow pkg="org.apache.kafka.raft"/>
     <allow pkg="org.apache.kafka.server.common" />
     <allow pkg="org.apache.kafka.server.fault" />
+    <allow pkg="org.apache.kafka.server.util" />
     <allow pkg="org.apache.kafka.shell"/>
     <allow pkg="org.apache.kafka.image"/>
     <allow pkg="org.apache.kafka.image.loader"/>
@@ -277,12 +283,17 @@
 
   <subpackage name="tools">
     <allow pkg="org.apache.kafka.common"/>
+    <allow pkg="org.apache.kafka.metadata.properties" />
+    <allow pkg="org.apache.kafka.network" />
     <allow pkg="org.apache.kafka.server.util" />
     <allow pkg="kafka.admin" />
     <allow pkg="kafka.server" />
     <allow pkg="org.apache.kafka.storage.internals" />
     <allow pkg="org.apache.kafka.server.config" />
     <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="org.apache.kafka.server.log.remote.metadata.storage" />
+    <allow pkg="org.apache.kafka.server.log.remote.storage" />
+    <allow pkg="org.apache.kafka.server.quota" />
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.clients.admin" />
     <allow pkg="org.apache.kafka.clients.producer" />
@@ -299,6 +310,8 @@
     <allow pkg="javax.rmi.ssl"/>
     <allow pkg="kafka.utils" />
     <allow pkg="scala.collection" />
+    <allow pkg="org.apache.kafka.coordinator.transaction" />
+    <allow pkg="org.apache.kafka.coordinator.group" />
 
     <subpackage name="consumer">
       <allow pkg="org.apache.kafka.tools"/>
@@ -362,6 +375,7 @@
     <allow pkg="org.apache.kafka.clients.producer" exact-match="true"/>
     <allow pkg="org.apache.kafka.clients.consumer" exact-match="true"/>
     <allow pkg="org.apache.kafka.server.util"/>
+    <allow pkg="org.apache.log4j"/>
 
     <allow pkg="org.apache.kafka.streams"/>
 
@@ -379,6 +393,8 @@
     </subpackage>
 
     <subpackage name="integration">
+      <allow pkg="kafka.testkit"/>
+      <allow pkg="org.apache.kafka.metadata"/>
       <allow pkg="kafka.admin" />
       <allow pkg="kafka.api" />
       <allow pkg="kafka.cluster" />
@@ -392,7 +408,7 @@
       <allow pkg="org.apache.kafka.tools" />
       <allow pkg="org.apache.kafka.server.config" />
       <allow class="org.apache.kafka.storage.internals.log.CleanerConfig" />
-      <allow class="org.apache.kafka.coordinator.transaction.TransactionLogConfigs" />
+      <allow class="org.apache.kafka.coordinator.transaction.TransactionLogConfig" />
       <allow pkg="org.apache.kafka.coordinator.group" />
       <allow pkg="org.apache.kafka.network" />
     </subpackage>
@@ -472,6 +488,7 @@
     <!-- for testing -->
     <allow pkg="org.apache.kafka.coordinator.group" />
     <allow pkg="org.apache.kafka.network" />
+    <allow pkg="org.apache.log4j" />
 
     <subpackage name="source">
       <allow pkg="org.apache.kafka.connect.connector" />
@@ -533,8 +550,7 @@
 
     <subpackage name="runtime">
       <allow pkg="org.apache.kafka.connect" />
-      <allow pkg="org.reflections"/>
-      <allow pkg="org.reflections.util"/>
+      <allow pkg="io.github.classgraph"/>
       <allow pkg="javax.crypto"/>
       <allow pkg="org.eclipse.jetty.util" />
       <allow pkg="org.apache.log4j" />
@@ -580,7 +596,6 @@
 
     <subpackage name="util">
       <allow pkg="org.apache.kafka.connect" />
-      <allow pkg="org.reflections.vfs" />
       <!-- for annotations to avoid code duplication -->
       <allow pkg="com.fasterxml.jackson.annotation" />
       <allow pkg="com.fasterxml.jackson.databind" />
@@ -588,6 +603,7 @@
         <allow pkg="org.apache.kafka.server.config" />
         <allow pkg="kafka.cluster" />
         <allow pkg="kafka.server" />
+        <allow pkg="kafka.testkit" />
         <allow pkg="kafka.zk" />
         <allow pkg="kafka.utils" />
         <allow class="javax.servlet.http.HttpServletResponse" />
@@ -608,6 +624,8 @@
       <allow pkg="org.eclipse.jetty.util"/>
       <!-- for tests -->
       <allow pkg="org.apache.kafka.server.util" />
+      <allow pkg="org.apache.kafka.server.config" />
+      <allow pkg="kafka.server"/>
     </subpackage>
 
     <subpackage name="json">

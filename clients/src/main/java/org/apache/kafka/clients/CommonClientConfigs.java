@@ -45,11 +45,11 @@ public class CommonClientConfigs {
      */
 
     public static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";
-    public static final String BOOTSTRAP_SERVERS_DOC = "A list of host/port pairs to use for establishing the initial connection to the Kafka cluster. The client will make use of all servers irrespective of which servers are specified here for bootstrapping&mdash;this list only impacts the initial hosts used to discover the full set of servers. This list should be in the form "
-                                                       + "<code>host1:port1,host2:port2,...</code>. Since these servers are just used for the initial connection to "
-                                                       + "discover the full cluster membership (which may change dynamically), this list need not contain the full set of "
-                                                       + "servers (you may want more than one, though, in case a server is down).";
-
+    public static final String BOOTSTRAP_SERVERS_DOC = "A list of host/port pairs used to establish the initial connection to the Kafka cluster. "
+                                                        + "Clients use this list to bootstrap and discover the full set of Kafka brokers. "
+                                                        + "While the order of servers in the list does not matter, we recommend including more than one server to ensure resilience if any servers are down. "
+                                                        + "This list does not need to contain the entire set of brokers, as Kafka clients automatically manage and update connections to the cluster efficiently. "
+                                                        + "This list must be in the form <code>host1:port1,host2:port2,...</code>.";
     public static final String CLIENT_DNS_LOOKUP_CONFIG = "client.dns.lookup";
     public static final String CLIENT_DNS_LOOKUP_DOC = "Controls how the client uses DNS lookups. "
                                                        + "If set to <code>use_all_dns_ips</code>, connect to each returned IP "
@@ -118,8 +118,13 @@ public class CommonClientConfigs {
     public static final String METRICS_NUM_SAMPLES_DOC = "The number of samples maintained to compute metrics.";
 
     public static final String METRICS_RECORDING_LEVEL_CONFIG = "metrics.recording.level";
-    public static final String METRICS_RECORDING_LEVEL_DOC = "The highest recording level for metrics.";
-
+    public static final String METRICS_RECORDING_LEVEL_DOC = "The highest recording level for metrics. It has three levels for recording metrics - info, debug, and trace.\n" +
+            " \n" +
+            "INFO level records only essential metrics necessary for monitoring system performance and health. It collects vital data without gathering too much detail, making it suitable for production environments where minimal overhead is desired.\n" +
+            "\n" +
+            "DEBUG level records most metrics, providing more detailed information about the system's operation. It's useful for development and testing environments where you need deeper insights to debug and fine-tune the application.\n" +
+            "\n" +
+            "TRACE level records all possible metrics, capturing every detail about the system's performance and operation. It's best for controlled environments where in-depth analysis is required, though it can introduce significant overhead.";
     public static final String METRIC_REPORTER_CLASSES_CONFIG = "metric.reporters";
     public static final String METRIC_REPORTER_CLASSES_DOC = "A list of classes to use as metrics reporters. Implementing the <code>org.apache.kafka.common.metrics.MetricsReporter</code> interface allows plugging in classes that will be notified of new metric creation. The JmxReporter is always included to register JMX statistics.";
 

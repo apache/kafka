@@ -17,14 +17,12 @@
 package kafka.utils
 
 import com.yammer.metrics.core.{Histogram, Meter}
-import kafka.api._
 import kafka.controller.ControllerEventManager
 import kafka.log._
 import kafka.network.RequestChannel
+import kafka.security.JaasTestUtils
 import kafka.server._
-import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.{ConfigRepository, MockConfigRepository}
-import kafka.tools.StorageTool
 import kafka.utils.Implicits._
 import kafka.zk._
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -32,7 +30,7 @@ import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
-import org.apache.kafka.clients.{ClientResponse, CommonClientConfigs}
+import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common._
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBindingFilter}
 import org.apache.kafka.common.compress.Compression
@@ -43,7 +41,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.{ClientInformation, ListenerName, ConnectionMode}
+import org.apache.kafka.common.network.{ClientInformation, ConnectionMode, ListenerName}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests._
@@ -53,20 +51,23 @@ import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.utils.Utils.formatAddress
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
-import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
-import org.apache.kafka.metadata.properties.MetaProperties
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig
+import org.apache.kafka.metadata.LeaderAndIsr
 import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.network.metrics.RequestChannelMetrics
 import org.apache.kafka.queue.KafkaEventQueue
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
-import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ZkConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.server.util.timer.SystemTimer
 import org.apache.kafka.server.{ClientMetricsManager, ControllerRequestCompletionHandler}
+import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
-import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats
+import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.apache.zookeeper.KeeperException.SessionExpiredException
 import org.apache.zookeeper.ZooDefs._
 import org.apache.zookeeper.data.ACL
@@ -86,10 +87,12 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.{Arrays, Collections, Optional, Properties}
 import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.{Map, Seq, immutable, mutable}
+import scala.collection.{Map, Seq, mutable}
+import scala.compat.java8.OptionConverters
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOption
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -355,14 +358,14 @@ object TestUtils extends Logging {
       props.put(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0")
     rack.foreach(props.put(ServerConfigs.BROKER_RACK_CONFIG, _))
     // Reduce number of threads per broker
-    props.put(ServerConfigs.NUM_NETWORK_THREADS_CONFIG, "2")
+    props.put(SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG, "2")
     props.put(ServerConfigs.BACKGROUND_THREADS_CONFIG, "2")
 
-    if (protocolAndPorts.exists { case (protocol, _) => usesSslTransportLayer(protocol) })
-      props ++= sslConfigs(ConnectionMode.SERVER, false, trustStoreFile, s"server$nodeId")
+    if (protocolAndPorts.exists { case (protocol, _) => JaasTestUtils.usesSslTransportLayer(protocol) })
+      props ++= JaasTestUtils.sslConfigs(ConnectionMode.SERVER, false, OptionConverters.toJava(trustStoreFile), s"server$nodeId")
 
-    if (protocolAndPorts.exists { case (protocol, _) => usesSaslAuthentication(protocol) })
-      props ++= JaasTestUtils.saslConfigs(saslProperties)
+    if (protocolAndPorts.exists { case (protocol, _) => JaasTestUtils.usesSaslAuthentication(protocol) })
+      props ++= JaasTestUtils.saslConfigs(saslProperties.toJava)
 
     interBrokerSecurityProtocol.foreach { protocol =>
       props.put(ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG, protocol.name)
@@ -645,44 +648,6 @@ object TestUtils extends Logging {
   def randomBytes(numBytes: Int): Array[Byte] = JTestUtils.randomBytes(numBytes)
 
   /**
-   * Returns security configuration options for broker or clients
-   *
-   * @param connectionMode Client or server mode
-   * @param securityProtocol Security protocol which indicates if SASL or SSL or both configs are included
-   * @param trustStoreFile Trust store file must be provided for SSL and SASL_SSL
-   * @param certAlias Alias of certificate in SSL key store
-   * @param certCn CN for certificate
-   * @param saslProperties SASL configs if security protocol is SASL_SSL or SASL_PLAINTEXT
-   * @param tlsProtocol TLS version
-   * @param needsClientCert If not empty, a flag which indicates if client certificates are required. By default
-   *                        client certificates are generated only if securityProtocol is SSL (not for SASL_SSL).
-   */
-  def securityConfigs(connectionMode: ConnectionMode,
-                      securityProtocol: SecurityProtocol,
-                      trustStoreFile: Option[File],
-                      certAlias: String,
-                      certCn: String,
-                      saslProperties: Option[Properties],
-                      tlsProtocol: String = TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS,
-                      needsClientCert: Option[Boolean] = None): Properties = {
-    val props = new Properties
-    if (usesSslTransportLayer(securityProtocol)) {
-      val addClientCert = needsClientCert.getOrElse(securityProtocol == SecurityProtocol.SSL)
-      props ++= sslConfigs(connectionMode, addClientCert, trustStoreFile, certAlias, certCn, tlsProtocol)
-    }
-
-    if (usesSaslAuthentication(securityProtocol))
-      props ++= JaasTestUtils.saslConfigs(saslProperties)
-    props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name)
-    props
-  }
-
-  def producerSecurityConfigs(securityProtocol: SecurityProtocol,
-                              trustStoreFile: Option[File],
-                              saslProperties: Option[Properties]): Properties =
-    securityConfigs(ConnectionMode.CLIENT, securityProtocol, trustStoreFile, "producer", SslCertificateCn, saslProperties)
-
-  /**
    * Create a (new) producer with a few pre-configured properties.
    */
   def createProducer[K, V](brokerList: String,
@@ -713,25 +678,9 @@ object TestUtils extends Logging {
     producerProps.put(ProducerConfig.BATCH_SIZE_CONFIG, batchSize.toString)
     producerProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType)
     producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, enableIdempotence.toString)
-    producerProps ++= producerSecurityConfigs(securityProtocol, trustStoreFile, saslProperties)
+    producerProps ++= JaasTestUtils.producerSecurityConfigs(securityProtocol, OptionConverters.toJava(trustStoreFile), OptionConverters.toJava(saslProperties))
     new KafkaProducer[K, V](producerProps, keySerializer, valueSerializer)
   }
-
-  def usesSslTransportLayer(securityProtocol: SecurityProtocol): Boolean = securityProtocol match {
-    case SecurityProtocol.SSL | SecurityProtocol.SASL_SSL => true
-    case _ => false
-  }
-
-  def usesSaslAuthentication(securityProtocol: SecurityProtocol): Boolean = securityProtocol match {
-    case SecurityProtocol.SASL_PLAINTEXT | SecurityProtocol.SASL_SSL => true
-    case _ => false
-  }
-
-  def consumerSecurityConfigs(securityProtocol: SecurityProtocol, trustStoreFile: Option[File], saslProperties: Option[Properties]): Properties =
-    securityConfigs(ConnectionMode.CLIENT, securityProtocol, trustStoreFile, "consumer", SslCertificateCn, saslProperties)
-
-  def adminClientSecurityConfigs(securityProtocol: SecurityProtocol, trustStoreFile: Option[File], saslProperties: Option[Properties]): Properties =
-    securityConfigs(ConnectionMode.CLIENT, securityProtocol, trustStoreFile, "admin-client", SslCertificateCn, saslProperties)
 
   /**
    * Create a consumer with a few pre-configured properties.
@@ -746,15 +695,17 @@ object TestUtils extends Logging {
                            trustStoreFile: Option[File] = None,
                            saslProperties: Option[Properties] = None,
                            keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,
-                           valueDeserializer: Deserializer[V] = new ByteArrayDeserializer): Consumer[K, V] = {
+                           valueDeserializer: Deserializer[V] = new ByteArrayDeserializer,
+                           groupProtocol: GroupProtocol = GroupProtocol.CLASSIC): Consumer[K, V] = {
     val consumerProps = new Properties
     consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    consumerProps.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.toString)
     consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoOffsetReset)
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, groupId)
     consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, enableAutoCommit.toString)
     consumerProps.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
     consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, if (readCommitted) "read_committed" else "read_uncommitted")
-    consumerProps ++= consumerSecurityConfigs(securityProtocol, trustStoreFile, saslProperties)
+    consumerProps ++= JaasTestUtils.consumerSecurityConfigs(securityProtocol, OptionConverters.toJava(trustStoreFile), OptionConverters.toJava(saslProperties))
     new KafkaConsumer[K, V](consumerProps, keyDeserializer, valueDeserializer)
   }
 
@@ -778,7 +729,7 @@ object TestUtils extends Logging {
   ): Int = {
     def getPartitionLeader(topic: String, partition: Int): Option[Int] = {
       zkClient.getLeaderForPartition(new TopicPartition(topic, partition))
-        .filter(p => !ignoreNoLeader || p != LeaderAndIsr.NoLeader)
+        .filter(p => !ignoreNoLeader || p != LeaderAndIsr.NO_LEADER)
     }
     doWaitUntilLeaderIsElectedOrChanged(getPartitionLeader, topic, partition, timeoutMs, oldLeaderOpt, newLeaderOpt)
   }
@@ -1168,27 +1119,6 @@ object TestUtils extends Logging {
     assertEquals(0, threadCount, s"Found unexpected $threadCount NonDaemon threads=${nonDaemonThreads.map(t => t.getName).mkString(", ")}")
   }
 
-  def formatDirectories(
-    directories: immutable.Seq[String],
-    metaProperties: MetaProperties,
-    metadataVersion: MetadataVersion,
-    optionalMetadataRecords: Option[ArrayBuffer[ApiMessageAndVersion]]
-  ): Unit = {
-    val stream = new ByteArrayOutputStream()
-    var out: PrintStream = null
-    try {
-      out = new PrintStream(stream)
-      val bootstrapMetadata = StorageTool.buildBootstrapMetadata(metadataVersion, optionalMetadataRecords, "format command")
-      if (StorageTool.formatCommand(out, directories, metaProperties, bootstrapMetadata, metadataVersion, ignoreFormatted = false) != 0) {
-        throw new RuntimeException(stream.toString())
-      }
-      debug(s"Formatted storage directory(ies) ${directories}")
-    } finally {
-      if (out != null) out.close()
-      stream.close()
-    }
-  }
-
   /**
    * Create new LogManager instance with default configuration for testing
    */
@@ -1214,8 +1144,8 @@ object TestUtils extends Logging {
                    flushStartOffsetCheckpointMs = 10000L,
                    retentionCheckMs = 1000L,
                    maxTransactionTimeoutMs = 5 * 60 * 1000,
-                   producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_DEFAULT, transactionVerificationEnabled),
-                   producerIdExpirationCheckIntervalMs = TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
+                   producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, transactionVerificationEnabled),
+                   producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
                    scheduler = time.scheduler,
                    time = time,
                    brokerTopicStats = new BrokerTopicStats,
@@ -1350,9 +1280,9 @@ object TestUtils extends Logging {
     // ensure that topic is removed from all cleaner offsets
     waitUntilTrue(() => brokers.forall(broker => topicPartitions.forall { tp =>
       val checkpoints = broker.logManager.liveLogDirs.map { logDir =>
-        new OffsetCheckpointFile(new File(logDir, "cleaner-offset-checkpoint")).read()
+        new OffsetCheckpointFile(new File(logDir, "cleaner-offset-checkpoint"), null).read()
       }
-      checkpoints.forall(checkpointsPerLogDir => !checkpointsPerLogDir.contains(tp))
+      checkpoints.forall(checkpointsPerLogDir => !checkpointsPerLogDir.containsKey(tp))
     }), "Cleaner offset for deleted partition should have been removed")
     waitUntilTrue(() => brokers.forall(broker =>
       broker.config.logDirs.forall { logDir =>
@@ -1403,26 +1333,6 @@ object TestUtils extends Logging {
     val bytes = new Array[Byte](buffer.remaining)
     buffer.get(bytes)
     new String(bytes, encoding)
-  }
-
-  def sslConfigs(mode: ConnectionMode, clientCert: Boolean, trustStoreFile: Option[File], certAlias: String,
-                 certCn: String = SslCertificateCn,
-                 tlsProtocol: String = TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS): Properties = {
-    val trustStore = trustStoreFile.getOrElse {
-      throw new Exception("SSL enabled but no trustStoreFile provided")
-    }
-
-    val sslConfigs = new TestSslUtils.SslConfigsBuilder(mode)
-      .useClientCert(clientCert)
-      .createNewTrustStore(trustStore)
-      .certAlias(certAlias)
-      .cn(certCn)
-      .tlsProtocol(tlsProtocol)
-      .build()
-
-    val sslProps = new Properties()
-    sslConfigs.forEach { (k, v) => sslProps.put(k, v) }
-    sslProps
   }
 
   def waitAndVerifyAcls(expected: Set[AccessControlEntry],
@@ -1873,7 +1783,7 @@ object TestUtils extends Logging {
   def buildEnvelopeRequest(
     request: AbstractRequest,
     principalSerde: KafkaPrincipalSerde,
-    requestChannelMetrics: RequestChannel.Metrics,
+    requestChannelMetrics: RequestChannelMetrics,
     startTimeNanos: Long,
     dequeueTimeNanos: Long = -1,
     fromPrivilegedListener: Boolean = true

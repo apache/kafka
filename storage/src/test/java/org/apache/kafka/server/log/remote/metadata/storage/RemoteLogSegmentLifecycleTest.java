@@ -34,7 +34,6 @@ import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.storage.internals.log.EpochEntry;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.Arrays;
@@ -57,7 +56,6 @@ import static org.mockito.Mockito.verify;
 
 @ClusterTestDefaults(brokers = 3)
 @ExtendWith(value = ClusterTestExtensions.class)
-@Tag("integration")
 public class RemoteLogSegmentLifecycleTest {
 
     private final int segSize = 1048576;
@@ -96,7 +94,7 @@ public class RemoteLogSegmentLifecycleTest {
             leaderEpochSegment0.put(2, 80L);
             RemoteLogSegmentId segmentId0 = new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid());
             RemoteLogSegmentMetadata metadataSegment0 = new RemoteLogSegmentMetadata(segmentId0, 0L,
-                    100L, -1L, brokerId0, time.milliseconds(), segSize, leaderEpochSegment0, 0);
+                    100L, -1L, brokerId0, time.milliseconds(), segSize, leaderEpochSegment0);
             metadataManager.addRemoteLogSegmentMetadata(metadataSegment0).get();
             verify(spyRemotePartitionMetadataStore).handleRemoteLogSegmentMetadata(metadataSegment0);
 
@@ -225,7 +223,7 @@ public class RemoteLogSegmentLifecycleTest {
             throws RemoteStorageException, ExecutionException, InterruptedException {
         RemoteLogSegmentId segmentId = new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid());
         RemoteLogSegmentMetadata segmentMetadata = new RemoteLogSegmentMetadata(segmentId, startOffset, endOffset,
-                -1L, brokerId0, time.milliseconds(), segSize, segmentLeaderEpochs, 0);
+                -1L, brokerId0, time.milliseconds(), segSize, segmentLeaderEpochs);
         metadataManager.addRemoteLogSegmentMetadata(segmentMetadata).get();
         verify(spyRemotePartitionMetadataStore).handleRemoteLogSegmentMetadata(segmentMetadata);
 
@@ -260,7 +258,7 @@ public class RemoteLogSegmentLifecycleTest {
             // segments.
             RemoteLogSegmentId segmentId = new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid());
             RemoteLogSegmentMetadata segmentMetadata = new RemoteLogSegmentMetadata(segmentId, 0L, 50L,
-                    -1L, brokerId0, time.milliseconds(), segSize, Collections.singletonMap(0, 0L), 0);
+                    -1L, brokerId0, time.milliseconds(), segSize, Collections.singletonMap(0, 0L));
             metadataManager.addRemoteLogSegmentMetadata(segmentMetadata).get();
             verify(spyRemotePartitionMetadataStore).handleRemoteLogSegmentMetadata(segmentMetadata);
 

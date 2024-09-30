@@ -61,7 +61,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 @Timeout(600)
 public class TaskMetadataIntegrationTest {
 
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1, new Properties(), Collections.emptyList(), 0L, 0L);
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1, new Properties(), Collections.emptyMap(), 0L, 0L);
 
     @BeforeAll
     public static void startCluster() throws IOException {

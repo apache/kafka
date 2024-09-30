@@ -52,3 +52,9 @@ Then start the release script:
 python release.py
 ```
 
+Should you encounter some problem, where re-running the script doesn't work, look at the following steps:
+
+- The script remembers data inputted previously if you need to correct it, it is saved under the
+`.release-settings.json` file in the `release` folder.
+- If the script is interrupted you might need to manually delete the tag named after the release candidate name and
+branch named after the release version.

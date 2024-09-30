@@ -44,6 +44,16 @@ trait ConfigRepository {
   }
 
   /**
+   * Return a copy of the group configuration for the given group.  Future changes will not be reflected.
+   *
+   * @param groupName the name of the group for which configuration will be returned
+   * @return a copy of the group configuration for the given group
+   */
+  def groupConfig(groupName: String): Properties = {
+    config(new ConfigResource(Type.GROUP, groupName))
+  }
+
+  /**
    * Return a copy of the configuration for the given resource.  Future changes will not be reflected.
    * @param configResource the resource for which the configuration will be returned
    * @return a copy of the configuration for the given resource

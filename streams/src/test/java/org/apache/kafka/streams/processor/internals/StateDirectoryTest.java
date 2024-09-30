@@ -445,6 +445,22 @@ public class StateDirectoryTest {
     }
 
     @Test
+    public void shouldBackoffRetryIfStateDirLockedByAnotherThread() throws Exception {
+        final TaskId taskId = new TaskId(0, 0);
+        final Thread thread = new Thread(() -> directory.lock(taskId));
+        thread.start();
+        thread.join(30000);
+
+        assertTrue(directory.canTryLock(taskId, System.currentTimeMillis()));
+
+        assertFalse(directory.lock(taskId));
+        assertFalse(directory.lock(taskId));
+        assertFalse(directory.lock(taskId));
+        // after 3 unsuccessful retries, backoff time is > 0
+        assertFalse(directory.canTryLock(taskId, System.currentTimeMillis()));
+    }
+
+    @Test
     public void shouldNotUnLockStateDirLockedByAnotherThread() throws Exception {
         final TaskId taskId = new TaskId(0, 0);
         final CountDownLatch lockLatch = new CountDownLatch(1);

@@ -33,7 +33,6 @@ import org.apache.kafka.server.common.AdminOperationException;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -50,7 +49,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(value = ClusterTestExtensions.class)
-@Tag("integration")
 public class DeleteRecordsCommandTest {
 
     @ClusterTest

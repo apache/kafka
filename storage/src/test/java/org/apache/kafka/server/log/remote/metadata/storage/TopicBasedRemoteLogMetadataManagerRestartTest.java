@@ -30,7 +30,6 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.Arrays;
@@ -40,7 +39,6 @@ import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemo
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(value = ClusterTestExtensions.class)
-@Tag("integration")
 public class TopicBasedRemoteLogMetadataManagerRestartTest {
 
     private final Time time = Time.SYSTEM;
@@ -81,11 +79,11 @@ public class TopicBasedRemoteLogMetadataManagerRestartTest {
         RemoteLogSegmentMetadata leaderSegmentMetadata = new RemoteLogSegmentMetadata(
                 new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()),
                 0, 100, -1L, 0,
-                time.milliseconds(), segSize, Collections.singletonMap(0, 0L), 0);
+                time.milliseconds(), segSize, Collections.singletonMap(0, 0L));
         RemoteLogSegmentMetadata followerSegmentMetadata = new RemoteLogSegmentMetadata(
                 new RemoteLogSegmentId(followerTopicIdPartition, Uuid.randomUuid()),
                 0, 100, -1L, 0,
-                time.milliseconds(), segSize, Collections.singletonMap(0, 0L), 0);
+                time.milliseconds(), segSize, Collections.singletonMap(0, 0L));
 
         try (TopicBasedRemoteLogMetadataManager topicBasedRemoteLogMetadataManager = createTopicBasedRemoteLogMetadataManager()) {
             // Register these partitions to RemoteLogMetadataManager.
@@ -115,7 +113,7 @@ public class TopicBasedRemoteLogMetadataManagerRestartTest {
             RemoteLogSegmentMetadata leaderSegmentMetadata2 = new RemoteLogSegmentMetadata(
                     new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()),
                     101, 200, -1L, 0,
-                    time.milliseconds(), segSize, Collections.singletonMap(0, 101L), 0);
+                    time.milliseconds(), segSize, Collections.singletonMap(0, 101L));
             topicBasedRemoteLogMetadataManager.addRemoteLogSegmentMetadata(leaderSegmentMetadata2).get();
 
             // Check that both the stored segment and recently added segment are available.

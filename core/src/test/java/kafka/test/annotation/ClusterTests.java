@@ -17,7 +17,9 @@
 
 package kafka.test.annotation;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestTemplate;
+import org.junit.jupiter.api.Timeout;
 
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
@@ -30,6 +32,8 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 @Target({METHOD})
 @Retention(RUNTIME)
 @TestTemplate
+@Timeout(60)
+@Tag("integration")
 public @interface ClusterTests {
     ClusterTest[] value();
 }

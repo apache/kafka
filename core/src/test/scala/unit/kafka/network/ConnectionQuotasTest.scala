@@ -31,8 +31,8 @@ import org.apache.kafka.common.metrics.internals.MetricsUtils
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricConfig, Metrics}
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.server.config.{ReplicationConfigs, QuotaConfigs}
+import org.apache.kafka.network.{ConnectionThrottledException, SocketServerConfigs, TooManyConnectionsException}
+import org.apache.kafka.server.config.{QuotaConfigs, ReplicationConfigs}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.Assertions._

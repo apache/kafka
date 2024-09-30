@@ -26,18 +26,17 @@ import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 
-import org.reflections.Reflections;
-import org.reflections.ReflectionsException;
-import org.reflections.scanners.Scanners;
-import org.reflections.util.ConfigurationBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.ServiceLoader;
-import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
+
+import io.github.classgraph.ClassGraph;
+import io.github.classgraph.ClassInfoList;
+import io.github.classgraph.ScanResult;
 
 /**
  * A {@link PluginScanner} implementation which uses reflection and {@link ServiceLoader} to discover plugins.
@@ -77,53 +76,57 @@ public class ReflectionScanner extends PluginScanner {
 
     @Override
     protected PluginScanResult scanPlugins(PluginSource source) {
-        ConfigurationBuilder builder = new ConfigurationBuilder();
-        builder.setClassLoaders(new ClassLoader[]{source.loader()});
-        builder.addUrls(source.urls());
-        builder.setScanners(Scanners.SubTypes);
-        builder.setParallel(true);
-        Reflections reflections = new Reflections(builder);
-
-        return new PluginScanResult(
-                getPluginDesc(reflections, PluginType.SINK, source),
-                getPluginDesc(reflections, PluginType.SOURCE, source),
-                getPluginDesc(reflections, PluginType.CONVERTER, source),
-                getPluginDesc(reflections, PluginType.HEADER_CONVERTER, source),
-                getTransformationPluginDesc(source, reflections),
-                getPredicatePluginDesc(source, reflections),
-                getServiceLoaderPluginDesc(PluginType.CONFIGPROVIDER, source),
-                getServiceLoaderPluginDesc(PluginType.REST_EXTENSION, source),
-                getServiceLoaderPluginDesc(PluginType.CONNECTOR_CLIENT_CONFIG_OVERRIDE_POLICY, source)
-        );
+        ClassGraph classGraphBuilder = new ClassGraph()
+                .addClassLoader(source.loader())
+                .enableExternalClasses()
+                .enableClassInfo();
+        try (ScanResult classGraph = classGraphBuilder.scan()) {
+            return new PluginScanResult(
+                  getPluginDesc(classGraph, PluginType.SINK, source),
+                  getPluginDesc(classGraph, PluginType.SOURCE, source),
+                  getPluginDesc(classGraph, PluginType.CONVERTER, source),
+                  getPluginDesc(classGraph, PluginType.HEADER_CONVERTER, source),
+                  getTransformationPluginDesc(source, classGraph),
+                  getPredicatePluginDesc(source, classGraph),
+                  getServiceLoaderPluginDesc(PluginType.CONFIGPROVIDER, source),
+                  getServiceLoaderPluginDesc(PluginType.REST_EXTENSION, source),
+                  getServiceLoaderPluginDesc(PluginType.CONNECTOR_CLIENT_CONFIG_OVERRIDE_POLICY, source)
+          );
+        }
     }
 
     @SuppressWarnings({"unchecked"})
-    private SortedSet<PluginDesc<Predicate<?>>> getPredicatePluginDesc(PluginSource source, Reflections reflections) {
-        return (SortedSet<PluginDesc<Predicate<?>>>) (SortedSet<?>) getPluginDesc(reflections, PluginType.PREDICATE, source);
+    private SortedSet<PluginDesc<Predicate<?>>> getPredicatePluginDesc(PluginSource source, ScanResult classGraph) {
+        return (SortedSet<PluginDesc<Predicate<?>>>) (SortedSet<?>) getPluginDesc(classGraph, PluginType.PREDICATE, source);
     }
 
     @SuppressWarnings({"unchecked"})
-    private SortedSet<PluginDesc<Transformation<?>>> getTransformationPluginDesc(PluginSource source, Reflections reflections) {
-        return (SortedSet<PluginDesc<Transformation<?>>>) (SortedSet<?>) getPluginDesc(reflections, PluginType.TRANSFORMATION, source);
+    private SortedSet<PluginDesc<Transformation<?>>> getTransformationPluginDesc(PluginSource source, ScanResult classGraph) {
+        return (SortedSet<PluginDesc<Transformation<?>>>) (SortedSet<?>) getPluginDesc(classGraph, PluginType.TRANSFORMATION, source);
     }
 
     @SuppressWarnings({"unchecked"})
     private <T> SortedSet<PluginDesc<T>> getPluginDesc(
-            Reflections reflections,
+            ScanResult classGraph,
             PluginType type,
             PluginSource source
     ) {
-        Set<Class<? extends T>> plugins;
+        ClassInfoList plugins;
+        Class<T> klass = (Class<T>) type.superClass();
         try {
-            plugins = reflections.getSubTypesOf((Class<T>) type.superClass());
-        } catch (ReflectionsException e) {
+            if (klass.isInterface()) {
+                plugins = classGraph.getClassesImplementing(klass.getName());
+            } else {
+                plugins = classGraph.getSubclasses(klass.getName());
+            }
+        } catch (Exception e) {
             log.debug("Reflections scanner could not find any {} in {} for URLs: {}",
                     type, source, source.urls(), e);
             return Collections.emptySortedSet();
         }
 
         SortedSet<PluginDesc<T>> result = new TreeSet<>();
-        for (Class<? extends T> pluginKlass : plugins) {
+        for (Class<? extends T> pluginKlass : plugins.getStandardClasses().loadClasses(klass, true)) {
             if (!PluginUtils.isConcrete(pluginKlass)) {
                 log.debug("Skipping {} in {} as it is not concrete implementation", pluginKlass, source);
                 continue;

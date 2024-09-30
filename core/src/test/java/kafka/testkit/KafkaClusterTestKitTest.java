@@ -96,13 +96,14 @@ public class KafkaClusterTestKitTest {
                         setCombined(combined).
                         setNumControllerNodes(3).build()).build()) {
 
-            assertEquals(5, cluster.nodes().brokerNodes().size());
-            assertEquals(3, cluster.nodes().controllerNodes().size());
+            TestKitNodes nodes = cluster.nodes();
+            assertEquals(5, nodes.brokerNodes().size());
+            assertEquals(3, nodes.controllerNodes().size());
 
-            cluster.nodes().brokerNodes().forEach((brokerId, node) -> {
+            nodes.brokerNodes().forEach((brokerId, node) -> {
                 assertEquals(2, node.logDataDirectories().size());
                 Set<String> expected = new HashSet<>(Arrays.asList(String.format("broker_%d_data0", brokerId), String.format("broker_%d_data1", brokerId)));
-                if (node.combined()) {
+                if (nodes.isCombined(node.id())) {
                     expected = new HashSet<>(Arrays.asList(String.format("combined_%d_0", brokerId), String.format("combined_%d_1", brokerId)));
                 }
                 assertEquals(
@@ -113,7 +114,7 @@ public class KafkaClusterTestKitTest {
                 );
             });
 
-            cluster.nodes().controllerNodes().forEach((controllerId, node) -> {
+            nodes.controllerNodes().forEach((controllerId, node) -> {
                 String expected = combined ? String.format("combined_%d_0", controllerId) : String.format("controller_%d", controllerId);
                 assertEquals(expected, Paths.get(node.metadataDirectory()).getFileName().toString());
             });
