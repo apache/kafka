@@ -57,6 +57,7 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
  *  ProducerId => Int64
  *  ProducerEpoch => Int16
  *  BaseSequence => Int32
+ *  RecordsCount => Int32
  *  Records => [Record]
  *
  * Note that when compression is enabled (see attributes below), the compressed record data is serialized
