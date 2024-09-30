@@ -218,13 +218,10 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     }
   }
 
-  def modifyControllerConfigs(configs: Seq[Properties]): Unit = {}
-
   override def kraftControllerConfigs(testInfo: TestInfo): Seq[Properties] = {
     val controllerConfig = new Properties()
     val controllerConfigs = Seq(controllerConfig)
     modifyConfigs(controllerConfigs)
-    modifyControllerConfigs(controllerConfigs)
     controllerConfigs
   }
 

@@ -33,7 +33,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.authorizer.{ClusterMetadataAuthorizer, StandardAuthorizer}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
-import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.{AfterEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -137,9 +137,11 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     config
   }
 
-  override def modifyControllerConfigs(configs: Seq[Properties]): Unit = {
+  override def kraftControllerConfigs(testInfo: TestInfo): Seq[Properties] = {
+    val configs = super.kraftControllerConfigs(testInfo)
     JaasTestUtils.sslConfigs(ConnectionMode.SERVER, false, OptionConverters.toJava(trustStoreFile), s"controller")
       .forEach((k, v) => configs.foreach(c => c.put(k, v)))
+    configs
   }
 
   override def extraControllerSecurityProtocols(): Seq[SecurityProtocol] = {
