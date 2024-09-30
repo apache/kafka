@@ -122,9 +122,6 @@ ext {
     if (name == "compileTestJava" || name == "compileTestScala")
       options.compilerArgs << "-parameters"
   }
-
-  // Determines if the Rat plugin should ignore failures based on the 'ignoreRatFailure' property
-  ignoreRatFailure = project.hasProperty('ignoreRatFailure') ? project.ignoreRatFailure.toBoolean() : false
 }
 
 allprojects {
@@ -250,9 +247,6 @@ if (repo != null) {
         'docker/examples/fixtures/secrets/*',
         'docker/docker_official_images/.gitkeep'
     ])
-
-    // Set failOnError based on ignoreRatFailure parameter
-    failOnError = !ignoreRatFailure
   }
 } else {
   rat.enabled = false
