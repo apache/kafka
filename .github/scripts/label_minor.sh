@@ -1,3 +1,4 @@
+#!/bin/bash
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -13,26 +14,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: "Pull Request Labeler"
-on:
-  pull_request_target:
-    types: [opened, reopened, synchronize]
+pr_diff=$(gh pr diff $PR_NUM -R $GITHUB_REPOSITORY)
 
-jobs:
-  label_PRs:
-    permissions:
-      contents: read
-      pull-requests: write
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    - uses: actions/labeler@v5
-      with:
-        configuration-path: .github/configs/labeler.yml
-    - name: check MINOR label
-      env:
-        GH_TOKEN: ${{ github.token }}
-        PR_NUM: ${{github.event.number}}
-      run: |
-        ./.github/scripts/label_minor.sh
+min_size=100
+insertions=$(printf "$pr_diff" | grep '^+' | wc -l)
+deletions=$(printf "$pr_diff" | grep '^-' | wc -l)
+
+total_changes=$((insertions + deletions))
+if [ "$total_changes" -lt "$min_size" ]; then
+    gh api -H "Accept: application/vnd.github+json"  \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    /repos/$GITHUB_REPOSITORY/issues/$PR_NUM/labels -f "labels[]=minor"
+else
+  gh api -X Delete -H "Accept: application/vnd.github+json"  \
+      -H "X-GitHub-Api-Version: 2022-11-28" \
+      /repos/$GITHUB_REPOSITORY/issues/$PR_NUM/labels -f "labels[]=minor"
+fi
