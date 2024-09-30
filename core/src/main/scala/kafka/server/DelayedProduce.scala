@@ -90,11 +90,11 @@ class DelayedProduce(delayMs: Long,
    */
   override def tryComplete(): Boolean = {
     // check for each partition if it still has pending acks
-    produceMetadata.produceStatus.forKeyValue { (topicPartition, status) =>
-      trace(s"Checking produce satisfaction for $topicPartition, current status $status")
+    produceMetadata.produceStatus.forKeyValue { (topicIdPartition, status) =>
+      trace(s"Checking produce satisfaction for $topicIdPartition, current status $status")
       // skip those partitions that have already been satisfied
       if (status.acksPending) {
-        val (hasEnough, error) = replicaManager.getPartitionOrError(topicPartition.topicPartition()) match {
+        val (hasEnough, error) = replicaManager.getPartitionOrError(topicIdPartition.topicPartition()) match {
           case Left(err) =>
             // Case A
             (false, err)
@@ -119,10 +119,10 @@ class DelayedProduce(delayMs: Long,
   }
 
   override def onExpiration(): Unit = {
-    produceMetadata.produceStatus.forKeyValue { (topicPartition, status) =>
+    produceMetadata.produceStatus.forKeyValue { (topicIdPartition, status) =>
       if (status.acksPending) {
-        debug(s"Expiring produce request for partition $topicPartition with status $status")
-        DelayedProduceMetrics.recordExpiration(topicPartition.topicPartition())
+        debug(s"Expiring produce request for partition $topicIdPartition with status $status")
+        DelayedProduceMetrics.recordExpiration(topicIdPartition.topicPartition())
       }
     }
   }

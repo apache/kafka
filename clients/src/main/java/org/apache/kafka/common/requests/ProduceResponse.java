@@ -33,7 +33,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-
 /**
  * This wrapper supports both v0 and v8 of ProduceResponse.
  *
