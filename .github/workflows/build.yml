@@ -92,6 +92,32 @@ jobs:
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
 
+  integrate:
+    if: is-public-fork
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        java: [ 21, 17, 11, 8 ]
+    name: Integrate with trunk, compile, and check Java ${{ matrix.java }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Setup Gradle
+        uses: ./.github/actions/setup-gradle
+        with:
+          java-version: ${{ matrix.java }}
+          gradle-cache-read-only: true
+          gradle-cache-write-only: false
+          develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
+      - name: Merge, Compile, and validate
+        run: |
+          git checkout -b trunk-integration-${{ github.run_id }} trunk
+          git merge --squash ${{ github.ref }} -m ''
+          ./gradlew --build-cache --info --no-scan check -x test
+
   test:
     needs: validate
     if: ${{ ! needs.validate.outputs.is-draft }}
