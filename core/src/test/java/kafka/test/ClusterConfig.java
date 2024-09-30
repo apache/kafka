@@ -69,7 +69,7 @@ public class ClusterConfig {
                   Map<String, String> consumerProperties, Map<String, String> adminClientProperties, Map<String, String> saslServerProperties,
                   Map<String, String> saslClientProperties, Map<Integer, Map<String, String>> perServerProperties, List<String> tags,
                   Map<Features, Short> features) {
-        // do fail fast. the following values are invalid for both zk and kraft modes.
+        // do fail fast. the following values are invalid for kraft modes.
         if (brokers < 0) throw new IllegalArgumentException("Number of brokers must be greater or equal to zero.");
         if (controllers < 0) throw new IllegalArgumentException("Number of controller must be greater or equal to zero.");
         if (disksPerBroker <= 0) throw new IllegalArgumentException("Number of disks must be greater than zero.");
@@ -176,7 +176,7 @@ public class ClusterConfig {
 
     public static Builder defaultBuilder() {
         return new Builder()
-                .setTypes(Stream.of(Type.ZK, Type.KRAFT, Type.CO_KRAFT).collect(Collectors.toSet()))
+                .setTypes(Stream.of(Type.KRAFT, Type.CO_KRAFT).collect(Collectors.toSet()))
                 .setBrokers(1)
                 .setControllers(1)
                 .setDisksPerBroker(1)
