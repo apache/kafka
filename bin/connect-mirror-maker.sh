@@ -42,4 +42,4 @@ case $COMMAND in
     ;;
 esac
 
-exec $(dirname $0)/kafka-run-class.sh $EXTRA_ARGS org.apache.kafka.connect.mirror.MirrorMaker "$@"
+exec $(dirname "$(readlink -f "$0")")/kafka-run-class.sh $EXTRA_ARGS org.apache.kafka.connect.mirror.MirrorMaker "$@"

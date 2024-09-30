@@ -18,4 +18,4 @@ if [ "x$KAFKA_HEAP_OPTS" = "x" ]; then
   export KAFKA_HEAP_OPTS="-Xms256M -Xmx2G"
 fi
 
-exec $(dirname $0)/kafka-run-class.sh org.apache.kafka.tools.ConnectPluginPath "$@"
+exec $(dirname "$(readlink -f "$0")")/kafka-run-class.sh org.apache.kafka.tools.ConnectPluginPath "$@"

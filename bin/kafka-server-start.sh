@@ -41,4 +41,4 @@ case $COMMAND in
     ;;
 esac
 
-exec $base_dir/kafka-run-class.sh $EXTRA_ARGS kafka.Kafka "$@"
+exec $(dirname "$(readlink -f "$0")")/kafka-run-class.sh $EXTRA_ARGS kafka.Kafka "$@"
