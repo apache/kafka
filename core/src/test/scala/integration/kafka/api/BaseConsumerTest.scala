@@ -123,6 +123,12 @@ object BaseConsumerTest {
     )
   }
 
+  def getTestQuorumAndGroupProtocolParametersZkOnly() : java.util.stream.Stream[Arguments] = {
+    stream.Stream.of(
+      Arguments.of("zk", "classic")
+    )
+  }
+
   // For tests that only work with the classic group protocol, we want to test the following combinations:
   // * ZooKeeper and the classic group protocol
   // * KRaft and the classic group protocol
