@@ -93,17 +93,17 @@ public class SocketServerConfigs {
             "Name of listener used for communication between controller and brokers. " +
                     "A broker will use the <code>%s</code> to locate the endpoint in %s list, to listen for connections from the controller. " +
                     "For example, if a broker's config is:%n" +
-                    "<code>listeners = INTERNAL://192.1.1.8:9092, EXTERNAL://10.1.1.5:9093, CONTROLLER://192.1.1.8:9094" +
-                    "listener.security.protocol.map = INTERNAL:PLAINTEXT, EXTERNAL:SSL, CONTROLLER:SSL" +
-                    "control.plane.listener.name = CONTROLLER</code>%n" +
+                    "<code>listeners=INTERNAL://192.1.1.8:9092,EXTERNAL://10.1.1.5:9093,CONTROLLER://192.1.1.8:9094</code>%n" +
+                    "<code>listener.security.protocol.map=INTERNAL:PLAINTEXT,EXTERNAL:SSL,CONTROLLER:SSL</code>%n" +
+                    "<code>control.plane.listener.name = CONTROLLER</code>%n" +
                     "On startup, the broker will start listening on \"192.1.1.8:9094\" with security protocol \"SSL\".%n" +
                     "On the controller side, when it discovers a broker's published endpoints through ZooKeeper, it will use the <code>%1$1s</code> " +
                     "to find the endpoint, which it will use to establish connection to the broker.%n" +
                     "For example, if the broker's published endpoints on ZooKeeper are:%n" +
-                    " <code>\"endpoints\" : [\"INTERNAL://broker1.example.com:9092\",\"EXTERNAL://broker1.example.com:9093\",\"CONTROLLER://broker1.example.com:9094\"]</code>%n" +
+                    " <code>\"endpoints\":[\"INTERNAL://broker1.example.com:9092\",\"EXTERNAL://broker1.example.com:9093\",\"CONTROLLER://broker1.example.com:9094\"]</code>%n" +
                     " and the controller's config is:%n" +
-                    "<code>listener.security.protocol.map = INTERNAL:PLAINTEXT, EXTERNAL:SSL, CONTROLLER:SSL" +
-                    "control.plane.listener.name = CONTROLLER</code>%n" +
+                    "<code>listener.security.protocol.map = INTERNAL:PLAINTEXT, EXTERNAL:SSL, CONTROLLER:SSL</code>%n" +
+                    "<code>control.plane.listener.name = CONTROLLER</code>%n" +
                     "then the controller will use \"broker1.example.com:9094\" with security protocol \"SSL\" to connect to the broker.%n" +
                     "If not explicitly configured, the default value will be null and there will be no dedicated endpoints for controller connections.%n" +
                     "If explicitly configured, the value cannot be the same as the value of <code>%s</code>.",
