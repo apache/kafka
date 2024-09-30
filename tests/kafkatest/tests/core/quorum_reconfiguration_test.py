@@ -17,13 +17,9 @@ import json
 import re
 
 from functools import partial
-from typing import List
 
-from ducktape.cluster.cluster import ClusterNode
 from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
-from ducktape.tests.test import TestContext
-from ducktape.utils.util import wait_until
 
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.kafka import KafkaService
@@ -37,7 +33,7 @@ from kafkatest.version import DEV_BRANCH
 # Test quorum reconfiguration for combined and isolated mode
 #
 class TestQuorumReconfiguration(ProduceConsumeValidateTest):
-    def __init__(self, test_context: TestContext):
+    def __init__(self, test_context):
         super(TestQuorumReconfiguration, self).__init__(test_context=test_context)
 
     def setUp(self):
@@ -50,58 +46,46 @@ class TestQuorumReconfiguration(ProduceConsumeValidateTest):
         self.num_producers = 1
         self.num_consumers = 1
 
-    def perform_reconfig(self,
-                         active_controller_id: int,
-                         inactive_controller_id: int,
-                         inactive_controller: ClusterNode,
-                         broker_only_ids: List[int]):
-        """
-        Tests quorum reconfiguration by adding a second controller and then removing the active controller.
-
-        :param active_controller_id: id of the active controller
-        :param inactive_controller_id: id of the inactive controller
-        :param inactive_controller: node object of the inactive controller
-        :param broker_only_ids: broker ids of nodes which have no controller process
-        """
+    def perform_reconfig(self, active_controller_id, inactive_controller_id, inactive_controller, broker_ids):
         # Check describe quorum output shows the controller (first node) is the leader and the only voter
-        wait_until(lambda: check_describe_quorum_output(self.kafka.describe_quorum(),
-                                                        active_controller_id,
-                                                        [active_controller_id],
-                                                        broker_only_ids), timeout_sec=5)
+        output = self.kafka.describe_quorum()
+        assert re.search(r"LeaderId:\s*" + str(active_controller_id), output)
+        assert_nodes_in_output(r"CurrentVoters:.*", output, active_controller_id)
+        assert_nodes_in_output(r"CurrentObservers:.*", output, *broker_ids)
+
         # Start second controller
         self.kafka.controller_quorum.add_broker(inactive_controller)
-        wait_until(lambda: check_describe_quorum_output(self.kafka.describe_quorum(),
-                                                        active_controller_id,
-                                                        [active_controller_id],
-                                                        broker_only_ids + [inactive_controller_id]), timeout_sec=5)
+        output = self.kafka.describe_quorum()
+        assert re.search(r"LeaderId:\s*" + str(active_controller_id), output)
+        assert_nodes_in_output(r"CurrentVoters:.*", output, active_controller_id)
+        assert_nodes_in_output(r"CurrentObservers:.*", output, *broker_ids + [inactive_controller_id])
+
         # Add controller to quorum
         self.kafka.controller_quorum.add_controller(inactive_controller_id, inactive_controller)
 
         # Check describe quorum output shows both controllers are voters
-        wait_until(lambda: check_describe_quorum_output(self.kafka.describe_quorum(),
-                                                        active_controller_id,
-                                                        [active_controller_id, inactive_controller_id],
-                                                        broker_only_ids), timeout_sec=5)
+        output = self.kafka.describe_quorum()
+        assert re.search(r"LeaderId:\s*" + str(active_controller_id), output)
+        assert_nodes_in_output(r"CurrentVoters:.*", output, active_controller_id, inactive_controller_id)
+        assert_nodes_in_output(r"CurrentObservers:.*", output, *broker_ids)
+
         # Remove leader from quorum
-        voters = json_from_line(r"CurrentVoters:.*", self.kafka.describe_quorum())
+        voters = json_from_line(r"CurrentVoters:.*", output)
         directory_id = next(voter["directoryId"] for voter in voters if voter["id"] == active_controller_id)
         self.kafka.controller_quorum.remove_controller(active_controller_id, directory_id)
-        # Describe quorum output shows the second controller is now leader, old controller is an observer
-        wait_until(lambda: check_describe_quorum_output(self.kafka.describe_quorum(),
-                                                        inactive_controller_id,
-                                                        [inactive_controller_id],
-                                                        broker_only_ids + [active_controller_id]), timeout_sec=5)
+
+        # Check describe quorum output to show second_controller is now the leader
+        output = self.kafka.describe_quorum()
+        assert re.search(r"LeaderId:\s*" + str(inactive_controller_id), output)
+        assert_nodes_in_output(r"CurrentVoters:.*", output, inactive_controller_id)
+        assert_nodes_in_output(r"CurrentObservers:.*", output, *broker_ids)
+
 
     @cluster(num_nodes=6)
     @matrix(metadata_quorum=[combined_kraft])
     def test_combined_mode_reconfig(self, metadata_quorum):
-        """
-        Tests quorum reconfiguration in combined mode with produce & consume validation.
-        Starts a controller in standalone mode with two other broker nodes, then calls perform_reconfig to add
-        a second controller and then remove the first controller.
-        """
         self.kafka = KafkaService(self.test_context,
-                                  num_nodes=4,  # 2 combined, 2 broker-only nodes
+                                  num_nodes=4,
                                   zk=None,
                                   topics={self.topic: {"partitions": self.partitions,
                                                        "replication-factor": self.replication_factor,
@@ -109,8 +93,7 @@ class TestQuorumReconfiguration(ProduceConsumeValidateTest):
                                   version=DEV_BRANCH,
                                   controller_num_nodes_override=2,
                                   dynamicRaftQuorum=True)
-        # Start a controller and the broker-only nodes
-        # We leave starting the second controller for later in perform_reconfig
+        # Start one out of two controllers (standalone mode)
         inactive_controller = self.kafka.nodes[1]
         self.kafka.start(nodes_to_skip=[inactive_controller])
 
@@ -132,15 +115,10 @@ class TestQuorumReconfiguration(ProduceConsumeValidateTest):
     @cluster(num_nodes=7)
     @matrix(metadata_quorum=[isolated_kraft])
     def test_isolated_mode_reconfig(self, metadata_quorum):
-        """
-        Tests quorum reconfiguration in isolated mode with produce & consume validation.
-        Starts a controller in standalone mode with three other broker nodes, then calls perform_reconfig to add
-        a second controller and then remove the first controller.
-        """
         # Start up KRaft controller in migration mode
         remote_quorum = partial(ServiceQuorumInfo, isolated_kraft)
         self.kafka = KafkaService(self.test_context,
-                                  num_nodes=3,  # 3 broker-only nodes
+                                  num_nodes=3,
                                   zk=None,
                                   topics={self.topic: {"partitions": self.partitions,
                                                        "replication-factor": self.replication_factor,
@@ -149,8 +127,7 @@ class TestQuorumReconfiguration(ProduceConsumeValidateTest):
                                   controller_num_nodes_override=2,
                                   quorum_info_provider=remote_quorum,
                                   dynamicRaftQuorum=True)
-        # Start a controller and the broker-only nodes
-        # We leave starting the second controller for later in perform_reconfig
+        # Start one out of two controllers (standalone mode)
         controller_quorum = self.kafka.controller_quorum
         inactive_controller = controller_quorum.nodes[1]
         self.kafka.start(isolated_controllers_to_skip=[inactive_controller])
@@ -170,34 +147,17 @@ class TestQuorumReconfiguration(ProduceConsumeValidateTest):
                                                            inactive_controller,
                                                            [self.kafka.idx(node) for node in self.kafka.nodes]))
 
-def check_nodes_in_output(pattern: str, output: str, *node_ids: int):
+def assert_nodes_in_output(pattern, output, *node_ids):
     nodes = json_from_line(pattern, output)
-    if len(nodes) != len(node_ids):
-        return False
+    assert len(nodes) == len(node_ids)
 
     for node in nodes:
-        if not node["id"] in node_ids:
-            return False
-    return True
+        assert node["id"] in node_ids
 
-def check_describe_quorum_output(output: str, leader_id: int, voter_ids: List[int], observer_ids: List[int]):
-    """
-    Check that the describe quorum output contains the expected leader, voters, and observers
-    :param output: Describe quorum output
-    :param leader_id: Expected leader id
-    :param voter_ids: Expected voter ids
-    :param observer_ids: Expected observer ids
-    :return:
-    """
-    if not re.search(r"LeaderId:\s*" + str(leader_id), output):
-        return False
-    return (check_nodes_in_output(r"CurrentVoters:.*", output, *voter_ids) and
-            check_nodes_in_output(r"CurrentObservers:.*", output, *observer_ids))
-
-def json_from_line(pattern: str, output: str):
+def json_from_line(pattern, output):
     match = re.search(pattern, output)
     if not match:
-        raise Exception(f"Expected match for pattern {pattern} in describe quorum output")
+        raise Exception("Expected match for pattern %s in describe quorum output" % pattern)
     line = match.group(0)
     start_index = line.find('[')
     end_index = line.rfind(']') + 1

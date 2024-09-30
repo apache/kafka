@@ -54,7 +54,6 @@ import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -81,9 +80,8 @@ import static org.junit.jupiter.api.Assertions.fail;
 @Tag("integration")
 @Timeout(600)
 public class StreamsUncaughtExceptionHandlerIntegrationTest {
-    private static final long NOW = Instant.now().toEpochMilli();
 
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1, new Properties(), Collections.emptyList(), 0L, 0L);
 
     @BeforeAll
     public static void startCluster() throws IOException {
@@ -148,7 +146,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
             kafkaStreams.setUncaughtExceptionHandler((t, e) -> counter.incrementAndGet());
 
             startApplicationAndWaitUntilRunning(kafkaStreams);
-            produceMessages(NOW, inputTopic, "A");
+            produceMessages(0L, inputTopic, "A");
 
             // should call the UncaughtExceptionHandler in current thread
             TestUtils.waitForCondition(() -> counter.get() == 1, "Handler was called 1st time");
@@ -170,7 +168,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
             startApplicationAndWaitUntilRunning(kafkaStreams);
 
-            produceMessages(NOW, inputTopic, "A");
+            produceMessages(0L, inputTopic, "A");
             waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.ERROR, DEFAULT_DURATION);
 
             assertThat(processorValueCollector.size(), equalTo(1));
@@ -254,7 +252,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
             startApplicationAndWaitUntilRunning(kafkaStreams);
 
-            produceMessages(NOW, inputTopic2, "A");
+            produceMessages(0L, inputTopic2, "A");
             waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.ERROR, DEFAULT_DURATION);
 
             assertThat(processorValueCollector.size(), equalTo(1));
@@ -299,7 +297,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
                     IntegerSerializer.class,
                     StringSerializer.class,
                     new Properties()),
-                    NOW);
+                0L);
 
             IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
                 inputTopic2,
@@ -312,7 +310,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
                     IntegerSerializer.class,
                     StringSerializer.class,
                     new Properties()),
-                    NOW);
+                0L);
 
             IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
                 TestUtils.consumerConfig(
@@ -367,7 +365,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
             startApplicationAndWaitUntilRunning(asList(kafkaStreams1, kafkaStreams2));
 
-            produceMessages(NOW, inputTopic, "A");
+            produceMessages(0L, inputTopic, "A");
             waitForApplicationState(asList(kafkaStreams1, kafkaStreams2), KafkaStreams.State.ERROR, DEFAULT_DURATION);
 
             assertThat(processorValueCollector.size(), equalTo(1));
@@ -388,7 +386,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
             });
             startApplicationAndWaitUntilRunning(kafkaStreams);
 
-            produceMessages(NOW, inputTopic, "A");
+            produceMessages(0L, inputTopic, "A");
             TestUtils.waitForCondition(() -> count.get() == numThreads, "finished replacing threads");
             TestUtils.waitForCondition(() -> throwError.get(), "finished replacing threads");
             kafkaStreams.close();

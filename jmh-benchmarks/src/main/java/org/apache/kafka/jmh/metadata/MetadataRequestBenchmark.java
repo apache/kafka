@@ -20,6 +20,7 @@ package org.apache.kafka.jmh.metadata;
 import kafka.controller.KafkaController;
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
+import kafka.network.RequestConvertToJson;
 import kafka.server.AutoTopicCreationManager;
 import kafka.server.BrokerFeatures;
 import kafka.server.ClientQuotaManager;
@@ -58,7 +59,6 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupCoordinator;
-import org.apache.kafka.network.RequestConvertToJson;
 import org.apache.kafka.network.metrics.RequestChannelMetrics;
 import org.apache.kafka.server.common.FinalizedFeatures;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -237,9 +237,7 @@ public class MetadataRequestBenchmark {
 
     @Benchmark
     public String testRequestToJson() {
-        Option<com.fasterxml.jackson.databind.JsonNode> option = allTopicMetadataRequest.requestLog();
-        Optional<com.fasterxml.jackson.databind.JsonNode> optional = option.isDefined() ? Optional.of(option.get()) : Optional.empty();
-        return RequestConvertToJson.requestDesc(allTopicMetadataRequest.header(), optional, allTopicMetadataRequest.isForwarded()).toString();
+        return RequestConvertToJson.requestDesc(allTopicMetadataRequest.header(), allTopicMetadataRequest.requestLog(), allTopicMetadataRequest.isForwarded()).toString();
     }
 
     @Benchmark

@@ -17,10 +17,11 @@
 
 package org.apache.kafka.jmh.common;
 
+import kafka.network.RequestConvertToJson;
+
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.ProduceRequest;
-import org.apache.kafka.network.RequestConvertToJson;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;

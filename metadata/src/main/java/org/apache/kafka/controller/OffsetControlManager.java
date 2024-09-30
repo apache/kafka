@@ -280,10 +280,6 @@ class OffsetControlManager {
         this.lastCommittedOffset = batch.lastOffset();
         this.lastCommittedEpoch = batch.epoch();
         maybeAdvanceLastStableOffset();
-        handleCommitBatchMetrics(batch);
-    }
-
-    void handleCommitBatchMetrics(Batch<ApiMessageAndVersion> batch) {
         metrics.setLastCommittedRecordOffset(batch.lastOffset());
         if (!active()) {
             // On standby controllers, the last applied record offset is equals to the last

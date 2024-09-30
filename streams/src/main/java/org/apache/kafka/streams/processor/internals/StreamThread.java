@@ -408,7 +408,6 @@ public class StreamThread extends Thread implements ProcessingThread {
             time,
             clientSupplier,
             threadId,
-            threadIdx,
             processId,
             log,
             stateUpdaterEnabled,

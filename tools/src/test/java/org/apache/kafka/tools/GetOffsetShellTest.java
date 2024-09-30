@@ -62,6 +62,7 @@ import java.util.stream.Stream;
 
 import static kafka.test.annotation.Type.CO_KRAFT;
 import static kafka.test.annotation.Type.KRAFT;
+import static kafka.test.annotation.Type.ZK;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -148,7 +149,7 @@ public class GetOffsetShellTest {
                 // align listener name here as KafkaClusterTestKit (KRAFT/CO_KRAFT) the default
                 // broker listener name is EXTERNAL while in ZK it is PLAINTEXT
                 ClusterConfig.defaultBuilder()
-                        .setTypes(Stream.of(KRAFT, CO_KRAFT).collect(Collectors.toSet()))
+                        .setTypes(Stream.of(ZK, KRAFT, CO_KRAFT).collect(Collectors.toSet()))
                         .setServerProperties(serverProperties)
                         .setListenerName("EXTERNAL")
                         .build());

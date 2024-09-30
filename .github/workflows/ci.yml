@@ -21,7 +21,7 @@ on:
       - 'trunk'
 
   pull_request:
-    types: [ opened, synchronize, ready_for_review, reopened ]
+    types: [ opened, synchronize, reopened ]
     branches:
       - 'trunk'
 

@@ -393,8 +393,6 @@
     </subpackage>
 
     <subpackage name="integration">
-      <allow pkg="kafka.testkit"/>
-      <allow pkg="org.apache.kafka.metadata"/>
       <allow pkg="kafka.admin" />
       <allow pkg="kafka.api" />
       <allow pkg="kafka.cluster" />

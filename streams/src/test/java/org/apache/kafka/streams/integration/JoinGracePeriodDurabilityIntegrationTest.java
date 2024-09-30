@@ -49,7 +49,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -71,8 +70,12 @@ import static org.hamcrest.MatcherAssert.assertThat;
 @Timeout(600)
 public class JoinGracePeriodDurabilityIntegrationTest {
 
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
-    private static final long NOW = Instant.now().toEpochMilli();
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
+        3,
+        mkProperties(mkMap()),
+        0L
+    );
+
     @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
@@ -215,7 +218,7 @@ public class JoinGracePeriodDurabilityIntegrationTest {
      * just to exercise that everything works properly in the presence of commits.
      */
     private long scaledTime(final long unscaledTime) {
-        return NOW + COMMIT_INTERVAL * 2 * unscaledTime;
+        return COMMIT_INTERVAL * 2 * unscaledTime;
     }
 
     private static void produceSynchronouslyToPartitionZero(final String topic, final List<KeyValueTimestamp<String, String>> toProduce) {

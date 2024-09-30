@@ -18,7 +18,6 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidTopicException
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
-import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
@@ -228,29 +227,11 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testSubscribeInvalidTopicCanUnsubscribe(quorum: String, groupProtocol: String): Unit = {
-    val consumer = createConsumer()
-
-    setupSubscribeInvalidTopic(consumer)
-    assertDoesNotThrow(new Executable {
-      override def execute(): Unit = consumer.unsubscribe()
-    })
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testSubscribeInvalidTopicCanClose(quorum: String, groupProtocol: String): Unit = {
-    val consumer = createConsumer()
-
-    setupSubscribeInvalidTopic(consumer)
-    assertDoesNotThrow(new Executable {
-      override def execute(): Unit = consumer.close()
-    })
-  }
-
-  def setupSubscribeInvalidTopic(consumer: Consumer[Array[Byte], Array[Byte]]): Unit = {
+  def testSubscribeInvalidTopic(quorum: String, groupProtocol: String): Unit = {
     // Invalid topic name due to space
     val invalidTopicName = "topic abc"
+    val consumer = createConsumer()
+
     consumer.subscribe(List(invalidTopicName).asJava)
 
     var exception : InvalidTopicException = null

@@ -19,6 +19,7 @@ package kafka.test.annotation;
 
 import kafka.test.ClusterConfig;
 import kafka.test.junit.RaftClusterInvocationContext;
+import kafka.test.junit.ZkClusterInvocationContext;
 
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 
@@ -37,6 +38,12 @@ public enum Type {
         @Override
         public TestTemplateInvocationContext invocationContexts(String baseDisplayName, ClusterConfig config) {
             return new RaftClusterInvocationContext(baseDisplayName, config, true);
+        }
+    },
+    ZK {
+        @Override
+        public TestTemplateInvocationContext invocationContexts(String baseDisplayName, ClusterConfig config) {
+            return new ZkClusterInvocationContext(baseDisplayName, config);
         }
     };
 

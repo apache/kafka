@@ -21,7 +21,7 @@ import java.net.InetAddress
 import java.util
 import java.util.concurrent.{ExecutionException, TimeUnit}
 import kafka.test.ClusterInstance
-import kafka.test.annotation.ClusterTest
+import kafka.test.annotation.{ClusterTest, Type}
 import kafka.test.junit.ClusterTestExtensions
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{ScramCredentialInfo, ScramMechanism, UserScramCredentialUpsertion}
@@ -31,7 +31,6 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, 
 import org.apache.kafka.common.requests.{AlterClientQuotasRequest, AlterClientQuotasResponse, DescribeClientQuotasRequest, DescribeClientQuotasResponse}
 import org.apache.kafka.server.config.{QuotaConfigs, ZooKeeperInternals}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.extension.ExtendWith
 
 import scala.jdk.CollectionConverters._
@@ -166,8 +165,7 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
     ))
   }
 
-  @Disabled("TODO: KAFKA-17630 -  Convert ClientQuotasRequestTest#testClientQuotasForScramUsers to kraft")
-  @ClusterTest
+  @ClusterTest(types = Array(Type.ZK)) // No SCRAM for Raft yet
   def testClientQuotasForScramUsers(): Unit = {
     val userName = "user"
 

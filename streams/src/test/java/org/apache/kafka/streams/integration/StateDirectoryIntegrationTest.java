@@ -171,7 +171,7 @@ public class StateDirectoryIntegrationTest {
                     ).findFirst().isPresent()
             );
         } finally {
-            CLUSTER.deleteAllTopics();
+            CLUSTER.deleteAllTopicsAndWait(0L);
         }
     }
 
@@ -271,7 +271,7 @@ public class StateDirectoryIntegrationTest {
             assertTrue((new File(stateDir)).exists());  // Root state store exists
             assertTrue(appDir.exists());    // Application state store exists
         } finally {
-            CLUSTER.deleteAllTopics();
+            CLUSTER.deleteAllTopicsAndWait(0L);
         }
     }
 }

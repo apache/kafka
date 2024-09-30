@@ -97,7 +97,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 @Timeout(600)
 @Tag("integration")
 public class NamedTopologyIntegrationTest {
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
     private static final String TOPOLOGY_1 = "topology-1";
     private static final String TOPOLOGY_2 = "topology-2";
@@ -243,14 +243,14 @@ public class NamedTopologyIntegrationTest {
         CLUSTER.getAllTopicsInCluster().stream().filter(t -> t.contains("-changelog") || t.contains("-repartition")).forEach(t -> {
             try {
                 assertThat("topic was not decorated", t.contains(TOPIC_PREFIX));
-                CLUSTER.deleteTopics(t);
-            } catch (final RuntimeException e) {
+                CLUSTER.deleteTopicsAndWait(t);
+            } catch (final InterruptedException e) {
                 e.printStackTrace();
             }
         });
 
-        CLUSTER.deleteTopics(OUTPUT_STREAM_1, OUTPUT_STREAM_2, OUTPUT_STREAM_3);
-        CLUSTER.deleteTopics(SUM_OUTPUT, COUNT_OUTPUT);
+        CLUSTER.deleteTopicsAndWait(OUTPUT_STREAM_1, OUTPUT_STREAM_2, OUTPUT_STREAM_3);
+        CLUSTER.deleteTopicsAndWait(SUM_OUTPUT, COUNT_OUTPUT);
     }
 
     @Test
@@ -518,8 +518,8 @@ public class NamedTopologyIntegrationTest {
 
         CLUSTER.getAllTopicsInCluster().stream().filter(t -> t.contains("-changelog")).forEach(t -> {
             try {
-                CLUSTER.deleteTopic(t);
-            } catch (final RuntimeException e) {
+                CLUSTER.deleteTopicAndWait(t);
+            } catch (final InterruptedException e) {
                 e.printStackTrace();
             }
         });
@@ -570,7 +570,7 @@ public class NamedTopologyIntegrationTest {
             assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 5), equalTo(COUNT_OUTPUT_DATA));
             assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 5), equalTo(SUM_OUTPUT_DATA));
         } finally {
-            CLUSTER.deleteTopics(SUM_OUTPUT, COUNT_OUTPUT);
+            CLUSTER.deleteTopicsAndWait(SUM_OUTPUT, COUNT_OUTPUT);
             CLUSTER.deleteTopics(DELAYED_INPUT_STREAM_1);
         }
     }
@@ -624,8 +624,8 @@ public class NamedTopologyIntegrationTest {
 
             CLUSTER.getAllTopicsInCluster().stream().filter(t -> t.contains("changelog")).forEach(t -> {
                 try {
-                    CLUSTER.deleteTopic(t);
-                } catch (final RuntimeException e) {
+                    CLUSTER.deleteTopicAndWait(t);
+                } catch (final InterruptedException e) {
                     e.printStackTrace();
                 }
             });
@@ -640,7 +640,7 @@ public class NamedTopologyIntegrationTest {
             assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 5), equalTo(COUNT_OUTPUT_DATA));
             assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 5), equalTo(SUM_OUTPUT_DATA));
         } finally {
-            CLUSTER.deleteTopics(SUM_OUTPUT, COUNT_OUTPUT);
+            CLUSTER.deleteTopicsAndWait(SUM_OUTPUT, COUNT_OUTPUT);
         }
     }
 
@@ -662,8 +662,8 @@ public class NamedTopologyIntegrationTest {
 
         CLUSTER.getAllTopicsInCluster().stream().filter(t -> t.contains("-changelog") || t.contains("-repartition")).forEach(t -> {
             try {
-                CLUSTER.deleteTopics(t);
-            } catch (final RuntimeException e) {
+                CLUSTER.deleteTopicsAndWait(t);
+            } catch (final InterruptedException e) {
                 e.printStackTrace();
             }
         });
@@ -678,7 +678,7 @@ public class NamedTopologyIntegrationTest {
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 5), equalTo(COUNT_OUTPUT_DATA));
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 5), equalTo(SUM_OUTPUT_DATA));
 
-        CLUSTER.deleteTopics(SUM_OUTPUT, COUNT_OUTPUT);
+        CLUSTER.deleteTopicsAndWait(SUM_OUTPUT, COUNT_OUTPUT);
     }
 
     /**

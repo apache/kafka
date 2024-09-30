@@ -135,7 +135,7 @@ public class RocksDBMetricsIntegrationTest {
 
     @AfterEach
     public void after() throws Exception {
-        CLUSTER.deleteTopics(STREAM_INPUT_ONE, STREAM_INPUT_TWO, STREAM_OUTPUT_ONE, STREAM_OUTPUT_TWO);
+        CLUSTER.deleteTopicsAndWait(STREAM_INPUT_ONE, STREAM_INPUT_TWO, STREAM_OUTPUT_ONE, STREAM_OUTPUT_TWO);
     }
 
     @FunctionalInterface

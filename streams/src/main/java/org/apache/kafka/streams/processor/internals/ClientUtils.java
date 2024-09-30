@@ -64,6 +64,7 @@ public class ClientUtils {
         }
     }
 
+
     public static String adminClientId(final String clientId) {
         return clientId + "-admin";
     }
@@ -76,7 +77,7 @@ public class ClientUtils {
         return threadClientId + "-restore-consumer";
     }
 
-    public static String producerClientId(final String threadClientId) {
+    public static String threadProducerClientId(final String threadClientId) {
         return threadClientId + "-producer";
     }
 

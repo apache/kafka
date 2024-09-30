@@ -1137,25 +1137,10 @@ public class ShareMembershipManagerTest {
     }
 
     @Test
-    public void testOnSubscriptionUpdatedDoesNotTransitionToJoiningIfInGroup() {
+    public void testOnSubscriptionUpdatedTransitionsToJoiningOnlyIfNotInGroup() {
         ShareMembershipManager membershipManager = createMemberInStableState();
         membershipManager.onSubscriptionUpdated();
-        assertTrue(membershipManager.subscriptionUpdated());
-        membershipManager.onConsumerPoll();
         verify(membershipManager, never()).transitionToJoining();
-        assertFalse(membershipManager.subscriptionUpdated());
-    }
-
-    @Test
-    public void testOnSubscriptionUpdatedTransitionsToJoiningOnPollIfNotInGroup() {
-        ShareMembershipManager membershipManager = createMembershipManager();
-        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
-        membershipManager.onSubscriptionUpdated();
-        verify(membershipManager, never()).transitionToJoining();
-        assertTrue(membershipManager.subscriptionUpdated());
-        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
-        membershipManager.onConsumerPoll();
-        verify(membershipManager).transitionToJoining();
     }
 
     private void assertLeaveGroupDueToExpiredPollAndTransitionToStale(ShareMembershipManager membershipManager) {

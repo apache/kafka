@@ -678,9 +678,6 @@ public class LeaderState<T> implements EpochState {
 
             // Make sure that the replica key in the replica state matches the voter's
             state.setReplicaKey(voterNode.voterKey());
-
-            // Make sure that the listeners are updated
-            state.updateListeners(voterNode.listeners());
             newVoterStates.put(state.replicaKey.id(), state);
         }
         voterStates = newVoterStates;
@@ -755,12 +752,8 @@ public class LeaderState<T> implements EpochState {
             this.replicaKey = replicaKey;
         }
 
-        void updateListeners(Endpoints listeners) {
-            this.listeners = listeners;
-        }
-
         void clearListeners() {
-            updateListeners(Endpoints.empty());
+            this.listeners = Endpoints.empty();
         }
 
         boolean matchesKey(ReplicaKey replicaKey) {

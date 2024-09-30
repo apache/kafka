@@ -102,7 +102,7 @@ import static org.hamcrest.Matchers.is;
 public class PositionRestartIntegrationTest {
     private static final Logger LOG = LoggerFactory.getLogger(PositionRestartIntegrationTest.class);
     private static final long SEED = new Random().nextLong();
-    private static final int NUM_BROKERS = 3;
+    private static final int NUM_BROKERS = 1;
     public static final Duration WINDOW_SIZE = Duration.ofMinutes(5);
     private static int port = 0;
     private static final String INPUT_TOPIC_NAME = "input-topic";
@@ -274,7 +274,7 @@ public class PositionRestartIntegrationTest {
         throws InterruptedException, IOException, ExecutionException, TimeoutException {
 
         CLUSTER.start();
-        CLUSTER.deleteAllTopics();
+        CLUSTER.deleteAllTopicsAndWait(60 * 1000L);
         final int partitions = 2;
         CLUSTER.createTopic(INPUT_TOPIC_NAME, partitions, 1);
 
