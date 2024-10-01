@@ -696,7 +696,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 updateAssignmentMetadataIfNeeded(timer);
                 final Fetch<K, V> fetch = pollForFetches(timer);
                 if (!fetch.isEmpty()) {
-                    sendFetches(timer);
+                    sendFetches(timer, false);
 
                     if (fetch.records().isEmpty()) {
                         log.trace("Returning empty records from `poll()` "
@@ -1535,7 +1535,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
 
         // send any new fetches (won't resend pending fetches)
-        sendFetches(timer);
+        sendFetches(timer, true);
 
         // We do not want to be stuck blocking in poll if we are missing some positions
         // since the offset lookup may be backing off after a failure
@@ -1624,8 +1624,14 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             offsetAndMetadata.leaderEpoch().ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(topicPartition, epoch));
     }
 
-    private void sendFetches(Timer timer) {
-        applicationEventHandler.addAndGet(new CreateFetchRequestsEvent(calculateDeadlineMs(timer)));
+    private void sendFetches(Timer timer, boolean shouldWait) {
+        CreateFetchRequestsEvent event = new CreateFetchRequestsEvent(calculateDeadlineMs(timer));
+
+        if (shouldWait) {
+            applicationEventHandler.addAndGet(event);
+        } else {
+            applicationEventHandler.add(event);
+        }
     }
 
     @Override
