@@ -43,12 +43,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ConsoleProducerTest {
-    private static final String[] BROKER_LIST_VALID_ARGS = new String[]{
-        "--broker-list", "localhost:1001,localhost:1002",
-        "--topic", "t3",
-        "--property", "parse.key=true",
-        "--property", "key.separator=#"
-    };
     private static final String[] BOOTSTRAP_SERVER_VALID_ARGS = new String[]{
         "--bootstrap-server", "localhost:1003,localhost:1004",
         "--topic", "t3",
@@ -60,36 +54,31 @@ public class ConsoleProducerTest {
         "t3"
     };
     private static final String[] BOOTSTRAP_SERVER_OVERRIDE = new String[]{
-        "--broker-list", "localhost:1001",
         "--bootstrap-server", "localhost:1002",
         "--topic", "t3",
     };
     private static final String[] CLIENT_ID_OVERRIDE = new String[]{
-        "--broker-list", "localhost:1001",
+        "--bootstrap-server", "localhost:1001",
         "--topic", "t3",
         "--producer-property", "client.id=producer-1"
     };
     private static final String[] BATCH_SIZE_OVERRIDDEN_BY_MAX_PARTITION_MEMORY_BYTES_VALUE = new String[]{
-        "--broker-list", "localhost:1001",
         "--bootstrap-server", "localhost:1002",
         "--topic", "t3",
         "--batch-size", "123",
         "--max-partition-memory-bytes", "456"
     };
-    private static final String[] BTCH_SIZE_SET_AND_MAX_PARTITION_MEMORY_BYTES_NOT_SET = new String[]{
-        "--broker-list", "localhost:1001",
+    private static final String[] BATCH_SIZE_SET_AND_MAX_PARTITION_MEMORY_BYTES_NOT_SET = new String[]{
         "--bootstrap-server", "localhost:1002",
         "--topic", "t3",
         "--batch-size", "123"
     };
     private static final String[] BATCH_SIZE_NOT_SET_AND_MAX_PARTITION_MEMORY_BYTES_SET = new String[]{
-        "--broker-list", "localhost:1001",
         "--bootstrap-server", "localhost:1002",
         "--topic", "t3",
         "--max-partition-memory-bytes", "456"
     };
     private static final String[] BATCH_SIZE_DEFAULT = new String[]{
-        "--broker-list", "localhost:1001",
         "--bootstrap-server", "localhost:1002",
         "--topic", "t3"
     };
@@ -98,14 +87,6 @@ public class ConsoleProducerTest {
         "--topic", "t3",
         "--line-reader", TestRecordReader.class.getName()
     };
-
-    @Test
-    public void testValidConfigsBrokerList() throws IOException {
-        ConsoleProducerOptions opts = new ConsoleProducerOptions(BROKER_LIST_VALID_ARGS);
-        ProducerConfig producerConfig = new ProducerConfig(opts.producerProps());
-
-        assertEquals(asList("localhost:1001", "localhost:1002"), producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
-    }
 
     @Test
     public void testValidConfigsBootstrapServer() throws IOException {
@@ -129,7 +110,7 @@ public class ConsoleProducerTest {
 
     @Test
     public void testParseKeyProp() throws ReflectiveOperationException, IOException {
-        ConsoleProducerOptions opts = new ConsoleProducerOptions(BROKER_LIST_VALID_ARGS);
+        ConsoleProducerOptions opts = new ConsoleProducerOptions(BOOTSTRAP_SERVER_VALID_ARGS);
         LineMessageReader reader = (LineMessageReader) Class.forName(opts.readerClass()).getDeclaredConstructor().newInstance();
         reader.configure(opts.readerProps());
 
@@ -179,7 +160,7 @@ public class ConsoleProducerTest {
 
     @Test
     public void testDefaultClientId() throws IOException {
-        ConsoleProducerOptions opts = new ConsoleProducerOptions(BROKER_LIST_VALID_ARGS);
+        ConsoleProducerOptions opts = new ConsoleProducerOptions(BOOTSTRAP_SERVER_VALID_ARGS);
         ProducerConfig producerConfig = new ProducerConfig(opts.producerProps());
 
         assertEquals("console-producer", producerConfig.getString(ProducerConfig.CLIENT_ID_CONFIG));
@@ -195,7 +176,7 @@ public class ConsoleProducerTest {
 
     @Test
     public void testBatchSizeSetAndMaxPartitionMemoryBytesNotSet() throws IOException {
-        ConsoleProducerOptions opts = new ConsoleProducerOptions(BTCH_SIZE_SET_AND_MAX_PARTITION_MEMORY_BYTES_NOT_SET);
+        ConsoleProducerOptions opts = new ConsoleProducerOptions(BATCH_SIZE_SET_AND_MAX_PARTITION_MEMORY_BYTES_NOT_SET);
         ProducerConfig producerConfig = new ProducerConfig(opts.producerProps());
 
         assertEquals(123, producerConfig.getInt(ProducerConfig.BATCH_SIZE_CONFIG));

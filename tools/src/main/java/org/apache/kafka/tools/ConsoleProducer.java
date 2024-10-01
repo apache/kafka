@@ -115,7 +115,6 @@ public class ConsoleProducer {
 
     static final class ConsoleProducerOptions extends CommandDefaultOptions {
         private final OptionSpec<String> topicOpt;
-        private final OptionSpec<String> brokerListOpt;
         private final OptionSpec<String> bootstrapServerOpt;
         private final OptionSpec<Void> syncOpt;
         private final OptionSpec<String> compressionCodecOpt;
@@ -138,16 +137,11 @@ public class ConsoleProducer {
 
         public ConsoleProducerOptions(String[] args) {
             super(args);
-            topicOpt = parser.accepts("topic", "REQUIRED: The topic id to produce messages to.")
+            topicOpt = parser.accepts("topic", "REQUIRED: The topic name to produce messages to.")
                     .withRequiredArg()
                     .describedAs("topic")
                     .ofType(String.class);
-            brokerListOpt = parser.accepts("broker-list", "DEPRECATED, use --bootstrap-server instead; ignored if --bootstrap-server is specified.  The broker list string in the form HOST1:PORT1,HOST2:PORT2.")
-                    .withRequiredArg()
-                    .describedAs("broker-list")
-                    .ofType(String.class);
-            bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED unless --broker-list(deprecated) is specified. The server(s) to connect to. The broker list string in the form HOST1:PORT1,HOST2:PORT2.")
-                    .requiredUnless("broker-list")
+            bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: The server(s) to connect to. The broker list string in the form HOST1:PORT1,HOST2:PORT2.")
                     .withRequiredArg()
                     .describedAs("server to connect to")
                     .ofType(String.class);
@@ -269,7 +263,7 @@ public class ConsoleProducer {
             try {
                 options = parser.parse(args);
             } catch (OptionException e) {
-                ToolsUtils.printUsageAndExit(parser, e.getMessage());
+                CommandLineUtils.printUsageAndExit(parser, e.getMessage());
             }
 
             checkArgs();
@@ -281,14 +275,10 @@ public class ConsoleProducer {
             CommandLineUtils.checkRequiredArgs(parser, options, topicOpt);
 
             try {
-                ToolsUtils.validateBootstrapServer(brokerHostsAndPorts());
+                ToolsUtils.validateBootstrapServer(options.valueOf(bootstrapServerOpt));
             } catch (IllegalArgumentException e) {
                 CommandLineUtils.printUsageAndExit(parser, e.getMessage());
             }
-        }
-
-        String brokerHostsAndPorts() {
-            return options.has(bootstrapServerOpt) ? options.valueOf(bootstrapServerOpt) : options.valueOf(brokerListOpt);
         }
 
         boolean sync() {
@@ -330,7 +320,7 @@ public class ConsoleProducer {
             }
 
             props.putAll(parseKeyValueArgs(options.valuesOf(producerPropertyOpt)));
-            props.put(BOOTSTRAP_SERVERS_CONFIG, brokerHostsAndPorts());
+            props.put(BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOpt));
             props.put(COMPRESSION_TYPE_CONFIG, compressionCodec());
 
             if (props.getProperty(CLIENT_ID_CONFIG) == null) {

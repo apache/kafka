@@ -44,6 +44,7 @@ import static java.util.Arrays.stream;
  *    key.separator         : the string separating a record's key from its value. (default: \t).
  *    parse.headers         : indicates if record headers are included in a line input and need to be parsed. (default: false).
  *    headers.delimiter     : the string separating the list of headers from the record key. (default: \t).
+ *    headers.separator     : the string separating headers. (default: ,).
  *    headers.key.separator : the string separating the key and value within a header. (default: :).
  *    ignore.error          : whether best attempts should be made to ignore parsing errors. (default: false).
  *    null.marker           : record key, record value, header key, header value which match this marker are replaced by null. (default: null).
