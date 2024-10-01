@@ -683,7 +683,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
   @ValueSource(strings = Array("zk", "kraft"))
   def testExpireTokenWithOverflowTimestamp(quorum: String): Unit = {
     client = createAdminClient
-    val token = client.createDelegationToken(new CreateDelegationTokenOptions().maxlifeTimeMs(5000)).delegationToken().get()
+    val token = client.createDelegationToken(new CreateDelegationTokenOptions().maxlifeTimeMs(Long.MaxValue)).delegationToken().get()
     TestUtils.retry(1000) { assertTrue(expireTokenOrFailWithAssert(token, Long.MaxValue) == Long.MaxValue) }
   }
 
