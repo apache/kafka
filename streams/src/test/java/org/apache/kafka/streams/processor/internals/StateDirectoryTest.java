@@ -950,7 +950,7 @@ public class StateDirectoryTest {
         Mockito.when(metadata.buildSubtopology(ArgumentMatchers.any())).thenReturn(processorTopology);
         Mockito.when(metadata.taskConfig(ArgumentMatchers.any())).thenReturn(topologyConfig.getTaskConfig());
 
-        directory.initializeTasksForLocalState(metadata, new StreamsMetricsImpl(new Metrics(), "test", "0.1", time), new LogContext("test"));
+        directory.initializeTasksForLocalState(metadata, new StreamsMetricsImpl(new Metrics(), "test", time), new LogContext("test"));
 
         return store;
     }
