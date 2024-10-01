@@ -20,7 +20,7 @@
   "name": "UpdateFeaturesRequest",
   // Version 1 adds validate only field.
   //
-  // Version 2 changes error handling to return a top level error if any feature fails to update.
+  // Version 2 changes the response to not return feature level results.
   "validVersions": "0-2",
   "flexibleVersions": "0+",
   "fields": [
