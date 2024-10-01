@@ -241,7 +241,7 @@ public class BootstrapControllersIntegrationTest {
 
     @ClusterTest
     public void testClientQuotasOperation(ClusterInstance clusterInstance) throws Exception {
-        try (Admin admin = Admin.create(adminConfig(clusterInstance, false))) {
+        try (Admin admin = Admin.create(adminConfig(clusterInstance, true))) {
             ClientQuotaEntity entity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, "user"));
             Map<String, Double> quotas = new HashMap<>();
             String testQuota = CONSUMER_BYTE_RATE_OVERRIDE_CONFIG;
