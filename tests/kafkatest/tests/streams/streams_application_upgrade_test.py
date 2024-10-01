@@ -55,7 +55,7 @@ class StreamsUpgradeTest(Test):
             node.version = KafkaVersion(to_version)
             self.kafka.start_node(node)
 
-    @cluster(num_nodes=6)
+    @cluster(num_nodes=9)
     @matrix(from_version=smoke_test_versions, bounce_type=["full", "rolling"], metadata_quorum=[quorum.combined_kraft])
     def test_app_upgrade(self, from_version, bounce_type, metadata_quorum):
         """
