@@ -152,7 +152,7 @@ class StreamsBrokerBounceTest(Test):
     def setup_system(self, start_processor=True, num_threads=3):
         # Setup phase
 
-        self.kafka = KafkaService(self.test_context, num_nodes=3, zk=None, topics=self.topics,
+        self.kafka = KafkaService(self.test_context, num_nodes=self.replication, zk=None, topics=self.topics,
                                   controller_num_nodes_override=1)
         self.kafka.start()
 
