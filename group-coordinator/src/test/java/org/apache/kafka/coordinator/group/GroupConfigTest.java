@@ -18,9 +18,9 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.errors.InvalidConfigurationException;
-
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigTest;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;

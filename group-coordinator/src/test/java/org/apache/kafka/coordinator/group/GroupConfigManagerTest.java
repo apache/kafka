@@ -18,8 +18,8 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.errors.InvalidRequestException;
-
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
