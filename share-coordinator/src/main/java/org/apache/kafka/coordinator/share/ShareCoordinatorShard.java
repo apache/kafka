@@ -314,7 +314,9 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         } else if (snapshotUpdateCount.getOrDefault(key, 0) >= config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot()) {
             ShareGroupOffset currentState = shareStateMap.get(key);
             if (currentState == null) {
-                throw new IllegalStateException("Cannot create share snapshot record.");
+                throw new IllegalStateException(
+                    String.format("Cannot create share snapshot record for key %s as current state is empty.", key.asCoordinatorKey())
+                );
             }
             // Since the number of update records for this share part key exceeds snapshotUpdateRecordsPerSnapshot,
             // we should be creating a share snapshot record.
@@ -336,7 +338,9 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             // the incoming partition data could have overlapping state batches, we must merge them
             ShareGroupOffset currentState = shareStateMap.get(key);
             if (currentState == null) {
-                throw new IllegalStateException("Cannot create share update record.");
+                throw new IllegalStateException(
+                    String.format("Cannot create share update record for key %s as current state is empty.", key.asCoordinatorKey())
+                );
             }
 
             return ShareCoordinatorRecordHelpers.newShareSnapshotUpdateRecord(
