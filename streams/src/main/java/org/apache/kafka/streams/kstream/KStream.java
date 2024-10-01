@@ -798,46 +798,6 @@ public interface KStream<K, V> {
     KStream<K, V> merge(final KStream<K, V> stream, final Named named);
 
     /**
-     * Materialize this stream to a topic and creates a new {@code KStream} from the topic using default serializers,
-     * deserializers, and producer's default partitioning strategy.
-     * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
-     * started).
-     * <p>
-     * This is similar to calling {@link #to(String) #to(someTopicName)} and
-     * {@link StreamsBuilder#stream(String) StreamsBuilder#stream(someTopicName)}.
-     * Note that {@code through()} uses a hard coded {@link org.apache.kafka.streams.processor.FailOnInvalidTimestamp
-     * timestamp extractor} and does not allow to customize it, to ensure correct timestamp propagation.
-     *
-     * @param topic the topic name
-     * @return a {@code KStream} that contains the exact same (and potentially repartitioned) records as this {@code KStream}
-     * @deprecated since 2.6; use {@link #repartition()} instead
-     */
-    // TODO: when removed, update `StreamsResetter` description of --intermediate-topics
-    @Deprecated
-    KStream<K, V> through(final String topic);
-
-    /**
-     * Materialize this stream to a topic and creates a new {@code KStream} from the topic using the
-     * {@link Produced} instance for configuration of the {@link Serde key serde}, {@link Serde value serde},
-     * and {@link StreamPartitioner}.
-     * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
-     * started).
-     * <p>
-     * This is similar to calling {@link #to(String, Produced) to(someTopic, Produced.with(keySerde, valueSerde)}
-     * and {@link StreamsBuilder#stream(String, Consumed) StreamsBuilder#stream(someTopicName, Consumed.with(keySerde, valueSerde))}.
-     * Note that {@code through()} uses a hard coded {@link org.apache.kafka.streams.processor.FailOnInvalidTimestamp
-     * timestamp extractor} and does not allow to customize it, to ensure correct timestamp propagation.
-     *
-     * @param topic     the topic name
-     * @param produced  the options to use when producing to the topic
-     * @return a {@code KStream} that contains the exact same (and potentially repartitioned) records as this {@code KStream}
-     * @deprecated since 2.6; use {@link #repartition(Repartitioned)} instead
-     */
-    @Deprecated
-    KStream<K, V> through(final String topic,
-                          final Produced<K, V> produced);
-
-    /**
      * Materialize this stream to an auto-generated repartition topic and create a new {@code KStream}
      * from the auto-generated topic using default serializers, deserializers, and producer's default partitioning strategy.
      * The number of partitions is determined based on the upstream topics partition numbers.

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
@@ -97,8 +96,6 @@ public class StateDirectory implements AutoCloseable {
     private final boolean hasNamedTopologies;
 
     private final HashMap<TaskId, Thread> lockedTasksToOwner = new HashMap<>();
-
-    private final HashMap<TaskId, BackoffRecord> lockedTasksToBackoffRecord = new HashMap<>();
 
     private FileChannel stateDirLockChannel;
     private FileLock stateDirLock;
@@ -356,11 +353,9 @@ public class StateDirectory implements AutoCloseable {
             if (lockOwner.equals(Thread.currentThread())) {
                 log.trace("{} Found cached state dir lock for task {}", logPrefix(), taskId);
                 // we already own the lock
-                lockedTasksToBackoffRecord.remove(taskId);
                 return true;
             } else {
                 // another thread owns the lock
-                updateOrCreateBackoffRecord(taskId, System.currentTimeMillis());
                 return false;
             }
         } else if (!stateDir.exists()) {
@@ -369,20 +364,7 @@ public class StateDirectory implements AutoCloseable {
         } else {
             lockedTasksToOwner.put(taskId, Thread.currentThread());
             // make sure the task directory actually exists, and create it if not
-            getOrCreateDirectoryForTask(taskId);
             return true;
-        }
-    }
-
-    public boolean canTryLock(final TaskId taskId, final long nowMs) {
-        return !lockedTasksToBackoffRecord.containsKey(taskId) || lockedTasksToBackoffRecord.get(taskId).canAttempt(nowMs);
-    }
-
-    private void updateOrCreateBackoffRecord(final TaskId taskId, final long nowMs) {
-        if (lockedTasksToBackoffRecord.containsKey(taskId)) {
-            lockedTasksToBackoffRecord.get(taskId).recordAttempt(nowMs);
-        } else {
-            lockedTasksToBackoffRecord.put(taskId, new BackoffRecord(nowMs));
         }
     }
 
@@ -695,27 +677,6 @@ public class StateDirectory implements AutoCloseable {
         @Override
         public int hashCode() {
             return Objects.hash(file, namedTopology);
-        }
-    }
-
-    public static class BackoffRecord {
-        private long attempts;
-        private long lastAttemptMs;
-        private static final ExponentialBackoff EXPONENTIAL_BACKOFF = new ExponentialBackoff(1, 2, 10000, 0.5);
-
-
-        public BackoffRecord(final long nowMs) {
-            this.attempts = 1;
-            this.lastAttemptMs = nowMs;
-        }
-
-        public void recordAttempt(final long nowMs) {
-            this.attempts++;
-            this.lastAttemptMs = nowMs;
-        }
-
-        public boolean canAttempt(final long nowMs) {
-            return  nowMs - lastAttemptMs >= EXPONENTIAL_BACKOFF.backoff(attempts);
         }
     }
 }
