@@ -49,8 +49,9 @@ import org.apache.kafka.coordinator.group.generated.{GroupMetadataValue, OffsetC
 import org.apache.kafka.server.common.{MetadataVersion, RequestLocal}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_1_IV0, IBP_2_1_IV0, IBP_2_1_IV1, IBP_2_3_IV0}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.KafkaScheduler
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, VerificationGuard}
 
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
