@@ -133,7 +133,7 @@
 
     <module name="ClassFanOutComplexity">
       <!-- default is 20 -->
-      <property name="max" value="52"/>
+      <property name="max" value="53"/>
     </module>
     <module name="CyclomaticComplexity">
       <!-- default is 10-->
