@@ -744,6 +744,7 @@ public class RemoteLogManagerTest {
         dummyFuture.complete(null);
         when(remoteLogMetadataManager.addRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadata.class))).thenReturn(dummyFuture);
         when(rlmCopyQuotaManager.getThrottleTimeMs()).thenReturn(quotaAvailableThrottleTime);
+        when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class))).thenReturn(dummyFuture);
 
         // throw exception when copyLogSegmentData
         when(remoteStorageManager.copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class)))
@@ -756,8 +757,8 @@ public class RemoteLogManagerTest {
         // verify the segment is deleted
         verify(remoteStorageManager, times(1)).deleteLogSegmentData(eq(remoteLogSegmentMetadataArg.getValue()));
 
-        // The metadata update should not be posted.
-        verify(remoteLogMetadataManager, never()).updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class));
+        // verify deletion state update
+        verify(remoteLogMetadataManager, times(2)).updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class));
 
         // Verify the metrics
         assertEquals(1, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyRequestRate().count());
@@ -2422,16 +2423,16 @@ public class RemoteLogManagerTest {
         when(mockLog.logEndOffset()).thenReturn(2000L);
 
         // creating remote log metadata list:
-        // s1. One segment with "COPY_SEGMENT_STARTED" state to simulate the segment was failing on copying to remote storage.
+        // s1. One segment with "COPY_SEGMENT_STARTED" state to simulate the segment was failing on copying to remote storage (dangling).
         //     it should be ignored for both remote log size calculation, but get deleted in the 1st run.
         // s2. One segment with "DELETE_SEGMENT_FINISHED" state to simulate the remoteLogMetadataManager doesn't filter it out and returned.
         //     We should filter it out when calculating remote storage log size and deletion
-        // s3. One segment with "DELETE_SEGMENT_STARTED" state to simulate the segment was failing on deleting remote log.
-        //     We should count it in when calculating remote storage log size.
+        // s3. One segment with "DELETE_SEGMENT_STARTED" state to simulate the segment was failing on deleting remote log (dangling).
+        //     We should NOT count it when calculating remote storage log size and we should retry deletion.
         // s4. Another segment with "COPY_SEGMENT_STARTED" state to simulate the segment is copying to remote storage.
         //     The segment state will change to "COPY_SEGMENT_FINISHED" state before checking deletion.
         //     In the 1st run, this segment should be skipped when calculating remote storage size.
-        //     In the 2nd run, we should count it in when calculating remote storage log size.
+        //     In the 2nd run, we should count it in when calculating remote storage size.
         // s5. 11 segments with "COPY_SEGMENT_FINISHED" state. These are expected to be counted in when calculating remote storage log size
         //
         // Expected results (retention.size is 10240 (10 segments)):
@@ -2469,7 +2470,7 @@ public class RemoteLogManagerTest {
         RemoteLogManager.RLMExpirationTask task = remoteLogManager.new RLMExpirationTask(leaderTopicIdPartition);
         task.cleanupExpiredRemoteLogSegments();
         verify(remoteStorageManager, times(2)).deleteLogSegmentData(any(RemoteLogSegmentMetadata.class));
-        verify(remoteStorageManager).deleteLogSegmentData(s1);
+        verify(remoteStorageManager).deleteLogSegmentData(s1); 
         // make sure the s2 segment with "DELETE_SEGMENT_FINISHED" state is not invoking "deleteLogSegmentData"
         verify(remoteStorageManager, never()).deleteLogSegmentData(s2);
         verify(remoteStorageManager).deleteLogSegmentData(s3);
