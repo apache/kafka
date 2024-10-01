@@ -769,7 +769,6 @@ public class OffsetsRequestManagerTest {
         verify(commitRequestManager).fetchOffsets(initPartitions1, internalFetchCommittedTimeout);
         clearInvocations(commitRequestManager);
 
-
         // tp2 added to the assignment when the Offset Fetch request is already sent including tp1 only
         TopicPartition tp2 = new TopicPartition("topic2", 2);
         Set<TopicPartition> initPartitions2 = new HashSet<>(Arrays.asList(tp1, tp2));
