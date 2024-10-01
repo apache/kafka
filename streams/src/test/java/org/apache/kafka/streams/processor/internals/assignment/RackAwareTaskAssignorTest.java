@@ -28,7 +28,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
-import org.apache.kafka.test.MockClientSupplier;
+import org.apache.kafka.test.MockClientInterceptor;
 import org.apache.kafka.test.MockInternalTopicManager;
 
 import org.junit.jupiter.api.Assertions;
@@ -124,7 +124,7 @@ public class RackAwareTaskAssignorTest {
 
     private final MockTime time = new MockTime();
     private final StreamsConfig streamsConfig = new StreamsConfig(configProps(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC));
-    private final MockClientSupplier mockClientSupplier = new MockClientSupplier();
+    private final MockClientInterceptor mockClientInterceptor = new MockClientInterceptor();
 
     private int trafficCost;
     private int nonOverlapCost;
@@ -132,7 +132,7 @@ public class RackAwareTaskAssignorTest {
     private final MockInternalTopicManager mockInternalTopicManager = new MockInternalTopicManager(
             time,
             streamsConfig,
-            mockClientSupplier.restoreConsumer,
+            mockClientInterceptor.restoreConsumer,
             false
     );
 

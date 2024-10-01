@@ -28,7 +28,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.KafkaClientSupplier;
+import org.apache.kafka.streams.KafkaClientInterceptor;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -38,7 +38,6 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.TaskManager;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
@@ -124,15 +123,15 @@ public class StreamsUpgradeTest {
         config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class.getName());
         config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class.getName());
 
-        final KafkaClientSupplier kafkaClientSupplier;
+        final KafkaClientInterceptor clientInterceptor;
         if (streamsProperties.containsKey("test.future.metadata")) {
-            kafkaClientSupplier = new FutureKafkaClientSupplier();
+            clientInterceptor = new FutureKafkaClientInterceptor();
         } else {
-            kafkaClientSupplier = new DefaultKafkaClientSupplier();
+            clientInterceptor = new KafkaClientInterceptor();
         }
         config.putAll(streamsProperties);
 
-        return new KafkaStreams(builder.build(), config, kafkaClientSupplier);
+        return new KafkaStreams(builder.build(), config, clientInterceptor);
     }
 
     private static void buildFKTable(final KStream<String, Integer> primaryTable,
@@ -144,9 +143,10 @@ public class StreamsUpgradeTest {
         kStream.to("fk-result", Produced.with(stringSerde, stringSerde));
     }
 
-    private static class FutureKafkaClientSupplier extends DefaultKafkaClientSupplier {
+    private static class FutureKafkaClientInterceptor extends KafkaClientInterceptor {
         @Override
-        public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
+        public Consumer<byte[], byte[]> wrapMainConsumer(final KafkaConsumer<byte[], byte[]> consumer) {
+            // TODO: verify if this test setup will work with KIP-1071
             config.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, FutureStreamsPartitionAssignor.class.getName());
             return new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
         }

@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Metric;
@@ -25,6 +26,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.KafkaClientInterceptor;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -58,6 +60,7 @@ class ActiveTaskCreator {
     private final ThreadCache cache;
     private final Time time;
     private final KafkaClientSupplier clientSupplier;
+    private final KafkaClientInterceptor interceptorSupplier;
     private final String threadId;
     private final int threadIdx;
     private final UUID processId;
@@ -78,6 +81,7 @@ class ActiveTaskCreator {
                       final ThreadCache cache,
                       final Time time,
                       final KafkaClientSupplier clientSupplier,
+                      final KafkaClientInterceptor interceptorSupplier,
                       final String threadId,
                       final int threadIdx,
                       final UUID processId,
@@ -92,6 +96,7 @@ class ActiveTaskCreator {
         this.cache = cache;
         this.time = time;
         this.clientSupplier = clientSupplier;
+        this.interceptorSupplier = interceptorSupplier;
         this.threadId = threadId;
         this.threadIdx = threadIdx;
         this.processId = processId;
@@ -121,7 +126,11 @@ class ActiveTaskCreator {
                 applicationConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG) + "-" + processId + "-" + threadIdx
             );
         }
-        return clientSupplier.getProducer(producerConfig);
+        if (clientSupplier != null) {
+            return clientSupplier.getProducer(producerConfig);
+        } else {
+            return interceptorSupplier.wrapProducer(new KafkaProducer<>(producerConfig));
+        }
     }
 
     public void reInitializeThreadProducer() {

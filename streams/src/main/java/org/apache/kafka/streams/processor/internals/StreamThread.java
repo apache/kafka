@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
@@ -38,6 +39,7 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.KafkaClientInterceptor;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
@@ -355,6 +357,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     public static StreamThread create(final TopologyMetadata topologyMetadata,
                                       final StreamsConfig config,
                                       final KafkaClientSupplier clientSupplier,
+                                      final KafkaClientInterceptor interceptorSupplier,
                                       final Admin adminClient,
                                       final UUID processId,
                                       final String clientId,
@@ -382,7 +385,14 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         log.info("Creating restore consumer client");
         final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(restoreConsumerClientId(threadId));
-        final Consumer<byte[], byte[]> restoreConsumer = clientSupplier.getRestoreConsumer(restoreConsumerConfigs);
+        final Consumer<byte[], byte[]> restoreConsumer;
+        if (clientSupplier != null) {
+            restoreConsumer = clientSupplier.getRestoreConsumer(restoreConsumerConfigs);
+        } else if (interceptorSupplier == null) {
+            restoreConsumer = new KafkaConsumer<>(restoreConsumerConfigs, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        } else {
+            restoreConsumer = interceptorSupplier.wrapRestoreConsumer(new KafkaConsumer<>(restoreConsumerConfigs, new ByteArrayDeserializer(), new ByteArrayDeserializer()));
+        }
 
         final StoreChangelogReader changelogReader = new StoreChangelogReader(
             time,
@@ -407,6 +417,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             cache,
             time,
             clientSupplier,
+            interceptorSupplier,
             threadId,
             threadIdx,
             processId,
@@ -470,7 +481,14 @@ public class StreamThread extends Thread implements ProcessingThread {
             consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
         }
 
-        final Consumer<byte[], byte[]> mainConsumer = clientSupplier.getConsumer(consumerConfigs);
+        final Consumer<byte[], byte[]> mainConsumer;
+        if (clientSupplier != null) {
+            mainConsumer = clientSupplier.getConsumer(consumerConfigs);
+        } else if (interceptorSupplier == null) {
+            mainConsumer = new KafkaConsumer<>(consumerConfigs, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        } else {
+            mainConsumer = interceptorSupplier.wrapMainConsumer(new KafkaConsumer<>(consumerConfigs, new ByteArrayDeserializer(), new ByteArrayDeserializer()));
+        }
         taskManager.setMainConsumer(mainConsumer);
         referenceContainer.mainConsumer = mainConsumer;
 

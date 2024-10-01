@@ -1201,6 +1201,7 @@ public class StreamsConfigTest {
         assertEquals("LegacyStickyTaskAssignor", new StreamsConfig(props).getString(TASK_ASSIGNOR_CLASS_CONFIG));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldReturnDefaultClientSupplier() {
         final KafkaClientSupplier supplier = streamsConfig.getKafkaClientSupplier();

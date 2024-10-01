@@ -17,26 +17,30 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.streams.KafkaClientSupplier;
+import org.apache.kafka.streams.KafkaClientInterceptor;
+import org.apache.kafka.streams.StreamsConfig;
 
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
+import static org.hamcrest.CoreMatchers.startsWith;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.startsWith;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
-public class MockClientSupplier implements KafkaClientSupplier {
+public class MockClientInterceptor extends KafkaClientInterceptor {
     private static final ByteArraySerializer BYTE_ARRAY_SERIALIZER = new ByteArraySerializer();
 
     private Cluster cluster;
@@ -48,17 +52,19 @@ public class MockClientSupplier implements KafkaClientSupplier {
     public final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     public final MockConsumer<byte[], byte[]> restoreConsumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
 
-    public void setApplicationIdForProducer(final String applicationId) {
-        this.applicationId = applicationId;
-    }
-
     public void setCluster(final Cluster cluster) {
         this.cluster = cluster;
         this.adminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(-1));
     }
 
     @Override
-    public Admin getAdmin(final Map<String, Object> config) {
+    public void configure(final Map<String, ?> config) {
+        super.configure(config);
+        this.applicationId = (String) config.get(StreamsConfig.APPLICATION_ID_CONFIG);
+    }
+
+    @Override
+    public Admin wrapAdminClient(final KafkaAdminClient admin) {
         return adminClient;
     }
 
@@ -67,13 +73,7 @@ public class MockClientSupplier implements KafkaClientSupplier {
     }
 
     @Override
-    public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
-        if (applicationId != null) {
-            assertThat((String) config.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG), startsWith(applicationId + "-"));
-        } else {
-            assertFalse(config.containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG));
-        }
-
+    public Producer<byte[], byte[]> wrapProducer(final KafkaProducer<byte[], byte[]> kafkaProducer) {
         final MockProducer<byte[], byte[]> producer;
         if (preparedProducers.isEmpty()) {
             producer = new MockProducer<>(cluster, true, BYTE_ARRAY_SERIALIZER, BYTE_ARRAY_SERIALIZER);
@@ -86,17 +86,17 @@ public class MockClientSupplier implements KafkaClientSupplier {
     }
 
     @Override
-    public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
+    public Consumer<byte[], byte[]> wrapMainConsumer(final KafkaConsumer<byte[], byte[]> kafkaConsumer) {
         return consumer;
     }
 
     @Override
-    public Consumer<byte[], byte[]> getRestoreConsumer(final Map<String, Object> config) {
+    public Consumer<byte[], byte[]> wrapRestoreConsumer(final KafkaConsumer<byte[], byte[]> kafkaConsumer) {
         return restoreConsumer;
     }
 
     @Override
-    public Consumer<byte[], byte[]> getGlobalConsumer(final Map<String, Object> config) {
+    public Consumer<byte[], byte[]> wrapGlobalConsumer(final KafkaConsumer<byte[], byte[]> kafkaConsumer) {
         return restoreConsumer;
     }
 }

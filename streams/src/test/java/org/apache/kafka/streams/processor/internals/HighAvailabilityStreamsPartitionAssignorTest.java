@@ -36,7 +36,7 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 import org.apache.kafka.test.MockApiProcessorSupplier;
-import org.apache.kafka.test.MockClientSupplier;
+import org.apache.kafka.test.MockClientInterceptor;
 import org.apache.kafka.test.MockInternalTopicManager;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
 
@@ -102,7 +102,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         emptySet());
 
     private final StreamsPartitionAssignor partitionAssignor = new StreamsPartitionAssignor();
-    private final MockClientSupplier mockClientSupplier = new MockClientSupplier();
+    private final MockClientInterceptor mockClientInterceptor = new MockClientInterceptor();
     private static final String USER_END_POINT = "localhost:8080";
     private static final String APPLICATION_ID = "stream-partition-assignor-test";
 
@@ -158,7 +158,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         final MockInternalTopicManager mockInternalTopicManager = new MockInternalTopicManager(
             time,
             streamsConfig,
-            mockClientSupplier.restoreConsumer,
+            mockClientInterceptor.restoreConsumer,
             false
         );
         partitionAssignor.setInternalTopicManager(mockInternalTopicManager);
