@@ -882,6 +882,16 @@ public class StateDirectoryTest {
     }
 
     @Test
+    public void shouldUnlockPendingTasksOnClose() {
+        final TaskId taskId = new TaskId(0, 0);
+        initializeTasksForLocalState(taskId, true);
+
+        assertEquals(Thread.currentThread(), directory.lockOwner(taskId));
+        directory.closePendingTasks();
+        assertNull(directory.lockOwner(taskId));
+    }
+
+    @Test
     public void shouldClosePendingTasksOnDirectoryClose() {
         final StateStore store = initializeTasksForLocalState(new TaskId(0, 0), true);
 
@@ -895,7 +905,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldClosePendingTasksOnAutoCleanUp() {
+    public void shouldNotClosePendingTasksOnAutoCleanUp() {
         // we need to set this because the auto-cleanup uses the last-modified time from the filesystem,
         // which can't be mocked
         time.setCurrentTimeMs(System.currentTimeMillis());
@@ -905,18 +915,12 @@ public class StateDirectoryTest {
         assertTrue(directory.hasPendingTasks());
         assertTrue(store.isOpen());
 
-        directory.cleanRemovedTasks(1000);
-
-        // should not have been cleaned up yet, not enough time has elapsed
-        assertTrue(directory.hasPendingTasks());
-        assertTrue(store.isOpen());
-
         time.sleep(10000);
 
         directory.cleanRemovedTasks(1000);
 
-        assertFalse(directory.hasPendingTasks());
-        assertFalse(store.isOpen());
+        assertTrue(directory.hasPendingTasks());
+        assertTrue(store.isOpen());
     }
 
     private StateStore initializeTasksForLocalState(final TaskId taskId, final boolean createTaskDir) {

@@ -580,7 +580,7 @@ public class StateDirectory implements AutoCloseable {
         for (final TaskDirectory taskDir : listAllTaskDirectories()) {
             final String dirName = taskDir.file().getName();
             final TaskId id = parseTaskDirectoryName(dirName, taskDir.namedTopology());
-            if (!lockedTasksToOwner.containsKey(id) || tasksForLocalState.containsKey(id)) {
+            if (!lockedTasksToOwner.containsKey(id)) {
                 try {
                     if (lock(id)) {
                         final long now = time.milliseconds();
