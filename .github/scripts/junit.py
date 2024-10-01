@@ -23,6 +23,7 @@ import os.path
 import sys
 from typing import Tuple, Optional, List, Iterable
 import xml.etree.ElementTree
+import html
 
 
 logger = logging.getLogger()
@@ -37,10 +38,14 @@ FLAKY = "FLAKY ⚠️ "
 SKIPPED = "SKIPPED 🙈"
 
 
-def get_env(key: str) -> str:
+def get_env(key: str, fn = str) -> Optional:
     value = os.getenv(key)
-    logger.debug(f"Read env {key}: {value}")
-    return value
+    if value is None:
+        logger.debug(f"Could not find env {key}")
+        return None
+    else:
+        logger.debug(f"Read env {key}: {value}")
+        return fn(value)
 
 
 @dataclasses.dataclass
@@ -95,6 +100,9 @@ def parse_report(workspace_path, report_path, fp) -> Iterable[TestSuite]:
                 test_case_failed = False
             elif elem.tag == "failure":
                 failure_message = elem.get("message")
+                if failure_message:
+                    failure_message = html.escape(failure_message)
+                    failure_message = failure_message.replace('\n', '<br>').replace('\r', '<br>')
                 failure_class = elem.get("type")
                 failure_stack_trace = elem.text
                 failure = partial_test_case(failure_message, failure_class, failure_stack_trace)
@@ -152,7 +160,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     reports = glob(pathname=args.path, recursive=True)
-    logger.debug(f"Found {len(reports)} JUnit results")
+    logger.info(f"Found {len(reports)} JUnit results")
     workspace_path = get_env("GITHUB_WORKSPACE") # e.g., /home/runner/work/apache/kafka
 
     total_file_count = 0
@@ -169,6 +177,7 @@ if __name__ == "__main__":
     flaky_table = []
     skipped_table = []
 
+    logger.debug(f"::group::Parsing {len(reports)} JUnit Report Files")
     for report in reports:
         with open(report, "r") as fp:
             logger.debug(f"Parsing {report}")
@@ -207,11 +216,12 @@ if __name__ == "__main__":
                     simple_class_name = skipped_test.class_name.split(".")[-1]
                     logger.debug(f"Found skipped test: {skipped_test}")
                     skipped_table.append((simple_class_name, skipped_test.test_name))
+    logger.debug("::endgroup::")
     duration = pretty_time_duration(total_time)
     logger.info(f"Finished processing {len(reports)} reports")
 
     # Print summary
-    report_url = get_env("REPORT_URL")
+    report_url = get_env("JUNIT_REPORT_URL")
     report_md = f"Download [HTML report]({report_url})."
     summary = (f"{total_run} tests cases run in {duration}. "
                f"{total_success} {PASSED}, {total_failures} {FAILED}, "
@@ -248,12 +258,29 @@ if __name__ == "__main__":
             print(f"| {row_joined} |")
         print("\n</details>")
 
-    logger.debug(summary)
-    if total_failures > 0:
-        logger.debug(f"Failing this step due to {total_failures} test failures")
+    # Print special message if there was a timeout
+    exit_code = get_env("GRADLE_EXIT_CODE", int)
+    if exit_code == 124:
+        thread_dump_url = get_env("THREAD_DUMP_URL")
+        logger.debug(f"Gradle command timed out. These are partial results!")
+        logger.debug(summary)
+        if thread_dump_url:
+            print(f"\nThe JUnit tests were cancelled due to a timeout. Thread dumps were generated before the job was cancelled. "
+                  f"Download [thread dumps]({thread_dump_url}).\n")
+            logger.debug(f"Failing this step because the tests timed out. Thread dumps were taken and archived here: {thread_dump_url}")
+        else:
+            logger.debug(f"Failing this step because the tests timed out. Thread dumps were not archived, check logs in JUnit step.")
         exit(1)
-    elif total_errors > 0:
-        logger.debug(f"Failing this step due to {total_errors} test errors")
-        exit(1)
+    elif exit_code in (0, 1):
+        logger.debug(summary)
+        if total_failures > 0:
+            logger.debug(f"Failing this step due to {total_failures} test failures")
+            exit(1)
+        elif total_errors > 0:
+            logger.debug(f"Failing this step due to {total_errors} test errors")
+            exit(1)
+        else:
+            exit(0)
     else:
-        exit(0)
+        logger.debug(f"Gradle had unexpected exit code {exit_code}. Failing this step")
+        exit(1)

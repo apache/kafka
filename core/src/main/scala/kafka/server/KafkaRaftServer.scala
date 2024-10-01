@@ -71,8 +71,8 @@ class KafkaRaftServer(
     metaPropsEnsemble,
     time,
     metrics,
-    CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumVoters)),
-    QuorumConfig.parseBootstrapServers(config.quorumBootstrapServers),
+    CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig.voters)),
+    QuorumConfig.parseBootstrapServers(config.quorumConfig.bootstrapServers),
     new StandardFaultHandlerFactory(),
     KafkaServerSocketFactory.INSTANCE,
   )

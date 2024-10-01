@@ -181,7 +181,7 @@ public class FetcherTest {
     private final int maxBytes = Integer.MAX_VALUE;
     private final int maxWaitMs = 0;
     private final long retryBackoffMs = 100;
-    private final long requestTimeoutMs = 30000;
+    private final int requestTimeoutMs = 30000;
     private final ApiVersions apiVersions = new ApiVersions();
     private int fetchSize = 1000;
     private MockTime time = new MockTime(1);

@@ -196,6 +196,7 @@ class MetadataVersionTest {
         assertEquals(IBP_4_0_IV0, MetadataVersion.fromVersionString("4.0-IV0"));
         assertEquals(IBP_4_0_IV1, MetadataVersion.fromVersionString("4.0-IV1"));
         assertEquals(IBP_4_0_IV2, MetadataVersion.fromVersionString("4.0-IV2"));
+        assertEquals(IBP_4_0_IV3, MetadataVersion.fromVersionString("4.0-IV3"));
     }
 
     @Test
@@ -260,6 +261,7 @@ class MetadataVersionTest {
         assertEquals("4.0", IBP_4_0_IV0.shortVersion());
         assertEquals("4.0", IBP_4_0_IV1.shortVersion());
         assertEquals("4.0", IBP_4_0_IV2.shortVersion());
+        assertEquals("4.0", IBP_4_0_IV3.shortVersion());
     }
 
     @Test
@@ -313,6 +315,7 @@ class MetadataVersionTest {
         assertEquals("4.0-IV0", IBP_4_0_IV0.version());
         assertEquals("4.0-IV1", IBP_4_0_IV1.version());
         assertEquals("4.0-IV2", IBP_4_0_IV2.version());
+        assertEquals("4.0-IV3", IBP_4_0_IV3.version());
     }
 
     @Test
@@ -492,5 +495,16 @@ class MetadataVersionTest {
     @Test
     public void assertLatestIsNotProduction() {
         assertFalse(MetadataVersion.latestTesting().isProduction());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
+    public void testListOffsetsValueVersion(MetadataVersion metadataVersion) {
+        final short expectedVersion = 10;
+        if (metadataVersion.isAtLeast(IBP_4_0_IV3)) {
+            assertEquals(expectedVersion, metadataVersion.listOffsetRequestVersion());
+        } else {
+            assertTrue(metadataVersion.listOffsetRequestVersion() < expectedVersion);
+        }
     }
 }
