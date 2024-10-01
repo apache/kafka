@@ -17,9 +17,6 @@
 
 package org.apache.kafka.common.test.api;
 
-import org.apache.kafka.common.test.ClusterConfig;
-import org.apache.kafka.common.test.api.ClusterTemplate;
-
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtensionContext;

@@ -17,7 +17,6 @@
 
 package org.apache.kafka.common.test.api;
 
-import org.apache.kafka.common.test.api.ClusterTestExtensions;
 
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;

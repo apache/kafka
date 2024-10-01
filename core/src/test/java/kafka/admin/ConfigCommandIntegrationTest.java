@@ -19,7 +19,7 @@ package kafka.admin;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.common.config.ConfigResource;
-import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.test.api.Type;

@@ -18,8 +18,8 @@
 package org.apache.kafka.common.test.api;
 
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.server.common.MetadataVersion;
-import org.apache.kafka.common.test.api.Type;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;

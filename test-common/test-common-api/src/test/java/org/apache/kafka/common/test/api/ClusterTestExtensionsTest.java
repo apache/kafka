@@ -26,14 +26,6 @@ import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.server.common.MetadataVersion;
-import org.apache.kafka.common.test.api.AutoStart;
-import org.apache.kafka.common.test.api.ClusterConfigProperty;
-import org.apache.kafka.common.test.api.ClusterTemplate;
-import org.apache.kafka.common.test.api.ClusterTest;
-import org.apache.kafka.common.test.api.ClusterTestDefaults;
-import org.apache.kafka.common.test.api.ClusterTests;
-import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.common.test.api.ClusterTestExtensions;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.extension.ExtendWith;

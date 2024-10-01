@@ -28,9 +28,8 @@ import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.server.authorizer.Authorizer;
-import org.apache.kafka.common.test.api.ClusterTest;
-import org.apache.kafka.common.test.api.Type;
 
 import java.util.ArrayList;
 import java.util.Collection;

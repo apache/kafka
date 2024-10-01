@@ -19,7 +19,7 @@ package kafka.coordinator.transaction
 
 import kafka.network.SocketServer
 import kafka.server.IntegrationTestUtils
-import org.apache.kafka.common.test.ClusterInstance
+import org.apache.kafka.common.test.api.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, ClusterTests, Type}
 import org.apache.kafka.common.test.api.ClusterTestExtensions
 import org.apache.kafka.common.message.InitProducerIdRequestData

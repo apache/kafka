@@ -17,9 +17,6 @@
 
 package org.apache.kafka.common.test.api;
 
-import org.apache.kafka.common.test.ClusterConfig;
-import org.apache.kafka.common.test.ClusterGenerator;
-
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestTemplate;
 import org.junit.jupiter.api.Timeout;

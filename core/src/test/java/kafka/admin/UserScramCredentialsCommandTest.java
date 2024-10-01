@@ -16,7 +16,7 @@
  */
 package kafka.admin;
 
-import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.utils.Exit;

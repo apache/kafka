@@ -390,6 +390,8 @@ public class MockController implements Controller {
                     case DELETE:
                         configs.getOrDefault(resource, Collections.emptyMap()).remove(key);
                         break;
+                    default:
+                        break;
                 }
             }
         }

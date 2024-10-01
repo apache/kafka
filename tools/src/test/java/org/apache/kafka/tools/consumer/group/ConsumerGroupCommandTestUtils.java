@@ -20,7 +20,7 @@ package org.apache.kafka.tools.consumer.group;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.test.ClusterConfig;
+import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.utils.Utils;
 
 import java.time.Duration;

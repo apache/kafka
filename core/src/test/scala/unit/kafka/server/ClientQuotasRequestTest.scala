@@ -20,7 +20,7 @@ package kafka.server
 import java.net.InetAddress
 import java.util
 import java.util.concurrent.{ExecutionException, TimeUnit}
-import org.apache.kafka.common.test.ClusterInstance
+import org.apache.kafka.common.test.api.ClusterInstance
 import org.apache.kafka.common.test.api.ClusterTest
 import org.apache.kafka.common.test.api.ClusterTestExtensions
 import kafka.utils.TestUtils

@@ -20,7 +20,6 @@ package org.apache.kafka.common.test.api;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
-import org.apache.kafka.common.test.api.Type;
 
 import java.io.File;
 import java.util.ArrayList;

@@ -16,7 +16,7 @@
  */
 package kafka.server
 
-import org.apache.kafka.common.test.ClusterInstance
+import org.apache.kafka.common.test.api.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.common.test.api.ClusterTestExtensions
 
