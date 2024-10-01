@@ -50,7 +50,7 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
   }
 
   @ClusterTest(
-    types = Array(Type.ZK, Type.KRAFT, Type.CO_KRAFT),
+    types = Array(Type.KRAFT, Type.CO_KRAFT),
     serverProperties = Array(
       new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
       new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),

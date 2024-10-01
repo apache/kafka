@@ -192,6 +192,45 @@ public class ShareConsumerImplTest {
     }
 
     @Test
+    public void testWakeupAfterEmptyFetch() {
+        consumer = newConsumer();
+        final String topicName = "foo";
+        final int partition = 3;
+        doAnswer(invocation -> {
+            consumer.wakeup();
+            return ShareFetch.empty();
+        }).doAnswer(invocation -> ShareFetch.empty()).when(fetchCollector).collect(any(ShareFetchBuffer.class));
+
+        consumer.subscribe(singletonList(topicName));
+
+        assertThrows(WakeupException.class, () -> consumer.poll(Duration.ofMinutes(1)));
+        assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
+    }
+
+    @Test
+    public void testWakeupAfterNonEmptyFetch() {
+        consumer = newConsumer();
+        final String topicName = "foo";
+        final int partition = 3;
+        final TopicIdPartition tip = new TopicIdPartition(Uuid.randomUuid(), partition, topicName);
+        final ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(tip);
+        batch.addRecord(new ConsumerRecord<>(topicName, partition, 2, "key1", "value1"));
+        doAnswer(invocation -> {
+            consumer.wakeup();
+            final ShareFetch<String, String> fetch = ShareFetch.empty();
+            fetch.add(tip, batch);
+            return fetch;
+        }).when(fetchCollector).collect(Mockito.any(ShareFetchBuffer.class));
+
+        consumer.subscribe(singletonList(topicName));
+
+        // since wakeup() is called when the non-empty fetch is returned the wakeup should be ignored
+        assertDoesNotThrow(() -> consumer.poll(Duration.ofMinutes(1)));
+        // the previously ignored wake-up should not be ignored in the next call
+        assertThrows(WakeupException.class, () -> consumer.poll(Duration.ZERO));
+    }
+
+    @Test
     public void testFailOnClosedConsumer() {
         consumer = newConsumer();
         completeShareAcknowledgeOnCloseApplicationEventSuccessfully();

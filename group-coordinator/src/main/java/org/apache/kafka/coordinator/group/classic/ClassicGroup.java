@@ -610,13 +610,6 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * @return The set of pending join members.
-     */
-    public Set<String> pendingJoinMembers() {
-        return Collections.unmodifiableSet(pendingJoinMembers);
-    }
-
-    /**
      * Add a pending member.
      *
      * @param memberId the member id.

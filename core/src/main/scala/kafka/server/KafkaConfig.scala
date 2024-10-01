@@ -231,6 +231,9 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   private val _remoteLogManagerConfig = new RemoteLogManagerConfig(this)
   def remoteLogManagerConfig = _remoteLogManagerConfig
 
+  private val _quorumConfig = new QuorumConfig(this)
+  def quorumConfig: QuorumConfig = _quorumConfig
+
   private val _groupCoordinatorConfig = new GroupCoordinatorConfig(this)
 
   def groupCoordinatorConfig: GroupCoordinatorConfig = _groupCoordinatorConfig
@@ -664,16 +667,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   def lz4CompressionLevel = getInt(ServerConfigs.COMPRESSION_LZ4_LEVEL_CONFIG)
   def zstdCompressionLevel = getInt(ServerConfigs.COMPRESSION_ZSTD_LEVEL_CONFIG)
 
-  /** ********* Raft Quorum Configuration *********/
-  val quorumVoters = getList(QuorumConfig.QUORUM_VOTERS_CONFIG)
-  val quorumBootstrapServers = getList(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG)
-  val quorumElectionTimeoutMs = getInt(QuorumConfig.QUORUM_ELECTION_TIMEOUT_MS_CONFIG)
-  val quorumFetchTimeoutMs = getInt(QuorumConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG)
-  val quorumElectionBackoffMs = getInt(QuorumConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG)
-  val quorumLingerMs = getInt(QuorumConfig.QUORUM_LINGER_MS_CONFIG)
-  val quorumRequestTimeoutMs = getInt(QuorumConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG)
-  val quorumRetryBackoffMs = getInt(QuorumConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG)
-
   /** Internal Configurations **/
   val unstableApiVersionsEnabled = getBoolean(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG)
   val unstableFeatureVersionsEnabled = getBoolean(ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG)
@@ -878,9 +871,9 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     val advertisedBrokerListenerNames = effectiveAdvertisedBrokerListeners.map(_.listenerName).toSet
 
     // validate KRaft-related configs
-    val voterIds = QuorumConfig.parseVoterIds(quorumVoters)
+    val voterIds = QuorumConfig.parseVoterIds(quorumConfig.voters)
     def validateQuorumVotersAndQuorumBootstrapServerForKRaft(): Unit = {
-      if (voterIds.isEmpty && quorumBootstrapServers.isEmpty) {
+      if (voterIds.isEmpty && quorumConfig.bootstrapServers.isEmpty) {
         throw new ConfigException(
           s"""If using ${KRaftConfigs.PROCESS_ROLES_CONFIG}, either ${QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG} must
           |contain the set of bootstrap controllers or ${QuorumConfig.QUORUM_VOTERS_CONFIG} must contain a parseable
@@ -889,7 +882,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       }
     }
     def validateQuorumVotersAndQuorumBootstrapServerForMigration(): Unit = {
-      if (voterIds.isEmpty && quorumBootstrapServers.isEmpty) {
+      if (voterIds.isEmpty && quorumConfig.bootstrapServers.isEmpty) {
         throw new ConfigException(
           s"""If using ${KRaftConfigs.MIGRATION_ENABLED_CONFIG}, either ${QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG} must
           |contain the set of bootstrap controllers or ${QuorumConfig.QUORUM_VOTERS_CONFIG} must contain a parseable
