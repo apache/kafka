@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals.metrics;
 
-import org.apache.kafka.clients.consumer.internals.HeartbeatRequestManager;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.common.Uuid;
@@ -127,8 +126,7 @@ public class NetworkThreadMetricsManager {
 
         if (isNewEvent) {
             applicationEventQueueMap.put(id, nowMs);
-        }
-        else {
+        } else {
             long timeSinceEventAdded = nowMs - applicationEventQueueMap.get(id);
             applicationEventQueueChangeSensor.record(timeSinceEventAdded);
             applicationEventQueueMap.remove(id);
@@ -146,8 +144,7 @@ public class NetworkThreadMetricsManager {
     public void recordUnsentRequestsQueueChange(NetworkClientDelegate.UnsentRequest request, long nowMs, boolean isNewRequest) {
         if (isNewRequest) {
             unsentRequestsQueueMap.put(request, nowMs);
-        }
-        else {
+        } else {
             long timeSinceRequestAdded = nowMs - unsentRequestsQueueMap.get(request);
             unsentRequestsQueueSensor.record(timeSinceRequestAdded);
             unsentRequestsQueueMap.remove(request);

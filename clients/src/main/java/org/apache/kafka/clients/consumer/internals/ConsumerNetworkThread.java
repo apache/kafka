@@ -24,7 +24,6 @@ import org.apache.kafka.clients.consumer.internals.events.CompletableEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.clients.consumer.internals.metrics.NetworkThreadMetricsManager;
 import org.apache.kafka.common.internals.IdempotentCloser;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
@@ -91,7 +90,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         this.requestManagersSupplier = requestManagersSupplier;
         this.running = true;
         this.metricsManager = metricsManager;
-        this.usingMetrics = (metricsManager != null);
+        this.usingMetrics = metricsManager != null;
     }
 
     @Override
