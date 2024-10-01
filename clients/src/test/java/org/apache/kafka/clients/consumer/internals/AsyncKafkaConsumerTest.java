@@ -1713,7 +1713,7 @@ public class AsyncKafkaConsumerTest {
         consumer.subscribe(singletonList("topic1"));
         consumer.poll(Duration.ofMillis(100));
         verify(applicationEventHandler).add(any(PollEvent.class));
-        verify(applicationEventHandler).addAndGet(any(CreateFetchRequestsEvent.class));
+        verify(applicationEventHandler).add(any(CreateFetchRequestsEvent.class));
     }
 
     private Properties requiredConsumerConfigAndGroupId(final String groupId) {
