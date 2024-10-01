@@ -37,7 +37,8 @@ public class PersisterStateBatchCombiner {
         long startOffset
     ) {
         initializeCombinedList(batchesSoFar, newBatches);
-        finalBatchList = new ArrayList<>(combinedBatchList.size() * 2);   // heuristic size
+        int estimatedResultSize = (combinedBatchList.size() * 3) / 2;   // heuristic size - 50% overallocation
+        finalBatchList = new ArrayList<>(estimatedResultSize);
         this.startOffset = startOffset;
     }
 

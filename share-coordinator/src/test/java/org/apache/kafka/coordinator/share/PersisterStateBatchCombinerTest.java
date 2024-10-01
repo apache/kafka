@@ -38,20 +38,24 @@ public class PersisterStateBatchCombinerTest {
         final long startOffset;
         final boolean shouldRun;
 
-        BatchTestHolder(String testName,
-                        List<PersisterStateBatch> batchesSoFar,
-                        List<PersisterStateBatch> newBatches,
-                        List<PersisterStateBatch> expectedResult,
-                        long startOffset) {
+        BatchTestHolder(
+            String testName,
+            List<PersisterStateBatch> batchesSoFar,
+            List<PersisterStateBatch> newBatches,
+            List<PersisterStateBatch> expectedResult,
+            long startOffset
+        ) {
             this(testName, batchesSoFar, newBatches, expectedResult, startOffset, false);
         }
 
-        BatchTestHolder(String testName,
-                        List<PersisterStateBatch> batchesSoFar,
-                        List<PersisterStateBatch> newBatches,
-                        List<PersisterStateBatch> expectedResult,
-                        long startOffset,
-                        boolean shouldRun) {
+        BatchTestHolder(
+            String testName,
+            List<PersisterStateBatch> batchesSoFar,
+            List<PersisterStateBatch> newBatches,
+            List<PersisterStateBatch> expectedResult,
+            long startOffset,
+            boolean shouldRun
+        ) {
             this.testName = testName;
             this.batchesSoFar = batchesSoFar;
             this.newBatches = newBatches;
