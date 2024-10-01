@@ -20,7 +20,6 @@ import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -35,13 +34,13 @@ import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
-import org.apache.kafka.test.MockClientSupplier;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -54,7 +53,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -94,41 +92,31 @@ public class StreamsProducerTest {
         Collections.emptySet()
     );
 
-    private final StreamsConfig nonEosConfig = new StreamsConfig(mkMap(
-        mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
-        mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"))
-    );
-
-    private final StreamsConfig eosConfig = new StreamsConfig(mkMap(
-        mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
-        mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
-        mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2))
-    );
-
     private final Time mockTime = mock(Time.class);
 
     @SuppressWarnings("unchecked")
     final Producer<byte[], byte[]> mockedProducer = mock(Producer.class);
-    final StreamsProducer streamsProducerWithMock = new StreamsProducer(
+    private final StreamsProducer streamsProducerWithMock = new StreamsProducer(
         StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
         mockedProducer,
         logContext,
         mockTime
     );
-    final StreamsProducer eosStreamsProducerWithMock = new StreamsProducer(
+    private final StreamsProducer eosStreamsProducerWithMock = new StreamsProducer(
         StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2,
         mockedProducer,
         logContext,
         mockTime
     );
 
-    private final MockClientSupplier mockClientSupplier = new MockClientSupplier();
-    private StreamsProducer nonEosStreamsProducer;
-    private MockProducer<byte[], byte[]> nonEosMockProducer;
+    private final MockProducer<byte[], byte[]> nonEosMockProducer
+        = new MockProducer<>(cluster, true, new ByteArraySerializer(), new ByteArraySerializer());
+    private final MockProducer<byte[], byte[]> eosMockProducer
+        = new MockProducer<>(cluster, true, new ByteArraySerializer(), new ByteArraySerializer());
 
-    private final MockClientSupplier eosMockClientSupplier = new MockClientSupplier();
+    private StreamsProducer nonEosStreamsProducer;
     private StreamsProducer eosStreamsProducer;
-    private MockProducer<byte[], byte[]> eosMockProducer;
+
 
     private final ProducerRecord<byte[], byte[]> record =
         new ProducerRecord<>(topic, 0, 0L, new byte[0], new byte[0], new RecordHeaders());
@@ -139,8 +127,6 @@ public class StreamsProducerTest {
 
     @BeforeEach
     public void before() {
-        mockClientSupplier.setCluster(cluster);
-        nonEosMockProducer = (MockProducer<byte[], byte[]>) mockClientSupplier.getProducer(nonEosConfig.originals());
         nonEosStreamsProducer =
             new StreamsProducer(
                 StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
@@ -149,12 +135,6 @@ public class StreamsProducerTest {
                 mockTime
             );
 
-        eosMockClientSupplier.setCluster(cluster);
-        eosMockClientSupplier.setApplicationIdForProducer("appId");
-        final String clientId = "threadId-StreamThread-0";
-        final Map<String, Object> producerConfig = eosConfig.getProducerConfigs(clientId);
-        producerConfig.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "appId-" + UUID.randomUUID() + "-0");
-        eosMockProducer = (MockProducer<byte[], byte[]>) eosMockClientSupplier.getProducer(producerConfig);
         eosStreamsProducer =
             new StreamsProducer(
                 StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2,
@@ -197,11 +177,6 @@ public class StreamsProducerTest {
 
         // then:
         assertThat(eosStreamsProducer.transactionInFlight(), is(false));
-    }
-
-    @Test
-    public void shouldCreateProducer() {
-        assertThat(mockClientSupplier.producers.size(), is(1));
     }
 
     @Test
