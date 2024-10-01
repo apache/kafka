@@ -1151,8 +1151,7 @@ public class NetworkClient implements KafkaClient {
                 timer.reset(bootstrapResolveTimeoutMs);
                 isBootstrapped = true;
                 return addresses;
-            }
-            else {
+            } else {
                 return Collections.emptyList();
             }
         }
