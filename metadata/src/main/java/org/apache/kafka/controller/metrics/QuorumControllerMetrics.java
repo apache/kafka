@@ -67,7 +67,6 @@ public class QuorumControllerMetrics implements AutoCloseable {
     private final AtomicLong lastAppliedRecordOffset = new AtomicLong(0);
     private final AtomicLong lastCommittedRecordOffset = new AtomicLong(0);
     private final AtomicLong lastAppliedRecordTimestamp = new AtomicLong(0);
-    private final AtomicLong dualWriteOffset = new AtomicLong(0);
     private final Consumer<Long> eventQueueTimeUpdater;
     private final Consumer<Long> eventQueueProcessingTimeUpdater;
 
@@ -187,14 +186,6 @@ public class QuorumControllerMetrics implements AutoCloseable {
 
     public long lastAppliedRecordTimestamp() {
         return lastAppliedRecordTimestamp.get();
-    }
-
-    public void updateDualWriteOffset(long offset) {
-        dualWriteOffset.set(offset);
-    }
-
-    public long dualWriteOffset() {
-        return dualWriteOffset.get();
     }
 
     public void incrementTimedOutHeartbeats() {

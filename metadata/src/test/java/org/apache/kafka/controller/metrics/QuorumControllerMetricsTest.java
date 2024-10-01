@@ -97,7 +97,6 @@ public class QuorumControllerMetricsTest {
             metrics.setLastAppliedRecordOffset(100);
             metrics.setLastAppliedRecordTimestamp(500);
             metrics.setLastCommittedRecordOffset(50);
-            metrics.updateDualWriteOffset(40L);
             metrics.setActive(true);
             for (int i = 0; i < 2; i++) {
                 metrics.incrementTimedOutHeartbeats();
