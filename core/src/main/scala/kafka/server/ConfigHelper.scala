@@ -197,7 +197,8 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
     val allSynonyms = {
       val list = configSynonyms(name, allNames, isSensitive)
       if (!groupProps.containsKey(name))
-        list
+        new DescribeConfigsResponseData.DescribeConfigsSynonym().setName(name).setValue(valueAsString)
+          .setSource(ConfigSource.DEFAULT_CONFIG.id) +: list
       else
         new DescribeConfigsResponseData.DescribeConfigsSynonym().setName(name).setValue(valueAsString)
           .setSource(ConfigSource.GROUP_CONFIG.id) +: list
