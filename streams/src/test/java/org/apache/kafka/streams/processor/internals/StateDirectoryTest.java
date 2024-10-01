@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogCaptureAppender;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
@@ -949,7 +950,7 @@ public class StateDirectoryTest {
         Mockito.when(metadata.buildSubtopology(ArgumentMatchers.any())).thenReturn(processorTopology);
         Mockito.when(metadata.taskConfig(ArgumentMatchers.any())).thenReturn(topologyConfig.getTaskConfig());
 
-        directory.initializeTasksForLocalState(metadata, new StreamsMetricsImpl(new Metrics(), "test", "0.1", time));
+        directory.initializeTasksForLocalState(metadata, new StreamsMetricsImpl(new Metrics(), "test", "0.1", time), new LogContext("test"));
 
         return store;
     }

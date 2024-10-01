@@ -197,10 +197,11 @@ public class StateDirectory implements AutoCloseable {
         return stateDirLock != null;
     }
 
-    public void initializeTasksForLocalState(final TopologyMetadata topologyMetadata, final StreamsMetricsImpl streamsMetrics) {
+    public void initializeTasksForLocalState(final TopologyMetadata topologyMetadata,
+                                             final StreamsMetricsImpl streamsMetrics,
+                                             final LogContext logContext) {
         final List<TaskDirectory> nonEmptyTaskDirectories = listNonEmptyTaskDirectories();
         if (hasPersistentStores && !nonEmptyTaskDirectories.isEmpty()) {
-            final LogContext logContext = new LogContext("main-thread ");
             final ThreadCache dummyCache = new ThreadCache(logContext, 0, streamsMetrics);
             final boolean eosEnabled = StreamsConfigUtils.eosEnabled(config);
             final boolean stateUpdaterEnabled = StreamsConfig.InternalConfig.stateUpdaterEnabled(config.originals());
