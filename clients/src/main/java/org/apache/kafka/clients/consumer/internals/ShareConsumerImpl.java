@@ -40,6 +40,7 @@ import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeAsyncEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeCommitCallbackHandlerEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeSyncEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackEvent;
@@ -764,9 +765,13 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         try {
             if (callback != null) {
                 acknowledgementCommitCallbackHandler = new AcknowledgementCommitCallbackHandler(callback);
+                ShareAcknowledgeCommitCallbackHandlerEvent event = new ShareAcknowledgeCommitCallbackHandlerEvent(true);
+                applicationEventHandler.add(event);
             } else {
                 completedAcknowledgements.clear();
                 acknowledgementCommitCallbackHandler = null;
+                ShareAcknowledgeCommitCallbackHandlerEvent event = new ShareAcknowledgeCommitCallbackHandlerEvent(true);
+                applicationEventHandler.add(event);
             }
         } finally {
             release();

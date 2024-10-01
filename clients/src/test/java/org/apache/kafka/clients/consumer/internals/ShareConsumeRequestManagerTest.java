@@ -575,6 +575,54 @@ public class ShareConsumeRequestManagerTest {
     }
 
     @Test
+    public void testCallbackHandlerConfig() throws InterruptedException {
+        buildRequestManager();
+
+        assignFromSubscribed(Collections.singleton(tp0));
+
+        // normal fetch
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tip0, records, acquiredRecords, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        Acknowledgements acknowledgements = Acknowledgements.empty();
+        acknowledgements.add(1L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(2L, AcknowledgeType.ACCEPT);
+
+        shareConsumeRequestManager.commitAsync(Collections.singletonMap(tip0, acknowledgements));
+
+        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
+
+        client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        assertEquals(Collections.singletonMap(tip0, acknowledgements), completedAcknowledgements.get(0));
+
+        completedAcknowledgements.clear();
+
+        // Setting the boolean to false, indicating there is no callback handler configured.
+        shareConsumeRequestManager.setCallbackHandlerConfig(false);
+
+        Acknowledgements acknowledgements2 = Acknowledgements.empty();
+        acknowledgements2.add(3L, AcknowledgeType.ACCEPT);
+
+        shareConsumeRequestManager.commitAsync(Collections.singletonMap(tip0, acknowledgements2));
+
+        TestUtils.retryOnExceptionWithTimeout(() -> assertEquals(1, shareConsumeRequestManager.sendAcknowledgements()));
+
+        client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        // We expect no acknowledgements to be added as the callback handler is not configured.
+        assertEquals(0, completedAcknowledgements.size());
+    }
+
+    @Test
     public void testMultipleTopicsFetch() {
         buildRequestManager();
         Set<TopicPartition> partitions = new HashSet<>();
@@ -1066,6 +1114,7 @@ public class ShareConsumeRequestManagerTest {
                 backgroundEventHandler,
                 metricsManager,
                 shareFetchCollector));
+        shareConsumeRequestManager.setCallbackHandlerConfig(true);
     }
 
     private void buildDependencies(MetricConfig metricConfig,

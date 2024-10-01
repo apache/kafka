@@ -143,6 +143,10 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 process((ShareAcknowledgeOnCloseEvent) event);
                 return;
 
+            case SHARE_ACKNOWLEDGE_CALLBACK_HANDLER:
+                process((ShareAcknowledgeCommitCallbackHandlerEvent) event);
+                return;
+
             case SEEK_UNVALIDATED:
                 process((SeekUnvalidatedEvent) event);
                 return;
@@ -382,6 +386,20 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         ShareConsumeRequestManager manager = requestManagers.shareConsumeRequestManager.get();
         CompletableFuture<Void> future = manager.acknowledgeOnClose(event.acknowledgementsMap(), event.deadlineMs());
         future.whenComplete(complete(event.future()));
+    }
+
+    /**
+     * Process event indicating whether the AcknowledgeCommitCallbackHandler is configured by the user.
+     *
+     * @param event Event containing a boolean to indicate if the callback handler is configured or not.
+     */
+    private void process(final ShareAcknowledgeCommitCallbackHandlerEvent event) {
+        if (!requestManagers.shareConsumeRequestManager.isPresent()) {
+            return;
+        }
+
+        ShareConsumeRequestManager manager = requestManagers.shareConsumeRequestManager.get();
+        manager.setCallbackHandlerConfig(event.isCallbackHandlerConfigured());
     }
 
     private <T> BiConsumer<? super T, ? super Throwable> complete(final CompletableFuture<T> b) {
