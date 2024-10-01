@@ -332,10 +332,10 @@ public class TaskManager {
             final Map<Task, Set<TopicPartition>> assignedTasks = new HashMap<>(tasksToAssign.size());
             for (final Map.Entry<TaskId, Set<TopicPartition>> entry : tasksToAssign.entrySet()) {
                 final TaskId taskId = entry.getKey();
-                final Set<TopicPartition> inputPartitions = entry.getValue();
                 final Task task = stateDirectory.removePendingTask(taskId);
                 if (task != null) {
                     // replace our dummy values with the real ones, now we know our thread and assignment
+                    final Set<TopicPartition> inputPartitions = entry.getValue();
                     task.stateManager().assignToStreamThread(new LogContext(threadLogPrefix), changelogReader, inputPartitions);
                     task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(taskId));
 
