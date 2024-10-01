@@ -192,13 +192,11 @@ public class PersisterStateBatchCombinerTest {
     private static Stream<BatchTestHolder> generatorComplex() {
         return Stream.of(
             new BatchTestHolder(
-                "Handle overlapping batches within each list.",
+                "Handle overlapping batches in newBatches, same state",
                 BatchTestHolder.multiBatch()
                     .addBatch(100, 110, 0, 1)
                     .addBatch(121, 130, 0, 1)
-                    .addBatch(105, 115, 0, 1) // overlap with 1st batch
-                    .addBatch(123, 125, 0, 1)  // overlap with 2nd batch
-                    .build(),  //[(100-115, 0, 1), (121-130, 0, 1)]
+                    .build(),
                 BatchTestHolder.multiBatch()
                     .addBatch(111, 119, 2, 2)
                     .addBatch(116, 123, 2, 2)  // overlap with first batch
@@ -206,13 +204,12 @@ public class PersisterStateBatchCombinerTest {
                 BatchTestHolder.multiBatch()
                     .addBatch(100, 110, 0, 1)
                     .addBatch(111, 123, 2, 2)
-                    .addBatch(124, 130, 0, 1)
                     .build(),
                 -1
             ),
 
             new BatchTestHolder(
-                "Handle overlapping batches with different priority.",
+                "Handle overlapping batches in newBatches, different priority.",
                 BatchTestHolder.singleBatch(100, 110, 0, 1),
                 BatchTestHolder.multiBatch()
                     .addBatch(101, 105, 1, 2)
@@ -227,11 +224,10 @@ public class PersisterStateBatchCombinerTest {
             ),
 
             new BatchTestHolder(
-                "Handle overlapping batches within each list with pruning.",
+                "Handle overlapping batches in newBatches, with pruning.",
                 BatchTestHolder.multiBatch()
-                    .addBatch(100, 110, 0, 1)
+                    .addBatch(100, 110, 0, 1)   // should get removed
                     .addBatch(121, 130, 0, 1)
-                    .addBatch(105, 115, 0, 1) // overlap with 1st batch //[(100-115, 0, 1), (121-130, 0, 1)]
                     .build(),
                 BatchTestHolder.multiBatch()
                     .addBatch(111, 119, 2, 2)
