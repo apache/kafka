@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.clients.consumer.internals.metrics.KafkaConsumerMetrics;
-import org.apache.kafka.clients.consumer.internals.metrics.KafkaShareConsumerMetrics;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -34,19 +33,10 @@ public class BackgroundEventHandler {
 
     private final Queue<BackgroundEvent> backgroundEventQueue;
     private final Optional<KafkaConsumerMetrics> kafkaConsumerMetrics;
-    private final Optional<KafkaShareConsumerMetrics> kafkaShareConsumerMetrics;
 
     public BackgroundEventHandler(final Queue<BackgroundEvent> backgroundEventQueue, KafkaConsumerMetrics kafkaConsumerMetrics) {
         this.backgroundEventQueue = backgroundEventQueue;
         this.kafkaConsumerMetrics = Optional.of(kafkaConsumerMetrics);
-        this.kafkaShareConsumerMetrics = Optional.empty();
-        recordInitialEvents();
-    }
-
-    public BackgroundEventHandler(final Queue<BackgroundEvent> backgroundEventQueue, KafkaShareConsumerMetrics kafkaShareConsumerMetrics) {
-        this.backgroundEventQueue = backgroundEventQueue;
-        this.kafkaShareConsumerMetrics = Optional.of(kafkaShareConsumerMetrics);
-        this.kafkaConsumerMetrics = Optional.empty();
         recordInitialEvents();
     }
 
@@ -58,19 +48,12 @@ public class BackgroundEventHandler {
     public void add(BackgroundEvent event) {
         Objects.requireNonNull(event, "BackgroundEvent provided to add must be non-null");
         backgroundEventQueue.add(event);
-
-        if (!kafkaShareConsumerMetrics.isPresent())
-            kafkaConsumerMetrics.get().recordBackgroundEventQueueChange(event.id(), System.currentTimeMillis(), true);
-        else
-            kafkaShareConsumerMetrics.get().recordBackgroundEventQueueChange(event.id(), System.currentTimeMillis(), true);
+        kafkaConsumerMetrics.ifPresent(consumerMetrics -> consumerMetrics.recordBackgroundEventQueueChange(event.id(), System.currentTimeMillis(), true));
     }
 
     private void recordInitialEvents() {
         for (BackgroundEvent event : backgroundEventQueue) {
-            if (!kafkaShareConsumerMetrics.isPresent())
-                kafkaConsumerMetrics.get().recordBackgroundEventQueueChange(event.id(), System.currentTimeMillis(), true);
-            else
-                kafkaShareConsumerMetrics.get().recordBackgroundEventQueueChange(event.id(), System.currentTimeMillis(), true);
+            kafkaConsumerMetrics.ifPresent(consumerMetrics -> consumerMetrics.recordBackgroundEventQueueChange(event.id(), System.currentTimeMillis(), true));
         }
     }
 }
