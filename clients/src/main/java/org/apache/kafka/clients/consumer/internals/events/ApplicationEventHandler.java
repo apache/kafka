@@ -33,6 +33,7 @@ import org.slf4j.Logger;
 import java.io.Closeable;
 import java.time.Duration;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Future;
 import java.util.function.Supplier;
@@ -66,7 +67,7 @@ public class ApplicationEventHandler implements Closeable {
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
                 requestManagersSupplier,
-                null);
+                Optional.empty());
         this.networkThread.start();
     }
 
@@ -88,7 +89,7 @@ public class ApplicationEventHandler implements Closeable {
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
                 requestManagersSupplier,
-                networkThreadMetricsManager);
+                Optional.of(networkThreadMetricsManager));
         this.networkThread.start();
     }
 

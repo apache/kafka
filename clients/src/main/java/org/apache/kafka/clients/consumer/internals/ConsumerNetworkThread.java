@@ -68,9 +68,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     private final IdempotentCloser closer = new IdempotentCloser();
     private volatile Duration closeTimeout = Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS);
     private volatile long cachedMaximumTimeToWait = MAX_POLL_TIMEOUT_MS;
-    // Visible for testing
-    final NetworkThreadMetricsManager metricsManager;
-    private final boolean usingMetrics;
+    private final Optional<NetworkThreadMetricsManager> metricsManager;
 
     public ConsumerNetworkThread(LogContext logContext,
                                  Time time,
@@ -79,7 +77,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                                  Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
                                  Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
                                  Supplier<RequestManagers> requestManagersSupplier,
-                                 NetworkThreadMetricsManager metricsManager) {
+                                 Optional<NetworkThreadMetricsManager> metricsManager) {
         super(BACKGROUND_THREAD_NAME, true);
         this.time = time;
         this.log = logContext.logger(getClass());
@@ -90,7 +88,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         this.requestManagersSupplier = requestManagersSupplier;
         this.running = true;
         this.metricsManager = metricsManager;
-        this.usingMetrics = metricsManager != null;
     }
 
     @Override
@@ -153,8 +150,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                 .map(networkClientDelegate::addAll)
                 .reduce(MAX_POLL_TIMEOUT_MS, Math::min);
         networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
-        if (usingMetrics)
-            metricsManager.updatePollTime(time.milliseconds());
+        metricsManager.ifPresent(networkThreadMetricsManager -> networkThreadMetricsManager.updatePollTime(time.milliseconds()));
 
         cachedMaximumTimeToWait = requestManagers.entries().stream()
                 .filter(Optional::isPresent)
@@ -171,7 +167,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     private void processApplicationEvents() {
         LinkedList<ApplicationEvent> events = new LinkedList<>();
         applicationEventQueue.drainTo(events);
-        metricsManager.recordApplicationEventQueueSize(applicationEventQueue.size());
+        metricsManager.ifPresent(networkThreadMetricsManager -> networkThreadMetricsManager.recordApplicationEventQueueSize(applicationEventQueue.size()));
 
         long totalProcessingTime = 0;
         for (ApplicationEvent event : events) {
@@ -184,8 +180,10 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                 long processingTime = time.milliseconds() - startMs;
                 totalProcessingTime += processingTime;
 
-                metricsManager.recordApplicationEventQueueChange(event, startMs - totalProcessingTime, false);
-                metricsManager.recordApplicationEventProcessingTime(processingTime);
+                if (metricsManager.isPresent()) {
+                    metricsManager.get().recordApplicationEventQueueChange(event, startMs - totalProcessingTime, false);
+                    metricsManager.get().recordApplicationEventProcessingTime(processingTime);
+                }
             } catch (Throwable t) {
                 log.warn("Error processing event {}", t.getMessage(), t);
             }

@@ -83,7 +83,7 @@ public class ConsumerNetworkThreadTest {
                 () -> applicationEventProcessor,
                 () -> networkClientDelegate,
                 () -> requestManagers,
-                null
+                Optional.empty()
         );
     }
 
