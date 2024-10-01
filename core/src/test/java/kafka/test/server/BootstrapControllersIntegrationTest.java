@@ -25,10 +25,12 @@ import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AlterClientQuotasResult;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
+import org.apache.kafka.clients.admin.DescribeClientQuotasResult;
 import org.apache.kafka.clients.admin.DescribeClusterResult;
 import org.apache.kafka.clients.admin.DescribeFeaturesResult;
 import org.apache.kafka.clients.admin.DescribeMetadataQuorumResult;
@@ -55,6 +57,9 @@ import org.apache.kafka.common.errors.InvalidUpdateVersionException;
 import org.apache.kafka.common.errors.MismatchedEndpointTypeException;
 import org.apache.kafka.common.errors.UnsupportedEndpointTypeException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.quota.ClientQuotaAlteration;
+import org.apache.kafka.common.quota.ClientQuotaEntity;
+import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
@@ -77,10 +82,12 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import static java.util.Collections.singletonList;
 import static org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG;
 import static org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.admin.ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG;
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
+import static org.apache.kafka.server.config.QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG;
 import static org.apache.kafka.server.config.ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -230,6 +237,26 @@ public class BootstrapControllersIntegrationTest {
     @ClusterTest
     public void testIncrementalAlterConfigs(ClusterInstance clusterInstance) throws Exception {
         testIncrementalAlterConfigs(clusterInstance, false);
+    }
+
+    @ClusterTest
+    public void testClientQuotasOperation(ClusterInstance clusterInstance) throws Exception {
+        try (Admin admin = Admin.create(adminConfig(clusterInstance, false))) {
+            ClientQuotaEntity entity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, "user"));
+            Map<String, Double> quotas = new HashMap<>();
+            String testQuota = CONSUMER_BYTE_RATE_OVERRIDE_CONFIG;
+            Double limit = 1000.0;
+            quotas.put(testQuota, limit);
+            ClientQuotaAlteration alteration = new ClientQuotaAlteration(entity, singletonList(new ClientQuotaAlteration.Op(testQuota, limit)));
+            AlterClientQuotasResult alterResult = admin.alterClientQuotas(Collections.singleton(alteration));
+            alterResult.all().get();
+
+            TestUtils.waitForCondition(() -> {
+                    DescribeClientQuotasResult describeResult = admin.describeClientQuotas(ClientQuotaFilter.all());
+                    return describeResult.entities().get().get(entity).equals(quotas);
+                }, "Timed out waiting for quota config to be propagated to all servers"
+            );
+        }
     }
 
     private void testIncrementalAlterConfigs(ClusterInstance clusterInstance, boolean usingBootstrapControllers) throws Exception {
