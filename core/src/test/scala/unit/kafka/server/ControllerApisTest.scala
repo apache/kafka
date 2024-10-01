@@ -21,7 +21,7 @@ import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.KRaftMetadataCache
-import org.apache.kafka.testkit.MockController
+import org.apache.kafka.common.test.MockController
 import org.apache.kafka.clients.admin.AlterConfigOp
 import org.apache.kafka.common.Uuid.ZERO_UUID
 import org.apache.kafka.common.acl.AclOperation

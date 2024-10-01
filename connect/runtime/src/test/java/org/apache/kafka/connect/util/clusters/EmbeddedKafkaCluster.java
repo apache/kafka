@@ -46,14 +46,14 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.test.KafkaClusterTestKit;
+import org.apache.kafka.common.test.TestKitNodes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.metadata.BrokerState;
 import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
-import org.apache.kafka.testkit.KafkaClusterTestKit;
-import org.apache.kafka.testkit.TestKitNodes;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

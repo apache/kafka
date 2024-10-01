@@ -30,13 +30,13 @@ import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.test.ClusterConfig;
+import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterTemplate;
+import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.test.TestUtils;
-import org.apache.kafka.testkit.ClusterConfig;
-import org.apache.kafka.testkit.ClusterInstance;
-import org.apache.kafka.testkit.annotation.ClusterTemplate;
-import org.apache.kafka.testkit.junit.ClusterTestExtensions;
 import org.apache.kafka.tools.ToolsTestUtils;
 
 import org.junit.jupiter.api.Assertions;

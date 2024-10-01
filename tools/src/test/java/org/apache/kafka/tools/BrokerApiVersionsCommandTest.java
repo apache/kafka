@@ -24,12 +24,12 @@ import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
+import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.server.config.ServerConfigs;
-import org.apache.kafka.testkit.ClusterInstance;
-import org.apache.kafka.testkit.annotation.ClusterConfigProperty;
-import org.apache.kafka.testkit.annotation.ClusterTest;
-import org.apache.kafka.testkit.annotation.ClusterTestDefaults;
-import org.apache.kafka.testkit.junit.ClusterTestExtensions;
 
 import org.junit.jupiter.api.extension.ExtendWith;
 

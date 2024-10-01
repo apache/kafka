@@ -28,6 +28,13 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.test.ClusterConfig;
+import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
+import org.apache.kafka.common.test.api.ClusterTemplate;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.server.config.ServerLogConfigs;
@@ -35,13 +42,6 @@ import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMe
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorage;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.test.TestUtils;
-import org.apache.kafka.testkit.ClusterConfig;
-import org.apache.kafka.testkit.ClusterInstance;
-import org.apache.kafka.testkit.annotation.ClusterConfigProperty;
-import org.apache.kafka.testkit.annotation.ClusterTemplate;
-import org.apache.kafka.testkit.annotation.ClusterTest;
-import org.apache.kafka.testkit.annotation.ClusterTestDefaults;
-import org.apache.kafka.testkit.junit.ClusterTestExtensions;
 
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -59,8 +59,8 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.testkit.annotation.Type.CO_KRAFT;
-import static org.apache.kafka.testkit.annotation.Type.KRAFT;
+import static org.apache.kafka.common.test.api.Type.CO_KRAFT;
+import static org.apache.kafka.common.test.api.Type.KRAFT;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;

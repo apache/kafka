@@ -34,6 +34,9 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKeyJsonConverter;
@@ -48,9 +51,6 @@ import org.apache.kafka.coordinator.transaction.generated.TransactionLogKeyJsonC
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogValue;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogValueJsonConverter;
 import org.apache.kafka.server.util.MockTime;
-import org.apache.kafka.testkit.ClusterInstance;
-import org.apache.kafka.testkit.annotation.ClusterTest;
-import org.apache.kafka.testkit.junit.ClusterTestExtensions;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

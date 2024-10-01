@@ -16,9 +16,9 @@
  */
 package kafka.server
 
-import org.apache.kafka.testkit.ClusterInstance
-import org.apache.kafka.testkit.annotation.{ClusterTest, ClusterTestDefaults, Type}
-import org.apache.kafka.testkit.junit.ClusterTestExtensions
+import org.apache.kafka.common.test.ClusterInstance
+import org.apache.kafka.common.test.api.{ClusterTest, ClusterTestDefaults, Type}
+import org.apache.kafka.common.test.api.ClusterTestExtensions
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.DescribeQuorumRequest.singletonRequest
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, DescribeQuorumRequest, DescribeQuorumResponse}

@@ -16,7 +16,7 @@
  */
 package kafka.server
 
-import org.apache.kafka.testkit.ClusterInstance
+import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion

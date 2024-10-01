@@ -36,13 +36,13 @@ import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestExtensions;
+import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.telemetry.ClientTelemetry;
 import org.apache.kafka.server.telemetry.ClientTelemetryReceiver;
-import org.apache.kafka.testkit.ClusterInstance;
-import org.apache.kafka.testkit.annotation.ClusterConfigProperty;
-import org.apache.kafka.testkit.annotation.ClusterTest;
-import org.apache.kafka.testkit.annotation.Type;
-import org.apache.kafka.testkit.junit.ClusterTestExtensions;
 
 import org.junit.jupiter.api.extension.ExtendWith;
 

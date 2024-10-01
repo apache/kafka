@@ -19,10 +19,10 @@ package org.apache.kafka.tools;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.common.errors.UnsupportedEndpointTypeException;
-import org.apache.kafka.testkit.ClusterInstance;
-import org.apache.kafka.testkit.annotation.ClusterTest;
-import org.apache.kafka.testkit.annotation.Type;
-import org.apache.kafka.testkit.junit.ClusterTestExtensions;
+import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestExtensions;
+import org.apache.kafka.common.test.api.Type;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

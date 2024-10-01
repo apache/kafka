@@ -23,9 +23,9 @@ import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.testkit.ClusterInstance;
-import org.apache.kafka.testkit.annotation.ClusterTest;
-import org.apache.kafka.testkit.junit.ClusterTestExtensions;
+import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestExtensions;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;

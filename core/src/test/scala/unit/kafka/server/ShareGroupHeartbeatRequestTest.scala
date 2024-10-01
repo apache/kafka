@@ -16,10 +16,10 @@
  */
 package kafka.server
 
-import org.apache.kafka.testkit.ClusterInstance
-import org.apache.kafka.testkit.annotation.{ClusterConfigProperty, ClusterTest, Type}
-import org.apache.kafka.testkit.junit.ClusterTestExtensions
-import org.apache.kafka.testkit.junit.RaftClusterInvocationContext.RaftClusterInstance
+import org.apache.kafka.common.test.ClusterInstance
+import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, Type}
+import org.apache.kafka.common.test.api.ClusterTestExtensions
+import org.apache.kafka.common.test.api.RaftClusterInvocationContext.RaftClusterInstance
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.waitForAllPartitionsMetadata
 import org.apache.kafka.clients.admin.{Admin, NewPartitions}

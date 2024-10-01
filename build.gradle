@@ -1062,7 +1062,7 @@ project(':core') {
     testImplementation project(':storage:storage-api').sourceSets.test.output
     testImplementation project(':server').sourceSets.test.output
     testImplementation project(':share').sourceSets.test.output
-    testImplementation project(':test-common').sourceSets.test.output
+    testImplementation project(':test-common-api')
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
     testImplementation(libs.apacheda) {
@@ -1265,7 +1265,7 @@ project(':core') {
   }
 
   jar {
-    dependsOn('copyDependantLibs')
+    dependsOn copyDependantLibs
   }
 
   jar.manifest {
@@ -1527,23 +1527,17 @@ project(':test-common') {
     archivesName = "kafka-test-common"
   }
 
-  configurations {
-    generator
-  }
-
   dependencies {
-    testImplementation libs.scalaJava8Compat
-    testImplementation project(':core')
-    testImplementation project(':clients')
-    testImplementation project(':group-coordinator')
-    testImplementation project(':server')
-    testImplementation project(':server-common')
-    testImplementation project(':storage')
-    testImplementation project(':metadata')
-    testImplementation project(':raft')
+    implementation libs.scalaJava8Compat
+    implementation project(':core')
+    implementation project(':metadata')
+    implementation project(':server')
+    implementation project(':raft')
+    implementation project(':storage')
+    implementation project(':server-common')
+    implementation libs.slf4jApi
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    testImplementation libs.slf4jApi
     testRuntimeOnly libs.slf4jReload4j
     testRuntimeOnly libs.junitPlatformLanucher
   }
@@ -1551,7 +1545,7 @@ project(':test-common') {
   sourceSets {
     main {
       java {
-        srcDirs = []
+        srcDirs = ["src/main/java"]
       }
     }
     test {
@@ -1562,7 +1556,41 @@ project(':test-common') {
   }
 
   checkstyle {
-    checkstyleTest.enabled = false
+    sourceSets = []
+  }
+
+  javadoc {
+    enabled = false
+  }
+}
+
+project(':test-common-api') {
+  base {
+    archivesName = "kafka-test-common-api"
+  }
+
+
+  dependencies {
+    implementation project(':test-common')
+    implementation libs.junitJupiter
+    testRuntimeOnly libs.junitPlatformLanucher
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/test/java"]
+      }
+    }
+  }
+
+  checkstyle {
+    sourceSets = []
   }
 
   javadoc {
@@ -2215,7 +2243,7 @@ project(':storage') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
-    testImplementation project(':test-common').sourceSets.test.output
+    testImplementation project(':test-common-api')
     testImplementation project(':server')
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
@@ -2406,7 +2434,7 @@ project(':tools') {
     testImplementation project(':server').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
-    testImplementation project(':test-common').sourceSets.test.output
+    testImplementation project(':test-common-api')
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':connect:api')
@@ -2584,7 +2612,7 @@ project(':streams') {
     testImplementation project(':core')
     testImplementation project(':tools')
     testImplementation project(':core').sourceSets.test.output
-    testImplementation project(':test-common').sourceSets.test.output
+    testImplementation project(':test-common')
     testImplementation project(':storage')
     testImplementation project(':group-coordinator')
     testImplementation project(':transaction-coordinator')
@@ -3491,7 +3519,7 @@ project(':connect:runtime') {
     testImplementation project(':server')
     testImplementation project(':metadata')
     testImplementation project(':server-common')
-    testImplementation project(':test-common').sourceSets.test.output
+    testImplementation project(':test-common')
     testImplementation project(':server-common')
     testImplementation project(':server')
     testImplementation project(':group-coordinator')
@@ -3614,7 +3642,7 @@ project(':connect:file') {
     testImplementation project(':connect:runtime')
     testImplementation project(':connect:runtime').sourceSets.test.output
     testImplementation project(':core')
-    testImplementation project(':test-common').sourceSets.test.output
+    testImplementation project(':test-common')
     testImplementation project(':server-common').sourceSets.test.output
   }
 
@@ -3715,7 +3743,7 @@ project(':connect:mirror') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':connect:runtime').sourceSets.test.output
     testImplementation project(':core')
-    testImplementation project(':test-common').sourceSets.test.output
+    testImplementation project(':test-common')
     testImplementation project(':server')
     testImplementation project(':server-common').sourceSets.test.output
 

@@ -37,6 +37,8 @@ import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.test.KafkaClusterTestKit;
+import org.apache.kafka.common.test.TestKitNodes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
@@ -47,8 +49,6 @@ import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
-import org.apache.kafka.testkit.KafkaClusterTestKit;
-import org.apache.kafka.testkit.TestKitNodes;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,7 +76,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 
 /**
- * Setup an embedded Kafka KRaft cluster for integration tests (using {@link org.apache.kafka.testkit.KafkaClusterTestKit} internally) with the
+ * Setup an embedded Kafka KRaft cluster for integration tests (using {@link org.apache.kafka.common.test.KafkaClusterTestKit} internally) with the
  * specified number of brokers and the specified broker properties.
  * Additional Kafka client properties can also be supplied if required.
  * This class also provides various utility methods to easily create Kafka topics, produce data, consume data etc.

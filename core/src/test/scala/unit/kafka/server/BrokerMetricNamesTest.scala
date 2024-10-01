@@ -17,9 +17,9 @@
 
 package kafka.server
 
-import org.apache.kafka.testkit.ClusterInstance
-import org.apache.kafka.testkit.annotation.ClusterTest
-import org.apache.kafka.testkit.junit.ClusterTestExtensions
+import org.apache.kafka.common.test.ClusterInstance
+import org.apache.kafka.common.test.api.ClusterTest
+import org.apache.kafka.common.test.api.ClusterTestExtensions
 import kafka.utils.TestUtils
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.AfterEach

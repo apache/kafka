@@ -16,9 +16,9 @@
  */
 package kafka.server
 
-import org.apache.kafka.testkit.ClusterInstance
-import org.apache.kafka.testkit.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
-import org.apache.kafka.testkit.junit.ClusterTestExtensions
+import org.apache.kafka.common.test.ClusterInstance
+import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
+import org.apache.kafka.common.test.api.ClusterTestExtensions
 
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords
 import org.apache.kafka.common.message.{ShareAcknowledgeRequestData, ShareAcknowledgeResponseData, ShareFetchRequestData, ShareFetchResponseData}

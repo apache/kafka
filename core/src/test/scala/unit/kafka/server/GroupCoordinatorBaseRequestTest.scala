@@ -17,7 +17,7 @@
 package kafka.server
 
 import kafka.network.SocketServer
-import org.apache.kafka.testkit.ClusterInstance
+import org.apache.kafka.common.test.ClusterInstance
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}

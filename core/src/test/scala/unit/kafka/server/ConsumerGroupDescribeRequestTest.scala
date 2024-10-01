@@ -16,9 +16,9 @@
  */
 package kafka.server
 
-import org.apache.kafka.testkit.ClusterInstance
-import org.apache.kafka.testkit.annotation._
-import org.apache.kafka.testkit.junit.ClusterTestExtensions
+import org.apache.kafka.common.test.ClusterInstance
+import org.apache.kafka.common.test.api._
+import org.apache.kafka.common.test.api.ClusterTestExtensions
 import kafka.utils.TestUtils
 import org.apache.kafka.common.ConsumerGroupState
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData.{Assignment, DescribedGroup, TopicPartitions}

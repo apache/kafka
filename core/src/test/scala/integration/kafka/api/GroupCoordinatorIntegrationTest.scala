@@ -13,9 +13,9 @@
 package kafka.api
 
 import kafka.log.UnifiedLog
-import org.apache.kafka.testkit.ClusterInstance
-import org.apache.kafka.testkit.annotation.{ClusterConfigProperty, ClusterTest, Type}
-import org.apache.kafka.testkit.junit.ClusterTestExtensions
+import org.apache.kafka.common.test.api.ClusterInstance
+import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, Type}
+import org.apache.kafka.common.test.api.ClusterTestExtensions
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, ConsumerGroupDescription}
 import org.apache.kafka.clients.consumer.{Consumer, GroupProtocol, OffsetAndMetadata}
