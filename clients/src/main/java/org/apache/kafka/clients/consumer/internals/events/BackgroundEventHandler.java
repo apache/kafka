@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.internals.metrics.KafkaConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.metrics.KafkaShareConsumerMetrics;
 
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Queue;
 
 /**
@@ -32,23 +33,20 @@ import java.util.Queue;
 public class BackgroundEventHandler {
 
     private final Queue<BackgroundEvent> backgroundEventQueue;
-    private final KafkaConsumerMetrics kafkaConsumerMetrics;
-    private final KafkaShareConsumerMetrics kafkaShareConsumerMetrics;
-    private boolean isShareConsumer;
+    private final Optional<KafkaConsumerMetrics> kafkaConsumerMetrics;
+    private final Optional<KafkaShareConsumerMetrics> kafkaShareConsumerMetrics;
 
     public BackgroundEventHandler(final Queue<BackgroundEvent> backgroundEventQueue, KafkaConsumerMetrics kafkaConsumerMetrics) {
         this.backgroundEventQueue = backgroundEventQueue;
-        this.kafkaConsumerMetrics = kafkaConsumerMetrics;
-        this.kafkaShareConsumerMetrics = null;
-        isShareConsumer = false;
+        this.kafkaConsumerMetrics = Optional.of(kafkaConsumerMetrics);
+        this.kafkaShareConsumerMetrics = Optional.empty();
         recordInitialEvents();
     }
 
     public BackgroundEventHandler(final Queue<BackgroundEvent> backgroundEventQueue, KafkaShareConsumerMetrics kafkaShareConsumerMetrics) {
         this.backgroundEventQueue = backgroundEventQueue;
-        this.kafkaShareConsumerMetrics = kafkaShareConsumerMetrics;
-        this.kafkaConsumerMetrics = null;
-        isShareConsumer = true;
+        this.kafkaShareConsumerMetrics = Optional.of(kafkaShareConsumerMetrics);
+        this.kafkaConsumerMetrics = Optional.empty();
         recordInitialEvents();
     }
 
@@ -61,18 +59,18 @@ public class BackgroundEventHandler {
         Objects.requireNonNull(event, "BackgroundEvent provided to add must be non-null");
         backgroundEventQueue.add(event);
 
-        if (!isShareConsumer)
-            kafkaConsumerMetrics.recordBackgroundEventQueueChange(event.id(), System.currentTimeMillis(), true);
+        if (!kafkaShareConsumerMetrics.isPresent())
+            kafkaConsumerMetrics.get().recordBackgroundEventQueueChange(event.id(), System.currentTimeMillis(), true);
         else
-            kafkaShareConsumerMetrics.recordBackgroundEventQueueChange(event.id(), System.currentTimeMillis(), true);
+            kafkaShareConsumerMetrics.get().recordBackgroundEventQueueChange(event.id(), System.currentTimeMillis(), true);
     }
 
     private void recordInitialEvents() {
         for (BackgroundEvent event : backgroundEventQueue) {
-            if (!isShareConsumer)
-                kafkaConsumerMetrics.recordBackgroundEventQueueChange(event.id(), System.currentTimeMillis(), true);
+            if (!kafkaShareConsumerMetrics.isPresent())
+                kafkaConsumerMetrics.get().recordBackgroundEventQueueChange(event.id(), System.currentTimeMillis(), true);
             else
-                kafkaShareConsumerMetrics.recordBackgroundEventQueueChange(event.id(), System.currentTimeMillis(), true);
+                kafkaShareConsumerMetrics.get().recordBackgroundEventQueueChange(event.id(), System.currentTimeMillis(), true);
         }
     }
 }
