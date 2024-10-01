@@ -39,7 +39,8 @@ if ! git show "$sha" &> /dev/null; then
   "does not exist locally. Please update your remote and try again."
 else
   if git branch -f trunk-cached "$sha" &> /dev/null; then
-    printf '%s\n' "Local branch 'trunk-cached' successfully updated to $(head -c 10 <<< "$sha")."
+    rel_date="$(git show --no-patch $sha --date=relative --pretty=format:'%cr')"
+    printf '%s\n' "Local branch 'trunk-cached' successfully updated to $(head -c 10 <<< "$sha") (from $rel_date)."
   else
     printf '\e[31m%s\e[0m\n' "Failed to update ref for 'trunk-cached' and commit $(head -c 10 <<< "$sha")."
   fi
