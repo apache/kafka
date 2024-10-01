@@ -3469,6 +3469,10 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
         }
     }
 
+    private boolean requestGenerated(MockClient client, ApiKeys apiKey) {
+        return client.requests().stream().anyMatch(request -> request.requestBuilder().apiKey().equals(apiKey));
+    }
+
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class)
     public void testPollSendsRequestToJoin(GroupProtocol groupProtocol) throws InterruptedException {
