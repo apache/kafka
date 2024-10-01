@@ -18,7 +18,10 @@
   "type": "request",
   "listeners": ["zkBroker", "broker", "controller"],
   "name": "UpdateFeaturesRequest",
-  "validVersions": "0-1",
+  // Version 1 adds validate only field.
+  //
+  // Version 2 changes the response to not return feature level results.
+  "validVersions": "0-2",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "timeoutMs", "type": "int32", "versions": "0+", "default": "60000",

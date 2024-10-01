@@ -111,24 +111,24 @@ public class FeatureCommandTest {
                         "disable", "--feature", "metadata.version"))
         );
         // Change expected message to reflect possible MetadataVersion range 1-N (N increases when adding a new version)
-        assertEquals("Could not disable metadata.version. Invalid update version 0 for feature " +
-                "metadata.version. Local controller 3000 only supports versions 1-25", commandOutput);
+        assertEquals("Could not disable metadata.version. The update failed for all features since the following " +
+                "feature had an error: Invalid update version 0 for feature metadata.version. Local controller 3000 only supports versions 1-25", commandOutput);
 
         commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
                         "downgrade", "--metadata", "3.3-IV0"))
 
         );
-        assertEquals("Could not downgrade metadata.version to 4. Invalid metadata.version 4. " +
-                "Refusing to perform the requested downgrade because it might delete metadata information.", commandOutput);
+        assertEquals("Could not downgrade metadata.version to 4. The update failed for all features since the following " +
+                "feature had an error: Invalid metadata.version 4. Refusing to perform the requested downgrade because it might delete metadata information.", commandOutput);
 
         commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
                         "downgrade", "--unsafe", "--metadata", "3.3-IV0"))
 
         );
-        assertEquals("Could not downgrade metadata.version to 4. Invalid metadata.version 4. " +
-                "Unsafe metadata downgrade is not supported in this version.", commandOutput);
+        assertEquals("Could not downgrade metadata.version to 4. The update failed for all features since the following " +
+                "feature had an error: Invalid metadata.version 4. Unsafe metadata downgrade is not supported in this version.", commandOutput);
     }
 
     private String outputWithoutEpoch(String output) {
