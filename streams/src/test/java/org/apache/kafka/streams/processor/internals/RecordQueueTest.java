@@ -32,7 +32,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -73,7 +72,7 @@ public class RecordQueueTest {
 
     private final Metrics metrics = new Metrics();
     private final StreamsMetricsImpl streamsMetrics =
-        new StreamsMetricsImpl(metrics, "mock", StreamsConfig.METRICS_LATEST, new MockTime());
+        new StreamsMetricsImpl(metrics, "mock", new MockTime());
 
     @SuppressWarnings("rawtypes")
     final InternalMockProcessorContext context = new InternalMockProcessorContext<>(
@@ -400,11 +399,11 @@ public class RecordQueueTest {
             () -> queue.addRawRecords(records)
         );
         assertThat(exception.getMessage(), equalTo("Input record ConsumerRecord(topic = topic, partition = 1, " +
-            "leaderEpoch = null, offset = 1, CreateTime = -1, serialized key size = 0, serialized value size = 0, " +
-            "headers = RecordHeaders(headers = [], isReadOnly = false), key = 1, value = 10) has invalid (negative) " +
-            "timestamp. Possibly because a pre-0.10 producer client was used to write this record to Kafka without " +
-            "embedding a timestamp, or because the input topic was created before upgrading the Kafka cluster to 0.10+. " +
-            "Use a different TimestampExtractor to process this data."));
+            "leaderEpoch = null, offset = 1, CreateTime = -1, deliveryCount = null, serialized key size = 0, " +
+            "serialized value size = 0, headers = RecordHeaders(headers = [], isReadOnly = false), key = 1, value = 10) " +
+            "has invalid (negative) timestamp. Possibly because a pre-0.10 producer client was used to write this record " +
+            "to Kafka without embedding a timestamp, or because the input topic was created before upgrading the Kafka " +
+            "cluster to 0.10+. Use a different TimestampExtractor to process this data."));
     }
 
     @Test

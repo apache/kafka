@@ -26,7 +26,7 @@ interface Segments<S extends Segment> {
 
     String segmentName(final long segmentId);
 
-    S getSegmentForTimestamp(final long timestamp);
+    S segmentForTimestamp(final long timestamp);
 
     S getOrCreateSegmentIfLive(final long segmentId, final ProcessorContext context, final long streamTime);
 

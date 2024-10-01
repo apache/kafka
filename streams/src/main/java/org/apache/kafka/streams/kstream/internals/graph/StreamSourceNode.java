@@ -30,7 +30,7 @@ import java.util.regex.Pattern;
 
 public class StreamSourceNode<K, V> extends SourceGraphNode<K, V> {
 
-    private final Logger log = LoggerFactory.getLogger(StreamSourceNode.class);
+    private static final Logger log = LoggerFactory.getLogger(StreamSourceNode.class);
 
     public StreamSourceNode(final String nodeName,
                             final Collection<String> topicNames,

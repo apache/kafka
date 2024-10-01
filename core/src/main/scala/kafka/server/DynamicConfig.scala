@@ -22,6 +22,7 @@ import kafka.server.DynamicBrokerConfig.AllDynamicConfigs
 import java.net.{InetAddress, UnknownHostException}
 import java.util.Properties
 import org.apache.kafka.common.config.ConfigDef
+import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.server.config.{QuotaConfigs, ZooKeeperInternals}
 
 import java.util
@@ -75,7 +76,7 @@ object DynamicConfig {
   }
 
   object Ip {
-    private val ipConfigs = QuotaConfigs.ipConfigs()
+    private val ipConfigs = QuotaConfigs.ipConfigs
 
     def configKeys: util.Map[String, ConfigDef.ConfigKey] = ipConfigs.configKeys
 
@@ -101,9 +102,15 @@ object DynamicConfig {
     def names: util.Set[String] = clientConfigs.names
   }
 
+  object Group {
+    private val groupConfigs = GroupConfig.configDef()
+
+    def names: util.Set[String] = groupConfigs.names
+  }
+
   private def validate(configDef: ConfigDef, props: Properties, customPropsAllowed: Boolean) = {
     // Validate Names
-    val names = configDef.names()
+    val names = configDef.names
     val propKeys = props.keySet.asScala.map(_.asInstanceOf[String])
     if (!customPropsAllowed) {
       val unknownKeys = propKeys.filterNot(names.contains(_))

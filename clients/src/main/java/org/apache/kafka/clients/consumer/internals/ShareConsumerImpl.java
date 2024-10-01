@@ -200,7 +200,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     private final Metrics metrics;
     private final int defaultApiTimeoutMs;
     private volatile boolean closed = false;
-    private final Optional<ClientTelemetryReporter> clientTelemetryReporter;
+    // Init value is needed to avoid NPE in case of exception raised in the constructor
+    private Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.empty();
 
     private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
 
@@ -495,7 +496,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     public Set<String> subscription() {
         acquireAndEnsureOpen();
         try {
-            return subscriptions.subscription();
+            return Collections.unmodifiableSet(subscriptions.subscription());
         } finally {
             release();
         }
@@ -597,7 +598,6 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             return ConsumerRecords.empty();
         } finally {
             kafkaShareConsumerMetrics.recordPollEnd(timer.currentTimeMs());
-            wakeupTrigger.clearTask();
             release();
         }
     }
@@ -615,6 +615,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
         // Wait a bit - this is where we will fetch records
         Timer pollTimer = time.timer(pollTimeout);
+        wakeupTrigger.setShareFetchAction(fetchBuffer);
+
         try {
             fetchBuffer.awaitNotEmpty(pollTimer);
         } catch (InterruptException e) {
@@ -622,6 +624,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             throw e;
         } finally {
             timer.update(pollTimer.currentTimeMs());
+            wakeupTrigger.clearTask();
         }
 
         return collect(Collections.emptyMap());
@@ -714,11 +717,11 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     completedAcknowledgements.forEach((tip, acks) -> {
                         Errors ackErrorCode = acks.getAcknowledgeErrorCode();
                         if (ackErrorCode == null) {
-                            result.put(tip, null);
+                            result.put(tip, Optional.empty());
                         } else {
                             ApiException exception = ackErrorCode.exception();
                             if (exception == null) {
-                                result.put(tip, null);
+                                result.put(tip, Optional.empty());
                             } else {
                                 result.put(tip, Optional.of(ackErrorCode.exception()));
                             }

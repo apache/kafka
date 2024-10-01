@@ -41,7 +41,7 @@ import java.time.Duration;
  * materialized view) that can be queried using the name provided in the {@link Materialized} instance.
  * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
  * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
- * New events are added to {@link TimeWindows} until their grace period ends (see {@link TimeWindows#grace(Duration)}).
+ * New events are added to {@link TimeWindows} until their grace period ends (see {@link TimeWindows#ofSizeAndGrace(Duration, Duration)}).
  * <p>
  * A {@code TimeWindowedKStream} must be obtained from a {@link KGroupedStream} via
  * {@link KGroupedStream#windowedBy(Windows)}.
@@ -151,7 +151,7 @@ public interface TimeWindowedKStream<K, V> {
      * contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the provide store name defined
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the name of the store defined
      * in {@code Materialized}, and "-changelog" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
@@ -201,7 +201,7 @@ public interface TimeWindowedKStream<K, V> {
      * contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the provide store name defined
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the name of the store defined
      * in {@code Materialized}, and "-changelog" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
@@ -354,7 +354,7 @@ public interface TimeWindowedKStream<K, V> {
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
-     * provide store name defined in {@link Materialized}, and "-changelog" is a fixed suffix.
+     * name of the store defined in {@link Materialized}, and "-changelog" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
@@ -416,7 +416,7 @@ public interface TimeWindowedKStream<K, V> {
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
-     * provide store name defined in {@link Materialized}, and "-changelog" is a fixed suffix.
+     * name of the store defined in {@link Materialized}, and "-changelog" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
@@ -576,7 +576,7 @@ public interface TimeWindowedKStream<K, V> {
      * contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the provide store name defined
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the name of the store defined
      * in {@code Materialized}, and "-changelog" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
@@ -640,7 +640,7 @@ public interface TimeWindowedKStream<K, V> {
      * contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the provide store name defined
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the name of the store defined
      * in {@link Materialized}, and "-changelog" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.

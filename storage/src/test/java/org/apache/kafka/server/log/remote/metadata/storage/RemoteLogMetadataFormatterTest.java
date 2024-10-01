@@ -53,7 +53,7 @@ public class RemoteLogMetadataFormatterTest {
         Optional<CustomMetadata> customMetadata = Optional.of(new CustomMetadata(new byte[10]));
         RemoteLogSegmentMetadata remoteLogMetadata = new RemoteLogSegmentMetadata(
                 remoteLogSegmentId, 0L, 100L, -1L, 1, 123L, 1024, customMetadata, COPY_SEGMENT_STARTED,
-                segLeaderEpochs, 0);
+                segLeaderEpochs);
 
         byte[] metadataBytes = new RemoteLogMetadataSerde().serialize(remoteLogMetadata);
         ConsumerRecord<byte[], byte[]> metadataRecord = new ConsumerRecord<>(

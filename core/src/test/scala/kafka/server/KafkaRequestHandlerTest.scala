@@ -25,8 +25,11 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.{BufferSupplier, MockTime, Time}
+import org.apache.kafka.network.metrics.RequestChannelMetrics
+import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.storage.log.metrics.{BrokerTopicMetrics, BrokerTopicStats}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -37,6 +40,7 @@ import org.mockito.Mockito.{mock, times, verify, when}
 
 import java.net.InetAddress
 import java.nio.ByteBuffer
+import java.util.Collections
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.Collectors
@@ -52,7 +56,7 @@ class KafkaRequestHandlerTest {
   def testCallbackTiming(): Unit = {
     val time = new MockTime()
     val startTime = time.nanoseconds()
-    val metrics = new RequestChannel.Metrics(None)
+    val metrics = new RequestChannelMetrics(Collections.emptySet[ApiKeys])
     val requestChannel = new RequestChannel(10, "", time, metrics)
     val apiHandler = mock(classOf[ApiRequestHandler])
     try {
@@ -69,7 +73,7 @@ class KafkaRequestHandlerTest {
             time.sleep(ms)
             handler.stop()
           },
-          RequestLocal.NoCaching)
+          RequestLocal.noCaching)
         // Execute the callback asynchronously.
         CompletableFuture.runAsync(() => callback(1))
         request.apiLocalCompleteTimeNanos = time.nanoseconds
@@ -89,7 +93,7 @@ class KafkaRequestHandlerTest {
   @Test
   def testCallbackTryCompleteActions(): Unit = {
     val time = new MockTime()
-    val metrics = mock(classOf[RequestChannel.Metrics])
+    val metrics = mock(classOf[RequestChannelMetrics])
     val apiHandler = mock(classOf[ApiRequestHandler])
     val requestChannel = new RequestChannel(10, "", time, metrics)
     val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time)
@@ -107,7 +111,7 @@ class KafkaRequestHandlerTest {
         (_: RequestLocal, _: Int) => {
           handler.stop()
         },
-        RequestLocal.NoCaching)
+        RequestLocal.noCaching)
       // Execute the callback asynchronously.
       CompletableFuture.runAsync(() => callback(1))
     }
@@ -125,7 +129,7 @@ class KafkaRequestHandlerTest {
   @Test
   def testHandlingCallbackOnNewThread(): Unit = {
     val time = new MockTime()
-    val metrics = mock(classOf[RequestChannel.Metrics])
+    val metrics = mock(classOf[RequestChannelMetrics])
     val apiHandler = mock(classOf[ApiRequestHandler])
     val requestChannel = new RequestChannel(10, "", time, metrics)
     val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time)
@@ -159,7 +163,7 @@ class KafkaRequestHandlerTest {
   @Test
   def testCallbackOnSameThread(): Unit = {
     val time = new MockTime()
-    val metrics = mock(classOf[RequestChannel.Metrics])
+    val metrics = mock(classOf[RequestChannelMetrics])
     val apiHandler = mock(classOf[ApiRequestHandler])
     val requestChannel = new RequestChannel(10, "", time, metrics)
     val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time)
@@ -210,24 +214,24 @@ class KafkaRequestHandlerTest {
     RemoteStorageMetrics.brokerTopicStatsMetrics.forEach(metric => {
       if (systemRemoteStorageEnabled) {
         if (!gaugeMetrics.contains(metric.getName)) {
-          assertTrue(brokerTopicMetrics.metricMap.contains(metric.getName), "the metric is missing: " + metric.getName)
+          assertTrue(brokerTopicMetrics.metricMapKeySet().contains(metric.getName), "the metric is missing: " + metric.getName)
         } else {
-          assertFalse(brokerTopicMetrics.metricMap.contains(metric.getName), "the metric should not appear: " + metric.getName)
+          assertFalse(brokerTopicMetrics.metricMapKeySet().contains(metric.getName), "the metric should not appear: " + metric.getName)
         }
       } else {
-        assertFalse(brokerTopicMetrics.metricMap.contains(metric.getName))
+        assertFalse(brokerTopicMetrics.metricMapKeySet().contains(metric.getName))
       }
     })
     gaugeMetrics.foreach(metricName => {
       if (systemRemoteStorageEnabled) {
-        assertTrue(brokerTopicMetrics.metricGaugeMap.contains(metricName), "The metric is missing:" + metricName)
+        assertTrue(brokerTopicMetrics.metricGaugeMap.containsKey(metricName), "The metric is missing:" + metricName)
       } else {
-        assertFalse(brokerTopicMetrics.metricGaugeMap.contains(metricName), "The metric should appear:" + metricName)
+        assertFalse(brokerTopicMetrics.metricGaugeMap.containsKey(metricName), "The metric should appear:" + metricName)
       }
     })
   }
 
-  def makeRequest(time: Time, metrics: RequestChannel.Metrics): RequestChannel.Request = {
+  def makeRequest(time: Time, metrics: RequestChannelMetrics): RequestChannel.Request = {
     // Make unsupported API versions request to avoid having to parse a real request
     val requestHeader = mock(classOf[RequestHeader])
     when(requestHeader.apiKey()).thenReturn(ApiKeys.API_VERSIONS)
@@ -241,7 +245,7 @@ class KafkaRequestHandlerTest {
 
   def setupBrokerTopicMetrics(systemRemoteStorageEnabled: Boolean = true): BrokerTopicMetrics = {
     val topic = "topic"
-    new BrokerTopicMetrics(Option.apply(topic), systemRemoteStorageEnabled)
+    new BrokerTopicMetrics(topic, systemRemoteStorageEnabled)
   }
 
   @ParameterizedTest
@@ -259,8 +263,8 @@ class KafkaRequestHandlerTest {
       brokerTopicStats.recordRemoteCopyLagBytes(topic2, 0, 100)
       assertEquals(600, brokerTopicStats.allTopicsStats.remoteCopyLagBytes)
     } else {
-      assertEquals(None, brokerTopicMetrics.metricGaugeMap.get(RemoteStorageMetrics.REMOTE_COPY_LAG_BYTES_METRIC.getName))
-      assertEquals(None, brokerTopicStats.allTopicsStats.metricGaugeMap.get(RemoteStorageMetrics.REMOTE_COPY_LAG_BYTES_METRIC.getName))
+      assertEquals(null, brokerTopicMetrics.metricGaugeMap.get(RemoteStorageMetrics.REMOTE_COPY_LAG_BYTES_METRIC.getName))
+      assertEquals(null, brokerTopicStats.allTopicsStats.metricGaugeMap.get(RemoteStorageMetrics.REMOTE_COPY_LAG_BYTES_METRIC.getName))
     }
   }
 
@@ -599,7 +603,7 @@ class KafkaRequestHandlerTest {
       brokerTopicStats.recordRemoteLogSizeBytes(topic2, 0, 100)
       assertEquals(600, brokerTopicStats.allTopicsStats.remoteLogSizeBytes)
     } else {
-      assertEquals(None, brokerTopicMetrics.metricGaugeMap.get(RemoteStorageMetrics.REMOTE_LOG_SIZE_BYTES_METRIC.getName))
+      assertEquals(null, brokerTopicMetrics.metricGaugeMap.get(RemoteStorageMetrics.REMOTE_LOG_SIZE_BYTES_METRIC.getName))
     }
   }
 

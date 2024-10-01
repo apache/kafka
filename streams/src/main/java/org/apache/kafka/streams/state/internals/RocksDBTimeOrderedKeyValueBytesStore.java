@@ -57,7 +57,7 @@ public class RocksDBTimeOrderedKeyValueBytesStore extends AbstractRocksDBTimeOrd
             observedStreamTime = Math.max(observedStreamTime, timestamp);
             minTimestamp = Math.min(minTimestamp, timestamp);
             final long segmentId = segments.segmentId(timestamp);
-            final KeyValueSegment segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
+            final KeyValueSegment segment = segments.getOrCreateSegmentIfLive(segmentId, internalProcessorContext, observedStreamTime);
             if (segment != null) {
                 //null segment is if it has expired, so  we don't want those records
                 ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -45,14 +46,19 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyConfig;
+import org.apache.kafka.streams.errors.ErrorHandlerContext;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
+import org.apache.kafka.streams.errors.LogAndContinueProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
+import org.apache.kafka.streams.errors.LogAndFailProcessingExceptionHandler;
+import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.errors.internals.FailedProcessingException;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
@@ -121,6 +127,7 @@ import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -240,13 +247,18 @@ public class StreamTaskTest {
     }
 
     private static StreamsConfig createConfig(final String eosConfig, final String enforcedProcessingValue) {
-        return createConfig(eosConfig, enforcedProcessingValue, LogAndFailExceptionHandler.class.getName());
+        return createConfig(eosConfig, enforcedProcessingValue, LogAndFailExceptionHandler.class.getName(), LogAndFailProcessingExceptionHandler.class.getName());
+    }
+
+    private static StreamsConfig createConfig(final String eosConfig, final String enforcedProcessingValue, final String deserializationExceptionHandler) {
+        return createConfig(eosConfig, enforcedProcessingValue, deserializationExceptionHandler, LogAndFailProcessingExceptionHandler.class.getName());
     }
 
     private static StreamsConfig createConfig(
         final String eosConfig,
         final String enforcedProcessingValue,
-        final String deserializationExceptionHandler) {
+        final String deserializationExceptionHandler,
+        final String processingExceptionHandler) {
         final String canonicalPath;
         try {
             canonicalPath = BASE_DIR.getCanonicalPath();
@@ -262,7 +274,8 @@ public class StreamTaskTest {
             mkEntry(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName()),
             mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig),
             mkEntry(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, enforcedProcessingValue),
-            mkEntry(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, deserializationExceptionHandler)
+            mkEntry(StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, deserializationExceptionHandler),
+            mkEntry(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, processingExceptionHandler)
         )));
     }
 
@@ -593,7 +606,7 @@ public class StreamTaskTest {
     public void shouldProcessRecordsAfterPrepareCommitWhenEosDisabled() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createSingleSourceStateless(createConfig(), StreamsConfig.METRICS_LATEST);
+        task = createSingleSourceStateless(createConfig());
 
         assertFalse(task.process(time.milliseconds()));
 
@@ -607,31 +620,6 @@ public class StreamTaskTest {
         task.prepareCommit();
         assertTrue(task.process(time.milliseconds()));
         task.postCommit(false);
-        assertTrue(task.process(time.milliseconds()));
-
-        assertFalse(task.process(time.milliseconds()));
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldNotProcessRecordsAfterPrepareCommitWhenEosAlphaEnabled() {
-        when(stateManager.taskId()).thenReturn(taskId);
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createSingleSourceStateless(createConfig(StreamsConfig.EXACTLY_ONCE, "0"), StreamsConfig.METRICS_LATEST);
-
-        assertFalse(task.process(time.milliseconds()));
-
-        task.addRecords(partition1, asList(
-            getConsumerRecordWithOffsetAsTimestamp(partition1, 10),
-            getConsumerRecordWithOffsetAsTimestamp(partition1, 20),
-            getConsumerRecordWithOffsetAsTimestamp(partition1, 30)
-        ));
-
-        assertTrue(task.process(time.milliseconds()));
-        task.prepareCommit();
-        assertFalse(task.process(time.milliseconds()));
-        task.postCommit(false);
-        assertTrue(task.process(time.milliseconds()));
         assertTrue(task.process(time.milliseconds()));
 
         assertFalse(task.process(time.milliseconds()));
@@ -641,7 +629,7 @@ public class StreamTaskTest {
     public void shouldNotProcessRecordsAfterPrepareCommitWhenEosV2Enabled() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createSingleSourceStateless(createConfig(StreamsConfig.EXACTLY_ONCE_V2, "0"), StreamsConfig.METRICS_LATEST);
+        task = createSingleSourceStateless(createConfig(StreamsConfig.EXACTLY_ONCE_V2, "0"));
 
         assertFalse(task.process(time.milliseconds()));
 
@@ -665,7 +653,7 @@ public class StreamTaskTest {
     public void shouldRecordBufferedRecords() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"), StreamsConfig.METRICS_LATEST);
+        task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"));
 
         final KafkaMetric metric = getMetric("active-buffer", "%s-count", task.id().toString());
 
@@ -743,13 +731,13 @@ public class StreamTaskTest {
         final String sourceNodeName = evenKeyForwardingSourceNode.name();
         final String terminalNodeName = processorStreamTime.name();
 
-        final Metric sourceAvg = getProcessorMetric("record-e2e-latency", "%s-avg", task.id().toString(), sourceNodeName, StreamsConfig.METRICS_LATEST);
-        final Metric sourceMin = getProcessorMetric("record-e2e-latency", "%s-min", task.id().toString(), sourceNodeName, StreamsConfig.METRICS_LATEST);
-        final Metric sourceMax = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), sourceNodeName, StreamsConfig.METRICS_LATEST);
+        final Metric sourceAvg = getProcessorMetric("record-e2e-latency", "%s-avg", task.id().toString(), sourceNodeName);
+        final Metric sourceMin = getProcessorMetric("record-e2e-latency", "%s-min", task.id().toString(), sourceNodeName);
+        final Metric sourceMax = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), sourceNodeName);
 
-        final Metric terminalAvg = getProcessorMetric("record-e2e-latency", "%s-avg", task.id().toString(), terminalNodeName, StreamsConfig.METRICS_LATEST);
-        final Metric terminalMin = getProcessorMetric("record-e2e-latency", "%s-min", task.id().toString(), terminalNodeName, StreamsConfig.METRICS_LATEST);
-        final Metric terminalMax = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), terminalNodeName, StreamsConfig.METRICS_LATEST);
+        final Metric terminalAvg = getProcessorMetric("record-e2e-latency", "%s-avg", task.id().toString(), terminalNodeName);
+        final Metric terminalMin = getProcessorMetric("record-e2e-latency", "%s-min", task.id().toString(), terminalNodeName);
+        final Metric terminalMax = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), terminalNodeName);
 
         // e2e latency = 10
         task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(0, 0L)));
@@ -811,7 +799,7 @@ public class StreamTaskTest {
     public void shouldRecordRestoredRecords() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"), StreamsConfig.METRICS_LATEST);
+        task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"));
 
         final KafkaMetric totalMetric = getMetric("restore", "%s-total", task.id().toString());
         final KafkaMetric rateMetric = getMetric("restore", "%s-rate", task.id().toString());
@@ -936,7 +924,6 @@ public class StreamTaskTest {
     }
 
     private void testMetricsForBuiltInMetricsVersionLatest() {
-        final String builtInMetricsVersion = StreamsConfig.METRICS_LATEST;
         assertNull(getMetric("commit", "%s-latency-avg", "all"));
         assertNull(getMetric("commit", "%s-latency-max", "all"));
         assertNull(getMetric("commit", "%s-rate", "all"));
@@ -969,8 +956,7 @@ public class StreamTaskTest {
     private Metric getProcessorMetric(final String operation,
                                       final String nameFormat,
                                       final String taskId,
-                                      final String processorNodeId,
-                                      final String builtInMetricsVersion) {
+                                      final String processorNodeId) {
 
         return getMetricByNameFilterByTags(
             metrics.metrics(),
@@ -1222,7 +1208,7 @@ public class StreamTaskTest {
     public void shouldRespectCommitNeeded() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"), StreamsConfig.METRICS_LATEST);
+        task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
@@ -1264,7 +1250,7 @@ public class StreamTaskTest {
     public void shouldCommitNextOffsetAndProcessorMetadataFromQueueIfAvailable() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"), StreamsConfig.METRICS_LATEST);
+        task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
@@ -2320,7 +2306,7 @@ public class StreamTaskTest {
     public void shouldClearCommitStatusesInCloseDirty() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"), StreamsConfig.METRICS_LATEST);
+        task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
@@ -2370,7 +2356,7 @@ public class StreamTaskTest {
     public void shouldThrowIfCleanClosingDirtyTask() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"), StreamsConfig.METRICS_LATEST);
+        task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
@@ -2461,7 +2447,7 @@ public class StreamTaskTest {
                 streamsMetrics,
                 null
         );
-        final StreamsMetricsImpl metrics = new StreamsMetricsImpl(this.metrics, "test", StreamsConfig.METRICS_LATEST, time);
+        final StreamsMetricsImpl metrics = new StreamsMetricsImpl(this.metrics, "test", time);
 
         // The processor topology is missing the topics
         final ProcessorTopology topology = withSources(emptyList(), mkMap());
@@ -2647,6 +2633,187 @@ public class StreamTaskTest {
         verify(recordCollector, never()).offsets();
     }
 
+    @Test
+    public void punctuateShouldNotHandleFailProcessingExceptionAndThrowStreamsException() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        task = createStatelessTask(createConfig(
+            AT_LEAST_ONCE,
+            "100",
+            LogAndFailExceptionHandler.class.getName(),
+            LogAndContinueProcessingExceptionHandler.class.getName()
+        ));
+
+        final StreamsException streamsException = assertThrows(
+            StreamsException.class,
+            () -> task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, timestamp -> {
+                throw new FailedProcessingException(new RuntimeException("KABOOM!"));
+            })
+        );
+
+        assertInstanceOf(RuntimeException.class, streamsException.getCause());
+        assertEquals("KABOOM!", streamsException.getCause().getMessage());
+    }
+
+    @Test
+    public void punctuateShouldNotHandleTaskCorruptedExceptionAndThrowItAsIs() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        task = createStatelessTask(createConfig(
+            AT_LEAST_ONCE,
+            "100",
+            LogAndFailExceptionHandler.class.getName(),
+            LogAndContinueProcessingExceptionHandler.class.getName()
+        ));
+
+        final Set<TaskId> tasksIds = new HashSet<>();
+        tasksIds.add(new TaskId(0, 0));
+        final TaskCorruptedException expectedException = new TaskCorruptedException(tasksIds, new InvalidOffsetException("Invalid offset") {
+            @Override
+            public Set<TopicPartition> partitions() {
+                return new HashSet<>(Collections.singletonList(new TopicPartition("topic", 0)));
+            }
+        });
+
+        final TaskCorruptedException taskCorruptedException = assertThrows(
+            TaskCorruptedException.class,
+            () -> task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, timestamp -> {
+                throw expectedException;
+            })
+        );
+
+        assertEquals(expectedException, taskCorruptedException);
+    }
+
+    @Test
+    public void punctuateShouldNotHandleTaskMigratedExceptionAndThrowItAsIs() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        task = createStatelessTask(createConfig(
+            AT_LEAST_ONCE,
+            "100",
+            LogAndFailExceptionHandler.class.getName(),
+            LogAndContinueProcessingExceptionHandler.class.getName()
+        ));
+
+        final TaskMigratedException expectedException = new TaskMigratedException("TaskMigratedException", new RuntimeException("Task migrated cause"));
+
+        final TaskMigratedException taskCorruptedException = assertThrows(
+            TaskMigratedException.class,
+            () -> task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, timestamp -> {
+                throw expectedException;
+            })
+        );
+
+        assertEquals(expectedException, taskCorruptedException);
+    }
+
+    @Test
+    public void punctuateShouldNotThrowStreamsExceptionWhenProcessingExceptionHandlerRepliesWithContinue() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        task = createStatelessTask(createConfig(
+            AT_LEAST_ONCE,
+            "100",
+            LogAndFailExceptionHandler.class.getName(),
+            LogAndContinueProcessingExceptionHandler.class.getName()
+        ));
+
+        task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, timestamp -> {
+            throw new KafkaException("KABOOM!");
+        });
+    }
+
+    @Test
+    public void punctuateShouldThrowStreamsExceptionWhenProcessingExceptionHandlerRepliesWithFail() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        task = createStatelessTask(createConfig(
+            AT_LEAST_ONCE,
+            "100",
+            LogAndFailExceptionHandler.class.getName(),
+            LogAndFailProcessingExceptionHandler.class.getName()
+        ));
+
+        final StreamsException streamsException = assertThrows(
+            StreamsException.class,
+            () -> task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, timestamp -> {
+                throw new KafkaException("KABOOM!");
+            })
+        );
+
+        assertInstanceOf(KafkaException.class, streamsException.getCause());
+        assertEquals("KABOOM!", streamsException.getCause().getMessage());
+    }
+
+    @Test
+    public void punctuateShouldThrowStreamsExceptionWhenProcessingExceptionHandlerReturnsNull() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        task = createStatelessTask(createConfig(
+            AT_LEAST_ONCE,
+            "100",
+            LogAndFailExceptionHandler.class.getName(),
+            NullProcessingExceptionHandler.class.getName()
+        ));
+
+        final StreamsException streamsException = assertThrows(
+            StreamsException.class,
+            () -> task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, timestamp -> {
+                throw new KafkaException("KABOOM!");
+            })
+        );
+
+        assertEquals("Fatal user code error in processing error callback", streamsException.getMessage());
+        assertInstanceOf(NullPointerException.class, streamsException.getCause());
+        assertEquals("Invalid ProcessingExceptionHandler response.", streamsException.getCause().getMessage());
+    }
+
+    @Test
+    public void punctuateShouldThrowFailedProcessingExceptionWhenProcessingExceptionHandlerThrowsAnException() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        task = createStatelessTask(createConfig(
+            AT_LEAST_ONCE,
+            "100",
+            LogAndFailExceptionHandler.class.getName(),
+            CrashingProcessingExceptionHandler.class.getName()
+        ));
+
+        final FailedProcessingException streamsException = assertThrows(
+            FailedProcessingException.class,
+            () -> task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, timestamp -> {
+                throw new KafkaException("KABOOM!");
+            })
+        );
+
+        assertEquals("Fatal user code error in processing error callback", streamsException.getMessage());
+        assertEquals("KABOOM from ProcessingExceptionHandlerMock!", streamsException.getCause().getMessage());
+    }
+
+    public static class CrashingProcessingExceptionHandler implements ProcessingExceptionHandler {
+        @Override
+        public ProcessingHandlerResponse handle(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
+            throw new RuntimeException("KABOOM from ProcessingExceptionHandlerMock!");
+        }
+
+        @Override
+        public void configure(final Map<String, ?> configs) {
+            // No-op
+        }
+    }
+
+    public static class NullProcessingExceptionHandler implements ProcessingExceptionHandler {
+        @Override
+        public ProcessingHandlerResponse handle(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
+            return null;
+        }
+
+        @Override
+        public void configure(final Map<String, ?> configs) {
+            // No-op
+        }
+    }
 
     private ProcessorStateManager mockStateManager() {
         final ProcessorStateManager manager = mock(ProcessorStateManager.class);
@@ -2809,8 +2976,7 @@ public class StreamTaskTest {
         );
     }
 
-    private StreamTask createSingleSourceStateless(final StreamsConfig config,
-                                                   final String builtInMetricsVersion) {
+    private StreamTask createSingleSourceStateless(final StreamsConfig config) {
         final ProcessorTopology topology = withSources(
             asList(source1, processorStreamTime, processorSystemTime),
             mkMap(mkEntry(topic1, source1))
@@ -2833,7 +2999,7 @@ public class StreamTaskTest {
             topology,
             consumer,
             new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
-            new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion, time),
+            new StreamsMetricsImpl(metrics, "test", time),
             stateDirectory,
             cache,
             time,
@@ -2870,7 +3036,7 @@ public class StreamTaskTest {
             topology,
             consumer,
             new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
-            new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, time),
+            new StreamsMetricsImpl(metrics, "test", time),
             stateDirectory,
             cache,
             time,
@@ -2906,7 +3072,7 @@ public class StreamTaskTest {
             topology,
             consumer,
             new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
-            new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, time),
+            new StreamsMetricsImpl(metrics, "test", time),
             stateDirectory,
             cache,
             time,

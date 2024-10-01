@@ -226,12 +226,13 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      */
     // Visible for testing
     static void runAtClose(final Collection<Optional<? extends RequestManager>> requestManagers,
-                           final NetworkClientDelegate networkClientDelegate) {
+                           final NetworkClientDelegate networkClientDelegate,
+                           final long currentTimeMs) {
         // These are the optional outgoing requests at the
         requestManagers.stream()
                 .filter(Optional::isPresent)
                 .map(Optional::get)
-                .map(RequestManager::pollOnClose)
+                .map(rm -> rm.pollOnClose(currentTimeMs))
                 .forEach(networkClientDelegate::addAll);
     }
 
@@ -330,7 +331,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         log.trace("Closing the consumer network thread");
         Timer timer = time.timer(closeTimeout);
         try {
-            runAtClose(requestManagers.entries(), networkClientDelegate);
+            runAtClose(requestManagers.entries(), networkClientDelegate, time.milliseconds());
         } catch (Exception e) {
             log.error("Unexpected error during shutdown. Proceed with closing.", e);
         } finally {

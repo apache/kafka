@@ -28,13 +28,9 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.Objects;
 
-public class Lz4Compression implements Compression {
+import static org.apache.kafka.common.record.CompressionType.LZ4;
 
-    // These values come from net.jpountz.lz4.LZ4Constants
-    // We may need to update them if the lz4 library changes these values.
-    public static final int MIN_LEVEL = 1;
-    public static final int MAX_LEVEL = 17;
-    public static final int DEFAULT_LEVEL = 9;
+public class Lz4Compression implements Compression {
 
     private final int level;
 
@@ -44,7 +40,7 @@ public class Lz4Compression implements Compression {
 
     @Override
     public CompressionType type() {
-        return CompressionType.LZ4;
+        return LZ4;
     }
 
     @Override
@@ -89,10 +85,10 @@ public class Lz4Compression implements Compression {
     }
 
     public static class Builder implements Compression.Builder<Lz4Compression> {
-        private int level = DEFAULT_LEVEL;
+        private int level = LZ4.defaultLevel();
 
         public Builder level(int level) {
-            if (level < MIN_LEVEL || MAX_LEVEL < level) {
+            if (level < LZ4.minLevel() || LZ4.maxLevel() < level) {
                 throw new IllegalArgumentException("lz4 doesn't support given compression level: " + level);
             }
 

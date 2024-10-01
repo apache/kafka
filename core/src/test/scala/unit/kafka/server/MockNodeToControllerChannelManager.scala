@@ -55,6 +55,8 @@ class MockNodeToControllerChannelManager(
     Optional.of(controllerApiVersions)
   }
 
+  override def getTimeoutMs: Long = retryTimeoutMs.toLong
+
   private[server] def handleResponse(request: NodeToControllerQueueItem)(response: ClientResponse): Unit = {
     if (response.authenticationException != null || response.versionMismatch != null) {
       request.callback.onComplete(response)

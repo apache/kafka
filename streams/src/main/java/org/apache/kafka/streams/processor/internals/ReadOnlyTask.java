@@ -213,8 +213,8 @@ public class ReadOnlyTask implements Task {
     }
 
     @Override
-    public StateStore getStore(final String name) {
-        return task.getStore(name);
+    public StateStore store(final String name) {
+        return task.store(name);
     }
 
     @Override

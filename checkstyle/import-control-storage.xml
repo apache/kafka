@@ -63,6 +63,9 @@
             <allow pkg="org.apache.kafka.storage"/>
             <subpackage name="remote">
                 <allow pkg="scala.collection" />
+                <subpackage name="quota">
+                    <allow pkg="org.apache.kafka.server.quota" />
+                </subpackage>
                 <subpackage name="storage">
                     <allow pkg="com.yammer.metrics.core" />
                     <allow pkg="org.apache.kafka.server.metrics" />
@@ -73,6 +76,8 @@
     </subpackage>
 
     <subpackage name="storage.internals">
+        <allow pkg="kafka.server"/>
+        <allow pkg="kafka.log"/>
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="com.yammer.metrics.core" />
         <allow pkg="org.apache.kafka.common" />
@@ -81,6 +86,11 @@
         <allow pkg="org.apache.kafka.test" />
         <allow pkg="com.github.benmanes.caffeine.cache" />
         <allow pkg="org.apache.kafka.coordinator.transaction"/>
+    </subpackage>
+
+    <subpackage name="storage.log">
+        <allow pkg="org.apache.kafka.server" />
+        <allow pkg="com.yammer.metrics" />
     </subpackage>
 
     <!-- START OF TIERED STORAGE INTEGRATION TEST IMPORT DEPENDENCIES -->

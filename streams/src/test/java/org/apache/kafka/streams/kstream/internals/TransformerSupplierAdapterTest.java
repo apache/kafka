@@ -17,8 +17,6 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.Transformer;
-import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.StoreBuilder;
 
@@ -41,13 +39,16 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
+@SuppressWarnings("deprecation")
 public class TransformerSupplierAdapterTest {
 
     private ProcessorContext context = mock(ProcessorContext.class);
     @SuppressWarnings("unchecked")
-    private Transformer<String, String, KeyValue<Integer, Integer>> transformer = mock(Transformer.class);
+    private org.apache.kafka.streams.kstream.Transformer<String, String, KeyValue<Integer, Integer>> transformer =
+        mock(org.apache.kafka.streams.kstream.Transformer.class);
     @SuppressWarnings("unchecked")
-    private TransformerSupplier<String, String, KeyValue<Integer, Integer>> transformerSupplier = mock(TransformerSupplier.class);
+    private org.apache.kafka.streams.kstream.TransformerSupplier<String, String, KeyValue<Integer, Integer>> transformerSupplier =
+        mock(org.apache.kafka.streams.kstream.TransformerSupplier.class);
     @SuppressWarnings("unchecked")
     private Set<StoreBuilder<?>> stores = mock(Set.class);
 
@@ -60,7 +61,7 @@ public class TransformerSupplierAdapterTest {
 
         final TransformerSupplierAdapter<String, String, Integer, Integer> adapter =
             new TransformerSupplierAdapter<>(transformerSupplier);
-        final Transformer<String, String, Iterable<KeyValue<Integer, Integer>>> adaptedTransformer = adapter.get();
+        final org.apache.kafka.streams.kstream.Transformer<String, String, Iterable<KeyValue<Integer, Integer>>> adaptedTransformer = adapter.get();
         adaptedTransformer.init(context);
 
         verify(transformer).init(context);
@@ -72,7 +73,7 @@ public class TransformerSupplierAdapterTest {
 
         final TransformerSupplierAdapter<String, String, Integer, Integer> adapter =
             new TransformerSupplierAdapter<>(transformerSupplier);
-        final Transformer<String, String, Iterable<KeyValue<Integer, Integer>>> adaptedTransformer = adapter.get();
+        final org.apache.kafka.streams.kstream.Transformer<String, String, Iterable<KeyValue<Integer, Integer>>> adaptedTransformer = adapter.get();
         adaptedTransformer.close();
 
         verify(transformer).close();
@@ -94,7 +95,7 @@ public class TransformerSupplierAdapterTest {
 
         final TransformerSupplierAdapter<String, String, Integer, Integer> adapter =
             new TransformerSupplierAdapter<>(transformerSupplier);
-        final Transformer<String, String, Iterable<KeyValue<Integer, Integer>>> adaptedTransformer = adapter.get();
+        final org.apache.kafka.streams.kstream.Transformer<String, String, Iterable<KeyValue<Integer, Integer>>> adaptedTransformer = adapter.get();
         final Iterator<KeyValue<Integer, Integer>> iterator = adaptedTransformer.transform(key, value).iterator();
 
         assertThat(iterator.hasNext(), equalTo(true));
@@ -109,7 +110,7 @@ public class TransformerSupplierAdapterTest {
 
         final TransformerSupplierAdapter<String, String, Integer, Integer> adapter =
             new TransformerSupplierAdapter<>(transformerSupplier);
-        final Transformer<String, String, Iterable<KeyValue<Integer, Integer>>> adaptedTransformer = adapter.get();
+        final org.apache.kafka.streams.kstream.Transformer<String, String, Iterable<KeyValue<Integer, Integer>>> adaptedTransformer = adapter.get();
         final Iterator<KeyValue<Integer, Integer>> iterator = adaptedTransformer.transform(key, value).iterator();
 
         assertThat(iterator.hasNext(), equalTo(false));
@@ -118,20 +119,23 @@ public class TransformerSupplierAdapterTest {
     @Test
     public void shouldAlwaysGetNewAdapterTransformer() {
         @SuppressWarnings("unchecked")
-        final Transformer<String, String, KeyValue<Integer, Integer>> transformer1 = mock(Transformer.class);
+        final org.apache.kafka.streams.kstream.Transformer<String, String, KeyValue<Integer, Integer>> transformer1 =
+            mock(org.apache.kafka.streams.kstream.Transformer.class);
         @SuppressWarnings("unchecked")
-        final Transformer<String, String, KeyValue<Integer, Integer>> transformer2 = mock(Transformer.class);
+        final org.apache.kafka.streams.kstream.Transformer<String, String, KeyValue<Integer, Integer>> transformer2 =
+            mock(org.apache.kafka.streams.kstream.Transformer.class);
         @SuppressWarnings("unchecked")
-        final Transformer<String, String, KeyValue<Integer, Integer>> transformer3 = mock(Transformer.class);
+        final org.apache.kafka.streams.kstream.Transformer<String, String, KeyValue<Integer, Integer>> transformer3 =
+            mock(org.apache.kafka.streams.kstream.Transformer.class);
         when(transformerSupplier.get()).thenReturn(transformer1).thenReturn(transformer2).thenReturn(transformer3);
 
         final TransformerSupplierAdapter<String, String, Integer, Integer> adapter =
             new TransformerSupplierAdapter<>(transformerSupplier);
-        final Transformer<String, String, Iterable<KeyValue<Integer, Integer>>> adapterTransformer1 = adapter.get();
+        final org.apache.kafka.streams.kstream.Transformer<String, String, Iterable<KeyValue<Integer, Integer>>> adapterTransformer1 = adapter.get();
         adapterTransformer1.init(context);
-        final Transformer<String, String, Iterable<KeyValue<Integer, Integer>>> adapterTransformer2 = adapter.get();
+        final org.apache.kafka.streams.kstream.Transformer<String, String, Iterable<KeyValue<Integer, Integer>>> adapterTransformer2 = adapter.get();
         adapterTransformer2.init(context);
-        final Transformer<String, String, Iterable<KeyValue<Integer, Integer>>> adapterTransformer3 = adapter.get();
+        final org.apache.kafka.streams.kstream.Transformer<String, String, Iterable<KeyValue<Integer, Integer>>> adapterTransformer3 = adapter.get();
         adapterTransformer3.init(context);
 
         assertThat(adapterTransformer1, not(sameInstance(adapterTransformer2)));

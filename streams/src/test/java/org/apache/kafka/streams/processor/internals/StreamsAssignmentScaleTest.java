@@ -82,7 +82,7 @@ public class StreamsAssignmentScaleTest {
     static final long MAX_ASSIGNMENT_DURATION = 120 * 1000L; // we should stay below `max.poll.interval.ms`
     static final String APPLICATION_ID = "streams-assignment-scale-test";
 
-    private final Logger log = LoggerFactory.getLogger(StreamsAssignmentScaleTest.class);
+    private static final Logger log = LoggerFactory.getLogger(StreamsAssignmentScaleTest.class);
 
     /* HighAvailabilityTaskAssignor tests */
 

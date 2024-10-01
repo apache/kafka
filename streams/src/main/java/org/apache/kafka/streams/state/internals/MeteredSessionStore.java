@@ -24,7 +24,6 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
@@ -99,23 +98,6 @@ public class MeteredSessionStore<K, V>
         this.time = time;
     }
 
-    @Deprecated
-    @Override
-    public void init(final ProcessorContext context,
-                     final StateStore root) {
-        this.context = context instanceof InternalProcessorContext ? (InternalProcessorContext<?, ?>) context : null;
-        taskId = context.taskId();
-        initStoreSerde(context);
-        streamsMetrics = (StreamsMetricsImpl) context.metrics();
-
-        registerMetrics();
-        final Sensor restoreSensor =
-            StateStoreMetrics.restoreSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
-
-        // register and possibly restore the state from the logs
-        maybeMeasureLatency(() -> super.init(context, root), time, restoreSensor);
-    }
-
     @Override
     public void init(final StateStoreContext context,
                      final StateStore root) {
@@ -144,14 +126,6 @@ public class MeteredSessionStore<K, V>
         StateStoreMetrics.addOldestOpenIteratorGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
                 (config, now) -> openIterators.isEmpty() ? null : openIterators.first().startTimestamp()
         );
-    }
-
-
-    private void initStoreSerde(final ProcessorContext context) {
-        final String storeName = name();
-        final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
-        serdes = StoreSerdeInitializer.prepareStoreSerde(
-            context, storeName, changelogTopic, keySerde, valueSerde, WrappingNullableUtils::prepareValueSerde);
     }
 
     private void initStoreSerde(final StateStoreContext context) {
@@ -481,7 +455,7 @@ public class MeteredSessionStore<K, V>
                         iteratorDurationSensor,
                         streamsMetrics,
                         serdes::keyFrom,
-                        StoreQueryUtils.getDeserializeValue(serdes, wrapped()),
+                        StoreQueryUtils.deserializeValue(serdes, wrapped()),
                         time,
                         numOpenIterators,
                         openIterators
