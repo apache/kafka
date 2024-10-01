@@ -677,7 +677,7 @@ public class KafkaStreams implements AutoCloseable {
                 return;
             }
 
-            // all (alive) threads have received their assignment, close any remaining "pending" Tasks, they're not needed
+            // all (alive) threads have received their assignment, close any remaining "pending" tasks, they're not needed
             stateDirectory.closePendingTasks();
 
             setState(State.RUNNING);
@@ -1415,8 +1415,6 @@ public class KafkaStreams implements AutoCloseable {
     public synchronized void start() throws IllegalStateException, StreamsException {
         if (setState(State.REBALANCING)) {
             log.debug("Initializing STANDBY tasks for existing local state");
-
-            // initialize a dummy Task for any state we have locally
             stateDirectory.initializeTasksForLocalState(topologyMetadata, streamsMetrics);
 
             log.debug("Starting Streams client");

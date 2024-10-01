@@ -222,8 +222,11 @@ public class ProcessorStateManager implements StateManager {
         log.debug("Created state store manager for task {}", taskId);
     }
 
-    // standby tasks initialized for local state on-startup need to have their stateManager internals updated for the
-    // corresponding StreamThread context
+    /**
+     * Standby tasks initialized for local state on-startup are only partially initialized, because they are not yet
+     * assigned to a StreamThread. Once assigned to a StreamThread, we complete their initialization here using the
+     * assigned StreamThread's context.
+     */
     void assignToStreamThread(final LogContext logContext,
                               final ChangelogRegister changelogReader,
                               final Collection<TopicPartition> sourcePartitions) {

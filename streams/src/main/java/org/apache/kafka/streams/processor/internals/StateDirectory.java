@@ -209,13 +209,13 @@ public class StateDirectory implements AutoCloseable {
             for (final TaskDirectory taskDirectory : nonEmptyTaskDirectories) {
                 final String dirName = taskDirectory.file().getName();
                 final TaskId id = parseTaskDirectoryName(dirName, taskDirectory.namedTopology());
-                final ProcessorTopology topology = topologyMetadata.buildSubtopology(id);
-                final Set<TopicPartition> inputPartitions = topology.sourceTopics().stream().map(topic -> new TopicPartition(topic, id.partition())).collect(Collectors.toSet());
+                final ProcessorTopology subTopology = topologyMetadata.buildSubtopology(id);
+                final Set<TopicPartition> inputPartitions = subTopology.sourceTopics().stream().map(topic -> new TopicPartition(topic, id.partition())).collect(Collectors.toSet());
 
-                // we still check whether the Task sub-topology is stateful, even though we know its directory contains
-                // state, because it's possible the topology has changed since that data was written, and is now stateless
+                // we still check if the task's sub-topology is stateful, even though we know its directory contains state,
+                // because it's possible that the topology has changed since that data was written, and is now stateless
                 // this therefore prevents us from creating unnecessary Tasks just because of some left-over state
-                if (topology.hasStateWithChangelogs()) {
+                if (subTopology.hasStateWithChangelogs()) {
                     final ProcessorStateManager stateManager = new ProcessorStateManager(
                         id,
                         Task.TaskType.STANDBY,
@@ -223,7 +223,7 @@ public class StateDirectory implements AutoCloseable {
                         logContext,
                         this,
                         null,
-                        topology.storeToChangelogTopic(),
+                        subTopology.storeToChangelogTopic(),
                         inputPartitions,
                         stateUpdaterEnabled
                     );
@@ -239,7 +239,7 @@ public class StateDirectory implements AutoCloseable {
                     final Task task = new StandbyTask(
                         id,
                         inputPartitions,
-                        topology,
+                        subTopology,
                         topologyMetadata.taskConfig(id),
                         streamsMetrics,
                         stateManager,
@@ -248,7 +248,6 @@ public class StateDirectory implements AutoCloseable {
                         context
                     );
 
-                    // initialize and suspend new Tasks
                     try {
                         task.initializeIfNeeded();
 
@@ -496,6 +495,9 @@ public class StateDirectory implements AutoCloseable {
         }
     }
 
+    /**
+     * Expose for tests.
+     */
     Thread lockOwner(final TaskId taskId) {
         return lockedTasksToOwner.get(taskId);
     }
