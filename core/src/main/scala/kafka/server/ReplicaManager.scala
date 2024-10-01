@@ -25,7 +25,6 @@ import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.ReplicaManager.{AtMinIsrPartitionCountMetricName, FailedIsrUpdatesPerSecMetricName, IsrExpandsPerSecMetricName, IsrShrinksPerSecMetricName, LeaderCountMetricName, OfflineReplicaCountMetricName, PartitionCountMetricName, PartitionsWithLateTransactionsCountMetricName, ProducerIdCountMetricName, ReassigningPartitionsMetricName, UnderMinIsrPartitionCountMetricName, UnderReplicatedPartitionsMetricName, createLogReadResult, isListOffsetsTimestampUnsupported}
 import kafka.server.metadata.ZkMetadataCache
-import kafka.server.share.{DelayedShareFetch, DelayedShareFetchKey}
 import kafka.utils.Implicits._
 import kafka.utils._
 import kafka.zk.KafkaZkClient
@@ -291,7 +290,8 @@ class ReplicaManager(val config: KafkaConfig,
                      threadNamePrefix: Option[String] = None,
                      val brokerEpochSupplier: () => Long = () => -1,
                      addPartitionsToTxnManager: Option[AddPartitionsToTxnManager] = None,
-                     val directoryEventHandler: DirectoryEventHandler = DirectoryEventHandler.NOOP
+                     val directoryEventHandler: DirectoryEventHandler = DirectoryEventHandler.NOOP,
+                     val defaultActionQueue: ActionQueue = new DelayedActionQueue
                      ) extends Logging {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
@@ -742,28 +742,7 @@ class ReplicaManager(val config: KafkaConfig,
     localLog(topicPartition).map(_.parentDir)
   }
 
-  /**
-   * TODO: move this action queue to handle thread so we can simplify concurrency handling
-   */
-  private val defaultActionQueue = new DelayedActionQueue
-
   def tryCompleteActions(): Unit = defaultActionQueue.tryCompleteActions()
-
-  /**
-   * Append an action to the DelayedActionQueue to complete any pending share fetch requests for the already fetched topic partitions.
-   * @param topicIdPartitions          Topic partitions for which we know that the data has been fetched already
-   * @param groupId                    Share group's id
-   * @param delayedShareFetchPurgatory Purgatory storing the pending delayed share fetch requests
-   */
-  def addCompleteDelayedShareFetchPurgatoryAction(topicIdPartitions: Seq[TopicIdPartition],
-                                                  groupId: String,
-                                                  delayedShareFetchPurgatory: DelayedOperationPurgatory[DelayedShareFetch]): Unit = {
-    defaultActionQueue.add {
-      () => topicIdPartitions.foreach(topicIdPartition => {
-        delayedShareFetchPurgatory.checkAndComplete(new DelayedShareFetchKey(groupId, topicIdPartition))
-      })
-    }
-  }
 
   /**
    * Append messages to leader replicas of the partition, and wait for them to be replicated to other replicas;

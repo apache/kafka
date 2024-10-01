@@ -16,6 +16,7 @@
  */
 package kafka.server.share;
 
+import kafka.server.ActionQueue;
 import kafka.server.DelayedOperation;
 import kafka.server.DelayedOperationPurgatory;
 import kafka.server.LogReadResult;
@@ -55,6 +56,7 @@ public class DelayedShareFetch extends DelayedOperation {
     private final ShareFetchData shareFetchData;
     private final ReplicaManager replicaManager;
     private final Map<SharePartitionKey, SharePartition> partitionCacheMap;
+    private final ActionQueue delayedActionQueue;
     private final DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory;
 
     private Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionDataFromTryComplete;
@@ -63,11 +65,13 @@ public class DelayedShareFetch extends DelayedOperation {
             ShareFetchData shareFetchData,
             ReplicaManager replicaManager,
             Map<SharePartitionKey, SharePartition> partitionCacheMap,
+            ActionQueue delayedActionQueue,
             DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory) {
         super(shareFetchData.fetchParams().maxWaitMs, Option.empty());
         this.shareFetchData = shareFetchData;
         this.replicaManager = replicaManager;
         this.partitionCacheMap = partitionCacheMap;
+        this.delayedActionQueue = delayedActionQueue;
         this.delayedShareFetchPurgatory = delayedShareFetchPurgatory;
         this.topicPartitionDataFromTryComplete = new LinkedHashMap<>();
     }
@@ -139,7 +143,12 @@ public class DelayedShareFetch extends DelayedOperation {
                     // then we should check if there is a pending share fetch request for the topic-partition and complete it.
                     // We add the action to delayed actions queue to avoid an infinite call stack, which could happen if
                     // we directly call delayedShareFetchPurgatory.checkAndComplete
-                    replicaManager.addCompleteDelayedShareFetchPurgatoryAction(CollectionConverters.asScala(result.keySet()).toSeq(), shareFetchData.groupId(), delayedShareFetchPurgatory);
+                    delayedActionQueue.add(() -> {
+                        result.keySet().forEach(topicIdPartition ->
+                            delayedShareFetchPurgatory.checkAndComplete(
+                                new DelayedShareFetchKey(shareFetchData.groupId(), topicIdPartition)));
+                        return BoxedUnit.UNIT;
+                    });
                 });
 
         } catch (Exception e) {

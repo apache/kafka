@@ -28,7 +28,7 @@ import java.util.Objects;
  */
 public class DelayedShareFetchKey extends SharePartitionKey implements DelayedOperationKey {
 
-    public DelayedShareFetchKey(String groupId, TopicIdPartition topicIdPartition) {
+    DelayedShareFetchKey(String groupId, TopicIdPartition topicIdPartition) {
         super(groupId, topicIdPartition);
     }
 
