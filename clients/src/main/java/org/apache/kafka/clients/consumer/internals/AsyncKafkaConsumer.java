@@ -73,6 +73,7 @@ import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
@@ -1831,6 +1832,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * execution of the rebalancing logic. The rebalancing logic cannot complete until the
      * {@link ConsumerRebalanceListener} callback is performed.
      *
+<<<<<<< HEAD
      * <p/>
      *
      * There is a conflict between the needs of the {@link ConsumerRebalanceListener} and internal event processing
@@ -1855,13 +1857,21 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // ConsumerRebalanceListenerCallbackNeededEvent may or may not appear in the background event queue.
             // So there's really no choice but to process any events in the queue in case that event is waiting for
             // the application thread to pick up and invoke the callback handler.
-            boolean hadEvents;
+            boolean hadEvents = false;
 
             try {
                 if (wasInterrupted)
                     Thread.currentThread().interrupt();
 
-                hadEvents = processBackgroundEvents();
+                try {
+                    hadEvents = processBackgroundEvents();
+                } catch (InvalidTopicException e) {
+                    // If users subscribe to an invalid topic name, they will get InvalidTopicException in error events,
+                    // because network thread keeps trying to send MetadataRequest in the background.
+                    // Ignore it to avoid unsubscribe failed.
+                } catch (Exception e) {
+                    throw e;
+                }
             } finally {
                 if (wasInterrupted)
                     Thread.interrupted();

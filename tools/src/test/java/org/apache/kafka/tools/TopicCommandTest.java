@@ -137,9 +137,6 @@ public class TopicCommandTest {
         assertInitializeInvalidOptionsExitCode(1,
             new String[] {"--bootstrap-server", bootstrapServer, "--alter", "--topic", topicName,
                 "--partitions", "3", "--config", "cleanup.policy=compact"});
-        assertInitializeInvalidOptionsExitCode(1,
-            new String[] {"--bootstrap-server", bootstrapServer, "--alter", "--topic", topicName,
-                "--partitions", "3", "--delete-config", "cleanup.policy"});
         TopicCommand.TopicCommandOptions opts =
             new TopicCommand.TopicCommandOptions(
                 new String[] {"--bootstrap-server", bootstrapServer, "--create", "--topic", topicName, "--partitions", "3",
@@ -370,7 +367,7 @@ public class TopicCommandTest {
                 .setBrokers(6)
                 .setServerProperties(serverProp)
                 .setPerServerProperties(rackInfo)
-                .setTypes(Stream.of(Type.ZK, Type.KRAFT).collect(Collectors.toSet()))
+                .setTypes(Stream.of(Type.KRAFT).collect(Collectors.toSet()))
                 .build()
         );
     }

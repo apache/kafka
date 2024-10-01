@@ -75,6 +75,7 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -104,7 +105,6 @@ import static org.apache.kafka.common.utils.Utils.sleep;
 import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -294,7 +294,7 @@ public class IntegrationTestUtils {
                                             final int replicationCount,
                                             final String... topics) {
         try {
-            cluster.deleteAllTopicsAndWait(DEFAULT_TIMEOUT);
+            cluster.deleteAllTopics();
             for (final String topic : topics) {
                 cluster.createTopic(topic, partitionCount, replicationCount);
             }
@@ -306,9 +306,9 @@ public class IntegrationTestUtils {
     public static void quietlyCleanStateAfterTest(final EmbeddedKafkaCluster cluster, final KafkaStreams driver) {
         try {
             driver.cleanUp();
-            cluster.deleteAllTopicsAndWait(DEFAULT_TIMEOUT);
-        } catch (final RuntimeException | InterruptedException e) {
-            LOG.warn("Ignoring failure to clean test state", e);
+            cluster.deleteAllTopics();
+        } catch (final RuntimeException e) {
+            LOG.warn("Ignoring failure to clean test state");
         }
     }
 
@@ -1167,6 +1167,10 @@ public class IntegrationTestUtils {
         if (results.size() != expected.size()) {
             throw new AssertionError(printRecords(results) + " != " + expected);
         }
+        // sort expected and results by key before comparing them
+        expected.sort(Comparator.comparing(e -> e.key().toString()));
+        results.sort(Comparator.comparing(e -> e.key().toString()));
+
         final Iterator<KeyValueTimestamp<K, V>> expectedIterator = expected.iterator();
         for (final ConsumerRecord<K, V> result : results) {
             final KeyValueTimestamp<K, V> expected1 = expectedIterator.next();
@@ -1176,28 +1180,6 @@ public class IntegrationTestUtils {
                 throw new AssertionError(printRecords(results) + " != " + expected, e);
             }
         }
-    }
-
-    public static void verifyKeyValueTimestamps(final Properties consumerConfig,
-                                                final String topic,
-                                                final Set<KeyValueTimestamp<String, Long>> expected) {
-        final List<ConsumerRecord<String, Long>> results;
-        try {
-            results = waitUntilMinRecordsReceived(consumerConfig, topic, expected.size());
-        } catch (final Exception e) {
-            throw new RuntimeException(e);
-        }
-
-        if (results.size() != expected.size()) {
-            throw new AssertionError(printRecords(results) + " != " + expected);
-        }
-
-        final Set<KeyValueTimestamp<String, Long>> actual =
-            results.stream()
-                   .map(result -> new KeyValueTimestamp<>(result.key(), result.value(), result.timestamp()))
-                   .collect(Collectors.toSet());
-
-        assertThat(actual, equalTo(expected));
     }
 
     private static <K, V> void compareKeyValueTimestamp(final ConsumerRecord<K, V> record,

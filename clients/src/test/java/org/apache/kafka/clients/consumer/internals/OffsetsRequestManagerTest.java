@@ -747,6 +747,38 @@ public class OffsetsRequestManagerTest {
         verify(subscriptionState, never()).seekUnvalidated(any(), any());
     }
 
+    @Test
+    public void testRemoteListOffsetsRequestTimeoutMs() {
+        int requestTimeoutMs = 100;
+        int defaultApiTimeoutMs = 500;
+        // Overriding the requestManager to provide different request and default API timeout
+        requestManager = new OffsetsRequestManager(
+                subscriptionState,
+                metadata,
+                DEFAULT_ISOLATION_LEVEL,
+                time,
+                RETRY_BACKOFF_MS,
+                requestTimeoutMs,
+                defaultApiTimeoutMs,
+                apiVersions,
+                mock(NetworkClientDelegate.class),
+                commitRequestManager,
+                new LogContext()
+        );
+
+        Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,
+                ListOffsetsRequest.EARLIEST_TIMESTAMP);
+        mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
+        requestManager.fetchOffsets(timestampsToSearch, false);
+        assertEquals(1, requestManager.requestsToSend());
+        NetworkClientDelegate.PollResult retriedPoll = requestManager.poll(time.milliseconds());
+        NetworkClientDelegate.UnsentRequest unsentRequest = retriedPoll.unsentRequests.get(0);
+        AbstractRequest abstractRequest = unsentRequest.requestBuilder().build();
+        assertInstanceOf(ListOffsetsRequest.class, abstractRequest);
+        ListOffsetsRequest offsetFetchRequest = (ListOffsetsRequest) abstractRequest;
+        assertEquals(requestTimeoutMs, offsetFetchRequest.timeoutMs());
+    }
+
     private void mockAssignedPartitionsMissingPositions(Set<TopicPartition> assignedPartitions,
                                                         Set<TopicPartition> initializingPartitions,
                                                         Metadata.LeaderAndEpoch leaderAndEpoch) {
