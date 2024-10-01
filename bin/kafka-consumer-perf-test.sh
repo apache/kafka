@@ -14,8 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+base_dir=$(dirname "$(readlink -f "$0")")
+
 if [ "x$KAFKA_HEAP_OPTS" = "x" ]; then
     export KAFKA_HEAP_OPTS="-Xmx512M"
 fi
 
-exec $(dirname "$(readlink -f "$0")")/kafka-run-class.sh org.apache.kafka.tools.ConsumerPerformance "$@"
+exec "$base_dir"/kafka-run-class.sh org.apache.kafka.tools.ConsumerPerformance "$@"

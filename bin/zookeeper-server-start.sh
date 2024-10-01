@@ -19,7 +19,8 @@ then
 	echo "USAGE: $0 [-daemon] zookeeper.properties"
 	exit 1
 fi
-base_dir=$(dirname $0)
+
+base_dir=$(dirname "$(readlink -f "$0")")
 
 if [ "x$KAFKA_LOG4J_OPTS" = "x" ]; then
     export KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/../config/log4j.properties"
@@ -41,4 +42,4 @@ case $COMMAND in
      ;;
 esac
 
-exec $(dirname "$(readlink -f "$0")")/kafka-run-class.sh $EXTRA_ARGS org.apache.zookeeper.server.quorum.QuorumPeerMain "$@"
+exec "$base_dir"/kafka-run-class.sh $EXTRA_ARGS org.apache.zookeeper.server.quorum.QuorumPeerMain "$@"

@@ -20,7 +20,7 @@ export GREP_OPTIONS='--color=never'
 # Helper function which prints version numbers so they can be compared lexically or numerically
 function version { echo "$@" | awk -F. '{ printf("%03d%03d%03d%03d\n", $1,$2,$3,$4); }'; }
 
-base_dir=`dirname $0`/..
+base_dir=$(dirname "$(readlink -f "$0")")/..
 cd $base_dir
 
 echo "Checking Virtual Box installation..."

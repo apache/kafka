@@ -14,12 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-base_dir=$(dirname $0)
+base_dir=$(dirname "$(readlink -f "$0")")
 jmh_project_name="jmh-benchmarks"
 
-if [ ${base_dir} == "." ]; then
+if [ "$base_dir" == "." ]; then
      gradlew_dir=".."
-elif [ ${base_dir##./} == "${jmh_project_name}" ]; then
+elif [ "${base_dir##./}" == "${jmh_project_name}" ]; then
      gradlew_dir="."
 else
     echo "JMH Benchmarks need to be run from the root of the kafka repository or the 'jmh-benchmarks' directory"
@@ -27,7 +27,7 @@ else
 fi
 
 gradleCmd="${gradlew_dir}/gradlew"
-libDir="${base_dir}/build/libs"
+libDir="$base_dir/build/libs"
 
 echo "running gradlew :jmh-benchmarks:clean :jmh-benchmarks:shadowJar"
 

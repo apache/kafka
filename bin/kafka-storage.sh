@@ -14,4 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-exec $(dirname "$(readlink -f "$0")")/kafka-run-class.sh kafka.tools.StorageTool "$@"
+base_dir=$(dirname "$(readlink -f "$0")")
+
+exec "$base_dir"/kafka-run-class.sh kafka.tools.StorageTool "$@"

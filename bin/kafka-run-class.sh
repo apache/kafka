@@ -46,7 +46,7 @@ should_include_file() {
   fi
 }
 
-base_dir=$(dirname $0)/..
+base_dir=$(dirname "$(readlink -f "$0")")/..
 
 if [ -z "$SCALA_VERSION" ]; then
   SCALA_VERSION=2.13.15
@@ -76,9 +76,9 @@ do
 done
 
 if [ -z "$UPGRADE_KAFKA_STREAMS_TEST_VERSION" ]; then
-  clients_lib_dir=$(dirname $0)/../clients/build/libs
-  streams_lib_dir=$(dirname $0)/../streams/build/libs
-  streams_dependant_clients_lib_dir=$(dirname $0)/../streams/build/dependant-libs-${SCALA_VERSION}
+  clients_lib_dir="$base_dir"/clients/build/libs
+  streams_lib_dir="$base_dir"/streams/build/libs
+  streams_dependant_clients_lib_dir="$base_dir"/streams/build/dependant-libs-${SCALA_VERSION}
 else
   clients_lib_dir=/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs
   streams_lib_dir=$clients_lib_dir
@@ -344,7 +344,7 @@ CLASSPATH=${CLASSPATH#:}
 # It expects the Kafka executable binary to be present at $base_dir/kafka.Kafka.
 # This is specifically used to run system tests on native Kafka - by bringing up Kafka in the native mode.
 if [[ "x$KAFKA_MODE" == "xnative" ]] && [[ "$*" == *"kafka.Kafka"* ]]; then
-  exec $base_dir/kafka.Kafka start --config "$2"  $KAFKA_LOG4J_CMD_OPTS $KAFKA_JMX_OPTS $KAFKA_OPTS
+  exec "$base_dir"/kafka.Kafka start --config "$2"  $KAFKA_LOG4J_CMD_OPTS $KAFKA_JMX_OPTS $KAFKA_OPTS
 else
   # Launch mode
   if [ "x$DAEMON_MODE" = "xtrue" ]; then

@@ -20,4 +20,6 @@ then
 	exit 1
 fi
 
-exec $(dirname "$(readlink -f "$0")")/kafka-run-class.sh org.apache.zookeeper.ZooKeeperMainWithTlsSupportForKafka -server "$@"
+base_dir=$(dirname "$(readlink -f "$0")")
+
+exec "$base_dir"/kafka-run-class.sh org.apache.zookeeper.ZooKeeperMainWithTlsSupportForKafka -server "$@"

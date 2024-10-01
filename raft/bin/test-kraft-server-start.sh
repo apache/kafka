@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-base_dir=$(dirname $0)
+base_dir=$(dirname "$(readlink -f "$0")")
 
 if [ "x$KAFKA_LOG4J_OPTS" = "x" ]; then
     export KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/../config/kraft-log4j.properties"
@@ -36,4 +36,4 @@ case $COMMAND in
     ;;
 esac
 
-exec $base_dir/../../bin/kafka-run-class.sh $EXTRA_ARGS kafka.tools.TestRaftServer "$@"
+exec "$base_dir"/../../bin/kafka-run-class.sh $EXTRA_ARGS kafka.tools.TestRaftServer "$@"
