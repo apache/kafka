@@ -14,14 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.config;
+package org.apache.kafka.coordinator.group.modern.share;
 
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -144,5 +147,14 @@ public class ShareGroupConfig {
                 String.format("%s must be greater than or equals to %s",
                         SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG));
 
+    }
+
+    /**
+     * Copy the subset of properties that are relevant to share group.
+     */
+    public Map<String, Integer> extractGroupConfigMap() {
+        Map<String, Integer> groupProps = new HashMap<>();
+        groupProps.put(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, shareGroupRecordLockDurationMs());
+        return groupProps;
     }
 }

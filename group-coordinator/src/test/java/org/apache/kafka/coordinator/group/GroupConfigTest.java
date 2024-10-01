@@ -19,6 +19,8 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigTest;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -37,6 +39,8 @@ public class GroupConfigTest {
                 assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2");
             } else if (GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2");
+            } else if (GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG.equals(name)) {
+                assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2");
             } else {
                 assertPropertyInvalid(name, "not_a_number", "-1");
             }
@@ -53,24 +57,31 @@ public class GroupConfigTest {
 
     @Test
     public void testInvalidProps() {
-        // Check for invalid sessionTimeoutMs, < MIN
-        doTestInvalidProps(1, 5000);
+        // Check for invalid consumerSessionTimeoutMs, < MIN
+        doTestInvalidProps(1, 5000, 30000);
 
-        // Check for invalid sessionTimeoutMs, > MAX
-        doTestInvalidProps(70000, 5000);
+        // Check for invalid consumerSessionTimeoutMs, > MAX
+        doTestInvalidProps(70000, 5000, 30000);
 
-        // Check for invalid heartbeatIntervalMs, < MIN
-        doTestInvalidProps(50000, 1);
+        // Check for invalid consumerHeartbeatIntervalMs, < MIN
+        doTestInvalidProps(50000, 1, 30000);
 
-        // Check for invalid heartbeatIntervalMs, > MAX
-        doTestInvalidProps(50000, 70000);
+        // Check for invalid consumerHeartbeatIntervalMs, > MAX
+        doTestInvalidProps(50000, 70000, 30000);
+
+        // Check for invalid shareRecordLockDurationMs, < MIN
+        doTestInvalidProps(50000, 5000, 10000);
+
+        // Check for invalid shareRecordLockDurationMs, > MAX
+        doTestInvalidProps(50000, 5000, 70000);
     }
 
-    private void doTestInvalidProps(int sessionTimeoutMs, int heartbeatIntervalMs) {
+    private void doTestInvalidProps(int consumerSessionTimeoutMs, int consumerHeartbeatIntervalMs, int shareRecordLockDurationMs) {
         Properties props = new Properties();
-        props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, sessionTimeoutMs);
-        props.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, heartbeatIntervalMs);
-        assertThrows(InvalidConfigurationException.class, () -> GroupConfig.validate(props, createGroupCoordinatorConfig()));
+        props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, consumerSessionTimeoutMs);
+        props.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, consumerHeartbeatIntervalMs);
+        props.put(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, shareRecordLockDurationMs);
+        assertThrows(InvalidConfigurationException.class, () -> GroupConfig.validate(props, createGroupCoordinatorConfig(), createShareGroupConfig()));
     }
 
     @Test
@@ -78,6 +89,7 @@ public class GroupConfigTest {
         Map<String, String> defaultValue = new HashMap<>();
         defaultValue.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "10");
         defaultValue.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "10");
+        defaultValue.put(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, "10");
 
         Properties props = new Properties();
         props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "20");
@@ -85,6 +97,7 @@ public class GroupConfigTest {
 
         assertEquals(10, config.getInt(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG));
         assertEquals(20, config.getInt(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG));
+        assertEquals(10, config.getInt(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG));
     }
 
     @Test
@@ -92,10 +105,15 @@ public class GroupConfigTest {
         Properties props = new Properties();
         props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "10");
         props.put("invalid.config.name", "10");
-        assertThrows(InvalidConfigurationException.class, () -> GroupConfig.validate(props, createGroupCoordinatorConfig()));
+        assertThrows(InvalidConfigurationException.class, () -> GroupConfig.validate(props, createGroupCoordinatorConfig(), createShareGroupConfig()));
     }
 
     private GroupCoordinatorConfig createGroupCoordinatorConfig() {
         return GroupCoordinatorConfigTest.createGroupCoordinatorConfig(4096, 1000L, 24 * 60);
+    }
+
+    private ShareGroupConfig createShareGroupConfig() {
+        return ShareGroupConfigTest.createShareGroupConfig(true, 200, 5,
+            (short) 10, 30000, 15000, 60000);
     }
 }

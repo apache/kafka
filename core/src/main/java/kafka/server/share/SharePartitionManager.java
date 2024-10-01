@@ -38,6 +38,7 @@ import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.server.share.CachedSharePartition;
 import org.apache.kafka.server.share.Persister;
 import org.apache.kafka.server.share.SharePartitionKey;
@@ -113,9 +114,14 @@ public class SharePartitionManager implements AutoCloseable {
     private final AtomicBoolean processFetchQueueLock;
 
     /**
-     * The record lock duration is the time in milliseconds that a record lock is held for.
+     * The group config manager is used to retrieve the values for dynamic group configurations
      */
-    private final int recordLockDurationMs;
+    private final GroupConfigManager groupConfigManager;
+
+    /**
+     * The default record lock duration is the time in milliseconds that a record lock is held for.
+     */
+    private final int defaultRecordLockDurationMs;
 
     /**
      * The timer is used to schedule the records lock timeout.
@@ -151,23 +157,25 @@ public class SharePartitionManager implements AutoCloseable {
         ReplicaManager replicaManager,
         Time time,
         ShareSessionCache cache,
-        int recordLockDurationMs,
+        int defaultRecordLockDurationMs,
         int maxDeliveryCount,
         int maxInFlightMessages,
         int shareFetchPurgatoryPurgeIntervalRequests,
         Persister persister,
-        Metrics metrics
+        Metrics metrics,
+        GroupConfigManager groupConfigManager
     ) {
         this(replicaManager,
             time,
             cache,
             new ConcurrentHashMap<>(),
-            recordLockDurationMs,
+            defaultRecordLockDurationMs,
             maxDeliveryCount,
             maxInFlightMessages,
             shareFetchPurgatoryPurgeIntervalRequests,
             persister,
-            metrics
+            metrics,
+            groupConfigManager
         );
     }
 
@@ -176,12 +184,13 @@ public class SharePartitionManager implements AutoCloseable {
         Time time,
         ShareSessionCache cache,
         Map<SharePartitionKey, SharePartition> partitionCacheMap,
-        int recordLockDurationMs,
+        int defaultRecordLockDurationMs,
         int maxDeliveryCount,
         int maxInFlightMessages,
         int shareFetchPurgatoryPurgeIntervalRequests,
         Persister persister,
-        Metrics metrics
+        Metrics metrics,
+        GroupConfigManager groupConfigManager
     ) {
         this.replicaManager = replicaManager;
         this.time = time;
@@ -189,7 +198,7 @@ public class SharePartitionManager implements AutoCloseable {
         this.partitionCacheMap = partitionCacheMap;
         this.fetchQueue = new ConcurrentLinkedQueue<>();
         this.processFetchQueueLock = new AtomicBoolean(false);
-        this.recordLockDurationMs = recordLockDurationMs;
+        this.defaultRecordLockDurationMs = defaultRecordLockDurationMs;
         this.timer = new SystemTimerReaper("share-group-lock-timeout-reaper",
             new SystemTimer("share-group-lock-timeout"));
         this.maxDeliveryCount = maxDeliveryCount;
@@ -197,6 +206,7 @@ public class SharePartitionManager implements AutoCloseable {
         this.persister = persister;
         this.shareGroupMetrics = new ShareGroupMetrics(Objects.requireNonNull(metrics), time);
         this.delayedShareFetchPurgatory = new DelayedOperationPurgatory<>("ShareFetch", this.timer, this.replicaManager.localBrokerId(), shareFetchPurgatoryPurgeIntervalRequests, true, true);
+        this.groupConfigManager = groupConfigManager;
     }
 
     // Visible for testing.
@@ -206,13 +216,14 @@ public class SharePartitionManager implements AutoCloseable {
             ShareSessionCache cache,
             Map<SharePartitionKey, SharePartition> partitionCacheMap,
             ConcurrentLinkedQueue<ShareFetchData> fetchQueue,
-            int recordLockDurationMs,
+            int defaultRecordLockDurationMs,
             Timer timer,
             int maxDeliveryCount,
             int maxInFlightMessages,
             Persister persister,
             Metrics metrics,
-            DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory
+            DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory,
+            GroupConfigManager groupConfigManager
     ) {
         this.replicaManager = replicaManager;
         this.time = time;
@@ -220,13 +231,14 @@ public class SharePartitionManager implements AutoCloseable {
         this.partitionCacheMap = partitionCacheMap;
         this.fetchQueue = fetchQueue;
         this.processFetchQueueLock = new AtomicBoolean(false);
-        this.recordLockDurationMs = recordLockDurationMs;
+        this.defaultRecordLockDurationMs = defaultRecordLockDurationMs;
         this.timer = timer;
         this.maxDeliveryCount = maxDeliveryCount;
         this.maxInFlightMessages = maxInFlightMessages;
         this.persister = persister;
         this.shareGroupMetrics = new ShareGroupMetrics(Objects.requireNonNull(metrics), time);
         this.delayedShareFetchPurgatory = delayedShareFetchPurgatory;
+        this.groupConfigManager = groupConfigManager;
     }
 
     /**
@@ -628,11 +640,12 @@ public class SharePartitionManager implements AutoCloseable {
                             sharePartitionKey.topicIdPartition(),
                             maxInFlightMessages,
                             maxDeliveryCount,
-                            recordLockDurationMs,
+                            defaultRecordLockDurationMs,
                             timer,
                             time,
                             persister,
-                            delayedShareFetchPurgatory
+                            delayedShareFetchPurgatory,
+                            groupConfigManager
                     );
                     this.shareGroupMetrics.partitionLoadTime(start);
                     return partition;

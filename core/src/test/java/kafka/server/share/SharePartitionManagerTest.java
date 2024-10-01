@@ -49,6 +49,7 @@ import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.server.share.CachedSharePartition;
 import org.apache.kafka.server.share.ErroneousAndValidPartitionData;
 import org.apache.kafka.server.share.NoOpShareStatePersister;
@@ -127,13 +128,14 @@ import static org.mockito.Mockito.when;
 @SuppressWarnings({"ClassDataAbstractionCoupling"})
 public class SharePartitionManagerTest {
 
-    private static final int RECORD_LOCK_DURATION_MS = 30000;
+    private static final int DEFAULT_RECORD_LOCK_DURATION_MS = 30000;
     private static final int MAX_DELIVERY_COUNT = 5;
     private static final short MAX_IN_FLIGHT_MESSAGES = 200;
     static final int PARTITION_MAX_BYTES = 40000;
     private static final int DELAYED_SHARE_FETCH_MAX_WAIT_MS = 2000;
     private static final int DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL = 1000;
     private static final int DELAYED_SHARE_FETCH_TIMEOUT_MS = 3000;
+    private static final GroupConfigManager GROUP_CONFIG_MANAGER = new GroupConfigManager(new HashMap<>());
 
     private static Timer mockTimer;
 
@@ -2353,13 +2355,14 @@ public class SharePartitionManagerTest {
                     cache,
                     partitionCacheMap,
                     fetchQueue,
-                    RECORD_LOCK_DURATION_MS,
+                    DEFAULT_RECORD_LOCK_DURATION_MS,
                     timer,
                     MAX_DELIVERY_COUNT,
                     MAX_IN_FLIGHT_MESSAGES,
                     persister,
                     metrics,
-                    delayedShareFetchPurgatory);
+                    delayedShareFetchPurgatory,
+                    GROUP_CONFIG_MANAGER);
         }
     }
 }

@@ -121,6 +121,8 @@ class BrokerServer(
 
   @volatile var groupCoordinator: GroupCoordinator = _
 
+  var groupConfigManager: GroupConfigManager = _
+
   var transactionCoordinator: TransactionCoordinator = _
 
   var shareCoordinator: Option[ShareCoordinator] = _
@@ -345,6 +347,11 @@ class BrokerServer(
       tokenManager = new DelegationTokenManager(config, tokenCache, time)
       tokenManager.startup()
 
+      /* initializing the groupConfigManager */
+      val defaultConfigs: util.Map[String, Integer] = config.groupCoordinatorConfig.extractGroupConfigMap()
+      defaultConfigs.putAll(config.shareGroupConfig.extractGroupConfigMap())
+      groupConfigManager = new GroupConfigManager(defaultConfigs)
+
       shareCoordinator = createShareCoordinator()
 
       groupCoordinator = createGroupCoordinator()
@@ -423,7 +430,8 @@ class BrokerServer(
         config.shareGroupConfig.shareGroupPartitionMaxRecordLocks,
         config.shareGroupConfig.shareFetchPurgatoryPurgeIntervalRequests,
         persister,
-        new Metrics()
+        new Metrics(),
+        groupConfigManager
       )
 
       // Create the request processor objects.
@@ -614,7 +622,6 @@ class BrokerServer(
       val writer = new CoordinatorPartitionWriter(
         replicaManager
       )
-      val groupConfigManager = new GroupConfigManager(config.groupCoordinatorConfig.extractGroupConfigMap())
       new GroupCoordinatorService.Builder(config.brokerId, config.groupCoordinatorConfig)
         .withTime(time)
         .withTimer(timer)
