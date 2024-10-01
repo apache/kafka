@@ -144,7 +144,7 @@ public class RocksDBMetricsIntegrationTest {
 
     @Test
     public void shouldExposeRocksDBMetricsBeforeAndAfterFailureWithEmptyStateDir(final TestInfo testInfo) throws Exception {
-        final Properties streamsConfiguration = streamsConfig(StreamsConfig.AT_LEAST_ONCE, testInfo);
+        final Properties streamsConfiguration = streamsConfig(testInfo);
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
         final StreamsBuilder builder = builderForStateStores();
 
@@ -163,7 +163,7 @@ public class RocksDBMetricsIntegrationTest {
         );
     }
 
-    private Properties streamsConfig(final String processingGuarantee, final TestInfo testInfo) {
+    private Properties streamsConfig(final TestInfo testInfo) {
         final Properties streamsConfiguration = new Properties();
         final String safeTestName = safeUniqueTestName(testInfo);
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-application-" + safeTestName);
@@ -171,7 +171,6 @@ public class RocksDBMetricsIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfiguration.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.DEBUG.name);
-        streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuarantee);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         return streamsConfiguration;
