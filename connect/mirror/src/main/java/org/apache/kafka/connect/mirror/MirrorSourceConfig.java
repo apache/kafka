@@ -91,11 +91,6 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
     private static final String OFFSET_LAG_MAX_DOC = "How out-of-sync a remote partition can be before it is resynced.";
     public static final long OFFSET_LAG_MAX_DEFAULT = 100L;
 
-    public static final String ADD_SOURCE_ALIAS_TO_METRICS = "add.source.alias.to.metrics";
-    private static final String ADD_SOURCE_ALIAS_TO_METRICS_DOC = "Deprecated. Whether to tag metrics with the source cluster alias. "
-        + "Metrics have the target, topic and partition tags. When this setting is enabled, it adds the source tag. "
-        + "This configuration will be removed in Kafka 4.0 and the default behavior will be to always have the source tag.";
-    public static final boolean ADD_SOURCE_ALIAS_TO_METRICS_DEFAULT = false;
     public static final String OFFSET_SYNCS_SOURCE_PRODUCER_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "source-producer";
     public static final String OFFSET_SYNCS_TARGET_PRODUCER_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "target-producer";
     public static final String OFFSET_SYNCS_SOURCE_ADMIN_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "source-admin";
@@ -197,10 +192,6 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
 
     Duration consumerPollTimeout() {
         return Duration.ofMillis(getLong(CONSUMER_POLL_TIMEOUT_MILLIS));
-    }
-
-    boolean addSourceAliasToMetrics() {
-        return getBoolean(ADD_SOURCE_ALIAS_TO_METRICS);
     }
 
     boolean emitOffsetSyncsEnabled() {
@@ -318,12 +309,6 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
                         in(SOURCE_CLUSTER_ALIAS_DEFAULT, TARGET_CLUSTER_ALIAS_DEFAULT),
                         ConfigDef.Importance.LOW,
                         OFFSET_SYNCS_TOPIC_LOCATION_DOC)
-                .define(
-                        ADD_SOURCE_ALIAS_TO_METRICS,
-                        ConfigDef.Type.BOOLEAN,
-                        ADD_SOURCE_ALIAS_TO_METRICS_DEFAULT,
-                        ConfigDef.Importance.LOW,
-                        ADD_SOURCE_ALIAS_TO_METRICS_DOC)
                 .define(
                         EMIT_OFFSET_SYNCS_ENABLED,
                         ConfigDef.Type.BOOLEAN,

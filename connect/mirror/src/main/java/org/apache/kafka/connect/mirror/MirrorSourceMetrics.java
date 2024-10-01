@@ -56,17 +56,13 @@ class MirrorSourceMetrics implements AutoCloseable {
     private final Map<TopicPartition, PartitionMetrics> partitionMetrics;
     private final String source;
     private final String target;
-    private final boolean addSourceAlias;
 
     MirrorSourceMetrics(MirrorSourceTaskConfig taskConfig) {
         this.target = taskConfig.targetClusterAlias();
         this.source = taskConfig.sourceClusterAlias();
-        this.addSourceAlias = taskConfig.addSourceAliasToMetrics();
         this.metrics = new Metrics();
 
-        Set<String> partitionTags = new HashSet<>(addSourceAlias
-                ? Arrays.asList("source", "target", "topic", "partition")
-                : Arrays.asList("target", "topic", "partition"));
+        Set<String> partitionTags = new HashSet<>(Arrays.asList("source", "target", "topic", "partition"));
 
         recordCount = new MetricNameTemplate(
                 "record-count", SOURCE_CONNECTOR_GROUP,
@@ -153,7 +149,7 @@ class MirrorSourceMetrics implements AutoCloseable {
             String prefix = topicPartition.topic() + "-" + topicPartition.partition() + "-";
 
             Map<String, String> tags = new LinkedHashMap<>();
-            if (addSourceAlias) tags.put("source", source);
+            tags.put("source", source);
             tags.put("target", target); 
             tags.put("topic", topicPartition.topic());
             tags.put("partition", Integer.toString(topicPartition.partition()));
