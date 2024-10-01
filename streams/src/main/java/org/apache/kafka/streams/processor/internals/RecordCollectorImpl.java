@@ -75,7 +75,6 @@ public class RecordCollectorImpl implements RecordCollector {
     private final TaskId taskId;
     private final StreamsProducer streamsProducer;
     private final ProductionExceptionHandler productionExceptionHandler;
-    private final boolean eosEnabled;
     private final Map<TopicPartition, Long> offsets;
 
     private final StreamsMetricsImpl streamsMetrics;
@@ -98,7 +97,6 @@ public class RecordCollectorImpl implements RecordCollector {
         this.streamsProducer = streamsProducer;
         this.sendException = streamsProducer.sendException();
         this.productionExceptionHandler = productionExceptionHandler;
-        this.eosEnabled = streamsProducer.eosEnabled();
         this.streamsMetrics = streamsMetrics;
 
         final String threadId = Thread.currentThread().getName();
@@ -121,7 +119,7 @@ public class RecordCollectorImpl implements RecordCollector {
 
     @Override
     public void initialize() {
-        if (eosEnabled) {
+        if (streamsProducer.eosEnabled()) {
             streamsProducer.initTransaction();
         }
     }
@@ -528,7 +526,7 @@ public class RecordCollectorImpl implements RecordCollector {
     public void closeDirty() {
         log.info("Closing record collector dirty");
 
-        if (eosEnabled) {
+        if (streamsProducer.eosEnabled()) {
             // We may be closing dirty because the commit failed, so we must abort the transaction to be safe
             streamsProducer.abortTransaction();
         }
