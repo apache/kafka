@@ -2314,19 +2314,23 @@ public final class QuorumController implements Controller {
         }).thenApply(result -> {
             UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData();
 
-            // Only specify per feature responses if the error is None and request version is less than or equal to 1.
             if (result != ApiError.NONE) {
                 responseData.setErrorCode(result.error().code());
                 responseData.setErrorMessage("The update failed for all features since the following feature had an error: " + result.message());
-            } else if (context.requestHeader().requestApiVersion() <= 1) {
-                responseData.setResults(new UpdateFeaturesResponseData.UpdatableFeatureResultCollection(request.featureUpdates().size()));
-                request.featureUpdates().forEach(featureName ->
-                    responseData.results().add(
-                        new UpdateFeaturesResponseData.UpdatableFeatureResult()
-                            .setFeature(featureName.feature())
-                            .setErrorCode(result.error().code())
-                            .setErrorMessage(result.error().message())
-                ));
+            } else {
+                responseData.setErrorCode(result.error().code());
+                responseData.setErrorMessage(result.message());
+                // Only specify per feature responses if the error is None and request version is less than or equal to 1.
+                if (context.requestHeader().requestApiVersion() <= 1) {
+                    responseData.setResults(new UpdateFeaturesResponseData.UpdatableFeatureResultCollection(request.featureUpdates().size()));
+                    request.featureUpdates().forEach(featureName ->
+                            responseData.results().add(
+                                    new UpdateFeaturesResponseData.UpdatableFeatureResult()
+                                            .setFeature(featureName.feature())
+                                            .setErrorCode(result.error().code())
+                                            .setErrorMessage(result.error().message())
+                            ));
+                }
             }
             return responseData;
         });
