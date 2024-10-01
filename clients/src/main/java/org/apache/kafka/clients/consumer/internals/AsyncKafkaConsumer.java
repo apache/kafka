@@ -1832,7 +1832,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * execution of the rebalancing logic. The rebalancing logic cannot complete until the
      * {@link ConsumerRebalanceListener} callback is performed.
      *
-<<<<<<< HEAD
      * <p/>
      *
      * There is a conflict between the needs of the {@link ConsumerRebalanceListener} and internal event processing
