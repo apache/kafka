@@ -17,8 +17,10 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
+import org.apache.kafka.clients.consumer.internals.metrics.KafkaConsumerMetrics;
 
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Queue;
 
 /**
@@ -30,9 +32,12 @@ import java.util.Queue;
 public class BackgroundEventHandler {
 
     private final Queue<BackgroundEvent> backgroundEventQueue;
+    private final Optional<KafkaConsumerMetrics> kafkaConsumerMetrics;
 
-    public BackgroundEventHandler(final Queue<BackgroundEvent> backgroundEventQueue) {
+    public BackgroundEventHandler(final Queue<BackgroundEvent> backgroundEventQueue, KafkaConsumerMetrics kafkaConsumerMetrics) {
         this.backgroundEventQueue = backgroundEventQueue;
+        this.kafkaConsumerMetrics = Optional.of(kafkaConsumerMetrics);
+        recordInitialEvents();
     }
 
     /**
@@ -43,5 +48,12 @@ public class BackgroundEventHandler {
     public void add(BackgroundEvent event) {
         Objects.requireNonNull(event, "BackgroundEvent provided to add must be non-null");
         backgroundEventQueue.add(event);
+        kafkaConsumerMetrics.ifPresent(consumerMetrics -> consumerMetrics.recordBackgroundEventQueueChange(event.id(), System.currentTimeMillis(), true));
+    }
+
+    private void recordInitialEvents() {
+        for (BackgroundEvent event : backgroundEventQueue) {
+            kafkaConsumerMetrics.ifPresent(consumerMetrics -> consumerMetrics.recordBackgroundEventQueueChange(event.id(), System.currentTimeMillis(), true));
+        }
     }
 }

@@ -21,7 +21,9 @@ import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.clients.consumer.internals.metrics.NetworkThreadMetricsManager;
 import org.apache.kafka.common.internals.IdempotentCloser;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -31,6 +33,7 @@ import org.slf4j.Logger;
 import java.io.Closeable;
 import java.time.Duration;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Future;
 import java.util.function.Supplier;
@@ -45,6 +48,7 @@ public class ApplicationEventHandler implements Closeable {
     private final BlockingQueue<ApplicationEvent> applicationEventQueue;
     private final ConsumerNetworkThread networkThread;
     private final IdempotentCloser closer = new IdempotentCloser();
+    private final NetworkThreadMetricsManager networkThreadMetricsManager;
 
     public ApplicationEventHandler(final LogContext logContext,
                                    final Time time,
@@ -55,13 +59,37 @@ public class ApplicationEventHandler implements Closeable {
                                    final Supplier<RequestManagers> requestManagersSupplier) {
         this.log = logContext.logger(ApplicationEventHandler.class);
         this.applicationEventQueue = applicationEventQueue;
+        this.networkThreadMetricsManager = null;
         this.networkThread = new ConsumerNetworkThread(logContext,
                 time,
                 applicationEventQueue,
                 applicationEventReaper,
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
-                requestManagersSupplier);
+                requestManagersSupplier,
+                Optional.empty());
+        this.networkThread.start();
+    }
+
+    public ApplicationEventHandler(final LogContext logContext,
+                                   final Time time,
+                                   final BlockingQueue<ApplicationEvent> applicationEventQueue,
+                                   final CompletableEventReaper applicationEventReaper,
+                                   final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
+                                   final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
+                                   final Supplier<RequestManagers> requestManagersSupplier,
+                                   final Metrics metrics) {
+        this.log = logContext.logger(ApplicationEventHandler.class);
+        this.applicationEventQueue = applicationEventQueue;
+        this.networkThreadMetricsManager = new NetworkThreadMetricsManager(metrics);
+        this.networkThread = new ConsumerNetworkThread(logContext,
+                time,
+                applicationEventQueue,
+                applicationEventReaper,
+                applicationEventProcessorSupplier,
+                networkClientDelegateSupplier,
+                requestManagersSupplier,
+                Optional.of(networkThreadMetricsManager));
         this.networkThread.start();
     }
 
@@ -74,6 +102,8 @@ public class ApplicationEventHandler implements Closeable {
     public void add(final ApplicationEvent event) {
         Objects.requireNonNull(event, "ApplicationEvent provided to add must be non-null");
         applicationEventQueue.add(event);
+        networkThreadMetricsManager.recordApplicationEventQueueChange(event, System.currentTimeMillis(), true);
+        networkThreadMetricsManager.recordApplicationEventQueueSize(applicationEventQueue.size());
         wakeupNetworkThread();
     }
 

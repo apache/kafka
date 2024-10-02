@@ -464,7 +464,6 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testCommitInRebalanceCallback() {
-        consumer = newConsumer();
         final String topicName = "foo";
         final int partition = 3;
         final TopicPartition tp = new TopicPartition(topicName, partition);
@@ -474,6 +473,7 @@ public class AsyncKafkaConsumerTest {
         sortedPartitions.add(tp);
         CompletableBackgroundEvent<Void> e = new ConsumerRebalanceListenerCallbackNeededEvent(ON_PARTITIONS_REVOKED, sortedPartitions);
         backgroundEventQueue.add(e);
+        consumer = newConsumer();
         completeCommitSyncApplicationEventSuccessfully();
         final AtomicBoolean callbackExecuted = new AtomicBoolean(false);
 
@@ -1513,6 +1513,12 @@ public class AsyncKafkaConsumerTest {
                                             int expectedLostCount,
                                             Optional<RuntimeException> expectedException
                                             ) {
+        SortedSet<TopicPartition> partitions = Collections.emptySortedSet();
+
+        for (ConsumerRebalanceListenerMethodName methodName : methodNames) {
+            CompletableBackgroundEvent<Void> e = new ConsumerRebalanceListenerCallbackNeededEvent(methodName, partitions);
+            backgroundEventQueue.add(e);
+        }
         consumer = newConsumer();
         CounterConsumerRebalanceListener consumerRebalanceListener = new CounterConsumerRebalanceListener(
                 revokedError,
@@ -1521,12 +1527,6 @@ public class AsyncKafkaConsumerTest {
         );
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
         consumer.subscribe(Collections.singletonList("topic"), consumerRebalanceListener);
-        SortedSet<TopicPartition> partitions = Collections.emptySortedSet();
-
-        for (ConsumerRebalanceListenerMethodName methodName : methodNames) {
-            CompletableBackgroundEvent<Void> e = new ConsumerRebalanceListenerCallbackNeededEvent(methodName, partitions);
-            backgroundEventQueue.add(e);
-        }
 
         // This will trigger the background event queue to process our background event message.
         // If any error is happening inside the rebalance callbacks, we expect the first exception to be thrown from poll.

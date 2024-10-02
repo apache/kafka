@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
+import org.apache.kafka.clients.consumer.internals.metrics.KafkaConsumerMetrics;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
@@ -213,7 +214,7 @@ public class NetworkClientDelegateTest {
         doThrow(authException).when(metadata).maybeThrowAnyException();
 
         LinkedList<BackgroundEvent> backgroundEventQueue = new LinkedList<>();
-        this.backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
+        this.backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, mock(KafkaConsumerMetrics.class));
         NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate();
 
         assertEquals(0, backgroundEventQueue.size());
@@ -238,7 +239,8 @@ public class NetworkClientDelegateTest {
                 logContext,
                 this.client,
                 this.metadata,
-                this.backgroundEventHandler);
+                this.backgroundEventHandler,
+                null);
     }
 
     public NetworkClientDelegate.UnsentRequest newUnsentFindCoordinatorRequest() {

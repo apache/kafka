@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProces
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
+import org.apache.kafka.clients.consumer.internals.metrics.NetworkThreadMetricsManager;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.utils.KafkaThread;
@@ -67,6 +68,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     private final IdempotentCloser closer = new IdempotentCloser();
     private volatile Duration closeTimeout = Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS);
     private volatile long cachedMaximumTimeToWait = MAX_POLL_TIMEOUT_MS;
+    private final Optional<NetworkThreadMetricsManager> metricsManager;
 
     public ConsumerNetworkThread(LogContext logContext,
                                  Time time,
@@ -74,7 +76,8 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                                  CompletableEventReaper applicationEventReaper,
                                  Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
                                  Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
-                                 Supplier<RequestManagers> requestManagersSupplier) {
+                                 Supplier<RequestManagers> requestManagersSupplier,
+                                 Optional<NetworkThreadMetricsManager> metricsManager) {
         super(BACKGROUND_THREAD_NAME, true);
         this.time = time;
         this.log = logContext.logger(getClass());
@@ -84,6 +87,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         this.networkClientDelegateSupplier = networkClientDelegateSupplier;
         this.requestManagersSupplier = requestManagersSupplier;
         this.running = true;
+        this.metricsManager = metricsManager;
     }
 
     @Override
@@ -146,6 +150,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                 .map(networkClientDelegate::addAll)
                 .reduce(MAX_POLL_TIMEOUT_MS, Math::min);
         networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
+        metricsManager.ifPresent(networkThreadMetricsManager -> networkThreadMetricsManager.updatePollTime(time.milliseconds()));
 
         cachedMaximumTimeToWait = requestManagers.entries().stream()
                 .filter(Optional::isPresent)
@@ -162,13 +167,23 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     private void processApplicationEvents() {
         LinkedList<ApplicationEvent> events = new LinkedList<>();
         applicationEventQueue.drainTo(events);
+        metricsManager.ifPresent(networkThreadMetricsManager -> networkThreadMetricsManager.recordApplicationEventQueueSize(applicationEventQueue.size()));
 
+        long totalProcessingTime = 0;
         for (ApplicationEvent event : events) {
             try {
                 if (event instanceof CompletableEvent)
                     applicationEventReaper.add((CompletableEvent<?>) event);
 
+                long startMs = time.milliseconds();
                 applicationEventProcessor.process(event);
+                long processingTime = time.milliseconds() - startMs;
+                totalProcessingTime += processingTime;
+
+                if (metricsManager.isPresent()) {
+                    metricsManager.get().recordApplicationEventQueueChange(event, startMs - totalProcessingTime, false);
+                    metricsManager.get().recordApplicationEventProcessingTime(processingTime);
+                }
             } catch (Throwable t) {
                 log.warn("Error processing event {}", t.getMessage(), t);
             }

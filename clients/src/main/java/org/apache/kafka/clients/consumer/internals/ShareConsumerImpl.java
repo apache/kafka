@@ -47,6 +47,7 @@ import org.apache.kafka.clients.consumer.internals.events.ShareFetchEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareUnsubscribeEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.KafkaShareConsumerMetrics;
+import org.apache.kafka.clients.consumer.internals.metrics.NetworkThreadMetricsManager;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -252,6 +253,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
             this.clientTelemetryReporter.ifPresent(reporters::add);
             this.metrics = createMetrics(config, time, reporters);
+            this.kafkaShareConsumerMetrics = new KafkaShareConsumerMetrics(metrics, CONSUMER_SHARE_METRIC_GROUP_PREFIX);
 
             this.deserializers = new Deserializers<>(config, keyDeserializer, valueDeserializer);
             this.currentFetch = ShareFetch.empty();
@@ -266,7 +268,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             ShareFetchMetricsManager shareFetchMetricsManager = createShareFetchMetricsManager(metrics);
             ApiVersions apiVersions = new ApiVersions();
             final BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
-            final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
+            final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, kafkaShareConsumerMetrics);
+            final NetworkThreadMetricsManager networkThreadMetricsManager = new NetworkThreadMetricsManager(metrics);
 
             // This FetchBuffer is shared between the application and network threads.
             this.fetchBuffer = new ShareFetchBuffer(logContext);
@@ -279,7 +282,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     metrics,
                     shareFetchMetricsManager.throttleTimeSensor(),
                     clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null),
-                    backgroundEventHandler
+                    backgroundEventHandler,
+                    networkThreadMetricsManager
             );
             this.completedAcknowledgements = new LinkedList<>();
 
@@ -321,8 +325,6 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     subscriptions,
                     new FetchConfig(config),
                     deserializers);
-
-            this.kafkaShareConsumerMetrics = new KafkaShareConsumerMetrics(metrics, CONSUMER_SHARE_METRIC_GROUP_PREFIX);
 
             config.logUnused();
             AppInfoParser.registerAppInfo(CONSUMER_JMX_PREFIX, clientId, metrics, time.milliseconds());
@@ -375,10 +377,11 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
         final BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
         final BlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
-        final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
+        final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, kafkaShareConsumerMetrics);
+        final NetworkThreadMetricsManager networkThreadMetricsManager = new NetworkThreadMetricsManager(metrics);
 
         final Supplier<NetworkClientDelegate> networkClientDelegateSupplier =
-                () -> new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler);
+                () -> new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler, networkThreadMetricsManager);
 
         GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
                 config,
@@ -411,7 +414,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 new CompletableEventReaper(logContext),
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
-                requestManagersSupplier);
+                requestManagersSupplier,
+                metrics);
 
         this.backgroundEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventProcessor = new BackgroundEventProcessor();
@@ -1031,13 +1035,21 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
         LinkedList<BackgroundEvent> events = new LinkedList<>();
         backgroundEventQueue.drainTo(events);
+        kafkaShareConsumerMetrics.recordBackgroundEventQueueSize(backgroundEventQueue.size());
 
+        long totalProcessingTime = 0;
         for (BackgroundEvent event : events) {
             try {
                 if (event instanceof CompletableEvent)
                     backgroundEventReaper.add((CompletableEvent<?>) event);
 
+                long startMs = time.milliseconds();
                 backgroundEventProcessor.process(event);
+                long processingTime = time.milliseconds() - startMs;
+                totalProcessingTime += processingTime;
+
+                kafkaShareConsumerMetrics.recordBackgroundEventQueueChange(event.id(), startMs - totalProcessingTime, false);
+                kafkaShareConsumerMetrics.recordBackgroundEventQueueProcessingTime(processingTime);
             } catch (Throwable t) {
                 KafkaException e = ConsumerUtils.maybeWrapAsKafkaException(t);
 
