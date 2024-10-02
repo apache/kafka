@@ -18,12 +18,13 @@ package org.apache.kafka.coordinator.group.taskassignor;
 
 import java.util.Objects;
 
-public final class TaskId {
+public final class TaskId implements Comparable<TaskId> {
 
     private final String subtopologyId;
     private final int partition;
 
     public TaskId(final String subtopologyId, final int partition) {
+        Objects.requireNonNull(subtopologyId);
         this.subtopologyId = subtopologyId;
         this.partition = partition;
     }
@@ -65,6 +66,10 @@ public final class TaskId {
     }
 
     public int compareTo(final TaskId other) {
-        return this.hashCode() - other.hashCode();
+        int diff = subtopologyId.compareTo(other.subtopologyId);
+        if (diff == 0) {
+            diff = partition - other.partition;
+        }
+        return diff;
     }
 }
