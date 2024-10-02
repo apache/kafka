@@ -24,6 +24,7 @@ import kafka.test.junit.ClusterTestExtensions;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.test.TestUtils;
 
@@ -301,6 +302,36 @@ public class ConfigCommandIntegrationTest {
         }
     }
 
+    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
+    public void testUpdatingBothClusterAndBrokerLevelDynamicConfigUsingKRaft() throws Exception {
+        alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
+
+        try (Admin client = cluster.createAdminClient()) {
+
+            alterAndVerifyBothLevelConfig(client, Optional.of(defaultBrokerId), singletonMap("message.max.bytes", "110000"));
+            alterAndVerifyBothLevelConfig(client, Optional.of(defaultBrokerId), singletonMap("message.max.bytes", "130000"));
+
+            assertThrows(ExecutionException.class,
+                    () -> alterAndVerifyBothLevelConfig(client, Optional.of(defaultBrokerId),
+                            singletonMap("listener.name.internal.ssl.keystore.location", "/tmp/test.jks")));
+            assertThrows(ExecutionException.class,
+                    () -> alterAndVerifyBothLevelConfig(client, Optional.of(defaultBrokerId),
+                            singletonMap("listener.name.external.ssl.keystore.password", "secret")));
+        }
+    }
+
+    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
+    public void testUpdatingDynamicConfigInKRaftThenShouldFail() {
+        alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
+
+        try (Admin client = cluster.createAdminClient()) {
+            assertThrows(InvalidConfigurationException.class,
+                    () -> deleteAndVerifyConfigValue(client, defaultBrokerId, singleton("log.roll.jitter.ms"), false));
+            assertThrows(InvalidConfigurationException.class,
+                    () -> deleteAndVerifyConfigValue(client, defaultBrokerId, singleton("no.exist.config"), false));
+        }
+    }
+
     private void assertNonZeroStatusExit(Stream<String> args, Consumer<String> checkErrOut) {
         AtomicReference<Integer> exitStatus = new AtomicReference<>();
         Exit.setExitProcedure((status, __) -> {
@@ -342,6 +373,20 @@ public class ConfigCommandIntegrationTest {
     private void alterAndVerifyClientMetricsConfig(Admin client, String clientMetricsName, Map<String, String> config) throws Exception {
         alterConfigWithKraft(client, Optional.of(clientMetricsName), config);
         verifyClientMetricsConfig(client, clientMetricsName, config);
+    }
+
+    private void alterAndVerifyBothLevelConfig(Admin client, Optional<String> brokerId, Map<String, String> config) throws Exception {
+        alterBothLevelConfigWithKraft(client, brokerId, config);
+        verifyConfig(client, brokerId, config);
+        verifyConfig(client, Optional.empty(), config);
+    }
+
+    private void alterBothLevelConfigWithKraft(Admin client, Optional<String> brokerId, Map<String, String> config) {
+        String configStr = transferConfigMapToString(config);
+        ConfigCommand.ConfigCommandOptions addOpts =
+                new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, entityOp(brokerId),
+                        entityOp(Optional.empty()), asList("--add-config", configStr)));
+        ConfigCommand.alterConfig(client, addOpts);
     }
 
     private void alterConfigWithKraft(Admin client, Optional<String> resourceName, Map<String, String> config) {
