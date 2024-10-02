@@ -16,8 +16,8 @@
 # under the License.
 
 notifications:
-  commits:      commits@kafka.apache.org
-  issues:       jira@kafka.apache.org
+  commits: commits@kafka.apache.org
+  issues: jira@kafka.apache.org
   pullrequests: jira@kafka.apache.org
   jira_options: link label
 
@@ -25,13 +25,13 @@ notifications:
 # Read more here: https://github.com/apache/infrastructure-asfyaml
 github:
   collaborators:
-    - FrankYang0529
-    - kamalcph
+    - AndrewJSchofield
     - apoorvmittal10
-    - lianetm
     - brandboat
-    - kirktrue
-    - nizhikov
-    - OmniaGM
     - dongnuo123
     - frankvicky
+    - FrankYang0529
+    - kirktrue
+    - m1a2st
+    - nizhikov
+    - OmniaGM
