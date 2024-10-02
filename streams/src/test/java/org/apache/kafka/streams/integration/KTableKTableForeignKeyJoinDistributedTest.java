@@ -44,6 +44,7 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -121,8 +122,8 @@ public class KTableKTableForeignKeyJoinDistributedTest {
 
     @AfterEach
     public void after() {
-        client1.close();
-        client2.close();
+        client1.close(Duration.ofSeconds(60));
+        client2.close(Duration.ofSeconds(60));
         quietlyCleanStateAfterTest(CLUSTER, client1);
         quietlyCleanStateAfterTest(CLUSTER, client2);
     }
