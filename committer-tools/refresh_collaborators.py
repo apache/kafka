@@ -115,8 +115,7 @@ def update_local_yaml_content(yaml_file_path: str, collaborators: List[str]) -> 
         yaml: YAML = YAML()
         yaml_content: dict = yaml.load(file)
 
-    yaml_content["jenkins"]["github_whitelist"] = collaborators
-    yaml_content["github"]["collaborators"] = collaborators.copy()
+    yaml_content["github"]["collaborators"] = collaborators
 
     with open(yaml_file_path, "w", encoding="utf-8") as file:
         yaml.dump(yaml_content, file)
