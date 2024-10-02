@@ -564,11 +564,8 @@ public class TaskManager {
             final Set<Task> tasksToCloseDirty = new HashSet<>();
             for (final Map.Entry<Task, Set<TopicPartition>> entry : pendingStandbyTasksToRecycle.entrySet()) {
                 final Task task = entry.getKey();
-                final Set<TopicPartition> inputPartitions = entry.getValue();
-                // if the task fails to recycle, don't remove it from the set of actives to create, because we still need to create it
-                if (recycleTaskFromStateUpdater(task, inputPartitions, tasksToCloseDirty, failedTasks)) {
-                    activeTasksToCreate.remove(task.id());
-                }
+                recycleTaskFromStateUpdater(task, entry.getValue(), tasksToCloseDirty, failedTasks);
+                activeTasksToCreate.remove(task.id());
             }
 
             // if any standby tasks failed to recycle, close them dirty
@@ -982,13 +979,10 @@ public class TaskManager {
             && !tasks.hasPendingTasksToInit();
     }
 
-    /**
-     * @return true if the Task successfully recycled, otherwise returns false
-     */
-    private boolean recycleTaskFromStateUpdater(final Task task,
-                                                final Set<TopicPartition> inputPartitions,
-                                                final Set<Task> tasksToCloseDirty,
-                                                final Map<TaskId, RuntimeException> taskExceptions) {
+    private void recycleTaskFromStateUpdater(final Task task,
+                                             final Set<TopicPartition> inputPartitions,
+                                             final Set<Task> tasksToCloseDirty,
+                                             final Map<TaskId, RuntimeException> taskExceptions) {
         Task newTask = null;
         try {
             task.suspend();
