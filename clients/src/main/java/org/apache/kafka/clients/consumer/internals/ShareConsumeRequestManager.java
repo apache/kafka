@@ -724,9 +724,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                     partitionsWithUpdatedLeaderInfo.put(tp, new Metadata.LeaderIdAndEpoch(
                                         Optional.of(partitionData.currentLeader().leaderId()), Optional.of(partitionData.currentLeader().leaderEpoch())));
                                 }
-
-                                metricsManager.recordFailedAcknowledgements(acknowledgeRequestState.getInFlightAcknowledgementsCount(tip));
-                                acknowledgeRequestState.handleAcknowledgeErrorCode(tip, partitionError);
                             } else if (partitionError.exception() instanceof RetriableException) {
                                 retry = true;
                             }
