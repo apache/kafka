@@ -125,7 +125,7 @@ public class Formatter {
     /**
      * The metadata log directory.
      */
-    private String metadataLogDirectory = null;
+    private Optional<String> metadataLogDirectory = Optional.empty();
 
     /**
      * The initial KIP-853 voters.
@@ -167,6 +167,10 @@ public class Formatter {
         return this;
     }
 
+    public Collection<String> directories() {
+        return directories;
+    }
+
     public Formatter setReleaseVersion(MetadataVersion releaseVersion) {
         this.releaseVersion = releaseVersion;
         return this;
@@ -198,6 +202,11 @@ public class Formatter {
     }
 
     public Formatter setMetadataLogDirectory(String metadataLogDirectory) {
+        this.metadataLogDirectory = Optional.of(metadataLogDirectory);
+        return this;
+    }
+
+    public Formatter setMetadataLogDirectory(Optional<String> metadataLogDirectory) {
         this.metadataLogDirectory = metadataLogDirectory;
         return this;
     }
@@ -231,13 +240,12 @@ public class Formatter {
         if (controllerListenerName == null) {
             throw new FormatterException("You must specify the name of the initial controller listener.");
         }
-        if (metadataLogDirectory == null) {
-            throw new FormatterException("You must specify the metadata log directory.");
-        }
-        if (!directories.contains(metadataLogDirectory)) {
-            throw new FormatterException("The specified metadata log directory, " + metadataLogDirectory +
+        metadataLogDirectory.ifPresent(d -> {
+            if (!directories.contains(d)) {
+                throw new FormatterException("The specified metadata log directory, " + d +
                     " was not one of the given directories: " + directories);
-        }
+            }
+        });
         releaseVersion = calculateEffectiveReleaseVersion();
         featureLevels = calculateEffectiveFeatureLevels();
         this.bootstrapMetadata = calculateBootstrapMetadata();
@@ -401,7 +409,7 @@ public class Formatter {
             Map<String, DirectoryType> directoryTypes = new HashMap<>();
             for (String emptyLogDir : ensemble.emptyLogDirs()) {
                 DirectoryType directoryType = DirectoryType.calculate(emptyLogDir,
-                    metadataLogDirectory,
+                    metadataLogDirectory.orElse(""),
                     nodeId,
                     initialControllers);
                 directoryTypes.put(emptyLogDir, directoryType);

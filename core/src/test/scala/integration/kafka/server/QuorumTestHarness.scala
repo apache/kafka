@@ -17,6 +17,8 @@
 
 package kafka.server
 
+import kafka.server.ServerSocketFactory.KafkaServerSocketFactory
+
 import java.io.File
 import java.net.InetSocketAddress
 import java.util
@@ -129,7 +131,8 @@ class KRaftQuorumImplementation(
       new Metrics(),
       controllerQuorumVotersFuture,
       controllerQuorumVotersFuture.get().values(),
-      faultHandlerFactory
+      faultHandlerFactory,
+      KafkaServerSocketFactory.INSTANCE,
     )
     var broker: BrokerServer = null
     try {
@@ -372,7 +375,8 @@ abstract class QuorumTestHarness extends Logging {
       new Metrics(),
       controllerQuorumVotersFuture,
       Collections.emptyList(),
-      faultHandlerFactory
+      faultHandlerFactory,
+      KafkaServerSocketFactory.INSTANCE,
     )
     var controllerServer: ControllerServer = null
     try {

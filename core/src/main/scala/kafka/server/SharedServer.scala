@@ -98,7 +98,8 @@ class SharedServer(
   private val _metrics: Metrics,
   val controllerQuorumVotersFuture: CompletableFuture[JMap[Integer, InetSocketAddress]],
   val bootstrapServers: JCollection[InetSocketAddress],
-  val faultHandlerFactory: FaultHandlerFactory
+  val faultHandlerFactory: FaultHandlerFactory,
+  val socketFactory: ServerSocketFactory
 ) extends Logging {
   private val logContext: LogContext = new LogContext(s"[SharedServer id=${sharedServerConfig.nodeId}] ")
   this.logIdent = logContext.logPrefix
