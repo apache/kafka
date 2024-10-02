@@ -3578,12 +3578,13 @@ class KafkaApis(val requestChannel: RequestChannel,
           case Left(topLevelError) =>
             UpdateFeaturesResponse.createWithErrors(
               topLevelError,
-              Collections.emptyMap(),
+              Collections.emptySet(),
               throttleTimeMs)
           case Right(featureUpdateErrors) =>
+            // This response is not correct, but since this is ZK specific code it will be removed in 4.0
             UpdateFeaturesResponse.createWithErrors(
               ApiError.NONE,
-              featureUpdateErrors.asJava,
+              featureUpdateErrors.asJava.keySet(),
               throttleTimeMs)
         }
       }
