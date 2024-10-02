@@ -210,7 +210,6 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         shareStateMap.put(mapKey, offsetRecord);
         // if number of share updates is exceeded, then reset it
         if (snapshotUpdateCount.containsKey(mapKey)) {
-            snapshotUpdateCount.putIfAbsent(mapKey, 0); // handle mapping to null
             if (snapshotUpdateCount.get(mapKey) >= config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot()) {
                 snapshotUpdateCount.put(mapKey, 0);
             }
@@ -309,7 +308,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                     .setStartOffset(partitionData.startOffset())
                     .setLeaderEpoch(partitionData.leaderEpoch())
                     .setStateEpoch(partitionData.stateEpoch())
-                    .setStateBatches(getMergedBatches(Collections.emptyList(), partitionData))
+                    .setStateBatches(mergeBatches(Collections.emptyList(), partitionData))
                     .build());
         } else if (snapshotUpdateCount.getOrDefault(key, 0) >= config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot()) {
             ShareGroupOffset currentState = shareStateMap.get(key);
@@ -331,11 +330,9 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                     .setStartOffset(newStartOffset)
                     .setLeaderEpoch(newLeaderEpoch)
                     .setStateEpoch(newStateEpoch)
-                    .setStateBatches(getMergedBatches(currentState.stateBatches(), partitionData, newStartOffset))
+                    .setStateBatches(mergeBatches(currentState.stateBatches(), partitionData, newStartOffset))
                     .build());
         } else {
-            // share snapshot is present and number of share snapshot update records < snapshotUpdateRecordsPerSnapshot
-            // the incoming partition data could have overlapping state batches, we must merge them
             ShareGroupOffset currentState = shareStateMap.get(key);
             if (currentState == null) {
                 throw new IllegalStateException(
@@ -343,24 +340,26 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 );
             }
 
+            // share snapshot is present and number of share snapshot update records < snapshotUpdateRecordsPerSnapshot
+            // the incoming partition data could have overlapping state batches, we must merge them
             return ShareCoordinatorRecordHelpers.newShareSnapshotUpdateRecord(
                 key.groupId(), key.topicId(), partitionData.partition(),
                 new ShareGroupOffset.Builder()
                     .setSnapshotEpoch(currentState.snapshotEpoch())
                     .setStartOffset(partitionData.startOffset())
                     .setLeaderEpoch(partitionData.leaderEpoch())
-                    .setStateBatches(getMergedBatches(Collections.emptyList(), partitionData))
+                    .setStateBatches(mergeBatches(Collections.emptyList(), partitionData))
                     .build());
         }
     }
 
-    private List<PersisterStateBatch> getMergedBatches(
+    private List<PersisterStateBatch> mergeBatches(
         List<PersisterStateBatch> soFar,
         WriteShareGroupStateRequestData.PartitionData partitionData) {
-        return getMergedBatches(soFar, partitionData, partitionData.startOffset());
+        return mergeBatches(soFar, partitionData, partitionData.startOffset());
     }
 
-    private List<PersisterStateBatch> getMergedBatches(
+    private List<PersisterStateBatch> mergeBatches(
         List<PersisterStateBatch> soFar,
         WriteShareGroupStateRequestData.PartitionData partitionData,
         long startOffset) {
@@ -577,7 +576,8 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Converts a {@link ShareUpdateValue.StateBatch} type state batch to {@link PersisterStateBatch}
+     * Util function to convert a state batch of type {@link ShareUpdateValue.StateBatch }
+     * to {@link PersisterStateBatch}.
      *
      * @param batch - The object representing {@link ShareUpdateValue.StateBatch}
      * @return {@link PersisterStateBatch}
