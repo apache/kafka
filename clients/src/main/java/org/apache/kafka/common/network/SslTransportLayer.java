@@ -613,7 +613,7 @@ public class SslTransportLayer implements TransportLayer {
                 } else if (unwrapResult.getStatus() == Status.BUFFER_OVERFLOW) {
                     int currentApplicationBufferSize = applicationBufferSize();
                     appReadBuffer = Utils.ensureCapacity(appReadBuffer, currentApplicationBufferSize);
-                    if (appReadBuffer.position() >= currentApplicationBufferSize) {
+                    if (appReadBuffer.position() > currentApplicationBufferSize) {
                         throw new IllegalStateException("Buffer overflow when available data size (" + appReadBuffer.position() +
                                                         ") >= application buffer size (" + currentApplicationBufferSize + ")");
                     }
@@ -628,7 +628,7 @@ public class SslTransportLayer implements TransportLayer {
                 } else if (unwrapResult.getStatus() == Status.BUFFER_UNDERFLOW) {
                     int currentNetReadBufferSize = netReadBufferSize();
                     netReadBuffer = Utils.ensureCapacity(netReadBuffer, currentNetReadBufferSize);
-                    if (netReadBuffer.position() >= currentNetReadBufferSize) {
+                    if (netReadBuffer.position() > currentNetReadBufferSize) {
                         throw new IllegalStateException("Buffer underflow when available data size (" + netReadBuffer.position() +
                                                         ") > packet buffer size (" + currentNetReadBufferSize + ")");
                     }
