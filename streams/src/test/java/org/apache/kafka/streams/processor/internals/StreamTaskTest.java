@@ -53,7 +53,6 @@ import org.apache.kafka.streams.errors.LogAndContinueProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
-import org.apache.kafka.streams.errors.ProcessingExceptionHandler.ProcessingHandlerResponse;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
@@ -134,7 +133,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -316,7 +314,6 @@ public class StreamTaskTest {
         // Clean up state directory created as part of setup
         stateDirectory.close();
         stateDirectory = mock(StateDirectory.class);
-        when(stateDirectory.canTryLock(any(), anyLong())).thenReturn(true);
         when(stateDirectory.lock(taskId)).thenReturn(false);
 
         task = createStatefulTask(createConfig("100"), false);
@@ -609,7 +606,7 @@ public class StreamTaskTest {
     public void shouldProcessRecordsAfterPrepareCommitWhenEosDisabled() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createSingleSourceStateless(createConfig(), StreamsConfig.METRICS_LATEST);
+        task = createSingleSourceStateless(createConfig());
 
         assertFalse(task.process(time.milliseconds()));
 
@@ -623,31 +620,6 @@ public class StreamTaskTest {
         task.prepareCommit();
         assertTrue(task.process(time.milliseconds()));
         task.postCommit(false);
-        assertTrue(task.process(time.milliseconds()));
-
-        assertFalse(task.process(time.milliseconds()));
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldNotProcessRecordsAfterPrepareCommitWhenEosAlphaEnabled() {
-        when(stateManager.taskId()).thenReturn(taskId);
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createSingleSourceStateless(createConfig(StreamsConfig.EXACTLY_ONCE, "0"), StreamsConfig.METRICS_LATEST);
-
-        assertFalse(task.process(time.milliseconds()));
-
-        task.addRecords(partition1, asList(
-            getConsumerRecordWithOffsetAsTimestamp(partition1, 10),
-            getConsumerRecordWithOffsetAsTimestamp(partition1, 20),
-            getConsumerRecordWithOffsetAsTimestamp(partition1, 30)
-        ));
-
-        assertTrue(task.process(time.milliseconds()));
-        task.prepareCommit();
-        assertFalse(task.process(time.milliseconds()));
-        task.postCommit(false);
-        assertTrue(task.process(time.milliseconds()));
         assertTrue(task.process(time.milliseconds()));
 
         assertFalse(task.process(time.milliseconds()));
@@ -657,7 +629,7 @@ public class StreamTaskTest {
     public void shouldNotProcessRecordsAfterPrepareCommitWhenEosV2Enabled() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createSingleSourceStateless(createConfig(StreamsConfig.EXACTLY_ONCE_V2, "0"), StreamsConfig.METRICS_LATEST);
+        task = createSingleSourceStateless(createConfig(StreamsConfig.EXACTLY_ONCE_V2, "0"));
 
         assertFalse(task.process(time.milliseconds()));
 
@@ -681,7 +653,7 @@ public class StreamTaskTest {
     public void shouldRecordBufferedRecords() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"), StreamsConfig.METRICS_LATEST);
+        task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"));
 
         final KafkaMetric metric = getMetric("active-buffer", "%s-count", task.id().toString());
 
@@ -759,13 +731,13 @@ public class StreamTaskTest {
         final String sourceNodeName = evenKeyForwardingSourceNode.name();
         final String terminalNodeName = processorStreamTime.name();
 
-        final Metric sourceAvg = getProcessorMetric("record-e2e-latency", "%s-avg", task.id().toString(), sourceNodeName, StreamsConfig.METRICS_LATEST);
-        final Metric sourceMin = getProcessorMetric("record-e2e-latency", "%s-min", task.id().toString(), sourceNodeName, StreamsConfig.METRICS_LATEST);
-        final Metric sourceMax = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), sourceNodeName, StreamsConfig.METRICS_LATEST);
+        final Metric sourceAvg = getProcessorMetric("record-e2e-latency", "%s-avg", task.id().toString(), sourceNodeName);
+        final Metric sourceMin = getProcessorMetric("record-e2e-latency", "%s-min", task.id().toString(), sourceNodeName);
+        final Metric sourceMax = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), sourceNodeName);
 
-        final Metric terminalAvg = getProcessorMetric("record-e2e-latency", "%s-avg", task.id().toString(), terminalNodeName, StreamsConfig.METRICS_LATEST);
-        final Metric terminalMin = getProcessorMetric("record-e2e-latency", "%s-min", task.id().toString(), terminalNodeName, StreamsConfig.METRICS_LATEST);
-        final Metric terminalMax = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), terminalNodeName, StreamsConfig.METRICS_LATEST);
+        final Metric terminalAvg = getProcessorMetric("record-e2e-latency", "%s-avg", task.id().toString(), terminalNodeName);
+        final Metric terminalMin = getProcessorMetric("record-e2e-latency", "%s-min", task.id().toString(), terminalNodeName);
+        final Metric terminalMax = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), terminalNodeName);
 
         // e2e latency = 10
         task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(0, 0L)));
@@ -827,7 +799,7 @@ public class StreamTaskTest {
     public void shouldRecordRestoredRecords() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"), StreamsConfig.METRICS_LATEST);
+        task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"));
 
         final KafkaMetric totalMetric = getMetric("restore", "%s-total", task.id().toString());
         final KafkaMetric rateMetric = getMetric("restore", "%s-rate", task.id().toString());
@@ -952,7 +924,6 @@ public class StreamTaskTest {
     }
 
     private void testMetricsForBuiltInMetricsVersionLatest() {
-        final String builtInMetricsVersion = StreamsConfig.METRICS_LATEST;
         assertNull(getMetric("commit", "%s-latency-avg", "all"));
         assertNull(getMetric("commit", "%s-latency-max", "all"));
         assertNull(getMetric("commit", "%s-rate", "all"));
@@ -985,8 +956,7 @@ public class StreamTaskTest {
     private Metric getProcessorMetric(final String operation,
                                       final String nameFormat,
                                       final String taskId,
-                                      final String processorNodeId,
-                                      final String builtInMetricsVersion) {
+                                      final String processorNodeId) {
 
         return getMetricByNameFilterByTags(
             metrics.metrics(),
@@ -1238,7 +1208,7 @@ public class StreamTaskTest {
     public void shouldRespectCommitNeeded() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"), StreamsConfig.METRICS_LATEST);
+        task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
@@ -1280,7 +1250,7 @@ public class StreamTaskTest {
     public void shouldCommitNextOffsetAndProcessorMetadataFromQueueIfAvailable() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"), StreamsConfig.METRICS_LATEST);
+        task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
@@ -2336,7 +2306,7 @@ public class StreamTaskTest {
     public void shouldClearCommitStatusesInCloseDirty() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"), StreamsConfig.METRICS_LATEST);
+        task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
@@ -2386,7 +2356,7 @@ public class StreamTaskTest {
     public void shouldThrowIfCleanClosingDirtyTask() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"), StreamsConfig.METRICS_LATEST);
+        task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
@@ -2477,7 +2447,7 @@ public class StreamTaskTest {
                 streamsMetrics,
                 null
         );
-        final StreamsMetricsImpl metrics = new StreamsMetricsImpl(this.metrics, "test", StreamsConfig.METRICS_LATEST, time);
+        final StreamsMetricsImpl metrics = new StreamsMetricsImpl(this.metrics, "test", time);
 
         // The processor topology is missing the topics
         final ProcessorTopology topology = withSources(emptyList(), mkMap());
@@ -3006,8 +2976,7 @@ public class StreamTaskTest {
         );
     }
 
-    private StreamTask createSingleSourceStateless(final StreamsConfig config,
-                                                   final String builtInMetricsVersion) {
+    private StreamTask createSingleSourceStateless(final StreamsConfig config) {
         final ProcessorTopology topology = withSources(
             asList(source1, processorStreamTime, processorSystemTime),
             mkMap(mkEntry(topic1, source1))
@@ -3030,7 +2999,7 @@ public class StreamTaskTest {
             topology,
             consumer,
             new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
-            new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion, time),
+            new StreamsMetricsImpl(metrics, "test", time),
             stateDirectory,
             cache,
             time,
@@ -3067,7 +3036,7 @@ public class StreamTaskTest {
             topology,
             consumer,
             new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
-            new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, time),
+            new StreamsMetricsImpl(metrics, "test", time),
             stateDirectory,
             cache,
             time,
@@ -3103,7 +3072,7 @@ public class StreamTaskTest {
             topology,
             consumer,
             new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
-            new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, time),
+            new StreamsMetricsImpl(metrics, "test", time),
             stateDirectory,
             cache,
             time,

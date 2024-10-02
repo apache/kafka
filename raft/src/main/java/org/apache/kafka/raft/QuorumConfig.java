@@ -109,6 +109,8 @@ public class QuorumConfig {
             .define(QUORUM_REQUEST_TIMEOUT_MS_CONFIG, INT, DEFAULT_QUORUM_REQUEST_TIMEOUT_MS, null, MEDIUM, QUORUM_REQUEST_TIMEOUT_MS_DOC)
             .define(QUORUM_RETRY_BACKOFF_MS_CONFIG, INT, DEFAULT_QUORUM_RETRY_BACKOFF_MS, null, LOW, QUORUM_RETRY_BACKOFF_MS_DOC);
 
+    private final List<String> voters;
+    private final List<String> bootstrapServers;
     private final int requestTimeoutMs;
     private final int retryBackoffMs;
     private final int electionTimeoutMs;
@@ -117,30 +119,22 @@ public class QuorumConfig {
     private final int appendLingerMs;
 
     public QuorumConfig(AbstractConfig abstractConfig) {
-        this(
-            abstractConfig.getInt(QUORUM_REQUEST_TIMEOUT_MS_CONFIG),
-            abstractConfig.getInt(QUORUM_RETRY_BACKOFF_MS_CONFIG),
-            abstractConfig.getInt(QUORUM_ELECTION_TIMEOUT_MS_CONFIG),
-            abstractConfig.getInt(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG),
-            abstractConfig.getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG),
-            abstractConfig.getInt(QUORUM_LINGER_MS_CONFIG)
-        );
+        this.voters = abstractConfig.getList(QUORUM_VOTERS_CONFIG);
+        this.bootstrapServers = abstractConfig.getList(QUORUM_BOOTSTRAP_SERVERS_CONFIG);
+        this.requestTimeoutMs = abstractConfig.getInt(QUORUM_REQUEST_TIMEOUT_MS_CONFIG);
+        this.retryBackoffMs = abstractConfig.getInt(QUORUM_RETRY_BACKOFF_MS_CONFIG);
+        this.electionTimeoutMs = abstractConfig.getInt(QUORUM_ELECTION_TIMEOUT_MS_CONFIG);
+        this.electionBackoffMaxMs = abstractConfig.getInt(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG);
+        this.fetchTimeoutMs = abstractConfig.getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG);
+        this.appendLingerMs = abstractConfig.getInt(QUORUM_LINGER_MS_CONFIG);
     }
 
-    public QuorumConfig(
-        int requestTimeoutMs,
-        int retryBackoffMs,
-        int electionTimeoutMs,
-        int electionBackoffMaxMs,
-        int fetchTimeoutMs,
-        int appendLingerMs
-    ) {
-        this.requestTimeoutMs = requestTimeoutMs;
-        this.retryBackoffMs = retryBackoffMs;
-        this.electionTimeoutMs = electionTimeoutMs;
-        this.electionBackoffMaxMs = electionBackoffMaxMs;
-        this.fetchTimeoutMs = fetchTimeoutMs;
-        this.appendLingerMs = appendLingerMs;
+    public List<String> voters() {
+        return voters;
+    }
+
+    public List<String> bootstrapServers() {
+        return bootstrapServers;
     }
 
     public int requestTimeoutMs() {

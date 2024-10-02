@@ -36,12 +36,11 @@
         <p>You can reset an application and force it to reprocess its data from scratch by using the application reset tool.
             This can be useful for development and testing, or when fixing bugs.</p>
         <p>The application reset tool handles the Kafka Streams <a class="reference internal" href="manage-topics.html#streams-developer-guide-topics-user"><span class="std std-ref">user topics</span></a> (input,
-            output, and intermediate topics) and <a class="reference internal" href="manage-topics.html#streams-developer-guide-topics-internal"><span class="std std-ref">internal topics</span></a> differently
+            and output) and <a class="reference internal" href="manage-topics.html#streams-developer-guide-topics-internal"><span class="std std-ref">internal topics</span></a> differently
             when resetting the application.</p>
         <p>Here&#8217;s what the application reset tool does for each topic type:</p>
         <ul class="simple">
             <li>Input topics: Reset offsets to specified position (by default to the beginning of the topic).</li>
-            <li>Intermediate topics: Skip to the end of the topic, i.e., set the application&#8217;s committed consumer offsets for all partitions to each partition&#8217;s <code class="docutils literal"><span class="pre">logSize</span></code> (for consumer group <code class="docutils literal"><span class="pre">application.id</span></code>).</li>
             <li>Internal topics: Delete the internal topic (this automatically deletes any committed offsets).</li>
         </ul>
         <p>The application reset tool does not:</p>
@@ -60,16 +59,6 @@
                     When long session timeout has been configured, active members could take longer to get expired on the broker thus blocking the reset job to complete. Use the <code class="docutils literal"><span class="pre">--force</span></code> option could remove those left-over members immediately. Make sure to shut down all stream applications when this option is specified to avoid unexpected rebalances.</p>
                 </li>
                 <li><p class="first">Use this tool with care and double-check its parameters: If you provide wrong parameter values (e.g., typos in <code class="docutils literal"><span class="pre">application.id</span></code>) or specify parameters inconsistently (e.g., specify the wrong input topics for the application), this tool might invalidate the application&#8217;s state or even impact other applications, consumer groups, or your Kafka topics.</p>
-                </li>
-                <li><p class="first">You should manually delete and re-create any intermediate topics before running the application reset tool. This will free up disk space in Kafka brokers.</p>
-                </li>
-                <li><p class="first">You should delete and recreate intermediate topics before running the application reset tool, unless the following applies:</p>
-                    <blockquote>
-                        <div><ul class="simple">
-                            <li>You have external downstream consumers for the application&#8217;s intermediate topics.</li>
-                            <li>You are in a development environment where manually deleting and re-creating intermediate topics is unnecessary.</li>
-                        </ul>
-                        </div></blockquote>
                 </li>
             </ul>
             </dd>
@@ -106,10 +95,6 @@
                                         topics. For these topics, the tool will
                                         reset the offset to the earliest
                                         available offset.
---intermediate-topics &lt;String: list&gt;  Comma-separated list of intermediate user
-                                        topics (topics used in the through()
-                                        method). For these topics, the tool
-                                        will skip to the end.
 --internal-topics &lt;String: list&gt;      Comma-separated list of internal topics
                                         to delete. Must be a subset of the
                                         internal topics marked for deletion by
