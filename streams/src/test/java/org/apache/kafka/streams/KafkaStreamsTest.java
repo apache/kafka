@@ -367,6 +367,24 @@ public class KafkaStreamsTest {
     }
 
     @Test
+    public void shouldInitializeTasksForLocalStateOnStart() {
+        prepareStreams();
+        prepareStreamThread(streamThreadOne, 1);
+        prepareStreamThread(streamThreadTwo, 2);
+
+        try (final MockedConstruction<StateDirectory> constructed = mockConstruction(StateDirectory.class,
+                (mock, context) -> when(mock.initializeProcessId()).thenReturn(UUID.randomUUID()))) {
+            try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+                assertEquals(1, constructed.constructed().size());
+                final StateDirectory stateDirectory = constructed.constructed().get(0);
+                verify(stateDirectory, times(0)).initializeTasksForLocalState(any(), any(), any());
+                streams.start();
+                verify(stateDirectory, times(1)).initializeTasksForLocalState(any(), any(), any());
+            }
+        }
+    }
+
+    @Test
     public void shouldClosePendingTasksAfterFirstRebalance() throws Exception {
         prepareStreams();
         final AtomicReference<StreamThread.State> state1 = prepareStreamThread(streamThreadOne, 1);
