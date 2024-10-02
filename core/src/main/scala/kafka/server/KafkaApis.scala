@@ -3880,9 +3880,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleStreamsGroupInitialize(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    // TODO: The unit tests for this method are insufficient. Once we merge initialize with group heartbeat, we have to extend the tests to cover ACLs and internal topic creation
     val streamsGroupInitializeRequest = request.body[StreamsGroupInitializeRequest]
-
-    // TODO: Check ACLs on CREATE TOPIC & DESCRIBE_CONFIGS
 
     if (!isStreamsGroupProtocolEnabled()) {
       // The API is not supported by the "old" group coordinator (the default). If the
@@ -3893,6 +3892,53 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendMaybeThrottle(request, streamsGroupInitializeRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
+      val requestContext = request.context
+
+      val internalTopics: Map[String, StreamsGroupInitializeRequestData.TopicInfo] = {
+        streamsGroupInitializeRequest.data().topology().asScala.flatMap(subtopology =>
+          subtopology.repartitionSourceTopics().iterator().asScala ++ subtopology.stateChangelogTopics().iterator().asScala
+        ).map(x => x.name() -> x).toMap
+      }
+
+      val prohibitedInternalTopics = internalTopics.keys.filter(Topic.isInternal)
+      if (prohibitedInternalTopics.nonEmpty) {
+        val errorResponse = new StreamsGroupInitializeResponseData()
+        errorResponse.setErrorCode(Errors.STREAMS_INVALID_TOPOLOGY.code)
+        errorResponse.setErrorMessage(f"Use of Kafka internal topics ${prohibitedInternalTopics.mkString(",")} as Kafka Streams internal topics is prohibited.")
+        requestHelper.sendMaybeThrottle(request, new StreamsGroupInitializeResponse(errorResponse))
+        return CompletableFuture.completedFuture[Unit](())
+      }
+
+      val invalidTopics = internalTopics.keys.filterNot(Topic.isValid)
+      if (invalidTopics.nonEmpty) {
+        val errorResponse = new StreamsGroupInitializeResponseData()
+        errorResponse.setErrorCode(Errors.STREAMS_INVALID_TOPOLOGY.code)
+        errorResponse.setErrorMessage(f"Internal topic names ${invalidTopics.mkString(",")} are not valid topic names.")
+        requestHelper.sendMaybeThrottle(request, new StreamsGroupInitializeResponse(errorResponse))
+        return CompletableFuture.completedFuture[Unit](())
+      }
+
+      // TODO: Once we move initialization to the heartbeat, we should only require these permissions if there are missing internal topics.
+      if(!authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME, logIfDenied = false)) {
+        val (_, createTopicUnauthorized) = authHelper.partitionSeqByAuthorized(request.context, CREATE, TOPIC, internalTopics.keys.toSeq)(identity[String])
+        if (createTopicUnauthorized.nonEmpty) {
+          val errorResponse = new StreamsGroupInitializeResponseData()
+          errorResponse.setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+          errorResponse.setErrorMessage(f"Unauthorized to CREATE TOPIC ${createTopicUnauthorized.mkString(",")}.")
+          requestHelper.sendMaybeThrottle(request, new StreamsGroupInitializeResponse(errorResponse))
+          return CompletableFuture.completedFuture[Unit](())
+        }
+      }
+
+      val (_, describeConfigsAuthorized) = authHelper.partitionSeqByAuthorized(request.context, DESCRIBE_CONFIGS, TOPIC, internalTopics.keys.toSeq)(identity[String])
+      if (describeConfigsAuthorized.nonEmpty) {
+        val errorResponse = new StreamsGroupInitializeResponseData()
+        errorResponse.setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+        errorResponse.setErrorMessage(f"Unauthorized to DESCRIBE_CONFIGS on topics ${describeConfigsAuthorized.mkString(",")} are unauthorized.")
+        requestHelper.sendMaybeThrottle(request, new StreamsGroupInitializeResponse(errorResponse))
+        return CompletableFuture.completedFuture[Unit](())
+      }
+
       groupCoordinator.streamsGroupInitialize(
         request.context,
         streamsGroupInitializeRequest.data,
@@ -3900,7 +3946,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, streamsGroupInitializeRequest.getErrorResponse(exception))
         } else {
-          requestHelper.sendMaybeThrottle(request, new StreamsGroupInitializeResponse(response))
+          if (!response.creatableTopics().isEmpty) {
+            // TODO: Once we move this code to the heartbeat, we should indicate which topics are being created. We should also find a way to propagate failures to the client
+            autoTopicCreationManager.createStreamsInternalTopics(response.creatableTopics().asScala, requestContext);
+          }
+          requestHelper.sendMaybeThrottle(request, new StreamsGroupInitializeResponse(response.data()))
         }
       }
     }
