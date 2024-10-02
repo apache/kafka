@@ -77,6 +77,7 @@ import org.apache.kafka.common.utils.{ImplicitLinkedHashCollection, ProducerIdAn
 import org.apache.kafka.coordinator.group.GroupConfig.{CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_SESSION_TIMEOUT_MS_CONFIG, SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, SHARE_SESSION_TIMEOUT_MS_CONFIG, SHARE_RECORD_LOCK_DURATION_MS_CONFIG}
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig}
+import org.apache.kafka.coordinator.group.streams.StreamsGroupInitializeResult
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorConfigTest}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.LeaderAndIsr
@@ -11195,7 +11196,7 @@ class KafkaApisTest extends Logging {
 
     val requestChannelRequest = buildRequest(new StreamsGroupInitializeRequest.Builder(streamsGroupInitializeRequest, true).build())
 
-    val future = new CompletableFuture[StreamsGroupInitializeResponseData]()
+    val future = new CompletableFuture[StreamsGroupInitializeResult]()
     when(groupCoordinator.streamsGroupInitialize(
       requestChannelRequest.context,
       streamsGroupInitializeRequest
@@ -11206,7 +11207,7 @@ class KafkaApisTest extends Logging {
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
-    val streamsGroupInitializeResponse = new StreamsGroupInitializeResponseData()
+    val streamsGroupInitializeResponse = new StreamsGroupInitializeResult(new StreamsGroupInitializeResponseData())
 
     future.complete(streamsGroupInitializeResponse)
     val response = verifyNoThrottling[StreamsGroupInitializeResponse](requestChannelRequest)
@@ -11221,7 +11222,7 @@ class KafkaApisTest extends Logging {
 
     val requestChannelRequest = buildRequest(new StreamsGroupInitializeRequest.Builder(streamsGroupInitializeRequest, true).build())
 
-    val future = new CompletableFuture[StreamsGroupInitializeResponseData]()
+    val future = new CompletableFuture[StreamsGroupInitializeResult]()
     when(groupCoordinator.streamsGroupInitialize(
       requestChannelRequest.context,
       streamsGroupInitializeRequest

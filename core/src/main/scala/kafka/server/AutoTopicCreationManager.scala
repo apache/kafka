@@ -47,6 +47,13 @@ trait AutoTopicCreationManager {
     controllerMutationQuota: ControllerMutationQuota,
     metadataRequestContext: Option[RequestContext]
   ): Seq[MetadataResponseTopic]
+
+
+  def createStreamsInternalTopics(
+    topics: Map[String, CreatableTopic],
+    requestContext: RequestContext
+  ): Unit
+
 }
 
 object AutoTopicCreationManager {
@@ -108,6 +115,32 @@ class DefaultAutoTopicCreationManager(
     uncreatableTopicResponses ++ creatableTopicResponses
   }
 
+  override def createStreamsInternalTopics(
+    topics: Map[String, CreatableTopic],
+    requestContext: RequestContext
+  ): Unit = {
+
+    // Set default values for numPartitions and replicationFactor if they are not provided
+    for ((_, creatableTopic) <- topics) {
+      if (creatableTopic.numPartitions() == -1) {
+        creatableTopic
+          .setNumPartitions(config.numPartitions)
+      }
+      if (creatableTopic.replicationFactor() == -1) {
+        creatableTopic
+          .setReplicationFactor(config.defaultReplicationFactor.shortValue)
+      }
+    }
+
+    if (topics.isEmpty) {
+      Seq.empty
+    } else if (controller.isEmpty || !controller.get.isActive && channelManager.isDefined) {
+      sendCreateTopicRequest(topics, Some(requestContext))
+    } else {
+      throw new IllegalStateException("Controller must be defined in order to create streams internal topics.")
+    }
+  }
+
   private def createTopicsInZk(
     creatableTopics: Map[String, CreatableTopic],
     controllerMutationQuota: ControllerMutationQuota
@@ -159,8 +192,8 @@ class DefaultAutoTopicCreationManager(
   }
 
   private def sendCreateTopicRequest(
-    creatableTopics: Map[String, CreatableTopic],
-    metadataRequestContext: Option[RequestContext]
+                                      creatableTopics: Map[String, CreatableTopic],
+                                      requestContext: Option[RequestContext]
   ): Seq[MetadataResponseTopic] = {
     val topicsToCreate = new CreateTopicsRequestData.CreatableTopicCollection(creatableTopics.size)
     topicsToCreate.addAll(creatableTopics.values.asJavaCollection)
@@ -184,7 +217,8 @@ class DefaultAutoTopicCreationManager(
         } else if (response.versionMismatch() != null) {
           warn(s"Auto topic creation failed for ${creatableTopics.keys} with invalid version exception")
         } else {
-          debug(s"Auto topic creation completed for ${creatableTopics.keys} with response ${response.responseBody}.")
+          // TODO: Response may still contain errors for individual topics. This should be exposed.
+          info(s"Auto topic creation completed for ${creatableTopics.keys} with response ${response.responseBody}.")
         }
       }
     }
@@ -193,7 +227,7 @@ class DefaultAutoTopicCreationManager(
       throw new IllegalStateException("Channel manager must be defined in order to send CreateTopic requests.")
     }
 
-    val request = metadataRequestContext.map { context =>
+    val request = requestContext.map { context =>
       val requestVersion =
         channelManager.controllerApiVersions.toScala match {
           case None =>

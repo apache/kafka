@@ -37,6 +37,7 @@ import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.ConsumerProtocolSubscription;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
@@ -135,8 +136,11 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupAssignmentBuilder;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupInitializeResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsTopology;
+import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
+import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.coordinator.group.taskassignor.TaskAssignor;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -167,7 +171,6 @@ import java.util.stream.Stream;
 import static org.apache.kafka.common.protocol.Errors.COORDINATOR_NOT_AVAILABLE;
 import static org.apache.kafka.common.protocol.Errors.ILLEGAL_GENERATION;
 import static org.apache.kafka.common.protocol.Errors.NOT_COORDINATOR;
-import static org.apache.kafka.common.protocol.Errors.STREAMS_INVALID_TOPOLOGY;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_SERVER_ERROR;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
@@ -2590,7 +2593,7 @@ public class GroupMetadataManager {
      * @param subtopologies The list of subtopologies.
      * @return A Result containing the StreamsGroupInitialize response and a list of records to update the state machine.
      */
-    private CoordinatorResult<StreamsGroupInitializeResponseData, CoordinatorRecord> streamsGroupInitialize(String groupId,
+    private CoordinatorResult<StreamsGroupInitializeResult, CoordinatorRecord> streamsGroupInitialize(String groupId,
                                                                                                        String topologyId,
                                                                                                             List<StreamsGroupInitializeRequestData.Subtopology> subtopologies)
         throws ApiException {
@@ -2605,49 +2608,31 @@ public class GroupMetadataManager {
         if (!isTopologyInitializationScheduled(groupId, topologyId)) {
             log.warn("No topology to initialize for group ID {} and topology ID {} found.", groupId, topologyId);
             StreamsGroupInitializeResponseData response = new StreamsGroupInitializeResponseData();
-            return new CoordinatorResult<>(records, response);
-        }
-
-        // TODO: For the POC, only check if internal topics exist
-        Set<String> missingTopics = new HashSet<>();
-        for (StreamsGroupInitializeRequestData.Subtopology subtopology : subtopologies) {
-            for (StreamsGroupInitializeRequestData.TopicInfo topic : subtopology.stateChangelogTopics()) {
-                if (metadataImage.topics().getTopic(topic.name()) == null) {
-                    missingTopics.add(topic.name());
-                }
-            }
-            for (StreamsGroupInitializeRequestData.TopicInfo topic : subtopology.repartitionSourceTopics()) {
-                if (metadataImage.topics().getTopic(topic.name()) == null) {
-                    missingTopics.add(topic.name());
-                }
-            }
+            return new CoordinatorResult<>(records, new StreamsGroupInitializeResult(response));
         }
 
         StreamsGroupTopologyValue recordValue = convertToStreamsGroupTopologyRecord(subtopologies);
 
+        final Map<String, ConfiguredSubtopology> configuredTopics =
+            InternalTopicManager.configureTopics(logContext, recordValue.topology(), metadataImage);
+
         cancelStreamsGroupTopologyInitializationTimeout(groupId, topologyId);
 
-        if (!missingTopics.isEmpty()) {
-            StreamsGroupInitializeResponseData response =
-                new StreamsGroupInitializeResponseData()
-                    .setErrorCode(STREAMS_INVALID_TOPOLOGY.code())
-                    .setErrorMessage("Internal topics " + String.join(", ", missingTopics) + " do not exist.");
+        records.add(newStreamsGroupTopologyRecord(groupId, recordValue));
 
-            return new CoordinatorResult<>(records, response);
-        } else {
-            records.add(newStreamsGroupTopologyRecord(groupId, recordValue));
+        final Map<String, StreamsGroupTopologyValue.Subtopology> subtopologyMap = recordValue.topology().stream()
+            .collect(Collectors.toMap(StreamsGroupTopologyValue.Subtopology::subtopologyId, x -> x));
+        final StreamsTopology topology = new StreamsTopology(topologyId, subtopologyMap);
 
-            final Map<String, StreamsGroupTopologyValue.Subtopology> subtopologyMap = recordValue.topology().stream()
-                .collect(Collectors.toMap(StreamsGroupTopologyValue.Subtopology::subtopologyId, x -> x));
-
-            final StreamsTopology topology = new StreamsTopology(topologyId, subtopologyMap);
-
+        final Map<String, CreatableTopic> missingTopics = InternalTopicManager.missingTopics(configuredTopics, metadataImage);
+        // TODO: This needs to be sorted out, once we merge heartbeat and initialization
+        if (missingTopics.isEmpty()) {
             computeFirstTargetAssignmentAfterTopologyInitialization(group, records, topology);
-
-            StreamsGroupInitializeResponseData response = new StreamsGroupInitializeResponseData();
-
-            return new CoordinatorResult<>(records, response);
         }
+
+        StreamsGroupInitializeResponseData response = new StreamsGroupInitializeResponseData();
+
+        return new CoordinatorResult<>(records, new StreamsGroupInitializeResult(response, missingTopics));
 
     }
 
@@ -4579,7 +4564,7 @@ public class GroupMetadataManager {
      * @return A Result containing the StreamsGroupInitialize response and
      *         a list of records to update the state machine.
      */
-    public CoordinatorResult<StreamsGroupInitializeResponseData, CoordinatorRecord> streamsGroupInitialize(
+    public CoordinatorResult<StreamsGroupInitializeResult, CoordinatorRecord> streamsGroupInitialize(
         RequestContext context,
         StreamsGroupInitializeRequestData request
     ) throws ApiException {
