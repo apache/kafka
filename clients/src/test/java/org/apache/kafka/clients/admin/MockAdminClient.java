@@ -1310,7 +1310,7 @@ public class MockAdminClient extends AdminClient {
         for (Map.Entry<String, FeatureUpdate> entry : featureUpdates.entrySet()) {
             KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
             if (error == null) {
-               future.complete(null);
+                future.complete(null);
                 if (!options.validateOnly()) {
                     featureLevels.put(entry.getKey(), entry.getValue().maxVersionLevel());
                 }
