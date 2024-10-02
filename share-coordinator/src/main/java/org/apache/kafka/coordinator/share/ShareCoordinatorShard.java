@@ -275,32 +275,40 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         WriteShareGroupStateRequestData.PartitionData partitionData = topicData.partitions().get(0);
         SharePartitionKey key = SharePartitionKey.getInstance(request.groupId(), topicData.topicId(), partitionData.partition());
 
-        try {
-            CoordinatorRecord record = getRecord(partitionData, key);
-            // build successful response if record is correctly created
-            WriteShareGroupStateResponseData responseData = new WriteShareGroupStateResponseData()
-                .setResults(
-                    Collections.singletonList(
-                        WriteShareGroupStateResponse.toResponseWriteStateResult(key.topicId(),
-                            Collections.singletonList(
-                                WriteShareGroupStateResponse.toResponsePartitionResult(
-                                    key.partition()
-                                ))
-                        ))
-                );
+        CoordinatorRecord record = generateShareStateRecord(partitionData, key);
+        // build successful response if record is correctly created
+        WriteShareGroupStateResponseData responseData = new WriteShareGroupStateResponseData()
+            .setResults(
+                Collections.singletonList(
+                    WriteShareGroupStateResponse.toResponseWriteStateResult(key.topicId(),
+                        Collections.singletonList(
+                            WriteShareGroupStateResponse.toResponsePartitionResult(
+                                key.partition()
+                            ))
+                    ))
+            );
 
-            return new CoordinatorResult<>(Collections.singletonList(record), responseData);
-        } catch (IllegalStateException exception) {
-            log.error("Unable to create share state record.", exception);
-            return getWriteErrorResponse(Errors.UNKNOWN_SERVER_ERROR, UNEXPECTED_CURRENT_STATE, key.topicId(), key.partition());
-        }
+        return new CoordinatorResult<>(Collections.singletonList(record), responseData);
     }
 
-    private CoordinatorRecord getRecord(WriteShareGroupStateRequestData.PartitionData partitionData, SharePartitionKey key) {
-        // create appropriate type of record to write to the share group state topic
+    /**
+     * Util method to generate a ShareSnapshot or ShareUpdate type record for a key, based on various conditions.
+     * <p>
+     * if no snapshot has been created for the key => create a new ShareSnapshot record
+     * else if number of ShareUpdate records for key >= max allowed per snapshot per key => create a new ShareSnapshot record
+     * else create a new ShareUpdate record
+     *
+     * @param partitionData - Represents the data which should be written into the share state record.
+     * @param key - The {@link SharePartitionKey} object.
+     * @return {@link CoordinatorRecord} representing ShareSnapshot or ShareUpdate
+     */
+    private CoordinatorRecord generateShareStateRecord(
+        WriteShareGroupStateRequestData.PartitionData partitionData,
+        SharePartitionKey key
+    ) {
         if (!shareStateMap.containsKey(key)) {
-            // since this is the first time we are getting a write request, we should be creating a share snapshot record
-            // the incoming partition data could have overlapping state batches, we must merge them
+            // Since this is the first time we are getting a write request for key, we should be creating a share snapshot record.
+            // The incoming partition data could have overlapping state batches, we must merge them
             return ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
                 key.groupId(), key.topicId(), partitionData.partition(),
                 new ShareGroupOffset.Builder()
@@ -311,18 +319,14 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                     .setStateBatches(mergeBatches(Collections.emptyList(), partitionData))
                     .build());
         } else if (snapshotUpdateCount.getOrDefault(key, 0) >= config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot()) {
-            ShareGroupOffset currentState = shareStateMap.get(key);
-            if (currentState == null) {
-                throw new IllegalStateException(
-                    String.format("Cannot create share snapshot record for key %s as current state is empty.", key.asCoordinatorKey())
-                );
-            }
-            // Since the number of update records for this share part key exceeds snapshotUpdateRecordsPerSnapshot,
-            // we should be creating a share snapshot record.
+            ShareGroupOffset currentState = shareStateMap.get(key); // shareStateMap will have the entry as containsKey is true
             int newLeaderEpoch = partitionData.leaderEpoch() == -1 ? currentState.leaderEpoch() : partitionData.leaderEpoch();
             int newStateEpoch = partitionData.stateEpoch() == -1 ? currentState.stateEpoch() : partitionData.stateEpoch();
             long newStartOffset = partitionData.startOffset() == -1 ? currentState.startOffset() : partitionData.startOffset();
 
+            // Since the number of update records for this share part key exceeds snapshotUpdateRecordsPerSnapshot,
+            // we should be creating a share snapshot record.
+            // The incoming partition data could have overlapping state batches, we must merge them.
             return ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
                 key.groupId(), key.topicId(), partitionData.partition(),
                 new ShareGroupOffset.Builder()
@@ -333,19 +337,15 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                     .setStateBatches(mergeBatches(currentState.stateBatches(), partitionData, newStartOffset))
                     .build());
         } else {
-            ShareGroupOffset currentState = shareStateMap.get(key);
-            if (currentState == null) {
-                throw new IllegalStateException(
-                    String.format("Cannot create share update record for key %s as current state is empty.", key.asCoordinatorKey())
-                );
-            }
+            ShareGroupOffset currentState = shareStateMap.get(key); // shareStateMap will have the entry as containsKey is true
 
-            // share snapshot is present and number of share snapshot update records < snapshotUpdateRecordsPerSnapshot
-            // the incoming partition data could have overlapping state batches, we must merge them
+            // Share snapshot is present and number of share snapshot update records < snapshotUpdateRecordsPerSnapshot
+            // so create a share update record.
+            // The incoming partition data could have overlapping state batches, we must merge them.
             return ShareCoordinatorRecordHelpers.newShareSnapshotUpdateRecord(
                 key.groupId(), key.topicId(), partitionData.partition(),
                 new ShareGroupOffset.Builder()
-                    .setSnapshotEpoch(currentState.snapshotEpoch())
+                    .setSnapshotEpoch(currentState.snapshotEpoch()) // use same snapshotEpoch as last share snapshot
                     .setStartOffset(partitionData.startOffset())
                     .setLeaderEpoch(partitionData.leaderEpoch())
                     .setStateBatches(mergeBatches(Collections.emptyList(), partitionData))
