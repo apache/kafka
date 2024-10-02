@@ -30,7 +30,6 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class MirrorSourceMetricsTest {
 
@@ -55,22 +54,6 @@ public class MirrorSourceMetricsTest {
 
     @Test
     public void testTags() {
-        MirrorSourceTaskConfig taskConfig = new MirrorSourceTaskConfig(configs);
-        MirrorSourceMetrics metrics = new MirrorSourceMetrics(taskConfig);
-        metrics.addReporter(reporter);
-
-        metrics.countRecord(SOURCE_TP);
-        assertEquals(13, reporter.metrics.size());
-        Map<String, String> tags = reporter.metrics.get(0).metricName().tags();
-        assertEquals(TARGET, tags.get("target"));
-        assertEquals(SOURCE_TP.topic(), tags.get("topic"));
-        assertEquals(String.valueOf(SOURCE_TP.partition()), tags.get("partition"));
-        assertNull(tags.get("source"));
-    }
-
-    @Test
-    public void testTagsWithSourceAlias() {
-        configs.put(MirrorSourceConfig.ADD_SOURCE_ALIAS_TO_METRICS, "true");
         MirrorSourceTaskConfig taskConfig = new MirrorSourceTaskConfig(configs);
         MirrorSourceMetrics metrics = new MirrorSourceMetrics(taskConfig);
         metrics.addReporter(reporter);
