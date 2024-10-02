@@ -67,15 +67,12 @@ public class TopicIds implements Set<Uuid> {
     }
 
     /**
-     * A base implementation of TopicResolver.
-     *
-     * Provides an implementation of equals, hashCode and toString based on the underlying
-     * TopicsImage.
+     * A TopicResolver without any caching.
      */
-    private abstract static class BaseTopicResolver implements TopicResolver {
-        protected final TopicsImage image;
+    public static class DefaultTopicResolver implements TopicResolver {
+        private final TopicsImage image;
 
-        public BaseTopicResolver(
+        public DefaultTopicResolver(
             TopicsImage image
         ) {
             this.image = Objects.requireNonNull(image);
@@ -84,37 +81,6 @@ public class TopicIds implements Set<Uuid> {
         @Override
         public final TopicsImage image() {
             return image;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || !(o instanceof TopicResolver)) return false;
-
-            TopicResolver that = (TopicResolver) o;
-
-            return Objects.equals(image, that.image());
-        }
-
-        @Override
-        public int hashCode() {
-            return image.hashCode();
-        }
-
-        @Override
-        public String toString() {
-            return getClass().getName() + "(image=" + image + ")";
-        }
-    }
-
-    /**
-     * A TopicResolver without any caching.
-     */
-    public static class DefaultTopicResolver extends BaseTopicResolver {
-        public DefaultTopicResolver(
-            TopicsImage image
-        ) {
-            super(image);
         }
 
         @Override
@@ -133,19 +99,31 @@ public class TopicIds implements Set<Uuid> {
 
         @Override
         public void clear() {}
+
+        @Override
+        public String toString() {
+            return "DefaultTopicResolver(image=" + image + ")";
+        }
     }
 
     /**
      * A TopicResolver that caches results.
      */
-    public static class CachedTopicResolver extends BaseTopicResolver {
+    public static class CachedTopicResolver implements TopicResolver {
+        private final TopicsImage image;
+
         private final Map<String, Uuid> topicIds = new HashMap<>();
         private final Map<Uuid, String> topicNames = new HashMap<>();
 
         public CachedTopicResolver(
             TopicsImage image
         ) {
-            super(image);
+            this.image = Objects.requireNonNull(image);
+        }
+
+        @Override
+        public final TopicsImage image() {
+            return image;
         }
 
         @Override
@@ -170,6 +148,11 @@ public class TopicIds implements Set<Uuid> {
         public void clear() {
             this.topicNames.clear();
             this.topicIds.clear();
+        }
+
+        @Override
+        public String toString() {
+            return "CachedTopicResolver(image=" + image + ")";
         }
     }
 
@@ -314,13 +297,13 @@ public class TopicIds implements Set<Uuid> {
         TopicIds uuids = (TopicIds) o;
 
         if (!Objects.equals(topicNames, uuids.topicNames)) return false;
-        return Objects.equals(resolver, uuids.resolver);
+        return Objects.equals(resolver.image(), uuids.resolver.image());
     }
 
     @Override
     public int hashCode() {
         int result = topicNames.hashCode();
-        result = 31 * result + resolver.hashCode();
+        result = 31 * result + resolver.image().hashCode();
         return result;
     }
 
