@@ -13,14 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: "Pull Request Labeler"
+name: "Pull Request Update"
 on:
   pull_request_target:
     types: [opened, reopened, synchronize]
-  
+    branches:
+      - 'trunk'
 
 jobs:
-  label_PRs:
+  add-labeler-labels:
     permissions:
       contents: read
       pull-requests: write
@@ -29,3 +30,15 @@ jobs:
     - uses: actions/labeler@v5
       with:
         configuration-path: .github/configs/labeler.yml
+
+  add-triage-label:
+    if: github.event.action == 'opened'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - run: gh pr edit "$NUMBER" --add-label triage
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
