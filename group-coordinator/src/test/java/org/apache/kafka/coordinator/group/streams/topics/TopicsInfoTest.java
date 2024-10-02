@@ -39,15 +39,13 @@ public class TopicsInfoTest {
         Set<String> sourceTopics = mkSet("sourceTopic1", "sourceTopic2");
         Map<String, InternalTopicConfig> repartitionSourceTopics = new HashMap<>();
         Map<String, InternalTopicConfig> stateChangelogTopics = new HashMap<>();
-        Collection<Set<String>> copartitionGroups = new ArrayList<>();
 
-        TopicsInfo topicsInfo = new TopicsInfo(repartitionSinkTopics, sourceTopics, repartitionSourceTopics, stateChangelogTopics, copartitionGroups);
+        TopicsInfo topicsInfo = new TopicsInfo(repartitionSinkTopics, sourceTopics, repartitionSourceTopics, stateChangelogTopics);
 
         assertEquals(repartitionSinkTopics, topicsInfo.repartitionSinkTopics());
         assertEquals(sourceTopics, topicsInfo.sourceTopics());
         assertEquals(repartitionSourceTopics, topicsInfo.repartitionSourceTopics());
         assertEquals(stateChangelogTopics, topicsInfo.stateChangelogTopics());
-        assertEquals(copartitionGroups, topicsInfo.copartitionGroups());
     }
 
     @Test
@@ -69,10 +67,6 @@ public class TopicsInfoTest {
         Map<String, InternalTopicConfig> stateChangelogTopics = new HashMap<>();
         topicsInfo.setStateChangelogTopics(stateChangelogTopics);
         assertEquals(stateChangelogTopics, topicsInfo.stateChangelogTopics());
-
-        Collection<Set<String>> copartitionGroups = new ArrayList<>();
-        topicsInfo.setCopartitionGroups(copartitionGroups);
-        assertEquals(copartitionGroups, topicsInfo.copartitionGroups());
     }
 
     @Test
@@ -85,8 +79,7 @@ public class TopicsInfoTest {
             Collections.emptySet(),
             Collections.singleton("sourceTopic1"),
             Collections.emptyMap(),
-            stateChangelogTopics,
-            Collections.emptyList()
+            stateChangelogTopics
         );
 
         Set<InternalTopicConfig> nonSourceChangelogTopics = topicsInfo.nonSourceChangelogTopics();
@@ -100,10 +93,9 @@ public class TopicsInfoTest {
         Set<String> sourceTopics = new HashSet<>(Arrays.asList("sourceTopic1", "sourceTopic2"));
         Map<String, InternalTopicConfig> repartitionSourceTopics = new HashMap<>();
         Map<String, InternalTopicConfig> stateChangelogTopics = new HashMap<>();
-        Collection<Set<String>> copartitionGroups = new ArrayList<>();
 
-        TopicsInfo topicsInfo1 = new TopicsInfo(repartitionSinkTopics, sourceTopics, repartitionSourceTopics, stateChangelogTopics, copartitionGroups);
-        TopicsInfo topicsInfo2 = new TopicsInfo(repartitionSinkTopics, sourceTopics, repartitionSourceTopics, stateChangelogTopics, copartitionGroups);
+        TopicsInfo topicsInfo1 = new TopicsInfo(repartitionSinkTopics, sourceTopics, repartitionSourceTopics, stateChangelogTopics);
+        TopicsInfo topicsInfo2 = new TopicsInfo(repartitionSinkTopics, sourceTopics, repartitionSourceTopics, stateChangelogTopics);
 
         assertEquals(topicsInfo1, topicsInfo2);
     }
@@ -114,10 +106,9 @@ public class TopicsInfoTest {
         Set<String> sourceTopics = new HashSet<>(Arrays.asList("sourceTopic1", "sourceTopic2"));
         Map<String, InternalTopicConfig> repartitionSourceTopics = new HashMap<>();
         Map<String, InternalTopicConfig> stateChangelogTopics = new HashMap<>();
-        Collection<Set<String>> copartitionGroups = new ArrayList<>();
 
-        TopicsInfo topicsInfo1 = new TopicsInfo(repartitionSinkTopics, sourceTopics, repartitionSourceTopics, stateChangelogTopics, copartitionGroups);
-        TopicsInfo topicsInfo2 = new TopicsInfo(repartitionSinkTopics, sourceTopics, repartitionSourceTopics, stateChangelogTopics, copartitionGroups);
+        TopicsInfo topicsInfo1 = new TopicsInfo(repartitionSinkTopics, sourceTopics, repartitionSourceTopics, stateChangelogTopics);
+        TopicsInfo topicsInfo2 = new TopicsInfo(repartitionSinkTopics, sourceTopics, repartitionSourceTopics, stateChangelogTopics);
 
         assertEquals(topicsInfo1.hashCode(), topicsInfo2.hashCode());
     }
@@ -128,16 +119,14 @@ public class TopicsInfoTest {
         Set<String> sourceTopics = new HashSet<>(Arrays.asList("sourceTopic1", "sourceTopic2"));
         Map<String, InternalTopicConfig> repartitionSourceTopics = new HashMap<>();
         Map<String, InternalTopicConfig> stateChangelogTopics = new HashMap<>();
-        Collection<Set<String>> copartitionGroups = new ArrayList<>();
 
-        TopicsInfo topicsInfo = new TopicsInfo(repartitionSinkTopics, sourceTopics, repartitionSourceTopics, stateChangelogTopics, copartitionGroups);
+        TopicsInfo topicsInfo = new TopicsInfo(repartitionSinkTopics, sourceTopics, repartitionSourceTopics, stateChangelogTopics);
 
         String expectedString = "TopicsInfo{" +
             "repartitionSinkTopics=" + repartitionSinkTopics +
             ", sourceTopics=" + sourceTopics +
             ", stateChangelogTopics=" + stateChangelogTopics +
             ", repartitionSourceTopics=" + repartitionSourceTopics +
-            ", copartitionGroups=" + copartitionGroups +
             '}';
 
         assertEquals(expectedString, topicsInfo.toString());

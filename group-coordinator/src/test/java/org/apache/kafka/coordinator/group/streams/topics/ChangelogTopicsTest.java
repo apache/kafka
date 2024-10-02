@@ -44,15 +44,13 @@ public class ChangelogTopicsTest {
         Collections.singleton(SINK_TOPIC_NAME),
         Collections.emptySet(),
         mkMap(mkEntry(REPARTITION_TOPIC_NAME, REPARTITION_TOPIC_CONFIG)),
-        mkMap(),
-        Collections.emptyList()
+        mkMap()
     );
     private static final TopicsInfo TOPICS_INFO_STATELESS = new TopicsInfo(
         Collections.singleton(SINK_TOPIC_NAME),
         Collections.singleton(SOURCE_TOPIC_NAME),
         mkMap(mkEntry(REPARTITION_TOPIC_NAME, REPARTITION_TOPIC_CONFIG)),
-        mkMap(),
-        Collections.emptyList()
+        mkMap()
     );
     private static final InternalTopicConfig CHANGELOG_TOPIC_CONFIG =
         new InternalTopicConfig(CHANGELOG_TOPIC_NAME1, TOPIC_CONFIG);
@@ -60,22 +58,19 @@ public class ChangelogTopicsTest {
         Collections.singleton(SINK_TOPIC_NAME),
         Collections.singleton(SOURCE_TOPIC_NAME),
         mkMap(mkEntry(REPARTITION_TOPIC_NAME, REPARTITION_TOPIC_CONFIG)),
-        mkMap(mkEntry(CHANGELOG_TOPIC_NAME1, CHANGELOG_TOPIC_CONFIG)),
-        Collections.emptyList()
+        mkMap(mkEntry(CHANGELOG_TOPIC_NAME1, CHANGELOG_TOPIC_CONFIG))
     );
     private static final TopicsInfo TOPICS_INFO_SOURCE_CHANGELOG = new TopicsInfo(
         Collections.singleton(SINK_TOPIC_NAME),
         Collections.singleton(SOURCE_TOPIC_NAME),
         mkMap(mkEntry(REPARTITION_TOPIC_NAME, REPARTITION_TOPIC_CONFIG)),
-        mkMap(mkEntry(SOURCE_TOPIC_NAME, CHANGELOG_TOPIC_CONFIG)),
-        Collections.emptyList()
+        mkMap(mkEntry(SOURCE_TOPIC_NAME, CHANGELOG_TOPIC_CONFIG))
     );
     private static final TopicsInfo TOPICS_INFO_BOTH = new TopicsInfo(
         Collections.singleton(SINK_TOPIC_NAME),
         Collections.singleton(SOURCE_TOPIC_NAME),
         mkMap(mkEntry(REPARTITION_TOPIC_NAME, REPARTITION_TOPIC_CONFIG)),
-        mkMap(mkEntry(SOURCE_TOPIC_NAME, null), mkEntry(CHANGELOG_TOPIC_NAME1, CHANGELOG_TOPIC_CONFIG)),
-        Collections.emptyList()
+        mkMap(mkEntry(SOURCE_TOPIC_NAME, null), mkEntry(CHANGELOG_TOPIC_NAME1, CHANGELOG_TOPIC_CONFIG))
     );
 
     private static Integer topicPartitionProvider(String s) {

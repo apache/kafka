@@ -33,28 +33,24 @@ public class TopicsInfo {
     private Set<String> sourceTopics;
     private Map<String, InternalTopicConfig> stateChangelogTopics;
     private Map<String, InternalTopicConfig> repartitionSourceTopics;
-    private Collection<Set<String>> copartitionGroups;
 
     public TopicsInfo() {
         this.repartitionSinkTopics = new HashSet<>();
         this.sourceTopics = new HashSet<>();
         this.stateChangelogTopics = new HashMap<>();
         this.repartitionSourceTopics = new HashMap<>();
-        this.copartitionGroups = new ArrayList<>();
     }
 
     public TopicsInfo(
         final Set<String> repartitionSinkTopics,
         final Set<String> sourceTopics,
         final Map<String, InternalTopicConfig> repartitionSourceTopics,
-        final Map<String, InternalTopicConfig> stateChangelogTopics,
-        final Collection<Set<String>> copartitionGroups
+        final Map<String, InternalTopicConfig> stateChangelogTopics
     ) {
         this.repartitionSinkTopics = repartitionSinkTopics;
         this.sourceTopics = sourceTopics;
         this.stateChangelogTopics = stateChangelogTopics;
         this.repartitionSourceTopics = repartitionSourceTopics;
-        this.copartitionGroups = copartitionGroups;
     }
 
     public Set<String> repartitionSinkTopics() {
@@ -71,10 +67,6 @@ public class TopicsInfo {
 
     public Map<String, InternalTopicConfig> repartitionSourceTopics() {
         return repartitionSourceTopics;
-    }
-
-    public Collection<Set<String>> copartitionGroups() {
-        return copartitionGroups;
     }
 
     public TopicsInfo setRepartitionSinkTopics(final Set<String> repartitionSinkTopics) {
@@ -96,11 +88,6 @@ public class TopicsInfo {
     public TopicsInfo setRepartitionSourceTopics(
         final Map<String, InternalTopicConfig> repartitionSourceTopics) {
         this.repartitionSourceTopics = repartitionSourceTopics;
-        return this;
-    }
-
-    public TopicsInfo setCopartitionGroups(final Collection<Set<String>> copartitionGroups) {
-        this.copartitionGroups = copartitionGroups;
         return this;
     }
 
@@ -130,14 +117,13 @@ public class TopicsInfo {
         return Objects.equals(repartitionSinkTopics, that.repartitionSinkTopics)
             && Objects.equals(sourceTopics, that.sourceTopics)
             && Objects.equals(stateChangelogTopics, that.stateChangelogTopics)
-            && Objects.equals(repartitionSourceTopics, that.repartitionSourceTopics)
-            && Objects.equals(copartitionGroups, that.copartitionGroups);
+            && Objects.equals(repartitionSourceTopics, that.repartitionSourceTopics);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(repartitionSinkTopics, sourceTopics,
-            stateChangelogTopics, repartitionSourceTopics, copartitionGroups);
+            stateChangelogTopics, repartitionSourceTopics);
     }
 
     @Override
@@ -147,7 +133,6 @@ public class TopicsInfo {
             ", sourceTopics=" + sourceTopics +
             ", stateChangelogTopics=" + stateChangelogTopics +
             ", repartitionSourceTopics=" + repartitionSourceTopics +
-            ", copartitionGroups=" + copartitionGroups +
             '}';
     }
 

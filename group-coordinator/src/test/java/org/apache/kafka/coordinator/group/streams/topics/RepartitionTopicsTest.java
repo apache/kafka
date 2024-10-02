@@ -61,10 +61,8 @@ public class RepartitionTopicsTest {
             mkEntry(REPARTITION_TOPIC_NAME1, REPARTITION_TOPIC_CONFIG1),
             mkEntry(REPARTITION_WITHOUT_PARTITION_COUNT, REPARTITION_TOPIC_CONFIG_WITHOUT_PARTITION_COUNT)
         ),
-        Collections.emptyMap(),
-        Collections.emptyList()
+        Collections.emptyMap()
     );
-    private static final Set<String> COPARTITION_GROUP1 = mkSet(SOURCE_TOPIC_NAME1, SOURCE_TOPIC_NAME2);
     private static final TopicsInfo TOPICS_INFO1 = new TopicsInfo(
         Collections.singleton(REPARTITION_TOPIC_NAME1),
         mkSet(SOURCE_TOPIC_NAME1, SOURCE_TOPIC_NAME2),
@@ -72,16 +70,13 @@ public class RepartitionTopicsTest {
             mkEntry(REPARTITION_TOPIC_NAME1, REPARTITION_TOPIC_CONFIG1),
             mkEntry(REPARTITION_TOPIC_NAME2, REPARTITION_TOPIC_CONFIG2)
         ),
-        Collections.emptyMap(),
-        Collections.singletonList(COPARTITION_GROUP1)
+        Collections.emptyMap()
     );
-    private static final Set<String> COPARTITION_GROUP2 = mkSet(REPARTITION_TOPIC_NAME1, REPARTITION_TOPIC_NAME2);
     private static final TopicsInfo TOPICS_INFO2 = new TopicsInfo(
         Collections.singleton(SINK_TOPIC_NAME1),
         Collections.singleton(REPARTITION_TOPIC_NAME1),
         mkMap(mkEntry(REPARTITION_TOPIC_NAME1, REPARTITION_TOPIC_CONFIG1)),
-        Collections.emptyMap(),
-        Collections.singletonList(COPARTITION_GROUP2)
+        Collections.emptyMap()
     );
     private static final Set<String> TOPICS = mkSet(
         SOURCE_TOPIC_NAME1,
@@ -160,8 +155,7 @@ public class RepartitionTopicsTest {
                 mkEntry(REPARTITION_TOPIC_NAME2, REPARTITION_TOPIC_CONFIG2),
                 mkEntry(REPARTITION_WITHOUT_PARTITION_COUNT, REPARTITION_TOPIC_CONFIG_WITHOUT_PARTITION_COUNT)
             ),
-            Collections.emptyMap(),
-            Collections.emptyList()
+            Collections.emptyMap()
         );
         Map<String, TopicsInfo> subtopologyToTopicsInfo = mkMap(
             mkEntry("subtopology_0", topicsInfo),
@@ -193,8 +187,7 @@ public class RepartitionTopicsTest {
                 mkEntry(REPARTITION_TOPIC_NAME2, REPARTITION_TOPIC_CONFIG2),
                 mkEntry(REPARTITION_WITHOUT_PARTITION_COUNT, REPARTITION_TOPIC_CONFIG_WITHOUT_PARTITION_COUNT)
             ),
-            Collections.emptyMap(),
-            Collections.emptyList()
+            Collections.emptyMap()
         );
         Map<String, TopicsInfo> subtopologyToTopicsInfo = mkMap(
             mkEntry("subtopology_0", topicsInfo),
@@ -225,8 +218,7 @@ public class RepartitionTopicsTest {
             Collections.singleton(SINK_TOPIC_NAME1),
             Collections.singleton(SOURCE_TOPIC_NAME1),
             Collections.emptyMap(),
-            Collections.emptyMap(),
-            Collections.emptyList()
+            Collections.emptyMap()
         );
         Map<String, TopicsInfo> subtopologyToTopicsInfo = mkMap(mkEntry("subtopology_0", topicsInfo));
         Function<String, Integer> topicPartitionCountProvider = s -> TOPICS.contains(s) ? 3 : null;
