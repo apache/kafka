@@ -69,6 +69,14 @@ public class SharePartitionKey {
         return new SharePartitionKey(groupId, topicId, partition);
     }
 
+    public String asCoordinatorKey() {
+        return asCoordinatorKey(groupId(), topicId(), partition());
+    }
+
+    public static String asCoordinatorKey(String groupId, Uuid topicId, int partition) {
+        return String.format("%s:%s:%d", groupId, topicId, partition);
+    }
+
     @Override
     public boolean equals(final Object obj) {
         if (this == obj)
