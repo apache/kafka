@@ -32,7 +32,7 @@ import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.config.{ServerConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach , TestInfo, Timeout}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -218,7 +218,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     }
   }
 
-  override def kraftControllerConfigs(): Seq[Properties] = {
+  override def kraftControllerConfigs(testInfo: TestInfo): Seq[Properties] = {
     val controllerConfig = new Properties()
     val controllerConfigs = Seq(controllerConfig)
     modifyConfigs(controllerConfigs)

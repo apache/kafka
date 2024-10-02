@@ -166,6 +166,19 @@ public class ShareConsumerImplTest {
     }
 
     @Test
+    public void testFailConstructor() {
+        final Properties props = requiredConsumerProperties();
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "group-id");
+        props.put(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, "an.invalid.class");
+        final ConsumerConfig config = new ConsumerConfig(props);
+        KafkaException ce = assertThrows(
+                KafkaException.class,
+                () -> newConsumer(config));
+        assertTrue(ce.getMessage().contains("Failed to construct Kafka share consumer"), "Unexpected exception message: " + ce.getMessage());
+        assertTrue(ce.getCause().getMessage().contains("Class an.invalid.class cannot be found"), "Unexpected cause: " + ce.getCause());
+    }
+
+    @Test
     public void testWakeupBeforeCallingPoll() {
         consumer = newConsumer();
         final String topicName = "foo";
@@ -176,6 +189,45 @@ public class ShareConsumerImplTest {
 
         assertThrows(WakeupException.class, () -> consumer.poll(Duration.ZERO));
         assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
+    }
+
+    @Test
+    public void testWakeupAfterEmptyFetch() {
+        consumer = newConsumer();
+        final String topicName = "foo";
+        final int partition = 3;
+        doAnswer(invocation -> {
+            consumer.wakeup();
+            return ShareFetch.empty();
+        }).doAnswer(invocation -> ShareFetch.empty()).when(fetchCollector).collect(any(ShareFetchBuffer.class));
+
+        consumer.subscribe(singletonList(topicName));
+
+        assertThrows(WakeupException.class, () -> consumer.poll(Duration.ofMinutes(1)));
+        assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
+    }
+
+    @Test
+    public void testWakeupAfterNonEmptyFetch() {
+        consumer = newConsumer();
+        final String topicName = "foo";
+        final int partition = 3;
+        final TopicIdPartition tip = new TopicIdPartition(Uuid.randomUuid(), partition, topicName);
+        final ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(tip);
+        batch.addRecord(new ConsumerRecord<>(topicName, partition, 2, "key1", "value1"));
+        doAnswer(invocation -> {
+            consumer.wakeup();
+            final ShareFetch<String, String> fetch = ShareFetch.empty();
+            fetch.add(tip, batch);
+            return fetch;
+        }).when(fetchCollector).collect(Mockito.any(ShareFetchBuffer.class));
+
+        consumer.subscribe(singletonList(topicName));
+
+        // since wakeup() is called when the non-empty fetch is returned the wakeup should be ignored
+        assertDoesNotThrow(() -> consumer.poll(Duration.ofMinutes(1)));
+        // the previously ignored wake-up should not be ignored in the next call
+        assertThrows(WakeupException.class, () -> consumer.poll(Duration.ZERO));
     }
 
     @Test

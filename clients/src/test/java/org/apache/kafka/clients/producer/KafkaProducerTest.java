@@ -544,6 +544,18 @@ public class KafkaProducerTest {
     }
 
     @Test
+    public void testConstructorWithInvalidMetricReporterClass() {
+        Properties props = new Properties();
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG, "an.invalid.class");
+        KafkaException ce = assertThrows(
+                KafkaException.class,
+                () -> new KafkaProducer<>(props, new StringSerializer(), new StringSerializer()));
+        assertTrue(ce.getMessage().contains("Failed to construct kafka producer"), "Unexpected exception message: " + ce.getMessage());
+        assertTrue(ce.getCause().getMessage().contains("Class an.invalid.class cannot be found"), "Unexpected cause: " + ce.getCause());
+    }
+
+    @Test
     public void testSerializerClose() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.CLIENT_ID_CONFIG, "testConstructorClose");

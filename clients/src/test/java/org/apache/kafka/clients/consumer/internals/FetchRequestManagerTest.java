@@ -185,7 +185,7 @@ public class FetchRequestManagerTest {
     private final int maxWaitMs = 0;
     private final int fetchSize = 1000;
     private final long retryBackoffMs = 100;
-    private final long requestTimeoutMs = 30000;
+    private final int requestTimeoutMs = 30000;
     private final ApiVersions apiVersions = new ApiVersions();
     private MockTime time = new MockTime(1);
     private SubscriptionState subscriptions;
@@ -373,11 +373,10 @@ public class FetchRequestManagerTest {
 
         final ArgumentCaptor<NetworkClientDelegate.UnsentRequest> argument = ArgumentCaptor.forClass(NetworkClientDelegate.UnsentRequest.class);
 
-        Timer timer = time.timer(Duration.ofSeconds(10));
         // NOTE: by design the FetchRequestManager doesn't perform network I/O internally. That means that calling
         // the close() method with a Timer will NOT send out the close session requests on close. The network
         // I/O logic is handled inside ConsumerNetworkThread.runAtClose, so we need to run that logic here.
-        ConsumerNetworkThread.runAtClose(singletonList(Optional.of(fetcher)), networkClientDelegate);
+        ConsumerNetworkThread.runAtClose(singletonList(Optional.of(fetcher)), networkClientDelegate, time.milliseconds());
         // the network is polled during the last state of clean up.
         networkClientDelegate.poll(time.timer(1));
         // validate that closing the fetcher has sent a request with final epoch. 2 requests are sent, one for the
@@ -3601,7 +3600,7 @@ public class FetchRequestManagerTest {
                 metadata,
                 time,
                 retryBackoffMs,
-                (int) requestTimeoutMs,
+                requestTimeoutMs,
                 Integer.MAX_VALUE);
         offsetFetcher = new OffsetFetcher(logContext,
                 consumerNetworkClient,

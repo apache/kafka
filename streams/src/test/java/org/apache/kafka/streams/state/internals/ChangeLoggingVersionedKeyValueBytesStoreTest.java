@@ -23,7 +23,6 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -95,19 +94,6 @@ public class ChangeLoggingVersionedKeyValueBytesStoreTest {
     public void shouldThrowIfInnerIsNotVersioned() {
         assertThrows(IllegalArgumentException.class,
             () -> new ChangeLoggingVersionedKeyValueBytesStore(new InMemoryKeyValueStore("kv")));
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        // recreate store with mock inner
-        store.close();
-        final VersionedBytesStore mockInner = mock(VersionedBytesStore.class);
-        store = new ChangeLoggingVersionedKeyValueBytesStore(mockInner);
-
-        store.init((ProcessorContext) context, store);
-
-        verify(mockInner).init((ProcessorContext) context, store);
     }
 
     @Test

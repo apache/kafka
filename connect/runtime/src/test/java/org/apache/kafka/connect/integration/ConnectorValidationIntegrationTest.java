@@ -80,7 +80,6 @@ public class ConnectorValidationIntegrationTest {
                 TestPlugins.pluginPathJoined(testPlugins)
         );
 
-        // build a Connect cluster backed by Kafka and Zk
         connect = new EmbeddedConnectCluster.Builder()
                 .name("connector-validation-connect-cluster")
                 .workerProps(workerProps)
@@ -93,7 +92,6 @@ public class ConnectorValidationIntegrationTest {
     @AfterAll
     public static void close() {
         if (connect != null) {
-            // stop all Connect, Kafka and Zk threads.
             Utils.closeQuietly(connect::stop, "Embedded Connect cluster");
         }
     }

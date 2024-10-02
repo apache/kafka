@@ -18,6 +18,7 @@ package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.TopicPartition;
 
+import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collection;
@@ -34,7 +35,7 @@ import java.util.stream.Collectors;
  * This class encapsulates a thread-safe navigable map of LogSegment instances and provides the
  * required read and write behavior on the map.
  */
-public class LogSegments {
+public class LogSegments implements Closeable {
 
     private final TopicPartition topicPartition;
     /* the segments of the log with key being LogSegment base offset and value being a LogSegment */
@@ -102,6 +103,7 @@ public class LogSegments {
     /**
      * Close all segments.
      */
+    @Override
     public void close() throws IOException {
         for (LogSegment s : values())
             s.close();

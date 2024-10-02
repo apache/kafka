@@ -24,8 +24,6 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.ValueTransformer;
-import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.api.Processor;
@@ -61,8 +59,8 @@ public class KStreamTransformValuesTest {
     public void testTransform() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final ValueTransformerSupplier<Number, Integer> valueTransformerSupplier =
-            () -> new ValueTransformer<Number, Integer>() {
+        final org.apache.kafka.streams.kstream.ValueTransformerSupplier<Number, Integer> valueTransformerSupplier =
+            () -> new org.apache.kafka.streams.kstream.ValueTransformer<Number, Integer>() {
                 private int total = 0;
 
                 @Override

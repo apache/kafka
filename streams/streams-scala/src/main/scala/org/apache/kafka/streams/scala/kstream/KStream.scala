@@ -326,20 +326,6 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
     inner.foreach(action.asForeachAction, named)
 
   /**
-   * Creates an array of `KStream` from this stream by branching the records in the original stream based on
-   * the supplied predicates.
-   *
-   * @param predicates the ordered list of functions that return a Boolean
-   * @return multiple distinct substreams of this [[KStream]]
-   * @see `org.apache.kafka.streams.kstream.KStream#branch`
-   * @deprecated since 2.8. Use `split` instead.
-   */
-  // noinspection ScalaUnnecessaryParentheses
-  @deprecated("use `split()` instead", "2.8")
-  def branch(predicates: ((K, V) => Boolean)*): Array[KStream[K, V]] =
-    inner.branch(predicates.map(_.asPredicate): _*).map(kstream => new KStream(kstream))
-
-  /**
    * Split this stream. [[BranchedKStream]] can be used for routing the records to different branches depending
    * on evaluation against the supplied predicates.
    * Stream branching is a stateless record-by-record operation.
@@ -362,40 +348,6 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    */
   def split(named: Named): BranchedKStream[K, V] =
     new BranchedKStream(inner.split(named))
-
-  /**
-   * Materialize this stream to a topic and creates a new [[KStream]] from the topic using the `Produced` instance for
-   * configuration of the `Serde key serde`, `Serde value serde`, and `StreamPartitioner`
-   * <p>
-   * The user can either supply the `Produced` instance as an implicit in scope or they can also provide implicit
-   * key and value serdes that will be converted to a `Produced` instance implicitly.
-   * <p>
-   * {{{
-   * Example:
-   *
-   * // brings implicit serdes in scope
-   * import Serdes._
-   *
-   * //..
-   * val clicksPerRegion: KStream[String, Long] = //..
-   *
-   * // Implicit serdes in scope will generate an implicit Produced instance, which
-   * // will be passed automatically to the call of through below
-   * clicksPerRegion.through(topic)
-   *
-   * // Similarly you can create an implicit Produced and it will be passed implicitly
-   * // to the through call
-   * }}}
-   *
-   * @param topic    the topic name
-   * @param produced the instance of Produced that gives the serdes and `StreamPartitioner`
-   * @return a [[KStream]] that contains the exact same (and potentially repartitioned) records as this [[KStream]]
-   * @see `org.apache.kafka.streams.kstream.KStream#through`
-   * @deprecated use `repartition()` instead
-   */
-  @deprecated("use `repartition()` instead", "2.6.0")
-  def through(topic: String)(implicit produced: Produced[K, V]): KStream[K, V] =
-    new KStream(inner.through(topic, produced))
 
   /**
    * Materialize this stream to a topic and creates a new [[KStream]] from the topic using the `Repartitioned` instance

@@ -29,7 +29,7 @@ import java.util.function.Supplier;
  * Responsible for managing the connection state and sending request when the connection is
  * available.
  */
-interface RequestSender {
+public interface RequestSender {
     /**
      * The name of the listener used for sending request.
      *

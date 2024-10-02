@@ -18,15 +18,14 @@
 package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.common.message.AddRaftVoterResponseData;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.raft.Endpoints;
-import org.apache.kafka.raft.RaftUtil;
+import org.apache.kafka.raft.ReplicaKey;
 
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 
-public final class AddVoterHandlerState implements AutoCloseable {
+public final class AddVoterHandlerState {
     private final ReplicaKey voterKey;
     private final Endpoints voterEndpoints;
     private final Timer timeout;
@@ -83,10 +82,5 @@ public final class AddVoterHandlerState implements AutoCloseable {
 
     public CompletableFuture<AddRaftVoterResponseData> future() {
         return future;
-    }
-
-    @Override
-    public void close() {
-        future.complete(RaftUtil.addVoterResponse(Errors.NOT_LEADER_OR_FOLLOWER, null));
     }
 }

@@ -21,7 +21,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
@@ -267,7 +266,7 @@ public class MeteredVersionedKeyValueStore<K, V>
                             rawResult.getResult(),
                             iteratorDurationSensor,
                             time,
-                            StoreQueryUtils.getDeserializeValue(plainValueSerdes),
+                            StoreQueryUtils.deserializeValue(plainValueSerdes),
                             numOpenIterators,
                             openIterators
                         );
@@ -292,18 +291,6 @@ public class MeteredVersionedKeyValueStore<K, V>
             } else {
                 return super.prepareValueSerdeForStore(valueSerde, getter);
             }
-        }
-
-        @Deprecated
-        @Override
-        protected void initStoreSerde(final ProcessorContext context) {
-            super.initStoreSerde(context);
-
-            // additionally init raw value serde
-            final String storeName = super.name();
-            final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
-            plainValueSerdes = StoreSerdeInitializer.prepareStoreSerde(
-                context, storeName, changelogTopic, keySerde, plainValueSerde, WrappingNullableUtils::prepareValueSerde);
         }
 
         @Override
@@ -350,12 +337,6 @@ public class MeteredVersionedKeyValueStore<K, V>
     @Override
     public String name() {
         return internal.name();
-    }
-
-    @Deprecated
-    @Override
-    public void init(final ProcessorContext context, final StateStore root) {
-        internal.init(context, root);
     }
 
     @Override

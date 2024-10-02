@@ -62,7 +62,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 
-@SuppressWarnings("deprecation")
 @Tag("integration")
 @Timeout(600)
 public class RocksDBMetricsIntegrationTest {
@@ -136,7 +135,7 @@ public class RocksDBMetricsIntegrationTest {
 
     @AfterEach
     public void after() throws Exception {
-        CLUSTER.deleteTopicsAndWait(STREAM_INPUT_ONE, STREAM_INPUT_TWO, STREAM_OUTPUT_ONE, STREAM_OUTPUT_TWO);
+        CLUSTER.deleteTopics(STREAM_INPUT_ONE, STREAM_INPUT_TWO, STREAM_OUTPUT_ONE, STREAM_OUTPUT_TWO);
     }
 
     @FunctionalInterface
@@ -145,7 +144,7 @@ public class RocksDBMetricsIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
+    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
     public void shouldExposeRocksDBMetricsBeforeAndAfterFailureWithEmptyStateDir(final String processingGuarantee, final TestInfo testInfo) throws Exception {
         final Properties streamsConfiguration = streamsConfig(processingGuarantee, testInfo);
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
@@ -171,8 +170,8 @@ public class RocksDBMetricsIntegrationTest {
         final String safeTestName = safeUniqueTestName(testInfo);
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-application-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
-        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
+        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfiguration.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.DEBUG.name);
         streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuarantee);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
@@ -180,6 +179,7 @@ public class RocksDBMetricsIntegrationTest {
         return streamsConfiguration;
     }
 
+    @SuppressWarnings("deprecation")
     private StreamsBuilder builderForStateStores() {
         final StreamsBuilder builder = new StreamsBuilder();
         // create two state stores, one non-segmented and one segmented
@@ -189,7 +189,7 @@ public class RocksDBMetricsIntegrationTest {
         ).toStream().to(STREAM_OUTPUT_ONE);
         builder.stream(STREAM_INPUT_TWO, Consumed.with(Serdes.Integer(), Serdes.String()))
             .groupByKey()
-            .windowedBy(TimeWindows.of(WINDOW_SIZE).grace(Duration.ZERO))
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(WINDOW_SIZE))
             .aggregate(() -> 0L,
                 (aggKey, newValue, aggValue) -> aggValue,
                 Materialized.<Integer, Long, WindowStore<Bytes, byte[]>>as("time-windowed-aggregated-stream-store")

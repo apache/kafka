@@ -22,6 +22,7 @@ import org.apache.kafka.server.common.MetadataVersion;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestTemplate;
+import org.junit.jupiter.api.Timeout;
 
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
@@ -34,6 +35,7 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 @Target({METHOD})
 @Retention(RUNTIME)
 @TestTemplate
+@Timeout(60)
 @Tag("integration")
 public @interface ClusterTest {
     Type[] types() default {};
@@ -43,7 +45,7 @@ public @interface ClusterTest {
     AutoStart autoStart() default AutoStart.DEFAULT;
     SecurityProtocol securityProtocol() default SecurityProtocol.PLAINTEXT;
     String listener() default "";
-    MetadataVersion metadataVersion() default MetadataVersion.IBP_4_0_IV0;
+    MetadataVersion metadataVersion() default MetadataVersion.IBP_4_0_IV3;
     ClusterConfigProperty[] serverProperties() default {};
     // users can add tags that they want to display in test
     String[] tags() default {};

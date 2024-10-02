@@ -19,6 +19,7 @@ package kafka.server
 
 import kafka.utils.Logging
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
+import org.apache.kafka.metadata.VersionRange
 import org.apache.kafka.server.common.Features.PRODUCTION_FEATURES
 import org.apache.kafka.server.common.MetadataVersion
 
@@ -80,6 +81,13 @@ object BrokerFeatures extends Logging {
     new BrokerFeatures(defaultSupportedFeatures(unstableFeatureVersionsEnabled))
   }
 
+  def createDefaultFeatureMap(features: BrokerFeatures): Map[String, VersionRange] = {
+    features.supportedFeatures.features.asScala.map {
+      case (name, versionRange) =>
+        (name, VersionRange.of(versionRange.min, versionRange.max))
+    }.toMap
+  }
+
   def defaultSupportedFeatures(unstableFeatureVersionsEnabled: Boolean): Features[SupportedVersionRange] = {
     val features = new util.HashMap[String, SupportedVersionRange]()
       features.put(MetadataVersion.FEATURE_NAME,
@@ -90,13 +98,15 @@ object BrokerFeatures extends Logging {
           } else {
             MetadataVersion.latestProduction.featureLevel
           }))
-    PRODUCTION_FEATURES.forEach { feature => features.put(feature.featureName,
-          new SupportedVersionRange(0,
-            if (unstableFeatureVersionsEnabled) {
-              feature.latestTesting
-            } else {
-              feature.latestProduction
-            }))
+    PRODUCTION_FEATURES.forEach {
+      feature =>
+        val maxVersion = if (unstableFeatureVersionsEnabled)
+          feature.latestTesting
+        else
+          feature.latestProduction
+        if (maxVersion > 0) {
+          features.put(feature.featureName, new SupportedVersionRange(feature.minimumProduction(), maxVersion))
+        }
     }
     Features.supportedFeatures(features)
   }

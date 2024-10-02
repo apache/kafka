@@ -21,7 +21,7 @@ import kafka.coordinator.transaction.TransactionMarkerChannelManager.{LogAppendR
 
 import java.util
 import java.util.concurrent.{BlockingQueue, ConcurrentHashMap, LinkedBlockingQueue}
-import kafka.server.{KafkaConfig, MetadataCache, RequestLocal}
+import kafka.server.{KafkaConfig, MetadataCache}
 import kafka.utils.Implicits._
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.clients._
@@ -33,7 +33,7 @@ import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersReque
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{Node, Reconfigurable, TopicPartition}
-import org.apache.kafka.server.common.MetadataVersion.IBP_2_8_IV0
+import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
 
@@ -182,10 +182,6 @@ class TransactionMarkerChannelManager(
 
   private val transactionsWithPendingMarkers = new ConcurrentHashMap[String, PendingCompleteTxn]
 
-  private val writeTxnMarkersRequestVersion: Short =
-    if (config.interBrokerProtocolVersion.isAtLeast(IBP_2_8_IV0)) 1
-    else 0
-
   metricsGroup.newGauge(UnknownDestinationQueueSizeMetricName, () => markersQueueForUnknownBroker.totalNumMarkers)
   metricsGroup.newGauge(LogAppendRetryQueueSizeMetricName, () => txnLogAppendRetryQueue.size)
 
@@ -263,7 +259,9 @@ class TransactionMarkerChannelManager(
     }.filter { case (_, entries) => !entries.isEmpty }.map { case (node, entries) =>
       val markersToSend = entries.asScala.map(_.txnMarkerEntry).asJava
       val requestCompletionHandler = new TransactionMarkerRequestCompletionHandler(node.id, txnStateManager, this, entries)
-      val request = new WriteTxnMarkersRequest.Builder(writeTxnMarkersRequestVersion, markersToSend)
+      val request = new WriteTxnMarkersRequest.Builder(
+        metadataCache.metadataVersion().writeTxnMarkersRequestVersion(), markersToSend
+      )
 
       new RequestAndCompletionHandler(
         currentTimeMs,
@@ -380,7 +378,7 @@ class TransactionMarkerChannelManager(
       }
 
     txnStateManager.appendTransactionToLog(txnLogAppend.transactionalId, txnLogAppend.coordinatorEpoch,
-      txnLogAppend.newMetadata, appendCallback, _ == Errors.COORDINATOR_NOT_AVAILABLE, RequestLocal.NoCaching)
+      txnLogAppend.newMetadata, appendCallback, _ == Errors.COORDINATOR_NOT_AVAILABLE, RequestLocal.noCaching)
   }
 
   def addTxnMarkersToBrokerQueue(producerId: Long,

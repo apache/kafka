@@ -41,10 +41,15 @@ import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
  *   Attributes => Int8
  *   TimestampDelta => Varlong
  *   OffsetDelta => Varint
+ *   KeyLength => Varint
  *   Key => Bytes
+ *   ValueLength => Varint
  *   Value => Bytes
+ *   HeadersCount => Varint
  *   Headers => [HeaderKey HeaderValue]
+ *     HeaderKeyLength => Varint
  *     HeaderKey => String
+ *     HeaderValueLength => Varint
  *     HeaderValue => Bytes
  *
  * Note that in this schema, the Bytes and String types use a variable length integer to represent

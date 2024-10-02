@@ -61,7 +61,7 @@ public class GroupCoordinatorMetricsShardTest {
         shard.incrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.STABLE);
         shard.incrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.DEAD);
 
-        snapshotRegistry.getOrCreateSnapshot(1000);
+        snapshotRegistry.idempotentCreateSnapshot(1000);
         // The value should not be updated until the offset has been committed.
         assertEquals(0, shard.numOffsets());
         assertEquals(0, shard.numConsumerGroups());
@@ -87,7 +87,7 @@ public class GroupCoordinatorMetricsShardTest {
         shard.decrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.STABLE);
         shard.decrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.DEAD);
 
-        snapshotRegistry.getOrCreateSnapshot(2000);
+        snapshotRegistry.idempotentCreateSnapshot(2000);
         shard.commitUpTo(2000);
         assertEquals(0, shard.numOffsets());
         assertEquals(0, shard.numConsumerGroups());
@@ -184,7 +184,7 @@ public class GroupCoordinatorMetricsShardTest {
 
         IntStream.range(0, 4).forEach(__ -> shard.incrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.EMPTY));
 
-        snapshotRegistry.getOrCreateSnapshot(1000);
+        snapshotRegistry.idempotentCreateSnapshot(1000);
         shard.commitUpTo(1000);
         assertEquals(4, shard.numConsumerGroups());
         assertEquals(4, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.EMPTY));
@@ -198,7 +198,7 @@ public class GroupCoordinatorMetricsShardTest {
         group2.updateMember(member2);
         group3.updateMember(member3);
 
-        snapshotRegistry.getOrCreateSnapshot(2000);
+        snapshotRegistry.idempotentCreateSnapshot(2000);
         shard.commitUpTo(2000);
         assertEquals(0, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.EMPTY));
         assertEquals(4, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.STABLE));
@@ -206,7 +206,7 @@ public class GroupCoordinatorMetricsShardTest {
         group2.setGroupEpoch(1);
         group3.setGroupEpoch(1);
 
-        snapshotRegistry.getOrCreateSnapshot(3000);
+        snapshotRegistry.idempotentCreateSnapshot(3000);
         shard.commitUpTo(3000);
         assertEquals(0, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.EMPTY));
         assertEquals(2, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.ASSIGNING));
@@ -219,7 +219,7 @@ public class GroupCoordinatorMetricsShardTest {
             .setPartitionsPendingRevocation(Collections.singletonMap(Uuid.ZERO_UUID, Collections.singleton(0)))
             .build();
 
-        snapshotRegistry.getOrCreateSnapshot(4000);
+        snapshotRegistry.idempotentCreateSnapshot(4000);
         shard.commitUpTo(4000);
         assertEquals(0, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.EMPTY));
         assertEquals(1, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.ASSIGNING));

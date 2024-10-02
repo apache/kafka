@@ -17,8 +17,8 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -60,11 +60,8 @@ public class GenericInMemoryTimestampedKeyValueStore<K extends Comparable, V>
         return this.name;
     }
 
-    @Deprecated
     @Override
-    /* This is a "dummy" store used for testing;
-       it does not support restoring from changelog since we allow it to be serde-ignorant */
-    public void init(final ProcessorContext context, final StateStore root) {
+    public void init(final StateStoreContext context, final StateStore root) {
         if (root != null) {
             context.register(root, null);
         }

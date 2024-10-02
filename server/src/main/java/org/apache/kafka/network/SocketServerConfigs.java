@@ -16,12 +16,23 @@
  */
 package org.apache.kafka.network;
 
+import org.apache.kafka.common.Endpoint;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.server.config.ReplicationConfigs;
+import org.apache.kafka.server.util.Csv;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
@@ -82,17 +93,17 @@ public class SocketServerConfigs {
             "Name of listener used for communication between controller and brokers. " +
                     "A broker will use the <code>%s</code> to locate the endpoint in %s list, to listen for connections from the controller. " +
                     "For example, if a broker's config is:%n" +
-                    "<code>listeners = INTERNAL://192.1.1.8:9092, EXTERNAL://10.1.1.5:9093, CONTROLLER://192.1.1.8:9094" +
-                    "listener.security.protocol.map = INTERNAL:PLAINTEXT, EXTERNAL:SSL, CONTROLLER:SSL" +
-                    "control.plane.listener.name = CONTROLLER</code>%n" +
+                    "<code>listeners=INTERNAL://192.1.1.8:9092,EXTERNAL://10.1.1.5:9093,CONTROLLER://192.1.1.8:9094</code>%n" +
+                    "<code>listener.security.protocol.map=INTERNAL:PLAINTEXT,EXTERNAL:SSL,CONTROLLER:SSL</code>%n" +
+                    "<code>control.plane.listener.name = CONTROLLER</code>%n" +
                     "On startup, the broker will start listening on \"192.1.1.8:9094\" with security protocol \"SSL\".%n" +
                     "On the controller side, when it discovers a broker's published endpoints through ZooKeeper, it will use the <code>%1$1s</code> " +
                     "to find the endpoint, which it will use to establish connection to the broker.%n" +
                     "For example, if the broker's published endpoints on ZooKeeper are:%n" +
-                    " <code>\"endpoints\" : [\"INTERNAL://broker1.example.com:9092\",\"EXTERNAL://broker1.example.com:9093\",\"CONTROLLER://broker1.example.com:9094\"]</code>%n" +
+                    " <code>\"endpoints\":[\"INTERNAL://broker1.example.com:9092\",\"EXTERNAL://broker1.example.com:9093\",\"CONTROLLER://broker1.example.com:9094\"]</code>%n" +
                     " and the controller's config is:%n" +
-                    "<code>listener.security.protocol.map = INTERNAL:PLAINTEXT, EXTERNAL:SSL, CONTROLLER:SSL" +
-                    "control.plane.listener.name = CONTROLLER</code>%n" +
+                    "<code>listener.security.protocol.map = INTERNAL:PLAINTEXT, EXTERNAL:SSL, CONTROLLER:SSL</code>%n" +
+                    "<code>control.plane.listener.name = CONTROLLER</code>%n" +
                     "then the controller will use \"broker1.example.com:9094\" with security protocol \"SSL\" to connect to the broker.%n" +
                     "If not explicitly configured, the default value will be null and there will be no dedicated endpoints for controller connections.%n" +
                     "If explicitly configured, the value cannot be the same as the value of <code>%s</code>.",
@@ -184,4 +195,58 @@ public class SocketServerConfigs {
             .define(QUEUED_MAX_REQUESTS_CONFIG, INT, QUEUED_MAX_REQUESTS_DEFAULT, atLeast(1), HIGH, QUEUED_MAX_REQUESTS_DOC)
             .define(QUEUED_MAX_BYTES_CONFIG, LONG, QUEUED_MAX_REQUEST_BYTES_DEFAULT, MEDIUM, QUEUED_MAX_REQUEST_BYTES_DOC)
             .define(NUM_NETWORK_THREADS_CONFIG, INT, NUM_NETWORK_THREADS_DEFAULT, atLeast(1), HIGH, NUM_NETWORK_THREADS_DOC);
+
+    private static final Pattern URI_PARSE_REGEXP = Pattern.compile(
+        "^(.*)://\\[?([0-9a-zA-Z\\-%._:]*)\\]?:(-?[0-9]+)");
+
+    public static final Map<ListenerName, SecurityProtocol> DEFAULT_NAME_TO_SECURITY_PROTO;
+
+    static {
+        HashMap<ListenerName, SecurityProtocol> nameToSecurityProtocol = new HashMap<>();
+        for (SecurityProtocol securityProtocol : SecurityProtocol.values()) {
+            nameToSecurityProtocol.put(ListenerName.forSecurityProtocol(securityProtocol), securityProtocol);
+        }
+        DEFAULT_NAME_TO_SECURITY_PROTO = Collections.unmodifiableMap(nameToSecurityProtocol);
+    }
+
+    public static List<Endpoint> listenerListToEndPoints(
+        String input,
+        Map<ListenerName, SecurityProtocol> nameToSecurityProto
+    ) {
+        return listenerListToEndPoints(input, n -> {
+            SecurityProtocol result = nameToSecurityProto.get(n);
+            if (result == null) {
+                throw new IllegalArgumentException("No security protocol defined for listener " + n.value());
+            }
+            return result;
+        });
+    }
+
+    public static List<Endpoint> listenerListToEndPoints(
+        String input,
+        Function<ListenerName, SecurityProtocol> nameToSecurityProto
+    ) {
+        List<Endpoint> results = new ArrayList<>();
+        for (String entry : Csv.parseCsvList(input.trim())) {
+            Matcher matcher = URI_PARSE_REGEXP.matcher(entry);
+            if (!matcher.matches()) {
+                throw new KafkaException("Unable to parse " + entry + " to a broker endpoint");
+            }
+            ListenerName listenerName = ListenerName.normalised(matcher.group(1));
+            String host = matcher.group(2);
+            if (host.isEmpty()) {
+                // By Kafka convention, an empty host string indicates binding to the wildcard
+                // address, and is stored as null.
+                host = null;
+            }
+            String portString = matcher.group(3);
+            int port = Integer.parseInt(portString);
+            SecurityProtocol securityProtocol = nameToSecurityProto.apply(listenerName);
+            results.add(new Endpoint(listenerName.value(),
+                securityProtocol,
+                host,
+                port));
+        }
+        return results;
+    }
 }

@@ -234,6 +234,8 @@ class NodeToControllerChannelManagerImpl(
       Option(apiVersions.get(activeController.idString))
     }.asJava
   }
+
+  def getTimeoutMs: Long = retryTimeoutMs
 }
 
 case class NodeToControllerQueueItem(

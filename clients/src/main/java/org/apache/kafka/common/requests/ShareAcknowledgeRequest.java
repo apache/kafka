@@ -45,7 +45,7 @@ public class ShareAcknowledgeRequest extends AbstractRequest {
             this.data = data;
         }
 
-        public static ShareAcknowledgeRequest.Builder forConsumer(String groupId, ShareFetchMetadata metadata,
+        public static ShareAcknowledgeRequest.Builder forConsumer(String groupId, ShareRequestMetadata metadata,
                                                                   Map<TopicIdPartition, List<ShareAcknowledgeRequestData.AcknowledgementBatch>> acknowledgementsMap) {
             ShareAcknowledgeRequestData data = new ShareAcknowledgeRequestData();
             data.setGroupId(groupId);

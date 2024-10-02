@@ -21,7 +21,6 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.network.SocketServerConfigs;
-import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 
@@ -42,25 +41,24 @@ public class MirrorConnectorsIntegrationSSLTest extends MirrorConnectorsIntegrat
     public void startClusters() throws Exception {
         Map<String, Object> sslConfig = TestSslUtils.createSslConfig(false, true, ConnectionMode.SERVER, TestUtils.tempFile(), "testCert");
         // enable SSL on backup kafka broker
-        backupBrokerProps.put(SocketServerConfigs.LISTENERS_CONFIG, "SSL://localhost:0");
-        backupBrokerProps.put(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG, "SSL");
+        backupBrokerProps.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "EXTERNAL:SSL,CONTROLLER:SSL");
         backupBrokerProps.putAll(sslConfig);
-        
+
         Properties sslProps = new Properties();
         sslProps.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, sslConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
         sslProps.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, ((Password) sslConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)).value());
         sslProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL");
-        
+
         // set SSL config for kafka connect worker
         backupWorkerProps.putAll(sslProps.entrySet().stream().collect(Collectors.toMap(
             e -> String.valueOf(e.getKey()), e ->  String.valueOf(e.getValue()))));
-        
+
         mm2Props.putAll(sslProps.entrySet().stream().collect(Collectors.toMap(
             e -> BACKUP_CLUSTER_ALIAS + "." + e.getKey(), e ->  String.valueOf(e.getValue()))));
         // set SSL config for producer used by source task in MM2
         mm2Props.putAll(sslProps.entrySet().stream().collect(Collectors.toMap(
             e -> BACKUP_CLUSTER_ALIAS + ".producer." + e.getKey(), e ->  String.valueOf(e.getValue()))));
-        
+
         super.startClusters();
     }
 }
