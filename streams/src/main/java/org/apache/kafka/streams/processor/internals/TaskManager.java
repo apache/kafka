@@ -990,7 +990,6 @@ public class TaskManager {
                 convertActiveToStandby((StreamTask) task, inputPartitions) :
                 convertStandbyToActive((StandbyTask) task, inputPartitions);
             tasks.addPendingTasksToInit(Collections.singleton(newTask));
-            return true;
         } catch (final RuntimeException e) {
             final TaskId taskId = task.id();
             final String uncleanMessage = String.format("Failed to recycle task %s cleanly. " +
@@ -1005,7 +1004,6 @@ public class TaskManager {
             }
 
             taskExceptions.putIfAbsent(taskId, e);
-            return false;
         }
     }
 
