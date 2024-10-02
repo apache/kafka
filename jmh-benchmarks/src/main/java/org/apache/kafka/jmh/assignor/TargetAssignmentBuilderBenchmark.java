@@ -22,6 +22,7 @@ import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
+import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
@@ -71,6 +72,9 @@ public class TargetAssignmentBuilderBenchmark {
     @Param({"10", "100", "1000"})
     private int topicCount;
 
+    @Param({"HOMOGENEOUS", "HETEROGENEOUS"})
+    private SubscriptionType subscriptionType;
+
     private static final String GROUP_ID = "benchmark-group";
 
     private static final int GROUP_EPOCH = 0;
@@ -78,6 +82,9 @@ public class TargetAssignmentBuilderBenchmark {
     private PartitionAssignor partitionAssignor;
 
     private TargetAssignmentBuilder<ConsumerGroupMember> targetAssignmentBuilder;
+
+    /** The number of homogeneous subgroups to create for the heterogeneous subscription case. */
+    private static final int MAX_BUCKET_COUNT = 5;
 
     private GroupSpec groupSpec;
 
@@ -109,7 +116,7 @@ public class TargetAssignmentBuilderBenchmark {
         targetAssignmentBuilder = new TargetAssignmentBuilder<ConsumerGroupMember>(GROUP_ID, GROUP_EPOCH, partitionAssignor)
             .withMembers(members)
             .withSubscriptionMetadata(subscriptionMetadata)
-            .withSubscriptionType(HOMOGENEOUS)
+            .withSubscriptionType(subscriptionType)
             .withTargetAssignment(existingTargetAssignment)
             .withInvertedTargetAssignment(invertedTargetAssignment)
             .withTopicsImage(topicsImage)
@@ -122,8 +129,7 @@ public class TargetAssignmentBuilderBenchmark {
         int partitionsPerTopic = (memberCount * partitionsToMemberRatio) / topicCount;
         subscriptionMetadata = AssignorBenchmarkUtils.createSubscriptionMetadata(
             allTopicNames,
-            partitionsPerTopic,
-            topicName -> Collections.emptyMap()
+            partitionsPerTopic
         );
 
         topicsImage = AssignorBenchmarkUtils.createTopicsImage(subscriptionMetadata);
@@ -137,7 +143,7 @@ public class TargetAssignmentBuilderBenchmark {
     ) {
         this.groupSpec = AssignorBenchmarkUtils.createGroupSpec(
             members,
-            HOMOGENEOUS,
+            subscriptionType,
             topicsImage
         );
 
@@ -159,12 +165,22 @@ public class TargetAssignmentBuilderBenchmark {
     }
 
     private Map<String, ConsumerGroupMember> createMembers() {
-        return AssignorBenchmarkUtils.createHomogeneousMembers(
-            memberCount - 1,
-            this::memberId,
-            this::rackId,
-            allTopicNames
-        );
+        if (subscriptionType == HOMOGENEOUS) {
+            return AssignorBenchmarkUtils.createHomogeneousMembers(
+                memberCount - 1,
+                this::memberId,
+                this::rackId,
+                allTopicNames
+            );
+        } else {
+            return AssignorBenchmarkUtils.createHeterogeneousBucketedMembers(
+                memberCount - 1,
+                MAX_BUCKET_COUNT,
+                this::memberId,
+                this::rackId,
+                allTopicNames
+            );
+        }
     }
 
     private String memberId(int memberIndex) {

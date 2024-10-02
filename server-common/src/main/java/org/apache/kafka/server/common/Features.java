@@ -118,7 +118,7 @@ public enum Features {
      * For example, say feature X level x relies on feature Y level y:
      * if feature X >= x then throw an error if feature Y < y.
      *
-     * All feature levels above 0 require metadata.version=4 (IBP_3_3_IV0) in order to write the feature records to the cluster.
+     * All feature levels above 0 in kraft require metadata.version=4 (IBP_3_3_IV0) in order to write the feature records to the cluster.
      *
      * @param feature                   the feature we are validating
      * @param features                  the feature versions we have (or want to set)
@@ -161,6 +161,14 @@ public enum Features {
                 return level;
         }
         return level;
+    }
+
+    public static Features featureFromName(String featureName) {
+        for (Features features : FEATURES) {
+            if (features.name.equals(featureName))
+                return features;
+        }
+        throw new IllegalArgumentException("Feature " + featureName + " not found.");
     }
 
     /**

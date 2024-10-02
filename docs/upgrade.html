@@ -22,45 +22,67 @@
 <h4><a id="upgrade_4_0_0" href="#upgrade_4_0_0">Upgrading to 4.0.0 from any version 0.8.x through 3.9.x</a></h4>
     <h5><a id="upgrade_400_notable" href="#upgrade_400_notable">Notable changes in 4.0.0</a></h5>
     <ul>
-        <li>A number of deprecated classes, methods,configurations and tools have been removed from the <code>clients</code>, <code>connect</code>, <code>core</code> and <code>tools</code> modules:</li>
-        <ul>
-            <li> The original MirrorMaker (MM1) and related classes have been removed. Please use the Connect-based
-                MirrorMaker (MM2), as described in the
-                <a href="/{{version}}/documentation/#georeplication">Geo-Replication section</a>.
-            </li>
-            <li>
-                The <code>kafka.common.MessageReader</code> class has been removed. Please use the
-                <a href="/{{version}}/javadoc/org/apache/kafka/tools/api/RecordReader.html"><code>org.apache.kafka.tools.api.RecordReader</code></a>
-                interface to build custom readers for the <code>kafka-console-producer</code> tool.
-            </li>
-            <li> Remove <code>use.incremental.alter.configs</code>. The modified behavior is identical to the previous <code>required</code> configuration,
-                therefore users should ensure that target broker is at least 2.3.0
-            </li>
-            <li> Remove <code>delegation.token.master.key</code>. please use <code>delegation.token.secret.key</code> instead of it.
-            </li>
-            <li>
-                The <code>kafka.tools.DefaultMessageFormatter</code> class has been removed. Please use the <code>org.apache.kafka.tools.consumer.DefaultMessageFormatter</code> class instead.
-            </li>
-            <li>
-                The <code>kafka.tools.LoggingMessageFormatter</code> class has been removed. Please use the <code>org.apache.kafka.tools.consumer.LoggingMessageFormatter</code> class instead.
-            </li>
-            <li>
-                The <code>kafka.tools.NoOpMessageFormatter</code> class has been removed. Please use the <code>org.apache.kafka.tools.consumer.NoOpMessageFormatter</code> class instead.
-            </li>
-            <li>
-                The <code>--whitelist</code> option was removed from the <code>kafka-console-consumer</code> command line tool.
-                Please use <code>--include</code> instead.
-            </li>
-            <li>
-                The <code>metrics.jmx.blacklist</code> was removed from the <code>org.apache.kafka.common.metrics.JmxReporter</code>
-                Please use <code>metrics.jmx.exclude</code> instead.
-            </li>
-            <li>
-                The <code>metrics.jmx.whitelist</code> was removed from the <code>org.apache.kafka.common.metrics.JmxReporter</code>
-                Please use <code>metrics.jmx.include</code> instead.
-            </li>
-
-        </ul>
+        <li>A number of deprecated classes, methods, configurations and tools have been removed.
+            <ul>
+                <li><b>Common</b>
+                    <ul>
+                        <li>The <code>metrics.jmx.blacklist</code> and <code>metrics.jmx.whitelist</code> configurations were removed from the <code>org.apache.kafka.common.metrics.JmxReporter</code>
+                            Please use <code>metrics.jmx.exclude</code> and <code>metrics.jmx.include</code> respectively instead.
+                        </li>
+                    </ul>
+                </li>
+                <li><b>Broker</b>
+                    <ul>
+                        <li>The <code>delegation.token.master.key</code> configuration was removed.
+                            Please use <code>delegation.token.secret.key</code> instead.
+                        </li>
+                    </ul>
+                </li>
+                <li><b>MirrorMaker</b>
+                    <ul>
+                        <li>The original MirrorMaker (MM1) and related classes were removed. Please use the Connect-based
+                            MirrorMaker (MM2), as described in the <a href="/{{version}}/documentation/#georeplication">Geo-Replication section.</a>.
+                        </li>
+                        <li>The <code>use.incremental.alter.configs</code> configuration was removedfrom <code>MirrorSourceConnector</code>.
+                            The modified behavior is identical to the previous <code>required</code> configuration, therefore users should ensure that brokers in the target cluster are at least running 2.3.0.
+                        </li>
+                        <li>The <code>add.source.alias.to.metrics</code> configuration was removed from <code>MirrorSourceConnector</code>.
+                            The source cluster alias is now always added to the metrics.
+                        </li>
+                    </ul>
+                </li>
+                <li><b>Tools</b>
+                    <ul>
+                        <li>The <code>kafka.common.MessageReader</code> class was removed. Please use the
+                            <a href="/{{version}}/javadoc/org/apache/kafka/tools/api/RecordReader.html"><code>org.apache.kafka.tools.api.RecordReader</code></a>
+                            interface to build custom readers for the <code>kafka-console-producer</code> tool.
+                        </li>
+                        <li>The <code>kafka.tools.DefaultMessageFormatter</code> class was removed. Please use the <code>org.apache.kafka.tools.consumer.DefaultMessageFormatter</code> class instead.
+                        </li>
+                        <li>The <code>kafka.tools.LoggingMessageFormatter</code> class was removed. Please use the <code>org.apache.kafka.tools.consumer.LoggingMessageFormatter</code> class instead.
+                        </li>
+                        <li>The <code>kafka.tools.NoOpMessageFormatter</code> class has been removed. Please use the <code>org.apache.kafka.tools.consumer.NoOpMessageFormatter</code> class instead.
+                        </li>
+                        <li>The <code>--whitelist</code> option was removed from the <code>kafka-console-consumer</code> command line tool.
+                            Please use <code>--include</code> instead.
+                        </li>
+                    </ul>
+                </li>
+                <li><b>Connect</b>
+                    <ul>
+                        <li>The <code>whitelist</code> and <code>blacklist</code> configurations were removed from the <code>org.apache.kafka.connect.transforms.ReplaceField</code> transformation.
+                            Please use <code>include</code> and <code>exclude</code> respectively instead.
+                        </li>
+                    </ul>
+                </li>
+            </ul>
+        </li>
+        <li>Other changes:
+            <ul>
+                <li>The <code>--delete-config</code> option in the <code>kafka-topics</code> command line tool has been deprecated.
+                </li>
+            </ul>
+        </li>
     </ul>
 
 <h4><a id="upgrade_3_9_0" href="#upgrade_3_9_0">Upgrading to 3.9.0 from any version 0.8.x through 3.8.x</a></h4>
