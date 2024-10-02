@@ -14,19 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.metadata.authorizer;
 
+package org.apache.kafka.metadata.authorizer.trie;
 
-import java.util.Collections;
+public class StandardInserterTest extends AbstractInserterTest {
 
-import static org.apache.kafka.metadata.authorizer.StandardAuthorizerTest.PLAINTEXT;
+    @Override
+    protected InserterMetadata getMetadata() {
+        return new InserterMetadata() {
+            @Override
+            public Inserter getInserter(String pattern) {
+                return new StandardInserter(pattern);
+            }
 
-public class StandardAuthorizerPropertyTest extends AbstractAuthorizerPropertyTest {
+            @Override
+            public boolean supportWildcard() {
+                return false;
+            }
+        };
 
-    protected StandardAuthorizer buildAuthorizer() {
-        StandardAuthorizer authorizer = new StandardAuthorizer();
-        authorizer.start(new StandardAuthorizerTest.AuthorizerTestServerInfo(Collections.singletonList(PLAINTEXT)));
-        authorizer.completeInitialLoad();
-        return authorizer;
     }
 }

@@ -40,6 +40,22 @@ public class MockAuthorizableRequestContext implements AuthorizableRequestContex
             this.clientAddress = InetAddress.getLocalHost();
         }
 
+        private Builder(InetAddress clientAddress) {
+            this.clientAddress = clientAddress;
+        }
+
+        public Builder clone() {
+            Builder result = new Builder(clientAddress);
+            result.listenerName = listenerName;
+            result.securityProtocol = securityProtocol;
+            result.principal = principal;
+            result.requestType = requestType;
+            result.requestVersion = requestVersion;
+            result.clientId = clientId;
+            result.correlationId = correlationId;
+            return result;
+        }
+
         public Builder setListenerName(String listenerName) {
             this.listenerName = listenerName;
             return this;
@@ -158,4 +174,5 @@ public class MockAuthorizableRequestContext implements AuthorizableRequestContex
     public int correlationId() {
         return correlationId;
     }
+
 }

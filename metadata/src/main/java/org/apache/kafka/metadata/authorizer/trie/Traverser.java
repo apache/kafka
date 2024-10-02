@@ -14,19 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.metadata.authorizer;
+package org.apache.kafka.metadata.authorizer.trie;
 
-
-import java.util.Collections;
-
-import static org.apache.kafka.metadata.authorizer.StandardAuthorizerTest.PLAINTEXT;
-
-public class StandardAuthorizerPropertyTest extends AbstractAuthorizerPropertyTest {
-
-    protected StandardAuthorizer buildAuthorizer() {
-        StandardAuthorizer authorizer = new StandardAuthorizer();
-        authorizer.start(new StandardAuthorizerTest.AuthorizerTestServerInfo(Collections.singletonList(PLAINTEXT)));
-        authorizer.completeInitialLoad();
-        return authorizer;
-    }
+/**
+ * An interface that defines a Traverser.  A traverser starts at the root of the tree and moves
+ * thorugh the nodes in a programmatically defined order until a specific condition is met.  It is intended
+ * that the implementing class will retain data that is necessary for continued processing.
+ * @param <T> the data type for the Nodes.
+ */
+public interface Traverser<T> {
+    /**
+     * Traverse the tree starting at the root.
+     * @param root The root node of the tree.
+     */
+    void traverse(Node<T> root);
 }

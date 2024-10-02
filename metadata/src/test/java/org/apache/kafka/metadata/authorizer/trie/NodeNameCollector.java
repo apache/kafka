@@ -14,19 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.metadata.authorizer;
 
+package org.apache.kafka.metadata.authorizer.trie;
 
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Predicate;
 
-import static org.apache.kafka.metadata.authorizer.StandardAuthorizerTest.PLAINTEXT;
+/**
+ * Return the list of fragment strings of a depth first walk of the trie.
+ */
+public class NodeNameCollector<T> implements Predicate<Node<T>> {
+    private List<String> tokenList;
 
-public class StandardAuthorizerPropertyTest extends AbstractAuthorizerPropertyTest {
+    NodeNameCollector() {
+        tokenList = new ArrayList<>();
+    }
 
-    protected StandardAuthorizer buildAuthorizer() {
-        StandardAuthorizer authorizer = new StandardAuthorizer();
-        authorizer.start(new StandardAuthorizerTest.AuthorizerTestServerInfo(Collections.singletonList(PLAINTEXT)));
-        authorizer.completeInitialLoad();
-        return authorizer;
+    public List<String> tokens() {
+        List<String> result = new ArrayList<>(tokenList);
+        tokenList.clear();
+        return result;
+    }
+
+    @Override
+    public boolean test(Node<T> node) {
+        tokenList.add(node.getFragment());
+        return false;
     }
 }
