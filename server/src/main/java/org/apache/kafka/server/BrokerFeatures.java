@@ -19,6 +19,7 @@ package org.apache.kafka.server;
 import org.apache.kafka.common.feature.Features;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.metadata.VersionRange;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import org.slf4j.Logger;
@@ -59,10 +60,10 @@ public class BrokerFeatures {
     }
 
     public static Map<String, VersionRange> createDefaultFeatureMap(BrokerFeatures features) {
-        Map<String, SupportedVersionRange> supportedFeatures = features.supportedFeatures.features();
-        Map<String, VersionRange> result = new HashMap<>();
-        supportedFeatures.forEach((key, value) -> result.put(key, VersionRange.of(value.min(), value.max())));
-        return result;
+        return features.supportedFeatures.features()
+                .entrySet()
+                .stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> VersionRange.of(e.getValue().min(), e.getValue().max())));
     }
 
     public static Features<SupportedVersionRange> defaultSupportedFeatures(boolean unstableFeatureVersionsEnabled) {
@@ -106,15 +107,8 @@ public class BrokerFeatures {
     public Map<String, Short> defaultFinalizedFeatures() {
         return supportedFeatures.features().entrySet()
                 .stream()
-                .collect(HashMap::new, (m, e) -> {
-                    String name = e.getKey();
-                    SupportedVersionRange versionRange = e.getValue();
-                    if ("kraft.version".equals(name)) {
-                        m.put(name, (short) 0);
-                    } else {
-                        m.put(name, versionRange.max());
-                    }
-                }, HashMap::putAll);
+                .collect(Collectors.toMap(Map.Entry::getKey,
+                        e -> e.getKey().equals(KRaftVersion.FEATURE_NAME) ? 0 : e.getValue().max()));
     }
 
     /**
@@ -142,52 +136,45 @@ public class BrokerFeatures {
     private static Map<String, Short> incompatibleFeatures(Features<SupportedVersionRange> supportedFeatures,
                                                            Map<String, Short> finalizedFeatures,
                                                            boolean logIncompatibilities) {
-        List<IncompatibleFeaturesInfo> incompatibleFeaturesInfo = finalizedFeatures
-                .entrySet()
-                .stream()
-                .map(entry -> transferToIncompatibleFeaturesInfo(supportedFeatures, entry))
-                .filter(info -> info.errorReason != null)
-                .collect(Collectors.toList());
-        if (logIncompatibilities && !incompatibleFeaturesInfo.isEmpty()) {
-            log.warn("Feature incompatibilities seen: {}", incompatibleFeaturesInfo.stream()
-                    .map(info -> info.errorReason)
-                    .collect(Collectors.joining(", ")));
+        Map<IncompatibleFeaturesInfo, String> incompatibleFeaturesInfoToErrorReason = 
+                transferToIncompatibleFeaturesInfoToErrorCode(supportedFeatures, finalizedFeatures);
+        if (logIncompatibilities && !incompatibleFeaturesInfoToErrorReason.isEmpty()) {
+            log.warn("Feature incompatibilities seen: {}", 
+                    String.join(", ", incompatibleFeaturesInfoToErrorReason.values()));
         }
-        return incompatibleFeaturesInfo.stream()
+        return incompatibleFeaturesInfoToErrorReason.keySet().stream()
                 .collect(Collectors.toMap(info -> info.feature, info -> info.versionLevels));
     }
 
-    private static IncompatibleFeaturesInfo transferToIncompatibleFeaturesInfo(Features<SupportedVersionRange> supportedFeatures,
-                                                                               Map.Entry<String, Short> entry) {
-        String feature = entry.getKey();
-        Short versionLevels = entry.getValue();
-        SupportedVersionRange supportedVersions = supportedFeatures.get(feature);
-        if (supportedVersions == null) {
-            return new IncompatibleFeaturesInfo(
-                    feature,
-                    versionLevels,
-                    format("{feature=%s, reason='Unsupported feature'}", feature)
-            );
-        } else if (supportedVersions.isIncompatibleWith(versionLevels)) {
-            return new IncompatibleFeaturesInfo(
-                    feature,
-                    versionLevels,
-                    format("{feature=%s, reason='%s is incompatible with %s'}", feature, versionLevels, supportedVersions)
-            );
-        } else {
-            return new IncompatibleFeaturesInfo(feature, versionLevels, null);
-        }
+    private static Map<IncompatibleFeaturesInfo, String> transferToIncompatibleFeaturesInfoToErrorCode(
+            Features<SupportedVersionRange> supportedFeatures,
+            Map<String, Short> finalizedFeatures
+    ) {
+        HashMap<IncompatibleFeaturesInfo, String> incompatibleFeaturesInfoToErrorReason = new HashMap<>();
+        finalizedFeatures.forEach((feature, versionLevels) -> {
+            SupportedVersionRange supportedVersions = supportedFeatures.get(feature);
+            if (supportedVersions == null) {
+                incompatibleFeaturesInfoToErrorReason.put(
+                        new IncompatibleFeaturesInfo(feature, versionLevels), 
+                        format("{feature=%s, reason='Unsupported feature'}", feature)
+                );
+            } else if (supportedVersions.isIncompatibleWith(versionLevels)) {
+                incompatibleFeaturesInfoToErrorReason.put(
+                        new IncompatibleFeaturesInfo(feature, versionLevels),
+                        format("{feature=%s, reason='%s is incompatible with %s'}", feature, versionLevels, supportedVersions)
+                );
+            }
+        });
+        return incompatibleFeaturesInfoToErrorReason;
     }
 
     private static class IncompatibleFeaturesInfo {
         final String feature;
         final short versionLevels;
-        final String errorReason;
 
-        IncompatibleFeaturesInfo(String feature, short versionLevels, String errorReason) {
+        IncompatibleFeaturesInfo(String feature, short versionLevels) {
             this.feature = feature;
             this.versionLevels = versionLevels;
-            this.errorReason = errorReason;
         }
     }
 }
