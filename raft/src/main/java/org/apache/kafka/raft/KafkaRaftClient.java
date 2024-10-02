@@ -3137,7 +3137,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             transitionToCandidate(currentTimeMs);
             return 0L;
         } else {
-            return state.remainingElectionTimeMs(currentTimeMs);
+            return pollUnattachedAsObserver(state, currentTimeMs);
         }
     }
 
