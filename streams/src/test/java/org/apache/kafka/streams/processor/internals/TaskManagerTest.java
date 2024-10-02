@@ -55,6 +55,7 @@ import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager;
 import org.apache.kafka.streams.processor.internals.testutil.DummyStreamsConfig;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.log4j.Level;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
@@ -4654,18 +4655,8 @@ public class TaskManagerTest {
 
     @Test
     public void shouldRecyclePendingTasksFromStateDirectoryAsActive() {
-        final StandbyTask pendingTask = mock(StandbyTask.class);
-        when(pendingTask.id()).thenReturn(taskId00);
-        when(pendingTask.isActive()).thenReturn(false);
-        when(pendingTask.prepareCommit()).thenReturn(Collections.emptyMap());
-        when(pendingTask.stateManager()).thenReturn(stateManager);
-        doNothing().when(stateManager).assignToStreamThread(any(), any(), any());
-        doNothing().when(pendingTask).updateInputPartitions(any(), any());
-
-        final StreamTask activeTask = mock(StreamTask.class);
-        when(activeTask.id()).thenReturn(taskId00);
-        when(activeTask.isActive()).thenReturn(true);
-        when(activeTask.inputPartitions()).thenReturn(taskId00Partitions);
+        final StandbyTask pendingTask = StreamsTestUtils.TaskBuilder.standbyTask(taskId00, taskId00ChangelogPartitions).build();
+        final StreamTask activeTask = StreamsTestUtils.TaskBuilder.statefulTask(taskId00, taskId00ChangelogPartitions).build();
         when(activeTaskCreator.createActiveTaskFromStandby(eq(pendingTask), eq(taskId00Partitions), any()))
             .thenReturn(activeTask);
 
@@ -4690,10 +4681,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldUsePendingTasksFromStateDirectoryAsStandby() {
-        final StandbyTask pendingTask = mock(StandbyTask.class);
-        when(pendingTask.id()).thenReturn(taskId00);
-        when(pendingTask.isActive()).thenReturn(false);
-        when(pendingTask.stateManager()).thenReturn(stateManager);
+        final StandbyTask pendingTask = StreamsTestUtils.TaskBuilder.standbyTask(taskId00, taskId00ChangelogPartitions).build();
 
         when(stateDirectory.hasPendingTasks()).thenReturn(true, true, false);
         when(stateDirectory.removePendingTask(taskId00)).thenReturn(pendingTask, (Task) null);
@@ -4718,16 +4706,9 @@ public class TaskManagerTest {
     public void shouldRecyclePendingTasksFromStateDirectoryAsActiveWithStateUpdater() {
         final Tasks taskRegistry = new Tasks(new LogContext());
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, taskRegistry, true);
-        final StandbyTask pendingTask = mock(StandbyTask.class);
-        when(pendingTask.id()).thenReturn(taskId00);
-        when(pendingTask.isActive()).thenReturn(false);
-        when(pendingTask.stateManager()).thenReturn(stateManager);
-        doNothing().when(stateManager).assignToStreamThread(any(), any(), any());
-        doNothing().when(pendingTask).updateInputPartitions(any(), any());
+        final StandbyTask pendingTask = StreamsTestUtils.TaskBuilder.standbyTask(taskId00, taskId00ChangelogPartitions).build();
 
-        final StreamTask activeTask = mock(StreamTask.class);
-        when(activeTask.id()).thenReturn(taskId00);
-        when(activeTask.isActive()).thenReturn(true);
+        final StreamTask activeTask = StreamsTestUtils.TaskBuilder.statefulTask(taskId00, taskId00ChangelogPartitions).build();
         when(activeTaskCreator.createActiveTaskFromStandby(eq(pendingTask), eq(taskId00Partitions), any()))
                 .thenReturn(activeTask);
 
@@ -4763,10 +4744,7 @@ public class TaskManagerTest {
     public void shouldUsePendingTasksFromStateDirectoryAsStandbyWithStateUpdater() {
         final Tasks taskRegistry = new Tasks(new LogContext());
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, taskRegistry, true);
-        final StandbyTask pendingTask = mock(StandbyTask.class);
-        when(pendingTask.id()).thenReturn(taskId00);
-        when(pendingTask.isActive()).thenReturn(false);
-        when(pendingTask.stateManager()).thenReturn(stateManager);
+        final StandbyTask pendingTask = StreamsTestUtils.TaskBuilder.standbyTask(taskId00, taskId00ChangelogPartitions).build();
 
         when(stateDirectory.hasPendingTasks()).thenReturn(true, true, false);
         when(stateDirectory.removePendingTask(taskId00)).thenReturn(pendingTask, (Task) null);
