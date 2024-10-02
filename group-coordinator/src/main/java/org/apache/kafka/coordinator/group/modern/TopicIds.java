@@ -108,6 +108,9 @@ public class TopicIds implements Set<Uuid> {
 
     /**
      * A TopicResolver that caches results.
+     *
+     * This cache is expected to be short-lived and only used within a single
+     * TargetAssignmentBuilder.build() call.
      */
     public static class CachedTopicResolver implements TopicResolver {
         private final TopicsImage image;
