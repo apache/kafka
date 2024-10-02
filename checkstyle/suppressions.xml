@@ -341,6 +341,12 @@
     <suppress checks="NPathComplexity"
               files="CoordinatorRuntime.java"/>
 
+    <!-- share coordinator -->
+    <suppress checks="NPathComplexity"
+              files="ShareCoordinatorShard.java"/>
+    <suppress checks="CyclomaticComplexity"
+              files="ShareCoordinatorShard.java"/>
+
     <!-- storage -->
     <suppress checks="CyclomaticComplexity"
               files="(LogLoader|LogValidator|RemoteLogManagerConfig|RemoteLogManager).java"/>
