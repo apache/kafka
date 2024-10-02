@@ -131,6 +131,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -3738,6 +3739,7 @@ public class GroupMetadataManager {
      * for all members.
      */
     public void onLoaded() {
+        Map<ClassicGroupState, AtomicLong> classicGroupSizeCounter = GroupCoordinatorMetricsShard.createClassicGroupGauge();
         groups.forEach((groupId, group) -> {
             switch (group.type()) {
                 case CONSUMER:
@@ -3771,6 +3773,8 @@ public class GroupMetadataManager {
                             " (size " + classicGroup.numMembers() + ") is over capacity " + classicGroupMaxSize +
                             ". Rebalancing in order to give a chance for consumers to commit offsets");
                     }
+
+                    classicGroupSizeCounter.get(classicGroup.currentState()).incrementAndGet();
                     break;
 
                 case SHARE:
@@ -3782,6 +3786,7 @@ public class GroupMetadataManager {
                     break;
             }
         });
+        metrics.setClassicGroupGauges(classicGroupSizeCounter);
         scheduleClassicGroupSizeCounter();
     }
 
@@ -3834,6 +3839,7 @@ public class GroupMetadataManager {
                     break;
             }
         });
+        cancelClassicGroupSizeCounter();
     }
 
     public static String groupSessionTimeoutKey(String groupId, String memberId) {
@@ -3844,25 +3850,36 @@ public class GroupMetadataManager {
         return "rebalance-timeout-" + groupId + "-" + memberId;
     }
 
-    public static String classicGroupSizeCounterKey() {
-        return "classic-group-size-counter";
-    }
+    public static final String CLASSIC_GROUP_SIZE_COUNTER_KEY = "classic-group-size-counter";
 
     /**
-     * Schedules (or reschedules) the group size counter for the classic group.
+     * Schedules (or reschedules) the group size counter for the classic groups.
      */
     private void scheduleClassicGroupSizeCounter() {
         timer.schedule(
-            classicGroupSizeCounterKey(),
-            metrics.classicGroupGaugesUpdateIntervalMs(),
+            CLASSIC_GROUP_SIZE_COUNTER_KEY,
+            GroupCoordinatorMetricsShard.DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS,
             TimeUnit.MILLISECONDS,
             true,
             () -> {
-                metrics.updateClassicGroupGauges(groups);
+                Map<ClassicGroupState, AtomicLong> groupSizeCounter = GroupCoordinatorMetricsShard.createClassicGroupGauge();
+                groups.forEach((__, group) -> {
+                    if (group.type() == CLASSIC) {
+                        groupSizeCounter.get(((ClassicGroup) group).currentState()).incrementAndGet();
+                    }
+                });
+                metrics.setClassicGroupGauges(groupSizeCounter);
                 scheduleClassicGroupSizeCounter();
                 return EMPTY_RESULT;
             }
         );
+    }
+
+    /**
+     * Cancels the group size counter for the classic groups.
+     */
+    private void cancelClassicGroupSizeCounter() {
+        timer.cancel(CLASSIC_GROUP_SIZE_COUNTER_KEY);
     }
 
     /**

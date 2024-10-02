@@ -90,7 +90,6 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.server.common.MetadataVersion;
-import org.apache.kafka.timeline.TimelineHashMap;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -126,11 +125,11 @@ import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupMetadataManager.CLASSIC_GROUP_SIZE_COUNTER_KEY;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESULT;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.appendGroupMetadataErrorToResponseError;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupHeartbeatKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupJoinKey;
-import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupSizeCounterKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupSyncKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupJoinKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupRebalanceTimeoutKey;
@@ -154,6 +153,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -3579,31 +3579,66 @@ public class GroupMetadataManagerTest {
 
         // The classic group size counter is scheduled.
         assertEquals(
-            context.metrics.classicGroupGaugesUpdateIntervalMs(),
-            context.timer.timeout(classicGroupSizeCounterKey()).deadlineMs - context.time.milliseconds()
+            GroupCoordinatorMetricsShard.DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS,
+            context.timer.timeout(CLASSIC_GROUP_SIZE_COUNTER_KEY).deadlineMs - context.time.milliseconds()
         );
     }
 
     @Test
     public void testScheduleClassicGroupSizeCounter() {
+        String groupId0 = "group-0";
+        String groupId1 = "group-1";
+        String groupId2 = "group-2";
+        String groupId3 = "group-3";
+        String groupId4 = "group-4";
+
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId0, 10))
             .build();
 
-        // The classic group size counter is scheduled in onLoaded.
+        ClassicGroup group1 = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId1, true);
+        ClassicGroup group2 = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId2, true);
+        ClassicGroup group3 = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId3, true);
+        ClassicGroup group4 = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId4, true);
+
         context.groupMetadataManager.onLoaded();
 
-        when(context.metrics.classicGroupGaugesUpdateIntervalMs()).thenReturn(60000L);
+        // The classic group size counter is scheduled.
+        assertEquals(
+            GroupCoordinatorMetricsShard.DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS,
+            context.timer.timeout(CLASSIC_GROUP_SIZE_COUNTER_KEY).deadlineMs - context.time.milliseconds()
+        );
+        verify(context.metrics, times(1)).setClassicGroupGauges(argThat(
+            map -> map.get(ClassicGroupState.PREPARING_REBALANCE).get() == 0
+                && map.get(ClassicGroupState.COMPLETING_REBALANCE).get() == 0
+                && map.get(ClassicGroupState.STABLE).get() == 0
+                && map.get(ClassicGroupState.DEAD).get() == 0
+                && map.get(ClassicGroupState.EMPTY).get() == 4
+        ));
+
+        group1.transitionTo(PREPARING_REBALANCE);
+        group2.transitionTo(PREPARING_REBALANCE);
+        group2.transitionTo(COMPLETING_REBALANCE);
+        group3.transitionTo(PREPARING_REBALANCE);
+        group3.transitionTo(COMPLETING_REBALANCE);
+        group3.transitionTo(STABLE);
 
         // Advance time to trigger updating the classic group counter.
-        List<ExpiredTimeout<Void, CoordinatorRecord>> timeouts = context.sleep(context.metrics.classicGroupGaugesUpdateIntervalMs() + 1);
+        List<ExpiredTimeout<Void, CoordinatorRecord>> timeouts = context.sleep(GroupCoordinatorMetricsShard.DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS + 1);
         assertEquals(1, timeouts.size());
-        assertEquals(classicGroupSizeCounterKey(), timeouts.get(0).key);
-        verify(context.metrics, times(1)).updateClassicGroupGauges(new TimelineHashMap<>(context.snapshotRegistry, 0));
+        assertEquals(CLASSIC_GROUP_SIZE_COUNTER_KEY, timeouts.get(0).key);
+        verify(context.metrics, times(1)).setClassicGroupGauges(argThat(
+            map -> map.get(ClassicGroupState.PREPARING_REBALANCE).get() == 1
+                && map.get(ClassicGroupState.COMPLETING_REBALANCE).get() == 1
+                && map.get(ClassicGroupState.STABLE).get() == 1
+                && map.get(ClassicGroupState.DEAD).get() == 0
+                && map.get(ClassicGroupState.EMPTY).get() == 1
+        ));
 
         // A new timer has been scheduled.
         assertEquals(
-            context.metrics.classicGroupGaugesUpdateIntervalMs(),
-            context.timer.timeout(classicGroupSizeCounterKey()).deadlineMs - context.time.milliseconds()
+            GroupCoordinatorMetricsShard.DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS,
+            context.timer.timeout(CLASSIC_GROUP_SIZE_COUNTER_KEY).deadlineMs - context.time.milliseconds()
         );
     }
 

@@ -23,12 +23,12 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.Group;
-import org.apache.kafka.coordinator.group.classic.ClassicGroup;
+import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.timeline.SnapshotRegistry;
-import org.apache.kafka.timeline.TimelineHashMap;
 
 import com.yammer.metrics.core.MetricsRegistry;
 
@@ -37,9 +37,9 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.IntStream;
 
-import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.EMPTY;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CONSUMER_GROUP_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.METRICS_GROUP;
@@ -167,15 +167,20 @@ public class GroupCoordinatorMetricsTest {
         coordinatorMetrics.activateMetricsShard(shard0);
         coordinatorMetrics.activateMetricsShard(shard1);
 
-        LogContext logContext = new LogContext();
-        TimelineHashMap<String, Group> groups0 = new TimelineHashMap<>(snapshotRegistry0, 4);
-        TimelineHashMap<String, Group> groups1 = new TimelineHashMap<>(snapshotRegistry1, 5);
-        IntStream.range(0, 4).forEach(i ->
-            groups0.put("group-" + i, new ClassicGroup(logContext, "group-" + i, EMPTY, Time.SYSTEM, shard0)));
-        IntStream.range(0, 5).forEach(i ->
-            groups1.put("group-" + i, new ClassicGroup(logContext, "group-" + i, EMPTY, Time.SYSTEM, shard1)));
-        shard0.updateClassicGroupGauges(groups0);
-        shard1.updateClassicGroupGauges(groups1);
+        shard0.setClassicGroupGauges(Utils.mkMap(
+            Utils.mkEntry(ClassicGroupState.PREPARING_REBALANCE, new AtomicLong(1)),
+            Utils.mkEntry(ClassicGroupState.COMPLETING_REBALANCE, new AtomicLong(1)),
+            Utils.mkEntry(ClassicGroupState.STABLE, new AtomicLong(1)),
+            Utils.mkEntry(ClassicGroupState.EMPTY, new AtomicLong(1)),
+            Utils.mkEntry(ClassicGroupState.DEAD, new AtomicLong(0))
+        ));
+        shard1.setClassicGroupGauges(Utils.mkMap(
+            Utils.mkEntry(ClassicGroupState.PREPARING_REBALANCE, new AtomicLong(1)),
+            Utils.mkEntry(ClassicGroupState.COMPLETING_REBALANCE, new AtomicLong(1)),
+            Utils.mkEntry(ClassicGroupState.STABLE, new AtomicLong(1)),
+            Utils.mkEntry(ClassicGroupState.EMPTY, new AtomicLong(1)),
+            Utils.mkEntry(ClassicGroupState.DEAD, new AtomicLong(1))
+        ));
 
         IntStream.range(0, 5).forEach(__ -> shard0.incrementNumConsumerGroups(ConsumerGroupState.ASSIGNING));
         IntStream.range(0, 5).forEach(__ -> shard1.incrementNumConsumerGroups(ConsumerGroupState.RECONCILING));
