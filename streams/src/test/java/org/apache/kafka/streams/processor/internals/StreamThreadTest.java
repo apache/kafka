@@ -1147,7 +1147,7 @@ public class StreamThreadTest {
         topologyMetadata.buildAndRewriteTopology();
 
         final TaskManager taskManager = new TaskManager(
-            null,
+            new MockTime(),
             changelogReader,
             null,
             null,
