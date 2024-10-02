@@ -54,6 +54,13 @@ jobs:
         with:
           persist-credentials:
             false
+      - name: Set status to pending for re-runs
+        if: ${{ github.run_attempt > 1 }}
+        uses: myrotvorets/set-commit-status-action@master
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          state: pending
+          context: Re-run Workflow
       - name: Setup Gradle
         uses: ./.github/actions/setup-gradle
         with:
