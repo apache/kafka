@@ -20,11 +20,12 @@ package org.apache.kafka.metadata.authorizer;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
-import org.apache.kafka.server.immutable.ImmutableMap;
+import org.apache.kafka.common.utils.CopyOnWriteMap;
 import org.apache.kafka.server.immutable.ImmutableNavigableSet;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * An immutable class that stores the ACLs in KRaft-based clusters.
@@ -38,13 +39,13 @@ public class AclCache {
     /**
      * Contains all of the current ACLs indexed by UUID.
      */
-    private final ImmutableMap<Uuid, StandardAcl> aclsById;
+    private final Map<Uuid, StandardAcl> aclsById;
 
     AclCache() {
-        this(ImmutableNavigableSet.empty(), ImmutableMap.empty());
+        this(ImmutableNavigableSet.empty(), new CopyOnWriteMap<>());
     }
 
-    private AclCache(final ImmutableNavigableSet<StandardAcl> aclsByResource, final ImmutableMap<Uuid, StandardAcl> aclsById) {
+    private AclCache(final ImmutableNavigableSet<StandardAcl> aclsByResource, final Map<Uuid, StandardAcl> aclsById) {
         this.aclsByResource = aclsByResource;
         this.aclsById = aclsById;
     }
@@ -78,7 +79,7 @@ public class AclCache {
             throw new RuntimeException("An ACL with ID " + id + " already exists.");
         }
 
-        ImmutableMap<Uuid, StandardAcl> aclsById = this.aclsById.updated(id, acl);
+        this.aclsById.put(id, acl);
 
         if (this.aclsByResource.contains(acl)) {
             throw new RuntimeException("Unable to add the ACL with ID " + id +
@@ -94,7 +95,7 @@ public class AclCache {
         if (acl == null) {
             throw new RuntimeException("ID " + id + " not found in aclsById.");
         }
-        ImmutableMap<Uuid, StandardAcl> aclsById = this.aclsById.removed(id);
+        aclsById.remove(id);
 
         if (!this.aclsByResource.contains(acl)) {
             throw new RuntimeException("Unable to remove the ACL with ID " + id +
