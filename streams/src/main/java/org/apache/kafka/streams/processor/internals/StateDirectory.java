@@ -211,7 +211,6 @@ public class StateDirectory implements AutoCloseable {
                 final String dirName = taskDirectory.file().getName();
                 final TaskId id = parseTaskDirectoryName(dirName, taskDirectory.namedTopology());
                 final ProcessorTopology subTopology = topologyMetadata.buildSubtopology(id);
-                final Set<TopicPartition> inputPartitions = subTopology.sourceTopics().stream().map(topic -> new TopicPartition(topic, id.partition())).collect(Collectors.toSet());
 
                 // we still check if the task's sub-topology is stateful, even though we know its directory contains state,
                 // because it's possible that the topology has changed since that data was written, and is now stateless
@@ -223,9 +222,7 @@ public class StateDirectory implements AutoCloseable {
                         eosEnabled,
                         logContext,
                         this,
-                        null,
                         subTopology.storeToChangelogTopic(),
-                        inputPartitions,
                         stateUpdaterEnabled
                     );
 
@@ -239,7 +236,7 @@ public class StateDirectory implements AutoCloseable {
 
                     final Task task = new StandbyTask(
                         id,
-                        inputPartitions,
+                        new HashSet<>(),
                         subTopology,
                         topologyMetadata.taskConfig(id),
                         streamsMetrics,

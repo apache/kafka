@@ -44,6 +44,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -220,6 +221,21 @@ public class ProcessorStateManager implements StateManager {
         this.checkpointFile = new OffsetCheckpoint(stateDirectory.checkpointFileFor(taskId));
 
         log.debug("Created state store manager for task {}", taskId);
+    }
+
+    /**
+     * Special constructor used by {@link StateDirectory} to partially initialize "pending" tasks for local state, before
+     * they're assigned to a thread. When the task is assigned to a thread, the initialization of this StateManager is
+     * completed in {@link #assignToStreamThread(LogContext, ChangelogRegister, Collection)}.
+     */
+    ProcessorStateManager(final TaskId taskId,
+                          final TaskType taskType,
+                          final boolean eosEnabled,
+                          final LogContext logContext,
+                          final StateDirectory stateDirectory,
+                          final Map<String, String> storeToChangelogTopic,
+                          final boolean stateUpdaterEnabled) {
+        this(taskId, taskType, eosEnabled, logContext, stateDirectory, null, storeToChangelogTopic, new HashSet<>(0), stateUpdaterEnabled);
     }
 
     /**
