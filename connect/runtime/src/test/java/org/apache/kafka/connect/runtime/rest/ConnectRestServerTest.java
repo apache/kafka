@@ -345,7 +345,7 @@ public class ConnectRestServerTest {
         server.initializeServer();
         server.initializeResources(herder);
 
-        LogCaptureAppender restServerAppender = LogCaptureAppender.createAndRegister();
+        LogCaptureAppender restServerAppender = LogCaptureAppender.createAndRegister(ConnectRestServerTest.class);
         HttpRequest request = new HttpGet("/");
         HttpResponse response = executeRequest(server.advertisedUrl(), request);
 
@@ -353,7 +353,6 @@ public class ConnectRestServerTest {
         server.stop();
 
         Collection<String> logMessages = restServerAppender.getMessages();
-        LogCaptureAppender.unregister(restServerAppender);
         restServerAppender.close();
         String expectedlogContent = "\"GET / HTTP/1.1\" " + response.getStatusLine().getStatusCode();
         assertTrue(logMessages.stream().anyMatch(logMessage -> logMessage.contains(expectedlogContent)));

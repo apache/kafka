@@ -44,7 +44,8 @@ import org.apache.kafka.server.config.QuotaConfigs
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.quota.{ThrottleCallback, ThrottledChannel}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
-import org.apache.log4j.Level
+import org.apache.logging.log4j.Level
+import org.apache.logging.log4j.core.config.Configurator
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
 
@@ -87,7 +88,7 @@ class SocketServerTest {
   var server: SocketServer = _
   val sockets = new ArrayBuffer[Socket]
 
-  private val kafkaLogger = org.apache.log4j.LogManager.getLogger("kafka")
+  private val kafkaLogger = org.apache.logging.log4j.LogManager.getLogger("kafka")
   private var logLevelToRestore: Level = _
   def endpoint: EndPoint = {
     KafkaConfig.fromProps(props, doLog = false).dataPlaneListeners.head
@@ -101,7 +102,7 @@ class SocketServerTest {
     server.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
     // Run the tests with TRACE logging to exercise request logging path
     logLevelToRestore = kafkaLogger.getLevel
-    kafkaLogger.setLevel(Level.TRACE)
+    Configurator.setLevel(kafkaLogger.getName, Level.TRACE)
 
     assertTrue(server.controlPlaneRequestChannelOpt.isEmpty)
   }
@@ -111,7 +112,7 @@ class SocketServerTest {
     shutdownServerAndMetrics(server)
     sockets.foreach(_.close())
     sockets.clear()
-    kafkaLogger.setLevel(logLevelToRestore)
+    Configurator.setLevel(kafkaLogger.getName, logLevelToRestore)
     TestUtils.clearYammerMetrics()
   }
 

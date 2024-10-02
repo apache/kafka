@@ -215,7 +215,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
     STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_consumer.stderr")
     LOG_DIR = os.path.join(PERSISTENT_ROOT, "logs")
     LOG_FILE = os.path.join(LOG_DIR, "verifiable_consumer.log")
-    LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
+    LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j2.properties")
     CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "verifiable_consumer.properties")
 
     logs = {
@@ -298,7 +298,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         node.account.ssh("mkdir -p %s" % VerifiableConsumer.PERSISTENT_ROOT, allow_fail=False)
 
         # Create and upload log properties
-        log_config = self.render('tools_log4j.properties', log_file=VerifiableConsumer.LOG_FILE)
+        log_config = self.render('tools_log4j2.properties', log_file=VerifiableConsumer.LOG_FILE)
         node.account.create_file(VerifiableConsumer.LOG4J_CONFIG, log_config)
 
         # Create and upload config file

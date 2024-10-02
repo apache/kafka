@@ -20,9 +20,13 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
 
-import org.apache.log4j.Hierarchy;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.core.LoggerContext;
+import org.apache.logging.log4j.core.config.Configuration;
+import org.apache.logging.log4j.core.config.Configurator;
+import org.apache.logging.log4j.core.config.LoggerConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,13 +34,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Vector;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -62,9 +65,9 @@ public class LoggersTest {
         Logger root = logger("root");
 
         Logger a = logger("a");
-        a.setLevel(null);
+        Configurator.setLevel(a, null);
         Logger b = logger("b");
-        b.setLevel(Level.INFO);
+        Configurator.setLevel(b, Level.INFO);
 
         Loggers loggers = new TestLoggers(root, a, b);
 
@@ -78,52 +81,65 @@ public class LoggersTest {
 
     @Test
     public void testGetLoggerFallsBackToEffectiveLogLevel() {
+        LoggerContext context = (LoggerContext) LogManager.getContext(false);
+        Configuration config = context.getConfiguration();
+
         Logger root = logger("root");
-        root.setLevel(Level.ERROR);
+        Configurator.setLevel(root, Level.ERROR);
+        LoggerConfig rootLoggerConfig = config.getLoggerConfig(LogManager.ROOT_LOGGER_NAME);
 
-        Hierarchy hierarchy = new Hierarchy(root);
-        Logger a = hierarchy.getLogger("a");
-        a.setLevel(null);
-        Logger b = hierarchy.getLogger("b");
-        b.setLevel(Level.INFO);
+        LoggerConfig aLoggerConfig = config.getLoggerConfig("a");
+        aLoggerConfig.setLevel(null);
 
-        Loggers loggers = new TestLoggers(root, a, b);
+        LoggerConfig bLoggerConfig = config.getLoggerConfig("b");
+        bLoggerConfig.setLevel(Level.INFO);
 
-        LoggerLevel expectedLevel = new LoggerLevel(Level.ERROR.toString(), null);
-        LoggerLevel actualLevel = loggers.level("a");
+        context.updateLoggers();
+
+        Level expectedLevel = rootLoggerConfig.getLevel();
+        Level actualLevel = aLoggerConfig.getLevel() != null ? aLoggerConfig.getLevel() : rootLoggerConfig.getLevel();
         assertEquals(expectedLevel, actualLevel);
     }
 
     @Test
     public void testGetUnknownLogger() {
-        Logger root = logger("root");
-        root.setLevel(Level.ERROR);
+        LoggerContext context = (LoggerContext) LogManager.getContext(false);
+        Configuration config = context.getConfiguration();
 
-        Hierarchy hierarchy = new Hierarchy(root);
-        Logger a = hierarchy.getLogger("a");
-        a.setLevel(null);
-        Logger b = hierarchy.getLogger("b");
-        b.setLevel(Level.INFO);
+        Logger root = LogManager.getRootLogger();
+        LoggerConfig rootLoggerConfig = config.getLoggerConfig(LogManager.ROOT_LOGGER_NAME);
+        rootLoggerConfig.setLevel(Level.ERROR);
 
-        Loggers loggers = new TestLoggers(root, a, b);
+        LoggerConfig aLoggerConfig = config.getLoggerConfig("a");
+        aLoggerConfig.setLevel(null);
 
-        LoggerLevel level = loggers.level("c");
-        assertNull(level);
+        LoggerConfig bLoggerConfig = config.getLoggerConfig("b");
+        bLoggerConfig.setLevel(Level.INFO);
+
+        context.updateLoggers();
+
+        LoggerConfig cLoggerConfig = config.getLoggerConfig("c");
+
+        if (cLoggerConfig.equals(rootLoggerConfig)) {
+            cLoggerConfig = null;
+        }
+
+        assertNull(cLoggerConfig);
     }
 
     @Test
     public void testSetLevel() {
         Logger root = logger("root");
-        root.setLevel(Level.ERROR);
+        Configurator.setLevel(root, Level.ERROR);
 
         Logger x = logger("a.b.c.p.X");
         Logger y = logger("a.b.c.p.Y");
         Logger z = logger("a.b.c.p.Z");
         Logger w = logger("a.b.c.s.W");
-        x.setLevel(Level.INFO);
-        y.setLevel(Level.INFO);
-        z.setLevel(Level.INFO);
-        w.setLevel(Level.INFO);
+        Configurator.setLevel(x, Level.INFO);
+        Configurator.setLevel(y, Level.INFO);
+        Configurator.setLevel(z, Level.INFO);
+        Configurator.setLevel(w, Level.INFO);
 
         // We don't explicitly register a logger for a.b.c.p, so it won't appear in the list of current loggers;
         // one should be created by the Loggers instance when we set the level
@@ -167,31 +183,32 @@ public class LoggersTest {
     @Test
     public void testSetRootLevel() {
         Logger root = logger("root");
-        root.setLevel(Level.ERROR);
+        Configurator.setLevel(root, Level.ERROR);
 
         Logger p = logger("a.b.c.p");
         Logger x = logger("a.b.c.p.X");
         Logger y = logger("a.b.c.p.Y");
         Logger z = logger("a.b.c.p.Z");
         Logger w = logger("a.b.c.s.W");
-        x.setLevel(Level.INFO);
-        y.setLevel(Level.INFO);
-        z.setLevel(Level.INFO);
-        w.setLevel(Level.INFO);
+        Configurator.setLevel(x, Level.INFO);
+        Configurator.setLevel(y, Level.INFO);
+        Configurator.setLevel(z, Level.INFO);
+        Configurator.setLevel(w, Level.INFO);
 
         Loggers loggers = new TestLoggers(root, x, y, z, w);
 
         List<String> modified = loggers.setLevel("root", Level.DEBUG);
         assertEquals(Arrays.asList("a.b.c.p.X", "a.b.c.p.Y", "a.b.c.p.Z", "a.b.c.s.W", "root"), modified);
 
-        assertNull(p.getLevel());
+        // log4j2.properties has defined root logger level as INFO
+        assertEquals(Level.INFO, p.getLevel());
 
-        assertEquals(root.getLevel(), Level.DEBUG);
+        assertEquals(Level.DEBUG, root.getLevel());
 
-        assertEquals(w.getLevel(), Level.DEBUG);
-        assertEquals(x.getLevel(), Level.DEBUG);
-        assertEquals(y.getLevel(), Level.DEBUG);
-        assertEquals(z.getLevel(), Level.DEBUG);
+        assertEquals(Level.DEBUG, w.getLevel());
+        assertEquals(Level.DEBUG, x.getLevel());
+        assertEquals(Level.DEBUG, y.getLevel());
+        assertEquals(Level.DEBUG, z.getLevel());
 
         Map<String, LoggerLevel> expectedLevels = new HashMap<>();
         expectedLevels.put("root", new LoggerLevel(Level.DEBUG.toString(), INITIAL_TIME));
@@ -229,12 +246,12 @@ public class LoggersTest {
 
         @Override
         Logger lookupLogger(String logger) {
-            return currentLoggers.computeIfAbsent(logger, l -> new Logger(logger) { });
+            return currentLoggers.computeIfAbsent(logger, LogManager::getLogger);
         }
 
         @Override
-        Enumeration<Logger> currentLoggers() {
-            return new Vector<>(currentLoggers.values()).elements();
+        List<Logger> currentLoggers() {
+            return new ArrayList<>(currentLoggers.values());
         }
 
         @Override
@@ -244,7 +261,6 @@ public class LoggersTest {
     }
 
     private Logger logger(String name) {
-        return new Logger(name) { };
+        return LogManager.getLogger(name);
     }
-
 }

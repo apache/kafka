@@ -34,8 +34,8 @@ class TrogdorService(KafkaPathResolverMixin, Service):
         AGENT_STDOUT_STDERR             The path where we store the agents's stdout/stderr output.
         COORDINATOR_LOG                 The path where we store the coordinator's log4j output.
         AGENT_LOG                       The path where we store the agent's log4j output.
-        AGENT_LOG4J_PROPERTIES          The path to the agent log4j.properties file for log config.
-        COORDINATOR_LOG4J_PROPERTIES    The path to the coordinator log4j.properties file for log config.
+        AGENT_LOG4J_PROPERTIES          The path to the agent log4j2.properties file for log config.
+        COORDINATOR_LOG4J_PROPERTIES    The path to the coordinator log4j2.properties file for log config.
         CONFIG_PATH                     The path to the trogdor configuration file.
         DEFAULT_AGENT_PORT              The default port to use for trogdor_agent daemons.
         DEFAULT_COORDINATOR_PORT        The default port to use for trogdor_coordinator daemons.
@@ -48,8 +48,8 @@ class TrogdorService(KafkaPathResolverMixin, Service):
     AGENT_STDOUT_STDERR = os.path.join(PERSISTENT_ROOT, "trogdor-agent-stdout-stderr.log")
     COORDINATOR_LOG = os.path.join(PERSISTENT_ROOT, "trogdor-coordinator.log")
     AGENT_LOG = os.path.join(PERSISTENT_ROOT, "trogdor-agent.log")
-    COORDINATOR_LOG4J_PROPERTIES = os.path.join(PERSISTENT_ROOT, "trogdor-coordinator-log4j.properties")
-    AGENT_LOG4J_PROPERTIES = os.path.join(PERSISTENT_ROOT, "trogdor-agent-log4j.properties")
+    COORDINATOR_LOG4J_PROPERTIES = os.path.join(PERSISTENT_ROOT, "trogdor-coordinator-log4j2.properties")
+    AGENT_LOG4J_PROPERTIES = os.path.join(PERSISTENT_ROOT, "trogdor-agent-log4j2.properties")
     CONFIG_PATH = os.path.join(PERSISTENT_ROOT, "trogdor.conf")
     DEFAULT_AGENT_PORT=8888
     DEFAULT_COORDINATOR_PORT=8889
@@ -142,7 +142,7 @@ class TrogdorService(KafkaPathResolverMixin, Service):
 
     def _start_coordinator_node(self, node):
         node.account.create_file(TrogdorService.COORDINATOR_LOG4J_PROPERTIES,
-                                 self.render('log4j.properties',
+                                 self.render('log4j2.properties',
                                              log_path=TrogdorService.COORDINATOR_LOG))
         self._start_trogdor_daemon("coordinator", TrogdorService.COORDINATOR_STDOUT_STDERR,
                                    TrogdorService.COORDINATOR_LOG4J_PROPERTIES,
@@ -151,7 +151,7 @@ class TrogdorService(KafkaPathResolverMixin, Service):
 
     def _start_agent_node(self, node):
         node.account.create_file(TrogdorService.AGENT_LOG4J_PROPERTIES,
-                                 self.render('log4j.properties',
+                                 self.render('log4j2.properties',
                                              log_path=TrogdorService.AGENT_LOG))
         self._start_trogdor_daemon("agent", TrogdorService.AGENT_STDOUT_STDERR,
                                    TrogdorService.AGENT_LOG4J_PROPERTIES,

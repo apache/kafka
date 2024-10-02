@@ -17,7 +17,7 @@
 base_dir=$(dirname $0)
 
 if [ "x$KAFKA_LOG4J_OPTS" = "x" ]; then
-    export KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/../config/kraft-log4j.properties"
+    export KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/../config/kraft-log4j2.properties"
 fi
 
 if [ "x$KAFKA_HEAP_OPTS" = "x" ]; then

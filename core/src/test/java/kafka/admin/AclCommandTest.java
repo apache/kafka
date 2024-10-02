@@ -40,7 +40,7 @@ import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
 import org.apache.kafka.test.TestUtils;
 
-import org.apache.log4j.Level;
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -254,7 +254,7 @@ public class AclCommandTest {
 
     @ClusterTest
     public void testAclCliWithClientId(ClusterInstance cluster) throws IOException, InterruptedException {
-        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(AclCommandTest.class)) {
             appender.setClassLogger(AppInfoParser.class, Level.WARN);
             testAclCli(cluster, adminArgs(cluster.bootstrapServers(), Optional.of(TestUtils.tempFile("client.id=my-client"))));
             assertEquals(0, appender.getEvents().stream()
@@ -266,7 +266,7 @@ public class AclCommandTest {
 
     @ClusterTest
     public void testAclCliWithClientIdAndBootstrapController(ClusterInstance cluster) throws IOException, InterruptedException {
-        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(AclCommandTest.class)) {
             appender.setClassLogger(AppInfoParser.class, Level.WARN);
             testAclCli(cluster, adminArgsWithBootstrapController(cluster.bootstrapControllers(), Optional.of(TestUtils.tempFile("client.id=my-client"))));
             assertEquals(0, appender.getEvents().stream()

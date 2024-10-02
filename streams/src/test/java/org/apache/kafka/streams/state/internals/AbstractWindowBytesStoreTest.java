@@ -971,7 +971,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() {
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(AbstractWindowBytesStoreTest.class);
              final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore.fetch(-1, 1, 0L, 10L)) {
             assertFalse(iterator.hasNext());
 

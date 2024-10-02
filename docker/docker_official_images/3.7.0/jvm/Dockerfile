@@ -76,8 +76,8 @@ RUN set -eux ; \
     chown appuser:appuser -R /usr/logs /opt/kafka /mnt/shared/config; \
     chown appuser:root -R /var/lib/kafka /etc/kafka/secrets /etc/kafka; \
     chmod -R ug+w /etc/kafka /var/lib/kafka /etc/kafka/secrets; \
-    cp /opt/kafka/config/log4j.properties /etc/kafka/docker/log4j.properties; \
-    cp /opt/kafka/config/tools-log4j.properties /etc/kafka/docker/tools-log4j.properties; \
+    cp /opt/kafka/config/log4j2.properties /etc/kafka/docker/log4j2.properties; \
+    cp /opt/kafka/config/tools-log4j2.properties /etc/kafka/docker/tools-log4j2.properties; \
     cp /opt/kafka/config/kraft/server.properties /etc/kafka/docker/server.properties; \
     rm kafka.tgz kafka.tgz.asc KEYS; \
     apk del wget gpg gpg-agent; \

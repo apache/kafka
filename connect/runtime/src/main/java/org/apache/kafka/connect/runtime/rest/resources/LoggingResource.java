@@ -21,7 +21,7 @@ import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 
-import org.apache.log4j.Level;
+import org.apache.logging.log4j.Level;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;

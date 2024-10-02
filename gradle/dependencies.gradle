@@ -162,7 +162,9 @@ versions += [
   // Also make sure the compression levels in org.apache.kafka.common.record.CompressionType are still valid
   zstd: "1.5.6-6",
   junitPlatform: "1.10.2",
-  hdrHistogram: "2.2.2"
+  hdrHistogram: "2.2.2",
+  log4j2: "2.24.1",
+  bndlib: "7.0.0"
 ]
 
 libs += [
@@ -261,5 +263,11 @@ libs += [
   mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",
   zstd: "com.github.luben:zstd-jni:$versions.zstd",
   httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient",
-  hdrHistogram: "org.hdrhistogram:HdrHistogram:$versions.hdrHistogram"
+  hdrHistogram: "org.hdrhistogram:HdrHistogram:$versions.hdrHistogram",
+  log4j2Api: "org.apache.logging.log4j:log4j-api:$versions.log4j2",
+  log4j2Core: "org.apache.logging.log4j:log4j-core:$versions.log4j2",
+  log4j2CoreTest: "org.apache.logging.log4j:log4j-core-test:$versions.log4j2",
+  slf4jLog4j2: "org.apache.logging.log4j:log4j-slf4j-impl:$versions.log4j2",
+  spotbugs: "com.github.spotbugs:spotbugs-annotations:$versions.spotbugs",
+  bndlib:"biz.aQute.bnd:biz.aQute.bndlib:$versions.bndlib"
 ]

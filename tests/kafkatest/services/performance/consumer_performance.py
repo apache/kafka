@@ -49,7 +49,7 @@ class ConsumerPerformanceService(PerformanceService):
     STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "consumer_performance.stdout")
     STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "consumer_performance.stderr")
     LOG_FILE = os.path.join(LOG_DIR, "consumer_performance.log")
-    LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
+    LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j2.properties")
     CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "consumer.properties")
 
     logs = {
@@ -160,7 +160,7 @@ class ConsumerPerformanceService(PerformanceService):
     def _worker(self, idx, node):
         node.account.ssh("mkdir -p %s" % ConsumerPerformanceService.PERSISTENT_ROOT, allow_fail=False)
 
-        log_config = self.render('tools_log4j.properties', log_file=ConsumerPerformanceService.LOG_FILE)
+        log_config = self.render('tools_log4j2.properties', log_file=ConsumerPerformanceService.LOG_FILE)
         node.account.create_file(ConsumerPerformanceService.LOG4J_CONFIG, log_config)
         node.account.create_file(ConsumerPerformanceService.CONFIG_FILE, str(self.security_config))
         self.security_config.setup_node(node)

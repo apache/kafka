@@ -228,7 +228,7 @@ fi
 # Log4j settings
 if [ -z "$KAFKA_LOG4J_OPTS" ]; then
   # Log to console. This is a tool.
-  LOG4J_DIR="$base_dir/config/tools-log4j.properties"
+  LOG4J_DIR="$base_dir/config/tools-log4j2.properties"
   # If Cygwin is detected, LOG4J_DIR is converted to Windows format.
   (( WINDOWS_OS_FORMAT )) && LOG4J_DIR=$(cygpath --path --mixed "${LOG4J_DIR}")
   KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:${LOG4J_DIR}"

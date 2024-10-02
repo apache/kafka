@@ -113,6 +113,14 @@
     <allow pkg="org.apache.kafka.clients.consumer"/>
     <allow pkg="org.apache.kafka.coordinator.group"/>
     <allow pkg="org.apache.kafka.coordinator.transaction"/>
+    <subpackage name="annotation">
+      <allow pkg="kafka.test"/>
+    </subpackage>
+    <subpackage name="junit">
+      <allow pkg="kafka.test"/>
+      <allow pkg="org.apache.kafka.clients"/>
+      <allow pkg="org.apache.kafka.metadata" />
+    </subpackage>
     <subpackage name="server">
       <allow pkg="kafka.test" />
     </subpackage>
@@ -130,7 +138,7 @@
     <allow pkg="org.apache.kafka.security"/>
     <allow pkg="org.apache.kafka.server"/>
     <allow pkg="org.apache.kafka.test"/>
-    <allow pkg="org.apache.log4j"/>
+    <allow pkg="org.apache.logging.log4j"/>
     <allow pkg="org.apache.kafka.common.test"/>
     <allow pkg="org.apache.kafka.common.test.api"/>
     <allow pkg="org.apache.kafka.common.test.api"/>
@@ -140,5 +148,8 @@
     <allow pkg="org.apache.commons" />
     <allow pkg="org.apache.directory" />
     <allow pkg="org.apache.mina.core.service" />
+    <allow pkg="org.apache.kafka.clients" />
+    <allow pkg="org.apache.kafka.clients.admin" />
+    <allow pkg="org.apache.kafka.test" />
   </subpackage>
 </import-control>
