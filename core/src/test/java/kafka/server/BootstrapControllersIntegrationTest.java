@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.test.server;
+package kafka.server;
 
 import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterConfigProperty;
