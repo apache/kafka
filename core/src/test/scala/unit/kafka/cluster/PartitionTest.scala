@@ -44,7 +44,7 @@ import org.mockito.invocation.InvocationOnMock
 import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
 import java.util.Optional
-import java.util.concurrent.{CountDownLatch, Semaphore}
+import java.util.concurrent.{ConcurrentHashMap, CountDownLatch, Semaphore}
 import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.compress.Compression
@@ -58,10 +58,11 @@ import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToContro
 import org.apache.kafka.server.common.{MetadataVersion, RequestLocal}
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams}
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, EpochEntry, FetchIsolation, FetchParams, LogAppendInfo, LogDirFailureChannel, LogOffsetMetadata, LogReadInfo, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, EpochEntry, LogAppendInfo, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogReadInfo, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -454,12 +455,14 @@ class PartitionTest extends AbstractPartitionTest {
           mockTime.scheduler,
           mockTime,
           logDirFailureChannel,
-          hadCleanShutdown = true,
-          segments = segments,
-          logStartOffsetCheckpoint = 0L,
-          recoveryPointCheckpoint = 0L,
+          true,
+          segments,
+          0L,
+          0L,
           leaderEpochCache.asJava,
-          producerStateManager
+          producerStateManager,
+          new ConcurrentHashMap[String, Integer],
+          false
         ).load()
         val localLog = new LocalLog(log.dir, log.config, segments, offsets.recoveryPoint,
           offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, log.topicPartition,
@@ -749,7 +752,7 @@ class PartitionTest extends AbstractPartitionTest {
     val timestampAndOffsetOpt = partition.fetchOffsetForTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP,
       isolationLevel = None,
       currentLeaderEpoch = Optional.empty(),
-      fetchOnlyFromLeader = true)
+      fetchOnlyFromLeader = true).timestampAndOffsetOpt
 
     assertTrue(timestampAndOffsetOpt.isDefined)
 
@@ -803,12 +806,18 @@ class PartitionTest extends AbstractPartitionTest {
 
     def fetchOffsetsForTimestamp(timestamp: Long, isolation: Option[IsolationLevel]): Either[ApiException, Option[TimestampAndOffset]] = {
       try {
-        Right(partition.fetchOffsetForTimestamp(
+        val offsetResultHolder = partition.fetchOffsetForTimestamp(
           timestamp = timestamp,
           isolationLevel = isolation,
           currentLeaderEpoch = Optional.of(partition.getLeaderEpoch),
           fetchOnlyFromLeader = true
-        ))
+        )
+        val timestampAndOffsetOpt = offsetResultHolder.timestampAndOffsetOpt
+        if (timestampAndOffsetOpt.isEmpty || offsetResultHolder.lastFetchableOffset.isDefined &&
+          timestampAndOffsetOpt.get.offset >= offsetResultHolder.lastFetchableOffset.get) {
+          offsetResultHolder.maybeOffsetsError.map(e => throw e)
+        }
+        Right(timestampAndOffsetOpt)
       } catch {
         case e: ApiException => Left(e)
       }
@@ -1013,7 +1022,7 @@ class PartitionTest extends AbstractPartitionTest {
       val res = partition.fetchOffsetForTimestamp(timestamp,
         isolationLevel = isolationLevel,
         currentLeaderEpoch = Optional.empty(),
-        fetchOnlyFromLeader = true)
+        fetchOnlyFromLeader = true).timestampAndOffsetOpt
       assertTrue(res.isDefined)
       res.get
     }

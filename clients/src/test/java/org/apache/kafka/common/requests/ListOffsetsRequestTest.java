@@ -64,6 +64,7 @@ public class ListOffsetsRequestTest {
                 .setReplicaId(-1);
         ListOffsetsRequest request = ListOffsetsRequest.parse(MessageUtil.toByteBuffer(data, (short) 0), (short) 0);
         assertEquals(Collections.singleton(new TopicPartition("topic", 0)), request.duplicatePartitions());
+        assertEquals(0, data.timeoutMs()); // default value
     }
 
     @Test

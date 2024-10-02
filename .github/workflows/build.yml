@@ -20,16 +20,16 @@ on:
     inputs:
       gradle-cache-read-only:
         description: "Should the Gradle cache be read-only?"
-        default: "true"
-        type: string
+        default: true
+        type: boolean
       gradle-cache-write-only:
         description: "Should the Gradle cache be write-only?"
-        default: "false"
-        type: string
+        default: false
+        type: boolean
       is-public-fork:
         description: "Is this CI run from a public fork?"
-        default: "true"
-        type: string
+        default: true
+        type: boolean
 
 jobs:
   validate:
@@ -39,11 +39,19 @@ jobs:
       matrix:
         java: [ 21, 17, 11, 8 ]
     name: Compile and Check Java ${{ matrix.java }}
+    outputs:
+      is-draft: ${{ steps.check-draft-pr.outputs.is-draft }}
     steps:
       - name: Env
         run: printenv
         env:
           GITHUB_CONTEXT: ${{ toJson(github) }}
+      - name: Check for Draft PR
+        id: check-draft-pr
+        if: |
+          github.event_name == 'pull_request' && 
+          github.event.pull_request.draft
+        run: echo "is-draft=true" >> "$GITHUB_OUTPUT"
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -66,7 +74,7 @@ jobs:
         # --no-scan:      For public fork PRs, we won't attempt to publish the scan
         run: |
           ./gradlew --build-cache --info  \
-          ${{ inputs.is-public-fork == 'true' && '--no-scan' || '--scan' }} \
+          ${{ inputs.is-public-fork && '--no-scan' || '--scan' }} \
           check -x test
       - name: Archive check reports
         if: always()
@@ -83,9 +91,16 @@ jobs:
         run: python .github/scripts/checkstyle.py
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
+      - name: Annotate Rat errors
+        # Avoid duplicate annotations, only run on java 21
+        if: ${{ failure() && matrix.java == '21' }}
+        run: python .github/scripts/rat.py
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
 
   test:
     needs: validate
+    if: ${{ ! needs.validate.outputs.is-draft }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -107,7 +122,7 @@ jobs:
       - name: Test
         # Gradle flags
         # --build-cache:  Let Gradle restore the build cache
-        # --scan:         Attempt to publish build scans in PRs. This will only work on PRs from apache/kafka, not public forks.
+        # --no-scan:      Don't attempt to publish the scan yet. We want to archive it first.
         # --continue:     Keep running even if a test fails
         # -PcommitId      Prevent the Git SHA being written into the jar files (which breaks caching)
         id: junit-test
@@ -116,8 +131,7 @@ jobs:
         run: |
           set +e
           ./.github/scripts/thread-dump.sh &
-          timeout ${TIMEOUT_MINUTES}m ./gradlew --build-cache --continue \
-          ${{ inputs.is-public-fork == 'true' && '--no-scan' || '--scan' }} \
+          timeout ${TIMEOUT_MINUTES}m ./gradlew --build-cache --continue --no-scan \
           -PtestLoggingEvents=started,passed,skipped,failed \
           -PmaxParallelForks=2 \
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \

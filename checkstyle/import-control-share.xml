@@ -33,6 +33,7 @@
   <!-- anyone can use public classes -->
   <allow pkg="org.apache.kafka.common" exact-match="true" />
   <allow pkg="org.apache.kafka.common.utils" />
+  <allow pkg="org.apache.kafka.common.annotation" />
 
   <!-- protocol, records and request/response utilities -->
   <allow pkg="org.apache.kafka.common.message" />
@@ -42,6 +43,10 @@
   <subpackage name="server">
     <subpackage name="share">
       <allow pkg="org.apache.kafka.server.share" />
+
+      <subpackage name="fetch">
+        <allow class="org.apache.kafka.server.storage.log.FetchParams"/>
+      </subpackage>
     </subpackage>
   </subpackage>
 
