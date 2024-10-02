@@ -134,7 +134,8 @@ jobs:
           timeout ${TIMEOUT_MINUTES}m ./gradlew --build-cache --continue --no-scan \
           -PtestLoggingEvents=started,passed,skipped,failed \
           -PmaxParallelForks=2 \
-          -PmaxTestRetries=3 -PmaxTestRetryFailures=20 \
+          -PmaxTestRetries=1 -PmaxTestRetryFailures=3 \
+          -PmaxQuarantineTestRetries=3 -PmaxQuarantineTestRetryFailures=20 \
           -PcommitId=xxxxxxxxxxxxxxxx \
           quarantinedTest test
           exitcode="$?"
