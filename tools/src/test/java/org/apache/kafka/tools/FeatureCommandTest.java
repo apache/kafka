@@ -212,10 +212,10 @@ public class FeatureCommandTest {
         namespace.put("dry_run", false);
         String upgradeOutput = ToolsTestUtils.captureStandardOut(() -> {
             Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleUpgrade(new Namespace(namespace), buildAdminClient()));
-            assertTrue(t.getMessage().contains("1 out of 2 operation(s) failed."));
+            assertTrue(t.getMessage().contains("2 out of 2 operation(s) failed."));
         });
-        assertEquals(format("foo.bar was upgraded to 6.%n" +
-            "Could not upgrade metadata.version to 5. Can't upgrade to lower version."), upgradeOutput);
+        assertEquals(format("Could not upgrade foo.bar to 6. Invalid update version 5 for feature metadata.version. Can't upgrade to lower version.%n" +
+            "Could not upgrade metadata.version to 5. Invalid update version 5 for feature metadata.version. Can't upgrade to lower version."), upgradeOutput);
     }
 
     @Test
@@ -226,10 +226,10 @@ public class FeatureCommandTest {
         namespace.put("dry_run", true);
         String upgradeOutput = ToolsTestUtils.captureStandardOut(() -> {
             Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleUpgrade(new Namespace(namespace), buildAdminClient()));
-            assertTrue(t.getMessage().contains("1 out of 2 operation(s) failed."));
+            assertTrue(t.getMessage().contains("2 out of 2 operation(s) failed."));
         });
-        assertEquals(format("foo.bar can be upgraded to 6.%n" +
-            "Can not upgrade metadata.version to 5. Can't upgrade to lower version."), upgradeOutput);
+        assertEquals(format("Can not upgrade foo.bar to 6. Invalid update version 5 for feature metadata.version. Can't upgrade to lower version.%n" +
+            "Can not upgrade metadata.version to 5. Invalid update version 5 for feature metadata.version. Can't upgrade to lower version."), upgradeOutput);
     }
 
     @Test
@@ -240,10 +240,10 @@ public class FeatureCommandTest {
         namespace.put("dry_run", false);
         String downgradeOutput = ToolsTestUtils.captureStandardOut(() -> {
             Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleDowngrade(new Namespace(namespace), buildAdminClient()));
-            assertTrue(t.getMessage().contains("1 out of 2 operation(s) failed."));
+            assertTrue(t.getMessage().contains("2 out of 2 operation(s) failed."));
         });
-        assertEquals(format("foo.bar was downgraded to 1.%n" +
-            "Could not downgrade metadata.version to 7. Can't downgrade to newer version."), downgradeOutput);
+        assertEquals(format("Could not downgrade foo.bar to 1. Invalid update version 7 for feature metadata.version. Can't downgrade to newer version.%n" +
+            "Could not downgrade metadata.version to 7. Invalid update version 7 for feature metadata.version. Can't downgrade to newer version."), downgradeOutput);
     }
 
     @Test
@@ -254,10 +254,10 @@ public class FeatureCommandTest {
         namespace.put("dry_run", true);
         String downgradeOutput = ToolsTestUtils.captureStandardOut(() -> {
             Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleDowngrade(new Namespace(namespace), buildAdminClient()));
-            assertTrue(t.getMessage().contains("1 out of 2 operation(s) failed."));
+            assertTrue(t.getMessage().contains("2 out of 2 operation(s) failed."));
         });
-        assertEquals(format("foo.bar can be downgraded to 1.%n" +
-            "Can not downgrade metadata.version to 7. Can't downgrade to newer version."), downgradeOutput);
+        assertEquals(format("Can not downgrade foo.bar to 1. Invalid update version 7 for feature metadata.version. Can't downgrade to newer version.%n" +
+            "Can not downgrade metadata.version to 7. Invalid update version 7 for feature metadata.version. Can't downgrade to newer version."), downgradeOutput);
     }
 
     @Test
@@ -267,11 +267,11 @@ public class FeatureCommandTest {
         namespace.put("dry_run", false);
         String disableOutput = ToolsTestUtils.captureStandardOut(() -> {
             Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleDisable(new Namespace(namespace), buildAdminClient()));
-            assertTrue(t.getMessage().contains("1 out of 3 operation(s) failed."));
+            assertTrue(t.getMessage().contains("3 out of 3 operation(s) failed."));
         });
-        assertEquals(format("foo.bar was disabled.%n" +
-            "Could not disable metadata.version. Can't downgrade below 4%n" +
-            "quux was disabled."), disableOutput);
+        assertEquals(format("Could not disable foo.bar. Invalid update version 0 for feature metadata.version. Can't downgrade below 4%n" +
+            "Could not disable metadata.version. Invalid update version 0 for feature metadata.version. Can't downgrade below 4%n" +
+            "Could not disable quux. Invalid update version 0 for feature metadata.version. Can't downgrade below 4"), disableOutput);
     }
 
     @Test
@@ -281,11 +281,11 @@ public class FeatureCommandTest {
         namespace.put("dry_run", true);
         String disableOutput = ToolsTestUtils.captureStandardOut(() -> {
             Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleDisable(new Namespace(namespace), buildAdminClient()));
-            assertTrue(t.getMessage().contains("1 out of 3 operation(s) failed."));
+            assertTrue(t.getMessage().contains("3 out of 3 operation(s) failed."));
         });
-        assertEquals(format("foo.bar can be disabled.%n" +
-            "Can not disable metadata.version. Can't downgrade below 4%n" +
-            "quux can be disabled."), disableOutput);
+        assertEquals(format("Can not disable foo.bar. Invalid update version 0 for feature metadata.version. Can't downgrade below 4%n" +
+            "Can not disable metadata.version. Invalid update version 0 for feature metadata.version. Can't downgrade below 4%n" +
+            "Can not disable quux. Invalid update version 0 for feature metadata.version. Can't downgrade below 4"), disableOutput);
     }
 
     @Test
