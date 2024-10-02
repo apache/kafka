@@ -155,7 +155,7 @@ public class KStreamAggregationIntegrationTest {
     @AfterEach
     public void whenShuttingDown() throws Exception {
         if (kafkaStreams != null) {
-            kafkaStreams.close();
+            kafkaStreams.close(Duration.ofSeconds(60));
         }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }

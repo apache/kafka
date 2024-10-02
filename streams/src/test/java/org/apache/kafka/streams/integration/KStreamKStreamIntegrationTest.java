@@ -107,7 +107,7 @@ public class KStreamKStreamIntegrationTest {
     @AfterEach
     public void after() throws IOException {
         if (streams != null) {
-            streams.close();
+            streams.close(Duration.ofSeconds(60));
             streams = null;
         }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfig);

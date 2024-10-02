@@ -33,6 +33,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
@@ -63,7 +64,7 @@ public class NamedTopologyTest {
 
     @AfterEach
     public void cleanup() {
-        streams.close();
+        streams.close(Duration.ofSeconds(60));
     }
 
     private static Properties configProps() {

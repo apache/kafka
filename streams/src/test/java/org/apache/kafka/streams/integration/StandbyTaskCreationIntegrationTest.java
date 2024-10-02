@@ -43,6 +43,7 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Properties;
 import java.util.function.Predicate;
 
@@ -82,8 +83,8 @@ public class StandbyTaskCreationIntegrationTest {
 
     @AfterEach
     public void after() {
-        client1.close();
-        client2.close();
+        client1.close(Duration.ofSeconds(60));
+        client2.close(Duration.ofSeconds(60));
     }
 
     private Properties streamsConfiguration() {

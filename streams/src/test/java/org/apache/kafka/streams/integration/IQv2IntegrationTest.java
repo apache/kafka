@@ -167,7 +167,7 @@ public class IQv2IntegrationTest {
 
     @AfterEach
     public void afterTest() {
-        kafkaStreams.close();
+        kafkaStreams.close(Duration.ofSeconds(60));
         kafkaStreams.cleanUp();
     }
 

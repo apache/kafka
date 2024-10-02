@@ -101,7 +101,7 @@ public class OptimizedKTableIntegrationTest {
     @AfterEach
     public void after() {
         for (final KafkaStreams kafkaStreams : streamsToCleanup) {
-            kafkaStreams.close();
+            kafkaStreams.close(Duration.ofSeconds(60));
         }
     }
 

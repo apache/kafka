@@ -48,6 +48,7 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -87,7 +88,7 @@ public class ConsistencyVectorIntegrationTest {
     @AfterEach
     public void after() {
         for (final KafkaStreams kafkaStreams : streamsToCleanup) {
-            kafkaStreams.close();
+            kafkaStreams.close(Duration.ofSeconds(60));
         }
         cluster.stop();
     }

@@ -54,6 +54,7 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -158,15 +159,15 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
     @AfterEach
     public void after() throws IOException {
         if (streams != null) {
-            streams.close();
+            streams.close(Duration.ofSeconds(60));
             streams = null;
         }
         if (streamsTwo != null) {
-            streamsTwo.close();
+            streamsTwo.close(Duration.ofSeconds(60));
             streamsTwo = null;
         }
         if (streamsThree != null) {
-            streamsThree.close();
+            streamsThree.close(Duration.ofSeconds(60));
             streamsThree = null;
         }
         IntegrationTestUtils.purgeLocalStreamsState(asList(streamsConfig, streamsConfigTwo, streamsConfigThree));

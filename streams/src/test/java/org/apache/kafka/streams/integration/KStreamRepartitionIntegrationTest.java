@@ -138,7 +138,7 @@ public class KStreamRepartitionIntegrationTest {
     public void whenShuttingDown() throws IOException {
         kafkaStreamsInstances.stream()
                              .filter(Objects::nonNull)
-                             .forEach(KafkaStreams::close);
+                             .forEach(ks -> ks.close(Duration.ofSeconds(60)));
 
         Utils.delete(testFolder);
     }

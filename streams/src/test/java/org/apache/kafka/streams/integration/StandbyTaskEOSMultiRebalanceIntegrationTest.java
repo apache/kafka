@@ -111,13 +111,13 @@ public class StandbyTaskEOSMultiRebalanceIntegrationTest {
     @AfterEach
     public void cleanUp() {
         if (streamInstanceOne != null) {
-            streamInstanceOne.close();
+            streamInstanceOne.close(Duration.ofSeconds(60));
         }
         if (streamInstanceTwo != null) {
-            streamInstanceTwo.close();
+            streamInstanceTwo.close(Duration.ofSeconds(60));
         }
         if (streamInstanceThree != null) {
-            streamInstanceThree.close();
+            streamInstanceThree.close(Duration.ofSeconds(60));
         }
     }
 

@@ -119,7 +119,7 @@ public class StoreQueryIntegrationTest {
     @AfterEach
     public void after() {
         for (final KafkaStreams kafkaStreams : streamsToCleanup) {
-            kafkaStreams.close();
+            kafkaStreams.close(Duration.ofSeconds(60));
         }
         streamsToCleanup.clear();
     }

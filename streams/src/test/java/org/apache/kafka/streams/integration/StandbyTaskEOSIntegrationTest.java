@@ -112,13 +112,13 @@ public class StandbyTaskEOSIntegrationTest {
     @AfterEach
     public void cleanUp() {
         if (streamInstanceOne != null) {
-            streamInstanceOne.close();
+            streamInstanceOne.close(Duration.ofSeconds(60));
         }
         if (streamInstanceTwo != null) {
-            streamInstanceTwo.close();
+            streamInstanceTwo.close(Duration.ofSeconds(60));
         }
         if (streamInstanceOneRecovery != null) {
-            streamInstanceOneRecovery.close();
+            streamInstanceOneRecovery.close(Duration.ofSeconds(60));
         }
     }
 
