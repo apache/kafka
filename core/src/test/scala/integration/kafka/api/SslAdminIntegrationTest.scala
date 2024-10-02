@@ -343,7 +343,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     val config = controllerServers.map { s =>
       val listener = s.config.effectiveAdvertisedControllerListeners
         .find(_.listenerName == controllerListenerName)
-        .getOrElse(sys.error(s"Could not find listener with name $controllerListenerName"))
+        .getOrElse(throw new IllegalArgumentException(s"Could not find listener with name $controllerListenerName"))
       Utils.formatAddress(listener.host, s.socketServer.boundPort(controllerListenerName))
     }.mkString(",")
 
