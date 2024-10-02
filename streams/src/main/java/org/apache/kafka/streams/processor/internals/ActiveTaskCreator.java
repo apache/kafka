@@ -180,7 +180,7 @@ class ActiveTaskCreator {
         return new RecordCollectorImpl(
             logContext,
             taskId,
-            this.streamsProducer,
+            streamsProducer,
             applicationConfig.productionExceptionHandler(),
             streamsMetrics,
             topology
