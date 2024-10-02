@@ -65,7 +65,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     Map[String, Object](AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers()).asJava
 
   override def generateConfigs: collection.Seq[KafkaConfig] = {
-    val configs = TestUtils.createBrokerConfigs(brokerCount, zkConnectOrNull)
+    val configs = TestUtils.createBrokerConfigs(brokerCount, null)
     configs.foreach(overrideNodeConfigs)
     configs.map(KafkaConfig.fromProps)
   }
@@ -81,7 +81,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testValidAlterConfigs(quorum: String): Unit = {
     client = Admin.create(createConfig)
     // Create topics
@@ -100,7 +100,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testInvalidAlterConfigs(quorum: String): Unit = {
     client = Admin.create(createConfig)
     PlaintextAdminIntegrationTest.checkInvalidAlterConfigs(this, client)
@@ -108,7 +108,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
   @nowarn("cat=deprecation")
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testInvalidAlterConfigsDueToPolicy(quorum: String): Unit = {
     client = Admin.create(createConfig)
 
