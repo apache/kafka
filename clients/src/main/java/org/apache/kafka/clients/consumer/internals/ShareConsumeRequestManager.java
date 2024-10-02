@@ -91,7 +91,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     private final long retryBackoffMaxMs;
     private boolean closing = false;
     private final CompletableFuture<Void> closeFuture;
-    private boolean isAcknowledgeCommitCallbackHandlerConfigured = false;
+    private boolean isAcknowledgementCommitCallbackRegistered = false;
 
     ShareConsumeRequestManager(final Time time,
                                final LogContext logContext,
@@ -206,6 +206,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             log.debug("Fetch more data");
             fetchMoreRecords = true;
         }
+
         acknowledgementsMap.forEach((tip, acks) -> fetchAcknowledgementsMap.merge(tip, acks, Acknowledgements::merge));
     }
 
@@ -271,12 +272,12 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         return !nodesWithPendingRequests.contains(nodeId);
     }
 
-    public void setCallbackHandlerConfig(boolean isAcknowledgeCommitCallbackHandlerConfigured) {
-        this.isAcknowledgeCommitCallbackHandlerConfigured = isAcknowledgeCommitCallbackHandlerConfigured;
+    public void setAcknowledgementCommitCallbackRegistered(boolean isAcknowledgementCommitCallbackRegistered) {
+        this.isAcknowledgementCommitCallbackRegistered = isAcknowledgementCommitCallbackRegistered;
     }
 
     private void maybeSendShareAcknowledgeCommitCallBackEvent(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap) {
-        if (isAcknowledgeCommitCallbackHandlerConfigured) {
+        if (isAcknowledgementCommitCallbackRegistered) {
             ShareAcknowledgementCommitCallbackEvent event = new ShareAcknowledgementCommitCallbackEvent(acknowledgementsMap);
             backgroundEventHandler.add(event);
         }
@@ -876,7 +877,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             ShareAcknowledgeRequest.Builder requestBuilder = sessionHandler.newShareAcknowledgeBuilder(groupId, fetchConfig);
             Node nodeToSend = metadata.fetch().nodeById(nodeId);
 
-            log.info("Building acknowledgements to send : {}", finalAcknowledgementsToSend);
+            log.trace("Building acknowledgements to send : {}", finalAcknowledgementsToSend);
             nodesWithPendingRequests.add(nodeId);
             isProcessed = false;
 

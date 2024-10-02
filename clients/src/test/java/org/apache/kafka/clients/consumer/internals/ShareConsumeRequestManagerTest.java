@@ -229,6 +229,8 @@ public class ShareConsumeRequestManagerTest {
     @Test
     public void testMultipleFetches() {
         buildRequestManager();
+        // Enabling the config so that background event is sent when the acknowledgement response is received.
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
         assignFromSubscribed(Collections.singleton(tp0));
 
@@ -291,6 +293,8 @@ public class ShareConsumeRequestManagerTest {
     @Test
     public void testCommitSync() {
         buildRequestManager();
+        // Enabling the config so that background event is sent when the acknowledgement response is received.
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
         assignFromSubscribed(Collections.singleton(tp0));
 
@@ -322,6 +326,8 @@ public class ShareConsumeRequestManagerTest {
     @Test
     public void testCommitAsync() {
         buildRequestManager();
+        // Enabling the config so that background event is sent when the acknowledgement response is received.
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
         assignFromSubscribed(Collections.singleton(tp0));
 
@@ -353,6 +359,8 @@ public class ShareConsumeRequestManagerTest {
     @Test
     public void testAcknowledgeOnClose() {
         buildRequestManager();
+        // Enabling the config so that background event is sent when the acknowledgement response is received.
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
         assignFromSubscribed(Collections.singleton(tp0));
 
@@ -394,6 +402,8 @@ public class ShareConsumeRequestManagerTest {
     @Test
     public void testAcknowledgeOnCloseWithPendingCommitAsync() {
         buildRequestManager();
+        // Enabling the config so that background event is sent when the acknowledgement response is received.
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
         assignFromSubscribed(Collections.singleton(tp0));
 
@@ -577,6 +587,7 @@ public class ShareConsumeRequestManagerTest {
     @Test
     public void testCallbackHandlerConfig() throws InterruptedException {
         buildRequestManager();
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
         assignFromSubscribed(Collections.singleton(tp0));
 
@@ -604,8 +615,8 @@ public class ShareConsumeRequestManagerTest {
 
         completedAcknowledgements.clear();
 
-        // Setting the boolean to false, indicating there is no callback handler configured.
-        shareConsumeRequestManager.setCallbackHandlerConfig(false);
+        // Setting the boolean to false, indicating there is no callback handler registered.
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(false);
 
         Acknowledgements acknowledgements2 = Acknowledgements.empty();
         acknowledgements2.add(3L, AcknowledgeType.ACCEPT);
@@ -1114,7 +1125,6 @@ public class ShareConsumeRequestManagerTest {
                 backgroundEventHandler,
                 metricsManager,
                 shareFetchCollector));
-        shareConsumeRequestManager.setCallbackHandlerConfig(true);
     }
 
     private void buildDependencies(MetricConfig metricConfig,

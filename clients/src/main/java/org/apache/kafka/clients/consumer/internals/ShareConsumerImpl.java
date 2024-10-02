@@ -40,7 +40,7 @@ import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeAsyncEvent;
-import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeCommitCallbackHandlerEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackRegistrationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeSyncEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackEvent;
@@ -764,14 +764,18 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             if (callback != null) {
+                if (acknowledgementCommitCallbackHandler == null) {
+                    ShareAcknowledgementCommitCallbackRegistrationEvent event = new ShareAcknowledgementCommitCallbackRegistrationEvent(true);
+                    applicationEventHandler.add(event);
+                }
                 acknowledgementCommitCallbackHandler = new AcknowledgementCommitCallbackHandler(callback);
-                ShareAcknowledgeCommitCallbackHandlerEvent event = new ShareAcknowledgeCommitCallbackHandlerEvent(true);
-                applicationEventHandler.add(event);
             } else {
+                if (acknowledgementCommitCallbackHandler != null) {
+                    ShareAcknowledgementCommitCallbackRegistrationEvent event = new ShareAcknowledgementCommitCallbackRegistrationEvent(true);
+                    applicationEventHandler.add(event);
+                }
                 completedAcknowledgements.clear();
                 acknowledgementCommitCallbackHandler = null;
-                ShareAcknowledgeCommitCallbackHandlerEvent event = new ShareAcknowledgeCommitCallbackHandlerEvent(true);
-                applicationEventHandler.add(event);
             }
         } finally {
             release();
