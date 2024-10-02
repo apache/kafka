@@ -108,6 +108,7 @@ class ControllerApis(
         case ApiKeys.BROKER_HEARTBEAT => handleBrokerHeartBeatRequest(request)
         case ApiKeys.UNREGISTER_BROKER => handleUnregisterBroker(request)
         case ApiKeys.ALTER_CLIENT_QUOTAS => handleAlterClientQuotas(request)
+        case ApiKeys.DESCRIBE_CLIENT_QUOTAS => handleDescribeClientQuotas(request)
         case ApiKeys.INCREMENTAL_ALTER_CONFIGS => handleIncrementalAlterConfigs(request)
         case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => handleAlterPartitionReassignments(request)
         case ApiKeys.LIST_PARTITION_REASSIGNMENTS => handleListPartitionReassignments(request)
@@ -710,6 +711,30 @@ class ControllerApis(
         }
       }
   }
+
+  def handleDescribeClientQuotas(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val describeClientQuotasRequest = request.body[DescribeClientQuotasRequest]
+    try {
+      authHelper.authorizeClusterOperation(request, DESCRIBE_CONFIGS)
+    } catch {
+      case _: ClusterAuthorizationException =>
+        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+          describeClientQuotasRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
+    }
+    val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
+      OptionalLong.empty())
+
+    controller.describeClientQuotas(context, describeClientQuotasRequest.filter())
+      .handle[Unit] { (results, exception) =>
+        if (exception != null) {
+          requestHelper.handleError(request, exception)
+        } else {
+          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+            DescribeClientQuotasResponse.fromQuotaEntities(results, requestThrottleMs))
+        }
+      }
+  }
+
 
   def handleIncrementalAlterConfigs(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val response = new IncrementalAlterConfigsResponseData()

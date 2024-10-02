@@ -76,6 +76,11 @@ public class ClientQuotaControlManagerTest {
     }
 
     @Test
+    public void testDescribeQuota() {
+        // TODO:
+    }
+
+    @Test
     public void testInvalidQuotaKeys() {
         ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().build();
         ClientQuotaEntity entity = entity(ClientQuotaEntity.USER, "user-1");

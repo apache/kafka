@@ -87,6 +87,7 @@ import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
+import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 import org.apache.kafka.common.utils.LogContext;
@@ -2283,6 +2284,16 @@ public final class QuorumController implements Controller {
                 return result;
             }
         });
+    }
+
+    @Override
+    public CompletableFuture<Map<ClientQuotaEntity, Map<String, Double>>> describeClientQuotas(
+            ControllerRequestContext context,
+            ClientQuotaFilter quotaFilter
+    ) {
+        return appendReadEvent("describeClientQuotas", context.deadlineNs(),
+                () -> clientQuotaControlManager.describeClientQuotas(offsetControl.lastCommittedOffset(), quotaFilter)
+        );
     }
 
     @Override
