@@ -348,8 +348,8 @@ class BrokerServer(
       tokenManager.startup()
 
       /* initializing the groupConfigManager */
-      val defaultConfigs: util.Map[String, Integer] = config.groupCoordinatorConfig.extractGroupConfigMap()
-      defaultConfigs.putAll(config.shareGroupConfig.extractGroupConfigMap())
+      val defaultConfigs: util.Map[String, Integer] = config.groupCoordinatorConfig.extractConsumerGroupConfigMap()
+      defaultConfigs.putAll(config.shareGroupConfig.extractShareGroupConfigMap())
       groupConfigManager = new GroupConfigManager(defaultConfigs)
 
       shareCoordinator = createShareCoordinator()

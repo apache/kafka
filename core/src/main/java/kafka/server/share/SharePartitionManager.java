@@ -120,6 +120,7 @@ public class SharePartitionManager implements AutoCloseable {
 
     /**
      * The default record lock duration is the time in milliseconds that a record lock is held for.
+     * This default value can be overridden by a group-specific configuration.
      */
     private final int defaultRecordLockDurationMs;
 

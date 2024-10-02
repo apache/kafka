@@ -32,6 +32,18 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class GroupConfigTest {
 
+    private static final int OFFSET_METADATA_MAX_SIZE = 4096;
+    private static final long OFFSETS_RETENTION_CHECK_INTERVAL_MS = 1000L;
+    private static final int OFFSETS_RETENTION_MINUTES = 24 * 60;
+
+    private static final boolean SHARE_GROUP_ENABLE = true;
+    private static final int SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS = 200;
+    private static final int SHARE_GROUP_DELIVERY_COUNT_LIMIT = 5;
+    private static final short SHARE_GROUP_MAX_GROUPS = 10;
+    private static final int SHARE_GROUP_RECORD_LOCK_DURATION_MS = 30000;
+    private static final int SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS = 15000;
+    private static final int SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS = 60000;
+
     @Test
     public void testFromPropsInvalid() {
         GroupConfig.configNames().forEach(name -> {
@@ -109,11 +121,11 @@ public class GroupConfigTest {
     }
 
     private GroupCoordinatorConfig createGroupCoordinatorConfig() {
-        return GroupCoordinatorConfigTest.createGroupCoordinatorConfig(4096, 1000L, 24 * 60);
+        return GroupCoordinatorConfigTest.createGroupCoordinatorConfig(OFFSET_METADATA_MAX_SIZE, OFFSETS_RETENTION_CHECK_INTERVAL_MS, OFFSETS_RETENTION_MINUTES);
     }
 
     private ShareGroupConfig createShareGroupConfig() {
-        return ShareGroupConfigTest.createShareGroupConfig(true, 200, 5,
-            (short) 10, 30000, 15000, 60000);
+        return ShareGroupConfigTest.createShareGroupConfig(SHARE_GROUP_ENABLE, SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS, SHARE_GROUP_DELIVERY_COUNT_LIMIT,
+            SHARE_GROUP_MAX_GROUPS, SHARE_GROUP_RECORD_LOCK_DURATION_MS, SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS, SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS);
     }
 }

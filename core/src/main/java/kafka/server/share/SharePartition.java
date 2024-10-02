@@ -226,6 +226,7 @@ public class SharePartition {
     private final GroupConfigManager groupConfigManager;
 
     /**
+     * This is the default value which is used unless the group has a configuration which overrides it.
      * The record lock duration is used to limit the duration for which a consumer can acquire a record.
      * Once this time period is elapsed, the record will be made available or archived depending on the delivery count.
      */
@@ -1934,8 +1935,7 @@ public class SharePartition {
         return timer;
     }
 
-    // Visible for Testing
-    public final class AcquisitionLockTimerTask extends TimerTask {
+    private final class AcquisitionLockTimerTask extends TimerTask {
         private final long expirationMs;
         private final String memberId;
         private final long firstOffset;

@@ -152,7 +152,7 @@ public class ShareGroupConfig {
     /**
      * Copy the subset of properties that are relevant to share group.
      */
-    public Map<String, Integer> extractGroupConfigMap() {
+    public Map<String, Integer> extractShareGroupConfigMap() {
         Map<String, Integer> groupProps = new HashMap<>();
         groupProps.put(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, shareGroupRecordLockDurationMs());
         return groupProps;

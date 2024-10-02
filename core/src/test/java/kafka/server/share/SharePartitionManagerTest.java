@@ -135,7 +135,6 @@ public class SharePartitionManagerTest {
     private static final int DELAYED_SHARE_FETCH_MAX_WAIT_MS = 2000;
     private static final int DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL = 1000;
     private static final int DELAYED_SHARE_FETCH_TIMEOUT_MS = 3000;
-    private static final GroupConfigManager GROUP_CONFIG_MANAGER = new GroupConfigManager(new HashMap<>());
 
     private static Timer mockTimer;
 
@@ -2362,7 +2361,7 @@ public class SharePartitionManagerTest {
                     persister,
                     metrics,
                     delayedShareFetchPurgatory,
-                    GROUP_CONFIG_MANAGER);
+                    new GroupConfigManager(new HashMap<>()));
         }
     }
 }

@@ -362,7 +362,7 @@ public class GroupCoordinatorConfig {
     /**
      * Copy the subset of properties that are relevant to consumer group.
      */
-    public Map<String, Integer> extractGroupConfigMap() {
+    public Map<String, Integer> extractConsumerGroupConfigMap() {
         Map<String, Integer> groupProps = new HashMap<>();
         groupProps.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, consumerGroupSessionTimeoutMs());
         groupProps.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, consumerGroupHeartbeatIntervalMs());
