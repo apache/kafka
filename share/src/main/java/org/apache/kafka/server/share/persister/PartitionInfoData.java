@@ -15,20 +15,11 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.share;
-
-import java.util.List;
+package org.apache.kafka.server.share.persister;
 
 /**
- * This interface is implemented by classes used to contain the data for a partition with state batch data
- * in the interface to {@link Persister}.
+ * This interface is implemented by classes used to contain the data for a partition in the
+ * interface to {@link Persister}.
  */
-public interface PartitionStateBatchData extends PartitionInfoData, PartitionIdData {
-    int stateEpoch();
-
-    long startOffset();
-
-    int leaderEpoch();
-
-    List<PersisterStateBatch> stateBatches();
+public interface PartitionInfoData {
 }

@@ -20,7 +20,7 @@ package org.apache.kafka.coordinator.share;
 import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotValue;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
-import org.apache.kafka.server.share.PersisterStateBatch;
+import org.apache.kafka.server.share.persister.PersisterStateBatch;
 
 import java.util.Collections;
 import java.util.LinkedHashSet;

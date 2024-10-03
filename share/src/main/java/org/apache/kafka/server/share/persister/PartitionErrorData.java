@@ -15,10 +15,14 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.share;
+package org.apache.kafka.server.share.persister;
 
 /**
- * Marker interface for parameter classes related to the {@link Persister} result classes.
+ * This interface is implemented by classes used to contain the data for a partition with error data
+ * in the interface to {@link Persister}.
  */
-public interface PersisterParameters {
+public interface PartitionErrorData extends PartitionInfoData, PartitionIdData {
+    short errorCode();
+
+    String errorMessage();
 }

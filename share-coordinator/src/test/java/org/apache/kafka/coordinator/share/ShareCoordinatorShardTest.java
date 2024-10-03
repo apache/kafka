@@ -40,8 +40,8 @@ import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.config.ShareCoordinatorConfig;
-import org.apache.kafka.server.share.PersisterStateBatch;
 import org.apache.kafka.server.share.SharePartitionKey;
+import org.apache.kafka.server.share.persister.PersisterStateBatch;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.Test;

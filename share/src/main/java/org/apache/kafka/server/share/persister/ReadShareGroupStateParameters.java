@@ -15,19 +15,19 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.share;
+package org.apache.kafka.server.share.persister;
 
-import org.apache.kafka.common.message.ReadShareGroupStateSummaryRequestData;
+import org.apache.kafka.common.message.ReadShareGroupStateRequestData;
 
 import java.util.stream.Collectors;
 
 /**
- * This class contains the parameters for {@link Persister#readSummary(ReadShareGroupStateSummaryParameters)}.
+ * This class contains the parameters for {@link Persister#readState(ReadShareGroupStateParameters)}.
  */
-public class ReadShareGroupStateSummaryParameters implements PersisterParameters {
+public class ReadShareGroupStateParameters implements PersisterParameters {
     private final GroupTopicPartitionData<PartitionIdLeaderEpochData> groupTopicPartitionData;
 
-    private ReadShareGroupStateSummaryParameters(GroupTopicPartitionData<PartitionIdLeaderEpochData> groupTopicPartitionData) {
+    private ReadShareGroupStateParameters(GroupTopicPartitionData<PartitionIdLeaderEpochData> groupTopicPartitionData) {
         this.groupTopicPartitionData = groupTopicPartitionData;
     }
 
@@ -35,11 +35,11 @@ public class ReadShareGroupStateSummaryParameters implements PersisterParameters
         return groupTopicPartitionData;
     }
 
-    public static ReadShareGroupStateSummaryParameters from(ReadShareGroupStateSummaryRequestData data) {
+    public static ReadShareGroupStateParameters from(ReadShareGroupStateRequestData data) {
         return new Builder()
                 .setGroupTopicPartitionData(new GroupTopicPartitionData<>(data.groupId(), data.topics().stream()
-                        .map(topicData -> new TopicData<>(topicData.topicId(),
-                                topicData.partitions().stream()
+                        .map(readStateData -> new TopicData<>(readStateData.topicId(),
+                                readStateData.partitions().stream()
                                         .map(partitionData -> PartitionFactory.newPartitionIdLeaderEpochData(partitionData.partition(), partitionData.leaderEpoch()))
                                         .collect(Collectors.toList())))
                         .collect(Collectors.toList())))
@@ -54,8 +54,13 @@ public class ReadShareGroupStateSummaryParameters implements PersisterParameters
             return this;
         }
 
-        public ReadShareGroupStateSummaryParameters build() {
-            return new ReadShareGroupStateSummaryParameters(groupTopicPartitionData);
+        public ReadShareGroupStateParameters build() {
+            return new ReadShareGroupStateParameters(groupTopicPartitionData);
         }
+    }
+
+    @Override
+    public String toString() {
+        return "ReadShareGroupStateParameters(" + groupTopicPartitionData + ")";
     }
 }
