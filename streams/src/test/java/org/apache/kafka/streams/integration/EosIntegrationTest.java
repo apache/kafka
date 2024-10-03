@@ -69,7 +69,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -317,14 +316,12 @@ public class EosIntegrationTest {
         return recordsPerKey;
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE})
-    public void shouldBeAbleToPerformMultipleTransactions(final String eosConfig) throws Exception {
+    @Test
+    public void shouldBeAbleToPerformMultipleTransactions() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(SINGLE_PARTITION_INPUT_TOPIC).to(SINGLE_PARTITION_OUTPUT_TOPIC);
 
         final Properties properties = new Properties();
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
         properties.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         properties.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1000");
@@ -366,14 +363,8 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({
-            StreamsConfig.AT_LEAST_ONCE + ",true",
-            StreamsConfig.AT_LEAST_ONCE + ",false",
-            StreamsConfig.EXACTLY_ONCE_V2 + ",true",
-            StreamsConfig.EXACTLY_ONCE_V2 + ",false"
-    })
-    public void shouldNotViolateEosIfOneTaskFails(final String eosConfig, final boolean processingThreadsEnabled) throws Exception {
-        if (eosConfig.equals(StreamsConfig.AT_LEAST_ONCE)) return;
+    @ValueSource(booleans = {true, false})
+    public void shouldNotViolateEosIfOneTaskFails(final boolean processingThreadsEnabled) throws Exception {
 
         // this test writes 10 + 5 + 5 records per partition (running with 2 partitions)
         // the app is supposed to copy all 40 records into the output topic
@@ -384,7 +375,7 @@ public class EosIntegrationTest {
         // -> the failure only kills one thread
         // after fail over, we should read 40 committed records (even if 50 record got written)
 
-        try (final KafkaStreams streams = getKafkaStreams("dummy", false, "appDir", 2, eosConfig, processingThreadsEnabled)) {
+        try (final KafkaStreams streams = getKafkaStreams("dummy", false, "appDir", 2, processingThreadsEnabled)) {
             startApplicationAndWaitUntilRunning(streams);
 
             final List<KeyValue<Long, Long>> committedDataBeforeFailure = prepareData(0L, 10L, 0L, 1L);
@@ -475,14 +466,8 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({
-            StreamsConfig.AT_LEAST_ONCE + ",true",
-            StreamsConfig.AT_LEAST_ONCE + ",false",
-            StreamsConfig.EXACTLY_ONCE_V2 + ",true",
-            StreamsConfig.EXACTLY_ONCE_V2 + ",false"
-    })
-    public void shouldNotViolateEosIfOneTaskFailsWithState(final String eosConfig, final boolean processingThreadsEnabled) throws Exception {
-        if (eosConfig.equals(StreamsConfig.AT_LEAST_ONCE)) return;
+    @ValueSource(booleans = {true, false})
+    public void shouldNotViolateEosIfOneTaskFailsWithState(final boolean processingThreadsEnabled) throws Exception {
 
         // this test updates a store with 10 + 5 + 5 records per partition (running with 2 partitions)
         // the app is supposed to emit all 40 update records into the output topic
@@ -498,7 +483,7 @@ public class EosIntegrationTest {
 
         // We need more processing time under "with state" situation, so increasing the max.poll.interval.ms
         // to avoid unexpected rebalance during test, which will cause unexpected fail over triggered
-        try (final KafkaStreams streams = getKafkaStreams("dummy", true, "appDir", 2, eosConfig, processingThreadsEnabled)) {
+        try (final KafkaStreams streams = getKafkaStreams("dummy", true, "appDir", 2, processingThreadsEnabled)) {
             startApplicationAndWaitUntilRunning(streams);
 
             final List<KeyValue<Long, Long>> committedDataBeforeFailure = prepareData(0L, 10L, 0L, 1L);
@@ -599,15 +584,8 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({
-            StreamsConfig.AT_LEAST_ONCE + ",true",
-            StreamsConfig.AT_LEAST_ONCE + ",false",
-            StreamsConfig.EXACTLY_ONCE_V2 + ",true",
-            StreamsConfig.EXACTLY_ONCE_V2 + ",false"
-    })
-    public void shouldNotViolateEosIfOneTaskGetsFencedUsingIsolatedAppInstances(final String eosConfig, final boolean processingThreadsEnabled) throws Exception {
-        if (eosConfig.equals(StreamsConfig.AT_LEAST_ONCE)) return;
-
+    @ValueSource(booleans = {true, false})
+    public void shouldNotViolateEosIfOneTaskGetsFencedUsingIsolatedAppInstances(final boolean processingThreadsEnabled) throws Exception {
         // this test writes 10 + 5 + 5 + 10 records per partition (running with 2 partitions)
         // the app is supposed to copy all 60 records into the output topic
         //
@@ -621,8 +599,8 @@ public class EosIntegrationTest {
         // we write the remaining 20 records and verify to read 60 result records
 
         try (
-            final KafkaStreams streams1 = getKafkaStreams("streams1", false, "appDir1", 1, eosConfig, processingThreadsEnabled);
-            final KafkaStreams streams2 = getKafkaStreams("streams2", false, "appDir2", 1, eosConfig, processingThreadsEnabled)
+            final KafkaStreams streams1 = getKafkaStreams("streams1", false, "appDir1", 1, processingThreadsEnabled);
+            final KafkaStreams streams2 = getKafkaStreams("streams2", false, "appDir2", 1, processingThreadsEnabled)
         ) {
             startApplicationAndWaitUntilRunning(streams1);
             startApplicationAndWaitUntilRunning(streams2);
@@ -767,17 +745,12 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({
-            StreamsConfig.AT_LEAST_ONCE + ",true",
-            StreamsConfig.AT_LEAST_ONCE + ",false",
-            StreamsConfig.EXACTLY_ONCE_V2 + ",true",
-            StreamsConfig.EXACTLY_ONCE_V2 + ",false"
-    })
-    public void shouldWriteLatestOffsetsToCheckpointOnShutdown(final String eosConfig, final boolean processingThreadsEnabled) throws Exception {
+    @ValueSource(booleans = {true, false})
+    public void shouldWriteLatestOffsetsToCheckpointOnShutdown(final boolean processingThreadsEnabled) throws Exception {
         final List<KeyValue<Long, Long>> writtenData = prepareData(0L, 10, 0L, 1L);
         final List<KeyValue<Long, Long>> expectedResult = computeExpectedResult(writtenData);
 
-        try (final KafkaStreams streams = getKafkaStreams("streams", true, "appDir", 1, eosConfig, processingThreadsEnabled)) {
+        try (final KafkaStreams streams = getKafkaStreams("streams", true, "appDir", 1, processingThreadsEnabled)) {
             writeInputData(writtenData);
 
             startApplicationAndWaitUntilRunning(streams);
@@ -788,17 +761,15 @@ public class EosIntegrationTest {
 
             final List<KeyValue<Long, Long>> committedRecords = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, writtenData.size(), CONSUMER_GROUP_ID);
 
-            if (!eosConfig.equals(StreamsConfig.AT_LEAST_ONCE)) {
-                checkResultPerKey(
-                        committedRecords,
-                        expectedResult,
-                        "The committed records do not match what expected");
+            checkResultPerKey(
+                    committedRecords,
+                    expectedResult,
+                    "The committed records do not match what expected");
 
-                verifyStateStore(
-                        streams,
-                        getMaxPerKey(expectedResult),
-                        "The state store content do not match what expected");
-            }
+            verifyStateStore(
+                    streams,
+                    getMaxPerKey(expectedResult),
+                    "The state store content do not match what expected");
         }
 
         verifyOffsetsAreInCheckpoint(0);
@@ -806,44 +777,27 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({
-            StreamsConfig.AT_LEAST_ONCE + ",true",
-            StreamsConfig.AT_LEAST_ONCE + ",false",
-            StreamsConfig.EXACTLY_ONCE_V2 + ",true",
-            StreamsConfig.EXACTLY_ONCE_V2 + ",false"
-    })
+    @ValueSource(booleans = {true, false})
     public void shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoringStateUpdaterEnabled(
-            final String eosConfig, final boolean processingThreadsEnabled) throws Exception {
-        shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoring(eosConfig, processingThreadsEnabled, true);
+            final boolean processingThreadsEnabled) throws Exception {
+        shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoring(processingThreadsEnabled, true);
     }
 
-    @ParameterizedTest
-    @CsvSource({
-            StreamsConfig.AT_LEAST_ONCE + ",true",
-            StreamsConfig.AT_LEAST_ONCE + ",false",
-            StreamsConfig.EXACTLY_ONCE_V2 + ",true",
-            StreamsConfig.EXACTLY_ONCE_V2 + ",false"
-    })
-    public void shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoringStateUpdaterDisabled(
-            final String eosConfig, final boolean processingThreadsEnabled) throws Exception {
-        if (!processingThreadsEnabled) {
-            shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoring(eosConfig, false, false);
-        }
+    @Test
+    public void shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoringStateUpdaterDisabled() throws Exception {
+        shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoring(false, false);
     }
 
     private void shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoring(
-            final String eosConfig,
             final boolean processingThreadsEnabled,
             final boolean stateUpdaterEnabled) throws Exception {
-        if (!eosConfig.equals(StreamsConfig.EXACTLY_ONCE_V2)) {
-            return;
-        }
+
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
-        streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
+        streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(applicationId).getPath());
@@ -1030,7 +984,6 @@ public class EosIntegrationTest {
                                          final boolean withState,
                                          final String appDir,
                                          final int numberOfStreamsThreads,
-                                         final String eosConfig,
                                          final boolean processingThreadsEnabled) {
         commitRequested = new AtomicInteger(0);
         errorInjected = new AtomicBoolean(false);
@@ -1127,7 +1080,7 @@ public class EosIntegrationTest {
         // but not too large as we need to have a relatively low transaction timeout such
         // that it should help trigger the timed out transaction in time.
         final long commitIntervalMs = 20_000L;
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
         properties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numberOfStreamsThreads);
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, commitIntervalMs);
         properties.put(StreamsConfig.producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), (int) commitIntervalMs);
