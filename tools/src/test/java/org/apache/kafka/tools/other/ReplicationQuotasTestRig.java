@@ -17,8 +17,8 @@
 package org.apache.kafka.tools.other;
 
 import kafka.log.UnifiedLog;
+import kafka.server.KafkaBroker;
 import kafka.server.KafkaConfig;
-import kafka.server.KafkaServer;
 import kafka.server.QuorumTestHarness;
 import kafka.utils.EmptyTestInfo;
 import kafka.utils.TestUtils;
@@ -163,7 +163,7 @@ public class ReplicationQuotasTestRig {
         static final String TOPIC_NAME = "my-topic";
 
         String experimentName = "unset";
-        List<KafkaServer> servers;
+        List<KafkaBroker> servers;
         Map<Integer, List<Double>> leaderRates = new HashMap<>();
         Map<Integer, List<Double>> followerRates = new HashMap<>();
         Admin adminClient;
@@ -246,9 +246,9 @@ public class ReplicationQuotasTestRig {
 
         void validateAllOffsetsMatch(ExperimentDef config) {
             //Validate that offsets are correct in all brokers
-            for (KafkaServer broker : servers) {
+            for (KafkaBroker broker : servers) {
                 for (int partitionId = 0; partitionId < config.partitions; partitionId++) {
-                    long offset = broker.getLogManager().getLog(new TopicPartition(TOPIC_NAME, partitionId), false).map(UnifiedLog::logEndOffset).getOrElse(() -> -1L);
+                    long offset = broker.logManager().getLog(new TopicPartition(TOPIC_NAME, partitionId), false).map(UnifiedLog::logEndOffset).getOrElse(() -> -1L);
                     if (offset >= 0 && offset != config.msgsPerPartition) {
                         throw new RuntimeException(
                             "Run failed as offsets did not match for partition " + partitionId + " on broker " + broker.config().brokerId() + ". " +
@@ -348,7 +348,7 @@ public class ReplicationQuotasTestRig {
         }
 
         void printRateMetrics() {
-            for (KafkaServer broker : servers) {
+            for (KafkaBroker broker : servers) {
                 double leaderRate = measuredRate(broker, QuotaType.LEADER_REPLICATION);
                 if (broker.config().brokerId() == 100)
                     LOGGER.info("waiting... Leader rate on 101 is " + leaderRate);
@@ -363,7 +363,7 @@ public class ReplicationQuotasTestRig {
             }
         }
 
-        private double measuredRate(KafkaServer broker, QuotaType repType) {
+        private double measuredRate(KafkaBroker broker, QuotaType repType) {
             MetricName metricName = broker.metrics().metricName("byte-rate", repType.toString());
             return broker.metrics().metrics().containsKey(metricName)
                 ? (double) broker.metrics().metrics().get(metricName).metricValue()

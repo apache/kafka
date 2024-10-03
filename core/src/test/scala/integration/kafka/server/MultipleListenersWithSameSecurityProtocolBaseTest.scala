@@ -55,7 +55,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
   import MultipleListenersWithSameSecurityProtocolBaseTest._
 
   private val trustStoreFile = TestUtils.tempFile("truststore", ".jks")
-  private val servers = new ArrayBuffer[KafkaServer]
+  private val servers = new ArrayBuffer[KafkaBroker]
   private val producers = mutable.Map[ClientMetadata, KafkaProducer[Array[Byte], Array[Byte]]]()
   private val consumers = mutable.Map[ClientMetadata, Consumer[Array[Byte], Array[Byte]]]()
 

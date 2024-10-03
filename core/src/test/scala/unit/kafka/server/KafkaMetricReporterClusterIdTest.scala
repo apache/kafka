@@ -77,7 +77,7 @@ object KafkaMetricReporterClusterIdTest {
 }
 
 class KafkaMetricReporterClusterIdTest extends QuorumTestHarness {
-  var server: KafkaServer = _
+  var server: KafkaBroker = _
   var config: KafkaConfig = _
 
   @BeforeEach
@@ -89,7 +89,7 @@ class KafkaMetricReporterClusterIdTest extends QuorumTestHarness {
     props.setProperty(ServerConfigs.BROKER_ID_GENERATION_ENABLE_CONFIG, "true")
     props.setProperty(ServerConfigs.BROKER_ID_CONFIG, "-1")
     config = KafkaConfig.fromProps(props)
-    server = new KafkaServer(config, threadNamePrefix = Option(this.getClass.getName))
+    server = createBroker(config, threadNamePrefix = Option(this.getClass.getName))
     server.startup()
   }
 
