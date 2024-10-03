@@ -1484,7 +1484,7 @@ project(':group-coordinator') {
     testImplementation libs.mockitoCore
 
     testRuntimeOnly runtimeLibs
-    
+
     generator project(':generator')
   }
 
@@ -1851,7 +1851,7 @@ project(':clients') {
     testImplementation libs.reload4j
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
-    
+
     testRuntimeOnly libs.jacksonDatabind
     testRuntimeOnly libs.jacksonJDK8Datatypes
     testRuntimeOnly runtimeLibs
@@ -3395,7 +3395,7 @@ project(':connect:transforms') {
     runtimeOnly libs.reload4j
 
     testImplementation libs.junitJupiter
-    
+
     testImplementation project(':clients').sourceSets.test.output
 
     testRuntimeOnly runtimeLibs
@@ -3435,7 +3435,7 @@ project(':connect:json') {
     runtimeOnly libs.reload4j
 
     testImplementation libs.junitJupiter
-    
+
     testImplementation project(':clients').sourceSets.test.output
 
     testRuntimeOnly runtimeLibs
@@ -3515,7 +3515,7 @@ project(':connect:runtime') {
     testImplementation libs.hamcrest
     testImplementation libs.mockitoJunitJupiter
     testImplementation libs.httpclient
-    
+
     testRuntimeOnly libs.bcpkix
     testRuntimeOnly runtimeLibs
   }
@@ -3658,7 +3658,7 @@ project(':connect:basic-auth-extension') {
     testImplementation libs.mockitoCore
     testImplementation libs.junitJupiter
     testImplementation project(':clients').sourceSets.test.output
-    
+
     testRuntimeOnly libs.jerseyContainerServlet
     testRuntimeOnly runtimeLibs
   }
