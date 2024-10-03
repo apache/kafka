@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.utils.ConfigUtils;
 
 import java.time.Duration;
 import java.util.HashMap;
@@ -79,9 +78,7 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
     public static final String CHECKPOINTS_TARGET_CONSUMER_ROLE = "checkpoints-target-consumer";
 
     public MirrorCheckpointConfig(Map<String, String> props) {
-        super(CONNECTOR_CONFIG_DEF, ConfigUtils.translateDeprecatedConfigs(props, new String[][]{
-                {GROUPS_EXCLUDE},
-        }));
+        super(CONNECTOR_CONFIG_DEF, props);
     }
 
     public MirrorCheckpointConfig(ConfigDef configDef, Map<String, String> props) {

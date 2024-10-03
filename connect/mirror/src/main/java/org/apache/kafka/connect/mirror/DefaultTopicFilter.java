@@ -20,7 +20,6 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
-import org.apache.kafka.common.utils.ConfigUtils;
 
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -74,8 +73,7 @@ public class DefaultTopicFilter implements TopicFilter {
                     TOPICS_EXCLUDE_DOC);
 
         TopicFilterConfig(Map<String, ?> props) {
-            super(DEF, ConfigUtils.translateDeprecatedConfigs(props, new String[][]{
-                {TOPICS_EXCLUDE_CONFIG}}), false);
+            super(DEF, props, false);
         }
 
         Pattern includePattern() {
