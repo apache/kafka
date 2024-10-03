@@ -2437,10 +2437,9 @@ public class RemoteLogManagerTest {
         // s5. 11 segments with "COPY_SEGMENT_FINISHED" state. These are expected to be counted in when calculating remote storage log size
         //
         // Expected results (retention.size is 10240 (10 segments)):
-        // In the 1st run, the total remote storage size should be 1024 * 11 (s5), so 2 segments (s1, s3) will be deleted
-        // because they are dangling segments (s1 case should not happen as we always attempt a deletion when copy fails).
-        // In the 2nd run, the total remote storage size should be 1024 * 12 (s4, s5), so 2 segments (s4, s5[0]) will be deleted 
-        // because of retention size breach.
+        // In the 1st run, the total remote storage size should be 1024 * 11 (s5) and 2 segments (s1, s3) will be deleted because they are dangling segments.
+        // Note: segments being copied are filtered out by the expiration logic, so s1 may be the result of an old failed copy cleanup where we weren't updating the state.
+        // In the 2nd run, the total remote storage size should be 1024 * 12 (s4, s5) and 2 segments (s4, s5[0]) will be deleted because of retention size breach.
         RemoteLogSegmentMetadata s1 = createRemoteLogSegmentMetadata(new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()),
                 0, 99, segmentSize, epochEntries, RemoteLogSegmentState.COPY_SEGMENT_STARTED);
         RemoteLogSegmentMetadata s2 = createRemoteLogSegmentMetadata(new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()),
