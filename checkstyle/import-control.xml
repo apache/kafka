@@ -305,7 +305,7 @@
     <allow pkg="org.jose4j" />
     <allow pkg="net.sourceforge.argparse4j" />
     <allow pkg="org.apache.log4j" />
-    <allow pkg="kafka.test" />
+    <allow pkg="org.apache.kafka.common.test" />
     <allow pkg="joptsimple" />
     <allow pkg="javax.rmi.ssl"/>
     <allow pkg="kafka.utils" />
@@ -394,6 +394,8 @@
     </subpackage>
 
     <subpackage name="integration">
+      <allow pkg="org.apache.kafka.common.test"/>
+      <allow pkg="org.apache.kafka.metadata"/>
       <allow pkg="kafka.admin" />
       <allow pkg="kafka.api" />
       <allow pkg="kafka.cluster" />
@@ -602,7 +604,7 @@
         <allow pkg="org.apache.kafka.server.config" />
         <allow pkg="kafka.cluster" />
         <allow pkg="kafka.server" />
-        <allow pkg="kafka.testkit" />
+        <allow pkg="org.apache.kafka.common.test" />
         <allow pkg="kafka.zk" />
         <allow pkg="kafka.utils" />
         <allow class="javax.servlet.http.HttpServletResponse" />

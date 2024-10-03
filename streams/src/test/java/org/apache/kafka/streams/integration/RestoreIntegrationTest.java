@@ -117,7 +117,7 @@ public class RestoreIntegrationTest {
 
     private static final Duration RESTORATION_DELAY = Duration.ofMillis(2000);
 
-    private static final int NUM_BROKERS = 1;
+    private static final int NUM_BROKERS = 2;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 

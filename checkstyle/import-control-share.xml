@@ -43,6 +43,10 @@
   <subpackage name="server">
     <subpackage name="share">
       <allow pkg="org.apache.kafka.server.share" />
+
+      <subpackage name="fetch">
+        <allow class="org.apache.kafka.server.storage.log.FetchParams"/>
+      </subpackage>
     </subpackage>
   </subpackage>
 

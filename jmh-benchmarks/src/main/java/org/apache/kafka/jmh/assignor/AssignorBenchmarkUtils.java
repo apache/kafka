@@ -93,14 +93,11 @@ public class AssignorBenchmarkUtils {
      *
      * @param topicNames                The names of the topics.
      * @param partitionsPerTopic        The number of partitions per topic.
-     * @param getTopicPartitionRacks    A function to get the racks map for each topic. May return
-     *                                  an empty map if no rack info is desired.
      * @return The subscription metadata map.
      */
     public static Map<String, TopicMetadata> createSubscriptionMetadata(
         List<String> topicNames,
-        int partitionsPerTopic,
-        Function<String, Map<Integer, Set<String>>> getTopicPartitionRacks
+        int partitionsPerTopic
     ) {
         Map<String, TopicMetadata> subscriptionMetadata = new HashMap<>();
 
@@ -110,8 +107,7 @@ public class AssignorBenchmarkUtils {
             TopicMetadata metadata = new TopicMetadata(
                 topicId,
                 topicName,
-                partitionsPerTopic,
-                getTopicPartitionRacks.apply(topicName)
+                partitionsPerTopic
             );
             subscriptionMetadata.put(topicName, metadata);
         }
@@ -163,13 +159,13 @@ public class AssignorBenchmarkUtils {
      *
      * @param members               The ConsumerGroupMembers.
      * @param subscriptionType      The group's subscription type.
-     * @param topicsImage           The TopicsImage to use.
+     * @param topicResolver         The TopicResolver to use.
      * @return The new GroupSpec.
      */
     public static GroupSpec createGroupSpec(
         Map<String, ConsumerGroupMember> members,
         SubscriptionType subscriptionType,
-        TopicsImage topicsImage
+        TopicIds.TopicResolver topicResolver
     ) {
         Map<String, MemberSubscriptionAndAssignmentImpl> memberSpecs = new HashMap<>();
 
@@ -181,7 +177,7 @@ public class AssignorBenchmarkUtils {
             memberSpecs.put(memberId, new MemberSubscriptionAndAssignmentImpl(
                 Optional.ofNullable(member.rackId()),
                 Optional.ofNullable(member.instanceId()),
-                new TopicIds(member.subscribedTopicNames(), topicsImage),
+                new TopicIds(member.subscribedTopicNames(), topicResolver),
                 new Assignment(member.assignedPartitions())
             ));
         }

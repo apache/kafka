@@ -44,6 +44,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -64,13 +65,15 @@ import static org.hamcrest.MatcherAssert.assertThat;
 public class ResetPartitionTimeIntegrationTest {
     private static final int NUM_BROKERS = 1;
     private static final Properties BROKER_CONFIG;
+    private static final long NOW = Instant.now().toEpochMilli();
+
     static {
         BROKER_CONFIG = new Properties();
         BROKER_CONFIG.put("transaction.state.log.replication.factor", (short) 1);
         BROKER_CONFIG.put("transaction.state.log.min.isr", 1);
     }
     public static final EmbeddedKafkaCluster CLUSTER =
-        new EmbeddedKafkaCluster(NUM_BROKERS, BROKER_CONFIG, 0L);
+        new EmbeddedKafkaCluster(NUM_BROKERS, BROKER_CONFIG);
 
     @BeforeAll
     public static void startCluster() throws IOException {
@@ -117,13 +120,13 @@ public class ResetPartitionTimeIntegrationTest {
             produceSynchronouslyToPartitionZero(
                 input,
                 Collections.singletonList(
-                    new KeyValueTimestamp<>("k3", "v3", 5000)
+                    new KeyValueTimestamp<>("k3", "v3", NOW + 5000)
                 )
             );
             verifyOutput(
                 outputRaw,
                 Collections.singletonList(
-                    new KeyValueTimestamp<>("k3", "v3", 5000)
+                    new KeyValueTimestamp<>("k3", "v3", NOW + 5000)
                 )
             );
             assertThat(lastRecordedTimestamp, is(-1L));
@@ -138,16 +141,16 @@ public class ResetPartitionTimeIntegrationTest {
             produceSynchronouslyToPartitionZero(
                 input,
                 Collections.singletonList(
-                    new KeyValueTimestamp<>("k5", "v5", 4999)
+                    new KeyValueTimestamp<>("k5", "v5", NOW + 4999)
                 )
             );
             verifyOutput(
                 outputRaw,
                 Collections.singletonList(
-                    new KeyValueTimestamp<>("k5", "v5", 4999)
+                    new KeyValueTimestamp<>("k5", "v5", NOW + 4999)
                 )
             );
-            assertThat(lastRecordedTimestamp, is(5000L));
+            assertThat(lastRecordedTimestamp, is(NOW + 5000L));
         } finally {
             kafkaStreams.close();
             quietlyCleanStateAfterTest(CLUSTER, kafkaStreams);

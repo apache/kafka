@@ -17,36 +17,48 @@
 package org.apache.kafka.server.share;
 
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 
 import java.util.Objects;
 
 /**
- * Common immutable share partition key class. This class is
- * placed in server-common so that it can be freely used across
- * various modules.
+ * The SharePartitionKey is used to uniquely identify a share partition. The key is made up of the
+ * share group id, the topic id and the partition id. The key is used to store the SharePartition
+ * objects in the partition cache map.
  */
 public class SharePartitionKey {
-    private final String groupId;
-    private final Uuid topicId;
-    private final int partition;
+
+    protected final String groupId;
+    protected final TopicIdPartition topicIdPartition;
+
+    public SharePartitionKey(String groupId, TopicIdPartition topicIdPartition) {
+        this.groupId = Objects.requireNonNull(groupId);
+        this.topicIdPartition = Objects.requireNonNull(topicIdPartition);
+    }
 
     private SharePartitionKey(String groupId, Uuid topicId, int partition) {
-        this.groupId = groupId;
-        this.topicId = topicId;
-        this.partition = partition;
+        this(groupId, topicId, null, partition);
+    }
+
+    private SharePartitionKey(String groupId, Uuid topicId, String topic, int partition) {
+        this(groupId, new TopicIdPartition(Objects.requireNonNull(topicId), new TopicPartition(topic, partition)));
     }
 
     public String groupId() {
         return groupId;
     }
 
+    public TopicIdPartition topicIdPartition() {
+        return topicIdPartition;
+    }
+
     public Uuid topicId() {
-        return topicId;
+        return topicIdPartition.topicId();
     }
 
     public int partition() {
-        return partition;
+        return topicIdPartition.partition();
     }
 
     public static SharePartitionKey getInstance(String groupId, TopicIdPartition topicIdPartition) {
@@ -58,7 +70,7 @@ public class SharePartitionKey {
     }
 
     public String asCoordinatorKey() {
-        return asCoordinatorKey(groupId, topicId, partition);
+        return asCoordinatorKey(groupId(), topicId(), partition());
     }
 
     public static String asCoordinatorKey(String groupId, Uuid topicId, int partition) {
@@ -66,24 +78,27 @@ public class SharePartitionKey {
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof SharePartitionKey)) return false;
-        SharePartitionKey that = (SharePartitionKey) o;
-        return partition == that.partition && Objects.equals(groupId, that.groupId) && Objects.equals(topicId, that.topicId);
+    public boolean equals(final Object obj) {
+        if (this == obj)
+            return true;
+        else if (obj == null || getClass() != obj.getClass())
+            return false;
+        else {
+            SharePartitionKey that = (SharePartitionKey) obj;
+            return groupId.equals(that.groupId) && Objects.equals(topicIdPartition, that.topicIdPartition);
+        }
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(groupId, topicId, partition);
+        return Objects.hash(groupId, topicIdPartition);
     }
 
     @Override
     public String toString() {
         return "SharePartitionKey{" +
-            "groupId=" + groupId +
-            ",topicId=" + topicId +
-            ",partition=" + partition +
-            "}";
+            "groupId='" + groupId +
+            ", topicIdPartition=" + topicIdPartition +
+            '}';
     }
 }

@@ -1065,7 +1065,10 @@ public final class QuorumController implements Controller {
                         int epoch = batch.epoch();
                         List<ApiMessageAndVersion> messages = batch.records();
 
-                        if (isActive) {
+                        if (messages.isEmpty()) {
+                            log.debug("Skipping handling commit for batch with no data records with offset {} and epoch {}.", offset, epoch);
+                            offsetControl.handleCommitBatchMetrics(batch);
+                        } else if (isActive) {
                             // If the controller is active, the records were already replayed,
                             // so we don't need to do it here.
                             log.debug("Completing purgatory items up to offset {} and epoch {}.", offset, epoch);
@@ -1075,9 +1078,6 @@ public final class QuorumController implements Controller {
                             offsetControl.handleCommitBatch(batch);
                             deferredEventQueue.completeUpTo(offsetControl.lastStableOffset());
                             deferredUnstableEventQueue.completeUpTo(offsetControl.lastCommittedOffset());
-
-                            // The active controller can delete up to the current committed offset.
-                            snapshotRegistry.deleteSnapshotsUpTo(offsetControl.lastStableOffset());
                         } else {
                             // If the controller is a standby, replay the records that were
                             // created by the active controller.
@@ -2313,12 +2313,25 @@ public final class QuorumController implements Controller {
             return featureControl.updateFeatures(updates, upgradeTypes, request.validateOnly());
         }).thenApply(result -> {
             UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData();
-            responseData.setResults(new UpdateFeaturesResponseData.UpdatableFeatureResultCollection(result.size()));
-            result.forEach((featureName, error) -> responseData.results().add(
-                new UpdateFeaturesResponseData.UpdatableFeatureResult()
-                    .setFeature(featureName)
-                    .setErrorCode(error.error().code())
-                    .setErrorMessage(error.message())));
+
+            if (result != ApiError.NONE) {
+                responseData.setErrorCode(result.error().code());
+                responseData.setErrorMessage("The update failed for all features since the following feature had an error: " + result.message());
+            } else {
+                responseData.setErrorCode(result.error().code());
+                responseData.setErrorMessage(result.message());
+                // Only specify per feature responses if the error is None and request version is less than or equal to 1.
+                if (context.requestHeader().requestApiVersion() <= 1) {
+                    responseData.setResults(new UpdateFeaturesResponseData.UpdatableFeatureResultCollection(request.featureUpdates().size()));
+                    request.featureUpdates().forEach(featureName ->
+                            responseData.results().add(
+                                    new UpdateFeaturesResponseData.UpdatableFeatureResult()
+                                            .setFeature(featureName.feature())
+                                            .setErrorCode(result.error().code())
+                                            .setErrorMessage(result.error().message())
+                            ));
+                }
+            }
             return responseData;
         });
     }

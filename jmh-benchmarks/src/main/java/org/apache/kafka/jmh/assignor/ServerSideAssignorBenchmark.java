@@ -118,6 +118,7 @@ public class ServerSideAssignorBenchmark {
 
     private static final int NUMBER_OF_RACKS = 3;
 
+    /** The number of homogeneous subgroups to create for the heterogeneous subscription case. */
     private static final int MAX_BUCKET_COUNT = 5;
 
     private GroupSpec groupSpec;
@@ -128,6 +129,8 @@ public class ServerSideAssignorBenchmark {
 
     private TopicsImage topicsImage = TopicsImage.EMPTY;
 
+    private TopicIds.TopicResolver topicResolver;
+
     private SubscribedTopicDescriber subscribedTopicDescriber;
 
     @Setup(Level.Trial)
@@ -137,7 +140,7 @@ public class ServerSideAssignorBenchmark {
         setupTopics();
 
         Map<String, ConsumerGroupMember> members = createMembers();
-        this.groupSpec = AssignorBenchmarkUtils.createGroupSpec(members, subscriptionType, topicsImage);
+        this.groupSpec = AssignorBenchmarkUtils.createGroupSpec(members, subscriptionType, topicResolver);
 
         if (assignmentType == AssignmentType.INCREMENTAL) {
             simulateIncrementalRebalance();
@@ -148,16 +151,13 @@ public class ServerSideAssignorBenchmark {
         allTopicNames = AssignorBenchmarkUtils.createTopicNames(topicCount);
 
         int partitionsPerTopic = (memberCount * partitionsToMemberRatio) / topicCount;
-        Map<Integer, Set<String>> partitionRacks = isRackAware ?
-            mkMapOfPartitionRacks(partitionsPerTopic) :
-            Collections.emptyMap();
         subscriptionMetadata = AssignorBenchmarkUtils.createSubscriptionMetadata(
             allTopicNames,
-            partitionsPerTopic,
-            topicName -> partitionRacks
+            partitionsPerTopic
         );
 
         topicsImage = AssignorBenchmarkUtils.createTopicsImage(subscriptionMetadata);
+        topicResolver = new TopicIds.CachedTopicResolver(topicsImage);
 
         Map<Uuid, TopicMetadata> topicMetadata = AssignorBenchmarkUtils.createTopicMetadata(subscriptionMetadata);
         subscribedTopicDescriber = new SubscribedTopicDescriberImpl(topicMetadata);
@@ -232,7 +232,7 @@ public class ServerSideAssignorBenchmark {
         if (subscriptionType == HETEROGENEOUS) {
             subscribedTopicIdsForNewMember = updatedMemberSpec.get(memberId(memberCount - 2)).subscribedTopicIds();
         } else {
-            subscribedTopicIdsForNewMember = new TopicIds(new HashSet<>(allTopicNames), topicsImage);
+            subscribedTopicIdsForNewMember = new TopicIds(new HashSet<>(allTopicNames), topicResolver);
         }
 
         Optional<String> rackId = rackId(memberCount - 1);
@@ -254,6 +254,7 @@ public class ServerSideAssignorBenchmark {
     @Threads(1)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     public void doAssignment() {
+        topicResolver.clear();
         partitionAssignor.assign(groupSpec, subscribedTopicDescriber);
     }
 }
