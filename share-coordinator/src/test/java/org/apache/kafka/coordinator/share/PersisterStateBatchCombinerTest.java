@@ -17,7 +17,7 @@
 
 package org.apache.kafka.coordinator.share;
 
-import org.apache.kafka.server.share.PersisterStateBatch;
+import org.apache.kafka.server.share.persister.PersisterStateBatch;
 
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
