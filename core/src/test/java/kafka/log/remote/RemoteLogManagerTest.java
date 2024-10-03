@@ -655,6 +655,7 @@ public class RemoteLogManagerTest {
         CompletableFuture<Void> dummyFuture = new CompletableFuture<>();
         dummyFuture.complete(null);
         when(remoteLogMetadataManager.addRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadata.class))).thenReturn(dummyFuture);
+        when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class))).thenReturn(dummyFuture);
         when(remoteStorageManager.copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class)))
                 .thenReturn(Optional.of(customMetadata));
         when(rlmCopyQuotaManager.getThrottleTimeMs()).thenReturn(quotaAvailableThrottleTime);
@@ -675,8 +676,8 @@ public class RemoteLogManagerTest {
         // Check the task is cancelled in the end.
         assertTrue(task.isCancelled());
 
-        // The metadata update should not be posted.
-        verify(remoteLogMetadataManager, never()).updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class));
+        // The metadata update should be posted.
+        verify(remoteLogMetadataManager, times(2)).updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class));
 
         // Verify the metrics
         assertEquals(1, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyRequestRate().count());
@@ -2440,7 +2441,7 @@ public class RemoteLogManagerTest {
         // due to retention size breached. s1 will be deleted even though it is not included in size calculation. But it's fine.
         // The segment intended to be deleted will be deleted in the next run.
         // In the 2nd run, the total remote storage size should be 1024 * 12 (s4, s5)
-        // so 2 segments will be deleted due to retention size breached.
+        // so 2 segments (s4, s5[0]) will be deleted due to retention size breached.
         RemoteLogSegmentMetadata s1 = createRemoteLogSegmentMetadata(new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()),
                 0, 99, segmentSize, epochEntries, RemoteLogSegmentState.COPY_SEGMENT_STARTED);
         RemoteLogSegmentMetadata s2 = createRemoteLogSegmentMetadata(new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()),
@@ -2470,7 +2471,7 @@ public class RemoteLogManagerTest {
         RemoteLogManager.RLMExpirationTask task = remoteLogManager.new RLMExpirationTask(leaderTopicIdPartition);
         task.cleanupExpiredRemoteLogSegments();
         verify(remoteStorageManager, times(2)).deleteLogSegmentData(any(RemoteLogSegmentMetadata.class));
-        verify(remoteStorageManager).deleteLogSegmentData(s1); 
+        verify(remoteStorageManager).deleteLogSegmentData(s1);
         // make sure the s2 segment with "DELETE_SEGMENT_FINISHED" state is not invoking "deleteLogSegmentData"
         verify(remoteStorageManager, never()).deleteLogSegmentData(s2);
         verify(remoteStorageManager).deleteLogSegmentData(s3);

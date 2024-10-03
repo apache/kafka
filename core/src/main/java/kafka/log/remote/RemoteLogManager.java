@@ -956,7 +956,7 @@ public class RemoteLogManager implements Closeable {
             try {
                 customMetadata = remoteLogStorageManager.copyLogSegmentData(copySegmentStartedRlsm, segmentData);
             } catch (RemoteStorageException e) {
-                logger.warn("Cleaning after failing to copy segment {}", copySegmentStartedRlsm.remoteLogSegmentId());
+                logger.error("Copy failed, cleaning segment {}", copySegmentStartedRlsm.remoteLogSegmentId());
                 try {
                     deleteRemoteLogSegment(
                         copySegmentStartedRlsm,
@@ -967,9 +967,9 @@ public class RemoteLogManager implements Closeable {
                         time,
                         brokerId
                     );
-                    LOGGER.info("Successfully cleaned dangling segment {}", copySegmentStartedRlsm.remoteLogSegmentId());
+                    LOGGER.info("Cleanup completed for segment {}", copySegmentStartedRlsm.remoteLogSegmentId());
                 } catch (RemoteStorageException e1) {
-                    LOGGER.warn("Error while cleaning dangling segment {}: {}", copySegmentStartedRlsm.remoteLogSegmentId(), e1.getMessage());
+                    LOGGER.info("Cleanup failed, will retry later with segment {}: {}", copySegmentStartedRlsm.remoteLogSegmentId(), e1.getMessage());
                 }
                 throw e;
             }
@@ -985,13 +985,22 @@ public class RemoteLogManager implements Closeable {
                                     " Copying will be stopped and copied segment will be attempted to clean." +
                                     " Original metadata: {}",
                             customMetadataSize, this.customMetadataSizeLimit, copySegmentStartedRlsm, e);
+                    // For deletion, we provide back the custom metadata by creating a new metadata object from the update.
+                    // However, the update itself will not be stored in this case.
+                    RemoteLogSegmentMetadata newMetadata = copySegmentStartedRlsm.createWithUpdates(copySegmentFinishedRlsm);
                     try {
-                        // For deletion, we provide back the custom metadata by creating a new metadata object from the update.
-                        // However, the update itself will not be stored in this case.
-                        remoteLogStorageManager.deleteLogSegmentData(copySegmentStartedRlsm.createWithUpdates(copySegmentFinishedRlsm));
-                        logger.info("Successfully cleaned segment after custom metadata size exceeded");
+                        deleteRemoteLogSegment(
+                            newMetadata,
+                            ignored -> !isCancelled(),
+                            remoteLogMetadataManager,
+                            remoteLogStorageManager,
+                            brokerTopicStats,
+                            time,
+                            brokerId
+                        );
+                        LOGGER.info("Cleanup completed for segment {}", newMetadata.remoteLogSegmentId());
                     } catch (RemoteStorageException e1) {
-                        logger.error("Error while cleaning segment after custom metadata size exceeded, consider cleaning manually", e1);
+                        LOGGER.info("Cleanup failed, will retry later with segment {}: {}", newMetadata.remoteLogSegmentId(), e1.getMessage());
                     }
                     throw e;
                 }
@@ -1248,25 +1257,11 @@ public class RemoteLogManager implements Closeable {
                         canProcess = false;
                         continue;
                     }
-                    // This works as retry mechanism for dangling remote segments.
-                    // A dangling remote segment is one that failed the copy to remote storage and the following cleanup.
-                    // Rather than waiting for the retention to kick in, we cleanup early to avoid polluting the cache and possibly waste remote storage.
+                    // This works as retry mechanism for failed deletion remote segments. Rather than waiting for the 
+                    // retention to kick in, we cleanup early to avoid polluting the cache and possibly waste remote storage.
                     if (RemoteLogSegmentState.DELETE_SEGMENT_STARTED.equals(metadata.state())) {
-                        LOGGER.info("Cleaning dangling segment {}", metadata.remoteLogSegmentId());
-                        try {
-                            deleteRemoteLogSegment(
-                                metadata,
-                                ignored -> !isCancelled(),
-                                remoteLogMetadataManager,
-                                remoteLogStorageManager,
-                                brokerTopicStats,
-                                time,
-                                brokerId
-                            );
-                            LOGGER.info("Successfully cleaned dangling segment {}", metadata.remoteLogSegmentId());
-                        } catch (RemoteStorageException e1) {
-                            LOGGER.warn("Error while cleaning dangling segment {}: {}", metadata.remoteLogSegmentId(), e1.getMessage());
-                        }
+                        segmentsToDelete.add(metadata);
+                        continue;
                     }
                     if (RemoteLogSegmentState.DELETE_SEGMENT_FINISHED.equals(metadata.state())) {
                         continue;
@@ -1315,7 +1310,8 @@ public class RemoteLogManager implements Closeable {
             List<String> undeletedSegments = new ArrayList<>();
             for (RemoteLogSegmentMetadata segmentMetadata : segmentsToDelete) {
                 if (!deleteRemoteLogSegment(
-                    segmentMetadata, x -> !isCancelled(),
+                    segmentMetadata, 
+                    ignored -> !isCancelled(),
                     remoteLogMetadataManager,
                     remoteLogStorageManager,
                     brokerTopicStats,
