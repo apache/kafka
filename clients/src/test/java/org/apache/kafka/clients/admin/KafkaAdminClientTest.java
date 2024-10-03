@@ -6159,7 +6159,7 @@ public class KafkaAdminClientTest {
 
             // Now test that only numRetries timeouts for partition 0 result in success for both
             // partition 0 and partition 1.
-            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
+            // Note that the admin client caches the leader information so there's no metadata request.
             for (int i = 0; i < numRetries; i++) {
                 env.kafkaClient().prepareResponseFrom(
                     request -> request instanceof ListOffsetsRequest,
