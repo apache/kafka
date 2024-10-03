@@ -41,6 +41,7 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.config.ShareCoordinatorConfig;
 import org.apache.kafka.server.share.SharePartitionKey;
+import org.apache.kafka.server.share.persister.PersisterStateBatch;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.Test;
@@ -53,7 +54,6 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
@@ -312,7 +312,9 @@ class ShareCoordinatorShardTest {
         assertEquals(incrementalUpdate.snapshotEpoch(), combinedState.snapshotEpoch());
         assertEquals(incrementalUpdate.leaderEpoch(), combinedState.leaderEpoch());
         assertEquals(incrementalUpdate.startOffset(), combinedState.startOffset());
-        assertTrue(combinedState.stateBatchAsSet().containsAll(incrementalUpdate.stateBatchAsSet()));
+        // the batches should have combined to 1 since same state
+        assertEquals(Collections.singletonList(new PersisterStateBatch(0, 20, (byte) 0, (short) 1)),
+            combinedState.stateBatches());
         assertEquals(0, shard.getLeaderMapValue(shareCoordinatorKey));
     }
 
@@ -773,8 +775,8 @@ class ShareCoordinatorShardTest {
             .setStateEpoch(0)
             .setSnapshotEpoch(2)    // since 2nd share snapshot
             .setStateBatches(Arrays.asList(
-                new PersisterOffsetsStateBatch(110, 119, (byte) 1, (short) 2),  //  b2 not lost
-                new PersisterOffsetsStateBatch(120, 129, (byte) 2, (short) 1)
+                new PersisterStateBatch(110, 119, (byte) 1, (short) 2),  //  b2 not lost
+                new PersisterStateBatch(120, 129, (byte) 2, (short) 1)
             ))
             .build();
         List<CoordinatorRecord> expectedRecordsFinal = Collections.singletonList(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
