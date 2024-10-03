@@ -170,7 +170,6 @@ class ControllerApisTest {
       new SimpleApiVersionManager(
         ListenerType.CONTROLLER,
         true,
-        false,
         () => FinalizedFeatures.fromKRaftVersion(MetadataVersion.latestTesting())),
       metadataCache
     )

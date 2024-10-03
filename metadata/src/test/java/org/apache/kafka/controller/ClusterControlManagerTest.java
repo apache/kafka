@@ -852,33 +852,4 @@ public class ClusterControlManagerTest {
                     clusterControl.brokerRegistrations().get(1).epoch());
         }
     }
-
-    @Test
-    public void testRegistrationWithIncorrectInterBrokerListenerName() {
-        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
-                setClusterId("pjvUwj3ZTEeSVQmUiH3IJw").
-                setFeatureControlManager(new FeatureControlManager.Builder().build()).
-                setBrokerUncleanShutdownHandler((brokerId, records) -> { }).
-                setInterBrokerListenerName("INTERNAL").
-                setZkMigrationEnabled(true).
-                build();
-        clusterControl.activate();
-        assertEquals("Broker does not have the current inter.broker.listener INTERNAL",
-            assertThrows(InvalidRegistrationException.class,
-                () -> clusterControl.registerBroker(
-                    new BrokerRegistrationRequestData().
-                        setBrokerId(1).
-                        setClusterId(clusterControl.clusterId()).
-                        setIncarnationId(Uuid.fromString("07OOcU7MQFeSmGAFPP2Zww")).
-                        setLogDirs(Arrays.asList(Uuid.fromString("Vv1gzkM2QpuE-PPrIc6XEw"))).
-                        setIsMigratingZkBroker(true).
-                        setListeners(new BrokerRegistrationRequestData.ListenerCollection(Collections.singleton(
-                            new BrokerRegistrationRequestData.Listener().
-                                setName("PLAINTEXT").
-                                setHost("example.com").
-                                setPort(9092).
-                                setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)).iterator())),
-                        111,
-                    new FinalizedControllerFeatures(Collections.emptyMap(), 100L))).getMessage());
-    }
 }

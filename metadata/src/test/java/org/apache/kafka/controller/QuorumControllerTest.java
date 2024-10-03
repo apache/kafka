@@ -100,7 +100,6 @@ import org.apache.kafka.metadata.RecordTestUtils.TestThroughAllIntermediateImage
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.migration.ZkMigrationState;
-import org.apache.kafka.metadata.migration.ZkRecordConsumer;
 import org.apache.kafka.metadata.util.BatchFileWriter;
 import org.apache.kafka.metalog.LocalLogManager;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
@@ -111,7 +110,6 @@ import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.TopicIdPartition;
-import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.snapshot.FileRawSnapshotReader;
 import org.apache.kafka.snapshot.Snapshots;
 import org.apache.kafka.test.TestUtils;
@@ -121,14 +119,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.params.provider.EnumSource;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -162,7 +157,6 @@ import static org.apache.kafka.controller.ConfigurationControlManagerTest.entry;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.anonymousContextFor;
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.brokerFeatures;
-import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.forceRenounce;
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.pause;
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.registerBrokersAndUnfence;
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.sendBrokerHeartbeatToUnfenceBrokers;
@@ -1382,75 +1376,9 @@ public class QuorumControllerTest {
                         appender)).getMessage());
     }
 
-    @Test
-    public void testBootstrapZkMigrationRecord() throws Exception {
-        assertEquals(ZkMigrationState.PRE_MIGRATION,
-            checkBootstrapZkMigrationRecord(MetadataVersion.IBP_3_4_IV0, true));
-
-        assertEquals(ZkMigrationState.NONE,
-            checkBootstrapZkMigrationRecord(MetadataVersion.IBP_3_4_IV0, false));
-
-        assertEquals(ZkMigrationState.NONE,
-            checkBootstrapZkMigrationRecord(MetadataVersion.IBP_3_3_IV0, false));
-
-        assertEquals(
-            "The bootstrap metadata.version 3.3-IV0 does not support ZK migrations. Cannot continue with ZK migrations enabled.",
-            assertThrows(FaultHandlerException.class, () ->
-                checkBootstrapZkMigrationRecord(MetadataVersion.IBP_3_3_IV0, true)).getCause().getMessage()
-        );
-    }
-
-    public ZkMigrationState checkBootstrapZkMigrationRecord(
-        MetadataVersion metadataVersion,
-        boolean migrationEnabled
-    ) throws Exception {
-        try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder.setZkMigrationEnabled(migrationEnabled)
-                ).
-                setBootstrapMetadata(BootstrapMetadata.fromVersion(metadataVersion, "test")).
-                build()
-        ) {
-            QuorumController active = controlEnv.activeController();
-            ZkMigrationState zkMigrationState = active.appendReadEvent("read migration state", OptionalLong.empty(),
-                () -> active.featureControl().zkMigrationState()).get(30, TimeUnit.SECONDS);
-            testToImages(logEnv.allRecords());
-            return zkMigrationState;
-        }
-    }
-
-    @Test
-    public void testUpgradeMigrationStateFrom34() throws Exception {
-        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build()) {
-            // In 3.4, we only wrote a PRE_MIGRATION to the log. In that software version, we defined this
-            // as enum value 1. In 3.5+ software, this enum value is redefined as MIGRATION
-            BootstrapMetadata bootstrapMetadata = BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_4_IV0, "test");
-            List<ApiMessageAndVersion> initialRecords = new ArrayList<>(bootstrapMetadata.records());
-            initialRecords.add(ZkMigrationState.of((byte) 1).toRecord());
-            logEnv.appendInitialRecords(initialRecords);
-            try (
-                QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                    setControllerBuilderInitializer(controllerBuilder ->
-                        controllerBuilder.setZkMigrationEnabled(true)
-                    ).
-                    setBootstrapMetadata(bootstrapMetadata).
-                    build()
-            ) {
-                QuorumController active = controlEnv.activeController();
-                assertEquals(active.featureControl().zkMigrationState(), ZkMigrationState.MIGRATION);
-                assertFalse(active.featureControl().inPreMigrationMode());
-            }
-
-            testToImages(logEnv.allRecords());
-        }
-    }
-
     FeatureControlManager getActivationRecords(
-            MetadataVersion metadataVersion,
-            Optional<ZkMigrationState> stateInLog,
-            boolean zkMigrationEnabled
+        MetadataVersion metadataVersion,
+        Optional<ZkMigrationState> stateInLog
     ) {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControlManager = new FeatureControlManager.Builder()
@@ -1458,16 +1386,13 @@ public class QuorumControllerTest {
                 .setMetadataVersion(metadataVersion)
                 .build();
 
-        stateInLog.ifPresent(zkMigrationState ->
-            featureControlManager.replay((ZkMigrationStateRecord) zkMigrationState.toRecord().message()));
-
         ControllerResult<Void> result = ActivationRecordsGenerator.generate(
             msg -> { },
             !stateInLog.isPresent(),
             -1L,
-            zkMigrationEnabled,
             BootstrapMetadata.fromVersion(metadataVersion, "test"),
-            featureControlManager);
+            stateInLog.orElseGet(() -> ZkMigrationState.NONE),
+            metadataVersion);
         RecordTestUtils.replayAll(featureControlManager, result.records());
         return featureControlManager;
     }
@@ -1476,21 +1401,11 @@ public class QuorumControllerTest {
     public void testActivationRecords33() {
         FeatureControlManager featureControl;
 
-        assertEquals(
-            "The bootstrap metadata.version 3.3-IV0 does not support ZK migrations. Cannot continue with ZK migrations enabled.",
-            assertThrows(RuntimeException.class, () -> getActivationRecords(MetadataVersion.IBP_3_3_IV0, Optional.empty(), true)).getMessage()
-        );
-
-        featureControl = getActivationRecords(MetadataVersion.IBP_3_3_IV0, Optional.empty(), false);
+        featureControl = getActivationRecords(MetadataVersion.IBP_3_3_IV0, Optional.empty());
         assertEquals(MetadataVersion.IBP_3_3_IV0, featureControl.metadataVersion());
         assertEquals(ZkMigrationState.NONE, featureControl.zkMigrationState());
 
-        assertEquals(
-            "Should not have ZK migrations enabled on a cluster running metadata.version 3.3-IV0",
-            assertThrows(RuntimeException.class, () -> getActivationRecords(MetadataVersion.IBP_3_3_IV0, Optional.of(ZkMigrationState.NONE), true)).getMessage()
-        );
-
-        featureControl = getActivationRecords(MetadataVersion.IBP_3_3_IV0, Optional.of(ZkMigrationState.NONE), false);
+        featureControl = getActivationRecords(MetadataVersion.IBP_3_3_IV0, Optional.of(ZkMigrationState.NONE));
         assertEquals(MetadataVersion.IBP_3_3_IV0, featureControl.metadataVersion());
         assertEquals(ZkMigrationState.NONE, featureControl.zkMigrationState());
     }
@@ -1499,67 +1414,32 @@ public class QuorumControllerTest {
     public void testActivationRecords34() {
         FeatureControlManager featureControl;
 
-        featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, Optional.empty(), true);
-        assertEquals(MetadataVersion.IBP_3_4_IV0, featureControl.metadataVersion());
-        assertEquals(ZkMigrationState.PRE_MIGRATION, featureControl.zkMigrationState());
-
-        featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, Optional.empty(), false);
+        featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, Optional.empty());
         assertEquals(MetadataVersion.IBP_3_4_IV0, featureControl.metadataVersion());
         assertEquals(ZkMigrationState.NONE, featureControl.zkMigrationState());
 
-        assertEquals(
-            "Should not have ZK migrations enabled on a cluster that was created in KRaft mode.",
-            assertThrows(RuntimeException.class, () -> getActivationRecords(MetadataVersion.IBP_3_4_IV0, Optional.of(ZkMigrationState.NONE), true)).getMessage()
-        );
-
-        featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, Optional.of(ZkMigrationState.NONE), false);
+        featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, Optional.of(ZkMigrationState.NONE));
         assertEquals(MetadataVersion.IBP_3_4_IV0, featureControl.metadataVersion());
         assertEquals(ZkMigrationState.NONE, featureControl.zkMigrationState());
-
-        featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, Optional.of(ZkMigrationState.PRE_MIGRATION), true);
-        assertEquals(MetadataVersion.IBP_3_4_IV0, featureControl.metadataVersion());
-        assertEquals(ZkMigrationState.PRE_MIGRATION, featureControl.zkMigrationState());
-
-        featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, Optional.of(ZkMigrationState.MIGRATION), true);
-        assertEquals(MetadataVersion.IBP_3_4_IV0, featureControl.metadataVersion());
-        assertEquals(ZkMigrationState.MIGRATION, featureControl.zkMigrationState());
-
-        featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, Optional.of(ZkMigrationState.MIGRATION), false);
-        assertEquals(MetadataVersion.IBP_3_4_IV0, featureControl.metadataVersion());
-        assertEquals(ZkMigrationState.POST_MIGRATION, featureControl.zkMigrationState());
-
-        featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, Optional.of(ZkMigrationState.POST_MIGRATION), true);
-        assertEquals(MetadataVersion.IBP_3_4_IV0, featureControl.metadataVersion());
-        assertEquals(ZkMigrationState.POST_MIGRATION, featureControl.zkMigrationState());
-
-        featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, Optional.of(ZkMigrationState.POST_MIGRATION), false);
-        assertEquals(MetadataVersion.IBP_3_4_IV0, featureControl.metadataVersion());
-        assertEquals(ZkMigrationState.POST_MIGRATION, featureControl.zkMigrationState());
     }
 
     @Test
     public void testActivationRecordsNonEmptyLog() {
         FeatureControlManager featureControl = getActivationRecords(
-            MetadataVersion.IBP_3_4_IV0, Optional.empty(), true);
-        assertEquals(MetadataVersion.IBP_3_4_IV0, featureControl.metadataVersion());
-        assertEquals(ZkMigrationState.PRE_MIGRATION, featureControl.zkMigrationState());
+            MetadataVersion.IBP_3_9_IV0, Optional.empty());
+        assertEquals(MetadataVersion.IBP_3_9_IV0, featureControl.metadataVersion());
+        assertEquals(ZkMigrationState.NONE, featureControl.zkMigrationState());
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testActivationRecordsPartialBootstrap(boolean zkMigrationEnabled) {
-        FeatureControlManager featureControlManager = new FeatureControlManager.Builder()
-            .setSnapshotRegistry(new SnapshotRegistry(new LogContext()))
-            .setMetadataVersion(MetadataVersion.IBP_3_6_IV1)
-            .build();
-
+    @Test
+    public void testActivationRecordsPartialBootstrap() {
         ControllerResult<Void> result = ActivationRecordsGenerator.generate(
             logMsg -> { },
             true,
             0L,
-            zkMigrationEnabled,
             BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"),
-            featureControlManager);
+            ZkMigrationState.NONE,
+            MetadataVersion.IBP_3_6_IV1);
         assertFalse(result.isAtomic());
         assertTrue(RecordTestUtils.recordAtIndexAs(
             AbortTransactionRecord.class, result.records(), 0).isPresent());
@@ -1567,27 +1447,6 @@ public class QuorumControllerTest {
             BeginTransactionRecord.class, result.records(), 1).isPresent());
         assertTrue(RecordTestUtils.recordAtIndexAs(
             EndTransactionRecord.class, result.records(), result.records().size() - 1).isPresent());
-    }
-
-    @Test
-    public void testMigrationsEnabledForOldBootstrapMetadataVersion() throws Exception {
-        try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build()
-        ) {
-            QuorumControllerTestEnv.Builder controlEnvBuilder = new QuorumControllerTestEnv.Builder(logEnv).
-                    setControllerBuilderInitializer(controllerBuilder ->
-                        controllerBuilder.setZkMigrationEnabled(true)
-                    ).
-                    setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_3_IV0, "test"));
-
-            QuorumControllerTestEnv controlEnv = controlEnvBuilder.build();
-            QuorumController active = controlEnv.activeController();
-            assertEquals(ZkMigrationState.NONE, active.appendReadEvent("read migration state", OptionalLong.empty(),
-                () -> active.featureControl().zkMigrationState()).get(30, TimeUnit.SECONDS));
-            assertThrows(FaultHandlerException.class, controlEnv::close);
-
-            testToImages(logEnv.allRecords());
-        }
     }
 
     /**
@@ -1618,12 +1477,6 @@ public class QuorumControllerTest {
 
     @Test
     public void testActivationRecordsPartialTransaction() {
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        FeatureControlManager featureControlManager = new FeatureControlManager.Builder()
-            .setSnapshotRegistry(snapshotRegistry)
-            .setMetadataVersion(MetadataVersion.IBP_3_6_IV1)
-            .build();
-
         OffsetControlManager offsetControlManager = new OffsetControlManager.Builder().build();
         offsetControlManager.replay(new BeginTransactionRecord(), 10);
         offsetControlManager.handleCommitBatch(Batch.data(20, 1, 1L, 0,
@@ -1633,9 +1486,9 @@ public class QuorumControllerTest {
             logMsg -> { },
             false,
             offsetControlManager.transactionStartOffset(),
-            false,
             BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"),
-            featureControlManager);
+            ZkMigrationState.NONE,
+            MetadataVersion.IBP_3_6_IV1);
 
         assertTrue(result.isAtomic());
         offsetControlManager.replay(
@@ -1647,12 +1500,6 @@ public class QuorumControllerTest {
 
     @Test
     public void testActivationRecordsPartialTransactionNoSupport() {
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        FeatureControlManager featureControlManager = new FeatureControlManager.Builder()
-            .setSnapshotRegistry(snapshotRegistry)
-            .setMetadataVersion(MetadataVersion.IBP_3_6_IV0)
-            .build();
-
         OffsetControlManager offsetControlManager = new OffsetControlManager.Builder().build();
         offsetControlManager.replay(new BeginTransactionRecord(), 10);
         offsetControlManager.handleCommitBatch(Batch.data(20, 1, 1L, 0,
@@ -1663,129 +1510,9 @@ public class QuorumControllerTest {
                 msg -> { },
                 false,
                 offsetControlManager.transactionStartOffset(),
-                false,
                 BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV0, "test"),
-                featureControlManager)
+                ZkMigrationState.NONE,
+                MetadataVersion.IBP_3_6_IV0)
         );
-    }
-
-    private static final List<ApiMessageAndVersion> ZK_MIGRATION_RECORDS =
-        Collections.unmodifiableList(Arrays.asList(
-            new ApiMessageAndVersion(new TopicRecord().
-                setName("spam").
-                setTopicId(Uuid.fromString("qvRJLpDYRHmgEi8_TPBYTQ")),
-                (short) 0),
-            new ApiMessageAndVersion(new PartitionRecord().setPartitionId(0).
-                setTopicId(Uuid.fromString("qvRJLpDYRHmgEi8_TPBYTQ")).setReplicas(Arrays.asList(0, 1, 2)).
-                setIsr(Arrays.asList(0, 1, 2)).setRemovingReplicas(Collections.emptyList()).
-                setAddingReplicas(Collections.emptyList()).setLeader(0).setLeaderEpoch(0).
-                setPartitionEpoch(0), (short) 0),
-            new ApiMessageAndVersion(new PartitionRecord().setPartitionId(1).
-                setTopicId(Uuid.fromString("qvRJLpDYRHmgEi8_TPBYTQ")).setReplicas(Arrays.asList(1, 2, 0)).
-                setIsr(Arrays.asList(1, 2, 0)).setRemovingReplicas(Collections.emptyList()).
-                setAddingReplicas(Collections.emptyList()).setLeader(1).setLeaderEpoch(0).
-                setPartitionEpoch(0), (short) 0)
-            ));
-
-    @Test
-    public void testFailoverDuringMigrationTransaction() throws Exception {
-        try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).build()
-        ) {
-            QuorumControllerTestEnv.Builder controlEnvBuilder = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder -> controllerBuilder.setZkMigrationEnabled(true)).
-                setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"));
-            QuorumControllerTestEnv controlEnv = controlEnvBuilder.build();
-            QuorumController active = controlEnv.activeController(true);
-            ZkRecordConsumer migrationConsumer = active.zkRecordConsumer();
-            migrationConsumer.beginMigration().get(30, TimeUnit.SECONDS);
-            migrationConsumer.acceptBatch(ZK_MIGRATION_RECORDS).get(30, TimeUnit.SECONDS);
-            forceRenounce(active);
-
-            // Ensure next controller doesn't see the topic from partial migration
-            QuorumController newActive = controlEnv.activeController(true);
-            CompletableFuture<Map<String, ResultOrError<Uuid>>> results =
-                newActive.findTopicIds(ANONYMOUS_CONTEXT, Collections.singleton("spam"));
-            assertEquals(
-                Errors.UNKNOWN_TOPIC_OR_PARTITION,
-                results.get(30, TimeUnit.SECONDS).get("spam").error().error());
-
-            assertEquals(
-                ZkMigrationState.PRE_MIGRATION,
-                newActive.appendReadEvent("read migration state", OptionalLong.empty(),
-                    () -> newActive.featureControl().zkMigrationState()
-                ).get(30, TimeUnit.SECONDS)
-            );
-            // Ensure the migration can happen on new active controller
-            migrationConsumer = newActive.zkRecordConsumer();
-            migrationConsumer.beginMigration().get(30, TimeUnit.SECONDS);
-            migrationConsumer.acceptBatch(ZK_MIGRATION_RECORDS).get(30, TimeUnit.SECONDS);
-            migrationConsumer.completeMigration().get(30, TimeUnit.SECONDS);
-
-            results = newActive.findTopicIds(ANONYMOUS_CONTEXT, Collections.singleton("spam"));
-            assertTrue(results.get(30, TimeUnit.SECONDS).get("spam").isResult());
-
-            assertEquals(ZkMigrationState.MIGRATION, newActive.appendReadEvent("read migration state", OptionalLong.empty(),
-                () -> newActive.featureControl().zkMigrationState()).get(30, TimeUnit.SECONDS));
-
-        }
-    }
-
-    @ParameterizedTest
-    @EnumSource(value = MetadataVersion.class, names = {"IBP_3_4_IV0", "IBP_3_5_IV0", "IBP_3_6_IV0", "IBP_3_6_IV1"})
-    public void testBrokerHeartbeatDuringMigration(MetadataVersion metadataVersion) throws Exception {
-        try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build()
-        ) {
-            QuorumControllerTestEnv.Builder controlEnvBuilder = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder
-                        .setZkMigrationEnabled(true)
-                        .setMaxIdleIntervalNs(OptionalLong.of(TimeUnit.MILLISECONDS.toNanos(100)))
-                ).
-                setBootstrapMetadata(BootstrapMetadata.fromVersion(metadataVersion, "test"));
-            QuorumControllerTestEnv controlEnv = controlEnvBuilder.build();
-            QuorumController active = controlEnv.activeController(true);
-
-            // Register a ZK broker
-            BrokerRegistrationReply reply = active.registerBroker(ANONYMOUS_CONTEXT,
-                new BrokerRegistrationRequestData().
-                    setBrokerId(0).
-                    setRack(null).
-                    setClusterId(active.clusterId()).
-                    setIsMigratingZkBroker(true).
-                    setFeatures(brokerFeatures(metadataVersion, metadataVersion)).
-                    setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB0")).
-                    setListeners(new ListenerCollection(singletonList(new Listener().
-                        setName("PLAINTEXT").setHost("localhost").
-                        setPort(9092)).iterator()))).get();
-
-            // Start migration
-            ZkRecordConsumer migrationConsumer = active.zkRecordConsumer();
-            migrationConsumer.beginMigration().get(30, TimeUnit.SECONDS);
-
-            // Interleave migration batches with heartbeats. Ensure the heartbeat events use the correct
-            // offset when adding to the purgatory. Otherwise, we get errors like:
-            //   There is already a deferred event with offset 292. We should not add one with an offset of 241 which is lower than that.
-            for (int i = 0; i < 100; i++) {
-                Uuid topicId = Uuid.randomUuid();
-                String topicName = "testBrokerHeartbeatDuringMigration" + i;
-                Future<?> migrationFuture = migrationConsumer.acceptBatch(
-                    Arrays.asList(
-                        new ApiMessageAndVersion(new TopicRecord().setTopicId(topicId).setName(topicName), (short) 0),
-                        new ApiMessageAndVersion(new PartitionRecord().setTopicId(topicId).setPartitionId(0).setIsr(Arrays.asList(0, 1, 2)), (short) 0)));
-                active.processBrokerHeartbeat(ANONYMOUS_CONTEXT, new BrokerHeartbeatRequestData().
-                        setWantFence(false).setBrokerEpoch(reply.epoch()).setBrokerId(0).
-                        setCurrentMetadataOffset(100000L + i));
-                migrationFuture.get();
-            }
-
-            // Ensure that we can complete a heartbeat even though we leave migration transaction hanging
-            assertEquals(new BrokerHeartbeatReply(true, false, false, false),
-                active.processBrokerHeartbeat(ANONYMOUS_CONTEXT, new BrokerHeartbeatRequestData().
-                    setWantFence(false).setBrokerEpoch(reply.epoch()).setBrokerId(0).
-                    setCurrentMetadataOffset(100100L)).get());
-
-        }
     }
 }

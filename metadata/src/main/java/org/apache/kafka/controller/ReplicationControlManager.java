@@ -1070,7 +1070,6 @@ public class ReplicationControlManager {
                     featureControl.metadataVersion(),
                     getTopicEffectiveMinIsr(topic.name)
                 )
-                    .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed())
                     .setEligibleLeaderReplicasEnabled(isElrEnabled());
                 if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name())) {
                     builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
@@ -1517,7 +1516,6 @@ public class ReplicationControlManager {
             getTopicEffectiveMinIsr(topic)
         )
             .setElection(election)
-            .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed())
             .setEligibleLeaderReplicasEnabled(isElrEnabled())
             .setDefaultDirProvider(clusterDescriber)
             .build();
@@ -1666,7 +1664,6 @@ public class ReplicationControlManager {
                 getTopicEffectiveMinIsr(topic.name)
             )
                 .setElection(PartitionChangeBuilder.Election.PREFERRED)
-                .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed())
                 .setEligibleLeaderReplicasEnabled(isElrEnabled())
                 .setDefaultDirProvider(clusterDescriber)
                 .build().ifPresent(records::add);
@@ -1936,7 +1933,6 @@ public class ReplicationControlManager {
                 featureControl.metadataVersion(),
                 getTopicEffectiveMinIsr(topic.name)
             );
-            builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
             builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
             if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
                 builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
@@ -2055,7 +2051,6 @@ public class ReplicationControlManager {
             featureControl.metadataVersion(),
             getTopicEffectiveMinIsr(topicName)
         );
-        builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
         builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
         if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicName)) {
             builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
@@ -2117,7 +2112,6 @@ public class ReplicationControlManager {
             featureControl.metadataVersion(),
             getTopicEffectiveMinIsr(topics.get(tp.topicId()).name)
         );
-        builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
         builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
         if (!reassignment.replicas().equals(currentReplicas)) {
             builder.setTargetReplicas(reassignment.replicas());

@@ -208,7 +208,6 @@ public class MetadataRequestBenchmark {
             setApiVersionManager(new SimpleApiVersionManager(
                     ApiMessageType.ListenerType.ZK_BROKER,
                     false,
-                    false,
                     () -> FinalizedFeatures.fromKRaftVersion(MetadataVersion.latestTesting()))).
             build();
     }

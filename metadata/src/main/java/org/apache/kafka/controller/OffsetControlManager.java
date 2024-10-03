@@ -75,7 +75,7 @@ class OffsetControlManager {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
             if (metrics == null) {
-                metrics = new QuorumControllerMetrics(Optional.empty(), time, false);
+                metrics = new QuorumControllerMetrics(Optional.empty(), time);
             }
             return new OffsetControlManager(logContext,
                     snapshotRegistry,
