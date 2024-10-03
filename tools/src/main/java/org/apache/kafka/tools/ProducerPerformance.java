@@ -51,6 +51,7 @@ public class ProducerPerformance {
 
     public static final String DEFAULT_TRANSACTION_ID_PREFIX = "performance-producer-";
     public static final long DEFAULT_TRANSACTION_DURATION_MS = 3000L;
+    public static final int DEFAULT_REPORTING_INTERVAL_MS = 5000;
 
     public static void main(String[] args) throws Exception {
         ProducerPerformance perf = new ProducerPerformance();
@@ -78,9 +79,9 @@ public class ProducerPerformance {
             if (config.warmupRecords > 0) {
                 // TODO: Keep this message? Maybe unnecessary
                 System.out.println("Warmup first " + config.warmupRecords + " records. Steady-state results will print after the complete-test summary.");
-                this.warmupStats = new Stats(config.warmupRecords, 5000);
+                warmupStats = new Stats(config.warmupRecords, DEFAULT_REPORTING_INTERVAL_MS);
             } else {
-                stats = new Stats(config.numRecords, 5000);
+                stats = new Stats(config.numRecords, DEFAULT_REPORTING_INTERVAL_MS);
             }
             long startMs = System.currentTimeMillis();
 
@@ -103,15 +104,17 @@ public class ProducerPerformance {
                 if (warmupStats != null) {
                     if (i < config.warmupRecords) {
                         cb = new PerfCallback(sendStartMs, payload.length, warmupStats);
-                    } else if (i == config.warmupRecords) {
-                        stats = new Stats(config.numRecords - config.warmupRecords, 5000, config.warmupRecords);
+                    } else {
+                        if (i == config.warmupRecords) {
+                            // Create the steady-state 'stats' object here so its start time is correct
+                            stats = new Stats(config.numRecords - config.warmupRecords, DEFAULT_REPORTING_INTERVAL_MS, config.warmupRecords);
+                        }
                         cb = new PerfCallback(sendStartMs, payload.length, stats);
                     }
-                    producer.send(record, cb);
                 } else {
                     cb = new PerfCallback(sendStartMs, payload.length, stats);
-                    producer.send(record, cb);
                 }
+                producer.send(record, cb);
 
                 currentTransactionSize++;
                 if (config.transactionsEnabled && config.transactionDurationMs <= (sendStartMs - transactionStartTime)) {
@@ -188,7 +191,7 @@ public class ProducerPerformance {
         }
         return payload;
     }
-    
+
     static Properties readProps(List<String> producerProps, String producerConfig) throws IOException {
         Properties props = new Properties();
         if (producerConfig != null) {
@@ -484,10 +487,7 @@ public class ProducerPerformance {
             double recsPerSec = 1000.0 * count / (double) elapsed;
             double mbPerSec = 1000.0 * this.bytes / (double) elapsed / (1024.0 * 1024.0);
             int[] percs = percentiles(this.latencies, index, 0.5, 0.95, 0.99, 0.999);
-            String state = "";
-            if (this.warmupRecords > 0) {
-                state = " steady state";
-            }
+            String state = this.warmupRecords > 0 ? "" : " steady state";
             System.out.printf("%d%s records sent, %f records/sec (%.2f MB/sec), %.2f ms avg latency, %.2f ms max latency, %d ms 50th, %d ms 95th, %d ms 99th, %d ms 99.9th.%n",
                               count,
                               state,
@@ -566,6 +566,9 @@ public class ProducerPerformance {
             String payloadFilePath = namespace.getString("payloadFile");
             Long transactionDurationMsArg = namespace.getLong("transactionDurationMs");
             String transactionIdArg = namespace.getString("transactionalId");
+            if (numRecords <= 0) {
+                throw new ArgumentParserException("The value for --num-records must be greater than zero.", parser);
+            }
             if (warmupRecords >= numRecords) {
                 throw new ArgumentParserException("The value for --warmup-records must be strictly fewer than the number of records in the test, --num-records.", parser);
             }
@@ -573,7 +576,7 @@ public class ProducerPerformance {
                 throw new ArgumentParserException("Either --producer-props or --producer.config must be specified.", parser);
             }
             if (transactionDurationMsArg != null && transactionDurationMsArg <= 0) {
-                throw new ArgumentParserException("--transaction-duration-ms should > 0", parser);
+                throw new ArgumentParserException("--transaction-duration-ms should greater than zero", parser);
             }
 
             // since default value gets printed with the help text, we are escaping \n there and replacing it with correct value here.
