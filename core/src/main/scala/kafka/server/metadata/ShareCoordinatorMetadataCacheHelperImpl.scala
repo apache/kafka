@@ -21,7 +21,7 @@ import org.apache.kafka.common.Node
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.MetadataResponse
-import org.apache.kafka.server.share.ShareCoordinatorMetadataCacheHelper
+import org.apache.kafka.server.share.persister.ShareCoordinatorMetadataCacheHelper
 
 import java.util
 import scala.jdk.CollectionConverters._

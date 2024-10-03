@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.share;
+package org.apache.kafka.server.share.persister;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.Errors;
@@ -38,11 +38,10 @@ import java.util.stream.Collectors;
 /**
  * The default implementation of the {@link Persister} interface which is used by the
  * group coordinator and share-partition leaders to manage the durable share-partition state.
- * This implementation uses inter-broker RPCs to make requests with the share coordinator
+ * This implementation uses inter-broker RPCs to make requests to the share coordinator
  * which is responsible for persisting the share-partition state.
  */
 public class DefaultStatePersister implements Persister {
-    private PersisterConfig persisterConfig;
     private PersisterStateManager stateManager;
 
     private static final Logger log = LoggerFactory.getLogger(DefaultStatePersister.class);
@@ -65,7 +64,7 @@ public class DefaultStatePersister implements Persister {
 
     @Override
     public void configure(PersisterConfig config) {
-        this.persisterConfig = Objects.requireNonNull(config);
+        Objects.requireNonNull(config);
         this.stateManager = Objects.requireNonNull(config.stateManager);
         this.stateManager.start();
     }
@@ -98,7 +97,6 @@ public class DefaultStatePersister implements Persister {
      * @return WriteShareGroupStateResult
      */
     public CompletableFuture<WriteShareGroupStateResult> writeState(WriteShareGroupStateParameters request) throws IllegalArgumentException {
-        log.debug("Write share group state request dump - {}", request);
         validate(request);
         GroupTopicPartitionData<PartitionStateBatchData> gtp = request.groupTopicPartitionData();
         String groupId = gtp.groupId();
@@ -167,7 +165,6 @@ public class DefaultStatePersister implements Persister {
      * @return ReadShareGroupStateResult
      */
     public CompletableFuture<ReadShareGroupStateResult> readState(ReadShareGroupStateParameters request) throws IllegalArgumentException {
-        log.debug("Read share group request dump - {}", request);
         validate(request);
         GroupTopicPartitionData<PartitionIdLeaderEpochData> gtp = request.groupTopicPartitionData();
         String groupId = gtp.groupId();

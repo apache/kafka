@@ -15,13 +15,16 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.share;
+package org.apache.kafka.server.share.persister;
 
+import org.apache.kafka.common.Node;
 
-public class PersisterConfig {
-    public final PersisterStateManager stateManager;
+import java.util.List;
 
-    public PersisterConfig(PersisterStateManager stateManager) {
-        this.stateManager = stateManager;
-    }
+public interface ShareCoordinatorMetadataCacheHelper {
+    boolean containsTopic(String topic);
+
+    Node getShareCoordinator(String key, String internalTopicName);
+
+    List<Node> getClusterNodes();
 }

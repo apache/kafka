@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.share;
+package org.apache.kafka.server.share.persister;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -41,6 +41,7 @@ import org.apache.kafka.common.requests.WriteShareGroupStateRequest;
 import org.apache.kafka.common.requests.WriteShareGroupStateResponse;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.util.InterBrokerSendThread;
 import org.apache.kafka.server.util.RequestAndCompletionHandler;
 
@@ -77,10 +78,11 @@ public class PersisterStateManager {
     // holds the set of share coord nodes for each RPC type which is currently sent but not completed
     private final Map<RPCType, Set<Node>> inFlight = new HashMap<>();
 
-    // Mapping of batchable RPCs. The top level grouping is based on destination share coordinator node
-    // Since kafkaApis for each RPC type are separate, we cannot batch different types of RPCs, hence we need
-    // RPCType'd key inner map. The RPC schemas defined in kip-932 are have a single group id per request
-    // hence, we cannot batch RPCs with different groupIds, therefore another inner map keyed on groupId is needed.
+    // Mapping for batchable RPCs. The top level grouping is based on destination share coordinator node.
+    // Since kafkaApis for each RPC type are separate, we cannot batch different types of RPCs. Hence, we need
+    // RPCType'd key inner map.
+    // The RPC schemas defined in kip-932 have a single group id per request. Hence, we cannot batch RPCs
+    // with different groupIds and therefore, another inner map keyed on groupId is needed.
     // Finally, the value is a list of handlers
     private final Map<Node, Map<RPCType, Map<String, List<PersisterStateManagerHandler>>>> nodeRPCMap = new HashMap<>();
 
@@ -148,6 +150,9 @@ public class PersisterStateManager {
      * Parent class of all RPCs. Uses template pattern to implement core methods.
      * Various child classes can extend this class to define how to handle RPC specific
      * responses, retries, batching etc.
+     * <p>
+     * Since the find coordinator RPC/lookup is a necessary pre-condition for all
+     * share state RPCs, the infra code for it is encapsulated in this class itself.
      */
     public abstract class PersisterStateManagerHandler implements RequestCompletionHandler {
         protected Node coordinatorNode;
@@ -644,7 +649,7 @@ public class PersisterStateManager {
         }
 
         /**
-         * the incoming requests will have the keys in the following format
+         * The incoming requests will have the keys in the following format
          * groupId: [
          * topidId1: [part1, part2, part3],
          * topicId2: [part1, part2, part3]
@@ -652,23 +657,28 @@ public class PersisterStateManager {
          * ]
          * Hence, the total number of keys would be 1 x m x n (1 is for the groupId) where m is number of topicIds
          * and n is number of partitions specified per topicId.
-         * Therefore, we must issue a find coordinator RPC for each of the mn keys
-         * and then a read state RPC again for each of the mn keys. Hence, resulting in 2mn RPC calls
-         * due to 1 request.
+         * <p>
+         * For each RPC, we need to identify the coordinator node first.
+         * If the internal share state topic is not found in the metadata cache, when RPC is received
+         * we will need to make a FIND_COORDINATOR RPC which will have the side effect of creating the internal
+         * topic as well. If the node is found in the cache, we will use it directly.
          *
-         * @return list of requests to manage
+         * @return list of requests to send
          */
         @Override
         public Collection<RequestAndCompletionHandler> generateRequests() {
             // There are two sources for requests here:
             // 1. A queue which will contain FIND_CORD RPCs and other non-batchable RPCs.
-            // 2. A hashMap keyed on the share coord node which may contain batched requests.
+            // 2. A hashMap keyed on the share coordinator nodes which may contain batched requests.
 
             if (generateCallback != null) {
                 generateCallback.run();
             }
             List<RequestAndCompletionHandler> requests = new ArrayList<>();
 
+            // honor queue first as find coordinator
+            // is mandatory for batching and sending the
+            // request to correct destination node
             if (!queue.isEmpty()) {
                 PersisterStateManagerHandler handler = queue.peek();
                 queue.poll();
@@ -718,19 +728,22 @@ public class PersisterStateManager {
             // 1. 1st write request arrives
             // 2. it is enqueued in the send thread
             // 3. wakeup event causes the generate requests to find the coordinator
-            // 4. It will cause either RPC or cache lookup
-            // 5. Once complete, the write handler is added to the nodeMap and not the queue
-            // 6. wakeup event causes generate requests to iterate over the map and send the write request (W1) and remove node from the nodeMap and add it to inFlight
-            // 7. Until W1 completes, more write requests (W2, W3, ...) could come in and get added to the nodeMap as per point 3, 4, 5.
-            // 8. If these belong to same node as W1. They will not be sent as the membership test with inFlight will pass.
-            // 9. When W1 completes, it will clear inFlight and raise wakeup event.
-            // 10. At this point W2, W3, etc. could be sent as a combined request thus achieving batching.
+            // 4. it will cause either RPC or cache lookup
+            // 5. once complete, the write handler is added to the nodeMap for batching and not the queue
+            // 6. wakeup event causes generate requests to iterate over the map and send the write request (W1) and
+            // remove node from the nodeMap and add it to inFlight
+            // 7. until W1 completes, more write requests (W2, W3, ...) could come in and get added to the nodeMap as per point 3, 4, 5.
+            // 8. if these belong to same node as W1. They will not be sent as the membership test with inFlight will pass.
+            // 9. when W1 completes, it will clear inFlight and raise wakeup event.
+            // 10. at this point W2, W3, etc. could be sent as a combined request thus achieving batching.
             final Map<RPCType, Set<Node>> sending = new HashMap<>();
             synchronized (nodeMapLock) {
                 nodeRPCMap.forEach((coordNode, rpcTypesPerNode) ->
                     rpcTypesPerNode.forEach((rpcType, groupsPerRpcType) ->
                         groupsPerRpcType.forEach((groupId, handlersPerGroup) -> {
-                            if (!inFlight.containsKey(rpcType) || !inFlight.get(rpcType).contains(coordNode)) { // this will wait for similar rpc type requests to batch
+                            // this condition causes requests of same type and same destination node
+                            // to not be sent immediately but get batched
+                            if (!inFlight.containsKey(rpcType) || !inFlight.get(rpcType).contains(coordNode)) {
                                 AbstractRequest.Builder<? extends AbstractRequest> combinedRequestPerTypePerGroup =
                                     RequestCoalescerHelper.coalesceRequests(groupId, rpcType, handlersPerGroup);
                                 requests.add(new RequestAndCompletionHandler(
@@ -742,6 +755,9 @@ public class PersisterStateManager {
                                             oldVal.remove(coordNode);
                                             return oldVal;
                                         });
+                                        // now the combined request has completed
+                                        // we need to create responses for individual
+                                        // requests which composed the combined request
                                         handlersPerGroup.forEach(handler1 -> handler1.onComplete(response));
                                         wakeup();
                                     }));
@@ -770,6 +786,11 @@ public class PersisterStateManager {
         }
     }
 
+    /**
+     * Util class which takes in builders of requests of the same type
+     * and returns a combined request of the same type. This is required for
+     * batching requests.
+     */
     private static class RequestCoalescerHelper {
         public static AbstractRequest.Builder<? extends AbstractRequest> coalesceRequests(String groupId, RPCType rpcType, List<? extends PersisterStateManagerHandler> handlers) {
             switch (rpcType) {
