@@ -1256,65 +1256,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Get the last committed offset for the given partition (whether the commit happened by this process or
-     * another). This offset will be used as the position for the consumer in the event of a failure.
-     * <p>
-     * This call will do a remote call to get the latest committed offset from the server, and will block until the
-     * committed offset is gotten successfully, an unrecoverable error is encountered (in which case it is thrown to
-     * the caller), or the timeout specified by {@code default.api.timeout.ms} expires (in which case a
-     * {@link org.apache.kafka.common.errors.TimeoutException} is thrown to the caller).
-     *
-     * @param partition The partition to check
-     * @return The last committed offset and metadata or null if there was no prior commit
-     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
-     *             function is called
-     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
-     *             this function is called
-     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
-     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
-     *             configured groupId. See the exception for more details
-     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
-     * @throws org.apache.kafka.common.errors.TimeoutException if the committed offset cannot be found before
-     *             the timeout specified by {@code default.api.timeout.ms} expires.
-     *
-     * @deprecated since 2.4 Use {@link #committed(Set)} instead
-     */
-    @Deprecated
-    @Override
-    public OffsetAndMetadata committed(TopicPartition partition) {
-        return delegate.committed(partition);
-    }
-
-    /**
-     * Get the last committed offset for the given partition (whether the commit happened by this process or
-     * another). This offset will be used as the position for the consumer in the event of a failure.
-     * <p>
-     * This call will block until the position can be determined, an unrecoverable error is
-     * encountered (in which case it is thrown to the caller), or the timeout expires.
-     *
-     * @param partition The partition to check
-     * @param timeout  The maximum amount of time to await the current committed offset
-     * @return The last committed offset and metadata or null if there was no prior commit
-     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
-     *             function is called
-     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
-     *             this function is called
-     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
-     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
-     *             configured groupId. See the exception for more details
-     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
-     * @throws org.apache.kafka.common.errors.TimeoutException if the committed offset cannot be found before
-     *             expiration of the timeout
-     *
-     * @deprecated since 2.4 Use {@link #committed(Set, Duration)} instead
-     */
-    @Deprecated
-    @Override
-    public OffsetAndMetadata committed(TopicPartition partition, final Duration timeout) {
-        return delegate.committed(partition, timeout);
-    }
-
-    /**
      * Get the last committed offsets for the given partitions (whether the commit happened by this process or
      * another). The returned offsets will be used as the position for the consumer in the event of a failure.
      * <p>
