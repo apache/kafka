@@ -242,7 +242,7 @@ public class QueryableStateIntegrationTest {
             kafkaStreams.close(ofSeconds(30));
         }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
-        CLUSTER.deleteAllTopicsAndWait(0L);
+        CLUSTER.deleteAllTopics();
     }
 
     /**

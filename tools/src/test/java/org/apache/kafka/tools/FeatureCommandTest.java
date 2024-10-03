@@ -49,13 +49,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(value = ClusterTestExtensions.class)
 public class FeatureCommandTest {
-    @ClusterTest(types = {Type.ZK}, metadataVersion = MetadataVersion.IBP_3_3_IV1)
-    public void testDescribeWithZK(ClusterInstance cluster) {
-        String commandOutput = ToolsTestUtils.captureStandardOut(() ->
-                assertEquals(0, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe"))
-        );
-        assertEquals("", commandOutput);
-    }
 
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_3_IV1)
     public void testDescribeWithKRaft(ClusterInstance cluster) {
@@ -96,16 +89,6 @@ public class FeatureCommandTest {
                 "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(3)));
     }
 
-    @ClusterTest(types = {Type.ZK}, metadataVersion = MetadataVersion.IBP_3_3_IV1)
-    public void testUpgradeMetadataVersionWithZk(ClusterInstance cluster) {
-        String commandOutput = ToolsTestUtils.captureStandardOut(() ->
-                assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
-                        "upgrade", "--metadata", "3.3-IV2"))
-        );
-        assertEquals("Could not upgrade metadata.version to 6. Could not apply finalized feature " +
-                "update because the provided feature is not supported.", commandOutput);
-    }
-
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_3_IV1)
     public void testUpgradeMetadataVersionWithKraft(ClusterInstance cluster) {
         String commandOutput = ToolsTestUtils.captureStandardOut(() ->
@@ -121,29 +104,6 @@ public class FeatureCommandTest {
         assertEquals("metadata.version was upgraded to 6.", commandOutput);
     }
 
-    @ClusterTest(types = {Type.ZK}, metadataVersion = MetadataVersion.IBP_3_3_IV1)
-    public void testDowngradeMetadataVersionWithZk(ClusterInstance cluster) {
-        String commandOutput = ToolsTestUtils.captureStandardOut(() ->
-                assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
-                        "disable", "--feature", "metadata.version"))
-        );
-        assertEquals("Could not disable metadata.version. Can not delete non-existing finalized feature.", commandOutput);
-
-        commandOutput = ToolsTestUtils.captureStandardOut(() ->
-                assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
-                        "downgrade", "--metadata", "3.3-IV0"))
-        );
-        assertEquals("Could not downgrade metadata.version to 4. Could not apply finalized feature " +
-                        "update because the provided feature is not supported.", commandOutput);
-
-        commandOutput = ToolsTestUtils.captureStandardOut(() ->
-                assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
-                        "downgrade", "--unsafe", "--metadata", "3.3-IV0"))
-        );
-        assertEquals("Could not downgrade metadata.version to 4. Could not apply finalized feature " +
-                "update because the provided feature is not supported.", commandOutput);
-    }
-
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_3_IV1)
     public void testDowngradeMetadataVersionWithKRaft(ClusterInstance cluster) {
         String commandOutput = ToolsTestUtils.captureStandardOut(() ->
@@ -151,24 +111,24 @@ public class FeatureCommandTest {
                         "disable", "--feature", "metadata.version"))
         );
         // Change expected message to reflect possible MetadataVersion range 1-N (N increases when adding a new version)
-        assertEquals("Could not disable metadata.version. Invalid update version 0 for feature " +
-                "metadata.version. Local controller 3000 only supports versions 1-25", commandOutput);
+        assertEquals("Could not disable metadata.version. The update failed for all features since the following " +
+                "feature had an error: Invalid update version 0 for feature metadata.version. Local controller 3000 only supports versions 1-25", commandOutput);
 
         commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
                         "downgrade", "--metadata", "3.3-IV0"))
 
         );
-        assertEquals("Could not downgrade metadata.version to 4. Invalid metadata.version 4. " +
-                "Refusing to perform the requested downgrade because it might delete metadata information.", commandOutput);
+        assertEquals("Could not downgrade metadata.version to 4. The update failed for all features since the following " +
+                "feature had an error: Invalid metadata.version 4. Refusing to perform the requested downgrade because it might delete metadata information.", commandOutput);
 
         commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
                         "downgrade", "--unsafe", "--metadata", "3.3-IV0"))
 
         );
-        assertEquals("Could not downgrade metadata.version to 4. Invalid metadata.version 4. " +
-                "Unsafe metadata downgrade is not supported in this version.", commandOutput);
+        assertEquals("Could not downgrade metadata.version to 4. The update failed for all features since the following " +
+                "feature had an error: Invalid metadata.version 4. Unsafe metadata downgrade is not supported in this version.", commandOutput);
     }
 
     private String outputWithoutEpoch(String output) {

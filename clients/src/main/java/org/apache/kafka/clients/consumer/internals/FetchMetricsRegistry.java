@@ -141,7 +141,7 @@ public class FetchMetricsRegistry {
         this.partitionRecordsLeadAvg = new MetricNameTemplate("records-lead-avg", groupName,
                 "The average lead of the partition", partitionTags);
         this.partitionPreferredReadReplica = new MetricNameTemplate(
-                "preferred-read-replica", "consumer-fetch-manager-metrics",
+                "preferred-read-replica", groupName,
                 "The current read replica for the partition, or -1 if reading from leader", partitionTags);
     }
 

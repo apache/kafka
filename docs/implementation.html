@@ -55,6 +55,7 @@ maxTimestamp: int64
 producerId: int64
 producerEpoch: int16
 baseSequence: int32
+recordsCount: int32
 records: [Record]</code></pre>
     <p> Note that when compression is enabled, the compressed record data is serialized directly following the count of the number of records. </p>
 
@@ -88,8 +89,9 @@ timestampDelta: varlong
 offsetDelta: varint
 keyLength: varint
 key: byte[]
-valueLen: varint
+valueLength: varint
 value: byte[]
+headersCount: varint
 Headers => [Header]</code></pre>
 	<h5 class="anchor-heading"><a id="recordheader" class="anchor-link"></a><a href="#recordheader">5.3.2.1 Record Header</a></h5>
 	<pre><code class="language-text">headerKeyLength: varint
