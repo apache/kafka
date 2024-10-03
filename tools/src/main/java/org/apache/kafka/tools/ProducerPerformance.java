@@ -542,7 +542,6 @@ public class ProducerPerformance {
         final String topicName;
         final Long numRecords;
         final Long warmupRecords;
-        final Long numRecords;
         final Integer recordSize;
         final double throughput;
         final boolean payloadMonotonic;
