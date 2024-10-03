@@ -956,7 +956,7 @@ public class RemoteLogManager implements Closeable {
             try {
                 customMetadata = remoteLogStorageManager.copyLogSegmentData(copySegmentStartedRlsm, segmentData);
             } catch (RemoteStorageException e) {
-                logger.error("Copy failed, cleaning segment {}", copySegmentStartedRlsm.remoteLogSegmentId());
+                logger.info("Copy failed, cleaning segment {}", copySegmentStartedRlsm.remoteLogSegmentId());
                 try {
                     deleteRemoteLogSegment(
                         copySegmentStartedRlsm,
@@ -981,7 +981,7 @@ public class RemoteLogManager implements Closeable {
                 long customMetadataSize = customMetadata.get().value().length;
                 if (customMetadataSize > this.customMetadataSizeLimit) {
                     CustomMetadataSizeLimitExceededException e = new CustomMetadataSizeLimitExceededException();
-                    logger.error("Custom metadata size {} exceeds configured limit {}." +
+                    logger.info("Custom metadata size {} exceeds configured limit {}." +
                                     " Copying will be stopped and copied segment will be attempted to clean." +
                                     " Original metadata: {}",
                             customMetadataSize, this.customMetadataSizeLimit, copySegmentStartedRlsm, e);
