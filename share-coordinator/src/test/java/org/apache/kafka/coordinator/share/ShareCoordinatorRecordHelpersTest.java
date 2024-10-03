@@ -23,7 +23,7 @@ import org.apache.kafka.coordinator.share.generated.ShareSnapshotValue;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateKey;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.share.PersisterStateBatch;
+import org.apache.kafka.server.share.persister.PersisterStateBatch;
 
 import org.junit.jupiter.api.Test;
 

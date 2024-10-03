@@ -15,10 +15,20 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.share;
+package org.apache.kafka.server.share.persister;
+
+import java.util.List;
 
 /**
- * Marker interface for result classes related to the {@link Persister} result classes.
+ * This interface is implemented by classes used to contain the data for a partition with state batch data
+ * in the interface to {@link Persister}.
  */
-public interface PersisterResult {
+public interface PartitionStateBatchData extends PartitionInfoData, PartitionIdData {
+    int stateEpoch();
+
+    long startOffset();
+
+    int leaderEpoch();
+
+    List<PersisterStateBatch> stateBatches();
 }
