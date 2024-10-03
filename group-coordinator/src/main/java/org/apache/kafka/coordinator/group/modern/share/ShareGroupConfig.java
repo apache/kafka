@@ -141,10 +141,10 @@ public class ShareGroupConfig {
 
     private void validate() {
         Utils.require(shareGroupRecordLockDurationMs >= shareGroupMinRecordLockDurationMs,
-                String.format("%s must be greater than or equals to %s",
+                String.format("%s must be greater than or equal to %s",
                         SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG));
         Utils.require(shareGroupMaxRecordLockDurationMs >= shareGroupRecordLockDurationMs,
-                String.format("%s must be greater than or equals to %s",
+                String.format("%s must be greater than or equal to %s",
                         SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG));
 
     }
