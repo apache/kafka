@@ -124,8 +124,8 @@ ext {
   }
 
   runtimeLibs = [
-          libs.slf4jReload4j,
-          libs.junitPlatformLanucher,
+    libs.slf4jReload4j,
+    libs.junitPlatformLanucher,
   ]
 }
 
