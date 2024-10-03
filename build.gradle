@@ -1660,13 +1660,15 @@ project(':transaction-coordinator') {
   dependencies {
     implementation libs.jacksonDatabind
     implementation project(':clients')
+    testImplementation libs.junitJupiter
+    testImplementation libs.mockitoCore
     generator project(':generator')
   }
 
   sourceSets {
     main {
       java {
-        srcDirs = ["src/main/java", "${projectDir}/build/generated/main/java"]
+        srcDirs = ["src/main/java"]
       }
     }
     test {
