@@ -41,7 +41,12 @@ public class TopicIdsTest {
 
     @Test
     public void testTopicsImageCannotBeNull() {
-        assertThrows(NullPointerException.class, () -> new TopicIds(Collections.emptySet(), null));
+        assertThrows(NullPointerException.class, () -> new TopicIds(Collections.emptySet(), (TopicsImage) null));
+    }
+
+    @Test
+    public void testTopicResolverCannotBeNull() {
+        assertThrows(NullPointerException.class, () -> new TopicIds(Collections.emptySet(), (TopicIds.TopicResolver) null));
     }
 
     @Test
