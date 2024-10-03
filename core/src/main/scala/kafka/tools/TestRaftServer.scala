@@ -147,8 +147,7 @@ class TestRaftServer(
       CoreUtils.swallow(dataPlaneRequestHandlerPool.shutdown(), this)
     if (socketServer != null)
       CoreUtils.swallow(socketServer.shutdown(), this)
-    if (metrics != null)
-      CoreUtils.swallow(metrics.close(), this)
+    Utils.closeQuietly(metrics, "metrics")
     shutdownLatch.countDown()
   }
 
