@@ -877,9 +877,9 @@ public class RemoteLogManager implements Closeable {
             } catch (RemoteStorageException e) {
                 try {
                     remoteLogStorageManager.deleteLogSegmentData(copySegmentStartedRlsm);
-                    logger.info("Successfully cleaned segment {} after failing to copy segment", segmentId);
+                    logger.info("Successfully cleaned segment {} after failing to copy segment", id);
                 } catch (RemoteStorageException e1) {
-                    logger.error("Error while cleaning segment {}, consider cleaning manually", segmentId, e1);
+                    logger.error("Error while cleaning segment {}, consider cleaning manually", id, e1);
                 }
                 throw e;
             }

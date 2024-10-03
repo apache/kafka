@@ -731,12 +731,14 @@ public class RemoteLogManagerTest {
         CompletableFuture<Void> dummyFuture = new CompletableFuture<>();
         dummyFuture.complete(null);
         when(remoteLogMetadataManager.addRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadata.class))).thenReturn(dummyFuture);
-        when(rlmCopyQuotaManager.getThrottleTimeMs()).thenReturn(quotaAvailableThrottleTime);
+        when(rlmCopyQuotaManager.isQuotaExceeded()).thenReturn(false);
 
         // throw exception when copyLogSegmentData
         when(remoteStorageManager.copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class)))
                 .thenThrow(new RemoteStorageException("test"));
-        RemoteLogManager.RLMCopyTask task = remoteLogManager.new RLMCopyTask(leaderTopicIdPartition, 128);
+
+        RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition, 128);
+        task.convertToLeader(epochEntry2.epoch);
         task.copyLogSegmentsToRemote(mockLog);
 
         ArgumentCaptor<RemoteLogSegmentMetadata> remoteLogSegmentMetadataArg = ArgumentCaptor.forClass(RemoteLogSegmentMetadata.class);
@@ -2321,7 +2323,8 @@ public class RemoteLogManagerTest {
         doNothing().when(remoteStorageManager).deleteLogSegmentData(any(RemoteLogSegmentMetadata.class));
 
         // RUN 1
-        RemoteLogManager.RLMExpirationTask task = remoteLogManager.new RLMExpirationTask(leaderTopicIdPartition);
+        RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition, 128);
+        task.convertToLeader(epochEntry2.epoch);
         task.cleanupExpiredRemoteLogSegments();
         verify(remoteStorageManager, times(2)).deleteLogSegmentData(any(RemoteLogSegmentMetadata.class));
         verify(remoteStorageManager).deleteLogSegmentData(s1);
