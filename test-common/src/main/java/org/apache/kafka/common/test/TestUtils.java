@@ -25,10 +25,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Random;
 import java.util.function.Supplier;
 
 /**
@@ -37,17 +35,8 @@ import java.util.function.Supplier;
 public class TestUtils {
     private static final Logger log = LoggerFactory.getLogger(TestUtils.class);
 
-    public static final File IO_TMP_DIR = new File(System.getProperty("java.io.tmpdir"));
-
-    public static final String LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-    public static final String DIGITS = "0123456789";
-    public static final String LETTERS_AND_DIGITS = LETTERS + DIGITS;
-
-    /* A consistent random number generator to make tests repeatable */
-    public static final Random SEEDED_RANDOM = new Random(192348092834L);
-    public static final Random RANDOM = new Random();
-    public static final long DEFAULT_POLL_INTERVAL_MS = 100;
-    public static final long DEFAULT_MAX_WAIT_MS = 15000;
+    private static final long DEFAULT_POLL_INTERVAL_MS = 100;
+    private static final long DEFAULT_MAX_WAIT_MS = 15000;
 
 
     /**
@@ -55,7 +44,7 @@ public class TestUtils {
      * to generate its name.
      * @throws IOException
      */
-    public static File tempFile(final String prefix, final String suffix) throws IOException {
+    static File tempFile(final String prefix, final String suffix) throws IOException {
         final File file = Files.createTempFile(prefix, suffix).toFile();
         file.deleteOnExit();
         return file;
@@ -70,21 +59,11 @@ public class TestUtils {
     }
 
     /**
-     * Create a file with the given contents in the default temporary-file directory,
-     * using `kafka` as the prefix and `tmp` as the suffix to generate its name.
-     */
-    public static File tempFile(final String contents) throws IOException {
-        final File file = tempFile();
-        Files.write(file.toPath(), contents.getBytes(StandardCharsets.UTF_8));
-        return file;
-    }
-
-    /**
      * Create a temporary relative directory in the default temporary-file directory with the given prefix.
      *
      * @param prefix The prefix of the temporary directory, if null using "kafka-" as default prefix
      */
-    public static File tempDirectory(final String prefix) {
+    static File tempDirectory(final String prefix) {
         return tempDirectory(null, prefix);
     }
 
@@ -94,24 +73,8 @@ public class TestUtils {
      *
      * @return the temporary directory just created.
      */
-    public static File tempDirectory() {
+    static File tempDirectory() {
         return tempDirectory(null);
-    }
-
-    /**
-     * Create a temporary directory under the given root directory.
-     * The root directory is removed on JVM exit if it doesn't already exist
-     * when this function is invoked.
-     *
-     * @param root path to create temporary directory under
-     * @return the temporary directory created within {@code root}
-     */
-    public static File tempRelativeDir(String root) {
-        File rootFile = new File(root);
-        if (rootFile.mkdir()) {
-            rootFile.deleteOnExit();
-        }
-        return tempDirectory(rootFile.toPath(), null);
     }
 
     /**
@@ -120,7 +83,7 @@ public class TestUtils {
      * @param parent The parent folder path name, if null using the default temporary-file directory
      * @param prefix The prefix of the temporary directory, if null using "kafka-" as default prefix
      */
-    public static File tempDirectory(final Path parent, String prefix) {
+    static File tempDirectory(final Path parent, String prefix) {
         final File file;
         prefix = prefix == null ? "kafka-" : prefix;
         try {
@@ -171,7 +134,7 @@ public class TestUtils {
      * without unnecessarily increasing test time (as the condition is checked frequently). The longer timeout is needed to
      * avoid transient failures due to slow or overloaded machines.
      */
-    public static void waitForCondition(final TestCondition testCondition, final long maxWaitMs, Supplier<String> conditionDetailsSupplier) throws InterruptedException {
+    static void waitForCondition(final TestCondition testCondition, final long maxWaitMs, Supplier<String> conditionDetailsSupplier) throws InterruptedException {
         waitForCondition(testCondition, maxWaitMs, DEFAULT_POLL_INTERVAL_MS, conditionDetailsSupplier);
     }
 
@@ -182,7 +145,7 @@ public class TestUtils {
      * checked frequently). The longer timeout is needed to avoid transient failures due to slow or overloaded
      * machines.
      */
-    public static void waitForCondition(
+    static void waitForCondition(
         final TestCondition testCondition,
         final long maxWaitMs,
         final long pollIntervalMs,
@@ -205,21 +168,9 @@ public class TestUtils {
      * @param runnable the code to attempt to execute successfully.
      * @throws InterruptedException if the current thread is interrupted while waiting for {@code runnable} to complete successfully.
      */
-    public static void retryOnExceptionWithTimeout(final long timeoutMs,
+    static void retryOnExceptionWithTimeout(final long timeoutMs,
                                                    final ValuelessCallable runnable) throws InterruptedException {
         retryOnExceptionWithTimeout(timeoutMs, DEFAULT_POLL_INTERVAL_MS, runnable);
-    }
-
-    /**
-     * Wait for the given runnable to complete successfully, i.e. throw now {@link Exception}s or
-     * {@link AssertionError}s, or for the default timeout to expire. If the timeout expires then the
-     * last exception or assertion failure will be thrown thus providing context for the failure.
-     *
-     * @param runnable the code to attempt to execute successfully.
-     * @throws InterruptedException if the current thread is interrupted while waiting for {@code runnable} to complete successfully.
-     */
-    public static void retryOnExceptionWithTimeout(final ValuelessCallable runnable) throws InterruptedException {
-        retryOnExceptionWithTimeout(DEFAULT_MAX_WAIT_MS, DEFAULT_POLL_INTERVAL_MS, runnable);
     }
 
     /**
@@ -232,7 +183,7 @@ public class TestUtils {
      * @param runnable the code to attempt to execute successfully.
      * @throws InterruptedException if the current thread is interrupted while waiting for {@code runnable} to complete successfully.
      */
-    public static void retryOnExceptionWithTimeout(final long timeoutMs,
+    static void retryOnExceptionWithTimeout(final long timeoutMs,
                                                    final long pollIntervalMs,
                                                    final ValuelessCallable runnable) throws InterruptedException {
         final long expectedEnd = System.currentTimeMillis() + timeoutMs;
