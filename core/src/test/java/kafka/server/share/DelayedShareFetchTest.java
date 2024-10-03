@@ -340,7 +340,7 @@ public class DelayedShareFetchTest {
             .withPartitionCacheMap(partitionCacheMap)
             .build();
 
-        // We add a delayed share fetch entry to the purgatory which will be waiting for completion since none of the
+        // We add a delayed share fetch entry to the purgatory which will be waiting for completion since neither of the
         // partitions in the share fetch request can be acquired.
         delayedShareFetchPurgatory.tryCompleteElseWatch(delayedShareFetch1, CollectionConverters.asScala(delayedShareFetchWatchKeys).toSeq());
 

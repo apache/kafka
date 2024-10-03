@@ -457,7 +457,8 @@ class BrokerServer(
         time = time,
         tokenManager = tokenManager,
         apiVersionManager = apiVersionManager,
-        clientMetricsManager = Some(clientMetricsManager))
+        clientMetricsManager = Some(clientMetricsManager),
+        defaultActionQueue = defaultActionQueue)
 
       dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
         socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,

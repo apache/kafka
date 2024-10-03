@@ -120,7 +120,8 @@ class KafkaApis(val requestChannel: RequestChannel,
                 time: Time,
                 val tokenManager: DelegationTokenManager,
                 val apiVersionManager: ApiVersionManager,
-                val clientMetricsManager: Option[ClientMetricsManager]
+                val clientMetricsManager: Option[ClientMetricsManager],
+                val defaultActionQueue: ActionQueue
 ) extends ApiRequestHandler with Logging {
 
   type FetchResponseStats = Map[TopicPartition, RecordValidationStats]

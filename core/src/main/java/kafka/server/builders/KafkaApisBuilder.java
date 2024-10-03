@@ -19,6 +19,7 @@ package kafka.server.builders;
 
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
+import kafka.server.ActionQueue;
 import kafka.server.ApiVersionManager;
 import kafka.server.AutoTopicCreationManager;
 import kafka.server.DelegationTokenManager;
@@ -69,6 +70,7 @@ public class KafkaApisBuilder {
     private ApiVersionManager apiVersionManager = null;
     private Optional<ClientMetricsManager> clientMetricsManager = Optional.empty();
     private Optional<ShareCoordinator> shareCoordinator = Optional.empty();
+    private ActionQueue defaultActionQueue = null;
 
     public KafkaApisBuilder setRequestChannel(RequestChannel requestChannel) {
         this.requestChannel = requestChannel;
@@ -180,6 +182,11 @@ public class KafkaApisBuilder {
         return this;
     }
 
+    public KafkaApisBuilder setDefaultActionQueue(ActionQueue defaultActionQueue) {
+        this.defaultActionQueue = defaultActionQueue;
+        return this;
+    }
+
     public KafkaApis build() {
         if (requestChannel == null) throw new RuntimeException("you must set requestChannel");
         if (metadataSupport == null) throw new RuntimeException("you must set metadataSupport");
@@ -196,6 +203,7 @@ public class KafkaApisBuilder {
         if (fetchManager == null) throw new RuntimeException("You must set fetchManager");
         if (brokerTopicStats == null) brokerTopicStats = new BrokerTopicStats(config.remoteLogManagerConfig().isRemoteStorageSystemEnabled());
         if (apiVersionManager == null) throw new RuntimeException("You must set apiVersionManager");
+        if (defaultActionQueue == null) throw new RuntimeException("You must set defaultActionQueue");
 
         return new KafkaApis(requestChannel,
                              metadataSupport,
@@ -218,6 +226,7 @@ public class KafkaApisBuilder {
                              time,
                              tokenManager,
                              apiVersionManager,
-                             OptionConverters.toScala(clientMetricsManager));
+                             OptionConverters.toScala(clientMetricsManager),
+                             defaultActionQueue);
     }
 }

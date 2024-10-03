@@ -25,6 +25,7 @@ import kafka.server.BrokerFeatures;
 import kafka.server.ClientQuotaManager;
 import kafka.server.ClientRequestQuotaManager;
 import kafka.server.ControllerMutationQuotaManager;
+import kafka.server.DelayedActionQueue;
 import kafka.server.FetchManager;
 import kafka.server.KafkaApis;
 import kafka.server.KafkaConfig;
@@ -210,6 +211,7 @@ public class MetadataRequestBenchmark {
                     false,
                     false,
                     () -> FinalizedFeatures.fromKRaftVersion(MetadataVersion.latestTesting()))).
+            setDefaultActionQueue(new DelayedActionQueue()).
             build();
     }
 
