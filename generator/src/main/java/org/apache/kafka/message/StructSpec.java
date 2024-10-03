@@ -56,13 +56,13 @@ public final class StructSpec {
             // Each field should have a unique name.
             HashSet<String> names = new HashSet<>();
             for (FieldSpec field : fields) {
-                if (field.tag().isPresent()) {
-                    if (!tags.add(field.tag().get())) {
+                field.tag().ifPresent(tag -> {
+                    if (!tags.add(tag)) {
                         throw new RuntimeException("In " + name + ", field " + field.name() +
-                            " has a duplicate tag ID " + field.tag().get() + ". All tags IDs " +
-                            "must be unique.");
+                                " has a duplicate tag ID " + tag + ". All tags IDs " +
+                                "must be unique.");
                     }
-                }
+                });
                 if (!names.add(field.name())) {
                     throw new RuntimeException("In " + name + ", field " + field.name() +
                             " has a duplicate name " + field.name() + ". All field names " +
