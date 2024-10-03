@@ -6,13 +6,8 @@ Trogdor can run benchmarks and other workloads.  Trogdor can also inject faults 
 
 Quickstart
 =========================================================
-First, we want to start a single-node Kafka cluster with a ZooKeeper and a broker.
+First, we want to start a single-node Kafka cluster with one broker.
 
-Running ZooKeeper:
-
-```
- ./bin/zookeeper-server-start.sh ./config/zookeeper.properties &> /tmp/zookeeper.log &
-```
 Running Kafka:
 
 ```
