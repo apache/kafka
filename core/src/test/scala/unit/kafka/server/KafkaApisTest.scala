@@ -147,6 +147,7 @@ class KafkaApisTest extends Logging {
     clientControllerQuotaManager, replicaQuotaManager, replicaQuotaManager, replicaQuotaManager, None)
   private val fetchManager: FetchManager = mock(classOf[FetchManager])
   private val sharePartitionManager: SharePartitionManager = mock(classOf[SharePartitionManager])
+  private val defaultActionQueue: ActionQueue = mock(classOf[ActionQueue])
   private val clientMetricsManager: ClientMetricsManager = mock(classOf[ClientMetricsManager])
   private val brokerTopicStats = new BrokerTopicStats
   private val clusterId = "clusterId"
@@ -248,7 +249,7 @@ class KafkaApisTest extends Logging {
       tokenManager = null,
       apiVersionManager = apiVersionManager,
       clientMetricsManager = clientMetricsManagerOpt,
-      defaultActionQueue = new DelayedActionQueue)
+      defaultActionQueue = defaultActionQueue)
   }
 
   private def setupFeatures(featureVersions: Seq[FeatureVersion]): Unit = {

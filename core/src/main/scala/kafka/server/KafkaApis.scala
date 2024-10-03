@@ -288,7 +288,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // are kept in a queue. We add the logic to check the ReplicaManager queue at the end of KafkaApis.handle() and the
       // expiration thread for certain delayed operations (e.g. DelayedJoin)
       // Delayed fetches are also completed by ReplicaFetcherThread.
-      defaultActionQueue.tryCompleteActions()
+      replicaManager.tryCompleteActions()
       // The local completion time may be set while processing the request. Only record it if it's unset.
       if (request.apiLocalCompleteTimeNanos < 0)
         request.apiLocalCompleteTimeNanos = time.nanoseconds
