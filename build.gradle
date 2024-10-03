@@ -542,6 +542,9 @@ subprojects {
       hadFailure = false  // Used to track if any tests failed, see afterSuite below
     }
 
+    outputs.upToDateWhen { false } // Never consider quarantined test up-to-date
+    outputs.cacheIf { false } // Never cache quarantined test results
+
     maxParallelForks = maxTestForks
     ignoreFailures = userIgnoreFailures || ext.isGithubActions
 
