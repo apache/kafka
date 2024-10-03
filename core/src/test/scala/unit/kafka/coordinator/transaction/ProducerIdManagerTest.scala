@@ -181,8 +181,9 @@ class ProducerIdManagerTest {
     val time = new MockTime()
     val manager = new MockProducerIdManager(0, 0, 1, errorQueue = queue(Errors.NONE, error), time = time)
 
+    Thread.sleep(1000)
     verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 0, 1), 0)
-
+    Thread.sleep(1000)
     verifyFailure(manager)
 
     time.sleep(RetryBackoffMs)
