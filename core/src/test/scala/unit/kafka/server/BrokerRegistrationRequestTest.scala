@@ -17,10 +17,8 @@
 
 package kafka.server
 
-import kafka.test.ClusterInstance
-import kafka.test.annotation._
-import kafka.test.junit.ClusterTestExtensions
-import kafka.test.junit.RaftClusterInvocationContext.RaftClusterInstance
+import org.apache.kafka.common.test.api.{AutoStart, ClusterConfigProperty, ClusterInstance, ClusterTest, ClusterTestExtensions, ClusterTests, Type}
+import org.apache.kafka.common.test.api.RaftClusterInvocationContext.RaftClusterInstance
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.{BrokerRegistrationRequestData, CreateTopicsRequestData}
@@ -34,6 +32,7 @@ import org.apache.kafka.common.{Node, Uuid}
 import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.extension.ExtendWith
 
 import java.util
@@ -207,6 +206,7 @@ class BrokerRegistrationRequestTest {
     }
   }
 
+  @Disabled("zk migration is removed from ClusterTestExtensions")
   @ClusterTest(
     types = Array(Type.KRAFT),
     brokers = 1,
@@ -243,6 +243,7 @@ class BrokerRegistrationRequestTest {
     }
   }
 
+  @Disabled("zk migration is removed from ClusterTestExtensions")
   @ClusterTest(
     types = Array(Type.KRAFT),
     brokers = 1,
@@ -275,6 +276,7 @@ class BrokerRegistrationRequestTest {
    * Start a KRaft cluster with migrations enabled, verify that the controller does not accept metadata changes
    * through the RPCs. The migration never proceeds past pre-migration since no ZK brokers are registered.
    */
+  @Disabled("zk migration is removed from ClusterTestExtensions")
   @ClusterTests(Array(
     new ClusterTest(types = Array(Type.KRAFT), autoStart = AutoStart.NO, controllers = 1, metadataVersion = MetadataVersion.IBP_3_4_IV0,
       serverProperties = Array(new ClusterConfigProperty(key = "zookeeper.metadata.migration.enable", value = "true")))

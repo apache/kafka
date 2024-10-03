@@ -33,7 +33,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
-import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.common.{ClusterResource, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord
 import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, GroupCoordinatorRuntimeMetrics}
@@ -47,7 +47,7 @@ import org.apache.kafka.server.{AssignmentsManager, ClientMetricsManager, NodeTo
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, TopicIdPartition}
 import org.apache.kafka.server.config.ConfigType
-import org.apache.kafka.server.share.{NoOpShareStatePersister, Persister}
+import org.apache.kafka.server.share.persister.{NoOpShareStatePersister, Persister}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.{ClientMetricsReceiverPlugin, KafkaYammerMetrics}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
@@ -719,7 +719,7 @@ class BrokerServer(
         CoreUtils.swallow(dataPlaneRequestHandlerPool.shutdown(), this)
       if (dataPlaneRequestProcessor != null)
         CoreUtils.swallow(dataPlaneRequestProcessor.close(), this)
-      CoreUtils.swallow(authorizer.foreach(_.close()), this)
+      authorizer.foreach(Utils.closeQuietly(_, "authorizer"))
 
       /**
        * We must shutdown the scheduler early because otherwise, the scheduler could touch other
@@ -764,23 +764,21 @@ class BrokerServer(
 
       // Close remote log manager to give a chance to any of its underlying clients
       // (especially in RemoteStorageManager and RemoteLogMetadataManager) to close gracefully.
-      CoreUtils.swallow(remoteLogManagerOpt.foreach(_.close()), this)
+      remoteLogManagerOpt.foreach(Utils.closeQuietly(_, "remote log manager"))
 
       if (quotaManagers != null)
         CoreUtils.swallow(quotaManagers.shutdown(), this)
 
       if (socketServer != null)
         CoreUtils.swallow(socketServer.shutdown(), this)
-      if (brokerTopicStats != null)
-        CoreUtils.swallow(brokerTopicStats.close(), this)
-      if (sharePartitionManager != null)
-        CoreUtils.swallow(sharePartitionManager.close(), this)
+      Utils.closeQuietly(brokerTopicStats, "broker topic stats")
+      Utils.closeQuietly(sharePartitionManager, "share partition manager")
 
       isShuttingDown.set(false)
 
       CoreUtils.swallow(lifecycleManager.close(), this)
       CoreUtils.swallow(config.dynamicConfig.clear(), this)
-      CoreUtils.swallow(clientMetricsManager.close(), this)
+      Utils.closeQuietly(clientMetricsManager, "client metrics manager")
       sharedServer.stopForBroker()
       info("shut down completed")
     } catch {
