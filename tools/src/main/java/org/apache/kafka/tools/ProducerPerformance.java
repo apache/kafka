@@ -566,7 +566,6 @@ public class ProducerPerformance {
             String payloadFilePath = namespace.getString("payloadFile");
             Long transactionDurationMsArg = namespace.getLong("transactionDurationMs");
             String transactionIdArg = namespace.getString("transactionalId");
-            }
             if (numRecords != null && numRecords <= 0) {
                 throw new ArgumentParserException("--num-records should be greater than zero", parser);
             }
