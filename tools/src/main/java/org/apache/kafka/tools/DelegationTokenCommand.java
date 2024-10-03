@@ -17,6 +17,7 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.CreateDelegationTokenOptions;
 import org.apache.kafka.clients.admin.CreateDelegationTokenResult;
 import org.apache.kafka.clients.admin.DescribeDelegationTokenOptions;
@@ -181,12 +182,16 @@ public class DelegationTokenCommand {
 
     private static Admin createAdminClient(DelegationTokenCommandOptions opts) throws IOException {
         Properties props = Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt));
-        props.put("bootstrap.servers", opts.options.valueOf(opts.bootstrapServerOpt));
+        if (opts.options.has(opts.bootstrapServerOpt))
+            props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt));
+        else
+            props.put(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, opts.options.valueOf(opts.bootstrapControllerOpt));
         return Admin.create(props);
     }
 
     static class DelegationTokenCommandOptions extends CommandDefaultOptions {
         public final OptionSpec<String> bootstrapServerOpt;
+        public final OptionSpec<String> bootstrapControllerOpt;
         public final OptionSpec<String> commandConfigOpt;
         public final OptionSpec<Void> createOpt;
         public final OptionSpec<Void> renewOpt;
@@ -202,11 +207,17 @@ public class DelegationTokenCommand {
         public DelegationTokenCommandOptions(String[] args) {
             super(args);
 
-            String bootstrapServerDoc = "REQUIRED: server(s) to use for bootstrapping.";
+            String bootstrapServerDoc = "REQUIRED: server(s) or controller(s) to use for bootstrapping.";
+            String bootstrapControllerDoc = "REQUIRED: server(s) or controller(s) to use for bootstrapping. A comma-separated list of bootstrap.controllers that can be supplied instead of bootstrap-servers." +
+                    "This is useful for administrators who wish to bypass the brokers.";
             String commandConfigDoc = "REQUIRED: A property file containing configs to be passed to Admin Client. Token management" +
                     " operations are allowed in secure mode only. This config file is used to pass security related configs.";
 
             this.bootstrapServerOpt = parser.accepts("bootstrap-server", bootstrapServerDoc)
+                    .withRequiredArg()
+                    .ofType(String.class);
+
+            this.bootstrapControllerOpt = parser.accepts("bootstrap-controller", bootstrapControllerDoc)
                     .withRequiredArg()
                     .ofType(String.class);
 
@@ -283,8 +294,16 @@ public class DelegationTokenCommand {
         }
         
         public void checkArgs() {
+            if (options.has(bootstrapServerOpt) && options.has(bootstrapControllerOpt)) {
+                CommandLineUtils.printUsageAndExit(parser, "Only one of --bootstrap-server or --bootstrap-controller must be specified");
+            }
+
             // check required args
-            CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt, commandConfigOpt);
+            if (options.has(bootstrapServerOpt)) {
+                CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt, commandConfigOpt);
+            } else {
+                CommandLineUtils.checkRequiredArgs(parser, options, bootstrapControllerOpt, commandConfigOpt);
+            }
 
             if (options.has(createOpt)) {
                 CommandLineUtils.checkRequiredArgs(parser, options, maxLifeTimeOpt);

@@ -3463,7 +3463,7 @@ public class KafkaAdminClient extends AdminClient {
         final KafkaFutureImpl<List<DelegationToken>>  tokensFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         runnable.call(new Call("describeDelegationToken", calcDeadlineMs(now, options.timeoutMs()),
-            new LeastLoadedNodeProvider()) {
+            new LeastLoadedBrokerOrActiveKController()) {
 
             @Override
             DescribeDelegationTokenRequest.Builder createRequest(int timeoutMs) {
@@ -4254,7 +4254,7 @@ public class KafkaAdminClient extends AdminClient {
         final KafkaFutureImpl<DescribeUserScramCredentialsResponseData> dataFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         Call call = new Call("describeUserScramCredentials", calcDeadlineMs(now, options.timeoutMs()),
-                new LeastLoadedNodeProvider()) {
+                new LeastLoadedBrokerOrActiveKController()) {
             @Override
             public DescribeUserScramCredentialsRequest.Builder createRequest(final int timeoutMs) {
                 final DescribeUserScramCredentialsRequestData requestData = new DescribeUserScramCredentialsRequestData();
@@ -4688,7 +4688,7 @@ public class KafkaAdminClient extends AdminClient {
         final KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         final Call call = new Call("unregisterBroker", calcDeadlineMs(now, options.timeoutMs()),
-                new LeastLoadedNodeProvider()) {
+                new LeastLoadedBrokerOrActiveKController()) {
 
             @Override
             UnregisterBrokerRequest.Builder createRequest(int timeoutMs) {
