@@ -25,11 +25,11 @@ import java.util.Objects;
 /**
  * This class contains the information for a single batch of state information for use by the {@link Persister}.
  */
-public class PersisterStateBatch {
+public class PersisterStateBatch implements Comparable {
     private final long firstOffset;
     private final long lastOffset;
-    private final byte deliveryState;
     private final short deliveryCount;
+    private final byte deliveryState;
 
     public PersisterStateBatch(long firstOffset, long lastOffset, byte deliveryState, short deliveryCount) {
         this.firstOffset = firstOffset;
@@ -77,13 +77,13 @@ public class PersisterStateBatch {
         PersisterStateBatch that = (PersisterStateBatch) o;
         return firstOffset == that.firstOffset &&
             lastOffset == that.lastOffset &&
-            deliveryState == that.deliveryState &&
-            deliveryCount == that.deliveryCount;
+            deliveryCount == that.deliveryCount &&
+            deliveryState == that.deliveryState;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(firstOffset, lastOffset, deliveryState, deliveryCount);
+        return Objects.hash(firstOffset, lastOffset, deliveryCount, deliveryState);
     }
 
     @Override
@@ -91,8 +91,47 @@ public class PersisterStateBatch {
         return "PersisterStateBatch(" +
             "firstOffset=" + firstOffset + "," +
             "lastOffset=" + lastOffset + "," +
-            "deliveryState=" + deliveryState + "," +
-            "deliveryCount=" + deliveryCount +
+            "deliveryCount=" + deliveryCount + "," +
+            "deliveryState=" + deliveryState +
             ")";
+    }
+
+    /**
+     * Compares 2 PersisterStateBatches in various dimensions.
+     * The priority of the dimensions are:
+     * - firstOffset
+     * - lastOffset
+     * - deliveryCount
+     * - deliveryState
+     * <p>
+     * Does not check all dimensions in every case. The first dimension
+     * check resulting in non-zero comparison result is returned.
+     * <p>
+     * In case the 2 objects are equal, all 4 dimension comparisons must
+     * be 0.
+     * <p>
+     * This method could be used for storing PersisterStateBatch objects
+     * in containers which allow a Comparator argument or various sort algorithms
+     * in the java library.
+     *
+     * @param o - object representing another PersisterStateBatch
+     * @return -INT, 0, +INT based on "this" being smaller, equal or larger than the argument.
+     */
+    @Override
+    public int compareTo(Object o) {
+        PersisterStateBatch that = (PersisterStateBatch) o;
+        int deltaFirst = Long.compare(this.firstOffset(), that.firstOffset());
+        if (deltaFirst == 0) {
+            int deltaLast = Long.compare(this.lastOffset(), that.lastOffset());
+            if (deltaLast == 0) {
+                int deltaCount = this.deliveryCount() - that.deliveryCount();
+                if (deltaCount == 0) {
+                    return Byte.compare(this.deliveryState(), that.deliveryState());
+                }
+                return deltaCount;
+            }
+            return deltaLast;
+        }
+        return deltaFirst;
     }
 }
