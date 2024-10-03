@@ -1133,6 +1133,8 @@ project(':core') {
     testImplementation project(':storage:storage-api').sourceSets.test.output
     testImplementation project(':server').sourceSets.test.output
     testImplementation project(':share').sourceSets.test.output
+    testImplementation project(':test-common')
+    testImplementation project(':test-common:test-common-api')
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
     testImplementation(libs.apacheda) {
@@ -1182,8 +1184,7 @@ project(':core') {
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.testRuntimeClasspath) {
-      include('slf4j-log4j12*')
+    from (configurations.compileClasspath) {
       include('reload4j*jar')
     }
     from (configurations.runtimeClasspath) {
@@ -1335,7 +1336,7 @@ project(':core') {
   }
 
   jar {
-    dependsOn('copyDependantLibs')
+    dependsOn copyDependantLibs
   }
 
   jar.manifest {
@@ -1590,6 +1591,91 @@ project(':group-coordinator') {
 
   compileJava.dependsOn 'processMessages'
   srcJar.dependsOn 'processMessages'
+}
+
+project(':test-common') {
+  base {
+    archivesName = "kafka-test-common"
+  }
+
+  dependencies {
+    implementation libs.scalaJava8Compat
+    implementation project(':core')
+    implementation project(':metadata')
+    implementation project(':server')
+    implementation project(':raft')
+    implementation project(':storage')
+    implementation project(':server-common')
+    implementation libs.slf4jApi
+    testImplementation libs.junitJupiter
+    testImplementation libs.mockitoCore
+    testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/test/java"]
+      }
+    }
+  }
+
+  checkstyle {
+    sourceSets = []
+  }
+
+  javadoc {
+    enabled = false
+  }
+}
+
+project(':test-common:test-common-api') {
+  base {
+    archivesName = "kafka-test-common-api"
+  }
+
+
+  dependencies {
+    implementation libs.scalaJava8Compat
+    implementation project(':clients')
+    implementation project(':core')
+    implementation project(':group-coordinator')
+    implementation project(':metadata')
+    implementation project(':raft')
+    implementation project(':server')
+    implementation project(':server-common')
+    implementation project(':test-common')
+    implementation libs.junitJupiter
+    testImplementation libs.mockitoCore
+    testRuntimeOnly libs.junitPlatformLanucher
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/test/java"]
+      }
+    }
+  }
+
+  checkstyle {
+    sourceSets = []
+  }
+
+  javadoc {
+    enabled = false
+  }
 }
 
 project(':transaction-coordinator') {
@@ -2237,6 +2323,7 @@ project(':storage') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':test-common:test-common-api')
     testImplementation project(':server')
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
@@ -2427,6 +2514,7 @@ project(':tools') {
     testImplementation project(':server').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':test-common:test-common-api')
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':connect:api')
@@ -2457,10 +2545,6 @@ project(':tools') {
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.testRuntimeClasspath) {
-      include('slf4j-log4j12*')
-      include('reload4j*jar')
-    }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
     }
@@ -2484,6 +2568,7 @@ project(':trogdor') {
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
     implementation libs.slf4jApi
+    runtimeOnly libs.reload4j
 
     implementation libs.jacksonJaxrsJsonProvider
     implementation libs.jerseyContainerServlet
@@ -2508,10 +2593,6 @@ project(':trogdor') {
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.testRuntimeClasspath) {
-      include('slf4j-log4j12*')
-      include('reload4j*jar')
-    }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
     }
@@ -2547,7 +2628,6 @@ project(':shell') {
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
-    testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.junitJupiter
@@ -2561,9 +2641,6 @@ project(':shell') {
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.testRuntimeClasspath) {
-      include('jline-*jar')
-    }
     from (configurations.runtimeClasspath) {
       include('jline-*jar')
     }
@@ -2604,7 +2681,7 @@ project(':streams') {
     testImplementation project(':server')
     testImplementation project(':core')
     testImplementation project(':tools')
-    testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':test-common')
     testImplementation project(':storage')
     testImplementation project(':group-coordinator')
     testImplementation project(':transaction-coordinator')
@@ -2763,7 +2840,7 @@ project(':streams:streams-scala') {
     }
     testImplementation project(':group-coordinator')
     testImplementation project(':core')
-    testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':test-common')
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':streams').sourceSets.test.output
     testImplementation project(':clients').sourceSets.test.output
@@ -3356,6 +3433,7 @@ project(':connect:api') {
   dependencies {
     api project(':clients')
     implementation libs.slf4jApi
+    runtimeOnly libs.reload4j
     implementation libs.jaxrsApi
 
     testImplementation libs.junitJupiter
@@ -3369,10 +3447,6 @@ project(':connect:api') {
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.testRuntimeClasspath) {
-      include('slf4j-log4j12*')
-      include('reload4j*jar')
-    }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
       exclude('connect-*')
@@ -3395,6 +3469,7 @@ project(':connect:transforms') {
     api project(':connect:api')
 
     implementation libs.slf4jApi
+    runtimeOnly libs.reload4j
 
     testImplementation libs.junitJupiter
 
@@ -3408,10 +3483,6 @@ project(':connect:transforms') {
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.testRuntimeClasspath) {
-      include('slf4j-log4j12*')
-      include('reload4j*jar')
-    }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
       exclude('connect-*')
@@ -3438,6 +3509,7 @@ project(':connect:json') {
     api libs.jacksonAfterburner
 
     implementation libs.slf4jApi
+    runtimeOnly libs.reload4j
 
     testImplementation libs.junitJupiter
 
@@ -3451,10 +3523,6 @@ project(':connect:json') {
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.testRuntimeClasspath) {
-      include('slf4j-log4j12*')
-      include('reload4j*jar')
-    }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
       exclude('connect-*')
@@ -3511,7 +3579,7 @@ project(':connect:runtime') {
     testImplementation project(':server')
     testImplementation project(':metadata')
     testImplementation project(':server-common')
-    testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':test-common')
     testImplementation project(':server-common')
     testImplementation project(':server')
     testImplementation project(':group-coordinator')
@@ -3535,10 +3603,6 @@ project(':connect:runtime') {
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.testRuntimeClasspath) {
-      // No need to copy log4j since the module has an explicit dependency on that
-      include('slf4j-log4j12*')
-    }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
       exclude('connect-*')
@@ -3624,6 +3688,7 @@ project(':connect:file') {
   dependencies {
     implementation project(':connect:api')
     implementation libs.slf4jApi
+    runtimeOnly libs.reload4j
 
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
@@ -3634,7 +3699,7 @@ project(':connect:file') {
     testImplementation project(':connect:runtime')
     testImplementation project(':connect:runtime').sourceSets.test.output
     testImplementation project(':core')
-    testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':test-common')
     testImplementation project(':server-common').sourceSets.test.output
   }
 
@@ -3643,10 +3708,6 @@ project(':connect:file') {
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.testRuntimeClasspath) {
-      include('slf4j-log4j12*')
-      include('reload4j*jar')
-    }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
       exclude('connect-*')
@@ -3668,6 +3729,7 @@ project(':connect:basic-auth-extension') {
   dependencies {
     implementation project(':connect:api')
     implementation libs.slf4jApi
+    runtimeOnly libs.reload4j
     implementation libs.jaxrsApi
     implementation libs.jaxAnnotationApi
 
@@ -3686,10 +3748,6 @@ project(':connect:basic-auth-extension') {
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.testRuntimeClasspath) {
-      include('slf4j-log4j12*')
-      include('reload4j*jar')
-    }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
       exclude('connect-*')
@@ -3717,6 +3775,7 @@ project(':connect:mirror') {
     implementation libs.argparse4j
     implementation libs.jacksonAnnotations
     implementation libs.slf4jApi
+    runtimeOnly libs.reload4j
     implementation libs.jacksonAnnotations
     implementation libs.jacksonJaxrsJsonProvider
     implementation libs.jerseyContainerServlet
@@ -3735,7 +3794,7 @@ project(':connect:mirror') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':connect:runtime').sourceSets.test.output
     testImplementation project(':core')
-    testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':test-common')
     testImplementation project(':server')
     testImplementation project(':server-common').sourceSets.test.output
 
@@ -3750,10 +3809,6 @@ project(':connect:mirror') {
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.testRuntimeClasspath) {
-      include('slf4j-log4j12*')
-      include('reload4j*jar')
-    }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
       exclude('connect-*')
@@ -3803,6 +3858,7 @@ project(':connect:mirror-client') {
   dependencies {
     implementation project(':clients')
     implementation libs.slf4jApi
+    runtimeOnly libs.reload4j
 
     testImplementation libs.junitJupiter
     testImplementation project(':clients').sourceSets.test.output
@@ -3816,10 +3872,6 @@ project(':connect:mirror-client') {
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.testRuntimeClasspath) {
-      include('slf4j-log4j12*')
-      include('reload4j*jar')
-    }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
       exclude('connect-*')
