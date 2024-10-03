@@ -958,15 +958,7 @@ public class RemoteLogManager implements Closeable {
             } catch (RemoteStorageException e) {
                 logger.info("Copy failed, cleaning segment {}", copySegmentStartedRlsm.remoteLogSegmentId());
                 try {
-                    deleteRemoteLogSegment(
-                        copySegmentStartedRlsm,
-                        ignored -> !isCancelled(),
-                        remoteLogMetadataManager,
-                        remoteLogStorageManager,
-                        brokerTopicStats,
-                        time,
-                        brokerId
-                    );
+                    deleteRemoteLogSegment(copySegmentStartedRlsm, ignored -> !isCancelled());
                     LOGGER.info("Cleanup completed for segment {}", copySegmentStartedRlsm.remoteLogSegmentId());
                 } catch (RemoteStorageException e1) {
                     LOGGER.info("Cleanup failed, will retry later with segment {}: {}", copySegmentStartedRlsm.remoteLogSegmentId(), e1.getMessage());
@@ -989,15 +981,7 @@ public class RemoteLogManager implements Closeable {
                     // However, the update itself will not be stored in this case.
                     RemoteLogSegmentMetadata newMetadata = copySegmentStartedRlsm.createWithUpdates(copySegmentFinishedRlsm);
                     try {
-                        deleteRemoteLogSegment(
-                            newMetadata,
-                            ignored -> !isCancelled(),
-                            remoteLogMetadataManager,
-                            remoteLogStorageManager,
-                            brokerTopicStats,
-                            time,
-                            brokerId
-                        );
+                        deleteRemoteLogSegment(newMetadata, ignored -> !isCancelled());
                         LOGGER.info("Cleanup completed for segment {}", newMetadata.remoteLogSegmentId());
                     } catch (RemoteStorageException e1) {
                         LOGGER.info("Cleanup failed, will retry later with segment {}: {}", newMetadata.remoteLogSegmentId(), e1.getMessage());
@@ -1146,16 +1130,8 @@ public class RemoteLogManager implements Closeable {
             private boolean deleteLogSegmentsDueToLeaderEpochCacheTruncation(EpochEntry earliestEpochEntry,
                                                                              RemoteLogSegmentMetadata metadata)
                     throws RemoteStorageException, ExecutionException, InterruptedException {
-                boolean isSegmentDeleted = deleteRemoteLogSegment(
-                    metadata, 
-                    ignored -> metadata.segmentLeaderEpochs().keySet()
-                        .stream().allMatch(epoch -> epoch < earliestEpochEntry.epoch),
-                    remoteLogMetadataManager,
-                    remoteLogStorageManager,
-                    brokerTopicStats,
-                    time,
-                    brokerId
-                );
+                boolean isSegmentDeleted = deleteRemoteLogSegment(metadata, 
+                    ignored -> metadata.segmentLeaderEpochs().keySet().stream().allMatch(epoch -> epoch < earliestEpochEntry.epoch));
                 if (isSegmentDeleted) {
                     logger.info("Deleted remote log segment {} due to leader-epoch-cache truncation. " +
                                     "Current earliest-epoch-entry: {}, segment-end-offset: {} and segment-epochs: {}",
@@ -1309,15 +1285,7 @@ public class RemoteLogManager implements Closeable {
             updateRemoteDeleteLagWith(segmentsLeftToDelete, sizeOfDeletableSegmentsBytes);
             List<String> undeletedSegments = new ArrayList<>();
             for (RemoteLogSegmentMetadata segmentMetadata : segmentsToDelete) {
-                if (!deleteRemoteLogSegment(
-                    segmentMetadata, 
-                    ignored -> !isCancelled(),
-                    remoteLogMetadataManager,
-                    remoteLogStorageManager,
-                    brokerTopicStats,
-                    time,
-                    brokerId
-                )) {
+                if (!deleteRemoteLogSegment(segmentMetadata, ignored -> !isCancelled())) {
                     undeletedSegments.add(segmentMetadata.remoteLogSegmentId().toString());
                 } else {
                     sizeOfDeletableSegmentsBytes -= segmentMetadata.segmentSizeInBytes();
@@ -1436,14 +1404,9 @@ public class RemoteLogManager implements Closeable {
         }
     }
     
-    private static boolean deleteRemoteLogSegment(
+    private boolean deleteRemoteLogSegment(
         RemoteLogSegmentMetadata segmentMetadata,
-        Predicate<RemoteLogSegmentMetadata> predicate,
-        RemoteLogMetadataManager remoteLogMetadataManager,
-        RemoteStorageManager remoteLogStorageManager,
-        BrokerTopicStats brokerTopicStats,
-        Time time,
-        int brokerId
+        Predicate<RemoteLogSegmentMetadata> predicate
     ) throws RemoteStorageException, ExecutionException, InterruptedException {
         if (predicate.test(segmentMetadata)) {
             LOGGER.debug("Deleting remote log segment {}", segmentMetadata.remoteLogSegmentId());
