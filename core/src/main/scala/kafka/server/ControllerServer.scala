@@ -30,7 +30,7 @@ import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
-import org.apache.kafka.common.utils.LogContext
+import org.apache.kafka.common.utils.{LogContext, Utils}
 import org.apache.kafka.common.{ClusterResource, Endpoint, Uuid}
 import org.apache.kafka.controller.metrics.{ControllerMetadataMetricsPublisher, QuorumControllerMetrics}
 import org.apache.kafka.controller.{Controller, QuorumController, QuorumFeatures}
@@ -66,15 +66,11 @@ case class ControllerMigrationSupport(
   brokersRpcClient: LegacyPropagator
 ) {
   def shutdown(logging: Logging): Unit = {
-    if (zkClient != null) {
-      CoreUtils.swallow(zkClient.close(), logging)
-    }
+    Utils.closeQuietly(zkClient, "zk client")
     if (brokersRpcClient != null) {
       CoreUtils.swallow(brokersRpcClient.shutdown(), logging)
     }
-    if (migrationDriver != null) {
-      CoreUtils.swallow(migrationDriver.close(), logging)
-    }
+    Utils.closeQuietly(migrationDriver, "migration driver")
   }
 }
 
@@ -475,10 +471,8 @@ class ControllerServer(
       // smoother transition.
       sharedServer.ensureNotRaftLeader()
       incarnationId = null
-      if (registrationManager != null) {
-        CoreUtils.swallow(registrationManager.close(), this)
-        registrationManager = null
-      }
+      Utils.closeQuietly(registrationManager, "registration manager")
+      registrationManager = null
       if (registrationChannelManager != null) {
         CoreUtils.swallow(registrationChannelManager.shutdown(), this)
         registrationChannelManager = null
@@ -488,18 +482,12 @@ class ControllerServer(
       if (metadataCache != null) {
         metadataCache = null
       }
-      if (metadataCachePublisher != null) {
-        metadataCachePublisher.close()
-        metadataCachePublisher = null
-      }
-      if (featuresPublisher != null) {
-        featuresPublisher.close()
-        featuresPublisher = null
-      }
-      if (registrationsPublisher != null) {
-        registrationsPublisher.close()
-        registrationsPublisher = null
-      }
+      Utils.closeQuietly(metadataCachePublisher, "metadata cache publisher")
+      metadataCachePublisher = null
+      Utils.closeQuietly(featuresPublisher, "features publisher")
+      featuresPublisher = null
+      Utils.closeQuietly(registrationsPublisher, "registrations publisher")
+      registrationsPublisher = null
       if (socketServer != null)
         CoreUtils.swallow(socketServer.stopProcessingRequests(), this)
       migrationSupport.foreach(_.shutdown(this))
@@ -513,13 +501,11 @@ class ControllerServer(
         CoreUtils.swallow(controllerApis.close(), this)
       if (quotaManagers != null)
         CoreUtils.swallow(quotaManagers.shutdown(), this)
-      if (controller != null)
-        controller.close()
-      if (quorumControllerMetrics != null)
-        CoreUtils.swallow(quorumControllerMetrics.close(), this)
-      CoreUtils.swallow(authorizer.foreach(_.close()), this)
-      createTopicPolicy.foreach(policy => CoreUtils.swallow(policy.close(), this))
-      alterConfigPolicy.foreach(policy => CoreUtils.swallow(policy.close(), this))
+      Utils.closeQuietly(controller, "controller")
+      Utils.closeQuietly(quorumControllerMetrics, "quorum controller metrics")
+      authorizer.foreach(Utils.closeQuietly(_, "authorizer"))
+      createTopicPolicy.foreach(policy => Utils.closeQuietly(policy, "create topic policy"))
+      alterConfigPolicy.foreach(policy => Utils.closeQuietly(policy, "alter config policy"))
       socketServerFirstBoundPortFuture.completeExceptionally(new RuntimeException("shutting down"))
       CoreUtils.swallow(config.dynamicConfig.clear(), this)
       sharedServer.stopForController()

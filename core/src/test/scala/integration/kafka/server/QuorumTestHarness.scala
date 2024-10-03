@@ -29,7 +29,7 @@ import org.apache.kafka.clients.consumer.GroupProtocol
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.utils.{Exit, Time}
+import org.apache.kafka.common.utils.{Exit, Time, Utils}
 import org.apache.kafka.common.{DirectoryId, Uuid}
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag.{REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion}
@@ -79,7 +79,7 @@ class ZooKeeperQuorumImplementation(
   }
 
   override def shutdown(): Unit = {
-    CoreUtils.swallow(zkClient.close(), log)
+    Utils.closeQuietly(zkClient, "zk client")
     CoreUtils.swallow(zookeeper.shutdown(), log)
   }
 }
@@ -429,7 +429,7 @@ abstract class QuorumTestHarness extends Logging {
     } catch {
       case t: Throwable =>
         CoreUtils.swallow(zookeeper.shutdown(), this)
-        if (zkClient != null) CoreUtils.swallow(zkClient.close(), this)
+        Utils.closeQuietly(zkClient, "zk client")
         throw t
     }
     new ZooKeeperQuorumImplementation(

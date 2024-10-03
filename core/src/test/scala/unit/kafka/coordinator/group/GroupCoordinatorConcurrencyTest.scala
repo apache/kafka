@@ -32,7 +32,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetFetchResponse}
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.common.RequestLocal
 import org.junit.jupiter.api.Assertions._
@@ -97,7 +97,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
   override def tearDown(): Unit = {
     try {
       CoreUtils.swallow(groupCoordinator.shutdown(), this)
-      CoreUtils.swallow(metrics.close(), this)
+      Utils.closeQuietly(metrics, "metrics")
     } finally {
       super.tearDown()
     }

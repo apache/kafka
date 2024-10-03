@@ -22,7 +22,7 @@ import kafka.server.Server.MetricsPrefix
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
+import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
 import org.apache.kafka.controller.metrics.ControllerMetadataMetrics
 import org.apache.kafka.image.MetadataProvenance
 import org.apache.kafka.image.loader.MetadataLoader
@@ -365,34 +365,22 @@ class SharedServer(
       if (snapshotGenerator != null) {
         CoreUtils.swallow(snapshotGenerator.beginShutdown(), this)
       }
-      if (loader != null) {
-        CoreUtils.swallow(loader.close(), this)
-        loader = null
-      }
-      if (metadataLoaderMetrics != null) {
-        CoreUtils.swallow(metadataLoaderMetrics.close(), this)
-        metadataLoaderMetrics = null
-      }
-      if (snapshotGenerator != null) {
-        CoreUtils.swallow(snapshotGenerator.close(), this)
-        snapshotGenerator = null
-      }
+      Utils.closeQuietly(loader, "loader")
+      loader = null
+      Utils.closeQuietly(metadataLoaderMetrics, "metadata loader metrics")
+      metadataLoaderMetrics = null
+      Utils.closeQuietly(snapshotGenerator, "snapshot generator")
+      snapshotGenerator = null
       if (raftManager != null) {
         CoreUtils.swallow(raftManager.shutdown(), this)
         raftManager = null
       }
-      if (controllerServerMetrics != null) {
-        CoreUtils.swallow(controllerServerMetrics.close(), this)
-        controllerServerMetrics = null
-      }
-      if (brokerMetrics != null) {
-        CoreUtils.swallow(brokerMetrics.close(), this)
-        brokerMetrics = null
-      }
-      if (metrics != null) {
-        CoreUtils.swallow(metrics.close(), this)
-        metrics = null
-      }
+      Utils.closeQuietly(controllerServerMetrics, "controller server metrics")
+      controllerServerMetrics = null
+      Utils.closeQuietly(brokerMetrics, "broker metrics")
+      brokerMetrics = null
+      Utils.closeQuietly(metrics, "metrics")
+      metrics = null
       CoreUtils.swallow(AppInfoParser.unregisterAppInfo(MetricsPrefix, sharedServerConfig.nodeId.toString, metrics), this)
       started = false
     }

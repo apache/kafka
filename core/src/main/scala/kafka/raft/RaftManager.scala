@@ -202,11 +202,11 @@ class KafkaRaftManager[T](
 
   def shutdown(): Unit = {
     CoreUtils.swallow(expirationService.shutdown(), this)
-    CoreUtils.swallow(expirationTimer.close(), this)
+    Utils.closeQuietly(expirationTimer, "expiration timer")
     CoreUtils.swallow(clientDriver.shutdown(), this)
     CoreUtils.swallow(scheduler.shutdown(), this)
-    CoreUtils.swallow(netChannel.close(), this)
-    CoreUtils.swallow(replicatedLog.close(), this)
+    Utils.closeQuietly(netChannel, "net channel")
+    Utils.closeQuietly(replicatedLog, "replicated log")
     CoreUtils.swallow(dataDirLock.foreach(_.destroy()), this)
   }
 

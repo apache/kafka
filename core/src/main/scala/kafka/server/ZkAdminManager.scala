@@ -45,7 +45,7 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, 
 import org.apache.kafka.common.requests.CreateTopicsRequest._
 import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError}
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter}
-import org.apache.kafka.common.utils.Sanitizer
+import org.apache.kafka.common.utils.{Sanitizer, Utils}
 import org.apache.kafka.server.common.AdminOperationException
 import org.apache.kafka.server.config.{ConfigType, QuotaConfigs, ZooKeeperInternals}
 import org.apache.kafka.server.config.ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG
@@ -547,8 +547,8 @@ class ZkAdminManager(val config: KafkaConfig,
 
   def shutdown(): Unit = {
     topicPurgatory.shutdown()
-    CoreUtils.swallow(createTopicPolicy.foreach(_.close()), this)
-    CoreUtils.swallow(alterConfigPolicy.foreach(_.close()), this)
+    createTopicPolicy.foreach(Utils.closeQuietly(_, "create topic policy"))
+    alterConfigPolicy.foreach(Utils.closeQuietly(_, "alter config policy"))
   }
 
   private def resourceNameToBrokerId(resourceName: String): Int = {
