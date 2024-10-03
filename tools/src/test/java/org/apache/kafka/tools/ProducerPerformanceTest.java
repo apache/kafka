@@ -377,9 +377,29 @@ public class ProducerPerformanceTest {
             "--record-size", "100",
             "--producer-props", "bootstrap.servers=localhost:9000",
             "--transaction-duration-ms", "0"};
-        assertEquals("--transaction-duration-ms should > 0",
+        assertEquals("--transaction-duration-ms should be greater than zero",
                 assertThrows(ArgumentParserException.class,
                         () -> new ProducerPerformance.ConfigPostProcessor(parser, invalidTransactionDurationMs)).getMessage());
+
+        String[] invalidNumRecords = new String[]{
+            "--topic", "Hello-Kafka",
+            "--num-records", "-5",
+            "--throughput", "100",
+            "--record-size", "100",
+            "--producer-props", "bootstrap.servers=localhost:9000"};
+        assertEquals("--num-records should be greater than zero",
+            assertThrows(ArgumentParserException.class,
+                () -> new ProducerPerformance.ConfigPostProcessor(parser, invalidNumRecords)).getMessage());
+
+        String[] invalidRecordSize = new String[]{
+            "--topic", "Hello-Kafka",
+            "--num-records", "5",
+            "--throughput", "100",
+            "--record-size", "-100",
+            "--producer-props", "bootstrap.servers=localhost:9000"};
+        assertEquals("--record-size should be greater than zero",
+            assertThrows(ArgumentParserException.class,
+                () -> new ProducerPerformance.ConfigPostProcessor(parser, invalidRecordSize)).getMessage());
     }
 
     @Test
