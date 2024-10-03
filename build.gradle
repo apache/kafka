@@ -123,7 +123,7 @@ ext {
       options.compilerArgs << "-parameters"
   }
 
-  runtimeLibs = [
+  runtimeTestLibs = [
     libs.slf4jReload4j,
     libs.junitPlatformLanucher,
   ]
@@ -1481,7 +1481,7 @@ project(':group-coordinator') {
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
 
-    testRuntimeOnly runtimeLibs
+    testRuntimeOnly runtimeTestLibs
 
     generator project(':generator')
   }
@@ -1543,7 +1543,7 @@ project(':test-common') {
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     
-    testRuntimeOnly runtimeLibs
+    testRuntimeOnly runtimeTestLibs
   }
 
   sourceSets {
@@ -1685,7 +1685,7 @@ project(':coordinator-common') {
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
 
-    testRuntimeOnly runtimeLibs
+    testRuntimeOnly runtimeTestLibs
   }
 
   sourceSets {
@@ -1736,7 +1736,7 @@ project(':share-coordinator') {
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
 
-    testRuntimeOnly runtimeLibs
+    testRuntimeOnly runtimeTestLibs
 
     generator project(':generator')
   }
@@ -1852,7 +1852,7 @@ project(':clients') {
 
     testRuntimeOnly libs.jacksonDatabind
     testRuntimeOnly libs.jacksonJDK8Datatypes
-    testRuntimeOnly runtimeLibs
+    testRuntimeOnly runtimeTestLibs
 
     generator project(':generator')
   }
@@ -2017,7 +2017,7 @@ project(':raft') {
     testImplementation libs.jqwik
     testImplementation libs.hamcrest
 
-    testRuntimeOnly runtimeLibs
+    testRuntimeOnly runtimeTestLibs
 
     generator project(':generator')
   }
@@ -2112,7 +2112,7 @@ project(':server-common') {
     testImplementation libs.mockitoCore
     testImplementation libs.hamcrest
 
-    testRuntimeOnly runtimeLibs
+    testRuntimeOnly runtimeTestLibs
   }
 
   task createVersionFile() {
@@ -2170,7 +2170,7 @@ project(':storage:storage-api') {
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
 
-    testRuntimeOnly runtimeLibs
+    testRuntimeOnly runtimeTestLibs
   }
 
   task createVersionFile() {
@@ -2259,7 +2259,7 @@ project(':storage') {
     testImplementation libs.mockitoCore
     testImplementation libs.bcpkix
 
-    testRuntimeOnly runtimeLibs
+    testRuntimeOnly runtimeTestLibs
 
     generator project(':generator')
   }
@@ -2510,7 +2510,7 @@ project(':trogdor') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.mockitoCore
 
-    testRuntimeOnly runtimeLibs
+    testRuntimeOnly runtimeTestLibs
   }
 
   javadoc {
@@ -2557,7 +2557,7 @@ project(':shell') {
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.junitJupiter
 
-    testRuntimeOnly runtimeLibs
+    testRuntimeOnly runtimeTestLibs
   }
 
   javadoc {
@@ -2622,7 +2622,7 @@ project(':streams') {
     testImplementation project(':group-coordinator')
 
     testRuntimeOnly project(':streams:test-utils')
-    testRuntimeOnly runtimeLibs
+    testRuntimeOnly runtimeTestLibs
 
     generator project(':generator')
   }
@@ -2773,7 +2773,7 @@ project(':streams:streams-scala') {
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testImplementation libs.hamcrest
-    testRuntimeOnly runtimeLibs
+    testRuntimeOnly runtimeTestLibs
   }
 
   javadoc {
@@ -2825,7 +2825,7 @@ project(':streams:test-utils') {
     testImplementation libs.mockitoCore
     testImplementation libs.hamcrest
 
-    testRuntimeOnly runtimeLibs
+    testRuntimeOnly runtimeTestLibs
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
@@ -3360,7 +3360,7 @@ project(':connect:api') {
     testImplementation libs.junitJupiter
     testImplementation project(':clients').sourceSets.test.output
 
-    testRuntimeOnly runtimeLibs
+    testRuntimeOnly runtimeTestLibs
   }
 
   javadoc {
@@ -3396,7 +3396,7 @@ project(':connect:transforms') {
 
     testImplementation project(':clients').sourceSets.test.output
 
-    testRuntimeOnly runtimeLibs
+    testRuntimeOnly runtimeTestLibs
   }
 
   javadoc {
@@ -3436,7 +3436,7 @@ project(':connect:json') {
 
     testImplementation project(':clients').sourceSets.test.output
 
-    testRuntimeOnly runtimeLibs
+    testRuntimeOnly runtimeTestLibs
   }
 
   javadoc {
@@ -3515,7 +3515,7 @@ project(':connect:runtime') {
     testImplementation libs.httpclient
 
     testRuntimeOnly libs.bcpkix
-    testRuntimeOnly runtimeLibs
+    testRuntimeOnly runtimeTestLibs
   }
 
   javadoc {
@@ -3619,7 +3619,7 @@ project(':connect:file') {
     testImplementation project(':test-common')
     testImplementation project(':server-common').sourceSets.test.output
 
-    testRuntimeOnly runtimeLibs
+    testRuntimeOnly runtimeTestLibs
   }
 
   javadoc {
@@ -3658,7 +3658,7 @@ project(':connect:basic-auth-extension') {
     testImplementation project(':clients').sourceSets.test.output
 
     testRuntimeOnly libs.jerseyContainerServlet
-    testRuntimeOnly runtimeLibs
+    testRuntimeOnly runtimeTestLibs
   }
 
   javadoc {
@@ -3718,7 +3718,7 @@ project(':connect:mirror') {
 
     testRuntimeOnly project(':connect:runtime')
     testRuntimeOnly libs.bcpkix
-    testRuntimeOnly runtimeLibs
+    testRuntimeOnly runtimeTestLibs
   }
 
   javadoc {
@@ -3780,7 +3780,7 @@ project(':connect:mirror-client') {
     testImplementation libs.junitJupiter
     testImplementation project(':clients').sourceSets.test.output
 
-    testRuntimeOnly runtimeLibs
+    testRuntimeOnly runtimeTestLibs
   }
 
   javadoc {
