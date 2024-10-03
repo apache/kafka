@@ -135,8 +135,12 @@ public class FeaturesTest {
 
     @Test
     public void testUnstableTestVersion() {
-        assertThrows(IllegalArgumentException.class, () ->
-            Features.TEST_VERSION.fromFeatureLevel(Features.TEST_VERSION.latestTesting(), false));
+        // If the latest MetadataVersion is stable, we don't throw an error. In that case, we don't worry about unstable feature
+        // versions since all feature versions are stable.
+        if (MetadataVersion.latestProduction().isLessThan(MetadataVersion.latestTesting())) {
+            assertThrows(IllegalArgumentException.class, () ->
+                Features.TEST_VERSION.fromFeatureLevel(Features.TEST_VERSION.latestTesting(), false));
+        }
         Features.TEST_VERSION.fromFeatureLevel(Features.TEST_VERSION.latestTesting(), true);
     }
 }

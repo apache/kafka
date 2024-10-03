@@ -223,7 +223,7 @@ object AclCommand extends Logging {
         authZ.configure(authorizerProperties.asJava)
         f(authZ)
       }
-      finally CoreUtils.swallow(authZ.close(), this)
+      finally Utils.closeQuietly(authZ, "authorizer")
     }
 
     def addAcls(): Unit = {

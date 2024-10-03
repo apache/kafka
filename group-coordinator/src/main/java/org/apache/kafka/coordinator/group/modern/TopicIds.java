@@ -21,25 +21,161 @@ import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Set;
 
 /**
  * TopicIds is initialized with topic names (String) but exposes a Set of topic ids (Uuid) to the
- * user and performs the conversion lazily with TopicsImage.
+ * user and performs the conversion lazily with a TopicResolver backed by a TopicsImage.
  */
 public class TopicIds implements Set<Uuid> {
+    /**
+     * Converts between topic ids (Uuids) and topic names (Strings).
+     */
+    public interface TopicResolver {
+        /**
+         * @return The TopicsImage used by the resolver.
+         */
+        TopicsImage image();
+
+        /**
+         * Converts a topic id to a topic name.
+         *
+         * @param id The topic id.
+         * @return The topic name for the given topic id, or null if the topic does not exist.
+         */
+        String name(Uuid id);
+
+        /**
+         * Converts a topic name to a topic id.
+         *
+         * @param name The topic name.
+         * @return The topic id for the given topic name, or null if the topic does not exist.
+         */
+        Uuid id(String name);
+
+        /**
+         * Clears any cached data.
+         *
+         * Used for benchmarking purposes.
+         */
+        void clear();
+    }
+
+    /**
+     * A TopicResolver without any caching.
+     */
+    public static class DefaultTopicResolver implements TopicResolver {
+        private final TopicsImage image;
+
+        public DefaultTopicResolver(
+            TopicsImage image
+        ) {
+            this.image = Objects.requireNonNull(image);
+        }
+
+        @Override
+        public final TopicsImage image() {
+            return image;
+        }
+
+        @Override
+        public String name(Uuid id) {
+            TopicImage topic = image.getTopic(id);
+            if (topic == null) return null;
+            return topic.name();
+        }
+
+        @Override
+        public Uuid id(String name) {
+            TopicImage topic = image.getTopic(name);
+            if (topic == null) return null;
+            return topic.id();
+        }
+
+        @Override
+        public void clear() {}
+
+        @Override
+        public String toString() {
+            return "DefaultTopicResolver(image=" + image + ")";
+        }
+    }
+
+    /**
+     * A TopicResolver that caches results.
+     *
+     * This cache is expected to be short-lived and only used within a single
+     * TargetAssignmentBuilder.build() call.
+     */
+    public static class CachedTopicResolver implements TopicResolver {
+        private final TopicsImage image;
+
+        private final Map<String, Uuid> topicIds = new HashMap<>();
+        private final Map<Uuid, String> topicNames = new HashMap<>();
+
+        public CachedTopicResolver(
+            TopicsImage image
+        ) {
+            this.image = Objects.requireNonNull(image);
+        }
+
+        @Override
+        public final TopicsImage image() {
+            return image;
+        }
+
+        @Override
+        public String name(Uuid id) {
+            return topicNames.computeIfAbsent(id, __ -> {
+                TopicImage topic = image.getTopic(id);
+                if (topic == null) return null;
+                return topic.name();
+            });
+        }
+
+        @Override
+        public Uuid id(String name) {
+            return topicIds.computeIfAbsent(name, __ -> {
+                TopicImage topic = image.getTopic(name);
+                if (topic == null) return null;
+                return topic.id();
+            });
+        }
+
+        @Override
+        public void clear() {
+            this.topicNames.clear();
+            this.topicIds.clear();
+        }
+
+        @Override
+        public String toString() {
+            return "CachedTopicResolver(image=" + image + ")";
+        }
+    }
+
     private final Set<String> topicNames;
-    private final TopicsImage image;
+    private final TopicResolver resolver;
 
     public TopicIds(
         Set<String> topicNames,
         TopicsImage image
     ) {
         this.topicNames = Objects.requireNonNull(topicNames);
-        this.image = Objects.requireNonNull(image);
+        this.resolver = new DefaultTopicResolver(image);
+    }
+
+    public TopicIds(
+        Set<String> topicNames,
+        TopicResolver resolver
+    ) {
+        this.topicNames = Objects.requireNonNull(topicNames);
+        this.resolver = Objects.requireNonNull(resolver);
     }
 
     @Override
@@ -56,24 +192,24 @@ public class TopicIds implements Set<Uuid> {
     public boolean contains(Object o) {
         if (o instanceof Uuid) {
             Uuid topicId = (Uuid) o;
-            TopicImage topicImage = image.getTopic(topicId);
-            if (topicImage == null) return false;
-            return topicNames.contains(topicImage.name());
+            String topicName = resolver.name(topicId);
+            if (topicName == null) return false;
+            return topicNames.contains(topicName);
         }
         return false;
     }
 
     private static class TopicIdIterator implements Iterator<Uuid> {
         final Iterator<String> iterator;
-        final TopicsImage image;
+        final TopicResolver resolver;
         private Uuid next = null;
 
         private TopicIdIterator(
             Iterator<String> iterator,
-            TopicsImage image
+            TopicResolver resolver
         ) {
             this.iterator = Objects.requireNonNull(iterator);
-            this.image = Objects.requireNonNull(image);
+            this.resolver = Objects.requireNonNull(resolver);
         }
 
         @Override
@@ -85,9 +221,9 @@ public class TopicIds implements Set<Uuid> {
                     return false;
                 }
                 String next = iterator.next();
-                TopicImage topicImage = image.getTopic(next);
-                if (topicImage != null) {
-                    result = topicImage.id();
+                Uuid topicId = resolver.id(next);
+                if (topicId != null) {
+                    result = topicId;
                 }
             } while (result == null);
             next = result;
@@ -105,7 +241,7 @@ public class TopicIds implements Set<Uuid> {
 
     @Override
     public Iterator<Uuid> iterator() {
-        return new TopicIdIterator(topicNames.iterator(), image);
+        return new TopicIdIterator(topicNames.iterator(), resolver);
     }
 
     @Override
@@ -164,20 +300,20 @@ public class TopicIds implements Set<Uuid> {
         TopicIds uuids = (TopicIds) o;
 
         if (!Objects.equals(topicNames, uuids.topicNames)) return false;
-        return Objects.equals(image, uuids.image);
+        return Objects.equals(resolver.image(), uuids.resolver.image());
     }
 
     @Override
     public int hashCode() {
         int result = topicNames.hashCode();
-        result = 31 * result + image.hashCode();
+        result = 31 * result + resolver.image().hashCode();
         return result;
     }
 
     @Override
     public String toString() {
         return "TopicIds(topicNames=" + topicNames +
-            ", image=" + image +
+            ", resolver=" + resolver +
             ')';
     }
 }
