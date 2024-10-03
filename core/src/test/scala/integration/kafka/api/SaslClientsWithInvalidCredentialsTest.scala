@@ -141,9 +141,6 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     verifyWithRetry(assertEquals(1, consumer.poll(Duration.ofMillis(1000)).count))
   }
 
-  // This test fails because it takes too long to poll. The reason it is failing is because without credentials,
-  // we cannot bootstrap. Therefore, we will get stuck trying to bootstrap, but will continue to fail due to
-  // incorrect credentials. This causes the error we are looking for to never be thrown, and go in a loop
   @Test
   def testKafkaAdminClientWithAuthenticationFailure(): Unit = {
     val props = JaasTestUtils.adminClientSecurityConfigs(securityProtocol, OptionConverters.toJava(trustStoreFile), OptionConverters.toJava(clientSaslProperties))
