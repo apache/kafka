@@ -24,11 +24,12 @@ import org.apache.kafka.common.errors.CoordinatorLoadInProgressException
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.AllocateProducerIdsResponse
+import org.apache.kafka.common.test.api.Quarantined
 import org.apache.kafka.common.utils.{MockTime, Time}
 import org.apache.kafka.server.NodeToControllerChannelManager
 import org.apache.kafka.server.common.ProducerIdsBlock
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{Tag, Test}
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 import org.mockito.ArgumentCaptor
@@ -40,7 +41,7 @@ import java.util.concurrent.{ConcurrentLinkedQueue, CountDownLatch, Executors, T
 import scala.collection.mutable
 import scala.util.{Failure, Success, Try}
 
-@Tag("quarantined")
+@Quarantined("KAFKA-17654")
 class ProducerIdManagerTest {
 
   var brokerToController: NodeToControllerChannelManager = mock(classOf[NodeToControllerChannelManager])

@@ -19,6 +19,7 @@ package org.apache.kafka.connect.integration;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupListing;
+import org.apache.kafka.common.test.api.Quarantined;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
@@ -331,7 +332,7 @@ public class OffsetsApiIntegrationTest {
         alterAndVerifySinkConnectorOffsets(baseSinkConnectorConfigs(), connect.kafka());
     }
 
-    @Tag("quarantined")
+    @Quarantined("KAFKA-15914")
     @Test
     public void testAlterSinkConnectorOffsetsOverriddenConsumerGroupId() throws Exception {
         Map<String, String> connectorConfigs = baseSinkConnectorConfigs();
@@ -349,7 +350,6 @@ public class OffsetsApiIntegrationTest {
         }
     }
 
-    @Tag("quarantined")
     @Test
     public void testAlterSinkConnectorOffsetsDifferentKafkaClusterTargeted() throws Exception {
         EmbeddedKafkaCluster kafkaCluster = new EmbeddedKafkaCluster(1, new Properties());

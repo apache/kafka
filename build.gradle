@@ -3586,6 +3586,7 @@ project(':connect:runtime') {
     testImplementation project(':storage')
     testImplementation project(':connect:test-plugins')
     testImplementation project(':server-common').sourceSets.test.output
+    testImplementation project(':test-common:test-common-api')
 
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
