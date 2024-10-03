@@ -324,14 +324,15 @@ class DefaultStateUpdaterTest {
     public void shouldRestoreSingleActiveStatefulTask() throws Exception {
         final StreamTask task =
             statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0, TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
+        final AtomicBoolean allChangelogCompleted = new AtomicBoolean(false);
         when(changelogReader.completedChangelogs())
             .thenReturn(Collections.emptySet())
             .thenReturn(Set.of(TOPIC_PARTITION_A_0))
-            .thenReturn(Set.of(TOPIC_PARTITION_A_0, TOPIC_PARTITION_B_0));
-        when(changelogReader.allChangelogsCompleted())
-            .thenReturn(false)
-            .thenReturn(false)
-            .thenReturn(true);
+            .thenAnswer(invocation -> {
+                allChangelogCompleted.set(true);
+                return Set.of(TOPIC_PARTITION_A_0, TOPIC_PARTITION_B_0);
+            });
+        when(changelogReader.allChangelogsCompleted()).thenReturn(allChangelogCompleted.get());
         stateUpdater.start();
 
         stateUpdater.add(task);
