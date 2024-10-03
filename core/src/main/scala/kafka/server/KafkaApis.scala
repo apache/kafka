@@ -120,8 +120,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 time: Time,
                 val tokenManager: DelegationTokenManager,
                 val apiVersionManager: ApiVersionManager,
-                val clientMetricsManager: Option[ClientMetricsManager],
-                val defaultActionQueue: ActionQueue
+                val clientMetricsManager: Option[ClientMetricsManager]
 ) extends ApiRequestHandler with Logging {
 
   type FetchResponseStats = Map[TopicPartition, RecordValidationStats]
@@ -296,7 +295,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   override def tryCompleteActions(): Unit = {
-    defaultActionQueue.tryCompleteActions()
+    replicaManager.tryCompleteActions()
   }
 
   def handleLeaderAndIsrRequest(request: RequestChannel.Request): Unit = {

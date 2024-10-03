@@ -23,7 +23,6 @@ import kafka.server.AutoTopicCreationManager;
 import kafka.server.ClientQuotaManager;
 import kafka.server.ClientRequestQuotaManager;
 import kafka.server.ControllerMutationQuotaManager;
-import kafka.server.DelayedActionQueue;
 import kafka.server.FetchManager;
 import kafka.server.ForwardingManager;
 import kafka.server.KafkaApis;
@@ -211,7 +210,6 @@ public class KRaftMetadataRequestBenchmark {
                         false,
                         false,
                         () -> FinalizedFeatures.fromKRaftVersion(MetadataVersion.latestTesting()))).
-                setDefaultActionQueue(new DelayedActionQueue()).
                 build();
     }
 
