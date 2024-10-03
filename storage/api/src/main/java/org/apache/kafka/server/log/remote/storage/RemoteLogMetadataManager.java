@@ -68,17 +68,35 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
 
     /**
      * This method is used to update the {@link RemoteLogSegmentMetadata} asynchronously. Currently, it allows to update with the new
-     * state based on the life cycle of the segment. It can go through the below state transitions described in {@link RemoteLogSegmentState}.
-     *
-     * <ul><li>{@link RemoteLogSegmentState#COPY_SEGMENT_STARTED} - This state indicates that the segment copying to remote storage is started but not yet finished.</li>
-     * <li>{@link RemoteLogSegmentState#COPY_SEGMENT_FINISHED} - This state indicates that the segment copying to remote storage is finished.</li></ul>
+     * state based on the life cycle of the segment. It can go through the below state transitions.
+     * <p>
+     * <pre>
+     * +---------------------+            +----------------------+
+     * |COPY_SEGMENT_STARTED |-----------&gt;|COPY_SEGMENT_FINISHED |
+     * +-------------------+-+            +--+-------------------+
+     *                     |                 |
+     *                     |                 |
+     *                     v                 v
+     *                  +--+-----------------+-+
+     *                  |DELETE_SEGMENT_STARTED|
+     *                  +-----------+----------+
+     *                              |
+     *                              |
+     *                              v
+     *                  +-----------+-----------+
+     *                  |DELETE_SEGMENT_FINISHED|
+     *                  +-----------------------+
+     * </pre>
+     * <p>
+     * {@link RemoteLogSegmentState#COPY_SEGMENT_STARTED} - This state indicates that the segment copying to remote storage is started but not yet finished.
+     * {@link RemoteLogSegmentState#COPY_SEGMENT_FINISHED} - This state indicates that the segment copying to remote storage is finished.
+     * <br>
      * The leader broker copies the log segments to the remote storage and puts the remote log segment metadata with the
      * state as “COPY_SEGMENT_STARTED” and updates the state as “COPY_SEGMENT_FINISHED” once the copy is successful.
-     * If the copy fails, the leader broker updates the remote segment state to "DANGLING" and tries to delete it immediately.
-     * If it fails to delete immediately, the copy task will retry in the following iterations.
-     * 
-     * <ul><li>{@link RemoteLogSegmentState#DELETE_SEGMENT_STARTED} - This state indicates that the segment deletion is started but not yet finished.</li>
-     * <li>{@link RemoteLogSegmentState#DELETE_SEGMENT_FINISHED} - This state indicates that the segment is deleted successfully.</li></ul>
+     * <p></p>
+     * {@link RemoteLogSegmentState#DELETE_SEGMENT_STARTED} - This state indicates that the segment deletion is started but not yet finished.
+     * {@link RemoteLogSegmentState#DELETE_SEGMENT_FINISHED} - This state indicates that the segment is deleted successfully.
+     * <br>
      * Leader partitions publish both the above delete segment events when remote log retention is reached for the
      * respective segments. Remote Partition Removers also publish these events when a segment is deleted as part of
      * the remote partition deletion.
