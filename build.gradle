@@ -122,12 +122,10 @@ ext {
     if (name == "compileTestJava" || name == "compileTestScala")
       options.compilerArgs << "-parameters"
   }
-}
 
-ext {
   runtimeLibs = [
-    libs.slf4jReload4j,
-    libs.junitPlatformLanucher,
+          libs.slf4jReload4j,
+          libs.junitPlatformLanucher,
   ]
 }
 
