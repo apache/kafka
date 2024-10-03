@@ -1257,8 +1257,8 @@ public class RemoteLogManager implements Closeable {
                         canProcess = false;
                         continue;
                     }
-                    // This works as retry mechanism for failed deletion remote segments. Rather than waiting for the 
-                    // retention to kick in, we cleanup early to avoid polluting the cache and possibly waste remote storage.
+                    // This works as retry mechanism for dangling remote segments that failed the deletion in previous attempts.
+                    // Rather than waiting for the retention to kick in, we cleanup early to avoid polluting the cache and possibly waste remote storage.
                     if (RemoteLogSegmentState.DELETE_SEGMENT_STARTED.equals(metadata.state())) {
                         segmentsToDelete.add(metadata);
                         continue;
@@ -1392,8 +1392,8 @@ public class RemoteLogManager implements Closeable {
                     while (segmentsIterator.hasNext()) {
                         RemoteLogSegmentMetadata segmentMetadata = segmentsIterator.next();
                         // Count only the size of segments in "COPY_SEGMENT_FINISHED" state because 
-                        // "COPY_SEGMENT_STARTED" means copy didn't complete and we will count them later, 
-                        // "DELETE_SEGMENT_STARTED" means deletion failed and we will retry later,
+                        // "COPY_SEGMENT_STARTED" means copy didn't complete and we will count them later,
+                        // "DELETE_SEGMENT_STARTED" means deletion failed in the previous attempt and we will retry later,
                         // "DELETE_SEGMENT_FINISHED" means deletion completed, so there is nothing to count.
                         if (segmentMetadata.state().equals(RemoteLogSegmentState.COPY_SEGMENT_FINISHED)) {
                             RemoteLogSegmentId segmentId = segmentMetadata.remoteLogSegmentId();
