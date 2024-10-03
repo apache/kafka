@@ -131,6 +131,7 @@ public class FeatureControlManagerTest {
         assertEquals(expectedMessages, result.records());
     }
 
+
     @Test
     public void testReplay() {
         LogContext logContext = new LogContext();

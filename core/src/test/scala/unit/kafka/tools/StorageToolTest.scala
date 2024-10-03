@@ -39,7 +39,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 import scala.collection.mutable.ListBuffer
-import scala.jdk.CollectionConverters.IterableHasAsScala
+import scala.jdk.CollectionConverters._
 
 @Timeout(value = 40)
 class StorageToolTest {
@@ -54,7 +54,7 @@ class StorageToolTest {
     properties
   }
 
-  val allFeatures = Features.FEATURES.toList
+  val testingFeatures = Features.values().toList.asJava
 
   @Test
   def testConfigToLogDirectories(): Unit = {
@@ -441,23 +441,17 @@ Found problem:
     stream: ByteArrayOutputStream,
     releaseVersion: String
   ): Int = {
-    val tempDir = TestUtils.tempDir()
-    try {
-      // Prepare the arguments list
-      val arguments = ListBuffer[String]("version-mapping")
+    // Prepare the arguments list
+    val arguments = ListBuffer[String]("version-mapping")
 
-      // Add the release version argument
-      if (releaseVersion != null) {
-        arguments += "--release-version"
-        arguments += releaseVersion
-      }
-
-      // Execute the StorageTool with the arguments
-      StorageTool.execute(arguments.toArray, new PrintStream(stream))
-
-    } finally {
-      Utils.delete(tempDir)
+    // Add the release version argument
+    if (releaseVersion != null) {
+      arguments += "--release-version"
+      arguments += releaseVersion
     }
+
+    // Execute the StorageTool with the arguments
+    StorageTool.execute(arguments.toArray, new PrintStream(stream))
   }
 
   @Test
@@ -473,7 +467,7 @@ Found problem:
       s"Output did not contain expected Metadata Version: $output"
     )
 
-    for (feature <- Features.values()) {
+    for (feature <- Features.PRODUCTION_FEATURES.asScala) {
       val featureLevel = feature.defaultValue(metadataVersion)
       assertTrue(output.contains(s"${feature.featureName()}=$featureLevel"),
         s"Output did not contain expected feature mapping: $output"
@@ -496,7 +490,7 @@ Found problem:
       s"Output did not contain expected Metadata Version: $output"
     )
 
-    for (feature <- Features.values()) {
+    for (feature <- Features.PRODUCTION_FEATURES.asScala) {
       val featureLevel = feature.defaultValue(metadataVersion)
       assertTrue(output.contains(s"${feature.featureName()}=$featureLevel"),
         s"Output did not contain expected feature mapping: $output"
@@ -534,17 +528,12 @@ Found problem:
     stream: ByteArrayOutputStream,
     features: Seq[String]
   ): Int = {
-    val tempDir = TestUtils.tempDir()
-    try {
-      val arguments = ListBuffer[String]("feature-dependencies")
-      features.foreach(feature => {
-        arguments += "--feature"
-        arguments += feature
-      })
-      StorageTool.execute(arguments.toArray, new PrintStream(stream))
-    } finally {
-      Utils.delete(tempDir)
-    }
+    val arguments = ListBuffer[String]("feature-dependencies")
+    features.foreach(feature => {
+      arguments += "--feature"
+      arguments += feature
+    })
+    StorageTool.execute(arguments.toArray, new PrintStream(stream))
   }
 
   @Test
@@ -557,6 +546,27 @@ Found problem:
 
     val expectedOutput = s"test.feature.version=2 requires:\n    metadata.version=${metadataVersion.featureLevel()} (${metadataVersion.version()})\n"
     assertEquals(expectedOutput.trim, output.trim)
+  }
+
+  @Test
+  def testTestingFeatureDependencies(): Unit = {
+    val stream = new ByteArrayOutputStream()
+    val namespace = StorageTool.parseArguments(Array("feature-dependencies", "--feature", "test.feature.version=2"))
+
+    StorageTool.runFeatureDependenciesCommand(namespace, new PrintStream(stream), testingFeatures)
+
+    val output = stream.toString.trim
+    System.out.println(output)
+
+    val latestTestingVersion = MetadataVersion.latestTesting()
+    val latestTestingVersionString = s"metadata.version=${latestTestingVersion.featureLevel()} (${latestTestingVersion.version()})"
+
+    val expectedOutput =
+      s"""test.feature.version=2 requires:
+         |    $latestTestingVersionString
+         |""".stripMargin.trim
+
+    assertEquals(expectedOutput, output)
   }
 
   @Test
