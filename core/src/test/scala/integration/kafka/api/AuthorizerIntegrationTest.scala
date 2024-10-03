@@ -66,7 +66,6 @@ import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.metadata.LeaderAndIsr
 import org.junit.jupiter.api.function.Executable
 
-import scala.annotation.nowarn
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
@@ -1123,7 +1122,6 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     consumeRecords(consumer)
   }
 
-  @nowarn("cat=deprecation")
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testPatternSubscriptionWithNoTopicAccess(quorum: String): Unit = {
@@ -1138,7 +1136,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
 
     val consumer = createConsumer()
     consumer.subscribe(Pattern.compile(topicPattern))
-    consumer.poll(0)
+    consumer.poll(Duration.ofMillis(500))
     assertTrue(consumer.subscription.isEmpty)
   }
 
@@ -1160,7 +1158,6 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     assertEquals(Collections.singleton(topic), e.unauthorizedTopics())
   }
 
-  @nowarn("cat=deprecation")
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testPatternSubscriptionWithTopicAndGroupRead(quorum: String): Unit = {
@@ -1188,12 +1185,11 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)),  new ResourcePattern(TOPIC,
       GROUP_METADATA_TOPIC_NAME, LITERAL))
     consumer.subscribe(Pattern.compile(GROUP_METADATA_TOPIC_NAME))
-    consumer.poll(0)
+    consumer.poll(Duration.ofMillis(500))
     assertTrue(consumer.subscription().isEmpty)
     assertTrue(consumer.assignment().isEmpty)
   }
 
-  @nowarn("cat=deprecation")
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testPatternSubscriptionMatchingInternalTopic(quorum: String): Unit = {
@@ -1219,7 +1215,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
       GROUP_METADATA_TOPIC_NAME, LITERAL))
     consumer.subscribe(Pattern.compile(GROUP_METADATA_TOPIC_NAME))
     TestUtils.retry(60000) {
-      consumer.poll(0)
+      consumer.poll(Duration.ofMillis(50))
       assertEquals(Set(GROUP_METADATA_TOPIC_NAME), consumer.subscription.asScala)
     }
   }
