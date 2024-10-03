@@ -2699,6 +2699,100 @@ public class KafkaRaftClientTest {
 
     @ParameterizedTest
     @ValueSource(booleans = { true, false })
+    public void testFollowerLeaderRediscoveryAfterBrokerNotAvailableError(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
+        int leaderId = localId + 1;
+        int otherNodeId = localId + 2;
+        int epoch = 5;
+        Set<Integer> voters = Utils.mkSet(leaderId, localId, otherNodeId);
+        List<InetSocketAddress> bootstrapServers = voters
+            .stream()
+            .map(RaftClientTestContext::mockAddress)
+            .collect(Collectors.toList());
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withBootstrapServers(Optional.of(bootstrapServers))
+            .withKip853Rpc(withKip853Rpc)
+            .withElectedLeader(epoch, leaderId)
+            .build();
+
+        context.pollUntilRequest();
+        RaftRequest.Outbound fetchRequest1 = context.assertSentFetchRequest();
+        assertEquals(leaderId, fetchRequest1.destination().id());
+        context.assertFetchRequestData(fetchRequest1, epoch, 0L, 0);
+
+        context.deliverResponse(
+            fetchRequest1.correlationId(),
+            fetchRequest1.destination(),
+            context.fetchResponse(epoch, -1, MemoryRecords.EMPTY, -1, Errors.BROKER_NOT_AVAILABLE)
+        );
+        context.pollUntilRequest();
+
+        // We should retry the Fetch against the other voter since the original
+        // voter connection will be backing off.
+        RaftRequest.Outbound fetchRequest2 = context.assertSentFetchRequest();
+        assertNotEquals(leaderId, fetchRequest2.destination().id());
+        assertTrue(context.bootstrapIds.contains(fetchRequest2.destination().id()));
+        context.assertFetchRequestData(fetchRequest2, epoch, 0L, 0);
+
+        Errors error = fetchRequest2.destination().id() == leaderId ?
+            Errors.NONE : Errors.NOT_LEADER_OR_FOLLOWER;
+        context.deliverResponse(
+            fetchRequest2.correlationId(),
+            fetchRequest2.destination(),
+            context.fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, error)
+        );
+        context.client.poll();
+
+        context.assertElectedLeader(epoch, leaderId);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testFollowerLeaderRediscoveryAfterRequestTimeout(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
+        int leaderId = localId + 1;
+        int otherNodeId = localId + 2;
+        int epoch = 5;
+        Set<Integer> voters = Utils.mkSet(leaderId, localId, otherNodeId);
+        List<InetSocketAddress> bootstrapServers = voters
+            .stream()
+            .map(RaftClientTestContext::mockAddress)
+            .collect(Collectors.toList());
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withBootstrapServers(Optional.of(bootstrapServers))
+            .withKip853Rpc(withKip853Rpc)
+            .withElectedLeader(epoch, leaderId)
+            .build();
+
+        context.pollUntilRequest();
+        RaftRequest.Outbound fetchRequest1 = context.assertSentFetchRequest();
+        assertEquals(leaderId, fetchRequest1.destination().id());
+        context.assertFetchRequestData(fetchRequest1, epoch, 0L, 0);
+
+        context.time.sleep(context.requestTimeoutMs());
+        context.pollUntilRequest();
+
+        // We should retry the Fetch against the other voter since the original
+        // voter connection will be backing off.
+        RaftRequest.Outbound fetchRequest2 = context.assertSentFetchRequest();
+        assertNotEquals(leaderId, fetchRequest2.destination().id());
+        assertTrue(context.bootstrapIds.contains(fetchRequest2.destination().id()));
+        context.assertFetchRequestData(fetchRequest2, epoch, 0L, 0);
+
+        context.deliverResponse(
+            fetchRequest2.correlationId(),
+            fetchRequest2.destination(),
+            context.fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, Errors.FENCED_LEADER_EPOCH)
+        );
+        context.client.poll();
+
+        context.assertElectedLeader(epoch, leaderId);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
     public void testObserverLeaderRediscoveryAfterBrokerNotAvailableError(boolean withKip853Rpc) throws Exception {
         int localId = randomReplicaId();
         int leaderId = localId + 1;
