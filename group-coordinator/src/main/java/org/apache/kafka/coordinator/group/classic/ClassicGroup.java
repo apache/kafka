@@ -38,7 +38,6 @@ import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
-import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -182,24 +181,17 @@ public class ClassicGroup implements Group {
      */
     private boolean newMemberAdded = false;
 
-    /**
-     * Coordinator metrics.
-     */
-    private final GroupCoordinatorMetricsShard metrics;
-
     public ClassicGroup(
         LogContext logContext,
         String groupId,
         ClassicGroupState initialState,
-        Time time,
-        GroupCoordinatorMetricsShard metrics
+        Time time
     ) {
         this(
             logContext,
             groupId,
             initialState,
             time,
-            metrics,
             0,
             Optional.empty(),
             Optional.empty(),
@@ -213,7 +205,6 @@ public class ClassicGroup implements Group {
         String groupId,
         ClassicGroupState initialState,
         Time time,
-        GroupCoordinatorMetricsShard metrics,
         int generationId,
         Optional<String> protocolType,
         Optional<String> protocolName,
@@ -226,7 +217,6 @@ public class ClassicGroup implements Group {
         this.state = Objects.requireNonNull(initialState);
         this.previousState = DEAD;
         this.time = Objects.requireNonNull(time);
-        this.metrics = Objects.requireNonNull(metrics);
         this.generationId = generationId;
         this.protocolType = protocolType;
         this.protocolName = protocolName;
@@ -1377,7 +1367,6 @@ public class ClassicGroup implements Group {
         String leavingMemberId,
         LogContext logContext,
         Time time,
-        GroupCoordinatorMetricsShard metrics,
         MetadataImage metadataImage
     ) {
         ClassicGroup classicGroup = new ClassicGroup(
@@ -1385,7 +1374,6 @@ public class ClassicGroup implements Group {
             consumerGroup.groupId(),
             ClassicGroupState.STABLE,
             time,
-            metrics,
             consumerGroup.groupEpoch(),
             Optional.ofNullable(ConsumerProtocol.PROTOCOL_TYPE),
             Optional.empty(),

@@ -131,7 +131,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -899,7 +898,7 @@ public class GroupMetadataManager {
         }
 
         if (group == null) {
-            ClassicGroup classicGroup = new ClassicGroup(logContext, groupId, ClassicGroupState.EMPTY, time, metrics);
+            ClassicGroup classicGroup = new ClassicGroup(logContext, groupId, ClassicGroupState.EMPTY, time);
             groups.put(groupId, classicGroup);
             return classicGroup;
         } else {
@@ -1090,7 +1089,6 @@ public class GroupMetadataManager {
                 leavingMemberId,
                 logContext,
                 time,
-                metrics,
                 metadataImage
             );
         } catch (SchemaException e) {
@@ -3735,11 +3733,24 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Counts and updates the number of classic groups in different states.
+     */
+    public void updateClassicGroupSizeCounter() {
+        Map<ClassicGroupState, Long> groupSizeCounter = new HashMap<>();
+        groups.forEach((__, group) -> {
+            if (group.type() == CLASSIC) {
+                groupSizeCounter.compute(((ClassicGroup) group).currentState(), Utils::incValue);
+            }
+        });
+        metrics.setClassicGroupGauges(groupSizeCounter);
+    }
+
+    /**
      * The coordinator has been loaded. Session timeouts are registered
      * for all members.
      */
     public void onLoaded() {
-        Map<ClassicGroupState, AtomicLong> classicGroupSizeCounter = GroupCoordinatorMetricsShard.createClassicGroupGauge();
+        Map<ClassicGroupState, Long> classicGroupSizeCounter = new HashMap<>();
         groups.forEach((groupId, group) -> {
             switch (group.type()) {
                 case CONSUMER:
@@ -3774,7 +3785,7 @@ public class GroupMetadataManager {
                             ". Rebalancing in order to give a chance for consumers to commit offsets");
                     }
 
-                    classicGroupSizeCounter.get(classicGroup.currentState()).incrementAndGet();
+                    classicGroupSizeCounter.compute(classicGroup.currentState(), Utils::incValue);
                     break;
 
                 case SHARE:
@@ -3787,7 +3798,6 @@ public class GroupMetadataManager {
             }
         });
         metrics.setClassicGroupGauges(classicGroupSizeCounter);
-        scheduleClassicGroupSizeCounter();
     }
 
     /**
@@ -3839,7 +3849,6 @@ public class GroupMetadataManager {
                     break;
             }
         });
-        cancelClassicGroupSizeCounter();
     }
 
     public static String groupSessionTimeoutKey(String groupId, String memberId) {
@@ -3848,38 +3857,6 @@ public class GroupMetadataManager {
 
     public static String consumerGroupRebalanceTimeoutKey(String groupId, String memberId) {
         return "rebalance-timeout-" + groupId + "-" + memberId;
-    }
-
-    public static final String CLASSIC_GROUP_SIZE_COUNTER_KEY = "classic-group-size-counter";
-
-    /**
-     * Schedules (or reschedules) the group size counter for the classic groups.
-     */
-    private void scheduleClassicGroupSizeCounter() {
-        timer.schedule(
-            CLASSIC_GROUP_SIZE_COUNTER_KEY,
-            GroupCoordinatorMetricsShard.DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS,
-            TimeUnit.MILLISECONDS,
-            true,
-            () -> {
-                Map<ClassicGroupState, AtomicLong> groupSizeCounter = GroupCoordinatorMetricsShard.createClassicGroupGauge();
-                groups.forEach((__, group) -> {
-                    if (group.type() == CLASSIC) {
-                        groupSizeCounter.get(((ClassicGroup) group).currentState()).incrementAndGet();
-                    }
-                });
-                metrics.setClassicGroupGauges(groupSizeCounter);
-                scheduleClassicGroupSizeCounter();
-                return EMPTY_RESULT;
-            }
-        );
-    }
-
-    /**
-     * Cancels the group size counter for the classic groups.
-     */
-    private void cancelClassicGroupSizeCounter() {
-        timer.cancel(CLASSIC_GROUP_SIZE_COUNTER_KEY);
     }
 
     /**
@@ -3931,7 +3908,6 @@ public class GroupMetadataManager {
                 groupId,
                 loadedMembers.isEmpty() ? EMPTY : STABLE,
                 time,
-                metrics,
                 value.generation(),
                 protocolType == null || protocolType.isEmpty() ? Optional.empty() : Optional.of(protocolType),
                 Optional.ofNullable(value.protocol()),

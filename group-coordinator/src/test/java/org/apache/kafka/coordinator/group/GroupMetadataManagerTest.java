@@ -75,7 +75,6 @@ import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
-import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.MemberState;
@@ -125,7 +124,6 @@ import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG;
-import static org.apache.kafka.coordinator.group.GroupMetadataManager.CLASSIC_GROUP_SIZE_COUNTER_KEY;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESULT;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.appendGroupMetadataErrorToResponseError;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupHeartbeatKey;
@@ -153,7 +151,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -3576,16 +3574,10 @@ public class GroupMetadataManagerTest {
 
         // foo-1 should also have a revocation timeout in place.
         assertNotNull(context.timer.timeout(consumerGroupRebalanceTimeoutKey("foo", "foo-1")));
-
-        // The classic group size counter is scheduled.
-        assertEquals(
-            GroupCoordinatorMetricsShard.DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS,
-            context.timer.timeout(CLASSIC_GROUP_SIZE_COUNTER_KEY).deadlineMs - context.time.milliseconds()
-        );
     }
 
     @Test
-    public void testScheduleClassicGroupSizeCounter() {
+    public void testUpdateClassicGroupSizeCounter() {
         String groupId0 = "group-0";
         String groupId1 = "group-1";
         String groupId2 = "group-2";
@@ -3601,20 +3593,10 @@ public class GroupMetadataManagerTest {
         ClassicGroup group3 = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId3, true);
         ClassicGroup group4 = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId4, true);
 
-        context.groupMetadataManager.onLoaded();
-
-        // The classic group size counter is scheduled.
-        assertEquals(
-            GroupCoordinatorMetricsShard.DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS,
-            context.timer.timeout(CLASSIC_GROUP_SIZE_COUNTER_KEY).deadlineMs - context.time.milliseconds()
-        );
-        verify(context.metrics, times(1)).setClassicGroupGauges(argThat(
-            map -> map.get(ClassicGroupState.PREPARING_REBALANCE).get() == 0
-                && map.get(ClassicGroupState.COMPLETING_REBALANCE).get() == 0
-                && map.get(ClassicGroupState.STABLE).get() == 0
-                && map.get(ClassicGroupState.DEAD).get() == 0
-                && map.get(ClassicGroupState.EMPTY).get() == 4
-        ));
+        context.groupMetadataManager.updateClassicGroupSizeCounter();
+        verify(context.metrics, times(1)).setClassicGroupGauges(eq(Utils.mkMap(
+            Utils.mkEntry(ClassicGroupState.EMPTY, 4L)
+        )));
 
         group1.transitionTo(PREPARING_REBALANCE);
         group2.transitionTo(PREPARING_REBALANCE);
@@ -3622,24 +3604,15 @@ public class GroupMetadataManagerTest {
         group3.transitionTo(PREPARING_REBALANCE);
         group3.transitionTo(COMPLETING_REBALANCE);
         group3.transitionTo(STABLE);
+        group4.transitionTo(DEAD);
 
-        // Advance time to trigger updating the classic group counter.
-        List<ExpiredTimeout<Void, CoordinatorRecord>> timeouts = context.sleep(GroupCoordinatorMetricsShard.DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS + 1);
-        assertEquals(1, timeouts.size());
-        assertEquals(CLASSIC_GROUP_SIZE_COUNTER_KEY, timeouts.get(0).key);
-        verify(context.metrics, times(1)).setClassicGroupGauges(argThat(
-            map -> map.get(ClassicGroupState.PREPARING_REBALANCE).get() == 1
-                && map.get(ClassicGroupState.COMPLETING_REBALANCE).get() == 1
-                && map.get(ClassicGroupState.STABLE).get() == 1
-                && map.get(ClassicGroupState.DEAD).get() == 0
-                && map.get(ClassicGroupState.EMPTY).get() == 1
-        ));
-
-        // A new timer has been scheduled.
-        assertEquals(
-            GroupCoordinatorMetricsShard.DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS,
-            context.timer.timeout(CLASSIC_GROUP_SIZE_COUNTER_KEY).deadlineMs - context.time.milliseconds()
-        );
+        context.groupMetadataManager.updateClassicGroupSizeCounter();
+        verify(context.metrics, times(1)).setClassicGroupGauges(eq(Utils.mkMap(
+            Utils.mkEntry(ClassicGroupState.PREPARING_REBALANCE, 1L),
+            Utils.mkEntry(ClassicGroupState.COMPLETING_REBALANCE, 1L),
+            Utils.mkEntry(ClassicGroupState.STABLE, 1L),
+            Utils.mkEntry(ClassicGroupState.DEAD, 1L)
+        )));
     }
 
     @Test
@@ -3744,11 +3717,6 @@ public class GroupMetadataManagerTest {
             "group-id",
             STABLE,
             context.time,
-            new GroupCoordinatorMetricsShard(
-                context.snapshotRegistry,
-                Collections.emptyMap(),
-                new TopicPartition("__consumer_offsets", 0)
-            ),
             1,
             Optional.of("consumer"),
             Optional.of("range"),
@@ -9576,8 +9544,7 @@ public class GroupMetadataManagerTest {
             new LogContext(),
             "group-id",
             EMPTY,
-            context.time,
-            context.metrics
+            context.time
         );
 
         // Even if there are more group metadata records loaded than tombstone records, the last replayed record
@@ -9648,8 +9615,7 @@ public class GroupMetadataManagerTest {
             new LogContext(),
             classicGroupId,
             EMPTY,
-            context.time,
-            context.metrics
+            context.time
         );
         context.replay(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(classicGroup, classicGroup.groupAssignment(), MetadataVersion.latestTesting()));
 
@@ -9677,8 +9643,7 @@ public class GroupMetadataManagerTest {
             new LogContext(),
             classicGroupId,
             EMPTY,
-            context.time,
-            context.metrics
+            context.time
         );
         context.replay(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(classicGroup, classicGroup.groupAssignment(), MetadataVersion.latestTesting()));
 
@@ -10922,7 +10887,6 @@ public class GroupMetadataManagerTest {
             groupId,
             STABLE,
             context.time,
-            context.metrics,
             10,
             Optional.of(ConsumerProtocol.PROTOCOL_TYPE),
             Optional.of("range"),
@@ -11106,7 +11070,6 @@ public class GroupMetadataManagerTest {
             groupId,
             STABLE,
             context.time,
-            context.metrics,
             10,
             Optional.of(ConsumerProtocol.PROTOCOL_TYPE),
             Optional.of("range"),
@@ -11317,7 +11280,6 @@ public class GroupMetadataManagerTest {
             groupId,
             STABLE,
             context.time,
-            context.metrics,
             11,
             Optional.of(ConsumerProtocol.PROTOCOL_TYPE),
             Optional.of("range"),

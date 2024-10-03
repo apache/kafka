@@ -29,6 +29,7 @@ import org.apache.kafka.timeline.TimelineLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
@@ -42,11 +43,6 @@ import java.util.concurrent.atomic.AtomicLong;
  * report.
  */
 public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
-
-    /**
-     * Hardcoded default value of the interval to update the classic group size counter.
-     */
-    public static final int DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS = 60 * 1000;
 
     private static final Logger log = LoggerFactory.getLogger(GroupCoordinatorMetricsShard.class);
 
@@ -70,7 +66,7 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
     /**
      * Classic group size gauge counters keyed by the metric name.
      */
-    private volatile Map<ClassicGroupState, AtomicLong> classicGroupGauges;
+    private volatile Map<ClassicGroupState, Long> classicGroupGauges;
 
     /**
      * Consumer group size gauge counters keyed by the metric name.
@@ -111,7 +107,7 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
         numOffsetsTimelineGaugeCounter = new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0));
         numClassicGroupsTimelineCounter = new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0));
 
-        this.classicGroupGauges = createClassicGroupGauge();
+        this.classicGroupGauges = Collections.emptyMap();
 
         this.consumerGroupGauges = Utils.mkMap(
             Utils.mkEntry(ConsumerGroupState.EMPTY,
@@ -137,19 +133,6 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
 
         this.globalSensors = Objects.requireNonNull(globalSensors);
         this.topicPartition = Objects.requireNonNull(topicPartition);
-    }
-
-    /**
-     * @return An empty ClassicGroupGauges.
-     */
-    public static Map<ClassicGroupState, AtomicLong> createClassicGroupGauge() {
-        return Utils.mkMap(
-            Utils.mkEntry(ClassicGroupState.PREPARING_REBALANCE, new AtomicLong(0)),
-            Utils.mkEntry(ClassicGroupState.COMPLETING_REBALANCE, new AtomicLong(0)),
-            Utils.mkEntry(ClassicGroupState.STABLE, new AtomicLong(0)),
-            Utils.mkEntry(ClassicGroupState.DEAD, new AtomicLong(0)),
-            Utils.mkEntry(ClassicGroupState.EMPTY, new AtomicLong(0))
-        );
     }
 
     /**
@@ -213,9 +196,9 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
      * @return   The number of classic groups in `state`.
      */
     public long numClassicGroups(ClassicGroupState state) {
-        AtomicLong counter = classicGroupGauges.get(state);
+        Long counter = classicGroupGauges.get(state);
         if (counter != null) {
-            return counter.get();
+            return counter;
         }
         return 0L;
     }
@@ -225,7 +208,7 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
      */
     public long numClassicGroups() {
         return classicGroupGauges.values().stream()
-                                 .mapToLong(AtomicLong::get).sum();
+                                 .mapToLong(Long::longValue).sum();
     }
 
     /**
@@ -307,7 +290,7 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
      * @param classicGroupGauges The new classicGroupGauges.
      */
     public void setClassicGroupGauges(
-        Map<ClassicGroupState, AtomicLong> classicGroupGauges
+        Map<ClassicGroupState, Long> classicGroupGauges
     ) {
         this.classicGroupGauges = classicGroupGauges;
     }

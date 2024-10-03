@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.group.classic;
 
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
@@ -39,8 +38,6 @@ import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.coordinator.group.OffsetAndMetadata;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
-import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
-import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -70,7 +67,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
 
 public class ClassicGroupTest {
     private final String protocolType = "consumer";
@@ -81,17 +77,12 @@ public class ClassicGroupTest {
     private final int rebalanceTimeoutMs = 60000;
     private final int sessionTimeoutMs = 10000;
     private final LogContext logContext = new LogContext();
-    private final GroupCoordinatorMetricsShard metrics = new GroupCoordinatorMetricsShard(
-        new SnapshotRegistry(logContext),
-        Collections.emptyMap(),
-        new TopicPartition("__consumer_offsets", 0)
-    );
 
     private ClassicGroup group = null;
 
     @BeforeEach
     public void initialize() {
-        group = new ClassicGroup(logContext, "groupId", EMPTY, Time.SYSTEM, metrics);
+        group = new ClassicGroup(logContext, "groupId", EMPTY, Time.SYSTEM);
     }
 
     @Test
@@ -1122,7 +1113,7 @@ public class ClassicGroupTest {
         OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(15000L, OptionalInt.empty(), "", commitTimestamp, OptionalLong.empty());
         MockTime time = new MockTime();
         long currentStateTimestamp = time.milliseconds();
-        ClassicGroup group = new ClassicGroup(new LogContext(), "groupId", EMPTY, time, mock(GroupCoordinatorMetricsShard.class));
+        ClassicGroup group = new ClassicGroup(new LogContext(), "groupId", EMPTY, time);
 
         // 1. Test no protocol type. Simple consumer case, Base timestamp based off of last commit timestamp.
         Optional<OffsetExpirationCondition> offsetExpirationCondition = group.offsetExpirationCondition();
@@ -1197,7 +1188,7 @@ public class ClassicGroupTest {
 
     @Test
     public void testIsSubscribedToTopic() {
-        ClassicGroup group = new ClassicGroup(new LogContext(), "groupId", EMPTY, Time.SYSTEM, mock(GroupCoordinatorMetricsShard.class));
+        ClassicGroup group = new ClassicGroup(new LogContext(), "groupId", EMPTY, Time.SYSTEM);
 
         // 1. group has no protocol type => not subscribed
         assertFalse(group.isSubscribedToTopic("topic"));
@@ -1261,7 +1252,7 @@ public class ClassicGroupTest {
 
     @Test
     public void testIsInStates() {
-        ClassicGroup group = new ClassicGroup(new LogContext(), "groupId", EMPTY, Time.SYSTEM, mock(GroupCoordinatorMetricsShard.class));
+        ClassicGroup group = new ClassicGroup(new LogContext(), "groupId", EMPTY, Time.SYSTEM);
         assertTrue(group.isInStates(Collections.singleton("empty"), 0));
 
         group.transitionTo(PREPARING_REBALANCE);
