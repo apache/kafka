@@ -103,7 +103,7 @@ public class FeatureCommandTest {
                 assertEquals(0, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
                         "upgrade", "--metadata", "3.3-IV2"))
         );
-        assertEquals("metadata.version was upgraded to 6.", commandOutput);
+        assertEquals(format("`metadata` flag is deprecated and may be removed in a future release.%nmetadata.version was upgraded to 6."), commandOutput);
     }
 
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_3_IV1)
@@ -121,16 +121,18 @@ public class FeatureCommandTest {
                         "downgrade", "--metadata", "3.3-IV0"))
 
         );
-        assertEquals("Could not downgrade metadata.version to 4. The update failed for all features since the following " +
-                "feature had an error: Invalid metadata.version 4. Refusing to perform the requested downgrade because it might delete metadata information.", commandOutput);
+        assertEquals(format("`metadata` flag is deprecated and may be removed in a future release.%nCould not downgrade metadata.version to 4." +
+                " The update failed for all features since the following feature had an error: Invalid metadata.version 4." +
+                " Refusing to perform the requested downgrade because it might delete metadata information."), commandOutput);
 
         commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
                         "downgrade", "--unsafe", "--metadata", "3.3-IV0"))
 
         );
-        assertEquals("Could not downgrade metadata.version to 4. The update failed for all features since the following " +
-                "feature had an error: Invalid metadata.version 4. Unsafe metadata downgrade is not supported in this version.", commandOutput);
+        assertEquals(format("`metadata` flag is deprecated and may be removed in a future release.%nCould not downgrade metadata.version to 4." +
+                " The update failed for all features since the following feature had an error: Invalid metadata.version 4." +
+                " Unsafe metadata downgrade is not supported in this version."), commandOutput);
     }
 
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_8_IV0)
@@ -260,7 +262,8 @@ public class FeatureCommandTest {
             Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleUpgrade(new Namespace(namespace), buildAdminClient()));
             assertTrue(t.getMessage().contains("2 out of 2 operation(s) failed."));
         });
-        assertEquals(format("Could not upgrade foo.bar to 6. Invalid update version 5 for feature metadata.version. Can't upgrade to lower version.%n" +
+        assertEquals(format("`metadata` flag is deprecated and may be removed in a future release.%nCould not upgrade foo.bar to 6." +
+            " Invalid update version 5 for feature metadata.version. Can't upgrade to lower version.%n" +
             "Could not upgrade metadata.version to 5. Invalid update version 5 for feature metadata.version. Can't upgrade to lower version."), upgradeOutput);
     }
 
@@ -274,7 +277,8 @@ public class FeatureCommandTest {
             Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleUpgrade(new Namespace(namespace), buildAdminClient()));
             assertTrue(t.getMessage().contains("2 out of 2 operation(s) failed."));
         });
-        assertEquals(format("Can not upgrade foo.bar to 6. Invalid update version 5 for feature metadata.version. Can't upgrade to lower version.%n" +
+        assertEquals(format("`metadata` flag is deprecated and may be removed in a future release.%nCan not upgrade foo.bar to 6." +
+            " Invalid update version 5 for feature metadata.version. Can't upgrade to lower version.%n" +
             "Can not upgrade metadata.version to 5. Invalid update version 5 for feature metadata.version. Can't upgrade to lower version."), upgradeOutput);
     }
 
@@ -522,7 +526,8 @@ public class FeatureCommandTest {
         Map<String, Object> namespace = new HashMap<>();
         namespace.put("feature", Arrays.asList(
                 "transaction.version=2",
-                "group.version=1"
+                "group.version=1",
+                "test.feature.version=2"
         ));
 
         String output = ToolsTestUtils.captureStandardOut(() -> {

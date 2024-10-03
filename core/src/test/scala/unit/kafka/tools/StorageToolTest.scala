@@ -54,7 +54,7 @@ class StorageToolTest {
     properties
   }
 
-  val testingFeatures = Features.values().toList.asJava
+  val testingFeatures = Features.FEATURES.toList.asJava
 
   @Test
   def testConfigToLogDirectories(): Unit = {
@@ -537,18 +537,6 @@ Found problem:
   }
 
   @Test
-  def testHandleFeatureDependenciesForFeatureWithDependencies(): Unit = {
-    val stream = new ByteArrayOutputStream()
-    assertEquals(0, runFeatureDependenciesCommand(stream, Seq("test.feature.version=2")))
-
-    val output = stream.toString
-    val metadataVersion = MetadataVersion.latestTesting()
-
-    val expectedOutput = s"test.feature.version=2 requires:\n    metadata.version=${metadataVersion.featureLevel()} (${metadataVersion.version()})\n"
-    assertEquals(expectedOutput.trim, output.trim)
-  }
-
-  @Test
   def testTestingFeatureDependencies(): Unit = {
     val stream = new ByteArrayOutputStream()
     val namespace = StorageTool.parseArguments(Array("feature-dependencies", "--feature", "test.feature.version=2"))
@@ -572,21 +560,16 @@ Found problem:
   @Test
   def testMultipleFeatureDependencies(): Unit = {
     val stream = new ByteArrayOutputStream()
-    val features = Seq("transaction.version=2", "group.version=1", "test.feature.version=2")
+    val features = Seq("transaction.version=2", "group.version=1")
 
     assertEquals(0, runFeatureDependenciesCommand(stream, features))
 
     val output = stream.toString.trim
     System.out.println(output)
 
-    val latestTestingVersion = MetadataVersion.latestTesting()
-    val latestTestingVersionString = s"metadata.version=${latestTestingVersion.featureLevel()} (${latestTestingVersion.version()})"
-
     val expectedOutput =
       s"""transaction.version=2 has no dependencies.
          |group.version=1 has no dependencies.
-         |test.feature.version=2 requires:
-         |    $latestTestingVersionString
          |""".stripMargin.trim
 
     assertEquals(expectedOutput, output)

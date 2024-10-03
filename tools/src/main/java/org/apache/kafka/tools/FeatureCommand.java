@@ -289,12 +289,12 @@ public class FeatureCommand {
         }
 
         Map<String, FeatureUpdate> updates = new HashMap<>();
-        MetadataVersion version;
+        MetadataVersion metadataVersion;
 
         if (releaseVersion != null) {
             try {
-                version = MetadataVersion.fromVersionString(releaseVersion);
-                updates.put(version.featureName(), new FeatureUpdate(version.featureLevel(), upgradeType));
+                metadataVersion = MetadataVersion.fromVersionString(releaseVersion);
+                updates.put(metadataVersion.featureName(), new FeatureUpdate(metadataVersion.featureLevel(), upgradeType));
             } catch (Throwable e) {
                 throw new TerseException("Unknown metadata.version " + releaseVersion +
                         ". Supported metadata.version are " + metadataVersionsToString(
@@ -302,7 +302,7 @@ public class FeatureCommand {
             }
             try {
                 for (Features feature : Features.PRODUCTION_FEATURES) {
-                    short featureLevel = feature.defaultValue(version);
+                    short featureLevel = feature.defaultValue(metadataVersion);
                     // Don't send a request to upgrade a feature to 0.
                     if (upgradeType != FeatureUpdate.UpgradeType.UPGRADE || featureLevel > 0) {
                         updates.put(feature.featureName(), new FeatureUpdate(featureLevel, upgradeType));
@@ -316,13 +316,13 @@ public class FeatureCommand {
             if (metadata != null) {
                 System.out.println(" `metadata` flag is deprecated and may be removed in a future release.");
                 try {
-                    version = MetadataVersion.fromVersionString(metadata);
+                    metadataVersion = MetadataVersion.fromVersionString(metadata);
                 } catch (Throwable e) {
                     throw new TerseException("Unknown metadata.version " + metadata +
                             ". Supported metadata.version are " + metadataVersionsToString(
                             MetadataVersion.MINIMUM_BOOTSTRAP_VERSION, MetadataVersion.latestProduction()));
                 }
-                updates.put(MetadataVersion.FEATURE_NAME, new FeatureUpdate(version.featureLevel(), upgradeType));
+                updates.put(MetadataVersion.FEATURE_NAME, new FeatureUpdate(metadataVersion.featureLevel(), upgradeType));
             }
 
             if (features != null) {
