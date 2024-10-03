@@ -186,11 +186,10 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
   }
 
   private def verifyAuthenticationException(action: => Unit): Unit = {
-    // Thinking the assertion on timing may not be that useful now
     val startMs = System.currentTimeMillis
     assertThrows(classOf[Exception], () => action)
     val elapsedMs = System.currentTimeMillis - startMs
-    assertTrue(elapsedMs <= 60100, s"Poll took too long, elapsed=$elapsedMs")
+    assertTrue(elapsedMs <= 5000, s"Poll took too long, elapsed=$elapsedMs")
   }
 
   private def verifyWithRetry(action: => Unit): Unit = {
