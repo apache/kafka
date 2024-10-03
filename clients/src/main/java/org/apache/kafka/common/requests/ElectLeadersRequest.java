@@ -96,10 +96,10 @@ public class ElectLeadersRequest extends AbstractRequest {
             return Collections.emptySet();
         }
         return this.data.topicPartitions().stream()
-                .flatMap((topicPartition -> topicPartition.partitions().stream()
-                        .map(partitionId -> new TopicPartition(topicPartition.topic(), partitionId))
-                ))
-                .collect(Collectors.toSet());
+            .flatMap(topicPartition -> topicPartition.partitions().stream()
+                    .map(partitionId -> new TopicPartition(topicPartition.topic(), partitionId))
+            )
+            .collect(Collectors.toSet());
     }
 
     public ElectionType electionType() {
