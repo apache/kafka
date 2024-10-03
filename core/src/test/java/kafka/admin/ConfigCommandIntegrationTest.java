@@ -32,7 +32,6 @@ import org.junit.platform.commons.util.StringUtils;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
