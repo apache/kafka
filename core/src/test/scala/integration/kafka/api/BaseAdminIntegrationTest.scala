@@ -71,7 +71,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testCreateDeleteTopics(quorum: String): Unit = {
     client = createAdminClient
     val topics = Seq("mytopic", "mytopic2", "mytopic3")
@@ -164,7 +164,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testAuthorizedOperations(quorum: String): Unit = {
     client = createAdminClient
 
