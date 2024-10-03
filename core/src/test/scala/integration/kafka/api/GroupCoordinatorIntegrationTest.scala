@@ -39,7 +39,7 @@ import java.util.concurrent.TimeUnit
 class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
 
   @ClusterTest(
-    types = Array(Type.KRAFT, Type.ZK),
+    types = Array(Type.KRAFT),
     serverProperties = Array(
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),

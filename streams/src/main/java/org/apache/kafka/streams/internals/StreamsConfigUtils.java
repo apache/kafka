@@ -28,11 +28,11 @@ public class StreamsConfigUtils {
 
     private static final Logger LOG = LoggerFactory.getLogger(StreamsConfigUtils.class);
 
-    @SuppressWarnings("deprecation")
     public enum ProcessingMode {
         AT_LEAST_ONCE(StreamsConfig.AT_LEAST_ONCE),
 
-        EXACTLY_ONCE_ALPHA(StreamsConfig.EXACTLY_ONCE),
+        // TODO cleanup
+        EXACTLY_ONCE_ALPHA("exactly_once"),
 
         EXACTLY_ONCE_V2(StreamsConfig.EXACTLY_ONCE_V2);
 
@@ -42,12 +42,12 @@ public class StreamsConfigUtils {
             this.name = name;
         }
     }
-    
-    @SuppressWarnings("deprecation")
+
+    // TODO cleanup
     public static ProcessingMode processingMode(final StreamsConfig config) {
-        if (StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
+        if ("exactly_once".equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
             return ProcessingMode.EXACTLY_ONCE_ALPHA;
-        } else if (StreamsConfig.EXACTLY_ONCE_BETA.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
+        } else if ("exactly_once_beta".equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
             return ProcessingMode.EXACTLY_ONCE_V2;
         } else if (StreamsConfig.EXACTLY_ONCE_V2.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
             return ProcessingMode.EXACTLY_ONCE_V2;
@@ -56,12 +56,12 @@ public class StreamsConfigUtils {
         }
     }
 
-    @SuppressWarnings("deprecation")
+    // TODO cleanup
     public static String processingModeString(final ProcessingMode processingMode) {
         if (processingMode == ProcessingMode.EXACTLY_ONCE_V2) {
             return StreamsConfig.EXACTLY_ONCE_V2;
         } else if (processingMode == ProcessingMode.EXACTLY_ONCE_ALPHA) {
-            return StreamsConfig.EXACTLY_ONCE;
+            return "exactly_once";
         } else {
             return StreamsConfig.AT_LEAST_ONCE;
         }
@@ -72,8 +72,7 @@ public class StreamsConfigUtils {
     }
 
     public static boolean eosEnabled(final ProcessingMode processingMode) {
-        return processingMode == ProcessingMode.EXACTLY_ONCE_ALPHA ||
-            processingMode == ProcessingMode.EXACTLY_ONCE_V2;
+        return processingMode == ProcessingMode.EXACTLY_ONCE_V2;
     }
 
     @SuppressWarnings("deprecation")

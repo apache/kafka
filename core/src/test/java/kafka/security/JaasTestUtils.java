@@ -18,9 +18,13 @@ package kafka.security;
 
 import kafka.utils.TestUtils;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.ScramMechanism;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.network.ConnectionMode;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Java;
+import org.apache.kafka.test.TestSslUtils;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -102,6 +106,8 @@ public class JaasTestUtils {
     public static final String KAFKA_OAUTH_BEARER_ADMIN = "oauthbearer-admin";
 
     public static final String SERVICE_NAME = "kafka";
+
+    public static final String SSL_CERTIFICATE_CN = "localhost";
 
     public static Properties saslConfigs(Optional<Properties> saslProperties) {
         Properties result = saslProperties.orElse(new Properties());
@@ -268,5 +274,107 @@ public class JaasTestUtils {
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(file))) {
             writer.write(String.join("", jaasSections.stream().map(Object::toString).toArray(String[]::new)));
         }
+    }
+
+    public static boolean usesSslTransportLayer(SecurityProtocol securityProtocol) {
+        switch (securityProtocol) {
+            case SSL:
+            case SASL_SSL:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    public static boolean usesSaslAuthentication(SecurityProtocol securityProtocol) {
+        switch (securityProtocol) {
+            case SASL_PLAINTEXT:
+            case SASL_SSL:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    public static Properties sslConfigs(ConnectionMode mode,
+                                        boolean clientCert,
+                                        Optional<File> trustStoreFile,
+                                        String certAlias) throws Exception {
+        return sslConfigs(mode, clientCert, trustStoreFile, certAlias, SSL_CERTIFICATE_CN, TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS);
+    }
+
+    public static Properties sslConfigs(ConnectionMode mode,
+                                        boolean clientCert,
+                                        Optional<File> trustStoreFile,
+                                        String certAlias,
+                                        String certCn,
+                                        String tlsProtocol) throws Exception {
+        File trustStore = trustStoreFile.orElseThrow(() -> new Exception("SSL enabled but no trustStoreFile provided"));
+        Properties sslProps = new Properties();
+        sslProps.putAll(new TestSslUtils.SslConfigsBuilder(mode)
+                .useClientCert(clientCert)
+                .createNewTrustStore(trustStore)
+                .certAlias(certAlias)
+                .cn(certCn)
+                .tlsProtocol(tlsProtocol)
+                .build());
+        return sslProps;
+    }
+
+    public static Properties producerSecurityConfigs(SecurityProtocol securityProtocol,
+                                                     Optional<File> trustStoreFile,
+                                                     Optional<Properties> saslProperties) throws Exception {
+        return securityConfigs(ConnectionMode.CLIENT, securityProtocol, trustStoreFile, "producer", SSL_CERTIFICATE_CN, saslProperties);
+    }
+
+    public static Properties consumerSecurityConfigs(SecurityProtocol securityProtocol, Optional<File> trustStoreFile, Optional<Properties> saslProperties) throws Exception {
+        return securityConfigs(ConnectionMode.CLIENT, securityProtocol, trustStoreFile, "consumer", SSL_CERTIFICATE_CN, saslProperties);
+    }
+
+    public static Properties adminClientSecurityConfigs(SecurityProtocol securityProtocol, Optional<File> trustStoreFile, Optional<Properties> saslProperties) throws Exception {
+        return securityConfigs(ConnectionMode.CLIENT, securityProtocol, trustStoreFile, "admin-client", SSL_CERTIFICATE_CN, saslProperties);
+    }
+
+    public static Properties securityConfigs(ConnectionMode connectionMode,
+                                             SecurityProtocol securityProtocol,
+                                             Optional<File> trustStoreFile,
+                                             String certAlias,
+                                             String certCn,
+                                             Optional<Properties> saslProperties) throws Exception {
+        return securityConfigs(connectionMode, securityProtocol, trustStoreFile, certAlias, certCn, saslProperties,
+                TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS, Optional.empty());
+    }
+    /**
+     * Returns security configuration options for broker or clients
+     *
+     * @param connectionMode Client or server mode
+     * @param securityProtocol Security protocol which indicates if SASL or SSL or both configs are included
+     * @param trustStoreFile Trust store file must be provided for SSL and SASL_SSL
+     * @param certAlias Alias of certificate in SSL key store
+     * @param certCn CN for certificate
+     * @param saslProperties SASL configs if security protocol is SASL_SSL or SASL_PLAINTEXT
+     * @param tlsProtocol TLS version
+     * @param needsClientCert If not empty, a flag which indicates if client certificates are required. By default,
+     *                        client certificates are generated only if securityProtocol is SSL (not for SASL_SSL).
+     */
+    public static Properties securityConfigs(ConnectionMode connectionMode,
+                                             SecurityProtocol securityProtocol,
+                                             Optional<File> trustStoreFile,
+                                             String certAlias,
+                                             String certCn,
+                                             Optional<Properties> saslProperties,
+                                             String tlsProtocol,
+                                             Optional<Boolean> needsClientCert) throws Exception {
+        Properties props = new Properties();
+        if (usesSslTransportLayer(securityProtocol)) {
+            boolean addClientCert = needsClientCert.orElse(securityProtocol == SecurityProtocol.SSL);
+            props.putAll(sslConfigs(connectionMode, addClientCert, trustStoreFile, certAlias, certCn, tlsProtocol));
+        }
+
+        if (usesSaslAuthentication(securityProtocol)) {
+            props.putAll(saslConfigs(saslProperties));
+        }
+        props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name());
+        return props;
     }
 }

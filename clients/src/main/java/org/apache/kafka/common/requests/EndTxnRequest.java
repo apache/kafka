@@ -32,7 +32,11 @@ public class EndTxnRequest extends AbstractRequest {
         public final EndTxnRequestData data;
 
         public Builder(EndTxnRequestData data) {
-            super(ApiKeys.END_TXN);
+            this(data, false);
+        }
+
+        public Builder(EndTxnRequestData data, boolean enableUnstableLastVersion) {
+            super(ApiKeys.END_TXN, enableUnstableLastVersion);
             this.data = data;
         }
 
