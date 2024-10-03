@@ -45,7 +45,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static java.util.Collections.singleton;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.DEFAULT_CLOSE_TIMEOUT_MS;
 
 
@@ -333,18 +332,6 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     public void seek(TopicPartition partition, OffsetAndMetadata offsetAndMetadata) {
         ensureNotClosed();
         subscriptions.seek(partition, offsetAndMetadata.offset());
-    }
-
-    @Deprecated
-    @Override
-    public synchronized OffsetAndMetadata committed(final TopicPartition partition) {
-        return committed(singleton(partition)).get(partition);
-    }
-
-    @Deprecated
-    @Override
-    public OffsetAndMetadata committed(final TopicPartition partition, final Duration timeout) {
-        return committed(partition);
     }
 
     @Override
