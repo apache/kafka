@@ -4585,22 +4585,29 @@ public class KafkaAdminClient extends AdminClient {
                 ApiError topLevelError = response.topLevelError();
                 switch (topLevelError.error()) {
                     case NONE:
-                        for (final UpdatableFeatureResult result : response.data().results()) {
-                            final KafkaFutureImpl<Void> future = updateFutures.get(result.feature());
-                            if (future == null) {
-                                log.warn("Server response mentioned unknown feature {}", result.feature());
-                            } else {
-                                final Errors error = Errors.forCode(result.errorCode());
-                                if (error == Errors.NONE) {
-                                    future.complete(null);
+                        // For V2 and above, None responses will just have a top level NONE error -- mark all the futures as completed.
+                        if (response.data().results().isEmpty()) {
+                            for (final KafkaFutureImpl<Void> future : updateFutures.values()) {
+                                future.complete(null);
+                            }
+                        } else {
+                            for (final UpdatableFeatureResult result : response.data().results()) {
+                                final KafkaFutureImpl<Void> future = updateFutures.get(result.feature());
+                                if (future == null) {
+                                    log.warn("Server response mentioned unknown feature {}", result.feature());
                                 } else {
-                                    future.completeExceptionally(error.exception(result.errorMessage()));
+                                    final Errors error = Errors.forCode(result.errorCode());
+                                    if (error == Errors.NONE) {
+                                        future.complete(null);
+                                    } else {
+                                        future.completeExceptionally(error.exception(result.errorMessage()));
+                                    }
                                 }
                             }
+                            // The server should send back a response for every feature, but we do a sanity check anyway.
+                            completeUnrealizedFutures(updateFutures.entrySet().stream(),
+                                    feature -> "The controller response did not contain a result for feature " + feature);
                         }
-                        // The server should send back a response for every feature, but we do a sanity check anyway.
-                        completeUnrealizedFutures(updateFutures.entrySet().stream(),
-                            feature -> "The controller response did not contain a result for feature " + feature);
                         break;
                     case NOT_CONTROLLER:
                         handleNotControllerError(topLevelError.error());

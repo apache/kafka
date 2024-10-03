@@ -223,6 +223,7 @@
     <suppress checks="ImportControl" files="FetchResponseData.java"/>
     <suppress checks="ImportControl" files="RecordsSerdeTest.java"/>
     <suppress checks="ImportControl" files="ClientTelemetryTest.java"/>
+    <suppress checks="ImportControl" files="AdminFenceProducersTest.java"/>
 
     <!-- Streams tests -->
     <suppress checks="ClassFanOutComplexity"
@@ -340,6 +341,12 @@
     <!-- coordinator-common -->
     <suppress checks="NPathComplexity"
               files="CoordinatorRuntime.java"/>
+
+    <!-- share coordinator -->
+    <suppress checks="NPathComplexity"
+              files="ShareCoordinatorShard.java"/>
+    <suppress checks="CyclomaticComplexity"
+              files="ShareCoordinatorShard.java"/>
 
     <!-- storage -->
     <suppress checks="CyclomaticComplexity"
