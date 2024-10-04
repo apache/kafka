@@ -25,9 +25,9 @@
 
     <!-- Generator -->
     <suppress checks="CyclomaticComplexity|BooleanExpressionComplexity"
-              files="(SchemaGenerator|MessageDataGenerator|FieldSpec|FieldType).java"/>
+              files="(SchemaGenerator|MessageDataGenerator|FieldSpec|FieldSpecPairIterator|FieldType).java"/>
     <suppress checks="NPathComplexity"
-              files="(MessageDataGenerator|FieldSpec|WorkerSinkTask).java"/>
+              files="(FieldSpecPairIterator|MessageDataGenerator|FieldSpec|WorkerSinkTask).java"/>
     <suppress checks="JavaNCSS"
               files="(ApiMessageType|FieldSpec|MessageDataGenerator|KafkaConsumerTest).java"/>
     <suppress checks="MethodLength"

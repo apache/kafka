@@ -217,7 +217,6 @@ class KafkaApisTest extends Logging {
       enabledApis,
       BrokerFeatures.defaultSupportedFeatures(true),
       true,
-      false,
       () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0, raftSupport))
 
     val clientMetricsManagerOpt = if (raftSupport) Some(clientMetricsManager) else None
