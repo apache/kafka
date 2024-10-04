@@ -98,7 +98,7 @@ object DelegationTokenManagerZk {
 class DelegationTokenManagerZk(config: KafkaConfig,
                                tokenCache: DelegationTokenCache,
                                time: Time,
-                               val zkClient: KafkaZkClient)
+                               val zkClient: KafkaZkClient) 
   extends DelegationTokenManager(config, tokenCache, time) {
 
   import DelegationTokenManager._
