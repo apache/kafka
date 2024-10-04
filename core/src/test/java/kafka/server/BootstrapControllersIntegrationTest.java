@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.test.server;
+package kafka.server;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
