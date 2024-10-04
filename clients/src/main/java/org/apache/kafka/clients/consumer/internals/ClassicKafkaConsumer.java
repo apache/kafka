@@ -856,18 +856,6 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
     }
 
-    @Deprecated
-    @Override
-    public OffsetAndMetadata committed(TopicPartition partition) {
-        return committed(partition, Duration.ofMillis(defaultApiTimeoutMs));
-    }
-
-    @Deprecated
-    @Override
-    public OffsetAndMetadata committed(TopicPartition partition, final Duration timeout) {
-        return committed(Collections.singleton(partition), timeout).get(partition);
-    }
-
     @Override
     public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
         return committed(partitions, Duration.ofMillis(defaultApiTimeoutMs));
