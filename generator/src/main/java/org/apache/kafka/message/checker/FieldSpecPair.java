@@ -15,9 +15,34 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.metadata.migration;
+package org.apache.kafka.message.checker;
 
-@FunctionalInterface
-public interface KRaftMigrationOperation {
-    ZkMigrationLeadershipState apply(ZkMigrationLeadershipState migrationState);
+import org.apache.kafka.message.FieldSpec;
+
+class FieldSpecPair {
+    private final FieldSpec field1;
+    private final FieldSpec field2;
+
+    FieldSpecPair(
+        FieldSpec field1,
+        FieldSpec field2
+    ) {
+        this.field1 = field1;
+        this.field2 = field2;
+    }
+
+    FieldSpec field1() {
+        return field1;
+    }
+
+    FieldSpec field2() {
+        return field2;
+    }
+
+    @Override
+    public String toString() {
+        return "FieldSpecPair(field1=" + field1.name() +
+                ", field2=" + field2.name() +
+                ")";
+    }
 }

@@ -15,24 +15,16 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.metadata.migration;
+package org.apache.kafka.message.checker;
 
-import org.apache.kafka.common.security.token.delegation.TokenInformation;
+public class UnificationException extends RuntimeException {
+    private static final long serialVersionUID = 1L;
 
-import java.util.List;
+    public UnificationException(String message, Throwable cause) {
+        super(message, cause);
+    }
 
-public interface DelegationTokenMigrationClient {
-    List<String> getDelegationTokens();
-
-    ZkMigrationLeadershipState writeDelegationToken(
-        String tokenId,
-        TokenInformation tokenInformation,
-        ZkMigrationLeadershipState state
-    );
-
-    ZkMigrationLeadershipState deleteDelegationToken(
-        String tokenId,
-        ZkMigrationLeadershipState state
-    );
-
+    public UnificationException(String message) {
+        this(message, null);
+    }
 }
