@@ -49,6 +49,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @ExtendWith(value = ClusterTestExtensions.class)
 public class FeatureCommandTest {
 
+    private final List<Features> testingFeatures = Arrays.stream(Features.FEATURES).collect(Collectors.toList());
+
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_3_IV1)
     public void testDescribeWithKRaft(ClusterInstance cluster) {
         String commandOutput = ToolsTestUtils.captureStandardOut(() ->
@@ -100,7 +102,7 @@ public class FeatureCommandTest {
                 assertEquals(0, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
                         "upgrade", "--metadata", "3.3-IV2"))
         );
-        assertEquals("metadata.version was upgraded to 6.", commandOutput);
+        assertEquals(format("`metadata` flag is deprecated and may be removed in a future release.%nmetadata.version was upgraded to 6."), commandOutput);
     }
 
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_3_IV1)
@@ -118,16 +120,62 @@ public class FeatureCommandTest {
                         "downgrade", "--metadata", "3.3-IV0"))
 
         );
-        assertEquals("Could not downgrade metadata.version to 4. The update failed for all features since the following " +
-                "feature had an error: Invalid metadata.version 4. Refusing to perform the requested downgrade because it might delete metadata information.", commandOutput);
+        assertEquals(format("`metadata` flag is deprecated and may be removed in a future release.%nCould not downgrade metadata.version to 4." +
+                " The update failed for all features since the following feature had an error: Invalid metadata.version 4." +
+                " Refusing to perform the requested downgrade because it might delete metadata information."), commandOutput);
 
         commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
                         "downgrade", "--unsafe", "--metadata", "3.3-IV0"))
 
         );
-        assertEquals("Could not downgrade metadata.version to 4. The update failed for all features since the following " +
-                "feature had an error: Invalid metadata.version 4. Unsafe metadata downgrade is not supported in this version.", commandOutput);
+        assertEquals(format("`metadata` flag is deprecated and may be removed in a future release.%nCould not downgrade metadata.version to 4." +
+                " The update failed for all features since the following feature had an error: Invalid metadata.version 4." +
+                " Unsafe metadata downgrade is not supported in this version."), commandOutput);
+    }
+
+    @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_8_IV0)
+    public void testUpgradeWithReleaseVersion(ClusterInstance cluster) {
+        String commandOutput = ToolsTestUtils.captureStandardOut(() ->
+                assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
+                        "upgrade", "--release-version", "3.7-IV3"))
+
+        );
+        assertEquals("Could not upgrade metadata.version to 18. The update failed for all features since the following feature had an error:" +
+             " Invalid update version 18 for feature metadata.version. Can't downgrade the version of this feature without setting the upgrade type to either safe or unsafe downgrade.", commandOutput);
+
+        commandOutput = ToolsTestUtils.captureStandardOut(() ->
+                assertEquals(0, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
+                        "upgrade", "--release-version", "3.9-IV0"))
+        );
+
+        assertEquals("kraft.version was upgraded to 1.\n" +
+                "metadata.version was upgraded to 21.", commandOutput);
+    }
+
+    @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_8_IV0)
+    public void testDowngradeWithReleaseVersion(ClusterInstance cluster) {
+        String commandOutput = ToolsTestUtils.captureStandardOut(() ->
+                assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
+                        "downgrade", "--release-version", "3.9-IV0"))
+
+        );
+        assertTrue(commandOutput.contains("The update failed for all features since the following feature had an error:" +
+                " Invalid update version 1 for feature kraft.version. Can't downgrade to a newer version."));
+        assertTrue(commandOutput.contains("Could not downgrade group.version to 0."));
+        assertTrue(commandOutput.contains("Could not downgrade transaction.version to 0."));
+        assertTrue(commandOutput.contains("Could not downgrade kraft.version to 1."));
+        assertTrue(commandOutput.contains("Could not downgrade metadata.version to 21."));
+
+        commandOutput = ToolsTestUtils.captureStandardOut(() ->
+                assertEquals(0, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
+                        "downgrade", "--release-version", "3.7-IV3"))
+
+        );
+        assertEquals("group.version was downgraded to 0.\n" +
+                "kraft.version was downgraded to 0.\n" +
+                "metadata.version was downgraded to 18.\n" +
+                "transaction.version was downgraded to 0.", commandOutput);
     }
 
     private String outputWithoutEpoch(String output) {
@@ -213,7 +261,8 @@ public class FeatureCommandTest {
             Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleUpgrade(new Namespace(namespace), buildAdminClient()));
             assertTrue(t.getMessage().contains("2 out of 2 operation(s) failed."));
         });
-        assertEquals(format("Could not upgrade foo.bar to 6. Invalid update version 5 for feature metadata.version. Can't upgrade to lower version.%n" +
+        assertEquals(format("`metadata` flag is deprecated and may be removed in a future release.%nCould not upgrade foo.bar to 6." +
+            " Invalid update version 5 for feature metadata.version. Can't upgrade to lower version.%n" +
             "Could not upgrade metadata.version to 5. Invalid update version 5 for feature metadata.version. Can't upgrade to lower version."), upgradeOutput);
     }
 
@@ -227,7 +276,8 @@ public class FeatureCommandTest {
             Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleUpgrade(new Namespace(namespace), buildAdminClient()));
             assertTrue(t.getMessage().contains("2 out of 2 operation(s) failed."));
         });
-        assertEquals(format("Can not upgrade foo.bar to 6. Invalid update version 5 for feature metadata.version. Can't upgrade to lower version.%n" +
+        assertEquals(format("`metadata` flag is deprecated and may be removed in a future release.%nCan not upgrade foo.bar to 6." +
+            " Invalid update version 5 for feature metadata.version. Can't upgrade to lower version.%n" +
             "Can not upgrade metadata.version to 5. Invalid update version 5 for feature metadata.version. Can't upgrade to lower version."), upgradeOutput);
     }
 
@@ -241,7 +291,8 @@ public class FeatureCommandTest {
             Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleDowngrade(new Namespace(namespace), buildAdminClient()));
             assertTrue(t.getMessage().contains("2 out of 2 operation(s) failed."));
         });
-        assertEquals(format("Could not downgrade foo.bar to 1. Invalid update version 7 for feature metadata.version. Can't downgrade to newer version.%n" +
+        assertEquals(format("`metadata` flag is deprecated and may be removed in a future release.%nCould not downgrade foo.bar to 1." +
+            " Invalid update version 7 for feature metadata.version. Can't downgrade to newer version.%n" +
             "Could not downgrade metadata.version to 7. Invalid update version 7 for feature metadata.version. Can't downgrade to newer version."), downgradeOutput);
     }
 
@@ -255,8 +306,8 @@ public class FeatureCommandTest {
             Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleDowngrade(new Namespace(namespace), buildAdminClient()));
             assertTrue(t.getMessage().contains("2 out of 2 operation(s) failed."));
         });
-        assertEquals(format("Can not downgrade foo.bar to 1. Invalid update version 7 for feature metadata.version. Can't downgrade to newer version.%n" +
-            "Can not downgrade metadata.version to 7. Invalid update version 7 for feature metadata.version. Can't downgrade to newer version."), downgradeOutput);
+        assertEquals(format("`metadata` flag is deprecated and may be removed in a future release.%nCan not downgrade foo.bar to 1. Invalid update version 7 for feature metadata.version." +
+            " Can't downgrade to newer version.%nCan not downgrade metadata.version to 7. Invalid update version 7 for feature metadata.version. Can't downgrade to newer version."), downgradeOutput);
     }
 
     @Test
@@ -288,12 +339,41 @@ public class FeatureCommandTest {
     }
 
     @Test
+    public void testInvalidReleaseVersion() {
+        Map<String, Object> namespace = new HashMap<>();
+        namespace.put("release_version", "foo");
+        ToolsTestUtils.captureStandardOut(() -> {
+            Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleUpgrade(new Namespace(namespace), buildAdminClient()));
+            assertTrue(t.getMessage().contains("Unknown metadata.version foo."));
+        });
+    }
+
+    @Test
+    public void testIncompatibleUpgradeFlags() {
+        Map<String, Object> namespace = new HashMap<>();
+        namespace.put("release_version", "3.3-IV3");
+        namespace.put("feature", Arrays.asList("foo.bar", "metadata.version", "quux"));
+        ToolsTestUtils.captureStandardOut(() -> {
+            Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleUpgrade(new Namespace(namespace), buildAdminClient()));
+            assertTrue(t.getMessage().contains("Can not specify `release-version` with other feature flags."));
+        });
+
+
+        namespace.put("release_version", "3.3-IV3");
+        namespace.put("metadata", "3.3-IV3");
+        ToolsTestUtils.captureStandardOut(() -> {
+            Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleUpgrade(new Namespace(namespace), buildAdminClient()));
+            assertTrue(t.getMessage().contains("Can not specify `release-version` with other feature flags."));
+        });
+    }
+
+    @Test
     public void testHandleVersionMappingWithValidReleaseVersion() {
         Map<String, Object> namespace = new HashMap<>();
         namespace.put("release_version", "3.3-IV3");
         String versionMappingOutput = ToolsTestUtils.captureStandardOut(() -> {
             try {
-                FeatureCommand.handleVersionMapping(new Namespace(namespace));
+                FeatureCommand.handleVersionMapping(new Namespace(namespace), testingFeatures);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
@@ -317,7 +397,7 @@ public class FeatureCommandTest {
         Map<String, Object> namespace = new HashMap<>();
         String versionMappingOutput = ToolsTestUtils.captureStandardOut(() -> {
             try {
-                FeatureCommand.handleVersionMapping(new Namespace(namespace));
+                FeatureCommand.handleVersionMapping(new Namespace(namespace), testingFeatures);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
@@ -342,7 +422,7 @@ public class FeatureCommandTest {
         namespace.put("release_version", "2.9-IV2");
 
         TerseException exception1 = assertThrows(TerseException.class, () ->
-            FeatureCommand.handleVersionMapping(new Namespace(namespace))
+            FeatureCommand.handleVersionMapping(new Namespace(namespace), testingFeatures)
         );
 
         assertEquals("Unknown release version '2.9-IV2'." +
@@ -352,7 +432,7 @@ public class FeatureCommandTest {
         namespace.put("release_version", "invalid");
 
         TerseException exception2 = assertThrows(TerseException.class, () ->
-            FeatureCommand.handleVersionMapping(new Namespace(namespace))
+            FeatureCommand.handleVersionMapping(new Namespace(namespace), testingFeatures)
         );
 
         assertEquals("Unknown release version 'invalid'." +
@@ -367,7 +447,7 @@ public class FeatureCommandTest {
 
         String output = ToolsTestUtils.captureStandardOut(() -> {
             try {
-                FeatureCommand.handleFeatureDependencies(new Namespace(namespace));
+                FeatureCommand.handleFeatureDependencies(new Namespace(namespace), testingFeatures);
             } catch (TerseException e) {
                 throw new RuntimeException(e);
             }
@@ -389,7 +469,7 @@ public class FeatureCommandTest {
 
         String output = ToolsTestUtils.captureStandardOut(() -> {
             try {
-                FeatureCommand.handleFeatureDependencies(new Namespace(namespace));
+                FeatureCommand.handleFeatureDependencies(new Namespace(namespace), testingFeatures);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
@@ -405,8 +485,8 @@ public class FeatureCommandTest {
 
         Exception exception = assertThrows(
             TerseException.class,
-            () -> FeatureCommand.handleFeatureDependencies(new Namespace(namespace)
-            ));
+            () -> FeatureCommand.handleFeatureDependencies(new Namespace(namespace), testingFeatures)
+        );
 
         assertEquals("Unknown feature: unknown.feature", exception.getMessage());
     }
@@ -418,8 +498,8 @@ public class FeatureCommandTest {
 
         Exception exception = assertThrows(
             IllegalArgumentException.class,
-            () -> FeatureCommand.handleFeatureDependencies(new Namespace(namespace)
-            ));
+            () -> FeatureCommand.handleFeatureDependencies(new Namespace(namespace), testingFeatures)
+        );
 
         assertEquals("No feature:transaction.version with feature level 1000", exception.getMessage());
     }
@@ -431,7 +511,7 @@ public class FeatureCommandTest {
 
         RuntimeException exception = assertThrows(
             RuntimeException.class,
-            () -> FeatureCommand.handleFeatureDependencies(new Namespace(namespace))
+            () -> FeatureCommand.handleFeatureDependencies(new Namespace(namespace), testingFeatures)
         );
 
         assertEquals(
@@ -451,7 +531,7 @@ public class FeatureCommandTest {
 
         String output = ToolsTestUtils.captureStandardOut(() -> {
             try {
-                FeatureCommand.handleFeatureDependencies(new Namespace(namespace));
+                FeatureCommand.handleFeatureDependencies(new Namespace(namespace), testingFeatures);
             } catch (TerseException e) {
                 throw new RuntimeException(e);
             }
