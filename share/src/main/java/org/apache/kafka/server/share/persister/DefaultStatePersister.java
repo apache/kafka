@@ -46,11 +46,7 @@ public class DefaultStatePersister implements Persister {
 
     private static final Logger log = LoggerFactory.getLogger(DefaultStatePersister.class);
 
-    /**
-     * needs to be public as its instance will be
-     * created in BrokerServer from class name.
-     */
-    public DefaultStatePersister() {
+    private DefaultStatePersister() {
     }
 
     // avoid double check locking - safer, neater
@@ -110,9 +106,7 @@ public class DefaultStatePersister implements Persister {
             .map(topicData -> topicData.partitions().stream()
                 .map(partitionData -> {
                     Map<Integer, CompletableFuture<WriteShareGroupStateResponse>> partMap = futureMap.computeIfAbsent(topicData.topicId(), k -> new HashMap<>());
-                    if (!partMap.containsKey(partitionData.partition())) {
-                        partMap.put(partitionData.partition(), new CompletableFuture<>());
-                    }
+                    partMap.computeIfAbsent(partitionData.partition(), k -> new CompletableFuture<>());
                     return stateManager.new WriteStateHandler(
                         groupId, topicData.topicId(), partitionData.partition(), partitionData.stateEpoch(), partitionData.leaderEpoch(), partitionData.startOffset(), partitionData.stateBatches(),
                         partMap.get(partitionData.partition()), null);
@@ -141,11 +135,11 @@ public class DefaultStatePersister implements Persister {
                                     .map(partitionResult -> PartitionFactory.newPartitionErrorData(partitionResult.partition(), partitionResult.errorCode(), partitionResult.errorMessage()))
                                     .collect(Collectors.toList());
                             } catch (InterruptedException | ExecutionException e) {
-                                log.error("Unexpected exception while getting data from share coordinator", e);
+                                log.error("Unexpected exception while writing data to share coordinator", e);
                                 return Collections.singletonList(PartitionFactory.newPartitionErrorData(
                                     partition,
                                     Errors.UNKNOWN_SERVER_ERROR.code(),   // No specific public error code exists for InterruptedException / ExecutionException
-                                    "Error reading state from share coordinator: " + e.getMessage())
+                                    "Error writing state to share coordinator: " + e.getMessage())
                                 );
                             }
                         })
@@ -177,9 +171,7 @@ public class DefaultStatePersister implements Persister {
                 .map(partitionData -> {
                     Map<Integer, CompletableFuture<ReadShareGroupStateResponse>> partMap =
                         futureMap.computeIfAbsent(topicData.topicId(), k -> new HashMap<>());
-                    if (!partMap.containsKey(partitionData.partition())) {
-                        partMap.put(partitionData.partition(), new CompletableFuture<>());
-                    }
+                    partMap.computeIfAbsent(partitionData.partition(), k -> new CompletableFuture<>());
                     return stateManager.new ReadStateHandler(
                         groupId,
                         topicData.topicId(),

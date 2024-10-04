@@ -66,6 +66,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+/**
+ * This class encapsulates various handler classes corresponding to share
+ * state RPCs. It also holds an {@link InterBrokerSendThread} specialization
+ * which manages the sending the RPC requests over the network.
+ * This class is for the exclusive purpose of being used with {@link DefaultStatePersister}
+ * but can be extended for other {@link Persister} implementations as well.
+ */
 public class PersisterStateManager {
 
     private SendThread sender;
@@ -232,7 +239,7 @@ public class PersisterStateManager {
          *
          * @return builder for find coordinator
          */
-        protected AbstractRequest.Builder<? extends AbstractRequest> findShareCoordinatorBuilder() {
+        protected AbstractRequest.Builder<FindCoordinatorRequest> findShareCoordinatorBuilder() {
             return new FindCoordinatorRequest.Builder(new FindCoordinatorRequestData()
                 .setKeyType(FindCoordinatorRequest.CoordinatorType.SHARE.id())
                 .setKey(coordinatorKey()));
@@ -551,7 +558,7 @@ public class PersisterStateManager {
         }
 
         @Override
-        protected AbstractRequest.Builder<? extends AbstractRequest> requestBuilder() {
+        protected AbstractRequest.Builder<ReadShareGroupStateRequest> requestBuilder() {
             throw new RuntimeException("Read requests are batchable, hence individual requests not needed.");
         }
 

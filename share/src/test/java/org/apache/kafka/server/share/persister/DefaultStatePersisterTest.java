@@ -84,10 +84,10 @@ class DefaultStatePersisterTest {
         }
 
         public DefaultStatePersister build() {
-            DefaultStatePersister defaultStatePersister = new DefaultStatePersister();
+            Persister defaultStatePersister = DefaultStatePersister.getInstance();
             PersisterStateManager persisterStateManager = new PersisterStateManager(client, time, cacheHelper);
             defaultStatePersister.configure(new PersisterConfig(persisterStateManager));
-            return defaultStatePersister;
+            return (DefaultStatePersister) defaultStatePersister;
         }
     }
 
@@ -402,7 +402,7 @@ class DefaultStatePersisterTest {
         expectedResultMap.add((PartitionData) PartitionFactory.newPartitionErrorData(partition2, Errors.NONE.code(), null));
 
         assertEquals(2, result.topicsData().size());
-        assertEquals(resultMap, expectedResultMap);
+        assertEquals(expectedResultMap, resultMap);
     }
 
     @Test
@@ -553,6 +553,6 @@ class DefaultStatePersisterTest {
                 )));
 
         assertEquals(2, result.topicsData().size());
-        assertEquals(resultMap, expectedResultMap);
+        assertEquals(expectedResultMap, resultMap);
     }
 }
