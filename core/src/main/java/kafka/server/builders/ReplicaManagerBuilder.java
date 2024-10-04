@@ -21,6 +21,7 @@ import kafka.log.LogManager;
 import kafka.log.remote.RemoteLogManager;
 import kafka.server.AddPartitionsToTxnManager;
 import kafka.server.AlterPartitionManager;
+import kafka.server.DelayedActionQueue;
 import kafka.server.DelayedDeleteRecords;
 import kafka.server.DelayedElectLeader;
 import kafka.server.DelayedFetch;
@@ -216,6 +217,7 @@ public class ReplicaManagerBuilder {
                              OptionConverters.toScala(threadNamePrefix),
                              () -> brokerEpoch,
                              OptionConverters.toScala(addPartitionsToTxnManager),
-                             directoryEventHandler);
+                             directoryEventHandler,
+                             new DelayedActionQueue());
     }
 }
