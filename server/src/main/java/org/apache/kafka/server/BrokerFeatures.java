@@ -27,7 +27,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.common.Features.PRODUCTION_FEATURES;
