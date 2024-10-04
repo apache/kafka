@@ -141,7 +141,7 @@ class DelegationTokenManagerZk(config: KafkaConfig,
         None
     }
   }
-
+  
   override def shutdown(): Unit = {
     if (config.tokenAuthEnabled) {
       if (tokenChangeListener != null) tokenChangeListener.close()
