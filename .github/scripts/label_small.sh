@@ -15,7 +15,7 @@
 # limitations under the License.
 
 LABEL_NAME=small
-MIN_SIZE=100
+MAX_SIZE=100
 
 pr_diff=$(gh pr diff $PR_NUM -R $GITHUB_REPOSITORY)
 
@@ -23,7 +23,7 @@ insertions=$(printf "$pr_diff" | grep '^+' | wc -l)
 deletions=$(printf "$pr_diff" | grep '^-' | wc -l)
 
 total_changes=$((insertions + deletions))
-if [ "$total_changes" -lt "$MIN_SIZE" ]; then
+if [ "$total_changes" -lt "$MAX_SIZE" ]; then
     gh issue edit $PR_NUM --add-label $LABEL_NAME -R $GITHUB_REPOSITORY
 else
     gh issue edit $PR_NUM --remove-label $LABEL_NAME -R $GITHUB_REPOSITORY
