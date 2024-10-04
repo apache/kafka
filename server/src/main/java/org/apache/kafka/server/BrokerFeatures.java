@@ -135,35 +135,22 @@ public class BrokerFeatures {
     private static Map<String, Short> incompatibleFeatures(Features<SupportedVersionRange> supportedFeatures,
                                                            Map<String, Short> finalizedFeatures,
                                                            boolean logIncompatibilities) {
-        return finalizedFeatures.entrySet().stream().map(entry -> {
-                    String feature = entry.getKey();
-                    short versionLevels = entry.getValue();
-                    SupportedVersionRange supportedVersions = supportedFeatures.get(feature);
-                    if (supportedVersions == null) {
-                        if (logIncompatibilities) {
-                            log.warn("Feature incompatibilities seen: {feature={}, reason='Unknown feature'}", feature);
-                        }
-                        return new IncompatibleFeaturesInfo(feature, versionLevels);
-                    } else if (supportedVersions.isIncompatibleWith(versionLevels)) {
-                        if (logIncompatibilities) {
-                            log.warn("Feature incompatibilities seen: {feature={}, reason='{} is incompatible with {}'}",
-                                    feature, versionLevels, supportedVersions);
-                        }
-                        return new IncompatibleFeaturesInfo(feature, versionLevels);
-                    }
-                    return null;
-                })
-                .filter(Objects::nonNull)
-                .collect(Collectors.toMap(info -> info.feature, info -> info.versionLevels, (a, b) -> a));
-    }
-
-    private static class IncompatibleFeaturesInfo {
-        final String feature;
-        final short versionLevels;
-
-        IncompatibleFeaturesInfo(String feature, short versionLevels) {
-            this.feature = feature;
-            this.versionLevels = versionLevels;
-        }
+        Map<String, Short> incompatibleFeaturesInfo = new HashMap<>();
+        finalizedFeatures.forEach((feature, versionLevels) -> {
+            SupportedVersionRange supportedVersions = supportedFeatures.get(feature);
+            if (supportedVersions == null) {
+                incompatibleFeaturesInfo.put(feature, versionLevels);
+                if (logIncompatibilities) {
+                    log.warn("Feature incompatibilities seen: {feature={}, reason='Unknown feature'}", feature);
+                }
+            } else if (supportedVersions.isIncompatibleWith(versionLevels)) {
+                incompatibleFeaturesInfo.put(feature, versionLevels);
+                if (logIncompatibilities) {
+                    log.warn("Feature incompatibilities seen: {feature={}, reason='{} is incompatible with {}'}",
+                            feature, versionLevels, supportedVersions);
+                }
+            }
+        });
+        return incompatibleFeaturesInfo;
     }
 }
