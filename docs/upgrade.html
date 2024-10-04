@@ -77,6 +77,8 @@
                 </li>
                 <li><b>Consumer</b>
                     <ul>
+                        <li>The <code>poll(long)</code> method was removed from the consumer. Please use <code>poll(Duration)</code> instead.
+                        </li>
                         <li>The <code>committed(TopicPartition)</code> and <code>committed(TopicPartition, Duration)</code> methods were removed from the consumer.
                             Please use <code>committed(Set&ltTopicPartition&gt)</code> and <code>committed(Set&ltTopicPartition&gt, Duration)</code> instead.
                         </li>
