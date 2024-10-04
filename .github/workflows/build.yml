@@ -136,13 +136,13 @@ jobs:
           quarantinedTest test
           exitcode="$?"
           echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
-      - name: Archive JUnit reports
+      - name: Archive JUnit HTML reports
         uses: actions/upload-artifact@v4
         id: junit-upload-artifact
         with:
           name: junit-reports-${{ matrix.java }}
           path: |
-            **/build/reports/tests/test/*
+            **/build/reports/tests/*
           compression-level: 9
           if-no-files-found: ignore
       - name: Archive Thread Dumps

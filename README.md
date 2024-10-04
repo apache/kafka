@@ -34,14 +34,16 @@ Follow instructions in https://kafka.apache.org/quickstart
     ./gradlew docsJar # builds both (if applicable) javadoc and scaladoc jars for each module
 
 ### Run unit/integration tests ###
-    ./gradlew test # runs both unit and integration tests
+    ./gradlew test  # runs both unit and integration tests
     ./gradlew unitTest
     ./gradlew integrationTest
+    ./gradlew quarantinedTest  # runs the quarantined tests
+
     
 ### Force re-running tests without code change ###
-    ./gradlew test --rerun
-    ./gradlew unitTest --rerun
-    ./gradlew integrationTest --rerun
+    ./gradlew test --rerun-tasks
+    ./gradlew unitTest --rerun-tasks
+    ./gradlew integrationTest --rerun-tasks
 
 ### Running a particular unit/integration test ###
     ./gradlew clients:test --tests RequestResponseTest
@@ -64,11 +66,17 @@ to `log4j.logger.org.apache.kafka=INFO` and then run:
 And you should see `INFO` level logs in the file under the `clients/build/test-results/test` directory.
 
 ### Specifying test retries ###
-By default, each failed test is retried once up to a maximum of five retries per test run. Tests are retried at the end of the test task. Adjust these parameters in the following way:
+By default, each failed test is retried once up to a maximum of three total retries per test run. 
+Tests are retried at the end of the test task. Adjust these parameters in the following way:
 
-    ./gradlew test -PmaxTestRetries=1 -PmaxTestRetryFailures=5
-    
-See [Test Retry Gradle Plugin](https://github.com/gradle/test-retry-gradle-plugin) for more details.
+    ./gradlew test -PmaxTestRetries=1 -PmaxTestRetryFailures=3
+
+Additionally, quarantined tests are automatically retried three times up to a total of
+20 retries per run. This is controlled by similar parameters.
+
+    ./gradlew test -PmaxQuarantineTestRetries=3 -PmaxQuarantineTestRetryFailures=20
+
+See [Test Retry Gradle Plugin](https://github.com/gradle/test-retry-gradle-plugin) for and [build.yml](.github/workflows/build.yml) more details.
 
 ### Generating test coverage reports ###
 Generate coverage reports for the whole project:

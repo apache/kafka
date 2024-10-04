@@ -544,14 +544,16 @@ subprojects {
   task quarantinedTest(type: Test, dependsOn: compileJava) {
     ext {
       isGithubActions = System.getenv('GITHUB_ACTIONS') != null
-      hadFailure = false  // Used to track if any tests failed, see afterSuite below
     }
 
-    outputs.upToDateWhen { false } // Never consider quarantined test up-to-date
-    outputs.cacheIf { false } // Never cache quarantined test results
+    // Disable caching and up-to-date for this task. We always want quarantined tests
+    // to run and never want to cache their results. Since we do this, we can avoid
+    // explicitly failing the build like we do in "test" with ext.hadFailure.
+    outputs.upToDateWhen { false }
+    outputs.cacheIf { false }
 
     maxParallelForks = maxTestForks
-    ignoreFailures = userIgnoreFailures || ext.isGithubActions
+    ignoreFailures = userIgnoreFailures
 
     maxHeapSize = defaultMaxHeapSize
     jvmArgs = defaultJvmArgs
@@ -579,13 +581,6 @@ subprojects {
       }
     }
 
-    // As we process results, check if there were any test failures.
-    afterSuite { desc, result ->
-      if (result.resultType == TestResult.ResultType.FAILURE) {
-        ext.hadFailure = true
-      }
-    }
-
     // This closure will copy JUnit XML files out of the sub-project's build directory and into
     // a top-level build/junit-xml directory. This is necessary to avoid reporting on tests which
     // were not run, but instead were restored via FROM-CACHE. See KAFKA-17479 for more details.
@@ -597,12 +592,6 @@ subprojects {
           ant.fileset(dir: "${quarantinedTest.reports.junitXml.entryPoint}") {
             ant.include(name: "**/*.xml")
           }
-        }
-
-        // If there were any test failures, we want to fail the task to prevent the failures
-        // from being cached.
-        if (ext.hadFailure) {
-          throw new GradleException("Failing this task since '${project.name}:${name}' had test failures.")
         }
       }
     }
