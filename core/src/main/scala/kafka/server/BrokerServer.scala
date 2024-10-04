@@ -161,6 +161,8 @@ class BrokerServer(
 
   var persister: Persister = _
 
+  var persisterStateManager: PersisterStateManager = _
+
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
     try {
@@ -345,10 +347,17 @@ class BrokerServer(
       tokenManager = new DelegationTokenManager(config, tokenCache, time)
       tokenManager.startup()
 
-      /* setup and configure the persister */
-      persister = if (config.shareGroupConfig.shareGroupPersisterClassName.nonEmpty)
-        CoreUtils.createObject[Persister](config.shareGroupConfig.shareGroupPersisterClassName) else NoOpShareStatePersister.getInstance()
+      /* get persister instance */
+      persister = if (config.shareGroupConfig.shareGroupPersisterClassName.nonEmpty) {
+        val klass = Utils.loadClass(config.shareGroupConfig.shareGroupPersisterClassName, classOf[Object]).asInstanceOf[Class[Persister]]
+        klass.getDeclaredMethod("getInstance")
+          .invoke(null)
+          .asInstanceOf[Persister]
+      } else {
+        NoOpShareStatePersister.getInstance
+      }
 
+      /* initialize persister instance if needed */
       if (!persister.isInstanceOf[NoOpShareStatePersister] && config.shareGroupConfig.isShareGroupEnabled) {
         // We only need share coordinator if we are not using
         // NoOpShareStatePersister and share groups are enabled.
@@ -356,7 +365,7 @@ class BrokerServer(
 
         // We should only initialize the persister, if it is not NoOpShareStatePersister
         // and share groups and enabled. Thus saving creation of network client and state manager.
-        val persisterStateManager = new PersisterStateManager(
+        persisterStateManager = new PersisterStateManager(
           NetworkUtils.buildNetworkClient("Persister", config, metrics, Time.SYSTEM, new LogContext(s"[PersisterStateManager broker=${config.brokerId}]")),
           Time.SYSTEM, new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.get.partitionFor(key), config.interBrokerListenerName))
         persister.configure(new PersisterConfig(persisterStateManager))
@@ -775,11 +784,14 @@ class BrokerServer(
       if (socketServer != null)
         CoreUtils.swallow(socketServer.shutdown(), this)
 
-      if(persister != null)
-        CoreUtils.swallow(persister.stop(), this)
-
       Utils.closeQuietly(brokerTopicStats, "broker topic stats")
       Utils.closeQuietly(sharePartitionManager, "share partition manager")
+
+      if (persister != null)
+        CoreUtils.swallow(persister.stop(), this)
+
+      if (persisterStateManager != null)
+        CoreUtils.swallow(persisterStateManager.stop(), this)
 
       isShuttingDown.set(false)
 
