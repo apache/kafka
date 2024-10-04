@@ -1935,7 +1935,7 @@ public class SharePartition {
         return timer;
     }
 
-    private final class AcquisitionLockTimerTask extends TimerTask {
+    final class AcquisitionLockTimerTask extends TimerTask {
         private final long expirationMs;
         private final String memberId;
         private final long firstOffset;

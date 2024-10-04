@@ -3647,10 +3647,40 @@ public class SharePartitionTest {
             .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
             .withGroupConfigManager(groupConfigManager).build();
 
-        sharePartition.scheduleAcquisitionLockTimeout(MEMBER_ID, 100L, 200L);
+        SharePartition.AcquisitionLockTimerTask timerTask = sharePartition.scheduleAcquisitionLockTimeout(MEMBER_ID, 100L, 200L);
 
         verify(groupConfigManager, times(2)).groupConfig(GROUP_ID);
         verify(groupConfig).shareRecordLockDurationMs();
+        assertEquals(expectedDurationMs, timerTask.delayMs);
+    }
+
+    @Test
+    public void testScheduleAcquisitionLockTimeoutValueUpdatesSuccessfully() {
+        GroupConfigManager groupConfigManager = mock(GroupConfigManager.class);
+        GroupConfig groupConfig = mock(GroupConfig.class);
+        int expectedDurationMs1 = 500;
+        int expectedDurationMs2 = 1000;
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
+        // First invocation of shareRecordLockDurationMs() returns 500, and the second invocation returns 1000
+        when(groupConfig.shareRecordLockDurationMs())
+            .thenReturn(expectedDurationMs1)
+            .thenReturn(expectedDurationMs2);
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withGroupConfigManager(groupConfigManager).build();
+
+        SharePartition.AcquisitionLockTimerTask timerTask1 = sharePartition.scheduleAcquisitionLockTimeout(MEMBER_ID, 100L, 200L);
+
+        verify(groupConfigManager, times(2)).groupConfig(GROUP_ID);
+        verify(groupConfig).shareRecordLockDurationMs();
+        assertEquals(expectedDurationMs1, timerTask1.delayMs);
+
+        SharePartition.AcquisitionLockTimerTask timerTask2 = sharePartition.scheduleAcquisitionLockTimeout(MEMBER_ID, 100L, 200L);
+
+        verify(groupConfigManager, times(4)).groupConfig(GROUP_ID);
+        verify(groupConfig, times(2)).shareRecordLockDurationMs();
+        assertEquals(expectedDurationMs2, timerTask2.delayMs);
     }
 
     @Test
