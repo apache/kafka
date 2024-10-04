@@ -165,10 +165,10 @@ class DelegationTokenManagerZk(config: KafkaConfig,
    * @param responseCallback
    */
   override def createToken(owner: KafkaPrincipal,
-                           tokenRequester: KafkaPrincipal,
-                           renewers: List[KafkaPrincipal],
-                           maxLifeTimeMs: Long,
-                           responseCallback: CreateResponseCallback): Unit = {
+                  tokenRequester: KafkaPrincipal,
+                  renewers: List[KafkaPrincipal],
+                  maxLifeTimeMs: Long,
+                  responseCallback: CreateResponseCallback): Unit = {
 
     if (!config.tokenAuthEnabled) {
       responseCallback(CreateTokenResult(owner, tokenRequester, -1, -1, -1, "", Array[Byte](), Errors.DELEGATION_TOKEN_AUTH_DISABLED))
@@ -229,9 +229,9 @@ class DelegationTokenManagerZk(config: KafkaConfig,
    * @param renewResponseCallback
    */
   override def renewToken(principal: KafkaPrincipal,
-                          hmac: ByteBuffer,
-                          renewLifeTimeMs: Long,
-                          renewCallback: RenewResponseCallback): Unit = {
+                 hmac: ByteBuffer,
+                 renewLifeTimeMs: Long,
+                 renewCallback: RenewResponseCallback): Unit = {
 
     if (!config.tokenAuthEnabled) {
       renewCallback(Errors.DELEGATION_TOKEN_AUTH_DISABLED, -1)
@@ -271,9 +271,9 @@ class DelegationTokenManagerZk(config: KafkaConfig,
    * @param expireResponseCallback
    */
   override def expireToken(principal: KafkaPrincipal,
-                           hmac: ByteBuffer,
-                           expireLifeTimeMs: Long,
-                           expireResponseCallback: ExpireResponseCallback): Unit = {
+                  hmac: ByteBuffer,
+                  expireLifeTimeMs: Long,
+                  expireResponseCallback: ExpireResponseCallback): Unit = {
 
     if (!config.tokenAuthEnabled) {
       expireResponseCallback(Errors.DELEGATION_TOKEN_AUTH_DISABLED, -1)
@@ -347,3 +347,4 @@ class DelegationTokenManagerZk(config: KafkaConfig,
     }
   }
 }
+
