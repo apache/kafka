@@ -23,6 +23,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState;
@@ -165,11 +166,19 @@ public class GroupCoordinatorMetricsTest {
         coordinatorMetrics.activateMetricsShard(shard0);
         coordinatorMetrics.activateMetricsShard(shard1);
 
-        IntStream.range(0, 5).forEach(__ -> shard0.incrementNumClassicGroups(ClassicGroupState.PREPARING_REBALANCE));
-        IntStream.range(0, 1).forEach(__ -> shard0.decrementNumClassicGroups(ClassicGroupState.COMPLETING_REBALANCE));
-        IntStream.range(0, 5).forEach(__ -> shard1.incrementNumClassicGroups(ClassicGroupState.STABLE));
-        IntStream.range(0, 4).forEach(__ -> shard1.incrementNumClassicGroups(ClassicGroupState.DEAD));
-        IntStream.range(0, 4).forEach(__ -> shard1.decrementNumClassicGroups(ClassicGroupState.EMPTY));
+        shard0.setClassicGroupGauges(Utils.mkMap(
+            Utils.mkEntry(ClassicGroupState.PREPARING_REBALANCE, 1L),
+            Utils.mkEntry(ClassicGroupState.COMPLETING_REBALANCE, 1L),
+            Utils.mkEntry(ClassicGroupState.STABLE, 1L),
+            Utils.mkEntry(ClassicGroupState.EMPTY, 1L)
+        ));
+        shard1.setClassicGroupGauges(Utils.mkMap(
+            Utils.mkEntry(ClassicGroupState.PREPARING_REBALANCE, 1L),
+            Utils.mkEntry(ClassicGroupState.COMPLETING_REBALANCE, 1L),
+            Utils.mkEntry(ClassicGroupState.STABLE, 1L),
+            Utils.mkEntry(ClassicGroupState.EMPTY, 1L),
+            Utils.mkEntry(ClassicGroupState.DEAD, 1L)
+        ));
 
         IntStream.range(0, 5).forEach(__ -> shard0.incrementNumConsumerGroups(ConsumerGroupState.ASSIGNING));
         IntStream.range(0, 5).forEach(__ -> shard1.incrementNumConsumerGroups(ConsumerGroupState.RECONCILING));
