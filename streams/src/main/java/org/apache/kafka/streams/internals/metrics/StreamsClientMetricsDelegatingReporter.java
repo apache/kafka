@@ -33,9 +33,9 @@ public class StreamsClientMetricsDelegatingReporter implements MetricsReporter {
     private static final Logger log = LoggerFactory.getLogger(StreamsClientMetricsDelegatingReporter.class);
     private final Admin adminClient;
 
-    public StreamsClientMetricsDelegatingReporter(final Admin adminClient) {
+    public StreamsClientMetricsDelegatingReporter(final Admin adminClient, final String adminClientId) {
         this.adminClient = Objects.requireNonNull(adminClient);
-        log.debug("Creating Client Metrics reporter for admin client {}", adminClient);
+        log.debug("Creating Client Metrics reporter for client {}", adminClientId);
     }
 
     @Override
@@ -54,7 +54,7 @@ public class StreamsClientMetricsDelegatingReporter implements MetricsReporter {
     private boolean isStreamsClientMetric(final KafkaMetric metric) {
         final boolean shouldInclude = metric.metricName().group().equals("stream-metrics");
         if (!shouldInclude) {
-            log.debug("Rejecting thread metric {}", metric.metricName());
+            log.trace("Rejecting thread metric {}", metric.metricName());
         }
         return shouldInclude;
     }

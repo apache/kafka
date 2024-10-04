@@ -52,7 +52,7 @@ class StreamsClientMetricsDelegatingReporterTest {
     @BeforeEach
     public void setup() {
         mockAdminClient = new MockAdminClient();
-        streamsClientMetricsDelegatingReporter = new StreamsClientMetricsDelegatingReporter(mockAdminClient);
+        streamsClientMetricsDelegatingReporter = new StreamsClientMetricsDelegatingReporter(mockAdminClient, "adminClientId");
 
         final Map<String, String> threadIdTagMap = new HashMap<>();
         final String threadId = "abcxyz-StreamThread-1";
