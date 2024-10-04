@@ -28,7 +28,7 @@ import java.util.Objects;
 /**
  * Event to perform {@link AsyncKafkaConsumer#seekToBeginning(Collection)} and {@link AsyncKafkaConsumer#seekToEnd(Collection)}
  * in the background thread. This can avoid race conditions when subscription state is updated. When a ResetOffsetEvent is completed
- * successfully, it does not guarantee the position have been reset.
+ * successfully, it does not guarantee the position reset request have been sent.
  */
 public class ResetOffsetEvent extends CompletableApplicationEvent<Void> {
 
