@@ -61,7 +61,7 @@ public class StreamsThreadMetricsDelegatingReporter implements MetricsReporter {
         final Map<String, String> tags = metric.metricName().tags();
         final boolean shouldInclude = tags.containsKey(THREAD_ID_TAG) && (tags.get(THREAD_ID_TAG).equals(threadId) || tags.get(THREAD_ID_TAG).equals(stateUpdaterThreadId));
         if (!shouldInclude) {
-            log.warn("Rejecting metric {}", metric.metricName());
+            log.trace("Rejecting metric {}", metric.metricName());
         }
         return shouldInclude;
     }
