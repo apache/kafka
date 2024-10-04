@@ -98,7 +98,7 @@ object DelegationTokenManagerZk {
 class DelegationTokenManagerZk(config: KafkaConfig,
                                tokenCache: DelegationTokenCache,
                                time: Time,
-                               val zkClient: KafkaZkClient) 
+                               val zkClient: KafkaZkClient)
   extends DelegationTokenManager(config, tokenCache, time) {
 
   import DelegationTokenManager._
@@ -141,7 +141,7 @@ class DelegationTokenManagerZk(config: KafkaConfig,
         None
     }
   }
-  
+
   override def shutdown(): Unit = {
     if (config.tokenAuthEnabled) {
       if (tokenChangeListener != null) tokenChangeListener.close()
@@ -165,10 +165,10 @@ class DelegationTokenManagerZk(config: KafkaConfig,
    * @param responseCallback
    */
   override def createToken(owner: KafkaPrincipal,
-                  tokenRequester: KafkaPrincipal,
-                  renewers: List[KafkaPrincipal],
-                  maxLifeTimeMs: Long,
-                  responseCallback: CreateResponseCallback): Unit = {
+                           tokenRequester: KafkaPrincipal,
+                           renewers: List[KafkaPrincipal],
+                           maxLifeTimeMs: Long,
+                           responseCallback: CreateResponseCallback): Unit = {
 
     if (!config.tokenAuthEnabled) {
       responseCallback(CreateTokenResult(owner, tokenRequester, -1, -1, -1, "", Array[Byte](), Errors.DELEGATION_TOKEN_AUTH_DISABLED))
@@ -178,9 +178,8 @@ class DelegationTokenManagerZk(config: KafkaConfig,
 
         val issueTimeStamp = time.milliseconds
         val maxLifeTime = if (maxLifeTimeMs <= 0) tokenMaxLifetime else Math.min(maxLifeTimeMs, tokenMaxLifetime)
-
-        val maxLifeTimeStamp = sum(issueTimeStamp, maxLifeTime)
-        val expiryTimeStamp = Math.min(maxLifeTimeStamp, sum(issueTimeStamp, defaultTokenRenewTime))
+        val maxLifeTimeStamp = issueTimeStamp + maxLifeTime
+        val expiryTimeStamp = Math.min(maxLifeTimeStamp, issueTimeStamp + defaultTokenRenewTime)
 
         val tokenInfo = new TokenInformation(tokenId, owner, tokenRequester, renewers.asJava, issueTimeStamp, maxLifeTimeStamp, expiryTimeStamp)
 
@@ -191,10 +190,6 @@ class DelegationTokenManagerZk(config: KafkaConfig,
         responseCallback(CreateTokenResult(owner, tokenRequester, issueTimeStamp, expiryTimeStamp, maxLifeTimeStamp, tokenId, hmac, Errors.NONE))
       }
     }
-  }
-
-  private def sum(now: Long, duration: Long): Long = {
-    if (now > Long.MaxValue - duration) Long.MaxValue else now + duration
   }
 
   /**
@@ -234,9 +229,9 @@ class DelegationTokenManagerZk(config: KafkaConfig,
    * @param renewResponseCallback
    */
   override def renewToken(principal: KafkaPrincipal,
-                 hmac: ByteBuffer,
-                 renewLifeTimeMs: Long,
-                 renewCallback: RenewResponseCallback): Unit = {
+                          hmac: ByteBuffer,
+                          renewLifeTimeMs: Long,
+                          renewCallback: RenewResponseCallback): Unit = {
 
     if (!config.tokenAuthEnabled) {
       renewCallback(Errors.DELEGATION_TOKEN_AUTH_DISABLED, -1)
@@ -276,9 +271,9 @@ class DelegationTokenManagerZk(config: KafkaConfig,
    * @param expireResponseCallback
    */
   override def expireToken(principal: KafkaPrincipal,
-                  hmac: ByteBuffer,
-                  expireLifeTimeMs: Long,
-                  expireResponseCallback: ExpireResponseCallback): Unit = {
+                           hmac: ByteBuffer,
+                           expireLifeTimeMs: Long,
+                           expireResponseCallback: ExpireResponseCallback): Unit = {
 
     if (!config.tokenAuthEnabled) {
       expireResponseCallback(Errors.DELEGATION_TOKEN_AUTH_DISABLED, -1)
@@ -299,7 +294,7 @@ class DelegationTokenManagerZk(config: KafkaConfig,
               expireResponseCallback(Errors.DELEGATION_TOKEN_EXPIRED, -1)
             } else {
               //set expiry time stamp
-              val expiryTimeStamp = Math.min(tokenInfo.maxTimestamp, sum(now, expireLifeTimeMs))
+              val expiryTimeStamp = Math.min(tokenInfo.maxTimestamp, now + expireLifeTimeMs)
               tokenInfo.setExpiryTimestamp(expiryTimeStamp)
 
               updateToken(token)
@@ -352,4 +347,3 @@ class DelegationTokenManagerZk(config: KafkaConfig,
     }
   }
 }
-
