@@ -25,7 +25,9 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -135,45 +137,43 @@ public class BrokerFeatures {
     private static Map<String, Short> incompatibleFeatures(Features<SupportedVersionRange> supportedFeatures,
                                                            Map<String, Short> finalizedFeatures,
                                                            boolean logIncompatibilities) {
-        Map<IncompatibleFeaturesInfo, String> incompatibleFeaturesInfoToErrorReason = 
-                transferToIncompatibleFeaturesInfoToErrorCode(supportedFeatures, finalizedFeatures);
-        if (logIncompatibilities && !incompatibleFeaturesInfoToErrorReason.isEmpty()) {
-            log.warn("Feature incompatibilities seen: {}", 
-                    String.join(", ", incompatibleFeaturesInfoToErrorReason.values()));
+        IncompatibleFeaturesInfosToErrorReasons features =
+                transferToIncompatibleFeaturesInfosToErrorReasons(supportedFeatures, finalizedFeatures);
+        if (logIncompatibilities && !features.errorReason.isEmpty()) {
+            log.warn("Feature incompatibilities seen: {}", features.errorReason);
         }
-        return incompatibleFeaturesInfoToErrorReason.keySet().stream()
-                .collect(Collectors.toMap(info -> info.feature, info -> info.versionLevels));
+        return features.incompatibleFeaturesInfos;
     }
 
-    private static Map<IncompatibleFeaturesInfo, String> transferToIncompatibleFeaturesInfoToErrorCode(
+    private static IncompatibleFeaturesInfosToErrorReasons transferToIncompatibleFeaturesInfosToErrorReasons(
             Features<SupportedVersionRange> supportedFeatures,
             Map<String, Short> finalizedFeatures
     ) {
-        HashMap<IncompatibleFeaturesInfo, String> incompatibleFeaturesInfoToErrorReason = new HashMap<>();
+        Map<String, Short> incompatibleFeaturesInfo = new HashMap<>();
+        List<String> errorReasons = new ArrayList<>();
         finalizedFeatures.forEach((feature, versionLevels) -> {
             SupportedVersionRange supportedVersions = supportedFeatures.get(feature);
             if (supportedVersions == null) {
-                incompatibleFeaturesInfoToErrorReason.put(
-                        new IncompatibleFeaturesInfo(feature, versionLevels), 
-                        format("{feature=%s, reason='Unsupported feature'}", feature)
-                );
+                incompatibleFeaturesInfo.put(feature, versionLevels);
+                errorReasons.add(format("{feature=%s, reason='Unknown feature'}", feature));
             } else if (supportedVersions.isIncompatibleWith(versionLevels)) {
-                incompatibleFeaturesInfoToErrorReason.put(
-                        new IncompatibleFeaturesInfo(feature, versionLevels),
-                        format("{feature=%s, reason='%s is incompatible with %s'}", feature, versionLevels, supportedVersions)
-                );
+                incompatibleFeaturesInfo.put(feature, versionLevels);
+                errorReasons.add(format("{feature=%s, reason='%s is incompatible with %s'}", feature, versionLevels, supportedVersions));
             }
         });
-        return incompatibleFeaturesInfoToErrorReason;
+        return new IncompatibleFeaturesInfosToErrorReasons(
+                incompatibleFeaturesInfo,
+                String.join(", ", errorReasons)
+        );
     }
 
-    private static class IncompatibleFeaturesInfo {
-        final String feature;
-        final short versionLevels;
+    private static class IncompatibleFeaturesInfosToErrorReasons {
+        final Map<String, Short> incompatibleFeaturesInfos;
+        final String errorReason;
 
-        IncompatibleFeaturesInfo(String feature, short versionLevels) {
-            this.feature = feature;
-            this.versionLevels = versionLevels;
+        IncompatibleFeaturesInfosToErrorReasons(Map<String, Short> incompatibleFeaturesInfos, String errorReason) {
+            this.incompatibleFeaturesInfos = incompatibleFeaturesInfos;
+            this.errorReason = errorReason;
         }
     }
 }
