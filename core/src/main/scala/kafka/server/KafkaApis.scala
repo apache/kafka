@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import kafka.api.ElectLeadersRequestOps
 import kafka.controller.ReplicaAssignment
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.network.RequestChannel
@@ -79,7 +78,8 @@ import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.share.context.ShareFetchContext
 import org.apache.kafka.server.share.ErroneousAndValidPartitionData
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, FetchParams, FetchPartitionData}
+import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
+import org.apache.kafka.storage.internals.log.AppendOrigin
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import java.lang.{Long => JLong}
@@ -3355,14 +3355,14 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (!authHelper.authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
       val error = new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, null)
       val partitionErrors: Map[TopicPartition, ApiError] =
-        electionRequest.topicPartitions.iterator.map(partition => partition -> error).toMap
+        electionRequest.topicPartitions.asScala.iterator.map(partition => partition -> error).toMap
 
       sendResponseCallback(error)(partitionErrors)
     } else {
       val partitions = if (electionRequest.data.topicPartitions == null) {
         metadataCache.getAllTopics().flatMap(metadataCache.getTopicPartitions)
       } else {
-        electionRequest.topicPartitions
+        electionRequest.topicPartitions.asScala
       }
 
       replicaManager.electLeaders(
@@ -3577,12 +3577,13 @@ class KafkaApis(val requestChannel: RequestChannel,
           case Left(topLevelError) =>
             UpdateFeaturesResponse.createWithErrors(
               topLevelError,
-              Collections.emptyMap(),
+              Collections.emptySet(),
               throttleTimeMs)
           case Right(featureUpdateErrors) =>
+            // This response is not correct, but since this is ZK specific code it will be removed in 4.0
             UpdateFeaturesResponse.createWithErrors(
               ApiError.NONE,
-              featureUpdateErrors.asJava,
+              featureUpdateErrors.asJava.keySet(),
               throttleTimeMs)
         }
       }

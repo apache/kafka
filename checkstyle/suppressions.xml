@@ -25,9 +25,9 @@
 
     <!-- Generator -->
     <suppress checks="CyclomaticComplexity|BooleanExpressionComplexity"
-              files="(SchemaGenerator|MessageDataGenerator|FieldSpec|FieldType).java"/>
+              files="(SchemaGenerator|MessageDataGenerator|FieldSpec|FieldSpecPairIterator|FieldType).java"/>
     <suppress checks="NPathComplexity"
-              files="(MessageDataGenerator|FieldSpec|WorkerSinkTask).java"/>
+              files="(FieldSpecPairIterator|MessageDataGenerator|FieldSpec|WorkerSinkTask).java"/>
     <suppress checks="JavaNCSS"
               files="(ApiMessageType|FieldSpec|MessageDataGenerator|KafkaConsumerTest).java"/>
     <suppress checks="MethodLength"
@@ -50,6 +50,7 @@
     <!-- server tests -->
     <suppress checks="MethodLength|JavaNCSS|NPath" files="DescribeTopicPartitionsRequestHandlerTest.java"/>
     <suppress checks="CyclomaticComplexity" files="ListConsumerGroupTest.java"/>
+    <suppress checks="ClassFanOutComplexity|CyclomaticComplexity|MethodLength|ParameterNumber|JavaNCSS|ImportControl" files="RequestConvertToJson.java"/>
 
     <!-- Clients -->
     <suppress id="dontUseSystemExit"
@@ -192,7 +193,7 @@
               files="KTableImpl.java"/>
 
     <suppress checks="ParameterNumber"
-              files="StreamThread.java"/>
+              files="(StreamThread|ActiveTaskCreator).java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
               files="(InternalTopologyBuilder|KafkaStreams|KStreamImpl|KTableImpl|StreamsPartitionAssignor).java"/>
@@ -222,6 +223,7 @@
     <suppress checks="ImportControl" files="FetchResponseData.java"/>
     <suppress checks="ImportControl" files="RecordsSerdeTest.java"/>
     <suppress checks="ImportControl" files="ClientTelemetryTest.java"/>
+    <suppress checks="ImportControl" files="AdminFenceProducersTest.java"/>
 
     <!-- Streams tests -->
     <suppress checks="ClassFanOutComplexity"
@@ -339,6 +341,12 @@
     <!-- coordinator-common -->
     <suppress checks="NPathComplexity"
               files="CoordinatorRuntime.java"/>
+
+    <!-- share coordinator -->
+    <suppress checks="NPathComplexity"
+              files="ShareCoordinatorShard.java"/>
+    <suppress checks="CyclomaticComplexity"
+              files="ShareCoordinatorShard.java"/>
 
     <!-- storage -->
     <suppress checks="CyclomaticComplexity"

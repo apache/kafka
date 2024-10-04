@@ -868,7 +868,6 @@ public class GroupMetadataManager {
             ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
             groups.put(groupId, consumerGroup);
             metrics.onConsumerGroupStateTransition(null, consumerGroup.state());
-            metrics.onClassicGroupStateTransition(EMPTY, null);
             return consumerGroup;
         } else {
             throw new IllegalStateException(String.format("Group %s is not a consumer group", groupId));
@@ -899,9 +898,8 @@ public class GroupMetadataManager {
         }
 
         if (group == null) {
-            ClassicGroup classicGroup = new ClassicGroup(logContext, groupId, ClassicGroupState.EMPTY, time, metrics);
+            ClassicGroup classicGroup = new ClassicGroup(logContext, groupId, ClassicGroupState.EMPTY, time);
             groups.put(groupId, classicGroup);
-            metrics.onClassicGroupStateTransition(null, classicGroup.currentState());
             return classicGroup;
         } else {
             if (group.type() == CLASSIC) {
@@ -1091,7 +1089,6 @@ public class GroupMetadataManager {
                 leavingMemberId,
                 logContext,
                 time,
-                metrics,
                 metadataImage
             );
         } catch (SchemaException e) {
@@ -1108,17 +1105,11 @@ public class GroupMetadataManager {
         // Set the appendFuture to prevent the records from being replayed.
         removeGroup(consumerGroup.groupId());
         groups.put(consumerGroup.groupId(), classicGroup);
-        metrics.onClassicGroupStateTransition(null, classicGroup.currentState());
 
         classicGroup.allMembers().forEach(member -> rescheduleClassicGroupMemberHeartbeat(classicGroup, member));
         prepareRebalance(classicGroup, String.format("Downgrade group %s from consumer to classic.", classicGroup.groupId()));
 
-        CompletableFuture<Void> appendFuture = new CompletableFuture<>();
-        appendFuture.exceptionally(__ -> {
-            metrics.onClassicGroupStateTransition(classicGroup.currentState(), null);
-            return null;
-        });
-        return new CoordinatorResult<>(records, response, appendFuture, false);
+        return new CoordinatorResult<>(records, response, null, false);
     }
 
     /**
@@ -1204,8 +1195,7 @@ public class GroupMetadataManager {
                     metrics.onConsumerGroupStateTransition(consumerGroup.state(), null);
                     break;
                 case CLASSIC:
-                    ClassicGroup classicGroup = (ClassicGroup) group;
-                    metrics.onClassicGroupStateTransition(classicGroup.currentState(), null);
+                    // The classic group size counter is implemented as scheduled task.
                     break;
                 case SHARE:
                     // Nothing for now, but we may want to add metrics in the future.
@@ -1793,8 +1783,10 @@ public class GroupMetadataManager {
             );
 
             if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
-                log.info("[GroupId {}] Computed new subscription metadata: {}.",
-                    groupId, subscriptionMetadata);
+                if (log.isDebugEnabled()) {
+                    log.debug("[GroupId {}] Computed new subscription metadata: {}.",
+                        groupId, subscriptionMetadata);
+                }
                 bumpGroupEpoch = true;
                 records.add(newConsumerGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
             }
@@ -1984,8 +1976,10 @@ public class GroupMetadataManager {
             );
 
             if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
-                log.info("[GroupId {}] Computed new subscription metadata: {}.",
-                    groupId, subscriptionMetadata);
+                if (log.isDebugEnabled()) {
+                    log.debug("[GroupId {}] Computed new subscription metadata: {}.",
+                        groupId, subscriptionMetadata);
+                }
                 bumpGroupEpoch = true;
                 records.add(newConsumerGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
             }
@@ -2350,13 +2344,13 @@ public class GroupMetadataManager {
             records.add(newConsumerGroupMemberSubscriptionRecord(groupId, updatedMember));
 
             if (!updatedMember.subscribedTopicNames().equals(member.subscribedTopicNames())) {
-                log.info("[GroupId {}] Member {} updated its subscribed topics to: {}.",
+                log.debug("[GroupId {}] Member {} updated its subscribed topics to: {}.",
                     groupId, memberId, updatedMember.subscribedTopicNames());
                 return true;
             }
 
             if (!updatedMember.subscribedTopicRegex().equals(member.subscribedTopicRegex())) {
-                log.info("[GroupId {}] Member {} updated its subscribed regex to: {}.",
+                log.debug("[GroupId {}] Member {} updated its subscribed regex to: {}.",
                     groupId, memberId, updatedMember.subscribedTopicRegex());
                 return true;
             }
@@ -2432,10 +2426,12 @@ public class GroupMetadataManager {
         if (!updatedMember.equals(member)) {
             records.add(newConsumerGroupCurrentAssignmentRecord(groupId, updatedMember));
 
-            log.info("[GroupId {}] Member {} new assignment state: epoch={}, previousEpoch={}, state={}, "
-                     + "assignedPartitions={} and revokedPartitions={}.",
-                groupId, updatedMember.memberId(), updatedMember.memberEpoch(), updatedMember.previousMemberEpoch(), updatedMember.state(),
-                assignmentToString(updatedMember.assignedPartitions()), assignmentToString(updatedMember.partitionsPendingRevocation()));
+            if (log.isDebugEnabled()) {
+                log.debug("[GroupId {}] Member {} new assignment state: epoch={}, previousEpoch={}, state={}, "
+                        + "assignedPartitions={} and revokedPartitions={}.",
+                    groupId, updatedMember.memberId(), updatedMember.memberEpoch(), updatedMember.previousMemberEpoch(), updatedMember.state(),
+                    assignmentToString(updatedMember.assignedPartitions()), assignmentToString(updatedMember.partitionsPendingRevocation()));
+            }
 
             // Schedule/cancel the rebalance timeout if the member uses the consumer protocol.
             // The members using classic protocol only have join timer and sync timer.
@@ -2543,8 +2539,13 @@ public class GroupMetadataManager {
                 assignmentResultBuilder.build();
             long assignorTimeMs = time.milliseconds() - startTimeMs;
 
-            log.info("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor in {}ms: {}.",
-                group.groupId(), groupEpoch, preferredServerAssignor, assignorTimeMs, assignmentResult.targetAssignment());
+            if (log.isDebugEnabled()) {
+                log.debug("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor in {}ms: {}.",
+                    group.groupId(), groupEpoch, preferredServerAssignor, assignorTimeMs, assignmentResult.targetAssignment());
+            } else {
+                log.info("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor in {}ms.",
+                    group.groupId(), groupEpoch, preferredServerAssignor, assignorTimeMs);
+            }
 
             records.addAll(assignmentResult.records());
 
@@ -2741,8 +2742,10 @@ public class GroupMetadataManager {
             );
 
             if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
-                log.info("[GroupId {}] Computed new subscription metadata: {}.",
-                    group.groupId(), subscriptionMetadata);
+                if (log.isDebugEnabled()) {
+                    log.debug("[GroupId {}] Computed new subscription metadata: {}.",
+                        group.groupId(), subscriptionMetadata);
+                }
                 records.add(newConsumerGroupSubscriptionMetadataRecord(group.groupId(), subscriptionMetadata));
             }
 
@@ -3730,10 +3733,24 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Counts and updates the number of classic groups in different states.
+     */
+    public void updateClassicGroupSizeCounter() {
+        Map<ClassicGroupState, Long> groupSizeCounter = new HashMap<>();
+        groups.forEach((__, group) -> {
+            if (group.type() == CLASSIC) {
+                groupSizeCounter.compute(((ClassicGroup) group).currentState(), Utils::incValue);
+            }
+        });
+        metrics.setClassicGroupGauges(groupSizeCounter);
+    }
+
+    /**
      * The coordinator has been loaded. Session timeouts are registered
      * for all members.
      */
     public void onLoaded() {
+        Map<ClassicGroupState, Long> classicGroupSizeCounter = new HashMap<>();
         groups.forEach((groupId, group) -> {
             switch (group.type()) {
                 case CONSUMER:
@@ -3767,6 +3784,8 @@ public class GroupMetadataManager {
                             " (size " + classicGroup.numMembers() + ") is over capacity " + classicGroupMaxSize +
                             ". Rebalancing in order to give a chance for consumers to commit offsets");
                     }
+
+                    classicGroupSizeCounter.compute(classicGroup.currentState(), Utils::incValue);
                     break;
 
                 case SHARE:
@@ -3778,6 +3797,7 @@ public class GroupMetadataManager {
                     break;
             }
         });
+        metrics.setClassicGroupGauges(classicGroupSizeCounter);
     }
 
     /**
@@ -3888,7 +3908,6 @@ public class GroupMetadataManager {
                 groupId,
                 loadedMembers.isEmpty() ? EMPTY : STABLE,
                 time,
-                metrics,
                 value.generation(),
                 protocolType == null || protocolType.isEmpty() ? Optional.empty() : Optional.of(protocolType),
                 Optional.ofNullable(value.protocol()),
@@ -3897,10 +3916,7 @@ public class GroupMetadataManager {
             );
 
             loadedMembers.forEach(member -> classicGroup.add(member, null));
-            Group prevGroup = groups.put(groupId, classicGroup);
-            if (prevGroup == null) {
-                metrics.onClassicGroupStateTransition(null, classicGroup.currentState());
-            }
+            groups.put(groupId, classicGroup);
 
             classicGroup.setSubscribedTopics(
                 classicGroup.computeSubscribedTopics()

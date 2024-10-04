@@ -19,7 +19,7 @@ package org.apache.kafka.server.share.fetch;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.message.ShareFetchResponseData.PartitionData;
-import org.apache.kafka.storage.internals.log.FetchParams;
+import org.apache.kafka.server.storage.log.FetchParams;
 
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;

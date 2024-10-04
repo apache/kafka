@@ -104,7 +104,7 @@ public class StandbyTaskEOSIntegrationTest {
         inputTopic = "input-" + safeTestName;
         outputTopic = "output-" + safeTestName;
         storeName = "store-" + safeTestName;
-        CLUSTER.deleteTopicsAndWait(inputTopic, outputTopic, appId + "-KSTREAM-AGGREGATE-STATE-STORE-0000000001-changelog");
+        CLUSTER.deleteTopics(inputTopic, outputTopic, appId + "-KSTREAM-AGGREGATE-STATE-STORE-0000000001-changelog");
         CLUSTER.createTopic(inputTopic, 1, 3);
         CLUSTER.createTopic(outputTopic, 1, 3);
     }
@@ -112,13 +112,13 @@ public class StandbyTaskEOSIntegrationTest {
     @AfterEach
     public void cleanUp() {
         if (streamInstanceOne != null) {
-            streamInstanceOne.close();
+            streamInstanceOne.close(Duration.ofSeconds(60));
         }
         if (streamInstanceTwo != null) {
-            streamInstanceTwo.close();
+            streamInstanceTwo.close(Duration.ofSeconds(60));
         }
         if (streamInstanceOneRecovery != null) {
-            streamInstanceOneRecovery.close();
+            streamInstanceOneRecovery.close(Duration.ofSeconds(60));
         }
     }
 
