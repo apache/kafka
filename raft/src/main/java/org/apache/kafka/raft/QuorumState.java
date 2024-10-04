@@ -470,15 +470,53 @@ public class QuorumState {
      */
     public void transitionToFollower(int epoch, int leaderId, Endpoints endpoints) {
         int currentEpoch = state.epoch();
-        if (localId.isPresent() && leaderId == localId.getAsInt()) {
-            throw new IllegalStateException("Cannot transition to Follower with leader " + leaderId +
-                " and epoch " + epoch + " since it matches the local broker.id " + localId);
+        if (endpoints.isEmpty()) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Cannot transition to Follower with leader %s and epoch %s without a leader endpoint",
+                    leaderId,
+                    epoch
+                )
+            );
+        } else if (localId.isPresent() && leaderId == localId.getAsInt()) {
+            throw new IllegalStateException(
+                String.format(
+                    "Cannot transition to Follower with leader %s and epoch %s since it matches the local node.id %s",
+                    leaderId,
+                    epoch,
+                    localId
+                )
+            );
         } else if (epoch < currentEpoch) {
-            throw new IllegalStateException("Cannot transition to Follower with leader " + leaderId +
-                " and epoch " + epoch + " since the current epoch " + currentEpoch + " is larger");
-        } else if (epoch == currentEpoch && (isFollower() || isLeader())) {
-            throw new IllegalStateException("Cannot transition to Follower with leader " + leaderId +
-                " and epoch " + epoch + " from state " + state);
+            throw new IllegalStateException(
+                String.format(
+                    "Cannot transition to Follower with leader %s and epoch %s since the current epoch %s is larger",
+                    leaderId,
+                    epoch,
+                    currentEpoch
+                )
+            );
+        } else if (epoch == currentEpoch) {
+            if (isFollower() && state.leaderEndpoints().size() >= endpoints.size()) {
+                throw new IllegalStateException(
+                    String.format(
+                        "Cannot transition to Follower with leader %s, epoch %s and endpoints %s from state %s",
+                        leaderId,
+                        epoch,
+                        endpoints,
+                        state
+                    )
+                );
+            } else if (isLeader()) {
+                throw new IllegalStateException(
+                    String.format(
+                        "Cannot transition to Follower with leader %s and epoch %s from state %s",
+                        leaderId,
+                        epoch,
+                        state
+                    )
+                );
+            }
         }
 
         durableTransitionTo(

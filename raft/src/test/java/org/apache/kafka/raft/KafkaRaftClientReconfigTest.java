@@ -2257,6 +2257,45 @@ public class KafkaRaftClientReconfigTest {
         assertEquals(-2, fetchRequest.destination().id());
     }
 
+    @Test
+    public void testHandleBeginQuorumRequestMoreEndpoints() throws Exception {
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
+        ReplicaKey leader = replicaKey(local.id() + 1, true);
+        int leaderEpoch = 3;
+
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(local, leader));
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+            .withBootstrapSnapshot(Optional.of(voters))
+            .withElectedLeader(leaderEpoch, leader.id())
+            .withKip853Rpc(true)
+            .build();
+
+        context.client.poll();
+
+        HashMap<ListenerName, InetSocketAddress> leaderListenersMap = new HashMap<>(2);
+        leaderListenersMap.put(
+            VoterSetTest.DEFAULT_LISTENER_NAME,
+            InetSocketAddress.createUnresolved("localhost", 9990 + leader.id())
+        );
+        leaderListenersMap.put(
+            ListenerName.normalised("ANOTHER_LISTENER"),
+            InetSocketAddress.createUnresolved("localhost", 8990 + leader.id())
+        );
+        Endpoints leaderEndpoints = Endpoints.fromInetSocketAddresses(leaderListenersMap);
+
+        context.deliverRequest(context.beginEpochRequest(leaderEpoch, leader.id(), leaderEndpoints));
+        context.pollUntilResponse();
+
+        context.assertElectedLeader(leaderEpoch, leader.id());
+
+        context.assertSentBeginQuorumEpochResponse(
+            Errors.NONE,
+            leaderEpoch,
+            OptionalInt.of(leader.id())
+        );
+    }
+
     private static void verifyVotersRecord(
         VoterSet expectedVoterSet,
         ByteBuffer recordKey,

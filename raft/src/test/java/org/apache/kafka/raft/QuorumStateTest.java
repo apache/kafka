@@ -17,6 +17,7 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
@@ -32,6 +33,7 @@ import org.mockito.Mockito;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -1208,6 +1210,38 @@ public class QuorumStateTest {
                 )
             ),
             store.readElectionState()
+        );
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = KRaftVersion.class)
+    public void testFollowerToFollowerSameEpochAndMoreEndpoints(KRaftVersion kraftVersion) {
+        int node1 = 1;
+        int node2 = 2;
+        VoterSet voters = localWithRemoteVoterSet(IntStream.of(node1, node2), kraftVersion);
+        QuorumState state = initializeEmptyState(voters, kraftVersion);
+        state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
+        state.transitionToFollower(
+            8,
+            node2,
+            voters.listeners(node2)
+        );
+
+        HashMap<ListenerName, InetSocketAddress> newNode2ListenersMap = new HashMap<>(2);
+        newNode2ListenersMap.put(
+            VoterSetTest.DEFAULT_LISTENER_NAME,
+            InetSocketAddress.createUnresolved("localhost", 9990 + node2)
+        );
+        newNode2ListenersMap.put(
+            ListenerName.normalised("ANOTHER_LISTENER"),
+            InetSocketAddress.createUnresolved("localhost", 8990 + node2)
+        );
+        Endpoints newNode2Endpoints = Endpoints.fromInetSocketAddresses(newNode2ListenersMap);
+
+        state.transitionToFollower(
+            8,
+            node2,
+            newNode2Endpoints
         );
     }
 

@@ -1368,6 +1368,14 @@ public final class RaftClientTestContext {
         return beginEpochRequest(clusterId, epoch, leaderId);
     }
 
+    BeginQuorumEpochRequestData beginEpochRequest(int epoch, int leaderId, Endpoints endpoints) {
+        ReplicaKey localReplicaKey = kip853Rpc ?
+            ReplicaKey.of(localIdOrThrow(), localDirectoryId) :
+            ReplicaKey.of(-1, ReplicaKey.NO_DIRECTORY_ID);
+
+        return beginEpochRequest(clusterId, epoch, leaderId, endpoints, localReplicaKey);
+    }
+
     BeginQuorumEpochRequestData beginEpochRequest(String clusterId, int epoch, int leaderId) {
         ReplicaKey localReplicaKey = kip853Rpc ?
             ReplicaKey.of(localIdOrThrow(), localDirectoryId) :
@@ -1382,12 +1390,28 @@ public final class RaftClientTestContext {
         int leaderId,
         ReplicaKey voterKey
     ) {
+        return beginEpochRequest(
+            clusterId,
+            epoch,
+            leaderId,
+            startingVoters.listeners(leaderId),
+            voterKey
+        );
+    }
+
+    BeginQuorumEpochRequestData beginEpochRequest(
+        String clusterId,
+        int epoch,
+        int leaderId,
+        Endpoints endpoints,
+        ReplicaKey voterKey
+    ) {
         return RaftUtil.singletonBeginQuorumEpochRequest(
             metadataPartition,
             clusterId,
             epoch,
             leaderId,
-            startingVoters.listeners(leaderId),
+            endpoints,
             voterKey
         );
     }
