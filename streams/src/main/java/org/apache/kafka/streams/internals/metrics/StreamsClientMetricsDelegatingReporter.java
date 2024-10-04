@@ -33,9 +33,9 @@ public class StreamsClientMetricsDelegatingReporter implements MetricsReporter {
     private static final Logger log = LoggerFactory.getLogger(StreamsClientMetricsDelegatingReporter.class);
     private final Admin adminClient;
 
-    public StreamsClientMetricsDelegatingReporter(final Admin adminClient, final String adminClientId) {
+    public StreamsClientMetricsDelegatingReporter(final Admin adminClient, final String streamsClientId) {
         this.adminClient = Objects.requireNonNull(adminClient);
-        log.debug("Creating Client Metrics reporter for client {}", adminClientId);
+        log.debug("Creating Client Metrics reporter for streams client {}", streamsClientId);
     }
 
     @Override
