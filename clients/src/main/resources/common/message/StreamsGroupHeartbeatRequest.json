@@ -72,16 +72,16 @@
         "about": "value of the config" }
     ]},
     { "name": "TaskOffset", "versions": "0+", "fields": [
-      { "name": "Subtopology", "type": "string", "versions": "0+",
-        "about": "The sub-topology identifier." },
+      { "name": "SubtopologyId", "type": "string", "versions": "0+",
+        "about": "The subtopology identifier." },
       { "name": "Partition", "type": "int32", "versions": "0+",
         "about": "The partition." },
       { "name": "Offset", "type": "int64", "versions": "0+",
         "about": "The offset." }
     ]},
     { "name": "TaskIds", "versions": "0+", "fields": [
-      { "name": "Subtopology", "type": "string", "versions": "0+",
-        "about": "The sub-topology identifier." },
+      { "name": "SubtopologyId", "type": "string", "versions": "0+",
+        "about": "The subtopology identifier." },
       { "name": "Partitions", "type": "[]int32", "versions": "0+",
         "about": "The partitions of the input topics processed by this member." }
     ]}

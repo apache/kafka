@@ -168,17 +168,17 @@ public class CurrentAssignmentBuilder {
         } else {
             this.ownedActiveTasks = ownedAssignment.activeTasks().entrySet().stream()
                 .map(activeTaskIds -> new StreamsGroupHeartbeatRequestData.TaskIds()
-                    .setSubtopology(activeTaskIds.getKey())
+                    .setSubtopologyId(activeTaskIds.getKey())
                     .setPartitions(new ArrayList<>(activeTaskIds.getValue())))
                 .collect(Collectors.toList());
             this.ownedStandbyTasks = ownedAssignment.standbyTasks().entrySet().stream()
                 .map(standbyTaskIds -> new StreamsGroupHeartbeatRequestData.TaskIds()
-                    .setSubtopology(standbyTaskIds.getKey())
+                    .setSubtopologyId(standbyTaskIds.getKey())
                     .setPartitions(new ArrayList<>(standbyTaskIds.getValue())))
                 .collect(Collectors.toList());
             this.ownedWarmupTasks = ownedAssignment.warmupTasks().entrySet().stream()
                 .map(warmupTaskIds -> new StreamsGroupHeartbeatRequestData.TaskIds()
-                    .setSubtopology(warmupTaskIds.getKey())
+                    .setSubtopologyId(warmupTaskIds.getKey())
                     .setPartitions(new ArrayList<>(warmupTaskIds.getValue())))
                 .collect(Collectors.toList());
         }
@@ -329,7 +329,7 @@ public class CurrentAssignmentBuilder {
 
         for (StreamsGroupHeartbeatRequestData.TaskIds owned : ownedTasks) {
             Set<Integer> tasksPendingRevocation =
-                assignment.getOrDefault(owned.subtopology(), Collections.emptySet());
+                assignment.getOrDefault(owned.subtopologyId(), Collections.emptySet());
 
             for (Integer partitionId : owned.partitions()) {
                 if (tasksPendingRevocation.contains(partitionId)) {

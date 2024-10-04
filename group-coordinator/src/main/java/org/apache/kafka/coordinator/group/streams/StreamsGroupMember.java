@@ -277,7 +277,7 @@ public class StreamsGroupMember {
             List<StreamsGroupCurrentMemberAssignmentValue.TaskIds> topicPartitionsList
         ) {
             return topicPartitionsList.stream().collect(Collectors.toMap(
-                StreamsGroupCurrentMemberAssignmentValue.TaskIds::subtopology,
+                StreamsGroupCurrentMemberAssignmentValue.TaskIds::subtopologyId,
                 taskIds -> Collections.unmodifiableSet(new HashSet<>(taskIds.partitions()))));
         }
 
@@ -632,7 +632,7 @@ public class StreamsGroupMember {
         List<StreamsGroupDescribeResponseData.TaskIds> taskIds = new ArrayList<>();
         tasks.forEach((subtopologyId, partitionSet) -> {
             taskIds.add(new StreamsGroupDescribeResponseData.TaskIds()
-                .setSubtopology(subtopologyId)
+                .setSubtopologyId(subtopologyId)
                 .setPartitions(new ArrayList<>(partitionSet)));
         });
         return taskIds;

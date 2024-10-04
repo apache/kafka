@@ -271,8 +271,8 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
     private void setTargetAssignmentForConsumerGroup(final StreamsGroupHeartbeatResponseData data, final ConsumerGroupHeartbeatResponseData cgData) {
         Map<String, TopicPartitions> tps = new HashMap<>();
         data.activeTasks().forEach(taskId -> Stream.concat(
-                streamsInterface.subtopologyMap().get(taskId.subtopology()).sourceTopics.stream(),
-                streamsInterface.subtopologyMap().get(taskId.subtopology()).repartitionSourceTopics.keySet().stream()
+                streamsInterface.subtopologyMap().get(taskId.subtopologyId()).sourceTopics.stream(),
+                streamsInterface.subtopologyMap().get(taskId.subtopologyId()).repartitionSourceTopics.keySet().stream()
             )
             .forEach(topic -> {
                 final TopicPartitions toInsert = tps.computeIfAbsent(topic, k -> {
@@ -323,7 +323,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         target.clear();
         source.forEach(taskId -> {
             taskId.partitions().forEach(partition -> {
-                target.add(new StreamsAssignmentInterface.TaskId(taskId.subtopology(), partition));
+                target.add(new StreamsAssignmentInterface.TaskId(taskId.subtopologyId(), partition));
             });
         });
     }
@@ -602,7 +602,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 .stream()
                 .map(entry -> {
                     TaskIds ids = new TaskIds();
-                    ids.setSubtopology(entry.getKey());
+                    ids.setSubtopologyId(entry.getKey());
                     ids.setPartitions(entry.getValue());
                     return ids;
                 })

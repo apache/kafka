@@ -64,24 +64,24 @@ public class AssignmentTest {
         String subtopology2 = "subtopology2";
         List<StreamsGroupTargetAssignmentMemberValue.TaskIds> activeTasks = new ArrayList<>();
         activeTasks.add(new StreamsGroupTargetAssignmentMemberValue.TaskIds()
-            .setSubtopology(subtopology1)
+            .setSubtopologyId(subtopology1)
             .setPartitions(Arrays.asList(1, 2, 3)));
         activeTasks.add(new StreamsGroupTargetAssignmentMemberValue.TaskIds()
-            .setSubtopology(subtopology2)
+            .setSubtopologyId(subtopology2)
             .setPartitions(Arrays.asList(4, 5, 6)));
         List<StreamsGroupTargetAssignmentMemberValue.TaskIds> standbyTasks = new ArrayList<>();
         standbyTasks.add(new StreamsGroupTargetAssignmentMemberValue.TaskIds()
-            .setSubtopology(subtopology1)
+            .setSubtopologyId(subtopology1)
             .setPartitions(Arrays.asList(7, 8, 9)));
         standbyTasks.add(new StreamsGroupTargetAssignmentMemberValue.TaskIds()
-            .setSubtopology(subtopology2)
+            .setSubtopologyId(subtopology2)
             .setPartitions(Arrays.asList(1, 2, 3)));
         List<StreamsGroupTargetAssignmentMemberValue.TaskIds> warmupTasks = new ArrayList<>();
         warmupTasks.add(new StreamsGroupTargetAssignmentMemberValue.TaskIds()
-            .setSubtopology(subtopology1)
+            .setSubtopologyId(subtopology1)
             .setPartitions(Arrays.asList(4, 5, 6)));
         warmupTasks.add(new StreamsGroupTargetAssignmentMemberValue.TaskIds()
-            .setSubtopology(subtopology2)
+            .setSubtopologyId(subtopology2)
             .setPartitions(Arrays.asList(7, 8, 9)));
 
         StreamsGroupTargetAssignmentMemberValue record = new StreamsGroupTargetAssignmentMemberValue()
