@@ -132,9 +132,7 @@ public class PersisterStateManager {
     }
 
     public void stop() throws InterruptedException {
-        if (isStarted.get()) {
-            this.sender.shutdown();
-        }
+        this.sender.shutdown();
     }
 
     // test visibility

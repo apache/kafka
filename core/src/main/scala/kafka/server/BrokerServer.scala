@@ -123,7 +123,7 @@ class BrokerServer(
 
   var transactionCoordinator: TransactionCoordinator = _
 
-  var shareCoordinator: Option[ShareCoordinator] = _
+  var shareCoordinator: Option[ShareCoordinator] = None
 
   var clientToControllerChannelManager: NodeToControllerChannelManager = _
 
@@ -345,13 +345,17 @@ class BrokerServer(
       tokenManager = new DelegationTokenManager(config, tokenCache, time)
       tokenManager.startup()
 
-      shareCoordinator = createShareCoordinator()
-
       /* setup and configure the persister */
       persister = if (config.shareGroupConfig.shareGroupPersisterClassName.nonEmpty)
         CoreUtils.createObject[Persister](config.shareGroupConfig.shareGroupPersisterClassName) else NoOpShareStatePersister.getInstance()
 
-      if (shareCoordinator.isDefined) {
+      if (!persister.isInstanceOf[NoOpShareStatePersister] && config.shareGroupConfig.isShareGroupEnabled) {
+        // We only need share coordinator if we are not using
+        // NoOpShareStatePersister and share groups are enabled.
+        shareCoordinator = createShareCoordinator()
+
+        // We should only initialize the persister, if it is not NoOpShareStatePersister
+        // and share groups and enabled. Thus saving creation of network client and state manager.
         val persisterStateManager = new PersisterStateManager(
           NetworkUtils.buildNetworkClient("Persister", config, metrics, Time.SYSTEM, new LogContext(s"[PersisterStateManager broker=${config.brokerId}]")),
           Time.SYSTEM, new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.get.partitionFor(key), config.interBrokerListenerName))
@@ -644,9 +648,6 @@ class BrokerServer(
   }
 
   private def createShareCoordinator(): Option[ShareCoordinator] = {
-    if (!config.shareGroupConfig.isShareGroupEnabled) {
-      return None
-    }
     val time = Time.SYSTEM
     val timer = new SystemTimerReaper(
       "share-coordinator-reaper",
@@ -773,6 +774,10 @@ class BrokerServer(
 
       if (socketServer != null)
         CoreUtils.swallow(socketServer.shutdown(), this)
+
+      if(persister != null)
+        CoreUtils.swallow(persister.stop(), this)
+
       Utils.closeQuietly(brokerTopicStats, "broker topic stats")
       Utils.closeQuietly(sharePartitionManager, "share partition manager")
 

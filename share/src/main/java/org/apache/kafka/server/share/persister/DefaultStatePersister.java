@@ -72,7 +72,10 @@ public class DefaultStatePersister implements Persister {
     @Override
     public void stop() {
         try {
-            this.stateManager.stop();
+            // in case called without configure
+            if (this.stateManager != null) {
+                this.stateManager.stop();
+            }
         } catch (Exception e) {
             log.error("Unable to stop state manager", e);
         }
