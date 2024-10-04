@@ -38,7 +38,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
     LOG_FILE = os.path.join(PERSISTENT_ROOT, "connect.log")
     STDOUT_FILE = os.path.join(PERSISTENT_ROOT, "connect.stdout")
     STDERR_FILE = os.path.join(PERSISTENT_ROOT, "connect.stderr")
-    LOG4J_CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "connect-log4j2.properties")
+    LOG4J_CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "connect-log4j.properties")
     PID_FILE = os.path.join(PERSISTENT_ROOT, "connect.pid")
     EXTERNAL_CONFIGS_FILE = os.path.join(PERSISTENT_ROOT, "connect-external-configs.properties")
     CONNECT_REST_PORT = 8083
@@ -364,7 +364,7 @@ class ConnectStandaloneService(ConnectServiceBase):
         if self.external_config_template_func:
             node.account.create_file(self.EXTERNAL_CONFIGS_FILE, self.external_config_template_func(node))
         node.account.create_file(self.CONFIG_FILE, self.config_template_func(node))
-        node.account.create_file(self.LOG4J_CONFIG_FILE, self.render('connect_log4j2.properties', log_file=self.LOG_FILE))
+        node.account.create_file(self.LOG4J_CONFIG_FILE, self.render('connect_log4j.properties', log_file=self.LOG_FILE))
         remote_connector_configs = []
         for idx, template in enumerate(self.connector_config_templates):
             target_file = os.path.join(self.PERSISTENT_ROOT, "connect-connector-" + str(idx) + ".properties")
@@ -421,7 +421,7 @@ class ConnectDistributedService(ConnectServiceBase):
         if self.external_config_template_func:
             node.account.create_file(self.EXTERNAL_CONFIGS_FILE, self.external_config_template_func(node))
         node.account.create_file(self.CONFIG_FILE, self.config_template_func(node))
-        node.account.create_file(self.LOG4J_CONFIG_FILE, self.render('connect_log4j2.properties', log_file=self.LOG_FILE))
+        node.account.create_file(self.LOG4J_CONFIG_FILE, self.render('connect_log4j.properties', log_file=self.LOG_FILE))
         if self.connector_config_templates:
             raise DucktapeError("Config files are not valid in distributed mode, submit connectors via the REST API")
 

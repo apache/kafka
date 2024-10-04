@@ -32,7 +32,7 @@ class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
     STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "producer_performance.stderr")
     LOG_DIR = os.path.join(PERSISTENT_ROOT, "logs")
     LOG_FILE = os.path.join(LOG_DIR, "producer_performance.log")
-    LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j2.properties")
+    LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
 
     def __init__(self, context, num_nodes, kafka, topic, num_records, record_size, throughput, version=DEV_BRANCH, settings=None,
                  intermediate_stats=False, client_id="producer-performance"):
@@ -122,7 +122,7 @@ class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
         node.account.ssh("mkdir -p %s" % ProducerPerformanceService.PERSISTENT_ROOT, allow_fail=False)
 
         # Create and upload log properties
-        log_config = self.render('tools_log4j2.properties', log_file=ProducerPerformanceService.LOG_FILE)
+        log_config = self.render('tools_log4j.properties', log_file=ProducerPerformanceService.LOG_FILE)
         node.account.create_file(ProducerPerformanceService.LOG4J_CONFIG, log_config)
 
         cmd = self.start_cmd(node)

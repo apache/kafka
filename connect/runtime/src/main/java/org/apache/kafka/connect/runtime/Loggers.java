@@ -48,9 +48,9 @@ public class Loggers {
     private static final Logger log = LoggerFactory.getLogger(Loggers.class);
 
     /**
-     * Log4j uses "root" (case-insensitive) as name of the root logger.
+     * Log4j2 uses "" (empty string) as name of the root logger.
      */
-    private static final String ROOT_LOGGER_NAME = "root";
+    private static final String ROOT_LOGGER_NAME = "";
 
     private final Time time;
     private final Map<String, Long> lastModifiedTimes;
@@ -101,11 +101,11 @@ public class Loggers {
         Map<String, LoggerLevel> result = new TreeMap<>();
 
         currentLoggers().stream()
-                .filter(logger -> logger.getLevel() != null)
+                .filter(logger -> !logger.getLevel().equals(Level.OFF))
                 .forEach(logger -> result.put(logger.getName(), loggerLevel(logger)));
 
         org.apache.logging.log4j.Logger root = rootLogger();
-        if (root.getLevel() != null) {
+        if (!root.getLevel().equals(Level.OFF)) {
             result.put(ROOT_LOGGER_NAME, loggerLevel(root));
         }
 
@@ -214,5 +214,4 @@ public class Loggers {
         Long lastModified = lastModifiedTimes.get(logger.getName());
         return new LoggerLevel(Objects.toString(level), lastModified);
     }
-
 }

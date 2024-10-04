@@ -304,7 +304,7 @@
     <allow pkg="com.fasterxml.jackson" />
     <allow pkg="org.jose4j" />
     <allow pkg="net.sourceforge.argparse4j" />
-    <allow pkg="org.apache.logging.log4j" />
+    <allow pkg="org.apache.log4j" />
     <allow pkg="org.apache.kafka.common.test" />
     <allow pkg="joptsimple" />
     <allow pkg="javax.rmi.ssl"/>

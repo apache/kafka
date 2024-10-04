@@ -197,7 +197,7 @@ public class MirrorSourceConnectorTest {
         when(describeAclsResult.values()).thenReturn(describeAclsFuture);
         when(sourceAdmin.describeAcls(any())).thenReturn(describeAclsResult);
 
-        try (LogCaptureAppender connectorLogs = LogCaptureAppender.createAndRegister(MirrorSourceConnector.class.getName())) {
+        try (LogCaptureAppender connectorLogs = LogCaptureAppender.createAndRegister(MirrorSourceConnector.class)) {
             connectorLogs.setClassLogger(MirrorSourceConnector.class, Level.TRACE);
             connector.syncTopicAcls();
             long aclSyncDisableMessages = connectorLogs.getMessages().stream()
@@ -245,7 +245,7 @@ public class MirrorSourceConnectorTest {
         when(describeConfigsResult.all()).thenReturn(describeConfigsFuture);
         when(sourceAdmin.describeConfigs(any())).thenReturn(describeConfigsResult);
 
-        try (LogCaptureAppender connectorLogs = LogCaptureAppender.createAndRegister(MirrorUtils.class.getName())) {
+        try (LogCaptureAppender connectorLogs = LogCaptureAppender.createAndRegister(MirrorUtils.class)) {
             connectorLogs.setClassLogger(MirrorUtils.class, Level.TRACE);
             Set<String> topics = new HashSet<>();
             topics.add("topic1");

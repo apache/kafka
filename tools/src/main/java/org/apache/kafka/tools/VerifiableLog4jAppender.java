@@ -24,16 +24,12 @@ import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.core.LoggerContext;
-import org.apache.logging.log4j.core.config.Configurator;
+import org.apache.log4j.Logger;
+import org.apache.log4j.PropertyConfigurator;
 
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Properties;
 
@@ -50,7 +46,7 @@ import static net.sourceforge.argparse4j.impl.Arguments.store;
  */
 
 public class VerifiableLog4jAppender {
-    Logger logger = LogManager.getLogger(VerifiableLog4jAppender.class);
+    Logger logger = Logger.getLogger(VerifiableLog4jAppender.class);
 
     // If maxMessages < 0, log until the process is killed externally
     private long maxMessages = -1;
@@ -239,16 +235,7 @@ public class VerifiableLog4jAppender {
 
     public VerifiableLog4jAppender(Properties props, int maxMessages) {
         this.maxMessages = maxMessages;
-        try {
-            Path tempConfigFile = Files.createTempFile("log4j2-", ".properties");
-            try (FileOutputStream fos = new FileOutputStream(tempConfigFile.toFile());
-                 LoggerContext context = Configurator.initialize(null, tempConfigFile.toString())) {
-                props.store(fos, null);  // 将 Properties 保存到文件
-                Files.deleteIfExists(tempConfigFile);
-            }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        PropertyConfigurator.configure(props);
     }
 
     public static void main(String[] args) {

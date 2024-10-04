@@ -111,16 +111,13 @@ public class LogCaptureAppender extends AbstractAppender implements AutoCloseabl
         String loggerName = clazz.getName();
         LoggerConfig loggerConfig = config.getLoggerConfig(loggerName);
 
-        // Store original level
         Level originalLevel = loggerConfig.getLevel();
         logLevelChanges.add(new LogLevelChange(originalLevel, clazz));
 
         if (!loggerConfig.getName().equals(loggerName)) {
-            // Create new LoggerConfig for the specific logger
             LoggerConfig newLoggerConfig = new LoggerConfig(loggerName, level, true);
             config.addLogger(loggerName, newLoggerConfig);
         } else {
-            // Update existing LoggerConfig
             loggerConfig.setLevel(level);
         }
         ctx.updateLoggers();

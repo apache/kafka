@@ -254,7 +254,7 @@ public class AclCommandTest {
 
     @ClusterTest
     public void testAclCliWithClientId(ClusterInstance cluster) throws IOException, InterruptedException {
-        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(AclCommandTest.class)) {
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
             appender.setClassLogger(AppInfoParser.class, Level.WARN);
             testAclCli(cluster, adminArgs(cluster.bootstrapServers(), Optional.of(TestUtils.tempFile("client.id=my-client"))));
             assertEquals(0, appender.getEvents().stream()
@@ -266,7 +266,7 @@ public class AclCommandTest {
 
     @ClusterTest
     public void testAclCliWithClientIdAndBootstrapController(ClusterInstance cluster) throws IOException, InterruptedException {
-        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(AclCommandTest.class)) {
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
             appender.setClassLogger(AppInfoParser.class, Level.WARN);
             testAclCli(cluster, adminArgsWithBootstrapController(cluster.bootstrapControllers(), Optional.of(TestUtils.tempFile("client.id=my-client"))));
             assertEquals(0, appender.getEvents().stream()

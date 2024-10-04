@@ -921,7 +921,7 @@ public abstract class AbstractSessionBytesStoreTest {
         final String keyTo = Serdes.String().deserializer()
             .deserialize("", Serdes.Integer().serializer().serialize("", 1));
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(AbstractSessionBytesStoreTest.class);
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
              final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions(keyFrom, keyTo, 0L, 10L)) {
             assertFalse(iterator.hasNext());
 

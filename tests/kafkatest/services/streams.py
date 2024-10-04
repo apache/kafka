@@ -38,7 +38,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
     STDERR_FILE = os.path.join(PERSISTENT_ROOT, "streams.stderr")
     JMX_LOG_FILE = os.path.join(PERSISTENT_ROOT, "jmx_tool.log")
     JMX_ERR_FILE = os.path.join(PERSISTENT_ROOT, "jmx_tool.err.log")
-    LOG4J_CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "tools-log4j2.properties")
+    LOG4J_CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
     PID_FILE = os.path.join(PERSISTENT_ROOT, "streams.pid")
 
     CLEAN_NODE_ENABLED = True
@@ -306,7 +306,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
         node.account.mkdirs(self.PERSISTENT_ROOT)
         prop_file = self.prop_file()
         node.account.create_file(self.CONFIG_FILE, prop_file)
-        node.account.create_file(self.LOG4J_CONFIG_FILE, self.render('tools_log4j2.properties', log_file=self.LOG_FILE))
+        node.account.create_file(self.LOG4J_CONFIG_FILE, self.render('tools_log4j.properties', log_file=self.LOG_FILE))
 
         self.logger.info("Starting StreamsTest process on " + str(node.account))
         with node.account.monitor_log(self.STDOUT_FILE) as monitor:

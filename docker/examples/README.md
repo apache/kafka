@@ -42,11 +42,11 @@ Using Environment Variables
         
 - To provide configs to log4j property files, following points should be considered:-      
 - log4j properties provided via environment variables will be appended to the default properties file (log4j properties files bundled with kafka)
-- `KAFKA_LOG4J_ROOT_LOGLEVEL` can be provided to set the value of log4j.rootLogger in log4j2.properties and tools-log4j2.properties
-- log4j loggers can be added to log4j2.properties by setting them in KAFKA_LOG4J_LOGGERS environment variable in a single comma separated string
+- `KAFKA_LOG4J_ROOT_LOGLEVEL` can be provided to set the value of log4j.rootLogger in log4j.properties and tools-log4j.properties
+- log4j loggers can be added to log4j.properties by setting them in KAFKA_LOG4J_LOGGERS environment variable in a single comma separated string
     - Example:
         - Assuming that KAFKA_LOG4J_LOGGERS='property1=value1,property2=value2' environment variable is provided to docker container.
-        - log4j.logger.property1=value1 and log4j.logger.property2=value2 will be added to the log4j2.properties file inside docker container.
+        - log4j.logger.property1=value1 and log4j.logger.property2=value2 will be added to the log4j.properties file inside docker container.
             
 - Environment variables commonly used in Kafka can be provided via environment variables, for example `CLUSTER_ID`.
 - Command `docker run --env CONFIG_NAME=CONFIG_VALUE -p 9092:9092 apache/kafka:latest` can be used to provide environment variables to docker container

@@ -79,7 +79,7 @@ object KafkaDockerWrapper extends Logging {
       required(true).
       help(
         """Directory which holds default properties. It should contain the three file:-
-          |server.properties, log4j2.properties and tools-log4j2.properties.
+          |server.properties, log4j.properties and tools-log4j.properties.
           |""".stripMargin)
 
     setupParser.addArgument("--mounted-configs-dir", "-M").
@@ -87,7 +87,7 @@ object KafkaDockerWrapper extends Logging {
       required(true).
       help(
         """Directory which holds user mounted properties. It can contain none to all the three files:-
-          |server.properties, log4j2.properties and tools-log4j2.properties.""".stripMargin)
+          |server.properties, log4j.properties and tools-log4j.properties.""".stripMargin)
 
     setupParser.addArgument("--final-configs-dir", "-F").
       action(store()).
@@ -238,8 +238,8 @@ object KafkaDockerWrapper extends Logging {
 
 private object Constants {
   val ServerPropsFilename = "server.properties"
-  val Log4jPropsFilename = "log4j2.properties"
-  val ToolsLog4jFilename = "tools-log4j2.properties"
+  val Log4jPropsFilename = "log4j.properties"
+  val ToolsLog4jFilename = "tools-log4j.properties"
   val KafkaLog4JLoggersEnv = "KAFKA_LOG4J_LOGGERS"
   val KafkaLog4jRootLoglevelEnv = "KAFKA_LOG4J_ROOT_LOGLEVEL"
   val KafkaToolsLog4jLoglevelEnv = "KAFKA_TOOLS_LOG4J_LOGLEVEL"

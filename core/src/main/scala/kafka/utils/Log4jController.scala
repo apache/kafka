@@ -28,13 +28,7 @@ import scala.jdk.CollectionConverters._
 
 object Log4jController {
 
-  /**
-   * Note: In log4j, the root logger's name was "root" and Kafka also followed that name for dynamic logging control feature.
-   *
-   * The root logger's name is changed in log4j2 to empty string (see: [[LogManager.ROOT_LOGGER_NAME]]) but for backward-
-   * compatibility. Kafka keeps its original root logger name. It is why here is a dedicated definition for the root logger name.
-   */
-  val ROOT_LOGGER = "root"
+  val ROOT_LOGGER = ""
 
   /**
    * Returns given logger's parent's (or the first ancestor's) name.

@@ -345,7 +345,7 @@ public class ConnectRestServerTest {
         server.initializeServer();
         server.initializeResources(herder);
 
-        LogCaptureAppender restServerAppender = LogCaptureAppender.createAndRegister(ConnectRestServerTest.class);
+        LogCaptureAppender restServerAppender = LogCaptureAppender.createAndRegister();
         HttpRequest request = new HttpGet("/");
         HttpResponse response = executeRequest(server.advertisedUrl(), request);
 

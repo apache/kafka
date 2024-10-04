@@ -64,8 +64,8 @@ RUN apk update ; \
 
 COPY --chown=appuser:root --from=build-native-image /app/kafka/kafka.Kafka /opt/kafka/
 COPY --chown=appuser:root --from=build-native-image /app/kafka/config/kraft/server.properties /etc/kafka/docker/
-COPY --chown=appuser:root --from=build-native-image /app/kafka/config/log4j2.properties /etc/kafka/docker/
-COPY --chown=appuser:root --from=build-native-image /app/kafka/config/tools-log4j2.properties /etc/kafka/docker/
+COPY --chown=appuser:root --from=build-native-image /app/kafka/config/log4j.properties /etc/kafka/docker/
+COPY --chown=appuser:root --from=build-native-image /app/kafka/config/tools-log4j.properties /etc/kafka/docker/
 COPY --chown=appuser:root resources/common-scripts /etc/kafka/docker/
 COPY --chown=appuser:root launch /etc/kafka/docker/
 
