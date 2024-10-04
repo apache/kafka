@@ -826,24 +826,23 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public void seekToBeginning(Collection<TopicPartition> partitions) {
-        seekWithResetEventInternal(partitions, OffsetResetStrategy.EARLIEST);
+        seek(partitions, OffsetResetStrategy.EARLIEST);
     }
 
     @Override
     public void seekToEnd(Collection<TopicPartition> partitions) {
-        seekWithResetEventInternal(partitions, OffsetResetStrategy.LATEST);
+        seek(partitions, OffsetResetStrategy.LATEST);
     }
 
-    private void seekWithResetEventInternal(Collection<TopicPartition> partitions, OffsetResetStrategy offsetResetStrategy) {
+    private void seek(Collection<TopicPartition> partitions, OffsetResetStrategy offsetResetStrategy) {
         if (partitions == null)
             throw new IllegalArgumentException("Partitions collection cannot be null");
 
         acquireAndEnsureOpen();
         try {
             Timer timer = time.timer(defaultApiTimeoutMs);
-            ResetOffsetEvent resetOffsetEvent = new ResetOffsetEvent(partitions, offsetResetStrategy,
-                    calculateDeadlineMs(timer));
-            applicationEventHandler.addAndGet(resetOffsetEvent);
+            ResetOffsetEvent event = new ResetOffsetEvent(partitions, offsetResetStrategy, calculateDeadlineMs(timer));
+            applicationEventHandler.addAndGet(event);
         } finally {
             release();
         }
