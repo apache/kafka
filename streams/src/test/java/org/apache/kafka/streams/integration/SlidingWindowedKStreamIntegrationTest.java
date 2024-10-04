@@ -57,6 +57,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -123,7 +124,7 @@ public class SlidingWindowedKStreamIntegrationTest {
     @AfterEach
     public void whenShuttingDown() throws IOException {
         if (kafkaStreams != null) {
-            kafkaStreams.close();
+            kafkaStreams.close(Duration.ofSeconds(60));
             kafkaStreams.cleanUp();
         }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);

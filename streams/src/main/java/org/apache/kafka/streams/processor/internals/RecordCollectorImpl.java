@@ -81,6 +81,7 @@ public class RecordCollectorImpl implements RecordCollector {
     private final Sensor droppedRecordsSensor;
     private final Map<String, Sensor> producedSensorByTopic = new HashMap<>();
 
+    // we get `sendException` from "singleton" `StreamsProducer` to share it across all instances of `RecordCollectorImpl`
     private final AtomicReference<KafkaException> sendException;
 
     /**
@@ -554,7 +555,7 @@ public class RecordCollectorImpl implements RecordCollector {
         final KafkaException exception = sendException.get();
 
         if (exception != null) {
-            sendException.set(null);
+            sendException.compareAndSet(exception, null);
             throw exception;
         }
     }
