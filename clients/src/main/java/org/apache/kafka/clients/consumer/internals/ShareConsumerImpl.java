@@ -773,7 +773,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 acknowledgementCommitCallbackHandler = new AcknowledgementCommitCallbackHandler(callback);
             } else {
                 if (acknowledgementCommitCallbackHandler != null) {
-                    ShareAcknowledgementCommitCallbackRegistrationEvent event = new ShareAcknowledgementCommitCallbackRegistrationEvent(true);
+                    ShareAcknowledgementCommitCallbackRegistrationEvent event = new ShareAcknowledgementCommitCallbackRegistrationEvent(false);
                     applicationEventHandler.add(event);
                 }
                 completedAcknowledgements.clear();

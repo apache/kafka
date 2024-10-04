@@ -399,7 +399,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         }
 
         ShareConsumeRequestManager manager = requestManagers.shareConsumeRequestManager.get();
-        manager.setAcknowledgementCommitCallbackRegistered(event.isCallbackHandlerRegistered());
+        manager.setAcknowledgementCommitCallbackRegistered(event.isCallbackRegistered());
     }
 
     private <T> BiConsumer<? super T, ? super Throwable> complete(final CompletableFuture<T> b) {

@@ -18,14 +18,14 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 public class ShareAcknowledgementCommitCallbackRegistrationEvent extends ApplicationEvent {
 
-    boolean isCallbackHandlerRegistered;
+    boolean isCallbackRegistered;
 
-    public ShareAcknowledgementCommitCallbackRegistrationEvent(boolean isCallbackHandlerRegistered) {
+    public ShareAcknowledgementCommitCallbackRegistrationEvent(boolean isCallbackRegistered) {
         super(Type.SHARE_ACKNOWLEDGEMENT_COMMIT_CALLBACK_REGISTRATION);
-        this.isCallbackHandlerRegistered = isCallbackHandlerRegistered;
+        this.isCallbackRegistered = isCallbackRegistered;
     }
 
-    public boolean isCallbackHandlerRegistered() {
-        return isCallbackHandlerRegistered;
+    public boolean isCallbackRegistered() {
+        return isCallbackRegistered;
     }
 }
