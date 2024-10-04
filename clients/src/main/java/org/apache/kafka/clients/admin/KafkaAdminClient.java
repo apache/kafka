@@ -3334,7 +3334,7 @@ public class KafkaAdminClient extends AdminClient {
     public DeleteRecordsResult deleteRecords(final Map<TopicPartition, RecordsToDelete> recordsToDelete,
                                              final DeleteRecordsOptions options) {
         PartitionLeaderStrategy.PartitionLeaderFuture<DeletedRecords> future =
-            new PartitionLeaderStrategy.PartitionLeaderFuture<>(recordsToDelete.keySet(), partitionLeaderCache);
+            DeleteRecordsHandler.newFuture(recordsToDelete.keySet(), partitionLeaderCache);
         int timeoutMs = defaultApiTimeoutMs;
         if (options.timeoutMs() != null) {
             timeoutMs = options.timeoutMs();
@@ -4186,7 +4186,7 @@ public class KafkaAdminClient extends AdminClient {
     public ListOffsetsResult listOffsets(Map<TopicPartition, OffsetSpec> topicPartitionOffsets,
                                          ListOffsetsOptions options) {
         PartitionLeaderStrategy.PartitionLeaderFuture<ListOffsetsResultInfo> future =
-            new PartitionLeaderStrategy.PartitionLeaderFuture<>(topicPartitionOffsets.keySet(), partitionLeaderCache);
+            ListOffsetsHandler.newFuture(topicPartitionOffsets.keySet(), partitionLeaderCache);
         Map<TopicPartition, Long> offsetQueriesByPartition = topicPartitionOffsets.entrySet().stream()
             .collect(Collectors.toMap(Map.Entry::getKey, e -> getOffsetFromSpec(e.getValue())));
         ListOffsetsHandler handler = new ListOffsetsHandler(offsetQueriesByPartition, options, logContext, defaultApiTimeoutMs);
@@ -4725,7 +4725,7 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public DescribeProducersResult describeProducers(Collection<TopicPartition> topicPartitions, DescribeProducersOptions options) {
         PartitionLeaderStrategy.PartitionLeaderFuture<DescribeProducersResult.PartitionProducerState> future =
-            new PartitionLeaderStrategy.PartitionLeaderFuture<>(new HashSet<>(topicPartitions), partitionLeaderCache);
+            DescribeProducersHandler.newFuture(topicPartitions, partitionLeaderCache);
         DescribeProducersHandler handler = new DescribeProducersHandler(options, logContext);
         invokeDriver(handler, future, options.timeoutMs);
         return new DescribeProducersResult(future.all());
@@ -4743,7 +4743,7 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public AbortTransactionResult abortTransaction(AbortTransactionSpec spec, AbortTransactionOptions options) {
         PartitionLeaderStrategy.PartitionLeaderFuture<Void> future =
-            new PartitionLeaderStrategy.PartitionLeaderFuture<>(Collections.singleton(spec.topicPartition()), partitionLeaderCache);
+            AbortTransactionHandler.newFuture(Collections.singleton(spec.topicPartition()), partitionLeaderCache);
         AbortTransactionHandler handler = new AbortTransactionHandler(spec, logContext);
         invokeDriver(handler, future, options.timeoutMs);
         return new AbortTransactionResult(future.all());

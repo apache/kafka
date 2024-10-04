@@ -18,7 +18,6 @@ package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
-import org.apache.kafka.clients.admin.internals.AdminApiFuture.SimpleAdminApiFuture;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.Batched;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -217,9 +216,10 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
         }
     }
 
-    public static SimpleAdminApiFuture<TopicPartition, ListOffsetsResultInfo> newFuture(
-        Collection<TopicPartition> topicPartitions
+    public static PartitionLeaderStrategy.PartitionLeaderFuture<ListOffsetsResultInfo> newFuture(
+        Collection<TopicPartition> topicPartitions,
+        Map<TopicPartition, Integer> partitionLeaderCache
     ) {
-        return AdminApiFuture.forKeys(new HashSet<>(topicPartitions));
+        return new PartitionLeaderStrategy.PartitionLeaderFuture<>(new HashSet<>(topicPartitions), partitionLeaderCache);
     }
 }
