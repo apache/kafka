@@ -157,7 +157,7 @@ public class GlobalThreadShutDownOrderTest {
     @AfterEach
     public void after() throws Exception {
         if (kafkaStreams != null) {
-            kafkaStreams.close();
+            kafkaStreams.close(Duration.ofSeconds(60));
         }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
