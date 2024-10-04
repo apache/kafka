@@ -19,8 +19,6 @@ package org.apache.kafka.tools.other;
 import kafka.log.UnifiedLog;
 import kafka.server.BrokerServer;
 import kafka.server.KafkaBroker;
-import kafka.testkit.KafkaClusterTestKit;
-import kafka.testkit.TestKitNodes;
 import kafka.utils.TestUtils;
 
 import org.apache.kafka.clients.admin.Admin;
@@ -33,6 +31,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.test.KafkaClusterTestKit;
+import org.apache.kafka.common.test.TestKitNodes;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -373,15 +373,15 @@ public class ReplicationQuotasTestRig {
             for (BrokerServer broker : cluster.brokers().values()) {
                 double leaderRate = measuredRate(broker, QuotaType.LEADER_REPLICATION);
                 if (broker.config().nodeId() == 0)
-                    LOGGER.info("waiting... Leader rate on 1 is " + leaderRate);
+                    LOGGER.info("waiting... Leader rate on 1 is {}", leaderRate);
                 record(leaderRates, broker.config().nodeId(), leaderRate);
                 if (leaderRate > 0)
-                    LOGGER.trace("Leader Rate on " + broker.config().nodeId() + " is " + leaderRate);
+                    LOGGER.trace("Leader Rate on {} is {}", broker.config().nodeId(), leaderRate);
 
                 double followerRate = measuredRate(broker, QuotaType.FOLLOWER_REPLICATION);
                 record(followerRates, broker.config().nodeId(), followerRate);
                 if (followerRate > 0)
-                    LOGGER.trace("Follower Rate on " + broker.config().nodeId() + " is " + followerRate);
+                    LOGGER.trace("Follower Rate on {} is {}", broker.config().nodeId(), followerRate);
             }
         }
 
