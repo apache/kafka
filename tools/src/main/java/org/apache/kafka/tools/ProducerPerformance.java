@@ -487,10 +487,9 @@ public class ProducerPerformance {
             double recsPerSec = 1000.0 * count / (double) elapsed;
             double mbPerSec = 1000.0 * this.bytes / (double) elapsed / (1024.0 * 1024.0);
             int[] percs = percentiles(this.latencies, index, 0.5, 0.95, 0.99, 0.999);
-            String state = this.warmupRecords > 0 ? "" : " steady state";
             System.out.printf("%d%s records sent, %f records/sec (%.2f MB/sec), %.2f ms avg latency, %.2f ms max latency, %d ms 50th, %d ms 95th, %d ms 99th, %d ms 99.9th.%n",
                               count,
-                              state,
+                              this.warmupRecords > 0 ? "" : " steady state",
                               recsPerSec,
                               mbPerSec,
                               totalLatency / (double) count,
