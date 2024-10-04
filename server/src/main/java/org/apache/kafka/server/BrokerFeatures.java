@@ -25,13 +25,10 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static java.lang.String.format;
 import static org.apache.kafka.server.common.Features.PRODUCTION_FEATURES;
 
 /**
@@ -137,43 +134,22 @@ public class BrokerFeatures {
     private static Map<String, Short> incompatibleFeatures(Features<SupportedVersionRange> supportedFeatures,
                                                            Map<String, Short> finalizedFeatures,
                                                            boolean logIncompatibilities) {
-        IncompatibleFeaturesInfosToErrorReasons features =
-                transferToIncompatibleFeaturesInfosToErrorReasons(supportedFeatures, finalizedFeatures);
-        if (logIncompatibilities && !features.errorReason.isEmpty()) {
-            log.warn("Feature incompatibilities seen: {}", features.errorReason);
-        }
-        return features.incompatibleFeaturesInfos;
-    }
-
-    private static IncompatibleFeaturesInfosToErrorReasons transferToIncompatibleFeaturesInfosToErrorReasons(
-            Features<SupportedVersionRange> supportedFeatures,
-            Map<String, Short> finalizedFeatures
-    ) {
         Map<String, Short> incompatibleFeaturesInfo = new HashMap<>();
-        List<String> errorReasons = new ArrayList<>();
         finalizedFeatures.forEach((feature, versionLevels) -> {
             SupportedVersionRange supportedVersions = supportedFeatures.get(feature);
             if (supportedVersions == null) {
                 incompatibleFeaturesInfo.put(feature, versionLevels);
-                errorReasons.add(format("{feature=%s, reason='Unknown feature'}", feature));
+                if (logIncompatibilities) {
+                    log.warn("Feature incompatibilities seen: {feature={}, reason='Unknown feature'}", feature);
+                }
             } else if (supportedVersions.isIncompatibleWith(versionLevels)) {
                 incompatibleFeaturesInfo.put(feature, versionLevels);
-                errorReasons.add(format("{feature=%s, reason='%s is incompatible with %s'}", feature, versionLevels, supportedVersions));
+                if (logIncompatibilities) {
+                    log.warn("Feature incompatibilities seen: {feature={}, reason='{} is incompatible with {}'}",
+                            feature, versionLevels, supportedVersions);
+                }
             }
         });
-        return new IncompatibleFeaturesInfosToErrorReasons(
-                incompatibleFeaturesInfo,
-                String.join(", ", errorReasons)
-        );
-    }
-
-    private static class IncompatibleFeaturesInfosToErrorReasons {
-        final Map<String, Short> incompatibleFeaturesInfos;
-        final String errorReason;
-
-        IncompatibleFeaturesInfosToErrorReasons(Map<String, Short> incompatibleFeaturesInfos, String errorReason) {
-            this.incompatibleFeaturesInfos = incompatibleFeaturesInfos;
-            this.errorReason = errorReason;
-        }
+        return incompatibleFeaturesInfo;
     }
 }
