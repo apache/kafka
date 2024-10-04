@@ -47,20 +47,17 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.config.ShareCoordinatorConfig;
-import org.apache.kafka.server.share.PartitionFactory;
 import org.apache.kafka.server.share.SharePartitionKey;
+import org.apache.kafka.server.share.persister.PartitionFactory;
+import org.apache.kafka.server.share.persister.PersisterStateBatch;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 
 import org.slf4j.Logger;
 
-import java.util.Collection;
 import java.util.Collections;
-import java.util.LinkedHashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord> {
@@ -262,7 +259,6 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param request - WriteShareGroupStateRequestData for a single key
      * @return CoordinatorResult(records, response)
      */
-    @SuppressWarnings("NPathComplexity")
     public CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> writeState(
         WriteShareGroupStateRequestData request
     ) {
@@ -274,79 +270,106 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             return error.get();
         }
 
-        String groupId = request.groupId();
         WriteShareGroupStateRequestData.WriteStateData topicData = request.topics().get(0);
         WriteShareGroupStateRequestData.PartitionData partitionData = topicData.partitions().get(0);
+        SharePartitionKey key = SharePartitionKey.getInstance(request.groupId(), topicData.topicId(), partitionData.partition());
 
-        SharePartitionKey key = SharePartitionKey.getInstance(groupId, topicData.topicId(), partitionData.partition());
-        List<CoordinatorRecord> recordList;
+        CoordinatorRecord record = generateShareStateRecord(partitionData, key);
+        // build successful response if record is correctly created
+        WriteShareGroupStateResponseData responseData = new WriteShareGroupStateResponseData()
+            .setResults(
+                Collections.singletonList(
+                    WriteShareGroupStateResponse.toResponseWriteStateResult(key.topicId(),
+                        Collections.singletonList(
+                            WriteShareGroupStateResponse.toResponsePartitionResult(
+                                key.partition()
+                            ))
+                    ))
+            );
 
+        return new CoordinatorResult<>(Collections.singletonList(record), responseData);
+    }
+
+    /**
+     * Util method to generate a ShareSnapshot or ShareUpdate type record for a key, based on various conditions.
+     * <p>
+     * if no snapshot has been created for the key => create a new ShareSnapshot record
+     * else if number of ShareUpdate records for key >= max allowed per snapshot per key => create a new ShareSnapshot record
+     * else create a new ShareUpdate record
+     *
+     * @param partitionData - Represents the data which should be written into the share state record.
+     * @param key - The {@link SharePartitionKey} object.
+     * @return {@link CoordinatorRecord} representing ShareSnapshot or ShareUpdate
+     */
+    private CoordinatorRecord generateShareStateRecord(
+        WriteShareGroupStateRequestData.PartitionData partitionData,
+        SharePartitionKey key
+    ) {
         if (!shareStateMap.containsKey(key)) {
-            // since this is the first time we are getting a write request, we should be creating a share snapshot record
-            recordList = Collections.singletonList(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
-                groupId, topicData.topicId(), partitionData.partition(), ShareGroupOffset.fromRequest(partitionData)
-            ));
+            // Since this is the first time we are getting a write request for key, we should be creating a share snapshot record.
+            // The incoming partition data could have overlapping state batches, we must merge them
+            return ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
+                key.groupId(), key.topicId(), partitionData.partition(),
+                new ShareGroupOffset.Builder()
+                    .setSnapshotEpoch(0)
+                    .setStartOffset(partitionData.startOffset())
+                    .setLeaderEpoch(partitionData.leaderEpoch())
+                    .setStateEpoch(partitionData.stateEpoch())
+                    .setStateBatches(mergeBatches(Collections.emptyList(), partitionData))
+                    .build());
         } else if (snapshotUpdateCount.getOrDefault(key, 0) >= config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot()) {
-            int newLeaderEpoch = partitionData.leaderEpoch() == -1 ? shareStateMap.get(key).leaderEpoch() : partitionData.leaderEpoch();
-            int newStateEpoch = partitionData.stateEpoch() == -1 ? shareStateMap.get(key).stateEpoch() : partitionData.stateEpoch();
-            long newStartOffset = partitionData.startOffset() == -1 ? shareStateMap.get(key).startOffset() : partitionData.startOffset();
+            ShareGroupOffset currentState = shareStateMap.get(key); // shareStateMap will have the entry as containsKey is true
+            int newLeaderEpoch = partitionData.leaderEpoch() == -1 ? currentState.leaderEpoch() : partitionData.leaderEpoch();
+            int newStateEpoch = partitionData.stateEpoch() == -1 ? currentState.stateEpoch() : partitionData.stateEpoch();
+            long newStartOffset = partitionData.startOffset() == -1 ? currentState.startOffset() : partitionData.startOffset();
 
             // Since the number of update records for this share part key exceeds snapshotUpdateRecordsPerSnapshot,
             // we should be creating a share snapshot record.
-            List<PersisterOffsetsStateBatch> batchesToAdd = combineStateBatches(
-                shareStateMap.get(key).stateBatchAsSet(),
-                partitionData.stateBatches().stream()
-                    .map(PersisterOffsetsStateBatch::from)
-                    .collect(Collectors.toCollection(LinkedHashSet::new)),
-                newStartOffset);
-
-            recordList = Collections.singletonList(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
-                groupId, topicData.topicId(), partitionData.partition(),
+            // The incoming partition data could have overlapping state batches, we must merge them.
+            return ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
+                key.groupId(), key.topicId(), partitionData.partition(),
                 new ShareGroupOffset.Builder()
+                    .setSnapshotEpoch(currentState.snapshotEpoch() + 1)   // we must increment snapshot epoch as this is new snapshot
                     .setStartOffset(newStartOffset)
                     .setLeaderEpoch(newLeaderEpoch)
                     .setStateEpoch(newStateEpoch)
-                    .setStateBatches(batchesToAdd)
-                    .build()));
+                    .setStateBatches(mergeBatches(currentState.stateBatches(), partitionData, newStartOffset))
+                    .build());
         } else {
-            // share snapshot is present and number of share snapshot update records < snapshotUpdateRecordsPerSnapshot
-            recordList = Collections.singletonList(ShareCoordinatorRecordHelpers.newShareSnapshotUpdateRecord(
-                groupId, topicData.topicId(), partitionData.partition(), ShareGroupOffset.fromRequest(partitionData, shareStateMap.get(key).snapshotEpoch())
-            ));
+            ShareGroupOffset currentState = shareStateMap.get(key); // shareStateMap will have the entry as containsKey is true
+
+            // Share snapshot is present and number of share snapshot update records < snapshotUpdateRecordsPerSnapshot
+            // so create a share update record.
+            // The incoming partition data could have overlapping state batches, we must merge them.
+            return ShareCoordinatorRecordHelpers.newShareSnapshotUpdateRecord(
+                key.groupId(), key.topicId(), partitionData.partition(),
+                new ShareGroupOffset.Builder()
+                    .setSnapshotEpoch(currentState.snapshotEpoch()) // use same snapshotEpoch as last share snapshot
+                    .setStartOffset(partitionData.startOffset())
+                    .setLeaderEpoch(partitionData.leaderEpoch())
+                    .setStateBatches(mergeBatches(Collections.emptyList(), partitionData))
+                    .build());
         }
+    }
 
-        List<CoordinatorRecord> validRecords = new LinkedList<>();
+    private List<PersisterStateBatch> mergeBatches(
+        List<PersisterStateBatch> soFar,
+        WriteShareGroupStateRequestData.PartitionData partitionData) {
+        return mergeBatches(soFar, partitionData, partitionData.startOffset());
+    }
 
-        WriteShareGroupStateResponseData responseData = new WriteShareGroupStateResponseData();
-        for (CoordinatorRecord record : recordList) {  // should be single record
-            if (!(record.key().message() instanceof ShareSnapshotKey) && !(record.key().message() instanceof ShareUpdateKey)) {
-                continue;
-            }
-            SharePartitionKey mapKey = null;
-            boolean shouldIncSnapshotEpoch = false;
-            if (record.key().message() instanceof ShareSnapshotKey) {
-                ShareSnapshotKey recordKey = (ShareSnapshotKey) record.key().message();
-                responseData.setResults(Collections.singletonList(WriteShareGroupStateResponse.toResponseWriteStateResult(
-                    recordKey.topicId(), Collections.singletonList(WriteShareGroupStateResponse.toResponsePartitionResult(
-                        recordKey.partition())))));
-                mapKey = SharePartitionKey.getInstance(recordKey.groupId(), recordKey.topicId(), recordKey.partition());
-                shouldIncSnapshotEpoch = true;
-            } else if (record.key().message() instanceof ShareUpdateKey) {
-                ShareUpdateKey recordKey = (ShareUpdateKey) record.key().message();
-                responseData.setResults(Collections.singletonList(WriteShareGroupStateResponse.toResponseWriteStateResult(
-                    recordKey.topicId(), Collections.singletonList(WriteShareGroupStateResponse.toResponsePartitionResult(
-                        recordKey.partition())))));
-                mapKey = SharePartitionKey.getInstance(recordKey.groupId(), recordKey.topicId(), recordKey.partition());
-            }
-
-            if (shareStateMap.containsKey(mapKey) && shouldIncSnapshotEpoch) {
-                ShareGroupOffset oldValue = shareStateMap.get(mapKey);
-                ((ShareSnapshotValue) record.value().message()).setSnapshotEpoch(oldValue.snapshotEpoch() + 1);  // increment the snapshot epoch
-            }
-            validRecords.add(record); // this will have updated snapshot epoch and on replay the value will trickle down to the map
-        }
-
-        return new CoordinatorResult<>(validRecords, responseData);
+    private List<PersisterStateBatch> mergeBatches(
+        List<PersisterStateBatch> soFar,
+        WriteShareGroupStateRequestData.PartitionData partitionData,
+        long startOffset) {
+        return new PersisterStateBatchCombiner(
+            soFar,
+            partitionData.stateBatches().stream()
+                .map(PersisterStateBatch::from)
+                .collect(Collectors.toList()),
+            startOffset
+        )
+            .combineStateBatches();
     }
 
     /**
@@ -527,7 +550,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     private static ShareGroupOffset merge(ShareGroupOffset soFar, ShareUpdateValue newData) {
         // snapshot epoch should be same as last share snapshot
         // state epoch is not present
-        Set<PersisterOffsetsStateBatch> currentBatches = soFar.stateBatchAsSet();
+        List<PersisterStateBatch> currentBatches = soFar.stateBatches();
         long newStartOffset = newData.startOffset() == -1 ? soFar.startOffset() : newData.startOffset();
         int newLeaderEpoch = newData.leaderEpoch() == -1 ? soFar.leaderEpoch() : newData.leaderEpoch();
 
@@ -536,39 +559,11 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             .setStateEpoch(soFar.stateEpoch())
             .setStartOffset(newStartOffset)
             .setLeaderEpoch(newLeaderEpoch)
-            .setStateBatches(combineStateBatches(currentBatches, newData.stateBatches().stream()
-                .map(PersisterOffsetsStateBatch::from)
-                .collect(Collectors.toCollection(LinkedHashSet::new)), newStartOffset))
+            .setStateBatches(new PersisterStateBatchCombiner(currentBatches, newData.stateBatches().stream()
+                .map(ShareCoordinatorShard::toPersisterStateBatch)
+                .collect(Collectors.toList()), newStartOffset)
+                .combineStateBatches())
             .build();
-    }
-
-    /**
-     * Util method which takes in 2 collections containing {@link PersisterOffsetsStateBatch}
-     * and the startOffset.
-     * It removes all batches from the 1st collection which have the same first and last offset
-     * as the batches in 2nd collection. It then creates a final list of batches which contains the
-     * former result and all the batches in the 2nd collection. In set notation (A - B) U B (we prefer batches in B
-     * which have same first and last offset in A).
-     * Finally, it removes any batches where the lastOffset < startOffset, if the startOffset > -1.
-     * @param currentBatch - collection containing current soft state of batches
-     * @param newBatch - collection containing batches in incoming request
-     * @param startOffset - startOffset to consider when removing old batches.
-     * @return List containing combined batches
-     */
-    private static List<PersisterOffsetsStateBatch> combineStateBatches(
-        Collection<PersisterOffsetsStateBatch> currentBatch,
-        Collection<PersisterOffsetsStateBatch> newBatch,
-        long startOffset
-    ) {
-        currentBatch.removeAll(newBatch);
-        List<PersisterOffsetsStateBatch> batchesToAdd = new LinkedList<>(currentBatch);
-        batchesToAdd.addAll(newBatch);
-        // Any batches where the last offset is < the current start offset
-        // are now expired. We should remove them from the persister.
-        if (startOffset != -1) {
-            batchesToAdd.removeIf(batch -> batch.lastOffset() < startOffset);
-        }
-        return batchesToAdd;
     }
 
     private static ApiMessage messageOrNull(ApiMessageAndVersion apiMessageAndVersion) {
@@ -577,5 +572,21 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         } else {
             return apiMessageAndVersion.message();
         }
+    }
+
+    /**
+     * Util function to convert a state batch of type {@link ShareUpdateValue.StateBatch }
+     * to {@link PersisterStateBatch}.
+     *
+     * @param batch - The object representing {@link ShareUpdateValue.StateBatch}
+     * @return {@link PersisterStateBatch}
+     */
+    private static PersisterStateBatch toPersisterStateBatch(ShareUpdateValue.StateBatch batch) {
+        return new PersisterStateBatch(
+            batch.firstOffset(),
+            batch.lastOffset(),
+            batch.deliveryState(),
+            batch.deliveryCount()
+        );
     }
 }
