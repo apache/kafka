@@ -290,9 +290,9 @@ class StreamsGroupHeartbeatRequestManagerTest {
 
         mockResponse(data);
 
-        ArgumentCaptor<ConsumerGroupHeartbeatResponseData> captor = ArgumentCaptor.forClass(ConsumerGroupHeartbeatResponseData.class);
-        verify(membershipManager, times(1)).onHeartbeatSuccess(new ConsumerGroupHeartbeatResponse(captor.capture()));
-        ConsumerGroupHeartbeatResponseData response = captor.getValue();
+        ArgumentCaptor<ConsumerGroupHeartbeatResponse> captor = ArgumentCaptor.forClass(ConsumerGroupHeartbeatResponse.class);
+        verify(membershipManager, times(1)).onHeartbeatSuccess(captor.capture());
+        ConsumerGroupHeartbeatResponseData response = captor.getValue().data();
         assertEquals(Errors.NONE.code(), response.errorCode());
         assertEquals(TEST_MEMBER_ID, response.memberId());
         assertEquals(TEST_MEMBER_EPOCH, response.memberEpoch());
