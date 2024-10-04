@@ -1560,7 +1560,7 @@ project(':test-common') {
   }
 
   checkstyle {
-    sourceSets = []
+    configProperties = checkstyleConfigProperties("import-control-test-common.xml")
   }
 
   javadoc {
@@ -1603,7 +1603,7 @@ project(':test-common:test-common-api') {
   }
 
   checkstyle {
-    sourceSets = []
+    configProperties = checkstyleConfigProperties("import-control-test-common-api.xml")
   }
 
   javadoc {
