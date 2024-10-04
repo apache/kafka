@@ -17,7 +17,7 @@
 
 package org.apache.kafka.coordinator.share;
 
-import org.apache.kafka.server.share.PersisterStateBatch;
+import org.apache.kafka.server.share.persister.PersisterStateBatch;
 
 import java.util.ArrayList;
 import java.util.Iterator;
