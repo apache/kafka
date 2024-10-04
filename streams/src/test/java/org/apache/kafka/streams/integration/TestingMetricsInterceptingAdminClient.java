@@ -418,18 +418,6 @@ public class TestingMetricsInterceptingAdminClient extends AdminClient {
         return adminDelegate.listShareGroups(options);
     }
 
-//    @Override
-//    public void registerMetricForSubscription(final KafkaMetric metric) {
-//        passedMetrics.add(metric);
-//        //adminDelegate.registerMetricForSubscription(metric);
-//    }
-//
-//    @Override
-//    public void unregisterMetricForSubscription(final KafkaMetric metric) {
-//        passedMetrics.remove(metric);
-//        //adminDelegate.unregisterMetricForSubscription(metric);
-//    }
-
     @Override
     public Map<MetricName, ? extends Metric> metrics() {
         return adminDelegate.metrics();
