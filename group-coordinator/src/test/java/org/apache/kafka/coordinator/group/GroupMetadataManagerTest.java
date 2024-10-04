@@ -75,7 +75,6 @@ import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
-import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.MemberState;
@@ -152,6 +151,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -3577,6 +3577,45 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testUpdateClassicGroupSizeCounter() {
+        String groupId0 = "group-0";
+        String groupId1 = "group-1";
+        String groupId2 = "group-2";
+        String groupId3 = "group-3";
+        String groupId4 = "group-4";
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId0, 10))
+            .build();
+
+        ClassicGroup group1 = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId1, true);
+        ClassicGroup group2 = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId2, true);
+        ClassicGroup group3 = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId3, true);
+        ClassicGroup group4 = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId4, true);
+
+        context.groupMetadataManager.updateClassicGroupSizeCounter();
+        verify(context.metrics, times(1)).setClassicGroupGauges(eq(Utils.mkMap(
+            Utils.mkEntry(ClassicGroupState.EMPTY, 4L)
+        )));
+
+        group1.transitionTo(PREPARING_REBALANCE);
+        group2.transitionTo(PREPARING_REBALANCE);
+        group2.transitionTo(COMPLETING_REBALANCE);
+        group3.transitionTo(PREPARING_REBALANCE);
+        group3.transitionTo(COMPLETING_REBALANCE);
+        group3.transitionTo(STABLE);
+        group4.transitionTo(DEAD);
+
+        context.groupMetadataManager.updateClassicGroupSizeCounter();
+        verify(context.metrics, times(1)).setClassicGroupGauges(eq(Utils.mkMap(
+            Utils.mkEntry(ClassicGroupState.PREPARING_REBALANCE, 1L),
+            Utils.mkEntry(ClassicGroupState.COMPLETING_REBALANCE, 1L),
+            Utils.mkEntry(ClassicGroupState.STABLE, 1L),
+            Utils.mkEntry(ClassicGroupState.DEAD, 1L)
+        )));
+    }
+
+    @Test
     public void testGenerateRecordsOnNewClassicGroup() throws Exception {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
@@ -3678,11 +3717,6 @@ public class GroupMetadataManagerTest {
             "group-id",
             STABLE,
             context.time,
-            new GroupCoordinatorMetricsShard(
-                context.snapshotRegistry,
-                Collections.emptyMap(),
-                new TopicPartition("__consumer_offsets", 0)
-            ),
             1,
             Optional.of("consumer"),
             Optional.of("range"),
@@ -9502,30 +9536,6 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testOnClassicGroupStateTransition() {
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .build();
-
-        // Creating a classic group should increment metric.
-        ClassicGroup group = context.createClassicGroup("group-id");
-        verify(context.metrics, times(1)).onClassicGroupStateTransition(null, EMPTY);
-
-        // Replaying a new group should not increment metric as the group was already created.
-        context.replay(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, Collections.emptyMap(), MetadataVersion.LATEST_PRODUCTION));
-        verify(context.metrics, times(1)).onClassicGroupStateTransition(null, EMPTY);
-
-        // Loading a tombstone should remove group and decrement metric.
-        context.createClassicGroup("group-id");
-        context.replay(GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord("group-id"));
-        verify(context.metrics, times(1)).onClassicGroupStateTransition(EMPTY, null);
-        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.group("group-id"));
-
-        // Replaying a tombstone for a group that has already been deleted should not decrement metric.
-        context.replay(GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord("group-id"));
-        verify(context.metrics, times(1)).onClassicGroupStateTransition(EMPTY, null);
-    }
-
-    @Test
     public void testOnClassicGroupStateTransitionOnLoading() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
@@ -9534,8 +9544,7 @@ public class GroupMetadataManagerTest {
             new LogContext(),
             "group-id",
             EMPTY,
-            context.time,
-            context.metrics
+            context.time
         );
 
         // Even if there are more group metadata records loaded than tombstone records, the last replayed record
@@ -9546,9 +9555,6 @@ public class GroupMetadataManagerTest {
         IntStream.range(0, 4).forEach(__ ->
             context.replay(GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord("group-id"))
         );
-
-        verify(context.metrics, times(1)).onClassicGroupStateTransition(null, EMPTY);
-        verify(context.metrics, times(1)).onClassicGroupStateTransition(EMPTY, null);
     }
 
     @Test
@@ -9609,8 +9615,7 @@ public class GroupMetadataManagerTest {
             new LogContext(),
             classicGroupId,
             EMPTY,
-            context.time,
-            context.metrics
+            context.time
         );
         context.replay(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(classicGroup, classicGroup.groupAssignment(), MetadataVersion.latestTesting()));
 
@@ -9638,8 +9643,7 @@ public class GroupMetadataManagerTest {
             new LogContext(),
             classicGroupId,
             EMPTY,
-            context.time,
-            context.metrics
+            context.time
         );
         context.replay(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(classicGroup, classicGroup.groupAssignment(), MetadataVersion.latestTesting()));
 
@@ -10883,7 +10887,6 @@ public class GroupMetadataManagerTest {
             groupId,
             STABLE,
             context.time,
-            context.metrics,
             10,
             Optional.of(ConsumerProtocol.PROTOCOL_TYPE),
             Optional.of("range"),
@@ -10927,7 +10930,6 @@ public class GroupMetadataManagerTest {
         assertRecordsEquals(expectedRecords.subList(7, 10), result.records().subList(7, 10));
 
         verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.STABLE, null);
-        verify(context.metrics, times(1)).onClassicGroupStateTransition(null, STABLE);
 
         // The new classic member 1 has a heartbeat timeout.
         ScheduledTimeout<Void, CoordinatorRecord> heartbeatTimeout = context.timer.timeout(
@@ -10943,14 +10945,6 @@ public class GroupMetadataManagerTest {
         // A new rebalance is triggered.
         ClassicGroup classicGroup = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId, false);
         assertTrue(classicGroup.isInState(PREPARING_REBALANCE));
-
-        // Simulate a failed write to the log.
-        result.appendFuture().completeExceptionally(new NotLeaderOrFollowerException());
-        context.rollback();
-
-        // The group is reverted back to the consumer group.
-        assertEquals(consumerGroup, context.groupMetadataManager.consumerGroup(groupId));
-        verify(context.metrics, times(1)).onClassicGroupStateTransition(PREPARING_REBALANCE, null);
     }
 
     @Test
@@ -11076,7 +11070,6 @@ public class GroupMetadataManagerTest {
             groupId,
             STABLE,
             context.time,
-            context.metrics,
             10,
             Optional.of(ConsumerProtocol.PROTOCOL_TYPE),
             Optional.of("range"),
@@ -11119,7 +11112,6 @@ public class GroupMetadataManagerTest {
         assertRecordsEquals(expectedRecords.subList(7, 10), timeout.result.records().subList(7, 10));
 
         verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.STABLE, null);
-        verify(context.metrics, times(1)).onClassicGroupStateTransition(null, STABLE);
 
         // The new classic member 1 has a heartbeat timeout.
         ScheduledTimeout<Void, CoordinatorRecord> heartbeatTimeout = context.timer.timeout(
@@ -11288,7 +11280,6 @@ public class GroupMetadataManagerTest {
             groupId,
             STABLE,
             context.time,
-            context.metrics,
             11,
             Optional.of(ConsumerProtocol.PROTOCOL_TYPE),
             Optional.of("range"),
@@ -11332,7 +11323,6 @@ public class GroupMetadataManagerTest {
         assertRecordsEquals(expectedRecords.subList(7, 10), timeout.result.records().subList(7, 10));
 
         verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.RECONCILING, null);
-        verify(context.metrics, times(1)).onClassicGroupStateTransition(null, STABLE);
 
         // The new classic member 1 has a heartbeat timeout.
         ScheduledTimeout<Void, CoordinatorRecord> heartbeatTimeout = context.timer.timeout(

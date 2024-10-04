@@ -249,6 +249,18 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     static final String GROUP_EXPIRATION_KEY = "expire-group-metadata";
 
     /**
+     * The classic group size counter key to schedule a timer task.
+     *
+     * Visible for testing.
+     */
+    static final String CLASSIC_GROUP_SIZE_COUNTER_KEY = "classic-group-size-counter";
+
+    /**
+     * Hardcoded default value of the interval to update the classic group size counter.
+     */
+    static final int DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS = 60 * 1000;
+
+    /**
      * The logger.
      */
     private final Logger log;
@@ -678,6 +690,30 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
+     * Schedules (or reschedules) the group size counter for the classic groups.
+     */
+    private void scheduleClassicGroupSizeCounter() {
+        timer.schedule(
+            CLASSIC_GROUP_SIZE_COUNTER_KEY,
+            DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS,
+            TimeUnit.MILLISECONDS,
+            true,
+            () -> {
+                groupMetadataManager.updateClassicGroupSizeCounter();
+                scheduleClassicGroupSizeCounter();
+                return GroupMetadataManager.EMPTY_RESULT;
+            }
+        );
+    }
+
+    /**
+     * Cancels the group size counter for the classic groups.
+     */
+    private void cancelClassicGroupSizeCounter() {
+        timer.cancel(CLASSIC_GROUP_SIZE_COUNTER_KEY);
+    }
+
+    /**
      * The coordinator has been loaded. This is used to apply any
      * post loading operations (e.g. registering timers).
      *
@@ -692,6 +728,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
         groupMetadataManager.onLoaded();
         scheduleGroupMetadataExpiration();
+        scheduleClassicGroupSizeCounter();
     }
 
     @Override
@@ -699,6 +736,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         timer.cancel(GROUP_EXPIRATION_KEY);
         coordinatorMetrics.deactivateMetricsShard(metricsShard);
         groupMetadataManager.onUnloaded();
+        cancelClassicGroupSizeCounter();
     }
 
     /**
