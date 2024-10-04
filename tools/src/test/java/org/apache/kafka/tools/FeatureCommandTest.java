@@ -16,17 +16,16 @@
  */
 package org.apache.kafka.tools;
 
-import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterTest;
-import kafka.test.annotation.Type;
-import kafka.test.junit.ClusterTestExtensions;
-
 import org.apache.kafka.clients.admin.MockAdminClient;
+import org.apache.kafka.common.test.api.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestExtensions;
+import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import net.sourceforge.argparse4j.inf.Namespace;
 
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -47,16 +46,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Tag("integration")
 @ExtendWith(value = ClusterTestExtensions.class)
 public class FeatureCommandTest {
-    @ClusterTest(types = {Type.ZK}, metadataVersion = MetadataVersion.IBP_3_3_IV1)
-    public void testDescribeWithZK(ClusterInstance cluster) {
-        String commandOutput = ToolsTestUtils.captureStandardOut(() ->
-                assertEquals(0, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe"))
-        );
-        assertEquals("", commandOutput);
-    }
 
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_3_IV1)
     public void testDescribeWithKRaft(ClusterInstance cluster) {
@@ -67,10 +58,14 @@ public class FeatureCommandTest {
         List<String> features = Arrays.stream(commandOutput.split("\n")).sorted().collect(Collectors.toList());
 
         // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
-        assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
+        assertEquals("Feature: group.version\tSupportedMinVersion: 0\t" +
                 "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(0)));
+        assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
+                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(1)));
         assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.0-IV1\t" +
-                "SupportedMaxVersion: 4.0-IV0\tFinalizedVersionLevel: 3.3-IV1\t", outputWithoutEpoch(features.get(1)));
+                "SupportedMaxVersion: 4.0-IV3\tFinalizedVersionLevel: 3.3-IV1\t", outputWithoutEpoch(features.get(2)));
+        assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
+                "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(3)));
     }
 
     // Use the first MetadataVersion that supports KIP-919
@@ -83,20 +78,14 @@ public class FeatureCommandTest {
         List<String> features = Arrays.stream(commandOutput.split("\n")).sorted().collect(Collectors.toList());
 
         // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
-        assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
+        assertEquals("Feature: group.version\tSupportedMinVersion: 0\t" +
                 "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(0)));
+        assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
+                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(1)));
         assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.0-IV1\t" +
-                "SupportedMaxVersion: 4.0-IV0\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(features.get(1)));
-    }
-
-    @ClusterTest(types = {Type.ZK}, metadataVersion = MetadataVersion.IBP_3_3_IV1)
-    public void testUpgradeMetadataVersionWithZk(ClusterInstance cluster) {
-        String commandOutput = ToolsTestUtils.captureStandardOut(() ->
-                assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
-                        "upgrade", "--metadata", "3.3-IV2"))
-        );
-        assertEquals("Could not upgrade metadata.version to 6. Could not apply finalized feature " +
-                "update because the provided feature is not supported.", commandOutput);
+                "SupportedMaxVersion: 4.0-IV3\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(features.get(2)));
+        assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
+                "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(3)));
     }
 
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_3_IV1)
@@ -114,29 +103,6 @@ public class FeatureCommandTest {
         assertEquals("metadata.version was upgraded to 6.", commandOutput);
     }
 
-    @ClusterTest(types = {Type.ZK}, metadataVersion = MetadataVersion.IBP_3_3_IV1)
-    public void testDowngradeMetadataVersionWithZk(ClusterInstance cluster) {
-        String commandOutput = ToolsTestUtils.captureStandardOut(() ->
-                assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
-                        "disable", "--feature", "metadata.version"))
-        );
-        assertEquals("Could not disable metadata.version. Can not delete non-existing finalized feature.", commandOutput);
-
-        commandOutput = ToolsTestUtils.captureStandardOut(() ->
-                assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
-                        "downgrade", "--metadata", "3.3-IV0"))
-        );
-        assertEquals("Could not downgrade metadata.version to 4. Could not apply finalized feature " +
-                        "update because the provided feature is not supported.", commandOutput);
-
-        commandOutput = ToolsTestUtils.captureStandardOut(() ->
-                assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
-                        "downgrade", "--unsafe", "--metadata", "3.3-IV0"))
-        );
-        assertEquals("Could not downgrade metadata.version to 4. Could not apply finalized feature " +
-                "update because the provided feature is not supported.", commandOutput);
-    }
-
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_3_IV1)
     public void testDowngradeMetadataVersionWithKRaft(ClusterInstance cluster) {
         String commandOutput = ToolsTestUtils.captureStandardOut(() ->
@@ -144,24 +110,24 @@ public class FeatureCommandTest {
                         "disable", "--feature", "metadata.version"))
         );
         // Change expected message to reflect possible MetadataVersion range 1-N (N increases when adding a new version)
-        assertEquals("Could not disable metadata.version. Invalid update version 0 for feature " +
-                "metadata.version. Local controller 3000 only supports versions 1-23", commandOutput);
+        assertEquals("Could not disable metadata.version. The update failed for all features since the following " +
+                "feature had an error: Invalid update version 0 for feature metadata.version. Local controller 3000 only supports versions 1-25", commandOutput);
 
         commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
                         "downgrade", "--metadata", "3.3-IV0"))
 
         );
-        assertEquals("Could not downgrade metadata.version to 4. Invalid metadata.version 4. " +
-                "Refusing to perform the requested downgrade because it might delete metadata information.", commandOutput);
+        assertEquals("Could not downgrade metadata.version to 4. The update failed for all features since the following " +
+                "feature had an error: Invalid metadata.version 4. Refusing to perform the requested downgrade because it might delete metadata information.", commandOutput);
 
         commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
                         "downgrade", "--unsafe", "--metadata", "3.3-IV0"))
 
         );
-        assertEquals("Could not downgrade metadata.version to 4. Invalid metadata.version 4. " +
-                "Unsafe metadata downgrade is not supported in this version.", commandOutput);
+        assertEquals("Could not downgrade metadata.version to 4. The update failed for all features since the following " +
+                "feature had an error: Invalid metadata.version 4. Unsafe metadata downgrade is not supported in this version.", commandOutput);
     }
 
     private String outputWithoutEpoch(String output) {
@@ -245,10 +211,10 @@ public class FeatureCommandTest {
         namespace.put("dry_run", false);
         String upgradeOutput = ToolsTestUtils.captureStandardOut(() -> {
             Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleUpgrade(new Namespace(namespace), buildAdminClient()));
-            assertTrue(t.getMessage().contains("1 out of 2 operation(s) failed."));
+            assertTrue(t.getMessage().contains("2 out of 2 operation(s) failed."));
         });
-        assertEquals(format("foo.bar was upgraded to 6.%n" +
-            "Could not upgrade metadata.version to 5. Can't upgrade to lower version."), upgradeOutput);
+        assertEquals(format("Could not upgrade foo.bar to 6. Invalid update version 5 for feature metadata.version. Can't upgrade to lower version.%n" +
+            "Could not upgrade metadata.version to 5. Invalid update version 5 for feature metadata.version. Can't upgrade to lower version."), upgradeOutput);
     }
 
     @Test
@@ -259,10 +225,10 @@ public class FeatureCommandTest {
         namespace.put("dry_run", true);
         String upgradeOutput = ToolsTestUtils.captureStandardOut(() -> {
             Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleUpgrade(new Namespace(namespace), buildAdminClient()));
-            assertTrue(t.getMessage().contains("1 out of 2 operation(s) failed."));
+            assertTrue(t.getMessage().contains("2 out of 2 operation(s) failed."));
         });
-        assertEquals(format("foo.bar can be upgraded to 6.%n" +
-            "Can not upgrade metadata.version to 5. Can't upgrade to lower version."), upgradeOutput);
+        assertEquals(format("Can not upgrade foo.bar to 6. Invalid update version 5 for feature metadata.version. Can't upgrade to lower version.%n" +
+            "Can not upgrade metadata.version to 5. Invalid update version 5 for feature metadata.version. Can't upgrade to lower version."), upgradeOutput);
     }
 
     @Test
@@ -273,10 +239,10 @@ public class FeatureCommandTest {
         namespace.put("dry_run", false);
         String downgradeOutput = ToolsTestUtils.captureStandardOut(() -> {
             Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleDowngrade(new Namespace(namespace), buildAdminClient()));
-            assertTrue(t.getMessage().contains("1 out of 2 operation(s) failed."));
+            assertTrue(t.getMessage().contains("2 out of 2 operation(s) failed."));
         });
-        assertEquals(format("foo.bar was downgraded to 1.%n" +
-            "Could not downgrade metadata.version to 7. Can't downgrade to newer version."), downgradeOutput);
+        assertEquals(format("Could not downgrade foo.bar to 1. Invalid update version 7 for feature metadata.version. Can't downgrade to newer version.%n" +
+            "Could not downgrade metadata.version to 7. Invalid update version 7 for feature metadata.version. Can't downgrade to newer version."), downgradeOutput);
     }
 
     @Test
@@ -287,10 +253,10 @@ public class FeatureCommandTest {
         namespace.put("dry_run", true);
         String downgradeOutput = ToolsTestUtils.captureStandardOut(() -> {
             Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleDowngrade(new Namespace(namespace), buildAdminClient()));
-            assertTrue(t.getMessage().contains("1 out of 2 operation(s) failed."));
+            assertTrue(t.getMessage().contains("2 out of 2 operation(s) failed."));
         });
-        assertEquals(format("foo.bar can be downgraded to 1.%n" +
-            "Can not downgrade metadata.version to 7. Can't downgrade to newer version."), downgradeOutput);
+        assertEquals(format("Can not downgrade foo.bar to 1. Invalid update version 7 for feature metadata.version. Can't downgrade to newer version.%n" +
+            "Can not downgrade metadata.version to 7. Invalid update version 7 for feature metadata.version. Can't downgrade to newer version."), downgradeOutput);
     }
 
     @Test
@@ -300,11 +266,11 @@ public class FeatureCommandTest {
         namespace.put("dry_run", false);
         String disableOutput = ToolsTestUtils.captureStandardOut(() -> {
             Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleDisable(new Namespace(namespace), buildAdminClient()));
-            assertTrue(t.getMessage().contains("1 out of 3 operation(s) failed."));
+            assertTrue(t.getMessage().contains("3 out of 3 operation(s) failed."));
         });
-        assertEquals(format("foo.bar was disabled.%n" +
-            "Could not disable metadata.version. Can't downgrade below 4%n" +
-            "quux was disabled."), disableOutput);
+        assertEquals(format("Could not disable foo.bar. Invalid update version 0 for feature metadata.version. Can't downgrade below 4%n" +
+            "Could not disable metadata.version. Invalid update version 0 for feature metadata.version. Can't downgrade below 4%n" +
+            "Could not disable quux. Invalid update version 0 for feature metadata.version. Can't downgrade below 4"), disableOutput);
     }
 
     @Test
@@ -314,10 +280,196 @@ public class FeatureCommandTest {
         namespace.put("dry_run", true);
         String disableOutput = ToolsTestUtils.captureStandardOut(() -> {
             Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleDisable(new Namespace(namespace), buildAdminClient()));
-            assertTrue(t.getMessage().contains("1 out of 3 operation(s) failed."));
+            assertTrue(t.getMessage().contains("3 out of 3 operation(s) failed."));
         });
-        assertEquals(format("foo.bar can be disabled.%n" +
-            "Can not disable metadata.version. Can't downgrade below 4%n" +
-            "quux can be disabled."), disableOutput);
+        assertEquals(format("Can not disable foo.bar. Invalid update version 0 for feature metadata.version. Can't downgrade below 4%n" +
+            "Can not disable metadata.version. Invalid update version 0 for feature metadata.version. Can't downgrade below 4%n" +
+            "Can not disable quux. Invalid update version 0 for feature metadata.version. Can't downgrade below 4"), disableOutput);
+    }
+
+    @Test
+    public void testHandleVersionMappingWithValidReleaseVersion() {
+        Map<String, Object> namespace = new HashMap<>();
+        namespace.put("release_version", "3.3-IV3");
+        String versionMappingOutput = ToolsTestUtils.captureStandardOut(() -> {
+            try {
+                FeatureCommand.handleVersionMapping(new Namespace(namespace));
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        MetadataVersion metadataVersion = MetadataVersion.IBP_3_3_IV3;
+
+        // Check that the metadata version is correctly included in the output
+        assertTrue(versionMappingOutput.contains("metadata.version=" + metadataVersion.featureLevel() + " (" + metadataVersion.version() + ")"),
+            "Output did not contain expected Metadata Version: " + versionMappingOutput);
+
+        for (Features feature : Features.values()) {
+            int featureLevel = feature.defaultValue(metadataVersion);
+            assertTrue(versionMappingOutput.contains(feature.featureName() + "=" + featureLevel),
+                "Output did not contain expected feature mapping: " + versionMappingOutput);
+        }
+    }
+
+    @Test
+    public void testHandleVersionMappingWithNoReleaseVersion() {
+        Map<String, Object> namespace = new HashMap<>();
+        String versionMappingOutput = ToolsTestUtils.captureStandardOut(() -> {
+            try {
+                FeatureCommand.handleVersionMapping(new Namespace(namespace));
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        MetadataVersion metadataVersion = MetadataVersion.latestProduction();
+
+        // Check that the metadata version is correctly included in the output
+        assertTrue(versionMappingOutput.contains("metadata.version=" + metadataVersion.featureLevel() + " (" + metadataVersion.version() + ")"),
+            "Output did not contain expected Metadata Version: " + versionMappingOutput);
+
+        for (Features feature : Features.values()) {
+            int featureLevel = feature.defaultValue(metadataVersion);
+            assertTrue(versionMappingOutput.contains(feature.featureName() + "=" + featureLevel),
+                "Output did not contain expected feature mapping: " + versionMappingOutput);
+        }
+    }
+
+    @Test
+    public void testHandleVersionMappingWithInvalidReleaseVersion() {
+        Map<String, Object> namespace = new HashMap<>();
+        namespace.put("release_version", "2.9-IV2");
+
+        TerseException exception1 = assertThrows(TerseException.class, () ->
+            FeatureCommand.handleVersionMapping(new Namespace(namespace))
+        );
+
+        assertEquals("Unknown release version '2.9-IV2'." +
+            " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION +
+            " to " + MetadataVersion.LATEST_PRODUCTION, exception1.getMessage());
+
+        namespace.put("release_version", "invalid");
+
+        TerseException exception2 = assertThrows(TerseException.class, () ->
+            FeatureCommand.handleVersionMapping(new Namespace(namespace))
+        );
+
+        assertEquals("Unknown release version 'invalid'." +
+            " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION +
+            " to " + MetadataVersion.LATEST_PRODUCTION, exception2.getMessage());
+    }
+
+    @Test
+    public void testHandleFeatureDependenciesForFeatureWithDependencies() {
+        Map<String, Object> namespace = new HashMap<>();
+        namespace.put("feature", Collections.singletonList("test.feature.version=2"));
+
+        String output = ToolsTestUtils.captureStandardOut(() -> {
+            try {
+                FeatureCommand.handleFeatureDependencies(new Namespace(namespace));
+            } catch (TerseException e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        String expectedOutput = String.format(
+            "test.feature.version=2 requires:\n    metadata.version=%d (%s)\n",
+            MetadataVersion.latestTesting().featureLevel(),
+            MetadataVersion.latestTesting().version()
+        );
+
+        assertEquals(expectedOutput.trim(), output.trim());
+    }
+
+    @Test
+    public void testHandleFeatureDependenciesForFeatureWithNoDependencies() {
+        Map<String, Object> namespace = new HashMap<>();
+        namespace.put("feature", Collections.singletonList("metadata.version=17"));
+
+        String output = ToolsTestUtils.captureStandardOut(() -> {
+            try {
+                FeatureCommand.handleFeatureDependencies(new Namespace(namespace));
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        assertEquals("metadata.version=17 (3.7-IV2) has no dependencies.", output);
+    }
+
+    @Test
+    public void testHandleFeatureDependenciesForUnknownFeature() {
+        Map<String, Object> namespace = new HashMap<>();
+        namespace.put("feature", Collections.singletonList("unknown.feature=1"));
+
+        Exception exception = assertThrows(
+            TerseException.class,
+            () -> FeatureCommand.handleFeatureDependencies(new Namespace(namespace)
+            ));
+
+        assertEquals("Unknown feature: unknown.feature", exception.getMessage());
+    }
+
+    @Test
+    public void testHandleFeatureDependenciesForFeatureWithUnknownFeatureVersion() {
+        Map<String, Object> namespace = new HashMap<>();
+        namespace.put("feature", Collections.singletonList("transaction.version=1000"));
+
+        Exception exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> FeatureCommand.handleFeatureDependencies(new Namespace(namespace)
+            ));
+
+        assertEquals("No feature:transaction.version with feature level 1000", exception.getMessage());
+    }
+
+    @Test
+    public void testHandleFeatureDependenciesForInvalidVersionFormat() {
+        Map<String, Object> namespace = new HashMap<>();
+        namespace.put("feature", Collections.singletonList("metadata.version=invalid"));
+
+        RuntimeException exception = assertThrows(
+            RuntimeException.class,
+            () -> FeatureCommand.handleFeatureDependencies(new Namespace(namespace))
+        );
+
+        assertEquals(
+            "Can't parse feature=level string metadata.version=invalid: unable to parse invalid as a short.",
+            exception.getMessage()
+        );
+    }
+
+    @Test
+    public void testHandleFeatureDependenciesForMultipleFeatures() {
+        Map<String, Object> namespace = new HashMap<>();
+        namespace.put("feature", Arrays.asList(
+                "transaction.version=2",
+                "group.version=1",
+                "test.feature.version=2"
+        ));
+
+        String output = ToolsTestUtils.captureStandardOut(() -> {
+            try {
+                FeatureCommand.handleFeatureDependencies(new Namespace(namespace));
+            } catch (TerseException e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        // Expected output for test.feature.version=2 dependencies
+        String latestTestingVersionOutput = String.format(
+                "test.feature.version=2 requires:\n    metadata.version=%d (%s)\n",
+                MetadataVersion.latestTesting().featureLevel(),
+                MetadataVersion.latestTesting().version()
+        );
+
+        String expectedOutput = String.join("\n",
+                "transaction.version=2 has no dependencies.",
+                "group.version=1 has no dependencies.",
+                latestTestingVersionOutput.trim()
+        );
+
+        assertEquals(expectedOutput.trim(), output.trim());
     }
 }

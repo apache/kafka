@@ -66,8 +66,7 @@ public final class ProcessorAdapter<KIn, VIn, KOut, VOut> implements Processor<K
                 context.offset(),
                 context.partition(),
                 context.topic(),
-                record.headers(),
-                processorRecordContext.rawRecord()
+                record.headers()
             ));
             delegate.process(record.key(), record.value());
         } finally {

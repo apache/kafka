@@ -91,6 +91,8 @@ public class MockAdminClient extends AdminClient {
     private final List<List<String>> brokerLogDirs;
     private final List<Map<String, String>> brokerConfigs;
     private final Map<String, Map<String, String>> clientMetricsConfigs;
+    private final Map<String, Map<String, String>> groupConfigs;
+    private final Map<String, String> defaultGroupConfigs;
 
     private Node controller;
     private int timeoutNextRequests = 0;
@@ -121,6 +123,7 @@ public class MockAdminClient extends AdminClient {
         private Map<String, Short> featureLevels = Collections.emptyMap();
         private Map<String, Short> minSupportedFeatureLevels = Collections.emptyMap();
         private Map<String, Short> maxSupportedFeatureLevels = Collections.emptyMap();
+        private Map<String, String> defaultGroupConfigs = Collections.emptyMap();
 
         @SuppressWarnings("this-escape")
         public Builder() {
@@ -191,6 +194,11 @@ public class MockAdminClient extends AdminClient {
             return this;
         }
 
+        public Builder defaultGroupConfigs(Map<String, String> defaultGroupConfigs) {
+            this.defaultGroupConfigs = defaultGroupConfigs;
+            return this;
+        }
+
         public MockAdminClient build() {
             return new MockAdminClient(brokers,
                 controller == null ? brokers.get(0) : controller,
@@ -201,7 +209,8 @@ public class MockAdminClient extends AdminClient {
                 usingRaftController,
                 featureLevels,
                 minSupportedFeatureLevels,
-                maxSupportedFeatureLevels);
+                maxSupportedFeatureLevels,
+                defaultGroupConfigs);
         }
     }
 
@@ -219,6 +228,7 @@ public class MockAdminClient extends AdminClient {
             false,
             Collections.emptyMap(),
             Collections.emptyMap(),
+            Collections.emptyMap(),
             Collections.emptyMap());
     }
 
@@ -233,7 +243,8 @@ public class MockAdminClient extends AdminClient {
         boolean usingRaftController,
         Map<String, Short> featureLevels,
         Map<String, Short> minSupportedFeatureLevels,
-        Map<String, Short> maxSupportedFeatureLevels
+        Map<String, Short> maxSupportedFeatureLevels,
+        Map<String, String> defaultGroupConfigs
     ) {
         this.brokers = brokers;
         controller(controller);
@@ -243,6 +254,8 @@ public class MockAdminClient extends AdminClient {
         this.brokerLogDirs = brokerLogDirs;
         this.brokerConfigs = new ArrayList<>();
         this.clientMetricsConfigs = new HashMap<>();
+        this.groupConfigs = new HashMap<>();
+        this.defaultGroupConfigs = new HashMap<>(defaultGroupConfigs);
         for (int i = 0; i < brokers.size(); i++) {
             final Map<String, String> config = new HashMap<>();
             config.put("default.replication.factor", String.valueOf(defaultReplicationFactor));
@@ -713,7 +726,9 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public synchronized ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        KafkaFutureImpl<Collection<Object>> future = new KafkaFutureImpl<>();
+        future.complete(groupConfigs.keySet().stream().map(g -> new ConsumerGroupListing(g, false)).collect(Collectors.toList()));
+        return new ListConsumerGroupsResult(future);
     }
 
     @Override
@@ -823,6 +838,15 @@ public class MockAdminClient extends AdminClient {
                     throw new InvalidRequestException("Empty resource name");
                 }
                 return toConfigObject(clientMetricsConfigs.get(resourceName));
+            }
+            case GROUP: {
+                String resourceName = resource.name();
+                if (resourceName.isEmpty()) {
+                    throw new InvalidRequestException("Empty resource name");
+                }
+                Map<String, String> groupConfig = groupConfigs.getOrDefault(resourceName, new HashMap<>());
+                defaultGroupConfigs.forEach(groupConfig::putIfAbsent);
+                return toConfigObject(groupConfig);
             }
             default:
                 throw new UnsupportedOperationException("Not implemented yet");
@@ -943,6 +967,33 @@ public class MockAdminClient extends AdminClient {
                     }
                 }
                 clientMetricsConfigs.put(resourceName, newMap);
+                return null;
+            }
+            case GROUP: {
+                String resourceName = resource.name();
+                if (resourceName.isEmpty()) {
+                    return new InvalidRequestException("Empty resource name");
+                }
+
+                if (!groupConfigs.containsKey(resourceName)) {
+                    groupConfigs.put(resourceName, new HashMap<>());
+                }
+
+                HashMap<String, String> newMap = new HashMap<>(groupConfigs.get(resourceName));
+                for (AlterConfigOp op : ops) {
+                    switch (op.opType()) {
+                        case SET:
+                            newMap.put(op.configEntry().name(), op.configEntry().value());
+                            break;
+                        case DELETE:
+                            newMap.remove(op.configEntry().name());
+                            break;
+                        default:
+                            return new InvalidRequestException(
+                                "Unsupported op type " + op.opType());
+                    }
+                }
+                groupConfigs.put(resourceName, newMap);
                 return null;
             }
             default:
@@ -1208,15 +1259,14 @@ public class MockAdminClient extends AdminClient {
         Map<String, FeatureUpdate> featureUpdates,
         UpdateFeaturesOptions options
     ) {
-        Map<String, KafkaFuture<Void>> results = new HashMap<>();
+        Throwable error = null;
         for (Map.Entry<String, FeatureUpdate> entry : featureUpdates.entrySet()) {
-            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
             String feature = entry.getKey();
+            short cur = featureLevels.getOrDefault(feature, (short) 0);
+            short next = entry.getValue().maxVersionLevel();
+            short min = minSupportedFeatureLevels.getOrDefault(feature, (short) 0);
+            short max = maxSupportedFeatureLevels.getOrDefault(feature, (short) 0);
             try {
-                short cur = featureLevels.getOrDefault(feature, (short) 0);
-                short next = entry.getValue().maxVersionLevel();
-                short min = minSupportedFeatureLevels.getOrDefault(feature, (short) 0);
-                short max = maxSupportedFeatureLevels.getOrDefault(feature, (short) 0);
                 switch (entry.getValue().upgradeType()) {
                     case UNKNOWN:
                         throw new InvalidRequestException("Invalid upgrade type.");
@@ -1251,16 +1301,30 @@ public class MockAdminClient extends AdminClient {
                 if (next > max) {
                     throw new InvalidUpdateVersionException("Can't upgrade above " + max);
                 }
-                if (!options.validateOnly()) {
-                    featureLevels.put(feature, next);
-                }
-                future.complete(null);
             } catch (Exception e) {
-                future.completeExceptionally(e);
+                error = invalidUpdateVersion(feature, next, e.getMessage());
+                break;
             }
-            results.put(feature, future);
         }
+        Map<String, KafkaFuture<Void>> results = new HashMap<>();
+        for (Map.Entry<String, FeatureUpdate> entry : featureUpdates.entrySet()) {
+            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+            if (error == null) {
+                future.complete(null);
+                if (!options.validateOnly()) {
+                    featureLevels.put(entry.getKey(), entry.getValue().maxVersionLevel());
+                }
+            } else {
+                future.completeExceptionally(error);
+            }
+            results.put(entry.getKey(), future);
+        }
+
         return new UpdateFeaturesResult(results);
+    }
+
+    private InvalidRequestException invalidUpdateVersion(String feature, short version, String message) {
+        return new InvalidRequestException(String.format("Invalid update version %d for feature %s. %s", version, feature, message));
     }
 
     @Override
@@ -1313,6 +1377,16 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public RemoveRaftVoterResult removeRaftVoter(int voterId, Uuid voterDirectoryId, RemoveRaftVoterOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public synchronized DescribeShareGroupsResult describeShareGroups(Collection<String> groupIds, DescribeShareGroupsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public synchronized ListShareGroupsResult listShareGroups(ListShareGroupsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 

@@ -154,7 +154,7 @@ public class StreamsUpgradeTest {
 
     public static class FutureStreamsPartitionAssignor extends StreamsPartitionAssignor {
         private static final Map<String, String> CLIENT_TAGS = mkMap(mkEntry("t1", "v1"), mkEntry("t2", "v2"));
-        private final Logger log = LoggerFactory.getLogger(FutureStreamsPartitionAssignor.class);
+        private static final Logger log = LoggerFactory.getLogger(FutureStreamsPartitionAssignor.class);
 
         private AtomicInteger usedSubscriptionMetadataVersionPeek;
         private AtomicLong nextScheduledRebalanceMs;
@@ -194,7 +194,7 @@ public class StreamsUpgradeTest {
                     LATEST_SUPPORTED_VERSION + 1,
                     taskManager.processId(),
                     userEndPoint(),
-                    taskManager.getTaskOffsetSums(),
+                    taskManager.taskOffsetSums(),
                     uniqueField,
                     0,
                     CLIENT_TAGS
@@ -203,8 +203,8 @@ public class StreamsUpgradeTest {
                 return new FutureSubscriptionInfo(
                     usedSubscriptionMetadataVersion,
                     taskManager.processId().id(),
-                    SubscriptionInfo.getActiveTasksFromTaskOffsetSumMap(taskManager.getTaskOffsetSums()),
-                    SubscriptionInfo.getStandbyTasksFromTaskOffsetSumMap(taskManager.getTaskOffsetSums()),
+                    SubscriptionInfo.getActiveTasksFromTaskOffsetSumMap(taskManager.taskOffsetSums()),
+                    SubscriptionInfo.getStandbyTasksFromTaskOffsetSumMap(taskManager.taskOffsetSums()),
                     userEndPoint())
                     .encode();
             }
@@ -296,7 +296,7 @@ public class StreamsUpgradeTest {
                                 LATEST_SUPPORTED_VERSION,
                                 info.processId(),
                                 info.userEndPoint(),
-                                taskManager().getTaskOffsetSums(),
+                                taskManager().taskOffsetSums(),
                                 (byte) 0,
                                 0,
                                 CLIENT_TAGS

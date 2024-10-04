@@ -64,6 +64,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.apache.zookeeper.client.ZKClientConfig
 
 import java.io.{File, IOException}
@@ -259,9 +260,6 @@ class KafkaServer(
 
         /* generate brokerId */
         config._brokerId = getOrGenerateBrokerId(initialMetaPropsEnsemble)
-        // Currently, we are migrating from ZooKeeper to KRaft. If broker.id.generation.enable is set to true,
-        // we must ensure that the nodeId synchronizes with the broker.id to prevent the nodeId from being -1,
-        // which would result in a failure during the migration.
         config._nodeId = config.brokerId
         logContext = new LogContext(s"[KafkaServer id=${config.brokerId}] ")
         this.logIdent = logContext.logPrefix
@@ -364,7 +362,7 @@ class KafkaServer(
         /* start forwarding manager */
         var autoTopicCreationChannel = Option.empty[NodeToControllerChannelManager]
         if (enableForwarding) {
-          this.forwardingManager = Some(ForwardingManager(clientToControllerChannelManager))
+          this.forwardingManager = Some(ForwardingManager(clientToControllerChannelManager, metrics))
           autoTopicCreationChannel = Some(clientToControllerChannelManager)
         }
 
@@ -431,7 +429,7 @@ class KafkaServer(
           logger.info("Successfully deleted local metadata log. It will be re-created.")
 
           // If the ZK broker is in migration mode, start up a RaftManager to learn about the new KRaft controller
-          val quorumVoters = QuorumConfig.parseVoterConnections(config.quorumVoters)
+          val quorumVoters = QuorumConfig.parseVoterConnections(config.quorumConfig.voters)
           raftManager = new KafkaRaftManager[ApiMessageAndVersion](
             metaPropsEnsemble.clusterId().get(),
             config,
@@ -444,7 +442,7 @@ class KafkaServer(
             metrics,
             threadNamePrefix,
             CompletableFuture.completedFuture(quorumVoters),
-            QuorumConfig.parseBootstrapServers(config.quorumBootstrapServers),
+            QuorumConfig.parseBootstrapServers(config.quorumConfig.bootstrapServers),
             // Endpoint information is only needed for KRaft controllers (voters). ZK brokers
             // (observers) can never be KRaft controllers
             Endpoints.empty(),
@@ -474,18 +472,19 @@ class KafkaServer(
               setSecurityProtocol(ep.securityProtocol.id))
           }
 
-          // Even though ZK brokers don't use "metadata.version" feature, we send our IBP here as part of the broker registration
+          val features = BrokerFeatures.createDefaultFeatureMap(BrokerFeatures.createDefault(config.unstableFeatureVersionsEnabled))
+
+          // Even though ZK brokers don't use "metadata.version" feature, we need to overwrite it with our IBP as part of registration
           // so the KRaft controller can verify that all brokers are on the same IBP before starting the migration.
-          val ibpAsFeature =
-           java.util.Collections.singletonMap(MetadataVersion.FEATURE_NAME,
-             VersionRange.of(config.interBrokerProtocolVersion.featureLevel(), config.interBrokerProtocolVersion.featureLevel()))
+          val featuresRemapped = features + (MetadataVersion.FEATURE_NAME ->
+            VersionRange.of(config.interBrokerProtocolVersion.featureLevel(), config.interBrokerProtocolVersion.featureLevel()))
 
           lifecycleManager.start(
             () => listener.highestOffset,
             brokerToQuorumChannelManager,
             clusterId,
             networkListeners,
-            ibpAsFeature,
+            featuresRemapped.asJava,
             OptionalLong.empty()
           )
           logger.debug("Start RaftManager")
@@ -523,7 +522,7 @@ class KafkaServer(
         transactionCoordinator = TransactionCoordinator(config, replicaManager, new KafkaScheduler(1, true, "transaction-log-manager-"),
           () => producerIdManager, metrics, metadataCache, Time.SYSTEM)
         transactionCoordinator.startup(
-          () => zkClient.getTopicPartitionCount(Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionTopicPartitions))
+          () => zkClient.getTopicPartitionCount(Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionLogConfig.transactionTopicPartitions))
 
         /* start auto topic creation manager */
         this.autoTopicCreationManager = AutoTopicCreationManager(
@@ -532,7 +531,8 @@ class KafkaServer(
           Some(adminManager),
           Some(kafkaController),
           groupCoordinator,
-          transactionCoordinator
+          transactionCoordinator,
+          None
         )
 
         /* Get the authorizer and initialize it if one is specified.*/
@@ -584,6 +584,7 @@ class KafkaServer(
           replicaManager = replicaManager,
           groupCoordinator = groupCoordinator,
           txnCoordinator = transactionCoordinator,
+          shareCoordinator = None,  //share coord only supported in kraft mode
           autoTopicCreationManager = autoTopicCreationManager,
           brokerId = config.brokerId,
           config = config,
@@ -593,6 +594,7 @@ class KafkaServer(
           authorizer = authorizer,
           quotas = quotaManagers,
           fetchManager = fetchManager,
+          sharePartitionManager = None,
           brokerTopicStats = brokerTopicStats,
           clusterId = clusterId,
           time = time,
@@ -1013,7 +1015,7 @@ class KafkaServer(
           CoreUtils.swallow(dataPlaneRequestProcessor.close(), this)
         if (controlPlaneRequestProcessor != null)
           CoreUtils.swallow(controlPlaneRequestProcessor.close(), this)
-        CoreUtils.swallow(authorizer.foreach(_.close()), this)
+        authorizer.foreach(Utils.closeQuietly(_, "authorizer"))
         if (adminManager != null)
           CoreUtils.swallow(adminManager.shutdown(), this)
 
@@ -1031,6 +1033,9 @@ class KafkaServer(
         if (alterPartitionManager != null)
           CoreUtils.swallow(alterPartitionManager.shutdown(), this)
 
+        if (forwardingManager.isDefined)
+          CoreUtils.swallow(forwardingManager.get.close(), this)
+
         if (clientToControllerChannelManager != null)
           CoreUtils.swallow(clientToControllerChannelManager.shutdown(), this)
 
@@ -1043,13 +1048,12 @@ class KafkaServer(
         // Close remote log manager before stopping processing requests, to give a chance to any
         // of its underlying clients (especially in RemoteStorageManager and RemoteLogMetadataManager)
         // to close gracefully.
-        CoreUtils.swallow(remoteLogManagerOpt.foreach(_.close()), this)
+        remoteLogManagerOpt.foreach(Utils.closeQuietly(_, "remote log manager"))
 
         if (featureChangeListener != null)
           CoreUtils.swallow(featureChangeListener.close(), this)
 
-        if (zkClient != null)
-          CoreUtils.swallow(zkClient.close(), this)
+        Utils.closeQuietly(zkClient, "zk client")
 
         if (quotaManagers != null)
           CoreUtils.swallow(quotaManagers.shutdown(), this)
@@ -1060,10 +1064,8 @@ class KafkaServer(
         if (socketServer != null)
           CoreUtils.swallow(socketServer.shutdown(), this)
         unregisterCurrentControllerIdMetric()
-        if (metrics != null)
-          CoreUtils.swallow(metrics.close(), this)
-        if (brokerTopicStats != null)
-          CoreUtils.swallow(brokerTopicStats.close(), this)
+        Utils.closeQuietly(metrics, "metrics")
+        Utils.closeQuietly(brokerTopicStats, "broker topic stats")
 
         // Clear all reconfigurable instances stored in DynamicBrokerConfig
         config.dynamicConfig.clear()

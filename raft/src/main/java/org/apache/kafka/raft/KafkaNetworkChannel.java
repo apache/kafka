@@ -19,6 +19,7 @@ package org.apache.kafka.raft;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.FetchRequestData;
@@ -29,6 +30,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.BeginQuorumEpochRequest;
 import org.apache.kafka.common.requests.EndQuorumEpochRequest;
 import org.apache.kafka.common.requests.FetchRequest;
@@ -185,6 +187,10 @@ public class KafkaNetworkChannel implements NetworkChannel {
             return new FetchRequest.SimpleBuilder((FetchRequestData) requestData);
         if (requestData instanceof FetchSnapshotRequestData)
             return new FetchSnapshotRequest.Builder((FetchSnapshotRequestData) requestData);
+        if (requestData instanceof ApiVersionsRequestData)
+            return new ApiVersionsRequest.Builder((ApiVersionsRequestData) requestData,
+                ApiKeys.API_VERSIONS.oldestVersion(),
+                ApiKeys.API_VERSIONS.latestVersion());
         throw new IllegalArgumentException("Unexpected type for requestData: " + requestData);
     }
 }

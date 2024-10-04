@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
@@ -30,14 +29,12 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.raft.internals.AddVoterHandlerState;
 import org.apache.kafka.raft.internals.BatchAccumulator;
-import org.apache.kafka.raft.internals.ReplicaKey;
-import org.apache.kafka.raft.internals.VoterSet;
+import org.apache.kafka.raft.internals.RemoveVoterHandlerState;
 import org.apache.kafka.server.common.KRaftVersion;
 
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -65,7 +62,7 @@ public class LeaderState<T> implements EpochState {
     private final int epoch;
     private final long epochStartOffset;
     private final Set<Integer> grantingVoters;
-    private final Endpoints endpoints;
+    private final Endpoints localListeners;
     private final VoterSet voterSetAtEpochStart;
     // This field is non-empty if the voter set at epoch start came from a snapshot or log segment
     private final OptionalLong offsetOfVotersAtEpochStart;
@@ -74,6 +71,8 @@ public class LeaderState<T> implements EpochState {
     private Optional<LogOffsetMetadata> highWatermark = Optional.empty();
     private Map<Integer, ReplicaState> voterStates = new HashMap<>();
     private Optional<AddVoterHandlerState> addVoterHandlerState = Optional.empty();
+    private Optional<RemoveVoterHandlerState> removeVoterHandlerState = Optional.empty();
+
     private final Map<ReplicaKey, ReplicaState> observerStates = new HashMap<>();
     private final Logger log;
     private final BatchAccumulator<T> accumulator;
@@ -97,20 +96,20 @@ public class LeaderState<T> implements EpochState {
         KRaftVersion kraftVersionAtEpochStart,
         Set<Integer> grantingVoters,
         BatchAccumulator<T> accumulator,
-        Endpoints endpoints,
+        Endpoints localListeners,
         int fetchTimeoutMs,
         LogContext logContext
     ) {
         this.localReplicaKey = localReplicaKey;
         this.epoch = epoch;
         this.epochStartOffset = epochStartOffset;
-        this.endpoints = endpoints;
+        this.localListeners = localListeners;
 
         for (VoterSet.VoterNode voterNode: voterSetAtEpochStart.voterNodes()) {
             boolean hasAcknowledgedLeader = voterNode.isVoter(localReplicaKey);
             this.voterStates.put(
                 voterNode.voterKey().id(),
-                new ReplicaState(voterNode.voterKey(), hasAcknowledgedLeader)
+                new ReplicaState(voterNode.voterKey(), hasAcknowledgedLeader, voterNode.listeners())
             );
         }
         this.grantingVoters = Collections.unmodifiableSet(new HashSet<>(grantingVoters));
@@ -221,13 +220,82 @@ public class LeaderState<T> implements EpochState {
         addVoterHandlerState = state;
     }
 
+    public Optional<RemoveVoterHandlerState> removeVoterHandlerState() {
+        return removeVoterHandlerState;
+    }
+
+    public void resetRemoveVoterHandlerState(
+        Errors error,
+        String message,
+        Optional<RemoveVoterHandlerState> state
+    ) {
+        removeVoterHandlerState.ifPresent(
+            handlerState -> handlerState
+                .future()
+                .complete(RaftUtil.removeVoterResponse(error, message))
+        );
+        removeVoterHandlerState = state;
+    }
+
+    public long maybeExpirePendingOperation(long currentTimeMs) {
+        // First abort any expired operations
+        long timeUntilAddVoterExpiration = addVoterHandlerState()
+            .map(state -> state.timeUntilOperationExpiration(currentTimeMs))
+            .orElse(Long.MAX_VALUE);
+
+        if (timeUntilAddVoterExpiration == 0) {
+            resetAddVoterHandlerState(Errors.REQUEST_TIMED_OUT, null, Optional.empty());
+        }
+
+        long timeUntilRemoveVoterExpiration = removeVoterHandlerState()
+            .map(state -> state.timeUntilOperationExpiration(currentTimeMs))
+            .orElse(Long.MAX_VALUE);
+
+        if (timeUntilRemoveVoterExpiration == 0) {
+            resetRemoveVoterHandlerState(Errors.REQUEST_TIMED_OUT, null, Optional.empty());
+        }
+
+        // Reread the timeouts and return the smaller of them
+        return Math.min(
+            addVoterHandlerState()
+                .map(state -> state.timeUntilOperationExpiration(currentTimeMs))
+                .orElse(Long.MAX_VALUE),
+            removeVoterHandlerState()
+                .map(state -> state.timeUntilOperationExpiration(currentTimeMs))
+                .orElse(Long.MAX_VALUE)
+        );
+    }
+
+    public boolean isOperationPending(long currentTimeMs) {
+        maybeExpirePendingOperation(currentTimeMs);
+        return addVoterHandlerState.isPresent() || removeVoterHandlerState.isPresent();
+    }
+
     private static List<Voter> convertToVoters(Set<Integer> voterIds) {
         return voterIds.stream()
             .map(follower -> new Voter().setVoterId(follower))
             .collect(Collectors.toList());
     }
 
-    public void appendLeaderChangeMessageAndBootstrapRecords(long currentTimeMs) {
+    public void appendStartOfEpochControlRecords(VoterSet.VoterNode localVoterNode, long currentTimeMs) {
+        if (!localReplicaKey.equals(localVoterNode.voterKey())) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Replica key %s didn't match the local key %s",
+                    localVoterNode.voterKey(),
+                    localReplicaKey
+                )
+            );
+        } else if (!localListeners.equals(localVoterNode.listeners())) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Listeners %s didn't match the local listeners %s",
+                    localVoterNode.listeners(),
+                    localListeners
+                )
+            );
+        }
+
         List<Voter> voters = convertToVoters(voterStates.keySet());
         List<Voter> grantingVoters = convertToVoters(this.grantingVoters());
 
@@ -256,41 +324,52 @@ public class LeaderState<T> implements EpochState {
             ) {
                 builder.appendLeaderChangeMessage(currentTimeMs, leaderChangeMessage);
 
-                offsetOfVotersAtEpochStart.ifPresent(offset -> {
-                    if (offset == -1) {
-                        // Latest voter set came from the bootstrap checkpoint (0-0.checkpoint)
-                        // rewrite the voter set to the log so that it is replicated to the replicas.
-                        if (!kraftVersionAtEpochStart.isReconfigSupported()) {
-                            throw new IllegalStateException(
-                                String.format(
-                                    "The bootstrap checkpoint contains a set of voters %s at %s " +
-                                    "and the KRaft version is %s",
-                                    voterSetAtEpochStart,
-                                    offset,
-                                    kraftVersionAtEpochStart
+                if (kraftVersionAtEpochStart.isReconfigSupported()) {
+                    long offset = offsetOfVotersAtEpochStart.orElseThrow(
+                        () -> new IllegalStateException(
+                            String.format(
+                                "The %s is %s but there is no voter set in the log or " +
+                                "checkpoint %s",
+                                KRaftVersion.FEATURE_NAME,
+                                kraftVersionAtEpochStart,
+                                voterSetAtEpochStart
+                            )
+                        )
+                    );
+
+                    // The leader should write the latest voters record if its local listeners are different
+                    // or it has never written a voters record to the log before.
+                    if (offset == -1 || voterSetAtEpochStart.voterNodeNeedsUpdate(localVoterNode)) {
+                        VoterSet updatedVoterSet = voterSetAtEpochStart
+                            .updateVoter(localVoterNode)
+                            .orElseThrow(
+                                () -> new IllegalStateException(
+                                    String.format(
+                                        "Update expected for leader node %s and voter set %s",
+                                        localVoterNode,
+                                        voterSetAtEpochStart
+                                    )
                                 )
                             );
-                        } else {
-                            builder.appendKRaftVersionMessage(
-                                currentTimeMs,
-                                new KRaftVersionRecord()
-                                    .setVersion(ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION)
-                                    .setKRaftVersion(kraftVersionAtEpochStart.featureLevel())
-                            );
-                            builder.appendVotersMessage(
-                                currentTimeMs,
-                                voterSetAtEpochStart.toVotersRecord(
-                                    ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION
-                                )
-                            );
-                        }
+
+                        builder.appendKRaftVersionMessage(
+                            currentTimeMs,
+                            new KRaftVersionRecord()
+                                .setVersion(kraftVersionAtEpochStart.kraftVersionRecordVersion())
+                                .setKRaftVersion(kraftVersionAtEpochStart.featureLevel())
+                        );
+                        builder.appendVotersMessage(
+                            currentTimeMs,
+                            updatedVoterSet.toVotersRecord(
+                                kraftVersionAtEpochStart.votersRecordVersion()
+                            )
+                        );
                     }
-                });
+                }
 
                 return builder.build();
             }
         });
-        accumulator.forceDrain();
     }
 
     public long appendVotersRecord(VoterSet voters, long currentTimeMs) {
@@ -305,7 +384,7 @@ public class LeaderState<T> implements EpochState {
     }
 
     public boolean isReplicaCaughtUp(ReplicaKey replicaKey, long currentTimeMs) {
-        // In summary, let's consider a replica caughed up for add voter, if they
+        // In summary, let's consider a replica caught up for add voter, if they
         // have fetched within the last hour
         long anHourInMs = TimeUnit.HOURS.toMillis(1);
         return Optional.ofNullable(observerStates.get(replicaKey))
@@ -338,7 +417,16 @@ public class LeaderState<T> implements EpochState {
 
     @Override
     public Endpoints leaderEndpoints() {
-        return endpoints;
+        return localListeners;
+    }
+
+    Map<Integer, ReplicaState> voterStates() {
+        return voterStates;
+    }
+
+    Map<ReplicaKey, ReplicaState> observerStates(final long currentTimeMs) {
+        clearInactiveObservers(currentTimeMs);
+        return observerStates;
     }
 
     public Set<Integer> grantingVoters() {
@@ -349,8 +437,9 @@ public class LeaderState<T> implements EpochState {
     Set<ReplicaKey> nonAcknowledgingVoters() {
         Set<ReplicaKey> nonAcknowledging = new HashSet<>();
         for (ReplicaState state : voterStates.values()) {
-            if (!state.hasAcknowledgedLeader)
+            if (!state.hasAcknowledgedLeader) {
                 nonAcknowledging.add(state.replicaKey);
+            }
         }
         return nonAcknowledging;
     }
@@ -544,7 +633,7 @@ public class LeaderState<T> implements EpochState {
     private ReplicaState getOrCreateReplicaState(ReplicaKey replicaKey) {
         ReplicaState state = voterStates.get(replicaKey.id());
         if (state == null || !state.matchesKey(replicaKey)) {
-            observerStates.putIfAbsent(replicaKey, new ReplicaState(replicaKey, false));
+            observerStates.putIfAbsent(replicaKey, new ReplicaState(replicaKey, false, Endpoints.empty()));
             return observerStates.get(replicaKey);
         }
         return state;
@@ -557,58 +646,6 @@ public class LeaderState<T> implements EpochState {
         }
 
         return Optional.ofNullable(state);
-    }
-
-    public DescribeQuorumResponseData.PartitionData describeQuorum(long currentTimeMs) {
-        clearInactiveObservers(currentTimeMs);
-
-        return new DescribeQuorumResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code())
-            .setLeaderId(localReplicaKey.id())
-            .setLeaderEpoch(epoch)
-            .setHighWatermark(highWatermark.map(LogOffsetMetadata::offset).orElse(-1L))
-            .setCurrentVoters(describeReplicaStates(voterStates.values(), currentTimeMs))
-            .setObservers(describeReplicaStates(observerStates.values(), currentTimeMs));
-    }
-
-    public DescribeQuorumResponseData.NodeCollection nodes(long currentTimeMs) {
-        clearInactiveObservers(currentTimeMs);
-
-        // KAFKA-16953 will add support for including the node listeners in the node collection
-        return new DescribeQuorumResponseData.NodeCollection();
-    }
-
-    private List<DescribeQuorumResponseData.ReplicaState> describeReplicaStates(
-        Collection<ReplicaState> states,
-        long currentTimeMs
-    ) {
-        return states
-            .stream()
-            .map(replicaState -> describeReplicaState(replicaState, currentTimeMs))
-            .collect(Collectors.toList());
-    }
-
-    private DescribeQuorumResponseData.ReplicaState describeReplicaState(
-        ReplicaState replicaState,
-        long currentTimeMs
-    ) {
-        final long lastCaughtUpTimestamp;
-        final long lastFetchTimestamp;
-        if (replicaState.matchesKey(localReplicaKey)) {
-            lastCaughtUpTimestamp = currentTimeMs;
-            lastFetchTimestamp = currentTimeMs;
-        } else {
-            lastCaughtUpTimestamp = replicaState.lastCaughtUpTimestamp;
-            lastFetchTimestamp = replicaState.lastFetchTimestamp;
-        }
-
-        // KAFKA-16953 will add support for the replica directory id
-        return new DescribeQuorumResponseData.ReplicaState()
-            .setReplicaId(replicaState.replicaKey.id())
-            .setLogEndOffset(replicaState.endOffset.map(LogOffsetMetadata::offset).orElse(-1L))
-            .setLastCaughtUpTimestamp(lastCaughtUpTimestamp)
-            .setLastFetchTimestamp(lastFetchTimestamp);
-
     }
 
     /**
@@ -633,7 +670,7 @@ public class LeaderState<T> implements EpochState {
         // Compute the new voter states map
         for (VoterSet.VoterNode voterNode : lastVoterSet.voterNodes()) {
             ReplicaState state = getReplicaState(voterNode.voterKey())
-                .orElse(new ReplicaState(voterNode.voterKey(), false));
+                .orElse(new ReplicaState(voterNode.voterKey(), false, voterNode.listeners()));
 
             // Remove the voter from the previous data structures
             oldVoterStates.remove(voterNode.voterKey().id());
@@ -641,31 +678,57 @@ public class LeaderState<T> implements EpochState {
 
             // Make sure that the replica key in the replica state matches the voter's
             state.setReplicaKey(voterNode.voterKey());
+
+            // Make sure that the listeners are updated
+            state.updateListeners(voterNode.listeners());
             newVoterStates.put(state.replicaKey.id(), state);
         }
         voterStates = newVoterStates;
 
         // Move any of the remaining old voters to observerStates
         for (ReplicaState replicaStateEntry : oldVoterStates.values()) {
+            replicaStateEntry.clearListeners();
             observerStates.putIfAbsent(replicaStateEntry.replicaKey, replicaStateEntry);
         }
     }
 
-    private static class ReplicaState implements Comparable<ReplicaState> {
-        ReplicaKey replicaKey;
-        Optional<LogOffsetMetadata> endOffset;
-        long lastFetchTimestamp;
-        long lastFetchLeaderLogEndOffset;
-        long lastCaughtUpTimestamp;
-        boolean hasAcknowledgedLeader;
+    public static class ReplicaState implements Comparable<ReplicaState> {
+        private ReplicaKey replicaKey;
+        private Endpoints listeners;
+        private Optional<LogOffsetMetadata> endOffset;
+        private long lastFetchTimestamp;
+        private long lastFetchLeaderLogEndOffset;
+        private long lastCaughtUpTimestamp;
+        private boolean hasAcknowledgedLeader;
 
-        public ReplicaState(ReplicaKey replicaKey, boolean hasAcknowledgedLeader) {
+        public ReplicaState(ReplicaKey replicaKey, boolean hasAcknowledgedLeader, Endpoints listeners) {
             this.replicaKey = replicaKey;
+            this.listeners = listeners;
             this.endOffset = Optional.empty();
             this.lastFetchTimestamp = -1;
             this.lastFetchLeaderLogEndOffset = -1;
             this.lastCaughtUpTimestamp = -1;
             this.hasAcknowledgedLeader = hasAcknowledgedLeader;
+        }
+
+        public ReplicaKey replicaKey() {
+            return replicaKey;
+        }
+
+        public Endpoints listeners() {
+            return listeners;
+        }
+
+        public Optional<LogOffsetMetadata> endOffset() {
+            return endOffset;
+        }
+
+        public long lastFetchTimestamp() {
+            return lastFetchTimestamp;
+        }
+
+        public long lastCaughtUpTimestamp() {
+            return lastCaughtUpTimestamp;
         }
 
         void setReplicaKey(ReplicaKey replicaKey) {
@@ -690,6 +753,14 @@ public class LeaderState<T> implements EpochState {
             }
 
             this.replicaKey = replicaKey;
+        }
+
+        void updateListeners(Endpoints listeners) {
+            this.listeners = listeners;
+        }
+
+        void clearListeners() {
+            updateListeners(Endpoints.empty());
         }
 
         boolean matchesKey(ReplicaKey replicaKey) {
@@ -789,8 +860,8 @@ public class LeaderState<T> implements EpochState {
 
     @Override
     public void close() {
-        addVoterHandlerState.ifPresent(AddVoterHandlerState::close);
-        addVoterHandlerState = Optional.empty();
+        resetAddVoterHandlerState(Errors.NOT_LEADER_OR_FOLLOWER, null, Optional.empty());
+        resetRemoveVoterHandlerState(Errors.NOT_LEADER_OR_FOLLOWER, null, Optional.empty());
 
         accumulator.close();
     }

@@ -34,7 +34,6 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
@@ -127,21 +126,6 @@ public class TimeOrderedWindowStoreTest {
     @AfterEach
     public void closeStore() {
         cachingStore.close();
-    }
-
-    @SuppressWarnings("deprecation")
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldDelegateDeprecatedInit(final boolean hasIndex) {
-        setUp(hasIndex);
-        final RocksDBTimeOrderedWindowStore inner = mock(RocksDBTimeOrderedWindowStore.class);
-        when(inner.hasIndex()).thenReturn(hasIndex);
-        final TimeOrderedCachingWindowStore outer = new TimeOrderedCachingWindowStore(inner, WINDOW_SIZE, SEGMENT_INTERVAL);
-
-        reset(inner);
-        when(inner.name()).thenReturn("store");
-        outer.init((ProcessorContext) context, outer);
-        verify(inner).init((ProcessorContext) context, outer);
     }
 
     @ParameterizedTest

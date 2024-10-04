@@ -364,7 +364,6 @@ public class StateDirectory implements AutoCloseable {
         } else {
             lockedTasksToOwner.put(taskId, Thread.currentThread());
             // make sure the task directory actually exists, and create it if not
-            getOrCreateDirectoryForTask(taskId);
             return true;
         }
     }
@@ -680,5 +679,4 @@ public class StateDirectory implements AutoCloseable {
             return Objects.hash(file, namedTopology);
         }
     }
-
 }

@@ -46,7 +46,7 @@ public class RemoveRaftVoterResponse extends AbstractResponse {
 
     @Override
     public void maybeSetThrottleTimeMs(int throttleTimeMs) {
-        // not supported
+        data.setThrottleTimeMs(throttleTimeMs);
     }
 
     @Override

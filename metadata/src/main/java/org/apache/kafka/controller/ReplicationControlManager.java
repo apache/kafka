@@ -159,7 +159,6 @@ public class ReplicationControlManager {
         private short defaultReplicationFactor = (short) 3;
         private int defaultNumPartitions = 1;
 
-        private int defaultMinIsr = 1;
         private int maxElectionsPerImbalance = MAX_ELECTIONS_PER_IMBALANCE;
         private ConfigurationControlManager configurationControl = null;
         private ClusterControlManager clusterControl = null;
@@ -184,11 +183,6 @@ public class ReplicationControlManager {
 
         Builder setDefaultNumPartitions(int defaultNumPartitions) {
             this.defaultNumPartitions = defaultNumPartitions;
-            return this;
-        }
-
-        Builder setDefaultMinIsr(int defaultMinIsr) {
-            this.defaultMinIsr = defaultMinIsr;
             return this;
         }
 
@@ -237,7 +231,6 @@ public class ReplicationControlManager {
                 logContext,
                 defaultReplicationFactor,
                 defaultNumPartitions,
-                defaultMinIsr,
                 maxElectionsPerImbalance,
                 eligibleLeaderReplicasEnabled,
                 configurationControl,
@@ -310,11 +303,6 @@ public class ReplicationControlManager {
      * not specify a number of partitions.
      */
     private final int defaultNumPartitions;
-
-    /**
-     * The default min ISR that is used if a CreateTopics request does not specify one.
-     */
-    private final int defaultMinIsr;
 
     /**
      * True if eligible leader replicas is enabled.
@@ -409,7 +397,6 @@ public class ReplicationControlManager {
         LogContext logContext,
         short defaultReplicationFactor,
         int defaultNumPartitions,
-        int defaultMinIsr,
         int maxElectionsPerImbalance,
         boolean eligibleLeaderReplicasEnabled,
         ConfigurationControlManager configurationControl,
@@ -421,7 +408,6 @@ public class ReplicationControlManager {
         this.log = logContext.logger(ReplicationControlManager.class);
         this.defaultReplicationFactor = defaultReplicationFactor;
         this.defaultNumPartitions = defaultNumPartitions;
-        this.defaultMinIsr = defaultMinIsr;
         this.maxElectionsPerImbalance = maxElectionsPerImbalance;
         this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
         this.configurationControl = configurationControl;
@@ -1084,7 +1070,6 @@ public class ReplicationControlManager {
                     featureControl.metadataVersion(),
                     getTopicEffectiveMinIsr(topic.name)
                 )
-                    .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed())
                     .setEligibleLeaderReplicasEnabled(isElrEnabled());
                 if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name())) {
                     builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
@@ -1216,7 +1201,7 @@ public class ReplicationControlManager {
         }
 
         int[] newIsr = partitionData.newIsrWithEpochs().stream()
-            .mapToInt(brokerState -> brokerState.brokerId()).toArray();
+            .mapToInt(BrokerState::brokerId).toArray();
 
         if (!Replicas.validateIsr(partition.replicas, newIsr)) {
             log.error("Rejecting AlterPartition request from node {} for {}-{} because " +
@@ -1531,7 +1516,6 @@ public class ReplicationControlManager {
             getTopicEffectiveMinIsr(topic)
         )
             .setElection(election)
-            .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed())
             .setEligibleLeaderReplicasEnabled(isElrEnabled())
             .setDefaultDirProvider(clusterDescriber)
             .build();
@@ -1560,6 +1544,7 @@ public class ReplicationControlManager {
         if (states.current() != states.next()) {
             switch (states.next()) {
                 case FENCED:
+                case SHUTDOWN_NOW:
                     handleBrokerFenced(brokerId, records);
                     break;
                 case UNFENCED:
@@ -1567,9 +1552,6 @@ public class ReplicationControlManager {
                     break;
                 case CONTROLLED_SHUTDOWN:
                     handleBrokerInControlledShutdown(brokerId, brokerEpoch, records);
-                    break;
-                case SHUTDOWN_NOW:
-                    handleBrokerFenced(brokerId, records);
                     break;
             }
         }
@@ -1633,6 +1615,10 @@ public class ReplicationControlManager {
         return !imbalancedPartitions.isEmpty();
     }
 
+    boolean areSomePartitionsLeaderless() {
+        return brokersToIsrs.partitionsWithNoLeader().hasNext();
+    }
+
     /**
      * Attempt to elect a preferred leader for all topic partitions which have a leader that is not the preferred replica.
      *
@@ -1643,12 +1629,17 @@ public class ReplicationControlManager {
      */
     ControllerResult<Boolean> maybeBalancePartitionLeaders() {
         List<ApiMessageAndVersion> records = new ArrayList<>();
+        maybeTriggerLeaderChangeForPartitionsWithoutPreferredLeader(records, maxElectionsPerImbalance);
+        return ControllerResult.of(records, records.size() >= maxElectionsPerImbalance);
+    }
 
-        boolean rescheduleImmediately = false;
+    void maybeTriggerLeaderChangeForPartitionsWithoutPreferredLeader(
+        List<ApiMessageAndVersion> records,
+        int maxElections
+    ) {
         for (TopicIdPartition topicPartition : imbalancedPartitions) {
-            if (records.size() >= maxElectionsPerImbalance) {
-                rescheduleImmediately = true;
-                break;
+            if (records.size() >= maxElections) {
+                return;
             }
 
             TopicControlInfo topic = topics.get(topicPartition.topicId());
@@ -1673,13 +1664,56 @@ public class ReplicationControlManager {
                 getTopicEffectiveMinIsr(topic.name)
             )
                 .setElection(PartitionChangeBuilder.Election.PREFERRED)
-                .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed())
                 .setEligibleLeaderReplicasEnabled(isElrEnabled())
                 .setDefaultDirProvider(clusterDescriber)
                 .build().ifPresent(records::add);
         }
+    }
 
-        return ControllerResult.of(records, rescheduleImmediately);
+    /**
+     * Check if we can do an unclean election for partitions with no leader.
+     *
+     * The response() method in the return object is true if this method returned without electing all possible preferred replicas.
+     * The quorum controller should reschedule this operation immediately if it is true.
+     *
+     * @return All of the election records and true if there may be more elections to be done.
+     */
+    ControllerResult<Boolean> maybeElectUncleanLeaders() {
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        maybeTriggerUncleanLeaderElectionForLeaderlessPartitions(records, maxElectionsPerImbalance);
+        return ControllerResult.of(records, records.size() >= maxElectionsPerImbalance);
+    }
+
+    /**
+     * Trigger unclean leader election for partitions without leader (visiable for testing)
+     *
+     * @param records       The record list to append to.
+     * @param maxElections  The maximum number of elections to perform.
+     */
+    void maybeTriggerUncleanLeaderElectionForLeaderlessPartitions(
+            List<ApiMessageAndVersion> records,
+            int maxElections
+    ) {
+        Iterator<TopicIdPartition> iterator = brokersToIsrs.partitionsWithNoLeader();
+        while (iterator.hasNext() && records.size() < maxElections) {
+            TopicIdPartition topicIdPartition = iterator.next();
+            TopicControlInfo topic = topics.get(topicIdPartition.topicId());
+            if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
+                ApiError result = electLeader(topic.name, topicIdPartition.partitionId(),
+                        ElectionType.UNCLEAN, records);
+                if (result.error().equals(Errors.NONE)) {
+                    log.error("Triggering unclean leader election for offline partition {}-{}.",
+                            topic.name, topicIdPartition.partitionId());
+                } else {
+                    log.warn("Cannot trigger unclean leader election for offline partition {}-{}: {}",
+                            topic.name, topicIdPartition.partitionId(), result.error());
+                }
+            } else if (log.isDebugEnabled()) {
+                log.debug("Cannot trigger unclean leader election for offline partition {}-{} " +
+                                "because unclean leader election is disabled for this topic.",
+                        topic.name, topicIdPartition.partitionId());
+            }
+        }
     }
 
     ControllerResult<List<CreatePartitionsTopicResult>> createPartitions(
@@ -1899,7 +1933,6 @@ public class ReplicationControlManager {
                 featureControl.metadataVersion(),
                 getTopicEffectiveMinIsr(topic.name)
             );
-            builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
             builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
             if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
                 builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
@@ -2018,7 +2051,6 @@ public class ReplicationControlManager {
             featureControl.metadataVersion(),
             getTopicEffectiveMinIsr(topicName)
         );
-        builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
         builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
         if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicName)) {
             builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
@@ -2078,9 +2110,8 @@ public class ReplicationControlManager {
             tp.partitionId(),
             new LeaderAcceptor(clusterControl, part),
             featureControl.metadataVersion(),
-            getTopicEffectiveMinIsr(topics.get(tp.topicId()).name.toString())
+            getTopicEffectiveMinIsr(topics.get(tp.topicId()).name)
         );
-        builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
         builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
         if (!reassignment.replicas().equals(currentReplicas)) {
             builder.setTargetReplicas(reassignment.replicas());
@@ -2202,9 +2233,7 @@ public class ReplicationControlManager {
         for (int partitionId : partitionIds) {
             Optional<OngoingPartitionReassignment> ongoing =
                 getOngoingPartitionReassignment(topicInfo, partitionId);
-            if (ongoing.isPresent()) {
-                ongoingTopic.partitions().add(ongoing.get());
-            }
+            ongoing.ifPresent(ongoingPartitionReassignment -> ongoingTopic.partitions().add(ongoingPartitionReassignment));
         }
         if (!ongoingTopic.partitions().isEmpty()) {
             response.topics().add(ongoingTopic);
@@ -2226,14 +2255,8 @@ public class ReplicationControlManager {
 
     // Visible to test.
     int getTopicEffectiveMinIsr(String topicName) {
-        int currentMinIsr = defaultMinIsr;
-        String minIsrConfig = configurationControl.getTopicConfig(topicName, MIN_IN_SYNC_REPLICAS_CONFIG);
-        if (minIsrConfig != null) {
-            currentMinIsr = Integer.parseInt(minIsrConfig);
-        } else {
-            log.debug("Can't find the min isr config for topic: " + topicName + ". Use default value " + defaultMinIsr);
-        }
-        
+        String minIsrConfig = configurationControl.getTopicConfig(topicName, MIN_IN_SYNC_REPLICAS_CONFIG).value();
+        int currentMinIsr = Integer.parseInt(minIsrConfig);
         Uuid topicId = topicsByName.get(topicName);
         int replicationFactor = topics.get(topicId).parts.get(0).replicas.length;
         return Math.min(currentMinIsr, replicationFactor);

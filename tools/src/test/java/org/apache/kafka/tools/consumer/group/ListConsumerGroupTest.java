@@ -16,11 +16,6 @@
  */
 package org.apache.kafka.tools.consumer.group;
 
-import kafka.test.ClusterConfig;
-import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterTemplate;
-import kafka.test.junit.ClusterTestExtensions;
-
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -33,11 +28,14 @@ import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.test.api.ClusterConfig;
+import org.apache.kafka.common.test.api.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterTemplate;
+import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
 
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -67,7 +65,6 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.PARTITION_ASSIGNM
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 
-@Tag("integration")
 @ExtendWith(ClusterTestExtensions.class)
 public class ListConsumerGroupTest {
     private static final String TOPIC_PREFIX = "test.topic.";
@@ -82,10 +79,6 @@ public class ListConsumerGroupTest {
 
     private static List<ClusterConfig> defaultGenerator() {
         return ConsumerGroupCommandTestUtils.generator();
-    }
-
-    private static List<ClusterConfig> consumerProtocolOnlyGenerator() {
-        return ConsumerGroupCommandTestUtils.forConsumerGroupCoordinator();
     }
 
     private List<GroupProtocol> supportedGroupProtocols() {
@@ -245,7 +238,7 @@ public class ListConsumerGroupTest {
         }
     }
 
-    @ClusterTemplate("consumerProtocolOnlyGenerator")
+    @ClusterTemplate("defaultGenerator")
     public void testListConsumerGroupsWithTypesConsumerProtocol() throws Exception {
         GroupProtocol groupProtocol = GroupProtocol.CONSUMER;
         String topic = TOPIC_PREFIX + groupProtocol.name;
@@ -417,7 +410,7 @@ public class ListConsumerGroupTest {
         }
     }
 
-    @ClusterTemplate("consumerProtocolOnlyGenerator")
+    @ClusterTemplate("defaultGenerator")
     public void testListGroupCommandConsumerProtocol() throws Exception {
         GroupProtocol groupProtocol = GroupProtocol.CONSUMER;
         String topic = TOPIC_PREFIX + groupProtocol.name;

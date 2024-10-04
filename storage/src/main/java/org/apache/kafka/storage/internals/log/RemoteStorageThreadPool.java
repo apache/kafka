@@ -18,10 +18,10 @@ package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.internals.FatalExitError;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
@@ -34,7 +34,7 @@ import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.RE
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_STORAGE_THREAD_POOL_METRICS;
 
 public class RemoteStorageThreadPool extends ThreadPoolExecutor {
-    private final Logger logger;
+    private static final Logger LOGGER = LoggerFactory.getLogger(RemoteStorageThreadPool.class);
     private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup(this.getClass());
 
     @SuppressWarnings("this-escape")
@@ -43,8 +43,6 @@ public class RemoteStorageThreadPool extends ThreadPoolExecutor {
                                    int maxPendingTasks) {
         super(numThreads, numThreads, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(maxPendingTasks),
                 new RemoteStorageThreadFactory(threadNamePrefix));
-        logger = new LogContext("[" + Thread.currentThread().getName() + "]").logger(RemoteStorageThreadPool.class);
-
         metricsGroup.newGauge(REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC.getName(),
                 () -> getQueue().size());
         metricsGroup.newGauge(REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC.getName(),
@@ -55,11 +53,11 @@ public class RemoteStorageThreadPool extends ThreadPoolExecutor {
     protected void afterExecute(Runnable runnable, Throwable th) {
         if (th != null) {
             if (th instanceof FatalExitError) {
-                logger.error("Stopping the server as it encountered a fatal error.");
+                LOGGER.error("Stopping the server as it encountered a fatal error.");
                 Exit.exit(((FatalExitError) th).statusCode());
             } else {
                 if (!isShutdown())
-                    logger.error("Error occurred while executing task: {}", runnable, th);
+                    LOGGER.error("Error occurred while executing task: {}", runnable, th);
             }
         }
     }

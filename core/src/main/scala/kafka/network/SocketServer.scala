@@ -48,6 +48,7 @@ import org.apache.kafka.network.{ConnectionQuotaEntity, ConnectionThrottledExcep
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.config.QuotaConfigs
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.quota.QuotaUtils
 import org.apache.kafka.server.util.FutureUtils
 import org.slf4j.event.Level
 
@@ -416,8 +417,8 @@ object SocketServer {
     channel: SocketChannel,
     logging: Logging
   ): Unit = {
-    CoreUtils.swallow(channel.socket().close(), logging, Level.ERROR)
-    CoreUtils.swallow(channel.close(), logging, Level.ERROR)
+    Utils.closeQuietly(channel.socket, "channel socket")
+    Utils.closeQuietly(channel, "channel")
   }
 }
 
@@ -608,9 +609,8 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
 
   private[network] val processors = new ArrayBuffer[Processor]()
   // Build the metric name explicitly in order to keep the existing name for compatibility
-  private val blockedPercentMeterMetricName = KafkaMetricsGroup.explicitMetricName(
-    "kafka.network",
-    "Acceptor",
+  private val backwardCompatibilityMetricGroup = new KafkaMetricsGroup("kafka.network", "Acceptor")
+  private val blockedPercentMeterMetricName = backwardCompatibilityMetricGroup.metricName(
     s"${metricPrefix()}AcceptorBlockedPercent",
     Map(ListenerMetricTag -> endPoint.listenerName.value).asJava)
   private val blockedPercentMeter = metricsGroup.newMeter(blockedPercentMeterMetricName,"blocked time", TimeUnit.NANOSECONDS)
@@ -708,8 +708,9 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
 
   private def closeAll(): Unit = {
     debug("Closing server socket, selector, and any throttled sockets.")
-    CoreUtils.swallow(serverChannel.close(), this, Level.ERROR)
-    CoreUtils.swallow(nioSelector.close(), this, Level.ERROR)
+    // The serverChannel will be null if Acceptor's thread is not started
+    Utils.closeQuietly(serverChannel, "Acceptor serverChannel")
+    Utils.closeQuietly(nioSelector, "Acceptor nioSelector")
     throttledSockets.foreach(throttledSocket => closeSocket(throttledSocket.socket, this))
     throttledSockets.clear()
   }

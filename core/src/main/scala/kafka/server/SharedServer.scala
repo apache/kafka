@@ -19,11 +19,10 @@ package kafka.server
 
 import kafka.raft.KafkaRaftManager
 import kafka.server.Server.MetricsPrefix
-import kafka.server.metadata.BrokerServerMetrics
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
+import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
 import org.apache.kafka.controller.metrics.ControllerMetadataMetrics
 import org.apache.kafka.image.MetadataProvenance
 import org.apache.kafka.image.loader.MetadataLoader
@@ -37,7 +36,7 @@ import org.apache.kafka.raft.Endpoints
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.{FaultHandler, LoggingFaultHandler, ProcessTerminatingFaultHandler}
-import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.metrics.{BrokerServerMetrics, KafkaYammerMetrics}
 
 import java.net.InetSocketAddress
 import java.util.Arrays
@@ -267,7 +266,7 @@ class SharedServer(
         sharedServerConfig.dynamicConfig.initialize(zkClientOpt = None, clientMetricsReceiverPluginOpt = None)
 
         if (sharedServerConfig.processRoles.contains(ProcessRole.BrokerRole)) {
-          brokerMetrics = BrokerServerMetrics(metrics)
+          brokerMetrics = new BrokerServerMetrics(metrics)
         }
         if (sharedServerConfig.processRoles.contains(ProcessRole.ControllerRole)) {
           controllerServerMetrics = new ControllerMetadataMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry()))
@@ -366,34 +365,22 @@ class SharedServer(
       if (snapshotGenerator != null) {
         CoreUtils.swallow(snapshotGenerator.beginShutdown(), this)
       }
-      if (loader != null) {
-        CoreUtils.swallow(loader.close(), this)
-        loader = null
-      }
-      if (metadataLoaderMetrics != null) {
-        CoreUtils.swallow(metadataLoaderMetrics.close(), this)
-        metadataLoaderMetrics = null
-      }
-      if (snapshotGenerator != null) {
-        CoreUtils.swallow(snapshotGenerator.close(), this)
-        snapshotGenerator = null
-      }
+      Utils.closeQuietly(loader, "loader")
+      loader = null
+      Utils.closeQuietly(metadataLoaderMetrics, "metadata loader metrics")
+      metadataLoaderMetrics = null
+      Utils.closeQuietly(snapshotGenerator, "snapshot generator")
+      snapshotGenerator = null
       if (raftManager != null) {
         CoreUtils.swallow(raftManager.shutdown(), this)
         raftManager = null
       }
-      if (controllerServerMetrics != null) {
-        CoreUtils.swallow(controllerServerMetrics.close(), this)
-        controllerServerMetrics = null
-      }
-      if (brokerMetrics != null) {
-        CoreUtils.swallow(brokerMetrics.close(), this)
-        brokerMetrics = null
-      }
-      if (metrics != null) {
-        CoreUtils.swallow(metrics.close(), this)
-        metrics = null
-      }
+      Utils.closeQuietly(controllerServerMetrics, "controller server metrics")
+      controllerServerMetrics = null
+      Utils.closeQuietly(brokerMetrics, "broker metrics")
+      brokerMetrics = null
+      Utils.closeQuietly(metrics, "metrics")
+      metrics = null
       CoreUtils.swallow(AppInfoParser.unregisterAppInfo(MetricsPrefix, sharedServerConfig.nodeId.toString, metrics), this)
       started = false
     }

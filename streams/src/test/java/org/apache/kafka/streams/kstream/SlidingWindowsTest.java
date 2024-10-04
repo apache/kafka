@@ -29,10 +29,8 @@ public class SlidingWindowsTest {
     private static final long ANY_SIZE = 123L;
     private static final long ANY_GRACE = 1024L;
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldSetTimeDifference() {
-        assertEquals(ANY_SIZE, SlidingWindows.withTimeDifferenceAndGrace(ofMillis(ANY_SIZE), ofMillis(3)).timeDifferenceMs());
         assertEquals(ANY_SIZE, SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(ANY_SIZE), ofMillis(ANY_GRACE)).timeDifferenceMs());
         assertEquals(ANY_SIZE, SlidingWindows.ofTimeDifferenceWithNoGrace(ofMillis(ANY_SIZE)).timeDifferenceMs());
     }

@@ -53,11 +53,13 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 
 import static java.time.Duration.ofMillis;
+import static java.time.Duration.ofMinutes;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 
 /**
@@ -66,7 +68,6 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.sa
  */
 @Timeout(600)
 @Tag("integration")
-@SuppressWarnings("deprecation")
 public class KStreamAggregationDedupIntegrationTest {
     private static final int NUM_BROKERS = 1;
     private static final long COMMIT_INTERVAL_MS = 300L;
@@ -117,7 +118,7 @@ public class KStreamAggregationDedupIntegrationTest {
     @AfterEach
     public void whenShuttingDown() throws IOException {
         if (kafkaStreams != null) {
-            kafkaStreams.close();
+            kafkaStreams.close(Duration.ofSeconds(60));
         }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
@@ -157,7 +158,7 @@ public class KStreamAggregationDedupIntegrationTest {
         produceMessages(secondBatchTimestamp);
 
         groupedStream
-            .windowedBy(TimeWindows.of(ofMillis(500L)))
+            .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(500L), ofMinutes(1L)))
             .reduce(reducer, Materialized.as("reduce-time-windows"))
             .toStream((windowedKey, value) -> windowedKey.key() + "@" + windowedKey.window().start())
             .to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
@@ -193,7 +194,7 @@ public class KStreamAggregationDedupIntegrationTest {
         produceMessages(timestamp);
 
         stream.groupByKey(Grouped.with(Serdes.Integer(), Serdes.String()))
-            .windowedBy(TimeWindows.of(ofMillis(500L)))
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(500L)))
             .count(Materialized.as("count-windows"))
             .toStream((windowedKey, value) -> windowedKey.key() + "@" + windowedKey.window().start())
             .to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));

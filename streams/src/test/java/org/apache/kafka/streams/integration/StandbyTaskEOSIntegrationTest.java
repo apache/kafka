@@ -30,7 +30,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
@@ -45,10 +44,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -69,7 +67,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * An integration test to verify the conversion of a dirty-closed EOS
  * task towards a standby task is safe across restarts of the application.
  */
-@SuppressWarnings("deprecation")
 @Tag("integration")
 @Timeout(600)
 public class StandbyTaskEOSIntegrationTest {
@@ -107,7 +104,7 @@ public class StandbyTaskEOSIntegrationTest {
         inputTopic = "input-" + safeTestName;
         outputTopic = "output-" + safeTestName;
         storeName = "store-" + safeTestName;
-        CLUSTER.deleteTopicsAndWait(inputTopic, outputTopic, appId + "-KSTREAM-AGGREGATE-STATE-STORE-0000000001-changelog");
+        CLUSTER.deleteTopics(inputTopic, outputTopic, appId + "-KSTREAM-AGGREGATE-STATE-STORE-0000000001-changelog");
         CLUSTER.createTopic(inputTopic, 1, 3);
         CLUSTER.createTopic(outputTopic, 1, 3);
     }
@@ -115,19 +112,18 @@ public class StandbyTaskEOSIntegrationTest {
     @AfterEach
     public void cleanUp() {
         if (streamInstanceOne != null) {
-            streamInstanceOne.close();
+            streamInstanceOne.close(Duration.ofSeconds(60));
         }
         if (streamInstanceTwo != null) {
-            streamInstanceTwo.close();
+            streamInstanceTwo.close(Duration.ofSeconds(60));
         }
         if (streamInstanceOneRecovery != null) {
-            streamInstanceOneRecovery.close();
+            streamInstanceOneRecovery.close(Duration.ofSeconds(60));
         }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
-    public void shouldSurviveWithOneTaskAsStandby(final String eosConfig) throws Exception {
+    @Test
+    public void shouldSurviveWithOneTaskAsStandby() throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             inputTopic,
             Collections.singletonList(
@@ -146,8 +142,8 @@ public class StandbyTaskEOSIntegrationTest {
 
         final CountDownLatch instanceLatch = new CountDownLatch(1);
 
-        streamInstanceOne = buildStreamWithDirtyStateDir(stateDirPath + "/" + appId + "-1/", instanceLatch, eosConfig);
-        streamInstanceTwo = buildStreamWithDirtyStateDir(stateDirPath + "/" + appId + "-2/", instanceLatch, eosConfig);
+        streamInstanceOne = buildStreamWithDirtyStateDir(stateDirPath + "/" + appId + "-1/", instanceLatch);
+        streamInstanceTwo = buildStreamWithDirtyStateDir(stateDirPath + "/" + appId + "-2/", instanceLatch);
 
         startApplicationAndWaitUntilRunning(asList(streamInstanceOne, streamInstanceTwo), Duration.ofSeconds(60));
 
@@ -162,13 +158,12 @@ public class StandbyTaskEOSIntegrationTest {
     }
 
     private KafkaStreams buildStreamWithDirtyStateDir(final String stateDirPath,
-                                                      final CountDownLatch recordProcessLatch,
-                                                      final String eosConfig) throws Exception {
+                                                      final CountDownLatch recordProcessLatch) throws Exception {
 
         final StreamsBuilder builder = new StreamsBuilder();
         final TaskId taskId = new TaskId(0, 0);
 
-        final Properties props = props(stateDirPath, eosConfig);
+        final Properties props = props(stateDirPath);
 
         final StateDirectory stateDirectory = new StateDirectory(
             new StreamsConfig(props), new MockTime(), true, false);
@@ -189,9 +184,8 @@ public class StandbyTaskEOSIntegrationTest {
         return new KafkaStreams(builder.build(), props);
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
-    public void shouldWipeOutStandbyStateDirectoryIfCheckpointIsMissing(final String eosConfig) throws Exception {
+    @Test
+    public void shouldWipeOutStandbyStateDirectoryIfCheckpointIsMissing() throws Exception {
         final long time = System.currentTimeMillis();
         final String base = TestUtils.tempDirectory(appId).getPath();
 
@@ -209,8 +203,8 @@ public class StandbyTaskEOSIntegrationTest {
             10L + time
         );
 
-        streamInstanceOne = buildWithDeduplicationTopology(base + "-1", eosConfig);
-        streamInstanceTwo = buildWithDeduplicationTopology(base + "-2", eosConfig);
+        streamInstanceOne = buildWithDeduplicationTopology(base + "-1");
+        streamInstanceTwo = buildWithDeduplicationTopology(base + "-2");
 
         // start first instance and wait for processing
         startApplicationAndWaitUntilRunning(streamInstanceOne);
@@ -277,7 +271,7 @@ public class StandbyTaskEOSIntegrationTest {
             2
         );
 
-        streamInstanceOneRecovery = buildWithDeduplicationTopology(base + "-1", eosConfig);
+        streamInstanceOneRecovery = buildWithDeduplicationTopology(base + "-1");
 
         // "restart" first client and wait for standby recovery
         // (could actually also be active, but it does not matter as long as we enable "state stores"
@@ -326,7 +320,7 @@ public class StandbyTaskEOSIntegrationTest {
     }
 
     @SuppressWarnings("deprecation")
-    private KafkaStreams buildWithDeduplicationTopology(final String stateDirPath, final String eosConfig) {
+    private KafkaStreams buildWithDeduplicationTopology(final String stateDirPath) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         builder.addStateStore(Stores.keyValueStoreBuilder(
@@ -336,7 +330,7 @@ public class StandbyTaskEOSIntegrationTest {
         );
         builder.<Integer, Integer>stream(inputTopic)
             .transform(
-                () -> new Transformer<Integer, Integer, KeyValue<Integer, Integer>>() {
+                () -> new org.apache.kafka.streams.kstream.Transformer<Integer, Integer, KeyValue<Integer, Integer>>() {
                     private KeyValueStore<Integer, Integer> store;
 
                     @SuppressWarnings("unchecked")
@@ -376,20 +370,20 @@ public class StandbyTaskEOSIntegrationTest {
             )
             .to(outputTopic);
 
-        return new KafkaStreams(builder.build(), props(stateDirPath, eosConfig));
+        return new KafkaStreams(builder.build(), props(stateDirPath));
     }
 
 
-    private Properties props(final String stateDirPath, final String eosConfig) {
+    private Properties props(final String stateDirPath) {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, stateDirPath);
         streamsConfiguration.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
-        streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
-        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
-        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
+        streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
+        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
         // need to set to zero to get predictable active/standby task assignments
         streamsConfiguration.put(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, 0);

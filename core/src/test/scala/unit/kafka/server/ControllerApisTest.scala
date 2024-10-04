@@ -21,7 +21,7 @@ import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.KRaftMetadataCache
-import kafka.test.MockController
+import org.apache.kafka.common.test.MockController
 import org.apache.kafka.clients.admin.AlterConfigOp
 import org.apache.kafka.common.Uuid.ZERO_UUID
 import org.apache.kafka.common.acl.AclOperation
@@ -52,9 +52,10 @@ import org.apache.kafka.common.{ElectionType, Uuid}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.apache.kafka.controller.{Controller, ControllerRequestContext, ResultOrError}
 import org.apache.kafka.image.publisher.ControllerRegistrationsPublisher
+import org.apache.kafka.network.metrics.RequestChannelMetrics
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
-import org.apache.kafka.server.common.{ApiMessageAndVersion, FinalizedFeatures, KRaftVersion, MetadataVersion, ProducerIdsBlock}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, FinalizedFeatures, KRaftVersion, MetadataVersion, ProducerIdsBlock, RequestLocal}
 import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs}
 import org.apache.kafka.server.util.FutureUtils
 import org.apache.kafka.storage.internals.log.CleanerConfig
@@ -103,7 +104,7 @@ class ControllerApisTest {
   private val nodeId = 1
   private val brokerRack = "Rack1"
   private val clientID = "Client1"
-  private val requestChannelMetrics: RequestChannel.Metrics = mock(classOf[RequestChannel.Metrics])
+  private val requestChannelMetrics: RequestChannelMetrics = mock(classOf[RequestChannelMetrics])
   private val requestChannel: RequestChannel = mock(classOf[RequestChannel])
   private val time = new MockTime
   private val clientQuotaManager: ClientQuotaManager = mock(classOf[ClientQuotaManager])
@@ -169,7 +170,6 @@ class ControllerApisTest {
       new SimpleApiVersionManager(
         ListenerType.CONTROLLER,
         true,
-        false,
         () => FinalizedFeatures.fromKRaftVersion(MetadataVersion.latestTesting())),
       metadataCache
     )
@@ -262,7 +262,7 @@ class ControllerApisTest {
     val fetchRequestData = new FetchRequestData()
     val request = buildRequest(new FetchRequest(fetchRequestData, ApiKeys.FETCH.latestVersion))
     controllerApis = createControllerApis(None, new MockController.Builder().build())
-    controllerApis.handle(request, RequestLocal.NoCaching)
+    controllerApis.handle(request, RequestLocal.noCaching)
 
 
     verify(raftManager).handleRequest(
@@ -496,6 +496,13 @@ class ControllerApisTest {
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName("interval.ms").
             setValue("100000").
+            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+        new AlterConfigsResource().
+          setResourceName("group-foo").
+          setResourceType(ConfigResource.Type.GROUP.id()).
+          setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
+            setName("consumer.session.timeout.ms").
+            setValue("50000").
             setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator()))
         ).iterator()))
     val request = buildRequest(new IncrementalAlterConfigsRequest.Builder(requestData).build(0))
@@ -524,7 +531,12 @@ class ControllerApisTest {
         setErrorCode(CLUSTER_AUTHORIZATION_FAILED.code()).
         setErrorMessage(CLUSTER_AUTHORIZATION_FAILED.message()).
         setResourceName("sub").
-        setResourceType(ConfigResource.Type.CLIENT_METRICS.id())),
+        setResourceType(ConfigResource.Type.CLIENT_METRICS.id()),
+      new AlterConfigsResourceResponse().
+        setErrorCode(GROUP_AUTHORIZATION_FAILED.code()).
+        setErrorMessage(GROUP_AUTHORIZATION_FAILED.message()).
+        setResourceName("group-foo").
+        setResourceType(ConfigResource.Type.GROUP.id())),
       response.data().responses().asScala.toSet)
   }
 
@@ -581,6 +593,27 @@ class ControllerApisTest {
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName("interval.ms").
             setValue("1").
+            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+        new AlterConfigsResource().
+          setResourceName("group-foo").
+          setResourceType(ConfigResource.Type.GROUP.id()).
+          setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
+            setName("consumer.session.timeout.ms").
+            setValue("50000").
+            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+        new AlterConfigsResource().
+          setResourceName("group-foo1").
+          setResourceType(ConfigResource.Type.GROUP.id()).
+          setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
+            setName("consumer.session.timeout.ms").
+            setValue("50000").
+            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+        new AlterConfigsResource().
+          setResourceName("group-foo1").
+          setResourceType(ConfigResource.Type.GROUP.id()).
+          setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
+            setName("consumer.session.timeout.ms").
+            setValue("50000").
             setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator()))
         ).iterator()))
     val request = buildRequest(new IncrementalAlterConfigsRequest.Builder(requestData).build(0))
@@ -624,7 +657,17 @@ class ControllerApisTest {
         setErrorCode(INVALID_REQUEST.code()).
         setErrorMessage("Duplicate resource.").
         setResourceName("sub1").
-        setResourceType(ConfigResource.Type.CLIENT_METRICS.id())),
+        setResourceType(ConfigResource.Type.CLIENT_METRICS.id()),
+      new AlterConfigsResourceResponse().
+        setErrorCode(if (denyAllAuthorizer) GROUP_AUTHORIZATION_FAILED.code() else NONE.code()).
+        setErrorMessage(if (denyAllAuthorizer) GROUP_AUTHORIZATION_FAILED.message() else null).
+        setResourceName("group-foo").
+        setResourceType(ConfigResource.Type.GROUP.id()),
+      new AlterConfigsResourceResponse().
+        setErrorCode(INVALID_REQUEST.code()).
+        setErrorMessage("Duplicate resource.").
+        setResourceName("group-foo1").
+        setResourceType(ConfigResource.Type.GROUP.id())),
       response.data().responses().asScala.toSet)
   }
 
@@ -1191,7 +1234,7 @@ class ControllerApisTest {
   ): T = {
     val req = buildRequest(request)
 
-    controllerApis.handle(req, RequestLocal.NoCaching)
+    controllerApis.handle(req, RequestLocal.noCaching)
 
     val capturedResponse: ArgumentCaptor[AbstractResponse] =
       ArgumentCaptor.forClass(classOf[AbstractResponse])

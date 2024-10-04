@@ -16,11 +16,6 @@
  */
 package org.apache.kafka.tools;
 
-import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterConfigProperty;
-import kafka.test.annotation.ClusterTest;
-import kafka.test.annotation.ClusterTestDefaults;
-import kafka.test.junit.ClusterTestExtensions;
 import kafka.utils.TestUtils;
 
 import org.apache.kafka.clients.admin.Admin;
@@ -29,9 +24,13 @@ import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
+import org.apache.kafka.common.test.api.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.server.common.AdminCommandFailedException;
 
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
@@ -72,7 +71,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
     @ClusterConfigProperty(key = "controlled.shutdown.retry.backoff.ms", value = "1000"),
     @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "2")
 })
-@Tag("integration")
 public class LeaderElectionCommandTest {
     private final ClusterInstance cluster;
     int broker2 = 1;

@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.server.common;
 
+import org.apache.kafka.common.feature.SupportedVersionRange;
+
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
@@ -40,7 +42,9 @@ public enum Features {
      * See {@link TestFeatureVersion} as an example. See {@link FeatureVersion} when implementing a new feature.
      */
     TEST_VERSION("test.feature.version", TestFeatureVersion.values()),
-    KRAFT_VERSION("kraft.version", KRaftVersion.values());
+    KRAFT_VERSION("kraft.version", KRaftVersion.values()),
+    TRANSACTION_VERSION("transaction.version", TransactionVersion.values()),
+    GROUP_VERSION("group.version", GroupVersion.values());
 
     public static final Features[] FEATURES;
     public static final List<Features> PRODUCTION_FEATURES;
@@ -77,8 +81,19 @@ public enum Features {
         return defaultValue(MetadataVersion.LATEST_PRODUCTION);
     }
 
+    public short minimumProduction() {
+        return featureVersions[0].featureLevel();
+    }
+
     public short latestTesting() {
         return featureVersions[featureVersions.length - 1].featureLevel();
+    }
+
+    public SupportedVersionRange supportedVersionRange() {
+        return new SupportedVersionRange(
+            minimumProduction(),
+            latestTesting()
+        );
     }
 
     /**
@@ -103,7 +118,7 @@ public enum Features {
      * For example, say feature X level x relies on feature Y level y:
      * if feature X >= x then throw an error if feature Y < y.
      *
-     * All feature levels above 0 require metadata.version=4 (IBP_3_3_IV0) in order to write the feature records to the cluster.
+     * All feature levels above 0 in kraft require metadata.version=4 (IBP_3_3_IV0) in order to write the feature records to the cluster.
      *
      * @param feature                   the feature we are validating
      * @param features                  the feature versions we have (or want to set)
@@ -146,6 +161,14 @@ public enum Features {
                 return level;
         }
         return level;
+    }
+
+    public static Features featureFromName(String featureName) {
+        for (Features features : FEATURES) {
+            if (features.name.equals(featureName))
+                return features;
+        }
+        throw new IllegalArgumentException("Feature " + featureName + " not found.");
     }
 
     /**

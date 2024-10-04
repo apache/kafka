@@ -17,7 +17,8 @@
 package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.CoordinatorRecord;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
@@ -32,9 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentEpochRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentRecord;
+import java.util.Set;
 
 /**
  * Build a new Target Assignment based on the provided parameters. As a result,
@@ -147,6 +146,27 @@ public class TargetAssignmentBuilder<T extends ModernGroupMember> {
      */
     private Map<String, String> staticMembers = new HashMap<>();
 
+    public interface TargetAssignmentRecordBuilder {
+        CoordinatorRecord build(
+            final String groupId,
+            final String memberId,
+            final Map<Uuid, Set<Integer>> partitions
+       );
+    }
+
+    public interface TargetAssignmentEpochRecordBuilder {
+        CoordinatorRecord build(
+            final String groupId,
+            final int assignmentEpoch
+        );
+    }
+
+    private TargetAssignmentRecordBuilder targetAssignmentRecordBuilder =
+        GroupCoordinatorRecordHelpers::newConsumerGroupTargetAssignmentRecord;
+
+    private TargetAssignmentEpochRecordBuilder targetAssignmentEpochRecordBuilder =
+        GroupCoordinatorRecordHelpers::newConsumerGroupTargetAssignmentEpochRecord;
+
     /**
      * Constructs the object.
      *
@@ -255,6 +275,20 @@ public class TargetAssignmentBuilder<T extends ModernGroupMember> {
         return this;
     }
 
+    public TargetAssignmentBuilder<T> withTargetAssignmentRecordBuilder(
+        TargetAssignmentRecordBuilder targetAssignmentRecordBuilder
+    ) {
+        this.targetAssignmentRecordBuilder = targetAssignmentRecordBuilder;
+        return this;
+    }
+
+    public TargetAssignmentBuilder<T> withTargetAssignmentEpochRecordBuilder(
+        TargetAssignmentEpochRecordBuilder targetAssignmentEpochRecordBuilder
+    ) {
+        this.targetAssignmentEpochRecordBuilder = targetAssignmentEpochRecordBuilder;
+        return this;
+    }
+
     /**
      * Adds or updates a member. This is useful when the updated member is
      * not yet materialized in memory.
@@ -293,13 +327,14 @@ public class TargetAssignmentBuilder<T extends ModernGroupMember> {
      */
     public TargetAssignmentResult build() throws PartitionAssignorException {
         Map<String, MemberSubscriptionAndAssignmentImpl> memberSpecs = new HashMap<>();
+        TopicIds.TopicResolver topicResolver = new TopicIds.CachedTopicResolver(topicsImage);
 
         // Prepare the member spec for all members.
         members.forEach((memberId, member) ->
             memberSpecs.put(memberId, createMemberSubscriptionAndAssignment(
                 member,
                 targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
-                topicsImage
+                topicResolver
             ))
         );
 
@@ -321,7 +356,7 @@ public class TargetAssignmentBuilder<T extends ModernGroupMember> {
                 memberSpecs.put(memberId, createMemberSubscriptionAndAssignment(
                     updatedMemberOrNull,
                     assignment,
-                    topicsImage
+                    topicResolver
                 ));
             }
         });
@@ -356,7 +391,7 @@ public class TargetAssignmentBuilder<T extends ModernGroupMember> {
             if (!newMemberAssignment.equals(oldMemberAssignment)) {
                 // If the member had no assignment or had a different assignment, we
                 // create a record for the new assignment.
-                records.add(newTargetAssignmentRecord(
+                records.add(targetAssignmentRecordBuilder.build(
                     groupId,
                     memberId,
                     newMemberAssignment.partitions()
@@ -365,7 +400,7 @@ public class TargetAssignmentBuilder<T extends ModernGroupMember> {
         }
 
         // Bump the target assignment epoch.
-        records.add(newTargetAssignmentEpochRecord(groupId, groupEpoch));
+        records.add(targetAssignmentEpochRecordBuilder.build(groupId, groupEpoch));
 
         return new TargetAssignmentResult(records, newGroupAssignment.members());
     }
@@ -386,12 +421,12 @@ public class TargetAssignmentBuilder<T extends ModernGroupMember> {
     static <T extends ModernGroupMember> MemberSubscriptionAndAssignmentImpl createMemberSubscriptionAndAssignment(
         T member,
         Assignment memberAssignment,
-        TopicsImage topicsImage
+        TopicIds.TopicResolver topicResolver
     ) {
         return new MemberSubscriptionAndAssignmentImpl(
             Optional.ofNullable(member.rackId()),
             Optional.ofNullable(member.instanceId()),
-            new TopicIds(member.subscribedTopicNames(), topicsImage),
+            new TopicIds(member.subscribedTopicNames(), topicResolver),
             memberAssignment
         );
     }

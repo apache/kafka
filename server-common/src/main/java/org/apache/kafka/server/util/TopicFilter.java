@@ -54,7 +54,7 @@ public abstract class TopicFilter {
     }
 
     public static class IncludeList extends TopicFilter {
-        private final Logger log = LoggerFactory.getLogger(IncludeList.class);
+        private static final Logger log = LoggerFactory.getLogger(IncludeList.class);
         public IncludeList(String rawRegex) {
             super(rawRegex);
         }

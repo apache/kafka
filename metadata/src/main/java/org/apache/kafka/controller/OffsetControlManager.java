@@ -36,7 +36,7 @@ import java.util.Optional;
 
 /**
  * Manages read and write offsets, and in-memory snapshots.
- *
+ * <p>
  * Also manages the following metrics:
  *      kafka.controller:type=KafkaController,name=ActiveControllerCount
  *      kafka.controller:type=KafkaController,name=LastAppliedRecordLagMs
@@ -45,7 +45,7 @@ import java.util.Optional;
  *      kafka.controller:type=KafkaController,name=LastCommittedRecordOffset
  */
 class OffsetControlManager {
-    public static class Builder {
+    static class Builder {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
         private QuorumControllerMetrics metrics = null;
@@ -71,11 +71,11 @@ class OffsetControlManager {
             return this;
         }
 
-        public OffsetControlManager build() {
+        OffsetControlManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
             if (metrics == null) {
-                metrics = new QuorumControllerMetrics(Optional.empty(), time, false);
+                metrics = new QuorumControllerMetrics(Optional.empty(), time);
             }
             return new OffsetControlManager(logContext,
                     snapshotRegistry,
@@ -156,7 +156,7 @@ class OffsetControlManager {
         this.lastStableOffset = -1L;
         this.transactionStartOffset = -1L;
         this.nextWriteOffset = -1L;
-        snapshotRegistry.getOrCreateSnapshot(-1L);
+        snapshotRegistry.idempotentCreateSnapshot(-1L);
         metrics.setActive(false);
         metrics.setLastCommittedRecordOffset(-1L);
         metrics.setLastAppliedRecordOffset(-1L);
@@ -249,7 +249,7 @@ class OffsetControlManager {
         // Before switching to active, create an in-memory snapshot at the last committed
         // offset. This is required because the active controller assumes that there is always
         // an in-memory snapshot at the last committed offset.
-        snapshotRegistry.getOrCreateSnapshot(lastStableOffset);
+        snapshotRegistry.idempotentCreateSnapshot(lastStableOffset);
         this.nextWriteOffset = newNextWriteOffset;
         metrics.setActive(true);
     }
@@ -280,6 +280,10 @@ class OffsetControlManager {
         this.lastCommittedOffset = batch.lastOffset();
         this.lastCommittedEpoch = batch.epoch();
         maybeAdvanceLastStableOffset();
+        handleCommitBatchMetrics(batch);
+    }
+
+    void handleCommitBatchMetrics(Batch<ApiMessageAndVersion> batch) {
         metrics.setLastCommittedRecordOffset(batch.lastOffset());
         if (!active()) {
             // On standby controllers, the last applied record offset is equals to the last
@@ -293,14 +297,14 @@ class OffsetControlManager {
      * Called by the active controller after it has invoked scheduleAtomicAppend to schedule some
      * records to be written.
      *
-     * @param endOffset The offset of the last record that was written.
+     * @param lastOffset The offset of the last record that was written.
      */
-    void handleScheduleAtomicAppend(long endOffset) {
-        this.nextWriteOffset = endOffset + 1;
+    void handleScheduleAppend(long lastOffset) {
+        this.nextWriteOffset = lastOffset + 1;
 
-        snapshotRegistry.getOrCreateSnapshot(endOffset);
+        snapshotRegistry.idempotentCreateSnapshot(lastOffset);
 
-        metrics.setLastAppliedRecordOffset(endOffset);
+        metrics.setLastAppliedRecordOffset(lastOffset);
 
         // This is not truly the append timestamp. The KRaft client doesn't expose the append
         // time when scheduling a write. This is good enough because this is called right after
@@ -323,7 +327,7 @@ class OffsetControlManager {
             lastStableOffset = newLastStableOffset;
             snapshotRegistry.deleteSnapshotsUpTo(lastStableOffset);
             if (!active()) {
-                snapshotRegistry.getOrCreateSnapshot(lastStableOffset);
+                snapshotRegistry.idempotentCreateSnapshot(lastStableOffset);
             }
         }
     }
@@ -362,7 +366,7 @@ class OffsetControlManager {
                     "current snapshot.");
         }
         log.info("Successfully loaded snapshot {}.", currentSnapshotName);
-        this.snapshotRegistry.getOrCreateSnapshot(currentSnapshotId.offset());
+        this.snapshotRegistry.idempotentCreateSnapshot(currentSnapshotId.offset());
         this.lastCommittedOffset = currentSnapshotId.offset();
         this.lastCommittedEpoch = currentSnapshotId.epoch();
         this.lastStableOffset = currentSnapshotId.offset();
@@ -383,7 +387,7 @@ class OffsetControlManager {
             throw new RuntimeException("Can't replay a BeginTransactionRecord at " + offset +
                 " because the transaction at " + transactionStartOffset + " was never closed.");
         }
-        snapshotRegistry.getOrCreateSnapshot(offset - 1);
+        snapshotRegistry.idempotentCreateSnapshot(offset - 1);
         transactionStartOffset = offset;
         log.info("Replayed {} at offset {}.", message, offset);
     }
