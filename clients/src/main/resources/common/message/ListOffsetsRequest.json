@@ -63,7 +63,7 @@
           "about": "The maximum number of offsets to report." }
       ]}
     ]},
-    { "name": "TimeoutMs", "type": "int32", "versions": "10+",
+    { "name": "TimeoutMs", "type": "int32", "versions": "10+", "ignorable": true,
       "about": "The timeout to await a response in milliseconds for requests that require reading from remote storage for topics enabled with tiered storage." }
   ]
 }

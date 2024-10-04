@@ -15,26 +15,17 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.metadata.migration;
+package org.apache.kafka.message.checker;
 
-import org.apache.kafka.common.acl.AccessControlEntry;
-import org.apache.kafka.common.resource.ResourcePattern;
+/**
+ * An exception thrown when a schema is evolved an invalid way.
+ */
+public class EvolutionException extends RuntimeException {
+    public EvolutionException(String message, Throwable t) {
+        super(message, t);
+    }
 
-import java.util.Collection;
-import java.util.Set;
-import java.util.function.BiConsumer;
-
-public interface AclMigrationClient {
-    ZkMigrationLeadershipState deleteResource(
-        ResourcePattern resourcePattern,
-        ZkMigrationLeadershipState state
-    );
-
-    ZkMigrationLeadershipState writeResourceAcls(
-        ResourcePattern resourcePattern,
-        Collection<AccessControlEntry> aclsToWrite,
-        ZkMigrationLeadershipState state
-    );
-
-    void iterateAcls(BiConsumer<ResourcePattern, Set<AccessControlEntry>> aclConsumer);
+    public EvolutionException(String message) {
+        super(message, null);
+    }
 }

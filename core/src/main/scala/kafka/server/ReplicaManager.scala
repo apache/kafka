@@ -290,7 +290,8 @@ class ReplicaManager(val config: KafkaConfig,
                      threadNamePrefix: Option[String] = None,
                      val brokerEpochSupplier: () => Long = () => -1,
                      addPartitionsToTxnManager: Option[AddPartitionsToTxnManager] = None,
-                     val directoryEventHandler: DirectoryEventHandler = DirectoryEventHandler.NOOP
+                     val directoryEventHandler: DirectoryEventHandler = DirectoryEventHandler.NOOP,
+                     val defaultActionQueue: ActionQueue = new DelayedActionQueue
                      ) extends Logging {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
@@ -740,11 +741,6 @@ class ReplicaManager(val config: KafkaConfig,
   def getLogDir(topicPartition: TopicPartition): Option[String] = {
     localLog(topicPartition).map(_.parentDir)
   }
-
-  /**
-   * TODO: move this action queue to handle thread so we can simplify concurrency handling
-   */
-  private val defaultActionQueue = new DelayedActionQueue
 
   def tryCompleteActions(): Unit = defaultActionQueue.tryCompleteActions()
 
