@@ -80,7 +80,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import scala.collection.Seq;
-import scala.jdk.CollectionConverters;
+import scala.jdk.javaapi.CollectionConverters;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -92,7 +92,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static scala.jdk.CollectionConverters.IteratorHasAsScala;
 
 public class ConfigCommandTest {
     private static final String ZK_CONNECT = "localhost:2181";
@@ -1013,7 +1012,7 @@ public class ConfigCommandTest {
         addedConfigs.put("delete.retention.ms", "1000000");
         addedConfigs.put("min.insync.replicas", "2");
         if (file) {
-            File f = kafka.utils.TestUtils.tempPropertiesFile(CollectionConverters.MapHasAsScala(addedConfigs).asScala());
+            File f = kafka.utils.TestUtils.tempPropertiesFile(CollectionConverters.asScala(addedConfigs));
             filePath = f.getPath();
         }
 
@@ -2292,8 +2291,7 @@ public class ConfigCommandTest {
         }
     }
 
-    @SuppressWarnings({"deprecation"})
     private <T> Seq<T> seq(Collection<T> seq) {
-        return IteratorHasAsScala(seq.iterator()).asScala().toSeq();
+        return CollectionConverters.asScala(seq).toSeq();
     }
 }
