@@ -131,7 +131,7 @@ jobs:
           -PtestLoggingEvents=started,passed,skipped,failed \
           -PmaxParallelForks=2 \
           -PmaxTestRetries=1 -PmaxTestRetryFailures=3 \
-          -PmaxQuarantineTestRetries=3 -PmaxQuarantineTestRetryFailures=20 \
+          -PmaxQuarantineTestRetries=3 -PmaxQuarantineTestRetryFailures=0 \
           -PcommitId=xxxxxxxxxxxxxxxx \
           quarantinedTest test
           exitcode="$?"
