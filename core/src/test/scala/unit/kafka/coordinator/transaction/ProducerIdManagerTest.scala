@@ -180,7 +180,9 @@ class ProducerIdManagerTest {
   def testUnrecoverableErrors(error: Errors): Unit = {
     val time = new MockTime()
     val manager = new MockProducerIdManager(0, 0, 1, errorQueue = queue(Errors.NONE, error), time = time)
-
+    // two block requests are sent in this case:
+    // 1. the first generateProducerId(), there is no Producer ID available.
+    // 2. the second generateProducerId(), the second block request will fail.
     verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 0, 1), 0)
     verifyFailureWithoutGenerateProducerId(manager)
 
@@ -233,7 +235,7 @@ class ProducerIdManagerTest {
     }, "Expected failure")
     manager.capturedFailure.set(false)
   }
-
+  
   private def verifyNewBlockAndProducerId(manager: MockProducerIdManager,
                                           expectedBlock: ProducerIdsBlock,
                                           expectedPid: Long): Unit = {
