@@ -127,15 +127,6 @@ public interface Consumer<K, V> extends Closeable {
      */
     void unregisterMetricFromSubscription(KafkaMetric metric);
     /**
-     * @see KafkaConsumer#registerMetricForSubscription(KafkaMetric)
-     */
-    void registerMetricForSubscription(KafkaMetric metric);
-
-    /**
-     * @see KafkaConsumer#unregisterMetricFromSubscription(KafkaMetric)
-     */
-    void unregisterMetricFromSubscription(KafkaMetric metric);
-    /**
      * @see KafkaConsumer#seek(TopicPartition, long)
      */
     void seek(TopicPartition partition, long offset);

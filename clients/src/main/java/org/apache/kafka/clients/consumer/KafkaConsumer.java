@@ -1746,14 +1746,4 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     boolean updateAssignmentMetadataIfNeeded(final Timer timer) {
         return delegate.updateAssignmentMetadataIfNeeded(timer);
     }
-
-    @Override
-    public void registerMetricForSubscription(KafkaMetric metric) {
-        throw new UnsupportedOperationException("not implemented");
-    }
-
-    @Override
-    public void unregisterMetricFromSubscription(KafkaMetric metric) {
-        throw new UnsupportedOperationException("not implemented");
-    }
 }
