@@ -235,7 +235,7 @@ class ProducerIdManagerTest {
     }, "Expected failure")
     manager.capturedFailure.set(false)
   }
-  
+
   private def verifyNewBlockAndProducerId(manager: MockProducerIdManager,
                                           expectedBlock: ProducerIdsBlock,
                                           expectedPid: Long): Unit = {
