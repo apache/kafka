@@ -31,6 +31,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNo
 import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
 
+import java.util.concurrent.atomic.AtomicInteger
 import scala.jdk.CollectionConverters._
 
 @Timeout(120)
@@ -449,24 +450,26 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
           .setTopicId(barTopicId)
           .setPartitions(List[Integer](0, 1, 2).asJava)).asJava)
     // Prepare the next heartbeat for member.
+    val memberEpoch = new AtomicInteger(1)
     shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberId(memberId)
-        .setMemberEpoch(1),
+        .setMemberEpoch(memberEpoch.get()),
       true
     ).build()
 
-    Thread.sleep(1000)
     TestUtils.waitUntilTrue(() => {
       shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
+      memberEpoch.incrementAndGet()
       shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
         shareGroupHeartbeatResponse.data.assignment != null &&
         expectedAssignment.topicPartitions.containsAll(shareGroupHeartbeatResponse.data.assignment.topicPartitions) &&
         shareGroupHeartbeatResponse.data.assignment.topicPartitions.containsAll(expectedAssignment.topicPartitions)
     }, msg = s"Could not get partitions for topic foo and bar assigned. Last response $shareGroupHeartbeatResponse.")
     // Verify the response.
-    assertEquals(2, shareGroupHeartbeatResponse.data.memberEpoch)
+    val exceptedEpoch = memberEpoch.get()
+    assertEquals(exceptedEpoch, shareGroupHeartbeatResponse.data.memberEpoch)
     // Create the topic baz.
     val bazTopicId = TestUtils.createTopicWithAdminRaw(
       admin = admin,
@@ -490,7 +493,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberId(memberId)
-        .setMemberEpoch(2),
+        .setMemberEpoch(exceptedEpoch),
       true
     ).build()
 
@@ -502,7 +505,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
         shareGroupHeartbeatResponse.data.assignment.topicPartitions.containsAll(expectedAssignment.topicPartitions)
     }, msg = s"Could not get partitions for topic baz assigned. Last response $shareGroupHeartbeatResponse.")
     // Verify the response.
-    assertEquals(3, shareGroupHeartbeatResponse.data.memberEpoch)
+    assertEquals(exceptedEpoch + 1, shareGroupHeartbeatResponse.data.memberEpoch)
     // Increasing the partitions of topic bar which is already being consumed in the share group.
     increasePartitions(admin, "bar", 6, Seq.empty)
 
@@ -522,7 +525,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberId(memberId)
-        .setMemberEpoch(3),
+        .setMemberEpoch(exceptedEpoch + 1),
       true
     ).build()
 
@@ -534,7 +537,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
         shareGroupHeartbeatResponse.data.assignment.topicPartitions.containsAll(expectedAssignment.topicPartitions)
     }, msg = s"Could not update partitions assignment for topic bar. Last response $shareGroupHeartbeatResponse.")
     // Verify the response.
-    assertEquals(4, shareGroupHeartbeatResponse.data.memberEpoch)
+    assertEquals(exceptedEpoch + 2, shareGroupHeartbeatResponse.data.memberEpoch)
     // Delete the topic foo.
     TestUtils.deleteTopicWithAdmin(
       admin = admin,
@@ -556,7 +559,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberId(memberId)
-        .setMemberEpoch(4),
+        .setMemberEpoch(exceptedEpoch + 2),
       true
     ).build()
 
@@ -568,7 +571,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
         shareGroupHeartbeatResponse.data.assignment.topicPartitions.containsAll(expectedAssignment.topicPartitions)
     }, msg = s"Could not update partitions assignment for topic foo. Last response $shareGroupHeartbeatResponse.")
     // Verify the response.
-    assertEquals(5, shareGroupHeartbeatResponse.data.memberEpoch)
+    assertEquals(exceptedEpoch + 3, shareGroupHeartbeatResponse.data.memberEpoch)
   }
 
   @ClusterTest(
