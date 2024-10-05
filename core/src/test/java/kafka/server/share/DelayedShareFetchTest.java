@@ -358,12 +358,18 @@ public class DelayedShareFetchTest {
         doAnswer(invocation -> buildLogReadResult(Collections.singleton(tp1))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
         DelayedActionQueue delayedActionQueue = spy(new DelayedActionQueue());
+
+        SharePartitionManager sharePartitionManager = SharePartitionManagerTest.SharePartitionManagerBuilder
+            .builder()
+            .withDelayedShareFetchPurgatory(delayedShareFetchPurgatory)
+            .withDelayedActionsQueue(delayedActionQueue)
+            .build();
+
         DelayedShareFetch delayedShareFetch2 = DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetchData2)
             .withReplicaManager(replicaManager)
             .withPartitionCacheMap(partitionCacheMap)
-            .withDelayedActionQueue(delayedActionQueue)
-            .withDelayedShareFetchPurgatory(delayedShareFetchPurgatory)
+            .withSharePartitionManager(sharePartitionManager)
             .build();
 
         // sp1 can be acquired now
@@ -388,8 +394,7 @@ public class DelayedShareFetchTest {
         ShareFetchData shareFetchData = mock(ShareFetchData.class);
         private ReplicaManager replicaManager = mock(ReplicaManager.class);
         private Map<SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
-        private DelayedActionQueue delayedActionsQueue = mock(DelayedActionQueue.class);
-        private DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = mock(DelayedOperationPurgatory.class);
+        private SharePartitionManager sharePartitionManager = mock(SharePartitionManager.class);
 
         DelayedShareFetchBuilder withShareFetchData(ShareFetchData shareFetchData) {
             this.shareFetchData = shareFetchData;
@@ -406,13 +411,8 @@ public class DelayedShareFetchTest {
             return this;
         }
 
-        DelayedShareFetchBuilder withDelayedActionQueue(DelayedActionQueue delayedActionsQueue) {
-            this.delayedActionsQueue = delayedActionsQueue;
-            return this;
-        }
-
-        DelayedShareFetchBuilder withDelayedShareFetchPurgatory(DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory) {
-            this.delayedShareFetchPurgatory = delayedShareFetchPurgatory;
+        DelayedShareFetchBuilder withSharePartitionManager(SharePartitionManager sharePartitionManager) {
+            this.sharePartitionManager = sharePartitionManager;
             return this;
         }
 
@@ -425,8 +425,7 @@ public class DelayedShareFetchTest {
                 shareFetchData,
                 replicaManager,
                 partitionCacheMap,
-                delayedActionsQueue,
-                delayedShareFetchPurgatory);
+                sharePartitionManager);
         }
     }
 }

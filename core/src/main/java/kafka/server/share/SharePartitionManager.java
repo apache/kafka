@@ -74,6 +74,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import scala.jdk.javaapi.CollectionConverters;
+import scala.runtime.BoxedUnit;
 
 /**
  * The SharePartitionManager is responsible for managing the SharePartitions and ShareSessions.
@@ -323,6 +324,15 @@ public class SharePartitionManager implements AutoCloseable {
         });
     }
 
+    void addPurgatoryCheckAndCompleteDelayedActionToActionQueue(Set<TopicIdPartition> topicIdPartitions, String groupId) {
+        delayedActionsQueue.add(() -> {
+            topicIdPartitions.forEach(topicIdPartition ->
+                delayedShareFetchPurgatory.checkAndComplete(
+                    new DelayedShareFetchKey(groupId, topicIdPartition)));
+            return BoxedUnit.UNIT;
+        });
+    }
+
     /**
      * The release session method is used to release the session for the memberId of respective group.
      * The method post removing session also releases acquired records for the respective member.
@@ -532,7 +542,7 @@ public class SharePartitionManager implements AutoCloseable {
 
     // Add the share fetch request to the delayed share fetch purgatory to process the fetch request if it can be
     // completed else watch until it can be completed/timeout.
-    private void addDelayedShareFetch(DelayedShareFetch delayedShareFetch, Set<DelayedShareFetchKey> keys) {
+    private void addDelayedShareFetch(DelayedShareFetch delayedShareFetch, Set<Object> keys) {
         delayedShareFetchPurgatory.tryCompleteElseWatch(delayedShareFetch,
             CollectionConverters.asScala(keys).toSeq().indices());
     }
@@ -606,13 +616,15 @@ public class SharePartitionManager implements AutoCloseable {
                 });
             });
 
-            Set<DelayedShareFetchKey> delayedShareFetchWatchKeys = new HashSet<>();
+            Set<Object> delayedShareFetchWatchKeys = new HashSet<>();
             shareFetchData.partitionMaxBytes().keySet().forEach(
-                topicIdPartition -> delayedShareFetchWatchKeys.add(
-                    new DelayedShareFetchKey(shareFetchData.groupId(), topicIdPartition)));
+                topicIdPartition -> {
+                    delayedShareFetchWatchKeys.add(new DelayedShareFetchKey(shareFetchData.groupId(), topicIdPartition));
+                    delayedShareFetchWatchKeys.add(topicIdPartition);
+                });
 
             // Add the share fetch to the delayed share fetch purgatory to process the fetch request.
-            addDelayedShareFetch(new DelayedShareFetch(shareFetchData, replicaManager, partitionCacheMap, delayedActionsQueue, delayedShareFetchPurgatory),
+            addDelayedShareFetch(new DelayedShareFetch(shareFetchData, replicaManager, partitionCacheMap, this),
                 delayedShareFetchWatchKeys);
 
             // Release the lock so that other threads can process the queue.

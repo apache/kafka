@@ -2288,7 +2288,7 @@ public class SharePartitionManagerTest {
         return CollectionConverters.asScala(logReadResults).toSeq();
     }
 
-    private static class SharePartitionManagerBuilder {
+    static class SharePartitionManagerBuilder {
         private ReplicaManager replicaManager = mock(ReplicaManager.class);
         private Time time = new MockTime();
         private ShareSessionCache cache = new ShareSessionCache(10, 1000);
@@ -2298,7 +2298,7 @@ public class SharePartitionManagerTest {
         private Metrics metrics = new Metrics();
         private ConcurrentLinkedQueue<ShareFetchData> fetchQueue = new ConcurrentLinkedQueue<>();
         private DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = mock(DelayedOperationPurgatory.class);
-        private final DelayedActionQueue delayedActionsQueue = mock(DelayedActionQueue.class);
+        private DelayedActionQueue delayedActionsQueue = mock(DelayedActionQueue.class);
 
         private SharePartitionManagerBuilder withReplicaManager(ReplicaManager replicaManager) {
             this.replicaManager = replicaManager;
@@ -2340,8 +2340,13 @@ public class SharePartitionManagerTest {
             return this;
         }
 
-        private SharePartitionManagerBuilder withDelayedShareFetchPurgatory(DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory) {
+        SharePartitionManagerBuilder withDelayedShareFetchPurgatory(DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory) {
             this.delayedShareFetchPurgatory = delayedShareFetchPurgatory;
+            return this;
+        }
+
+        SharePartitionManagerBuilder withDelayedActionsQueue(DelayedActionQueue delayedActionsQueue) {
+            this.delayedActionsQueue = delayedActionsQueue;
             return this;
         }
 
