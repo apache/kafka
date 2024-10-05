@@ -47,7 +47,7 @@ import org.apache.kafka.server.{AssignmentsManager, ClientMetricsManager, NodeTo
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, TopicIdPartition}
 import org.apache.kafka.server.config.ConfigType
-import org.apache.kafka.server.share.{NoOpShareStatePersister, Persister}
+import org.apache.kafka.server.share.persister.{NoOpShareStatePersister, Persister}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.{ClientMetricsReceiverPlugin, KafkaYammerMetrics}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
@@ -320,6 +320,11 @@ class BrokerServer(
           lifecycleManager.propagateDirectoryFailure(directoryId, config.logDirFailureTimeoutMs)
       }
 
+      /**
+       * TODO: move this action queue to handle thread so we can simplify concurrency handling
+       */
+      val defaultActionQueue = new DelayedActionQueue
+
       this._replicaManager = new ReplicaManager(
         config = config,
         metrics = metrics,
@@ -338,7 +343,8 @@ class BrokerServer(
         delayedRemoteFetchPurgatoryParam = None,
         brokerEpochSupplier = () => lifecycleManager.brokerEpoch,
         addPartitionsToTxnManager = Some(addPartitionsToTxnManager),
-        directoryEventHandler = directoryEventHandler
+        directoryEventHandler = directoryEventHandler,
+        defaultActionQueue = defaultActionQueue
       )
 
       /* start token manager */
@@ -423,6 +429,7 @@ class BrokerServer(
         config.shareGroupConfig.shareGroupPartitionMaxRecordLocks,
         config.shareGroupConfig.shareFetchPurgatoryPurgeIntervalRequests,
         persister,
+        defaultActionQueue,
         new Metrics()
       )
 
