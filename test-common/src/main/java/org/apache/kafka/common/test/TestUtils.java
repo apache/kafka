@@ -37,8 +37,7 @@ public class TestUtils {
 
     private static final long DEFAULT_POLL_INTERVAL_MS = 100;
     private static final long DEFAULT_MAX_WAIT_MS = 15000;
-
-
+    
     /**
      * Create an empty file in the default temporary-file directory, using the given prefix and suffix
      * to generate its name.
@@ -107,14 +106,14 @@ public class TestUtils {
     /**
      * uses default value of 15 seconds for timeout
      */
-    public static void waitForCondition(final TestCondition testCondition, final String conditionDetails) throws InterruptedException {
+    public static void waitForCondition(final Supplier<Boolean> testCondition, final String conditionDetails) throws InterruptedException {
         waitForCondition(testCondition, DEFAULT_MAX_WAIT_MS, () -> conditionDetails);
     }
 
     /**
      * uses default value of 15 seconds for timeout
      */
-    public static void waitForCondition(final TestCondition testCondition, final Supplier<String> conditionDetailsSupplier) throws InterruptedException {
+    public static void waitForCondition(final Supplier<Boolean> testCondition, final Supplier<String> conditionDetailsSupplier) throws InterruptedException {
         waitForCondition(testCondition, DEFAULT_MAX_WAIT_MS, conditionDetailsSupplier);
     }
 
@@ -124,7 +123,7 @@ public class TestUtils {
      * without unnecessarily increasing test time (as the condition is checked frequently). The longer timeout is needed to
      * avoid transient failures due to slow or overloaded machines.
      */
-    public static void waitForCondition(final TestCondition testCondition, final long maxWaitMs, String conditionDetails) throws InterruptedException {
+    public static void waitForCondition(final Supplier<Boolean> testCondition, final long maxWaitMs, String conditionDetails) throws InterruptedException {
         waitForCondition(testCondition, maxWaitMs, () -> conditionDetails);
     }
 
@@ -134,7 +133,7 @@ public class TestUtils {
      * without unnecessarily increasing test time (as the condition is checked frequently). The longer timeout is needed to
      * avoid transient failures due to slow or overloaded machines.
      */
-    static void waitForCondition(final TestCondition testCondition, final long maxWaitMs, Supplier<String> conditionDetailsSupplier) throws InterruptedException {
+    static void waitForCondition(final Supplier<Boolean> testCondition, final long maxWaitMs, Supplier<String> conditionDetailsSupplier) throws InterruptedException {
         waitForCondition(testCondition, maxWaitMs, DEFAULT_POLL_INTERVAL_MS, conditionDetailsSupplier);
     }
 
@@ -146,15 +145,15 @@ public class TestUtils {
      * machines.
      */
     static void waitForCondition(
-        final TestCondition testCondition,
-        final long maxWaitMs,
-        final long pollIntervalMs,
-        Supplier<String> conditionDetailsSupplier
+            final Supplier<Boolean> testCondition,
+            final long maxWaitMs,
+            final long pollIntervalMs,
+            Supplier<String> conditionDetailsSupplier
     ) throws InterruptedException {
         retryOnExceptionWithTimeout(maxWaitMs, pollIntervalMs, () -> {
             String conditionDetailsSupplied = conditionDetailsSupplier != null ? conditionDetailsSupplier.get() : null;
             String conditionDetails = conditionDetailsSupplied != null ? conditionDetailsSupplied : "";
-            if (!testCondition.conditionMet())
+            if (!testCondition.get()) 
                 throw new TimeoutException("Condition not met within timeout " + maxWaitMs + ". " + conditionDetails);
         });
     }
@@ -169,7 +168,7 @@ public class TestUtils {
      * @throws InterruptedException if the current thread is interrupted while waiting for {@code runnable} to complete successfully.
      */
     static void retryOnExceptionWithTimeout(final long timeoutMs,
-                                                   final ValuelessCallable runnable) throws InterruptedException {
+                                            final Runnable runnable) throws InterruptedException {
         retryOnExceptionWithTimeout(timeoutMs, DEFAULT_POLL_INTERVAL_MS, runnable);
     }
 
@@ -184,16 +183,14 @@ public class TestUtils {
      * @throws InterruptedException if the current thread is interrupted while waiting for {@code runnable} to complete successfully.
      */
     static void retryOnExceptionWithTimeout(final long timeoutMs,
-                                                   final long pollIntervalMs,
-                                                   final ValuelessCallable runnable) throws InterruptedException {
+                                            final long pollIntervalMs,
+                                            final Runnable runnable) throws InterruptedException {
         final long expectedEnd = System.currentTimeMillis() + timeoutMs;
 
         while (true) {
             try {
-                runnable.call();
+                runnable.run();
                 return;
-            } catch (final NoRetryException e) {
-                throw e;
             } catch (final AssertionError t) {
                 if (expectedEnd <= System.currentTimeMillis()) {
                     throw t;
