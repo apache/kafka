@@ -181,10 +181,8 @@ class ProducerIdManagerTest {
     val time = new MockTime()
     val manager = new MockProducerIdManager(0, 0, 1, errorQueue = queue(Errors.NONE, error), time = time)
 
-    Thread.sleep(1000)
     verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 0, 1), 0)
-    Thread.sleep(1000)
-    verifyFailure(manager)
+    verifyFailureWithoutGenerateProducerId(manager)
 
     time.sleep(RetryBackoffMs)
     verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 1, 1), 1)
@@ -224,6 +222,10 @@ class ProducerIdManagerTest {
 
   private def verifyFailure(manager: MockProducerIdManager): Unit = {
     assertCoordinatorLoadInProgressExceptionFailure(manager.generateProducerId())
+    verifyFailureWithoutGenerateProducerId(manager)
+  }  
+  
+  private def verifyFailureWithoutGenerateProducerId(manager: MockProducerIdManager): Unit = {
     TestUtils.waitUntilTrue(() => {
       manager synchronized {
         manager.capturedFailure.get
