@@ -31,7 +31,6 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNo
 import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
 
-import java.util.concurrent.atomic.AtomicInteger
 import scala.jdk.CollectionConverters._
 
 @Timeout(120)
@@ -450,26 +449,26 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
           .setTopicId(barTopicId)
           .setPartitions(List[Integer](0, 1, 2).asJava)).asJava)
     // Prepare the next heartbeat for member.
-    val memberEpoch = new AtomicInteger(1)
     shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberId(memberId)
-        .setMemberEpoch(memberEpoch.get()),
+        .setMemberEpoch(1),
       true
     ).build()
 
+    // in this section, we will want the response to contain the expected assignment. but it maybe not 
+    // reassignment in one request, thus the epoch version may be updated twice in this waitUntil block.
     TestUtils.waitUntilTrue(() => {
       shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
-      memberEpoch.incrementAndGet()
       shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
         shareGroupHeartbeatResponse.data.assignment != null &&
         expectedAssignment.topicPartitions.containsAll(shareGroupHeartbeatResponse.data.assignment.topicPartitions) &&
         shareGroupHeartbeatResponse.data.assignment.topicPartitions.containsAll(expectedAssignment.topicPartitions)
     }, msg = s"Could not get partitions for topic foo and bar assigned. Last response $shareGroupHeartbeatResponse.")
     // Verify the response.
-    val exceptedEpoch = memberEpoch.get()
-    assertEquals(exceptedEpoch, shareGroupHeartbeatResponse.data.memberEpoch)
+    assertTrue(shareGroupHeartbeatResponse.data.memberEpoch == 2 || shareGroupHeartbeatResponse.data.memberEpoch == 3)
+    val exceptedEpoch = shareGroupHeartbeatResponse.data.memberEpoch
     // Create the topic baz.
     val bazTopicId = TestUtils.createTopicWithAdminRaw(
       admin = admin,
