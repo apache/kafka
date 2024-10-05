@@ -26,8 +26,8 @@ import java.lang.annotation.Target;
 
 @Target({ElementType.TYPE, ElementType.METHOD})
 @Retention(RetentionPolicy.RUNTIME)
-@Tag("quarantined")
-public @interface Quarantined {
+@Tag("flaky")
+public @interface Flaky {
     /**
      * Required reference to a KAFKA Jira ticket.
      */

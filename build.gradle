@@ -504,7 +504,7 @@ subprojects {
 
     useJUnitPlatform {
       includeEngines 'junit-jupiter'
-      excludeTags 'quarantined'
+      excludeTags 'flaky'
     }
 
     develocity {
@@ -571,7 +571,7 @@ subprojects {
 
     useJUnitPlatform {
       includeEngines 'junit-jupiter'
-      includeTags 'quarantined'
+      includeTags 'flaky'
     }
 
     develocity {
