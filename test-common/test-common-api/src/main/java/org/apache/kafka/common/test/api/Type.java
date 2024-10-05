@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.test.api;
 
-import org.apache.kafka.common.test.RaftClusterInvocationContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 
 

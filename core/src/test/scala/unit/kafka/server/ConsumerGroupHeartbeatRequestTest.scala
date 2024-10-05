@@ -19,7 +19,7 @@ package kafka.server
 import org.apache.kafka.common.test.api.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterFeature, ClusterTest, Type}
 import org.apache.kafka.common.test.api.ClusterTestExtensions
-import org.apache.kafka.common.test.api.RaftClusterInvocationContext.RaftClusterInstance
+import org.apache.kafka.common.test.RaftClusterInstance
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}

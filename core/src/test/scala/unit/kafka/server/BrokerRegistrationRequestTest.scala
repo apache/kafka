@@ -18,7 +18,7 @@
 package kafka.server
 
 import org.apache.kafka.common.test.api.{AutoStart, ClusterConfigProperty, ClusterInstance, ClusterTest, ClusterTestExtensions, ClusterTests, Type}
-import org.apache.kafka.common.test.api.RaftClusterInvocationContext.RaftClusterInstance
+import org.apache.kafka.common.test.RaftClusterInstance
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.{BrokerRegistrationRequestData, CreateTopicsRequestData}
