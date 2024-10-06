@@ -19,10 +19,10 @@ MAX_SIZE=100
 
 pr_diff=$(gh pr view $PR_NUM -R $GITHUB_REPOSITORY --json additions,deletions)
 
-insertions=$(echo "$pr_diff" | jq -r '.additions')
+additions=$(echo "$pr_diff" | jq -r '.additions')
 deletions=$(echo "$pr_diff" | jq -r '.deletions')
 
-total_changes=$((insertions + deletions))
+total_changes=$((additions + deletions))
 if [ "$total_changes" -lt "$MAX_SIZE" ]; then
     gh issue edit $PR_NUM --add-label $LABEL_NAME -R $GITHUB_REPOSITORY
 else
