@@ -182,10 +182,10 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
         expectedAssignment.put(memberA, mkAssignment(
             mkTopicAssignment(topic1Uuid, 0, 1, 2),
-            mkTopicAssignment(topic3Uuid, 3, 5)
+            mkTopicAssignment(topic3Uuid, 4)
         ));
         expectedAssignment.put(memberB, mkAssignment(
-            mkTopicAssignment(topic3Uuid, 0, 1, 2, 4)
+            mkTopicAssignment(topic3Uuid, 0, 1, 2, 3, 5)
         ));
 
         assertAssignment(expectedAssignment, computedAssignment);
@@ -320,13 +320,14 @@ public class UniformHeterogeneousAssignmentBuilderTest {
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
         expectedAssignment.put(memberA, mkAssignment(
-            mkTopicAssignment(topic1Uuid, 0, 1, 2, 3, 4)
+            mkTopicAssignment(topic1Uuid, 0, 1, 2, 5)
         ));
         expectedAssignment.put(memberB, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 3),
             mkTopicAssignment(topic2Uuid, 0, 1, 2, 3)
         ));
         expectedAssignment.put(memberC, mkAssignment(
-            mkTopicAssignment(topic1Uuid, 5),
+            mkTopicAssignment(topic1Uuid, 4),
             mkTopicAssignment(topic3Uuid, 0, 1, 2, 3)
         ));
 
@@ -468,10 +469,10 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         ));
         expectedAssignment.put(memberB, mkAssignment(
             mkTopicAssignment(topic1Uuid, 1),
-            mkTopicAssignment(topic2Uuid, 1, 2, 5)
+            mkTopicAssignment(topic2Uuid, 1, 2, 6)
         ));
         expectedAssignment.put(memberC, mkAssignment(
-            mkTopicAssignment(topic2Uuid, 0, 3, 4, 6)
+            mkTopicAssignment(topic2Uuid, 0, 3, 4, 5)
         ));
 
         assertAssignment(expectedAssignment, computedAssignment);
