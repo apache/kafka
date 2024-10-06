@@ -140,22 +140,11 @@ public class ClientQuotaControlManager {
         Set<String> typeMatch = new HashSet<>();
 
         for (ClientQuotaFilterComponent component : quotaFilter.components()) {
-            if (component.entityType().isEmpty()) {
-                throw new InvalidRequestException("Invalid empty entity type.");
-            } else if (exactMatch.containsKey(component.entityType()) ||
-                    typeMatch.contains(component.entityType())) {
-                throw new InvalidRequestException("Entity type " + component.entityType() +
-                        " cannot appear more than once in the filter.");
-            }
-            if (!(component.entityType().equals(IP) || component.entityType().equals(USER) ||
-                    component.entityType().equals(CLIENT_ID))) {
-                throw new UnsupportedVersionException("Unsupported entity type " +
-                        component.entityType());
-            }
+            validate(exactMatch, typeMatch, component.entityType(), component);
 
             Optional<String> match = component.match();
 
-            if(match == null) {
+            if (match == null) {
                 exactMatch.put(component.entityType(), null);
             } else if (component.match().isPresent()) {
                 exactMatch.put(component.entityType(), component.match().get());
@@ -184,6 +173,21 @@ public class ClientQuotaControlManager {
         return results;
     }
 
+    private static void validate(Map<String, String> exactMatch, Set<String> typeMatch, String s, ClientQuotaFilterComponent component) {
+        if (s.isEmpty()) {
+            throw new InvalidRequestException("Invalid empty entity type.");
+        } else if (exactMatch.containsKey(s) ||
+                typeMatch.contains(s)) {
+            throw new InvalidRequestException("Entity type " + s +
+                    " cannot appear more than once in the filter.");
+        }
+        if (!(s.equals(IP) || s.equals(USER) ||
+                s.equals(CLIENT_ID))) {
+            throw new UnsupportedVersionException("Unsupported entity type " +
+                    s);
+        }
+    }
+
     private static boolean matches(ClientQuotaEntity entity,
                                    Map<String, String> exactMatch,
                                    Set<String> typeMatch,
@@ -208,19 +212,6 @@ public class ClientQuotaControlManager {
         }
         return true;
     }
-
-
-
-    private Map<ClientQuotaEntity, Map<String, Double>> handleDescribeClientQuotas(Optional<ClientQuotaFilterComponent> userComponent,
-                                       Optional<ClientQuotaFilterComponent> clientIdComponent, boolean strict) {
-        return Collections.emptyMap();
-    }
-
-    private Map<ClientQuotaEntity, Map<String, Double>> handleDescribeClientQuotas(Optional<ClientQuotaFilterComponent> ipComponent,
-                                                                               boolean strict) {
-        return Collections.emptyMap();
-    }
-
 
     /**
      * Apply a quota record to the in-memory state.
