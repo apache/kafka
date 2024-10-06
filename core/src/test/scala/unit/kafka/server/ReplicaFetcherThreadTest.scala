@@ -1314,7 +1314,6 @@ class ReplicaFetcherThreadTest {
     when(partition.localLogOrException).thenReturn(log)
     when(partition.appendRecordsToFollowerOrFutureReplica(any[MemoryRecords], any[Boolean])).thenReturn(appendInfo)
 
-    // In Scala 2.12, the partitionsWithNewHighWatermark buffer is cleared before the replicaManager mock is verified.
     // Capture the argument at the time of invocation.
     val completeDelayedFetchRequestsArgument = mutable.Buffer.empty[TopicPartition]
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
