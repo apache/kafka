@@ -51,7 +51,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
   private val _brokers = new mutable.ArrayBuffer[KafkaBroker]
 
   /**
-   * Get the list of brokers, which could be either BrokerServer objects or KafkaServer objects.
+   * Get the list of brokers.
    */
   def brokers: mutable.Buffer[KafkaBroker] = _brokers
 
@@ -102,9 +102,9 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     instanceConfigs
   }
 
-  def serverForId(id: Int): Option[KafkaServer] = servers.find(s => s.config.brokerId == id)
+  def serverForId(id: Int): Option[KafkaBroker] = brokers.find(s => s.config.brokerId == id)
 
-  def boundPort(server: KafkaServer): Int = server.boundPort(listenerName)
+  def boundPort(server: KafkaBroker): Int = server.boundPort(listenerName)
 
   def bootstrapServers(listenerName: ListenerName = listenerName): String = {
     TestUtils.bootstrapServers(_brokers, listenerName)
@@ -345,7 +345,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     }
   }
 
-  def getController(): KafkaServer = {
+  private def getController(): KafkaServer = {
     checkIsZKTest()
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     servers.filter(s => s.config.brokerId == controllerId).head

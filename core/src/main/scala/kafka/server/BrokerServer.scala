@@ -408,7 +408,7 @@ class BrokerServer(
       val fetchSessionCacheShards = (0 until NumFetchSessionCacheShards)
         .map(shardNum => new FetchSessionCacheShard(
           config.maxIncrementalFetchSessionCacheSlots / NumFetchSessionCacheShards,
-          KafkaServer.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS,
+          KafkaBroker.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS,
           sessionIdRange,
           shardNum
         ))
@@ -416,7 +416,7 @@ class BrokerServer(
 
       val shareFetchSessionCache : ShareSessionCache = new ShareSessionCache(
         config.shareGroupConfig.shareGroupMaxGroups * config.groupCoordinatorConfig.shareGroupMaxSize,
-        KafkaServer.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS)
+        KafkaBroker.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS)
 
       persister = NoOpShareStatePersister.getInstance()
 

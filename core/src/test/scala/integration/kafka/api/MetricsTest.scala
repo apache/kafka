@@ -14,7 +14,7 @@ package kafka.api
 
 import com.yammer.metrics.core.{Gauge, Histogram, Meter}
 import kafka.security.JaasTestUtils
-import kafka.server.KafkaServer
+import kafka.server.KafkaBroker
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
@@ -111,7 +111,6 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     val server = servers.head
     verifyBrokerMessageConversionMetrics(server, recordSize, tp)
     verifyBrokerErrorMetrics(servers.head)
-    verifyBrokerZkMetrics(server, topic)
 
     generateAuthenticationFailure(tp)
     verifyBrokerAuthenticationMetrics(server)
@@ -195,7 +194,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     }
   }
 
-  private def verifyBrokerAuthenticationMetrics(server: KafkaServer): Unit = {
+  private def verifyBrokerAuthenticationMetrics(server: KafkaBroker): Unit = {
     val metrics = server.metrics.metrics
     TestUtils.waitUntilTrue(() =>
       maxKafkaMetricValue("failed-authentication-total", metrics, "Broker", Some("socket-server-metrics")) > 0,
@@ -206,7 +205,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     verifyKafkaMetricRecorded("failed-authentication-total", metrics, "Broker", Some("socket-server-metrics"))
   }
 
-  private def verifyBrokerMessageConversionMetrics(server: KafkaServer, recordSize: Int, tp: TopicPartition): Unit = {
+  private def verifyBrokerMessageConversionMetrics(server: KafkaBroker, recordSize: Int, tp: TopicPartition): Unit = {
     val requestMetricsPrefix = "kafka.network:type=RequestMetrics"
     val requestBytes = verifyYammerMetricRecorded(s"$requestMetricsPrefix,name=RequestBytes,request=Produce")
     val tempBytes = verifyYammerMetricRecorded(s"$requestMetricsPrefix,name=TemporaryMemoryBytes,request=Produce")
@@ -222,21 +221,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     verifyYammerMetricRecorded(s"$requestMetricsPrefix,name=RequestBytes,request=Metadata")
   }
 
-  private def verifyBrokerZkMetrics(server: KafkaServer, topic: String): Unit = {
-    val histogram = yammerHistogram("kafka.server:type=ZooKeeperClientMetrics,name=ZooKeeperRequestLatencyMs")
-    // Latency is rounded to milliseconds, so check the count instead
-    val initialCount = histogram.count
-    servers.head.zkClient.getLeaderForPartition(new TopicPartition(topic, 0))
-    val newCount = histogram.count
-    assertTrue(newCount > initialCount, "ZooKeeper latency not recorded")
-
-    val min = histogram.min
-    assertTrue(min >= 0, s"Min latency should not be negative: $min")
-
-    assertEquals("CONNECTED", yammerMetricValue("SessionState"), s"Unexpected ZK state")
-  }
-
-  private def verifyBrokerErrorMetrics(server: KafkaServer): Unit = {
+  private def verifyBrokerErrorMetrics(server: KafkaBroker): Unit = {
 
     def errorMetricCount = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala.count(_.getName == "ErrorsPerSec")
 

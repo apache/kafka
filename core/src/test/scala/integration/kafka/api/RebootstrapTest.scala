@@ -16,7 +16,7 @@
  */
 package kafka.api
 
-import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.server.{KafkaConfig, KafkaBroker}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
@@ -26,8 +26,8 @@ import java.util.Properties
 abstract class RebootstrapTest extends AbstractConsumerTest {
   override def brokerCount: Int = 2
 
-  def server0: KafkaServer = serverForId(0).get
-  def server1: KafkaServer = serverForId(1).get
+  def server0: KafkaBroker = serverForId(0).get
+  def server1: KafkaBroker = serverForId(1).get
 
   override def generateConfigs: Seq[KafkaConfig] = {
     val overridingProps = new Properties()
