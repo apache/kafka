@@ -56,18 +56,16 @@ jobs:
             false
       - name: Set status to pending for re-runs
         if: ${{ github.run_attempt > 1 }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Use the built-in GitHub token
-          run: |
-            curl -X POST \
-              -H "Authorization: token $GITHUB_TOKEN" \
-              -H "Content-Type: application/json" \
-              -d '{
-                        "state": "pending",
-                        "context": "ci/build",
-                        "description": "Re-running all jobs",
-                        "target_url": "'${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'"
-              }'
+        run: |
+              curl -X POST \
+                -H "Authorization: token $GITHUB_TOKEN" \
+                -H "Content-Type: application/json" \
+                -d '{
+                    "state": "pending",
+                    "context": "ci/build",
+                    "description": "Re-running all jobs",
+                    "target_url": "'${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'"
+                    }'
       - name: Setup Gradle
         uses: ./.github/actions/setup-gradle
         with:
