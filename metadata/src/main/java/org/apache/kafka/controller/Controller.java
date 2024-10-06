@@ -354,13 +354,13 @@ public interface Controller extends AclMutator, AutoCloseable {
         boolean validateOnly
     );
 
-    /** FIXME: Doc
+    /**
      * Describe current quotas setting
      *
      * @param context           The controller request context.
      * @param quotaFilters      The list of quotas to filter
      *
-     * @return                  A future yielding a map of quota entities to error results.
+     * @return                  A future yielding a map of quota entities to quota results.
      */
     CompletableFuture<Map<ClientQuotaEntity, Map<String, Double>>> describeClientQuotas(
             ControllerRequestContext context,
