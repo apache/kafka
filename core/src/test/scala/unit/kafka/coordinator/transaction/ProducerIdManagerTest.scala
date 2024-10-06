@@ -24,6 +24,7 @@ import org.apache.kafka.common.errors.CoordinatorLoadInProgressException
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.AllocateProducerIdsResponse
+import org.apache.kafka.common.test.api.Flaky
 import org.apache.kafka.common.utils.{MockTime, Time}
 import org.apache.kafka.server.NodeToControllerChannelManager
 import org.apache.kafka.server.common.ProducerIdsBlock
@@ -40,6 +41,7 @@ import java.util.concurrent.{ConcurrentLinkedQueue, CountDownLatch, Executors, T
 import scala.collection.mutable
 import scala.util.{Failure, Success, Try}
 
+@Flaky("KAFKA-17654")
 class ProducerIdManagerTest {
 
   var brokerToController: NodeToControllerChannelManager = mock(classOf[NodeToControllerChannelManager])
