@@ -371,9 +371,9 @@ public class BootstrapControllersIntegrationTest {
             alterResult.all().get();
 
             TestUtils.waitForCondition(() -> {
-                        DescribeClientQuotasResult describeResult = admin.describeClientQuotas(ClientQuotaFilter.all());
-                        return describeResult.entities().get().get(entity).equals(quotas);
-                    }, "Timed out waiting for quota config to be propagated to all servers"
+                    DescribeClientQuotasResult describeResult = admin.describeClientQuotas(ClientQuotaFilter.all());
+                    return describeResult.entities().get().get(entity).equals(quotas);
+                }, "Timed out waiting for quota config to be propagated to all servers"
             );
         }
     }
