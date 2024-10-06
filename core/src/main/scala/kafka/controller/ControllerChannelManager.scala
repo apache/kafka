@@ -19,7 +19,6 @@ package kafka.controller
 import com.yammer.metrics.core.{Gauge, Timer}
 import kafka.cluster.Broker
 import kafka.server.KafkaConfig
-import kafka.utils.Implicits._
 import kafka.utils._
 import org.apache.kafka.clients._
 import org.apache.kafka.common._
@@ -524,11 +523,11 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
       else if (metadataVersion.isAtLeast(IBP_1_0_IV0)) 1
       else 0
 
-    leaderAndIsrRequestMap.forKeyValue { (broker, leaderAndIsrPartitionStates) =>
+    leaderAndIsrRequestMap.foreachEntry { (broker, leaderAndIsrPartitionStates) =>
       if (metadataInstance.liveOrShuttingDownBrokerIds.contains(broker)) {
         val leaderIds = mutable.Set.empty[Int]
         var numBecomeLeaders = 0
-        leaderAndIsrPartitionStates.forKeyValue { (topicPartition, state) =>
+        leaderAndIsrPartitionStates.foreachEntry { (topicPartition, state) =>
           leaderIds += state.leader
           val typeOfRequest = if (broker == state.leader) {
             numBecomeLeaders += 1
@@ -669,10 +668,10 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         handleStopReplicaResponse(stopReplicaResponse, brokerId, partitionErrorsForDeletingTopics.toMap)
     }
 
-    stopReplicaRequestMap.forKeyValue { (brokerId, partitionStates) =>
+    stopReplicaRequestMap.foreachEntry { (brokerId, partitionStates) =>
       if (metadataInstance.liveOrShuttingDownBrokerIds.contains(brokerId)) {
         if (traceEnabled)
-          partitionStates.forKeyValue { (topicPartition, partitionState) =>
+          partitionStates.foreachEntry { (topicPartition, partitionState) =>
             stateChangeLog.trace(s"Sending StopReplica request $partitionState to " +
               s"broker $brokerId for partition $topicPartition")
           }
@@ -680,7 +679,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         val brokerEpoch = metadataInstance.liveBrokerIdAndEpochs(brokerId)
         if (stopReplicaRequestVersion >= 3) {
           val stopReplicaTopicState = mutable.Map.empty[String, StopReplicaTopicState]
-          partitionStates.forKeyValue { (topicPartition, partitionState) =>
+          partitionStates.foreachEntry { (topicPartition, partitionState) =>
             val topicState = stopReplicaTopicState.getOrElseUpdate(topicPartition.topic,
               new StopReplicaTopicState().setTopicName(topicPartition.topic))
             topicState.partitionStates().add(partitionState)
@@ -699,7 +698,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
           val topicStatesWithDelete = mutable.Map.empty[String, StopReplicaTopicState]
           val topicStatesWithoutDelete = mutable.Map.empty[String, StopReplicaTopicState]
 
-          partitionStates.forKeyValue { (topicPartition, partitionState) =>
+          partitionStates.foreachEntry { (topicPartition, partitionState) =>
             val topicStates = if (partitionState.deletePartition()) {
               numPartitionStateWithDelete += 1
               topicStatesWithDelete

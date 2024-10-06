@@ -421,7 +421,7 @@ object TestUtils extends Logging {
         topic, numPartitions, replicationFactor.toShort).configs(configsMap)))
     } else {
       val assignment = new util.HashMap[Integer, util.List[Integer]]()
-      replicaAssignment.forKeyValue { case (k, v) =>
+      replicaAssignment.foreachEntry { case (k, v) =>
         val replicas = new util.ArrayList[Integer]
         v.foreach(r => replicas.add(r.asInstanceOf[Integer]))
         assignment.put(k.asInstanceOf[Integer], replicas)

@@ -326,7 +326,7 @@ except Exception as e:
 
 
 git.targz(rc_tag, f"kafka-{release_version}-src/", f"{artifacts_dir}/kafka-{release_version}-src.tgz")
-cmd("Building artifacts", "./gradlew clean && ./gradlewAll releaseTarGz", cwd=kafka_dir, env=jdk8_env, shell=True)
+cmd("Building artifacts", "./gradlew clean && ./gradlew releaseTarGz -PscalaVersion=2.13", cwd=kafka_dir, env=jdk8_env, shell=True)
 cmd("Copying artifacts", f"cp {kafka_dir}/core/build/distributions/* {artifacts_dir}", shell=True)
 cmd("Building docs", "./gradlew clean aggregatedJavadoc", cwd=kafka_dir, env=jdk17_env)
 cmd("Copying docs", f"cp -R {kafka_dir}/build/docs/javadoc {artifacts_dir}")
@@ -351,7 +351,7 @@ cmd("Zipping artifacts", f"tar -czf {artifact_name}.tar.gz {artifact_name}", cwd
 sftp.upload_artifacts(apache_id, artifacts_dir)
 
 confirm_or_fail("Going to build and upload mvn artifacts based on these settings:\n" + textfiles.read(global_gradle_props) + '\nOK?')
-cmd("Building and uploading archives", "./gradlewAll publish", cwd=kafka_dir, env=jdk8_env, shell=True)
+cmd("Building and uploading archives", "./gradlew publish -PscalaVersion=2.13", cwd=kafka_dir, env=jdk8_env, shell=True)
 cmd("Building and uploading archives", "mvn deploy -Pgpg-signing", cwd=os.path.join(kafka_dir, "streams/quickstart"), env=jdk8_env, shell=True)
 
 # TODO: Many of these suggested validation steps could be automated

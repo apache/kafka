@@ -27,7 +27,6 @@ import kafka.controller.StateChangeLogger
 import kafka.server.{BrokerFeatures, CachedControllerId, KRaftCachedControllerId, MetadataCache, ZkCachedControllerId}
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
-import kafka.utils.Implicits._
 import org.apache.kafka.admin.BrokerMetadata
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataPartitionState, UpdateMetadataTopicState}
@@ -74,7 +73,7 @@ object ZkMetadataCache {
     val topicIdToNewState = new util.HashMap[Uuid, UpdateMetadataTopicState]()
     requestTopicStates.forEach(state => topicIdToNewState.put(state.topicId(), state))
     val newRequestTopicStates = new util.ArrayList[UpdateMetadataTopicState]()
-    currentMetadata.topicNames.forKeyValue((id, name) => {
+    currentMetadata.topicNames.foreachEntry((id, name) => {
       try {
         Option(topicIdToNewState.get(id)) match {
           case None =>
@@ -560,7 +559,7 @@ class ZkMetadataCache(
       } else {
         //since kafka may do partial metadata updates, we start by copying the previous state
         val partitionStates = new mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataPartitionState]](metadataSnapshot.partitionStates.size)
-        metadataSnapshot.partitionStates.forKeyValue { (topic, oldPartitionStates) =>
+        metadataSnapshot.partitionStates.foreachEntry { (topic, oldPartitionStates) =>
           val copy = new mutable.LongMap[UpdateMetadataPartitionState](oldPartitionStates.size)
           copy ++= oldPartitionStates
           partitionStates(topic) = copy

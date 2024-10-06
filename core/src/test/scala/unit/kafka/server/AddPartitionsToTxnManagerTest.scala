@@ -18,7 +18,6 @@
 package kafka.server
 
 import com.yammer.metrics.core.{Histogram, Meter}
-import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
 import org.apache.kafka.common.errors.{AuthenticationException, SaslAuthenticationException, UnsupportedVersionException}
@@ -92,7 +91,7 @@ class AddPartitionsToTxnManagerTest {
   }
 
   private def setErrors(errors: mutable.Map[TopicPartition, Errors])(callbackErrors: Map[TopicPartition, Errors]): Unit = {
-    callbackErrors.forKeyValue(errors.put)
+    callbackErrors.foreachEntry(errors.put)
   }
 
   @Test

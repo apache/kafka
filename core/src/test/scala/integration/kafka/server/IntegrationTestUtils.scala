@@ -23,7 +23,6 @@ import java.nio.ByteBuffer
 import java.util.{Collections, Optional, Properties}
 import kafka.network.SocketServer
 import kafka.security.JaasTestUtils
-import kafka.utils.Implicits._
 import org.apache.kafka.clients.admin.{Admin, NewTopic}
 import org.apache.kafka.common.network.{ConnectionMode, ListenerName}
 import org.apache.kafka.common.protocol.ApiKeys
@@ -120,7 +119,7 @@ object IntegrationTestUtils {
     replicaAssignment: Map[Int, Seq[Int]]
   ): Unit = {
     val javaAssignment = new java.util.HashMap[Integer, java.util.List[Integer]]()
-    replicaAssignment.forKeyValue { (partitionId, assignment) =>
+    replicaAssignment.foreachEntry { (partitionId, assignment) =>
       javaAssignment.put(partitionId, assignment.map(Int.box).asJava)
     }
     val newTopic = new NewTopic(topic, javaAssignment)

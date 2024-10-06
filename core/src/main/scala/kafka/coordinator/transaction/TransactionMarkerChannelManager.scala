@@ -22,7 +22,6 @@ import kafka.coordinator.transaction.TransactionMarkerChannelManager.{LogAppendR
 import java.util
 import java.util.concurrent.{BlockingQueue, ConcurrentHashMap, LinkedBlockingQueue}
 import kafka.server.{KafkaConfig, MetadataCache}
-import kafka.utils.Implicits._
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.clients._
 import org.apache.kafka.common.metrics.Metrics
@@ -147,7 +146,7 @@ class TxnMarkerQueue(@volatile var destination: Node) extends Logging {
   }
 
   def forEachTxnTopicPartition[B](f:(Int, BlockingQueue[PendingCompleteTxnAndMarkerEntry]) => B): Unit =
-    markersPerTxnTopicPartition.forKeyValue { (partition, queue) =>
+    markersPerTxnTopicPartition.foreachEntry { (partition, queue) =>
       if (!queue.isEmpty) f(partition, queue)
     }
 

@@ -19,7 +19,6 @@ package kafka.server.epoch
 import kafka.cluster.BrokerEndPoint
 import kafka.server.KafkaConfig._
 import kafka.server._
-import kafka.utils.Implicits._
 import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
@@ -311,7 +310,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
 
     def leaderOffsetsFor(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
       val topics = new OffsetForLeaderTopicCollection(partitions.size)
-      partitions.forKeyValue { (topicPartition, leaderEpoch) =>
+      partitions.foreachEntry { (topicPartition, leaderEpoch) =>
         var topic = topics.find(topicPartition.topic)
         if (topic == null) {
           topic = new OffsetForLeaderTopic().setTopic(topicPartition.topic)

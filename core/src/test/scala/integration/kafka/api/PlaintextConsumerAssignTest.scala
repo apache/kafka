@@ -25,7 +25,6 @@ import org.apache.kafka.common.PartitionInfo
 import java.util.stream.Stream
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
-import org.junit.jupiter.params.provider.CsvSource
 
 /**
  * Integration tests for the consumer that covers logic related to manual assignment.
@@ -137,9 +136,7 @@ class PlaintextConsumerAssignTest extends AbstractConsumerTest {
 
   // partitionsFor not implemented in consumer group protocol and this test requires ZK also
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @CsvSource(Array(
-    "zk, classic"
-  ))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersZkOnly"))
   def testAssignAndConsumeWithLeaderChangeValidatingPositions(quorum: String, groupProtocol: String): Unit = {
     val numRecords = 10
     val producer = createProducer()
@@ -243,4 +240,7 @@ class PlaintextConsumerAssignTest extends AbstractConsumerTest {
 object PlaintextConsumerAssignTest {
   def getTestQuorumAndGroupProtocolParametersAll: Stream[Arguments] =
     BaseConsumerTest.getTestQuorumAndGroupProtocolParametersAll()
+
+  def getTestQuorumAndGroupProtocolParametersZkOnly: Stream[Arguments] =
+    BaseConsumerTest.getTestQuorumAndGroupProtocolParametersZkOnly()
 }

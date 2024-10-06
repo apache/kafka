@@ -24,7 +24,6 @@ import com.typesafe.scalalogging.Logger
 import kafka.network
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
-import kafka.utils.Implicits._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.EnvelopeResponseData
@@ -465,7 +464,7 @@ class RequestChannel(val queueSize: Int,
     requestQueue.take()
 
   def updateErrorMetrics(apiKey: ApiKeys, errors: collection.Map[Errors, Integer]): Unit = {
-    errors.forKeyValue { (error, count) =>
+    errors.foreachEntry { (error, count) =>
       metrics(apiKey.name).markErrorMeter(error, count)
     }
   }

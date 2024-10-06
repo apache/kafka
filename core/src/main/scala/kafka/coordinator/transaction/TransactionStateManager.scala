@@ -23,7 +23,6 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import kafka.server.{MetadataCache, ReplicaManager}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{Logging, Pool}
-import kafka.utils.Implicits._
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.ListTransactionsResponseData
@@ -237,7 +236,7 @@ class TransactionStateManager(brokerId: Int,
 
   private[transaction] def removeExpiredTransactionalIds(): Unit = {
     inReadLock(stateLock) {
-      transactionMetadataCache.forKeyValue { (partitionId, partitionCacheEntry) =>
+      transactionMetadataCache.foreachEntry { (partitionId, partitionCacheEntry) =>
         val transactionPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
         removeExpiredTransactionalIds(transactionPartition, partitionCacheEntry)
       }
@@ -250,7 +249,7 @@ class TransactionStateManager(brokerId: Int,
     tombstoneRecords: MemoryRecords
   ): Unit = {
     def removeFromCacheCallback(responses: collection.Map[TopicPartition, PartitionResponse]): Unit = {
-      responses.forKeyValue { (topicPartition, response) =>
+      responses.foreachEntry { (topicPartition, response) =>
         inReadLock(stateLock) {
           transactionMetadataCache.get(topicPartition.partition).foreach { txnMetadataCacheEntry =>
             expiredForPartition.foreach { idCoordinatorEpochAndMetadata =>
@@ -345,7 +344,7 @@ class TransactionStateManager(brokerId: Int,
         }
 
         val states = new java.util.ArrayList[ListTransactionsResponseData.TransactionState]
-        transactionMetadataCache.forKeyValue { (_, cache) =>
+        transactionMetadataCache.foreachEntry { (_, cache) =>
           cache.metadataPerTransactionalId.values.foreach { txnMetadata =>
             txnMetadata.inLock {
               if (shouldInclude(txnMetadata)) {
