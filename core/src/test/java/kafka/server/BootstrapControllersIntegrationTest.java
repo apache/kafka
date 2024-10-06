@@ -229,6 +229,12 @@ public class BootstrapControllersIntegrationTest {
     }
 
     @ClusterTest
+    public void testClientQuotasOperation(ClusterInstance clusterInstance) throws Exception {
+        testClientQuotasOperation(clusterInstance, true);
+        testClientQuotasOperation(clusterInstance, false);
+    }
+
+    @ClusterTest
     public void testIncrementalAlterConfigsByControllers(ClusterInstance clusterInstance) throws Exception {
         testIncrementalAlterConfigs(clusterInstance, true);
     }
@@ -236,26 +242,6 @@ public class BootstrapControllersIntegrationTest {
     @ClusterTest
     public void testIncrementalAlterConfigs(ClusterInstance clusterInstance) throws Exception {
         testIncrementalAlterConfigs(clusterInstance, false);
-    }
-
-    @ClusterTest
-    public void testClientQuotasOperation(ClusterInstance clusterInstance) throws Exception {
-        try (Admin admin = Admin.create(adminConfig(clusterInstance, true))) {
-            ClientQuotaEntity entity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, "user"));
-            Map<String, Double> quotas = new HashMap<>();
-            String testQuota = CONSUMER_BYTE_RATE_OVERRIDE_CONFIG;
-            Double limit = 1000.0;
-            quotas.put(testQuota, limit);
-            ClientQuotaAlteration alteration = new ClientQuotaAlteration(entity, singletonList(new ClientQuotaAlteration.Op(testQuota, limit)));
-            AlterClientQuotasResult alterResult = admin.alterClientQuotas(Collections.singleton(alteration));
-            alterResult.all().get();
-
-            TestUtils.waitForCondition(() -> {
-                    DescribeClientQuotasResult describeResult = admin.describeClientQuotas(ClientQuotaFilter.all());
-                    return describeResult.entities().get().get(entity).equals(quotas);
-                }, "Timed out waiting for quota config to be propagated to all servers"
-            );
-        }
     }
 
     private void testIncrementalAlterConfigs(ClusterInstance clusterInstance, boolean usingBootstrapControllers) throws Exception {
@@ -370,6 +356,25 @@ public class BootstrapControllersIntegrationTest {
             Collection<AclBinding> deletedAclBindings = admin.deleteAcls(Collections.singleton(AclBindingFilter.ANY)).all().get(1, TimeUnit.MINUTES);
             assertEquals(1, deletedAclBindings.size());
             assertEquals(aclBinding, deletedAclBindings.iterator().next());
+        }
+    }
+
+    private void testClientQuotasOperation(ClusterInstance clusterInstance, boolean usingBootrapController) throws Exception {
+        try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootrapController))) {
+            ClientQuotaEntity entity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, "user"));
+            Map<String, Double> quotas = new HashMap<>();
+            String testQuota = CONSUMER_BYTE_RATE_OVERRIDE_CONFIG;
+            Double limit = 1000.0;
+            quotas.put(testQuota, limit);
+            ClientQuotaAlteration alteration = new ClientQuotaAlteration(entity, singletonList(new ClientQuotaAlteration.Op(testQuota, limit)));
+            AlterClientQuotasResult alterResult = admin.alterClientQuotas(Collections.singleton(alteration));
+            alterResult.all().get();
+
+            TestUtils.waitForCondition(() -> {
+                        DescribeClientQuotasResult describeResult = admin.describeClientQuotas(ClientQuotaFilter.all());
+                        return describeResult.entities().get().get(entity).equals(quotas);
+                    }, "Timed out waiting for quota config to be propagated to all servers"
+            );
         }
     }
 }
