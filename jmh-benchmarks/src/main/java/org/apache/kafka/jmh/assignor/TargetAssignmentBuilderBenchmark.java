@@ -27,6 +27,7 @@ import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
 import org.apache.kafka.coordinator.group.modern.TargetAssignmentBuilder;
+import org.apache.kafka.coordinator.group.modern.TopicIds;
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.image.TopicsImage;
@@ -96,6 +97,8 @@ public class TargetAssignmentBuilderBenchmark {
 
     private TopicsImage topicsImage;
 
+    private TopicIds.TopicResolver topicResolver;
+
     private SubscribedTopicDescriber subscribedTopicDescriber;
 
     @Setup(Level.Trial)
@@ -133,6 +136,7 @@ public class TargetAssignmentBuilderBenchmark {
         );
 
         topicsImage = AssignorBenchmarkUtils.createTopicsImage(subscriptionMetadata);
+        topicResolver = new TopicIds.CachedTopicResolver(topicsImage);
 
         Map<Uuid, TopicMetadata> topicMetadata = AssignorBenchmarkUtils.createTopicMetadata(subscriptionMetadata);
         subscribedTopicDescriber = new SubscribedTopicDescriberImpl(topicMetadata);
@@ -144,7 +148,7 @@ public class TargetAssignmentBuilderBenchmark {
         this.groupSpec = AssignorBenchmarkUtils.createGroupSpec(
             members,
             subscriptionType,
-            topicsImage
+            topicResolver
         );
 
         GroupAssignment groupAssignment = partitionAssignor.assign(
