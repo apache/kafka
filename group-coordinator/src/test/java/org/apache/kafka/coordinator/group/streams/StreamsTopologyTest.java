@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.TopicInfo;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -28,11 +29,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.TopicInfo;
-import org.junit.jupiter.api.Test;
+
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class StreamsTopologyTest {
 

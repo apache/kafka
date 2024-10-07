@@ -23,6 +23,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.StreamsGroupInitializeRequest;
 import org.apache.kafka.common.requests.StreamsGroupInitializeResponse;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;

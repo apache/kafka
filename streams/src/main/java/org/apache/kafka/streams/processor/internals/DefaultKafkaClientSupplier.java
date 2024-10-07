@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Optional;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -30,6 +29,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.streams.KafkaClientSupplier;
 
 import java.util.Map;
+import java.util.Optional;
 
 public class DefaultKafkaClientSupplier implements KafkaClientSupplier {
     @Override

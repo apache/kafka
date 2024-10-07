@@ -68,7 +68,6 @@ import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager.Def
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
-import java.util.List;
 import org.slf4j.Logger;
 
 import java.time.Duration;
@@ -77,6 +76,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
