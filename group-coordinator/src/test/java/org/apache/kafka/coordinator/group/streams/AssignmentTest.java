@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberValue;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
