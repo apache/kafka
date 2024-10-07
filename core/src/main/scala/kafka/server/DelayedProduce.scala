@@ -21,7 +21,6 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.Lock
 import com.typesafe.scalalogging.Logger
 import com.yammer.metrics.core.Meter
-import kafka.utils.Implicits._
 import kafka.utils.Pool
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
@@ -65,7 +64,7 @@ class DelayedProduce(delayMs: Long,
   override lazy val logger: Logger = DelayedProduce.logger
 
   // first update the acks pending variable according to the error code
-  produceMetadata.produceStatus.forKeyValue { (topicPartition, status) =>
+  produceMetadata.produceStatus.foreachEntry { (topicPartition, status) =>
     if (status.responseStatus.error == Errors.NONE) {
       // Timeout error state will be cleared when required acks are received
       status.acksPending = true
@@ -90,7 +89,7 @@ class DelayedProduce(delayMs: Long,
    */
   override def tryComplete(): Boolean = {
     // check for each partition if it still has pending acks
-    produceMetadata.produceStatus.forKeyValue { (topicPartition, status) =>
+    produceMetadata.produceStatus.foreachEntry { (topicPartition, status) =>
       trace(s"Checking produce satisfaction for $topicPartition, current status $status")
       // skip those partitions that have already been satisfied
       if (status.acksPending) {
@@ -119,7 +118,7 @@ class DelayedProduce(delayMs: Long,
   }
 
   override def onExpiration(): Unit = {
-    produceMetadata.produceStatus.forKeyValue { (topicPartition, status) =>
+    produceMetadata.produceStatus.foreachEntry { (topicPartition, status) =>
       if (status.acksPending) {
         debug(s"Expiring produce request for partition $topicPartition with status $status")
         DelayedProduceMetrics.recordExpiration(topicPartition)
