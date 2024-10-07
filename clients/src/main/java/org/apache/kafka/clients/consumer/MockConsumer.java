@@ -26,6 +26,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.utils.LogContext;
 
 import java.time.Duration;
@@ -75,6 +76,8 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private boolean telemetryDisabled = false;
     private Uuid clientInstanceId;
     private int injectTimeoutExceptionCounter;
+
+    private final List<KafkaMetric> addedMetrics = new ArrayList<>();
 
     public MockConsumer(OffsetResetStrategy offsetResetStrategy) {
         this.subscriptions = new SubscriptionState(new LogContext(), offsetResetStrategy);
@@ -174,6 +177,16 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
         }
         subscriptions.assignFromSubscribed(assignedPartitions);
+    }
+
+    @Override
+    public void registerMetricForSubscription(KafkaMetric metric) {
+        addedMetrics.add(metric);
+    }
+
+    @Override
+    public void unregisterMetricFromSubscription(KafkaMetric metric) {
+        addedMetrics.remove(metric);
     }
 
     @Override
@@ -631,5 +644,9 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     public Duration lastPollTimeout() {
         return lastPollTimeout;
+    }
+
+    public List<KafkaMetric> addedMetrics() {
+        return Collections.unmodifiableList(addedMetrics);
     }
 }
