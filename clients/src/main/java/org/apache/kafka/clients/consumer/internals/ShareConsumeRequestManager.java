@@ -290,15 +290,15 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
      * @param acknowledgeRequestState Contains the acknowledgements to be sent.
      * @param currentTimeMs The current time in ms.
      * @param onCommitAsync Boolean to denote if the acknowledgements came from a commitAsync or not.
-     * @param isAsyncDone Boolean to indicate if the async request has been sent.
+     * @param isAsyncSent Boolean to indicate if the async request has been sent.
      *
      * @return Returns the request if it was built.
      */
     private Optional<UnsentRequest> maybeBuildRequest(AcknowledgeRequestState acknowledgeRequestState,
                                                       long currentTimeMs,
                                                       boolean onCommitAsync,
-                                                      AtomicBoolean isAsyncDone) {
-        boolean asyncDone = true;
+                                                      AtomicBoolean isAsyncSent) {
+        boolean asyncSent = true;
         try {
             if (acknowledgeRequestState == null || (!acknowledgeRequestState.onClose() && acknowledgeRequestState.isEmpty())) {
                 return Optional.empty();
@@ -316,13 +316,13 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
             if (!acknowledgeRequestState.canSendRequest(currentTimeMs)) {
                 // We wait for the backoff before we can send this request.
-                asyncDone = false;
+                asyncSent = false;
                 return Optional.empty();
             }
 
             UnsentRequest request = acknowledgeRequestState.buildRequest();
             if (request == null) {
-                asyncDone = false;
+                asyncSent = false;
                 return Optional.empty();
             }
 
@@ -330,7 +330,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             return Optional.of(request);
         } finally {
             if (onCommitAsync) {
-                isAsyncDone.set(asyncDone);
+                isAsyncSent.set(asyncSent);
             }
         }
     }
