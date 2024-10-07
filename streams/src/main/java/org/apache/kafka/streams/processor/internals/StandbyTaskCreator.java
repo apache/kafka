@@ -92,7 +92,7 @@ class StandbyTaskCreator {
                     partitions,
                     stateUpdaterEnabled);
 
-                final InternalProcessorContext<Object, Object> context = new ProcessorContextImpl(
+                final InternalProcessorContext<?, ?> context = new ProcessorContextImpl(
                     taskId,
                     applicationConfig,
                     stateManager,
@@ -147,7 +147,7 @@ class StandbyTaskCreator {
                                   final Set<TopicPartition> inputPartitions,
                                   final ProcessorTopology topology,
                                   final ProcessorStateManager stateManager,
-                                  final InternalProcessorContext<Object, Object> context) {
+                                  final InternalProcessorContext<?, ?> context) {
         final StandbyTask task = new StandbyTask(
             taskId,
             inputPartitions,

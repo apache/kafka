@@ -21,12 +21,14 @@ import java.io.{ByteArrayOutputStream, File, PrintStream}
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.util
-import java.util.Properties
+import java.util.{Optional, Properties}
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import net.sourceforge.argparse4j.inf.ArgumentParserException
+import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.common.{Features, MetadataVersion}
+import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
 import org.apache.kafka.metadata.properties.{MetaPropertiesEnsemble, PropertiesUtils}
 import org.apache.kafka.metadata.storage.FormatterException
 import org.apache.kafka.raft.QuorumConfig
@@ -37,6 +39,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 import scala.collection.mutable.ListBuffer
+import scala.jdk.CollectionConverters._
 
 @Timeout(value = 40)
 class StorageToolTest {
@@ -51,7 +54,7 @@ class StorageToolTest {
     properties
   }
 
-  val allFeatures = Features.FEATURES.toList
+  val testingFeatures = Features.FEATURES.toList.asJava
 
   @Test
   def testConfigToLogDirectories(): Unit = {
@@ -438,23 +441,17 @@ Found problem:
     stream: ByteArrayOutputStream,
     releaseVersion: String
   ): Int = {
-    val tempDir = TestUtils.tempDir()
-    try {
-      // Prepare the arguments list
-      val arguments = ListBuffer[String]("version-mapping")
+    // Prepare the arguments list
+    val arguments = ListBuffer[String]("version-mapping")
 
-      // Add the release version argument
-      if (releaseVersion != null) {
-        arguments += "--release-version"
-        arguments += releaseVersion
-      }
-
-      // Execute the StorageTool with the arguments
-      StorageTool.execute(arguments.toArray, new PrintStream(stream))
-
-    } finally {
-      Utils.delete(tempDir)
+    // Add the release version argument
+    if (releaseVersion != null) {
+      arguments += "--release-version"
+      arguments += releaseVersion
     }
+
+    // Execute the StorageTool with the arguments
+    StorageTool.execute(arguments.toArray, new PrintStream(stream))
   }
 
   @Test
@@ -470,7 +467,7 @@ Found problem:
       s"Output did not contain expected Metadata Version: $output"
     )
 
-    for (feature <- Features.values()) {
+    for (feature <- Features.PRODUCTION_FEATURES.asScala) {
       val featureLevel = feature.defaultValue(metadataVersion)
       assertTrue(output.contains(s"${feature.featureName()}=$featureLevel"),
         s"Output did not contain expected feature mapping: $output"
@@ -493,7 +490,7 @@ Found problem:
       s"Output did not contain expected Metadata Version: $output"
     )
 
-    for (feature <- Features.values()) {
+    for (feature <- Features.PRODUCTION_FEATURES.asScala) {
       val featureLevel = feature.defaultValue(metadataVersion)
       assertTrue(output.contains(s"${feature.featureName()}=$featureLevel"),
         s"Output did not contain expected feature mapping: $output"
@@ -512,7 +509,7 @@ Found problem:
       runVersionMappingCommand(stream, "2.9-IV2")
     })
 
-    assertEquals("Unsupported release version '2.9-IV2'." +
+    assertEquals("Unknown release version '2.9-IV2'." +
       " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION.version +
       " to " + MetadataVersion.LATEST_PRODUCTION.version, exception.getMessage
     )
@@ -521,9 +518,146 @@ Found problem:
       runVersionMappingCommand(stream, "invalid")
     })
 
-    assertEquals("Unsupported release version 'invalid'." +
+    assertEquals("Unknown release version 'invalid'." +
       " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION.version +
       " to " + MetadataVersion.LATEST_PRODUCTION.version, exception2.getMessage
     )
+  }
+
+  private def runFeatureDependenciesCommand(
+    stream: ByteArrayOutputStream,
+    features: Seq[String]
+  ): Int = {
+    val arguments = ListBuffer[String]("feature-dependencies")
+    features.foreach(feature => {
+      arguments += "--feature"
+      arguments += feature
+    })
+    StorageTool.execute(arguments.toArray, new PrintStream(stream))
+  }
+
+  @Test
+  def testTestingFeatureDependencies(): Unit = {
+    val stream = new ByteArrayOutputStream()
+    val namespace = StorageTool.parseArguments(Array("feature-dependencies", "--feature", "test.feature.version=2"))
+
+    StorageTool.runFeatureDependenciesCommand(namespace, new PrintStream(stream), testingFeatures)
+
+    val output = stream.toString.trim
+    System.out.println(output)
+
+    val latestTestingVersion = MetadataVersion.latestTesting()
+    val latestTestingVersionString = s"metadata.version=${latestTestingVersion.featureLevel()} (${latestTestingVersion.version()})"
+
+    val expectedOutput =
+      s"""test.feature.version=2 requires:
+         |    $latestTestingVersionString
+         |""".stripMargin.trim
+
+    assertEquals(expectedOutput, output)
+  }
+
+  @Test
+  def testMultipleFeatureDependencies(): Unit = {
+    val stream = new ByteArrayOutputStream()
+    val features = Seq("transaction.version=2", "group.version=1")
+
+    assertEquals(0, runFeatureDependenciesCommand(stream, features))
+
+    val output = stream.toString.trim
+    System.out.println(output)
+
+    val expectedOutput =
+      s"""transaction.version=2 has no dependencies.
+         |group.version=1 has no dependencies.
+         |""".stripMargin.trim
+
+    assertEquals(expectedOutput, output)
+  }
+
+  @Test
+  def testHandleFeatureDependenciesForFeatureWithNoDependencies(): Unit = {
+    val stream = new ByteArrayOutputStream()
+    assertEquals(0, runFeatureDependenciesCommand(stream, Seq("metadata.version=17")))
+
+    val output = stream.toString.trim
+
+    assertEquals("metadata.version=17 (3.7-IV2) has no dependencies.", output)
+  }
+
+  @Test
+  def testHandleFeatureDependenciesForUnknownFeature(): Unit = {
+    val stream = new ByteArrayOutputStream()
+    val exception = assertThrows(classOf[TerseFailure], () => {
+      runFeatureDependenciesCommand(stream, Seq("unknown.feature.version=1"))
+    })
+
+    assertEquals("Unknown feature: unknown.feature.version", exception.getMessage)
+  }
+
+  @Test
+  def testHandleFeatureDependenciesForFeatureWithUnknownFeatureVersion(): Unit = {
+    val stream = new ByteArrayOutputStream()
+    val exception = assertThrows(classOf[TerseFailure], () => {
+      runFeatureDependenciesCommand(stream, Seq("transaction.version=1000"))
+    })
+
+    assertEquals("Feature level 1000 is not supported for feature transaction.version", exception.getMessage)
+  }
+
+  @Test
+  def testHandleFeatureDependenciesForInvalidVersionFormat(): Unit = {
+    val stream = new ByteArrayOutputStream()
+
+    val exception = assertThrows(classOf[TerseFailure], () => {
+      runFeatureDependenciesCommand(stream, Seq("metadata.version=invalid"))
+    })
+
+    assertEquals("Invalid version format: invalid for feature metadata.version", exception.getMessage)
+  }
+
+  @Test
+  def testBootstrapScramRecords(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultDynamicQuorumProperties)
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    val arguments = ListBuffer[String](
+      "--release-version", "3.9-IV0",
+      "--add-scram", "SCRAM-SHA-512=[name=alice,password=changeit]",
+      "--add-scram", "SCRAM-SHA-512=[name=bob,password=changeit]"
+    )
+
+    assertEquals(0, runFormatCommand(stream, properties, arguments.toSeq))
+
+    // Not doing full SCRAM record validation since that's covered elsewhere.
+    // Just checking that we generate the correct number of records
+    val bootstrapMetadata = new BootstrapDirectory(availableDirs.head.toString, Optional.empty).read
+    val scramRecords = bootstrapMetadata.records().asScala
+      .filter(apiMessageAndVersion => apiMessageAndVersion.message().isInstanceOf[UserScramCredentialRecord])
+      .map(apiMessageAndVersion => apiMessageAndVersion.message().asInstanceOf[UserScramCredentialRecord])
+      .toList
+    assertEquals(2, scramRecords.size)
+    assertEquals("alice", scramRecords.head.name())
+    assertEquals("bob", scramRecords.last.name())
+  }
+
+  @Test
+  def testScramRecordsOldReleaseVersion(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultDynamicQuorumProperties)
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    val arguments = ListBuffer[String](
+      "--release-version", "3.4",
+      "--add-scram", "SCRAM-SHA-512=[name=alice,password=changeit]",
+      "--add-scram", "SCRAM-SHA-512=[name=bob,password=changeit]"
+    )
+
+    assertEquals(
+      "SCRAM is only supported in metadata.version 3.5-IV2 or later.",
+      assertThrows(classOf[FormatterException], () => runFormatCommand(stream, properties, arguments.toSeq)).getMessage)
   }
 }

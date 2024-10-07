@@ -24,7 +24,7 @@ import java.util.Properties
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import kafka.log.LogManager
 import kafka.server.{BrokerServer, KafkaConfig, ReplicaManager}
-import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
+import org.apache.kafka.common.test.{KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET
 import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ConfigEntry, NewTopic}
@@ -34,6 +34,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.coordinator.group.GroupCoordinator
+import org.apache.kafka.coordinator.share.ShareCoordinator
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataImageTest, MetadataProvenance}
 import org.apache.kafka.image.loader.LogDeltaManifest
 import org.apache.kafka.network.SocketServerConfigs
@@ -200,6 +201,7 @@ class BrokerMetadataPublisherTest {
       replicaManager,
       groupCoordinator,
       mock(classOf[TransactionCoordinator]),
+      Some(mock(classOf[ShareCoordinator])),
       mock(classOf[DynamicConfigPublisher]),
       mock(classOf[DynamicClientQuotaPublisher]),
       mock(classOf[ScramPublisher]),

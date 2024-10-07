@@ -379,7 +379,7 @@ public class IQv2StoreIntegrationTest {
         throws InterruptedException, IOException, ExecutionException, TimeoutException {
 
         CLUSTER.start();
-        CLUSTER.deleteAllTopicsAndWait(60 * 1000L);
+        CLUSTER.deleteAllTopics();
         final int partitions = 2;
         CLUSTER.createTopic(INPUT_TOPIC_NAME, partitions, 1);
 
@@ -754,7 +754,7 @@ public class IQv2StoreIntegrationTest {
     public void afterTest() {
         // only needed because some of the PAPI cases aren't added yet.
         if (kafkaStreams != null) {
-            kafkaStreams.close();
+            kafkaStreams.close(Duration.ofSeconds(60));
             kafkaStreams.cleanUp();
         }
     }

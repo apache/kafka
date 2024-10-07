@@ -332,28 +332,6 @@ public class StreamsBuilderTest {
                      processorSupplier.theCapturedProcessor().processed());
     }
 
-    @Deprecated
-    @Test
-    public void shouldProcessViaThroughTopic() {
-        final KStream<String, String> source = builder.stream("topic-source");
-        final KStream<String, String> through = source.through("topic-sink");
-
-        final MockApiProcessorSupplier<String, String, Void, Void> sourceProcessorSupplier = new MockApiProcessorSupplier<>();
-        source.process(sourceProcessorSupplier);
-
-        final MockApiProcessorSupplier<String, String, Void, Void> throughProcessorSupplier = new MockApiProcessorSupplier<>();
-        through.process(throughProcessorSupplier);
-
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic("topic-source", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            inputTopic.pipeInput("A", "aa");
-        }
-
-        assertEquals(Collections.singletonList(new KeyValueTimestamp<>("A", "aa", 0)), sourceProcessorSupplier.theCapturedProcessor().processed());
-        assertEquals(Collections.singletonList(new KeyValueTimestamp<>("A", "aa", 0)), throughProcessorSupplier.theCapturedProcessor().processed());
-    }
-
     @Test
     public void shouldProcessViaRepartitionTopic() {
         final KStream<String, String> source = builder.stream("topic-source");

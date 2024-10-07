@@ -221,11 +221,12 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      *                          created if it does not exist.
      *
      * @return A ConsumerGroupMember.
+     * @throws UnknownMemberIdException when the member does not exist and createIfNotExists is false.
      */
     public ConsumerGroupMember getOrMaybeCreateMember(
         String memberId,
         boolean createIfNotExists
-    ) {
+    ) throws UnknownMemberIdException {
         ConsumerGroupMember member = members.get(memberId);
         if (member != null) return member;
 
@@ -522,6 +523,40 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         members().forEach((memberId, member) ->
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId(), memberId))
         );
+
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord(groupId()));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord(groupId()));
+    }
+
+    /**
+     * Populates the list of records with tombstone(s) for deleting the group.
+     * If the removed member is the leaving member, create its tombstone with
+     * the joining member id.
+     *
+     * @param records           The list of records.
+     * @param leavingMemberId   The leaving member id.
+     * @param joiningMemberId   The joining member id.
+     */
+    public void createGroupTombstoneRecordsWithReplacedMember(
+        List<CoordinatorRecord> records,
+        String leavingMemberId,
+        String joiningMemberId
+    ) {
+        members().forEach((memberId, __) -> {
+            String removedMemberId = memberId.equals(leavingMemberId) ? joiningMemberId : memberId;
+            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId(), removedMemberId));
+        });
+
+        members().forEach((memberId, __) -> {
+            String removedMemberId = memberId.equals(leavingMemberId) ? joiningMemberId : memberId;
+            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId(), removedMemberId));
+        });
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord(groupId()));
+
+        members().forEach((memberId,  __) -> {
+            String removedMemberId = memberId.equals(leavingMemberId) ? joiningMemberId : memberId;
+            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId(), removedMemberId));
+        });
 
         records.add(GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord(groupId()));
         records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord(groupId()));

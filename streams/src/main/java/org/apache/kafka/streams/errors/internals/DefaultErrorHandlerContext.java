@@ -35,7 +35,7 @@ public class DefaultErrorHandlerContext implements ErrorHandlerContext {
     private final TaskId taskId;
 
     private final long timestamp;
-    private ProcessorContext processorContext;
+    private final ProcessorContext processorContext;
 
     public DefaultErrorHandlerContext(final ProcessorContext processorContext,
                                       final String topic,

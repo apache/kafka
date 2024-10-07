@@ -120,7 +120,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Timeout(600)
 @Tag("integration")
-@SuppressWarnings("deprecation")
 public class QueryableStateIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(QueryableStateIntegrationTest.class);
 
@@ -243,7 +242,7 @@ public class QueryableStateIntegrationTest {
             kafkaStreams.close(ofSeconds(30));
         }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
-        CLUSTER.deleteAllTopicsAndWait(0L);
+        CLUSTER.deleteAllTopics();
     }
 
     /**
@@ -271,7 +270,7 @@ public class QueryableStateIntegrationTest {
 
         // Create a Windowed State Store that contains the word count for every 1 minute
         groupedByWord
-            .windowedBy(TimeWindows.of(ofMillis(WINDOW_SIZE)))
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(WINDOW_SIZE)))
             .count(Materialized.as(windowStoreName + "-" + inputTopic))
             .toStream((key, value) -> key.key())
             .to(windowOutputTopic, Produced.with(Serdes.String(), Serdes.Long()));
@@ -1000,7 +999,7 @@ public class QueryableStateIntegrationTest {
 
         final String windowStoreName = "windowed-count";
         s1.groupByKey()
-            .windowedBy(TimeWindows.of(ofMillis(WINDOW_SIZE)))
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(WINDOW_SIZE)))
             .count(Materialized.as(windowStoreName));
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         startApplicationAndWaitUntilRunning(kafkaStreams);

@@ -25,6 +25,7 @@ import org.apache.kafka.common.protocol.{ByteBufferAccessor, MessageUtil}
 import org.apache.kafka.common.record.{Record, RecordBatch}
 import org.apache.kafka.common.{MessageFormatter, TopicPartition}
 import org.apache.kafka.coordinator.transaction.generated.{TransactionLogKey, TransactionLogValue}
+import org.apache.kafka.server.common.TransactionVersion
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
@@ -63,7 +64,7 @@ object TransactionLog {
     * @return value payload bytes
     */
   private[transaction] def valueToBytes(txnMetadata: TxnTransitMetadata,
-                                        usesFlexibleRecords: Boolean): Array[Byte] = {
+                                        transactionVersionLevel: TransactionVersion): Array[Byte] = {
     if (txnMetadata.txnState == Empty && txnMetadata.topicPartitions.nonEmpty)
         throw new IllegalStateException(s"Transaction is not expected to have any partitions since its state is ${txnMetadata.txnState}: $txnMetadata")
 
@@ -78,9 +79,7 @@ object TransactionLog {
 
     // Serialize with version 0 (highest non-flexible version) until transaction.version 1 is enabled
     // which enables flexible fields in records.
-    val version: Short =
-      if (usesFlexibleRecords) 1 else 0
-    MessageUtil.toVersionPrefixedBytes(version,
+    MessageUtil.toVersionPrefixedBytes(transactionVersionLevel.transactionLogValueVersion(),
       new TransactionLogValue()
         .setProducerId(txnMetadata.producerId)
         .setProducerEpoch(txnMetadata.producerEpoch)
@@ -88,7 +87,8 @@ object TransactionLog {
         .setTransactionStatus(txnMetadata.txnState.id)
         .setTransactionLastUpdateTimestampMs(txnMetadata.txnLastUpdateTimestamp)
         .setTransactionStartTimestampMs(txnMetadata.txnStartTimestamp)
-        .setTransactionPartitions(transactionPartitions))
+        .setTransactionPartitions(transactionPartitions)
+        .setClientTransactionVersion(txnMetadata.clientTransactionVersion.featureLevel()))
   }
 
   /**
@@ -124,14 +124,16 @@ object TransactionLog {
         val transactionMetadata = new TransactionMetadata(
           transactionalId = transactionalId,
           producerId = value.producerId,
-          lastProducerId = RecordBatch.NO_PRODUCER_ID,
+          previousProducerId = value.previousProducerId,
+          nextProducerId = value.nextProducerId,
           producerEpoch = value.producerEpoch,
           lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
           txnTimeoutMs = value.transactionTimeoutMs,
           state = TransactionState.fromId(value.transactionStatus),
           topicPartitions = mutable.Set.empty[TopicPartition],
           txnStartTimestamp = value.transactionStartTimestampMs,
-          txnLastUpdateTimestamp = value.transactionLastUpdateTimestampMs)
+          txnLastUpdateTimestamp = value.transactionLastUpdateTimestampMs,
+          clientTransactionVersion = TransactionVersion.fromFeatureLevel(value.clientTransactionVersion))
 
         if (!transactionMetadata.state.equals(Empty))
           value.transactionPartitions.forEach(partitionsSchema =>

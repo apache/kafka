@@ -30,7 +30,6 @@ import kafka.common.OffsetAndMetadata
 import kafka.coordinator.group.GroupMetadataManager.maybeConvertOffsetCommitError
 import kafka.server.ReplicaManager
 import kafka.utils.CoreUtils.inLock
-import kafka.utils.Implicits._
 import kafka.utils._
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.compress.Compression
@@ -49,8 +48,9 @@ import org.apache.kafka.coordinator.group.generated.{GroupMetadataValue, OffsetC
 import org.apache.kafka.server.common.{MetadataVersion, RequestLocal}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_1_IV0, IBP_2_1_IV0, IBP_2_1_IV1, IBP_2_3_IV0}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.KafkaScheduler
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, VerificationGuard}
 
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
@@ -392,7 +392,7 @@ class GroupMetadataManager(brokerId: Int,
       val responseError = group.inLock {
         if (status.error == Errors.NONE) {
           if (!group.is(Dead)) {
-            filteredOffsetMetadata.forKeyValue { (topicIdPartition, offsetAndMetadata) =>
+            filteredOffsetMetadata.foreachEntry { (topicIdPartition, offsetAndMetadata) =>
               if (isTxnOffsetCommit)
                 group.onTxnOffsetCommitAppend(producerId, topicIdPartition, CommitRecordMetadataAndOffset(Some(status.baseOffset), offsetAndMetadata))
               else
@@ -408,7 +408,7 @@ class GroupMetadataManager(brokerId: Int,
           if (!group.is(Dead)) {
             if (!group.hasPendingOffsetCommitsFromProducer(producerId))
               removeProducerGroup(producerId, group.groupId)
-            filteredOffsetMetadata.forKeyValue { (topicIdPartition, offsetAndMetadata) =>
+            filteredOffsetMetadata.foreachEntry { (topicIdPartition, offsetAndMetadata) =>
               if (isTxnOffsetCommit)
                 group.failPendingTxnOffsetCommit(producerId, topicIdPartition)
               else
@@ -704,11 +704,11 @@ class GroupMetadataManager(brokerId: Int,
           }.partition { case (group, _) => loadedGroups.contains(group) }
 
         val pendingOffsetsByGroup = mutable.Map[String, mutable.Map[Long, mutable.Map[TopicPartition, CommitRecordMetadataAndOffset]]]()
-        pendingOffsets.forKeyValue { (producerId, producerOffsets) =>
+        pendingOffsets.foreachEntry { (producerId, producerOffsets) =>
           producerOffsets.keySet.map(_.group).foreach(addProducerGroup(producerId, _))
           producerOffsets
             .groupBy(_._1.group)
-            .forKeyValue { (group, offsets) =>
+            .foreachEntry { (group, offsets) =>
               val groupPendingOffsets = pendingOffsetsByGroup.getOrElseUpdate(group, mutable.Map.empty[Long, mutable.Map[TopicPartition, CommitRecordMetadataAndOffset]])
               val groupProducerOffsets = groupPendingOffsets.getOrElseUpdate(producerId, mutable.Map.empty[TopicPartition, CommitRecordMetadataAndOffset])
               groupProducerOffsets ++= offsets.map { case (groupTopicPartition, offset) =>
@@ -877,7 +877,7 @@ class GroupMetadataManager(brokerId: Int,
 
           replicaManager.onlinePartition(appendPartition).foreach { partition =>
             val tombstones = ArrayBuffer.empty[SimpleRecord]
-            removedOffsets.forKeyValue { (topicPartition, offsetAndMetadata) =>
+            removedOffsets.foreachEntry { (topicPartition, offsetAndMetadata) =>
               trace(s"Removing expired/deleted offset and metadata for $groupId, $topicPartition: $offsetAndMetadata")
               val commitKey = GroupMetadataManager.offsetCommitKey(groupId, topicPartition)
               tombstones += new SimpleRecord(timestamp, commitKey, null)
@@ -970,7 +970,7 @@ class GroupMetadataManager(brokerId: Int,
   }
 
   private def removeGroupFromAllProducers(groupId: String): Unit = openGroupsForProducer synchronized {
-    openGroupsForProducer.forKeyValue { (_, groups) =>
+    openGroupsForProducer.foreachEntry { (_, groups) =>
       groups.remove(groupId)
     }
   }

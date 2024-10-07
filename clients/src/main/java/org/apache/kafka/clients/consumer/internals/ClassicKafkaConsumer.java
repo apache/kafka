@@ -48,6 +48,7 @@ import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -139,7 +140,8 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final int defaultApiTimeoutMs;
     private volatile boolean closed = false;
     private final List<ConsumerPartitionAssignor> assignors;
-    private final Optional<ClientTelemetryReporter> clientTelemetryReporter;
+    // Init value is needed to avoid NPE in case of exception raised in the constructor
+    private Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.empty();
 
     // currentThread holds the threadId of the current thread accessing this Consumer
     // and is used to prevent multi-threaded access
@@ -423,6 +425,17 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             throw new IllegalArgumentException("RebalanceListener cannot be null");
 
         subscribeInternal(topics, Optional.of(listener));
+    }
+
+
+    @Override
+    public void registerMetricForSubscription(KafkaMetric metric) {
+        throw new UnsupportedOperationException("not implemented");
+    }
+
+    @Override
+    public void unregisterMetricFromSubscription(KafkaMetric metric) {
+        throw new UnsupportedOperationException("not implemented");
     }
 
     @Override
@@ -853,18 +866,6 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         } finally {
             release();
         }
-    }
-
-    @Deprecated
-    @Override
-    public OffsetAndMetadata committed(TopicPartition partition) {
-        return committed(partition, Duration.ofMillis(defaultApiTimeoutMs));
-    }
-
-    @Deprecated
-    @Override
-    public OffsetAndMetadata committed(TopicPartition partition, final Duration timeout) {
-        return committed(Collections.singleton(partition), timeout).get(partition);
     }
 
     @Override

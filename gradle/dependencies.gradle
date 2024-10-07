@@ -20,29 +20,22 @@
 ext {
   versions = [:]
   libs = [:]
-
-  // Available if -PscalaVersion is used. This is useful when we want to support a Scala version that has
-  // a higher minimum Java requirement than Kafka. This was previously the case for Scala 2.12 and Java 7.
-  availableScalaVersions = [ '2.12', '2.13' ]
 }
 
 // Add Scala version
-def defaultScala212Version = '2.12.19'
-def defaultScala213Version = '2.13.14'
+def defaultScala213Version = '2.13.15'
 if (hasProperty('scalaVersion')) {
-  if (scalaVersion == '2.12') {
-    versions["scala"] = defaultScala212Version
-  } else if (scalaVersion == '2.13') {
+  if (scalaVersion == '2.13') {
     versions["scala"] = defaultScala213Version
   }  else {
     versions["scala"] = scalaVersion
   }
 } else {
-  versions["scala"] = defaultScala212Version
+  versions["scala"] = defaultScala213Version
 }
 
 /* Resolve base Scala version according to these patterns:
- 1. generally available Scala versions (such as: 2.12.y and 2.13.z) corresponding base versions will be: 2.12 and 2.13 (respectively)
+ 1. generally available Scala versions (such as: 2.13.z) corresponding base versions will be: 2.13 (respectively)
  2. pre-release Scala versions (i.e. milestone/rc, such as: 2.13.0-M5, 2.13.0-RC1, 2.14.0-M1, etc.) will have identical base versions;
     rationale: pre-release Scala versions are not binary compatible with each other and that's the reason why libraries include the full
     Scala release string in their name for pre-releases (see dependencies below with an artifact name suffix '_$versions.baseScala')
@@ -54,13 +47,9 @@ if ( !versions.scala.contains('-') ) {
 }
 
 // mockito >= 5.5 is required for Java 21 and mockito 5.x requires at least Java 11
-// mockito 4.9 is required for Scala 2.12 as a workaround for compiler errors due to ambiguous reference to `Mockito.spy`
-// since Scala 2.12 support is going away soon, this is simpler than adjusting the code.
 // mockito 4.11 is used with Java 8 and Scala 2.13
 String mockitoVersion
-if (scalaVersion == "2.12")
-  mockitoVersion = "4.9.0"
-else if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_11))
+if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_11))
   mockitoVersion = "5.10.0"
 else
   mockitoVersion = "4.11.0"
@@ -146,7 +135,6 @@ versions += [
   pcollections: "4.0.1",
   reload4j: "1.2.25",
   rocksDB: "7.9.2",
-  scalaCollectionCompat: "2.10.0",
   // When updating the scalafmt version please also update the version field in checkstyle/.scalafmt.conf. scalafmt now
   // has the version field as mandatory in its configuration, see
   // https://github.com/scalameta/scalafmt/releases/tag/v3.1.0.
@@ -160,7 +148,7 @@ versions += [
   zookeeper: "3.8.4",
   // When updating the zstd version, please do as well in docker/native/native-image-configs/resource-config.json
   // Also make sure the compression levels in org.apache.kafka.common.record.CompressionType are still valid
-  zstd: "1.5.6-4",
+  zstd: "1.5.6-6",
   junitPlatform: "1.10.2",
   hdrHistogram: "2.2.2"
 ]
@@ -246,7 +234,6 @@ libs += [
   opentelemetryProto: "io.opentelemetry.proto:opentelemetry-proto:$versions.opentelemetryProto",
   reload4j: "ch.qos.reload4j:reload4j:$versions.reload4j",
   rocksDBJni: "org.rocksdb:rocksdbjni:$versions.rocksDB",
-  scalaCollectionCompat: "org.scala-lang.modules:scala-collection-compat_$versions.baseScala:$versions.scalaCollectionCompat",
   scalaJava8Compat: "org.scala-lang.modules:scala-java8-compat_$versions.baseScala:$versions.scalaJava8Compat",
   scalaLibrary: "org.scala-lang:scala-library:$versions.scala",
   scalaLogging: "com.typesafe.scala-logging:scala-logging_$versions.baseScala:$versions.scalaLogging",

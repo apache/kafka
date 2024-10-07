@@ -22,7 +22,6 @@ import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.server.ConfigAdminManager.{prepareIncrementalConfigs, toLoggableProps}
 import kafka.server.metadata.ZkConfigRepository
 import kafka.utils._
-import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.admin.AdminUtils
 import org.apache.kafka.clients.admin.{AlterConfigOp, ScramMechanism}
@@ -45,7 +44,7 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, 
 import org.apache.kafka.common.requests.CreateTopicsRequest._
 import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError}
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter}
-import org.apache.kafka.common.utils.Sanitizer
+import org.apache.kafka.common.utils.{Sanitizer, Utils}
 import org.apache.kafka.server.common.AdminOperationException
 import org.apache.kafka.server.config.{ConfigType, QuotaConfigs, ZooKeeperInternals}
 import org.apache.kafka.server.config.ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG
@@ -547,8 +546,8 @@ class ZkAdminManager(val config: KafkaConfig,
 
   def shutdown(): Unit = {
     topicPurgatory.shutdown()
-    CoreUtils.swallow(createTopicPolicy.foreach(_.close()), this)
-    CoreUtils.swallow(alterConfigPolicy.foreach(_.close()), this)
+    createTopicPolicy.foreach(Utils.closeQuietly(_, "create topic policy"))
+    alterConfigPolicy.foreach(Utils.closeQuietly(_, "alter config policy"))
   }
 
   private def resourceNameToBrokerId(resourceName: String): Int = {
@@ -963,7 +962,7 @@ class ZkAdminManager(val config: KafkaConfig,
         }
       ).toMap
 
-    illegalRequestsByUser.forKeyValue { (user, errorMessage) =>
+    illegalRequestsByUser.foreachEntry { (user, errorMessage) =>
       retval.results.add(new AlterUserScramCredentialsResult().setUser(user)
         .setErrorCode(if (errorMessage == unknownScramMechanismMsg) {Errors.UNSUPPORTED_SASL_MECHANISM.code} else {Errors.UNACCEPTABLE_CREDENTIAL.code})
         .setErrorMessage(errorMessage)) }
@@ -1028,7 +1027,7 @@ class ZkAdminManager(val config: KafkaConfig,
     }).collect { case (user: String, exception: Exception) => (user, exception) }.toMap
 
     // report failures
-    usersFailedToPrepareProperties.++(usersFailedToPersist).forKeyValue { (user, exception) =>
+    usersFailedToPrepareProperties.++(usersFailedToPersist).foreachEntry { (user, exception) =>
       val error = Errors.forException(exception)
       retval.results.add(new AlterUserScramCredentialsResult()
         .setUser(user)
