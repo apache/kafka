@@ -16,7 +16,14 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.MockAdminClient;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.MockConsumer;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.producer.MockProducer;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
@@ -56,7 +63,6 @@ import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.MockApiProcessorSupplier;
-import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockStandbyUpdateListener;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.TestUtils;
@@ -158,9 +164,12 @@ public class StreamThreadStateStoreProviderTest {
         properties.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
 
         final StreamsConfig streamsConfig = new StreamsConfig(properties);
-        final MockClientSupplier clientSupplier = new MockClientSupplier();
-        configureClients(clientSupplier, "applicationId-kv-store-changelog");
-        configureClients(clientSupplier, "applicationId-window-store-changelog");
+        final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+        final MockConsumer<byte[], byte[]> mockRestoreConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+        final MockProducer<byte[], byte[]> mockProducer = new MockProducer<>();
+        final MockAdminClient mockAdminClient = MockAdminClient.create().build();
+        configureClients(mockRestoreConsumer, mockAdminClient, "applicationId-kv-store-changelog");
+        configureClients(mockRestoreConsumer, mockAdminClient, "applicationId-window-store-changelog");
 
         final InternalTopologyBuilder internalTopologyBuilder = topology.getInternalBuilder(applicationId);
         final ProcessorTopology processorTopology = internalTopologyBuilder.buildTopology();
@@ -170,7 +179,10 @@ public class StreamThreadStateStoreProviderTest {
 
         taskOne = createStreamsTask(
             streamsConfig,
-            clientSupplier,
+            mockConsumer,
+            mockRestoreConsumer,
+            mockProducer,
+            mockAdminClient,
             processorTopology,
             new TaskId(0, 0));
         taskOne.initializeIfNeeded();
@@ -178,7 +190,10 @@ public class StreamThreadStateStoreProviderTest {
 
         final StreamTask taskTwo = createStreamsTask(
             streamsConfig,
-            clientSupplier,
+            mockConsumer,
+            mockRestoreConsumer,
+            mockProducer,
+            mockAdminClient,
             processorTopology,
             new TaskId(0, 1));
         taskTwo.initializeIfNeeded();
@@ -406,7 +421,10 @@ public class StreamThreadStateStoreProviderTest {
     }
 
     private StreamTask createStreamsTask(final StreamsConfig streamsConfig,
-                                         final MockClientSupplier clientSupplier,
+                                         final Consumer<byte[], byte[]> consumer,
+                                         final Consumer<byte[], byte[]> restoreConsumer,
+                                         final Producer<byte[], byte[]> producer,
+                                         final Admin adminClient,
                                          final ProcessorTopology topology,
                                          final TaskId taskId) {
         final Metrics metrics = new Metrics();
@@ -422,8 +440,8 @@ public class StreamThreadStateStoreProviderTest {
                 new MockTime(),
                 streamsConfig,
                 logContext,
-                clientSupplier.adminClient,
-                clientSupplier.restoreConsumer,
+                adminClient,
+                restoreConsumer,
                 new MockStateRestoreListener(),
                 new MockStandbyUpdateListener()),
             topology.storeToChangelogTopic(),
@@ -434,7 +452,7 @@ public class StreamThreadStateStoreProviderTest {
             taskId,
             new StreamsProducer(
                 StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
-                clientSupplier.getProducer(streamsConfig.originals()),
+                producer,
                 logContext,
                 Time.SYSTEM
             ),
@@ -454,7 +472,7 @@ public class StreamThreadStateStoreProviderTest {
             taskId,
             partitions,
             topology,
-            clientSupplier.consumer,
+            consumer,
             new TopologyConfig(null, streamsConfig, new Properties()).getTaskConfig(),
             streamsMetrics,
             stateDirectory,
@@ -475,25 +493,27 @@ public class StreamThreadStateStoreProviderTest {
         );
     }
 
-    private void configureClients(final MockClientSupplier clientSupplier, final String topic) {
+    private void configureClients(final MockConsumer<byte[], byte[]> restoreConsumer,
+                                  final MockAdminClient adminClient,
+                                  final String topic) {
         final List<PartitionInfo> partitions = Arrays.asList(
             new PartitionInfo(topic, 0, null, null, null),
             new PartitionInfo(topic, 1, null, null, null)
         );
-        clientSupplier.restoreConsumer.updatePartitions(topic, partitions);
+        restoreConsumer.updatePartitions(topic, partitions);
         final TopicPartition tp1 = new TopicPartition(topic, 0);
         final TopicPartition tp2 = new TopicPartition(topic, 1);
 
-        clientSupplier.restoreConsumer.assign(Arrays.asList(tp1, tp2));
+        restoreConsumer.assign(Arrays.asList(tp1, tp2));
 
         final Map<TopicPartition, Long> offsets = new HashMap<>();
         offsets.put(tp1, 0L);
         offsets.put(tp2, 0L);
 
-        clientSupplier.restoreConsumer.updateBeginningOffsets(offsets);
-        clientSupplier.restoreConsumer.updateEndOffsets(offsets);
+        restoreConsumer.updateBeginningOffsets(offsets);
+        restoreConsumer.updateEndOffsets(offsets);
 
-        clientSupplier.adminClient.updateBeginningOffsets(offsets);
-        clientSupplier.adminClient.updateEndOffsets(offsets);
+        adminClient.updateBeginningOffsets(offsets);
+        adminClient.updateEndOffsets(offsets);
     }
 }
