@@ -221,6 +221,7 @@ public class SharePartitionManager implements AutoCloseable {
     }
 
     // Visible for testing.
+    @SuppressWarnings({"checkstyle:ParameterNumber"})
     SharePartitionManager(
             ReplicaManager replicaManager,
             Time time,

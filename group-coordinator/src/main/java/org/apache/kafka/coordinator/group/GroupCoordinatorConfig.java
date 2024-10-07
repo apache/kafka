@@ -366,7 +366,7 @@ public class GroupCoordinatorConfig {
         Map<String, Integer> groupProps = new HashMap<>();
         groupProps.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, consumerGroupSessionTimeoutMs());
         groupProps.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, consumerGroupHeartbeatIntervalMs());
-        return groupProps;
+        return Collections.unmodifiableMap(groupProps);
     }
 
     /**
