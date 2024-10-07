@@ -168,16 +168,14 @@ public class BufferPoolTest {
      */
     @Test
     public void testBlockTimeout() throws Exception {
-        long maxBlockTimeMs = 2000;
         BufferPool pool = new BufferPool(10, 1, metrics, Time.SYSTEM, metricGroup);
         ByteBuffer buffer1 = pool.allocate(1, maxBlockTimeMs);
         ByteBuffer buffer2 = pool.allocate(1, maxBlockTimeMs);
-        ByteBuffer buffer3 = pool.allocate(1, maxBlockTimeMs);
-        // The first two buffers will be de-allocated within maxBlockTimeMs since the most recent allocation
+        pool.allocate(1, maxBlockTimeMs);
+        // The first two buffers will be de-allocated shortly to simulate the signal from other threads while waiting for more memory
+        // The third buffer is not going to be deallocated to ensure the timeout is always hit
         delayedDeallocate(pool, buffer1, maxBlockTimeMs / 2);
         delayedDeallocate(pool, buffer2, maxBlockTimeMs);
-        // The third buffer will be de-allocated after maxBlockTimeMs since the most recent allocation
-        delayedDeallocate(pool, buffer3, maxBlockTimeMs / 2 * 5);
 
         long beginTimeMs = Time.SYSTEM.milliseconds();
         assertThrows(BufferExhaustedException.class, () -> pool.allocate(10, maxBlockTimeMs),
@@ -185,7 +183,7 @@ public class BufferPoolTest {
         long durationMs = Time.SYSTEM.milliseconds() - beginTimeMs;
 
         // Thread scheduling sometimes means that deallocation varies by this point
-        assertTrue(pool.availableMemory() >= 7 && pool.availableMemory() <= 10, "available memory " + pool.availableMemory());
+        assertTrue(pool.availableMemory() >= 7 && pool.availableMemory() <= 9, "available memory " + pool.availableMemory());
         assertTrue(durationMs >= maxBlockTimeMs, "BufferExhaustedException should not throw before maxBlockTimeMs");
         assertTrue(durationMs < maxBlockTimeMs + 1000, "BufferExhaustedException should throw soon after maxBlockTimeMs");
     }
