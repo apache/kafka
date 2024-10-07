@@ -604,6 +604,76 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         assertAssignment(expectedAssignment, computedAssignment);
     }
 
+    /**
+     * Tests an edge case in the reassignment algorithm where we run out of topic partitions before
+     * the topic's subscribers are balanced, and the topic's least loaded subscribers start off with
+     * no partitions from the topic. The per-topic reassignment loop should break when it cannot
+     * find a partition to reassign.
+     */
+    @Test
+    public void testReassignmentWhenTopicPartitionsRunOutAndMembersHaveNoPartitions() {
+        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
+        topicMetadata.put(topic1Uuid, new TopicMetadata(
+            topic1Uuid,
+            topic1Name,
+            2
+        ));
+        topicMetadata.put(topic2Uuid, new TopicMetadata(
+            topic2Uuid,
+            topic2Name,
+            2
+        ));
+        topicMetadata.put(topic3Uuid, new TopicMetadata(
+            topic3Uuid,
+            topic3Name,
+            2
+        ));
+
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
+
+        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            Optional.empty(),
+            mkSet(topic1Uuid, topic2Uuid, topic3Uuid),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 0, 1),
+                mkTopicAssignment(topic2Uuid, 0, 1),
+                mkTopicAssignment(topic3Uuid, 0, 1)
+            ))
+        ));
+
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            Optional.empty(),
+            mkSet(topic1Uuid, topic2Uuid, topic3Uuid),
+            Assignment.EMPTY
+        ));
+
+        GroupSpec groupSpec = new GroupSpecImpl(
+            members,
+            HETEROGENEOUS,
+            invertedTargetAssignment(members)
+        );
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
+
+        GroupAssignment computedAssignment = assignor.assign(
+            groupSpec,
+            subscribedTopicMetadata
+        );
+
+        Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
+        expectedAssignment.put(memberA, mkAssignment(
+            mkTopicAssignment(topic2Uuid, 0),
+            mkTopicAssignment(topic3Uuid, 0, 1)
+        ));
+        expectedAssignment.put(memberB, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 0, 1),
+            mkTopicAssignment(topic2Uuid, 1)
+        ));
+
+        assertAssignment(expectedAssignment, computedAssignment);
+    }
+
     @Test
     public void testFirstAssignmentWithTwoMembersIncludingOneWithoutSubscriptions() {
         Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();

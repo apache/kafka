@@ -465,6 +465,11 @@ public class UniformHeterogeneousAssignmentBuilder {
          * @return The difference in partition counts between the most and least loaded members.
          */
         public int initialize(List<Integer> members) {
+            if (members.size() < 1) {
+                // nextLeastLoadedMember needs at least one member.
+                throw new IllegalArgumentException("Cannot balance an empty subscriber list.");
+            }
+
             // Build a sorted list of subscribers, where members with the smallest partition count
             // appear first.
             sortedMembers.clear();
@@ -489,6 +494,8 @@ public class UniformHeterogeneousAssignmentBuilder {
          * <p/>
          * Advances the state of the balancer by assuming that an additional partition has been
          * assigned to the returned member.
+         * <p/>
+         * Assumes that there is at least one member.
          *
          * @return The least loaded member to which to assign a partition
          */
@@ -533,15 +540,21 @@ public class UniformHeterogeneousAssignmentBuilder {
          * <p/>
          * Advances the state of the balancer by assuming that a partition has been unassigned from
          * the returned member.
-         * <p/>
-         * Assumes that there is always a member that can give up a partition. That is,
-         * excludeMostLoadedMember has not been used to exclude every member.
          *
-         * @return The most loaded member from which to reassign a partition
+         * @return The most loaded member from which to reassign a partition, or -1 if no such
+         *         member exists.
          */
         public int nextMostLoadedMember() {
             if (nextMostLoadedMember < mostLoadedRangeStart) {
-                mostLoadedRangePartitionCount--;
+                if (mostLoadedRangeEnd <= mostLoadedRangeStart &&
+                    mostLoadedRangeStart > 0) {
+                    // The range is empty due to calls to excludeMostLoadedMember(). We risk not
+                    // expanding the range below and returning a member outside the range. Ensure
+                    // that we always expand the range below by resetting the partition count.
+                    mostLoadedRangePartitionCount = memberTargetAssignmentSizes[sortedMembers.get(mostLoadedRangeStart - 1)];
+                } else {
+                    mostLoadedRangePartitionCount--;
+                }
 
                 // Expand the range.
                 while (mostLoadedRangeStart > 0 &&
@@ -554,6 +567,12 @@ public class UniformHeterogeneousAssignmentBuilder {
                 nextMostLoadedMember = mostLoadedRangeEnd - 1;
             }
 
+            if (nextMostLoadedMember < 0) {
+                // The range is empty due to excludeMostLoadedMember() calls and there are no more
+                // members that can give up partitions.
+                return -1;
+            }
+
             int mostLoadedMemberIndex = sortedMembers.get(nextMostLoadedMember);
             nextMostLoadedMember--;
 
@@ -562,6 +581,8 @@ public class UniformHeterogeneousAssignmentBuilder {
 
         /**
          * Excludes the last member returned from nextMostLoadedMember from the most loaded range.
+         *
+         * Must not be called if nextMostLoadedMember has not been called yet or returned -1.
          */
         public void excludeMostLoadedMember() {
             // Kick the member out of the most loaded range by swapping with the member at the end
@@ -788,8 +809,8 @@ public class UniformHeterogeneousAssignmentBuilder {
         // Redistribute partitions from the most loaded subscriber to the least loaded subscriber
         // until the topic's subscribers are balanced.
         while (!memberAssignmentBalancer.isBalanced()) {
-            // NB: The condition above does not do much. This loop will terminate immediately after
-            //     selecting the most loaded subscriber and the least loaded subscriber instead.
+            // NB: The condition above does not do much. This loop will terminate due to the chekcs
+            //     inside instead.
 
             // First, choose a member from the most loaded range to reassign a partition from.
 
@@ -798,12 +819,23 @@ public class UniformHeterogeneousAssignmentBuilder {
             while (true) {
                 mostLoadedMemberIndex = memberAssignmentBalancer.nextMostLoadedMember();
 
+                if (mostLoadedMemberIndex == -1) {
+                    // There are no more members with partitions to give up.
+                    // We need to break out of two loops here.
+                    break;
+                }
+
                 if (!endPartitionIndices.containsKey(mostLoadedMemberIndex) ||
                     endPartitionIndices.get(mostLoadedMemberIndex) - startPartitionIndices.get(mostLoadedMemberIndex) <= 0) {
                     memberAssignmentBalancer.excludeMostLoadedMember();
                     continue;
                 }
 
+                break;
+            }
+
+            if (mostLoadedMemberIndex == -1) {
+                // There are no more members with partitions to give up.
                 break;
             }
 
