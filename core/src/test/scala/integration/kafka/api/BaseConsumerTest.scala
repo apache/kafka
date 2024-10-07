@@ -112,29 +112,19 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
 
 object BaseConsumerTest {
   // We want to test the following combinations:
-  // * ZooKeeper and the classic group protocol
   // * KRaft and the classic group protocol
   // * KRaft and the consumer group protocol
   def getTestQuorumAndGroupProtocolParametersAll() : java.util.stream.Stream[Arguments] = {
     stream.Stream.of(
-      Arguments.of("zk", "classic"),
       Arguments.of("kraft", "classic"),
       Arguments.of("kraft", "consumer")
     )
   }
 
-  def getTestQuorumAndGroupProtocolParametersZkOnly() : java.util.stream.Stream[Arguments] = {
-    stream.Stream.of(
-      Arguments.of("zk", "classic")
-    )
-  }
-
   // For tests that only work with the classic group protocol, we want to test the following combinations:
-  // * ZooKeeper and the classic group protocol
   // * KRaft and the classic group protocol
   def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly() : java.util.stream.Stream[Arguments] = {
     stream.Stream.of(
-      Arguments.of("zk", "classic"),
       Arguments.of("kraft", "classic")
     )
   }
