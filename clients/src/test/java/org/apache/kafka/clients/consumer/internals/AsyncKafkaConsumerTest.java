@@ -1915,12 +1915,13 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testSeekToBeginning() {
         Collection<TopicPartition> topics = Collections.singleton(new TopicPartition("test", 0));
-        time = new MockTime(1);
         consumer = newConsumer();
         consumer.seekToBeginning(topics);
-        CompletableApplicationEvent<Void> offsetEvent = addAndGetLastEnqueuedEvent();
-        assertSame(offsetEvent.getClass(), ResetOffsetEvent.class);
-        assertSame(((ResetOffsetEvent) offsetEvent).offsetResetStrategy(), OffsetResetStrategy.EARLIEST);
+        CompletableApplicationEvent<Void> event = addAndGetLastEnqueuedEvent();
+        assertInstanceOf(ResetOffsetEvent.class, event);
+        ResetOffsetEvent resetOffsetEvent = (ResetOffsetEvent) event;
+        assertEquals(topics, new HashSet<>(resetOffsetEvent.topicPartitions()));
+        assertSame(resetOffsetEvent.offsetResetStrategy(), OffsetResetStrategy.EARLIEST);
     }
 
     @Test
@@ -1942,12 +1943,13 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testSeekToEnd() {
         Collection<TopicPartition> topics = Collections.singleton(new TopicPartition("test", 0));
-        time = new MockTime(1);
         consumer = newConsumer();
         consumer.seekToEnd(topics);
-        CompletableApplicationEvent<Void> offsetEvent = addAndGetLastEnqueuedEvent();
-        assertSame(offsetEvent.getClass(), ResetOffsetEvent.class);
-        assertSame(((ResetOffsetEvent) offsetEvent).offsetResetStrategy(), OffsetResetStrategy.LATEST);
+        CompletableApplicationEvent<Void> event = addAndGetLastEnqueuedEvent();
+        assertInstanceOf(ResetOffsetEvent.class, event);
+        ResetOffsetEvent resetOffsetEvent = (ResetOffsetEvent) event;
+        assertEquals(topics, new HashSet<>(resetOffsetEvent.topicPartitions()));
+        assertSame(resetOffsetEvent.offsetResetStrategy(), OffsetResetStrategy.LATEST);
     }
 
     private void verifyUnsubscribeEvent(SubscriptionState subscriptions) {
