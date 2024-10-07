@@ -34,11 +34,7 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        java: [ 21, 17, 11, 8 ]
-    name: Compile and Check Java ${{ matrix.java }}
+    name: Compile and Check Java
     outputs:
       is-draft: ${{ steps.check-draft-pr.outputs.is-draft }}
     steps:
@@ -62,7 +58,7 @@ jobs:
       - name: Setup Gradle
         uses: ./.github/actions/setup-gradle
         with:
-          java-version: ${{ matrix.java }}
+          java-version: 21
           gradle-cache-read-only: ${{ inputs.gradle-cache-read-only }}
           gradle-cache-write-only: ${{ inputs.gradle-cache-write-only }}
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
@@ -80,15 +76,21 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: check-reports-${{ matrix.java }}
+          name: check-reports
           path: |
             **/build/**/*.html
           compression-level: 9
           if-no-files-found: ignore
       - name: Annotate checkstyle errors
         # Avoid duplicate annotations, only run on java 21
-        if: ${{ failure() && matrix.java == '21' }}
+        if: failure()
         run: python .github/scripts/checkstyle.py
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+      - name: Annotate Rat errors
+        # Avoid duplicate annotations, only run on java 21
+        if: failure()
+        run: python .github/scripts/rat.py
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
 
@@ -99,7 +101,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java: [ 17, 11 ]  # If we change these, make sure to adjust ci-complete.yml
+        java: [ 21, 11 ]  # If we change these, make sure to adjust ci-complete.yml
     name: JUnit tests Java ${{ matrix.java }}
     steps:
       - name: Checkout code
@@ -128,18 +130,19 @@ jobs:
           timeout ${TIMEOUT_MINUTES}m ./gradlew --build-cache --continue --no-scan \
           -PtestLoggingEvents=started,passed,skipped,failed \
           -PmaxParallelForks=2 \
-          -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
+          -PmaxTestRetries=1 -PmaxTestRetryFailures=3 \
+          -PmaxQuarantineTestRetries=3 -PmaxQuarantineTestRetryFailures=0 \
           -PcommitId=xxxxxxxxxxxxxxxx \
-          test
+          quarantinedTest test
           exitcode="$?"
           echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
-      - name: Archive JUnit reports
+      - name: Archive JUnit HTML reports
         uses: actions/upload-artifact@v4
         id: junit-upload-artifact
         with:
           name: junit-reports-${{ matrix.java }}
           path: |
-            **/build/reports/tests/test/*
+            **/build/reports/tests/*
           compression-level: 9
           if-no-files-found: ignore
       - name: Archive Thread Dumps
