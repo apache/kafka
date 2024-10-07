@@ -88,6 +88,15 @@ public class SnapshotGeneratorTest {
             .numBytes(100);
     }
 
+    static LogDeltaManifest.Builder notBatchAlignedLogDeltaManifestBuilder() {
+        return LogDeltaManifest.newBuilder()
+                .provenance(new MetadataProvenance(-1L, -1, -1L, false))
+                .leaderAndEpoch(LeaderAndEpoch.UNKNOWN)
+                .numBatches(1)
+                .elapsedNs(100)
+                .numBytes(100);
+    }
+
     private static final MetadataDelta TEST_DELTA;
 
     static {
@@ -119,6 +128,26 @@ public class SnapshotGeneratorTest {
             emitter.setReady();
         }
         assertEquals(Collections.singletonList(TEST_IMAGE), emitter.images());
+        faultHandler.maybeRethrowFirstException();
+    }
+
+    @Test
+    public void testNoSnapshotCreatedWhenLastOffsetIsNotBatchAligned() throws Exception {
+        MockFaultHandler faultHandler = new MockFaultHandler("SnapshotGenerator");
+        MockEmitter emitter = new MockEmitter();
+        try (SnapshotGenerator generator = new SnapshotGenerator.Builder(emitter).
+                setFaultHandler(faultHandler).
+                setMaxBytesSinceLastSnapshot(200).
+                setMaxTimeSinceLastSnapshotNs(TimeUnit.DAYS.toNanos(10)).
+                build()) {
+            // None of these log delta batches should trigger a snapshot since their offset is not batch aligned.
+            generator.publishLogDelta(TEST_DELTA, TEST_IMAGE, notBatchAlignedLogDeltaManifestBuilder().build());
+            generator.publishLogDelta(TEST_DELTA, TEST_IMAGE, notBatchAlignedLogDeltaManifestBuilder().build());
+            generator.publishLogDelta(TEST_DELTA, TEST_IMAGE, notBatchAlignedLogDeltaManifestBuilder().build());
+            assertEquals(Collections.emptyList(), emitter.images());
+            emitter.setReady();
+        }
+        assertEquals(Collections.emptyList(), emitter.images());
         faultHandler.maybeRethrowFirstException();
     }
 
