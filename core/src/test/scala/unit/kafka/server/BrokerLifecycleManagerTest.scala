@@ -26,6 +26,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, BrokerHeartbeatRequest, BrokerHeartbeatResponse, BrokerRegistrationRequest, BrokerRegistrationResponse}
 import org.apache.kafka.metadata.{BrokerState, VersionRange}
 import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.server.BrokerFeatures
 import org.apache.kafka.server.common.{Features, KRaftVersion, MetadataVersion}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_3_8_IV0, IBP_3_9_IV0}
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs, ZkConfigs}
@@ -120,7 +121,7 @@ class BrokerLifecycleManagerTest {
     manager = new BrokerLifecycleManager(context.config, context.time, "successful-registration-", isZkBroker = false, Set(Uuid.fromString("gCpDJgRlS2CBCpxoP2VMsQ")))
     val controllerNode = new Node(3000, "localhost", 8021)
     context.controllerNodeProvider.node.set(controllerNode)
-    val features = BrokerFeatures.createDefaultFeatureMap(BrokerFeatures.createDefault(true))
+    val features = BrokerFeatures.createDefaultFeatureMap(BrokerFeatures.createDefault(true)).asScala
 
     // Even though ZK brokers don't use "metadata.version" feature, we need to overwrite it with our IBP as part of registration
     // so the KRaft controller can verify that all brokers are on the same IBP before starting the migration.
