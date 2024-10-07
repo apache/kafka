@@ -418,10 +418,10 @@ public class CurrentAssignmentBuilderTest {
             .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Collections.emptySet())
             .withOwnedActiveTasks(Arrays.asList(
                 new StreamsGroupHeartbeatRequestData.TaskIds()
-                    .setSubtopology(subtopologyId1)
+                    .setSubtopologyId(subtopologyId1)
                     .setPartitions(Arrays.asList(2, 3)),
                 new StreamsGroupHeartbeatRequestData.TaskIds()
-                    .setSubtopology(subtopologyId2)
+                    .setSubtopologyId(subtopologyId2)
                     .setPartitions(Arrays.asList(5, 6))))
             .withOwnedStandbyTasks(Collections.emptyList())
             .withOwnedWarmupTasks(Collections.emptyList())

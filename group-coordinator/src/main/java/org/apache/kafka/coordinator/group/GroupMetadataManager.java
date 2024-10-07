@@ -1735,7 +1735,7 @@ public class GroupMetadataManager {
         if (ownedTasks == null) return false;
 
         for (StreamsGroupHeartbeatRequestData.TaskIds topicPartitions : ownedTasks) {
-            Set<Integer> partitions = target.get(topicPartitions.subtopology());
+            Set<Integer> partitions = target.get(topicPartitions.subtopologyId());
             if (partitions == null) return false;
             for (Integer partitionId : topicPartitions.partitions()) {
                 if (!partitions.contains(partitionId)) return false;
@@ -2377,7 +2377,7 @@ public class GroupMetadataManager {
     private List<StreamsGroupHeartbeatResponseData.TaskIds> createStreamsGroupHeartbeatResponseTaskIds(final Map<String, Set<Integer>> taskIds) {
         return taskIds.entrySet().stream()
             .map(entry -> new StreamsGroupHeartbeatResponseData.TaskIds()
-                .setSubtopology(entry.getKey())
+                .setSubtopologyId(entry.getKey())
                 .setPartitions(new ArrayList<>(entry.getValue())))
             .collect(Collectors.toList());
     }

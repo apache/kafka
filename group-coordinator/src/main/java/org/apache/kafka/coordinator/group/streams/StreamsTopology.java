@@ -68,7 +68,7 @@ public class StreamsTopology {
 
             this.subtopologies.put(
                 subtopology.subtopologyId(),
-                new StreamsGroupTopologyValue.Subtopology().setSubtopology(subtopology.subtopologyId())
+                new StreamsGroupTopologyValue.Subtopology().setSubtopologyId(subtopology.subtopologyId())
                     .setSourceTopics(subtopology.sourceTopics()).setRepartitionSinkTopics(subtopology.repartitionSinkTopics())
                     .setRepartitionSourceTopics(repartitionSourceTopics).setStateChangelogTopics(stateChangelogTopics));
         });
@@ -92,7 +92,7 @@ public class StreamsTopology {
     public static StreamsTopology fromRecord(StreamsGroupTopologyValue record) {
         return new StreamsTopology(
             record.topologyId(),
-            record.topology().stream().collect(Collectors.toMap(Subtopology::subtopology, x -> x))
+            record.topology().stream().collect(Collectors.toMap(Subtopology::subtopologyId, x -> x))
         );
     }
 
@@ -125,7 +125,7 @@ public class StreamsTopology {
         return subtopologies.values().stream().map(
             subtopology -> new StreamsGroupDescribeResponseData.Subtopology()
                 .setSourceTopicRegex(subtopology.sourceTopicRegex())
-                .setSubtopology(subtopology.subtopology())
+                .setSubtopologyId(subtopology.subtopologyId())
                 .setSourceTopics(subtopology.sourceTopics())
                 .setRepartitionSinkTopics(subtopology.repartitionSinkTopics())
                 .setRepartitionSourceTopics(

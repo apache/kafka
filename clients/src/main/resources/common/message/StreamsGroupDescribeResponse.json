@@ -48,8 +48,8 @@
         { "name":  "Topology", "type": "[]Subtopology", "versions": "0+", "nullableVersions": "0+", "default": "null",
           "about": "The sub-topologies of the streams application. Null if uninitialized.",
           "fields": [
-            { "name": "Subtopology", "type": "string", "versions": "0+",
-              "about": "String to uniquely identify the sub-topology." },
+            { "name": "SubtopologyId", "type": "string", "versions": "0+",
+              "about": "String to uniquely identify the subtopology. Deterministically generated from the topology." },
             { "name": "SourceTopics", "type": "[]string", "versions": "0+",
               "about": "The topics the topology reads from." },
             { "name": "SourceTopicRegex", "type": "string", "versions": "0+",
@@ -57,7 +57,7 @@
             { "name": "RepartitionSinkTopics", "type": "[]string", "versions": "0+",
               "about": "The repartition topics the topology writes to." },
             { "name": "StateChangelogTopics", "type": "[]TopicInfo", "versions": "0+",
-              "about": "The set of state changelog topics associated with this sub-topology. Created automatically." },
+              "about": "The set of state changelog topics associated with this subtopology. Created automatically." },
             { "name": "RepartitionSourceTopics", "type": "[]TopicInfo", "versions": "0+",
               "about": "The set of source topics that are internally created repartition topics. Created automatically." }
           ]
@@ -103,8 +103,8 @@
   ],
   "commonStructs": [
     { "name": "TaskOffset", "versions": "0+", "fields": [
-      { "name": "Subtopology", "type": "string", "versions": "0+",
-        "about": "The sub-topology identifier." },
+      { "name": "SubtopologyId", "type": "string", "versions": "0+",
+        "about": "The subtopology identifier." },
       { "name": "Partition", "type": "int32", "versions": "0+",
         "about": "The partition." },
       { "name": "Offset", "type": "int64", "versions": "0+",
@@ -127,8 +127,8 @@
         "about": "Warm-up tasks for this client. " }
     ]},
     { "name": "TaskIds", "versions": "0+", "fields": [
-      { "name": "Subtopology", "type": "string", "versions": "0+",
-        "about": "The sub-topology identifier." },
+      { "name": "SubtopologyId", "type": "string", "versions": "0+",
+        "about": "The subtopology identifier." },
       { "name": "Partitions", "type": "[]int32", "versions": "0+",
         "about": "The partitions of the input topics processed by this member." }
     ]},

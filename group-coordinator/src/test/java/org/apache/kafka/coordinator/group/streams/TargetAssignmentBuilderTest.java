@@ -117,7 +117,7 @@ public class TargetAssignmentBuilderTest {
             ));
             topicsImageBuilder = topicsImageBuilder.addTopic(topicId, topicName, numTasks);
             topology.subtopologies().put(subtopologyId, new StreamsGroupTopologyValue.Subtopology()
-                .setSubtopology(subtopologyId)
+                .setSubtopologyId(subtopologyId)
                 .setSourceTopics(Collections.singletonList(topicId.toString())));
 
             return subtopologyId;
