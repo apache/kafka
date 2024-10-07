@@ -14,12 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.test;
 
-/**
- * Like a {@link Runnable} that allows exceptions to be thrown or a {@link java.util.concurrent.Callable}
- * that does not return a value.
- */
-public interface ValuelessCallable {
-    void call() throws Exception;
+package org.apache.kafka.common.test.api;
+
+import org.junit.jupiter.api.Tag;
+
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
+@Target({ElementType.TYPE, ElementType.METHOD})
+@Retention(RetentionPolicy.RUNTIME)
+@Tag("flaky")
+public @interface Flaky {
+    /**
+     * Required reference to a KAFKA Jira ticket.
+     */
+    String value();
+
+    /**
+     * Optional comment describing the reason for quarantined.
+     */
+    String comment() default "";
 }
