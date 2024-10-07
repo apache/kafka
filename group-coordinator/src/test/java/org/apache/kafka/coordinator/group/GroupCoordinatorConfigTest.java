@@ -165,6 +165,22 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG, -100);
         assertEquals("Unknown compression type id: -100",
                 assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, 45000);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, 60000);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, 50000);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG, 50000);
+        assertEquals("group.consumer.heartbeat.interval.ms must be less than group.consumer.session.timeout.ms",
+                assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, 45000);
+        configs.put(GroupCoordinatorConfig.SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, 60000);
+        configs.put(GroupCoordinatorConfig.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, 50000);
+        configs.put(GroupCoordinatorConfig.SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, 50000);
+        assertEquals("group.share.heartbeat.interval.ms must be less than group.share.session.timeout.ms",
+                assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
     }
 
     public static GroupCoordinatorConfig createGroupCoordinatorConfig(
@@ -201,7 +217,7 @@ public class GroupCoordinatorConfigTest {
         return createConfig(configs);
     }
 
-    private static GroupCoordinatorConfig createConfig(Map<String, Object> configs) {
+    public static GroupCoordinatorConfig createConfig(Map<String, Object> configs) {
         return new GroupCoordinatorConfig(
                 new AbstractConfig(Utils.mergeConfigs(GROUP_COORDINATOR_CONFIG_DEFS), configs, false));
     }

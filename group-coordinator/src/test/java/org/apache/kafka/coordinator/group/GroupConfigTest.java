@@ -53,24 +53,33 @@ public class GroupConfigTest {
 
     @Test
     public void testInvalidProps() {
+        GroupCoordinatorConfig defaultGroupCoordinatorConfig = createGroupCoordinatorConfig();
         // Check for invalid sessionTimeoutMs, < MIN
-        doTestInvalidProps(1, 5000);
+        doTestInvalidProps(1, 5000, defaultGroupCoordinatorConfig);
 
         // Check for invalid sessionTimeoutMs, > MAX
-        doTestInvalidProps(70000, 5000);
+        doTestInvalidProps(70000, 5000, defaultGroupCoordinatorConfig);
 
         // Check for invalid heartbeatIntervalMs, < MIN
-        doTestInvalidProps(50000, 1);
+        doTestInvalidProps(50000, 1, defaultGroupCoordinatorConfig);
 
         // Check for invalid heartbeatIntervalMs, > MAX
-        doTestInvalidProps(50000, 70000);
+        doTestInvalidProps(50000, 70000, defaultGroupCoordinatorConfig);
+
+        // Check for invalid heartbeatIntervalMs >= sessionTimeoutMs
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, 45000);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, 60000);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, 45000);
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG, 50000);
+        doTestInvalidProps(45000, 45000, GroupCoordinatorConfigTest.createConfig(configs));
     }
 
-    private void doTestInvalidProps(int sessionTimeoutMs, int heartbeatIntervalMs) {
+    private void doTestInvalidProps(int sessionTimeoutMs, int heartbeatIntervalMs, GroupCoordinatorConfig groupCoordinatorConfig) {
         Properties props = new Properties();
         props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, sessionTimeoutMs);
         props.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, heartbeatIntervalMs);
-        assertThrows(InvalidConfigurationException.class, () -> GroupConfig.validate(props, createGroupCoordinatorConfig()));
+        assertThrows(InvalidConfigurationException.class, () -> GroupConfig.validate(props, groupCoordinatorConfig));
     }
 
     @Test

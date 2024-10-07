@@ -112,6 +112,11 @@ public class GroupConfig extends AbstractConfig {
             throw new InvalidConfigurationException(CONSUMER_SESSION_TIMEOUT_MS_CONFIG + " must be greater than or equals to " +
                 GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG);
         }
+
+        if (consumerSessionTimeout <= consumerHeartbeatInterval) {
+            throw new InvalidConfigurationException(CONSUMER_SESSION_TIMEOUT_MS_CONFIG + " must be greater than " +
+                CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
+        }
     }
 
     /**
