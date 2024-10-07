@@ -14,18 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.tools;
+package org.apache.kafka.clients.consumer.internals.events;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
+public class ShareAcknowledgementCommitCallbackRegistrationEvent extends ApplicationEvent {
 
-@Deprecated
-public class StreamsResetter {
+    boolean isCallbackRegistered;
 
-    public static void main(String[] args) throws ClassNotFoundException, NoSuchMethodException, InvocationTargetException, IllegalAccessException {
-        System.out.println("WARNING: The 'kafka.tools' package is deprecated and will change to 'org.apache.kafka.tools' in the next major release.");
-        Class<?> toolClass = Class.forName("org.apache.kafka.tools.StreamsResetter");
-        Method main = toolClass.getDeclaredMethod("main", String[].class);
-        main.invoke(null, (Object) args);
+    public ShareAcknowledgementCommitCallbackRegistrationEvent(boolean isCallbackRegistered) {
+        super(Type.SHARE_ACKNOWLEDGEMENT_COMMIT_CALLBACK_REGISTRATION);
+        this.isCallbackRegistered = isCallbackRegistered;
+    }
+
+    public boolean isCallbackRegistered() {
+        return isCallbackRegistered;
     }
 }
