@@ -17,12 +17,12 @@
 LABEL_NAME=small
 MAX_SIZE=100
 
-pr_diff=$(gh pr diff $PR_NUM -R $GITHUB_REPOSITORY)
+pr_diff=$(gh pr view $PR_NUM -R $GITHUB_REPOSITORY --json additions,deletions)
 
-insertions=$(printf "$pr_diff" | grep '^+' | wc -l)
-deletions=$(printf "$pr_diff" | grep '^-' | wc -l)
+additions=$(echo "$pr_diff" | jq -r '.additions')
+deletions=$(echo "$pr_diff" | jq -r '.deletions')
 
-total_changes=$((insertions + deletions))
+total_changes=$((additions + deletions))
 if [ "$total_changes" -lt "$MAX_SIZE" ]; then
     gh issue edit $PR_NUM --add-label $LABEL_NAME -R $GITHUB_REPOSITORY
 else
