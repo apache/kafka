@@ -137,6 +137,7 @@ public class ClientMetricsConfigs extends AbstractConfig {
         validateProperties(properties);
     }
 
+    @SuppressWarnings("unchecked")
     private static void validateProperties(Properties properties) {
         // Make sure that all the properties are valid
         properties.forEach((key, value) -> {
@@ -145,9 +146,11 @@ public class ClientMetricsConfigs extends AbstractConfig {
             }
         });
 
+        Map<String, Object> parsed = CONFIG.parse(properties);
+
         // Make sure that push interval is between 100ms and 1 hour.
         if (properties.containsKey(INTERVAL_MS_CONFIG)) {
-            int pushIntervalMs = Integer.parseInt(properties.getProperty(INTERVAL_MS_CONFIG));
+            int pushIntervalMs = (Integer) parsed.get(INTERVAL_MS_CONFIG);
             if (pushIntervalMs < MIN_INTERVAL_MS || pushIntervalMs > MAX_INTERVAL_MS) {
                 String msg = String.format("Invalid value %s for %s, interval must be between 100 and 3600000 (1 hour)",
                     pushIntervalMs, INTERVAL_MS_CONFIG);
@@ -157,7 +160,7 @@ public class ClientMetricsConfigs extends AbstractConfig {
 
         // Make sure that client match patterns are valid by parsing them.
         if (properties.containsKey(MATCH_CONFIG)) {
-            List<String> patterns = Arrays.asList(properties.getProperty(MATCH_CONFIG).split(","));
+            List<String> patterns = (List<String>) parsed.get(MATCH_CONFIG);
             // Parse the client matching patterns to validate if the patterns are valid.
             parseMatchingPatterns(patterns);
         }

@@ -41,7 +41,7 @@ import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig, SslConfig
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter}
-import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
+import org.apache.kafka.common.requests.{DeleteRecordsRequest}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -50,7 +50,7 @@ import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEX
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.authorizer.AclEntry
-import org.apache.kafka.server.config.{QuotaConfigs, ServerConfigs, ServerLogConfigs, ZkConfigs}
+import org.apache.kafka.server.config.{QuotaConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
 import org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS
 import org.junit.jupiter.api.Assertions._
@@ -98,7 +98,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
   @ParameterizedTest
   @Timeout(30)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDescribeConfigWithOptionTimeoutMs(quorum: String): Unit = {
     val config = createConfig
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, s"localhost:${TestUtils.IncorrectBrokerPort}")
@@ -119,7 +119,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
   @ParameterizedTest
   @Timeout(30)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testAlterConfigsWithOptionTimeoutMs(quorum: String): Unit = {
     client = createAdminClient
     val config = createConfig
@@ -141,7 +141,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testCreatePartitionWithOptionRetryOnQuotaViolation(quorum: String): Unit = {
     // Since it's hard to stably reach quota limit in integration test, we only verify quota configs are set correctly
     val config = createConfig
@@ -167,7 +167,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDescribeUserScramCredentials(quorum: String): Unit = {
     client = createAdminClient
 
@@ -235,7 +235,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
   @ParameterizedTest
   @Timeout(10)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDescribeUserScramCredentialsTimeout(quorum: String): Unit = {
     client = createInvalidAdminClient()
     try {
@@ -266,7 +266,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDescribeProducers(quorum: String): Unit = {
     client = createAdminClient
     client.createTopics(Collections.singletonList(new NewTopic(topic, 1, 1.toShort))).all().get()
@@ -339,7 +339,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDescribeTransactions(quorum: String): Unit = {
     client = createAdminClient
     client.createTopics(Collections.singletonList(new NewTopic(topic, 1, 1.toShort))).all().get()
@@ -425,7 +425,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
   @ParameterizedTest
   @Timeout(10)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDescribeTransactionsTimeout(quorum: String): Unit = {
     client = createInvalidAdminClient()
     try {
@@ -440,7 +440,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
   @ParameterizedTest
   @Timeout(10)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testAbortTransactionTimeout(quorum: String): Unit = {
     client = createInvalidAdminClient()
     try {
@@ -454,7 +454,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testListTransactions(quorum: String): Unit = {
     def createTransactionList(): Unit = {
       client = createAdminClient
@@ -528,7 +528,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testAbortTransaction(quorum: String): Unit = {
     client = createAdminClient
     val tp = new TopicPartition("topic1", 0)
@@ -593,7 +593,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testClose(quorum: String): Unit = {
     val client = createAdminClient
     client.close()
@@ -601,7 +601,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testListNodes(quorum: String): Unit = {
     client = createAdminClient
     val brokerStrs = bootstrapServers().split(",").toList.sorted
@@ -614,7 +614,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testAdminClientHandlingBadIPWithoutTimeout(quorum: String): Unit = {
     val config = createConfig
     config.put(AdminClientConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, "1000")
@@ -629,7 +629,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testCreateExistingTopicsThrowTopicExistsException(quorum: String): Unit = {
     client = createAdminClient
     val topic = "mytopic"
@@ -646,7 +646,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDeleteTopicsWithIds(quorum: String): Unit = {
     client = createAdminClient
     val topics = Seq("mytopic", "mytopic2", "mytopic3")
@@ -665,7 +665,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDeleteTopicsWithOptionTimeoutMs(quorum: String): Unit = {
     client = createInvalidAdminClient()
 
@@ -678,7 +678,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testListTopicsWithOptionTimeoutMs(quorum: String): Unit = {
     client = createInvalidAdminClient()
 
@@ -691,7 +691,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testListTopicsWithOptionListInternal(quorum: String): Unit = {
     client = createAdminClient
 
@@ -700,7 +700,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDescribeTopicsWithOptionPartitionSizeLimitPerResponse(quorum: String): Unit = {
     client = createAdminClient
 
@@ -717,7 +717,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDescribeTopicsWithOptionTimeoutMs(quorum: String): Unit = {
     client = createInvalidAdminClient()
 
@@ -733,7 +733,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     * describe should not auto create topics
     */
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDescribeNonExistingTopic(quorum: String): Unit = {
     client = createAdminClient
 
@@ -745,13 +745,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val results = client.describeTopics(Seq(nonExistingTopic, existingTopic).asJava).topicNameValues()
     assertEquals(existingTopic, results.get(existingTopic).get.name)
     assertFutureExceptionTypeEquals(results.get(nonExistingTopic), classOf[UnknownTopicOrPartitionException])
-    if (!isKRaftTest()) {
-      assertEquals(None, zkClient.getTopicPartitionCount(nonExistingTopic))
-    }
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDescribeTopicsWithIds(quorum: String): Unit = {
     client = createAdminClient
 
@@ -770,7 +767,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDescribeTopicsWithNames(quorum: String): Unit = {
     client = createAdminClient
 
@@ -785,7 +782,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDescribeCluster(quorum: String): Unit = {
     client = createAdminClient
     val result = client.describeCluster
@@ -794,14 +791,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(brokers.head.dataPlaneRequestProcessor.clusterId, clusterId)
     val controller = result.controller().get()
 
-    if (isKRaftTest()) {
-      // In KRaft, we return a random brokerId as the current controller.
-      val brokerIds = brokers.map(_.config.brokerId).toSet
-      assertTrue(brokerIds.contains(controller.id))
-    } else {
-      assertEquals(brokers.head.dataPlaneRequestProcessor.metadataCache.getControllerId.map(_.id).
-        getOrElse(MetadataResponse.NO_CONTROLLER_ID), controller.id)
-    }
+    // In KRaft, we return a random brokerId as the current controller.
+    val brokerIds = brokers.map(_.config.brokerId).toSet
+    assertTrue(brokerIds.contains(controller.id))
 
     val brokerEndpoints = bootstrapServers().split(",")
     assertEquals(brokerEndpoints.size, nodes.size)
@@ -812,7 +804,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDescribeLogDirs(quorum: String): Unit = {
     client = createAdminClient
     val topic = "topic"
@@ -844,7 +836,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDescribeReplicaLogDirs(quorum: String): Unit = {
     client = createAdminClient
     val topic = "topic"
@@ -863,7 +855,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testAlterReplicaLogDirs(quorum: String): Unit = {
     client = createAdminClient
     val topic = "topic"
@@ -953,7 +945,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDescribeConfigsNonexistent(quorum: String): Unit = {
     client = createAdminClient
 
@@ -984,7 +976,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDescribeAndAlterConfigs(quorum: String): Unit = {
     client = createAdminClient
 
@@ -1129,7 +1121,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testCreatePartitions(quorum: String): Unit = {
     client = createAdminClient
 
@@ -1194,11 +1186,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       var e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
         () => s"$desc: Expect InvalidPartitionsException when newCount is a decrease")
       assertTrue(e.getCause.isInstanceOf[InvalidPartitionsException], desc)
-      var exceptionMsgStr = if (isKRaftTest()) {
-        "The topic create-partitions-topic-1 currently has 3 partition(s); 1 would not be an increase."
-      } else {
-        "Topic currently has 3 partitions, which is higher than the requested 1."
-      }
+      var exceptionMsgStr = "The topic create-partitions-topic-1 currently has 3 partition(s); 1 would not be an increase."
       assertEquals(exceptionMsgStr, e.getCause.getMessage, desc)
       assertEquals(3, numPartitions(topic1, expectedNumPartitionsOpt = Some(3)), desc)
 
@@ -1208,11 +1196,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic2).get,
         () => s"$desc: Expect InvalidPartitionsException when requesting a noop")
       assertTrue(e.getCause.isInstanceOf[InvalidPartitionsException], desc)
-      exceptionMsgStr = if (isKRaftTest()) {
-        "Topic already has 3 partition(s)."
-      } else {
-        "Topic already has 3 partitions."
-      }
+      exceptionMsgStr = "Topic already has 3 partition(s)."
       assertEquals(exceptionMsgStr, e.getCause.getMessage, desc)
       assertEquals(3, numPartitions(topic2, expectedNumPartitionsOpt = Some(3)), desc)
 
@@ -1239,11 +1223,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(unknownTopic).get,
         () => s"$desc: Expect InvalidTopicException when using an unknown topic")
       assertTrue(e.getCause.isInstanceOf[UnknownTopicOrPartitionException], desc)
-      exceptionMsgStr = if (isKRaftTest()) {
-        "This server does not host this topic-partition."
-      } else {
-        "The topic 'an-unknown-topic' does not exist."
-      }
+      exceptionMsgStr = "This server does not host this topic-partition."
       assertEquals(exceptionMsgStr, e.getCause.getMessage, desc)
 
       // try an invalid newCount
@@ -1252,11 +1232,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
         () => s"$desc: Expect InvalidPartitionsException when newCount is invalid")
       assertTrue(e.getCause.isInstanceOf[InvalidPartitionsException], desc)
-      exceptionMsgStr = if (isKRaftTest()) {
-        "The topic create-partitions-topic-1 currently has 3 partition(s); -22 would not be an increase."
-      } else {
-        "Topic currently has 3 partitions, which is higher than the requested -22."
-      }
+      exceptionMsgStr = "The topic create-partitions-topic-1 currently has 3 partition(s); -22 would not be an increase."
       assertEquals(exceptionMsgStr, e.getCause.getMessage,
         desc)
       assertEquals(3, numPartitions(topic1, expectedNumPartitionsOpt = Some(3)), desc)
@@ -1267,13 +1243,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
         () => s"$desc: Expect InvalidPartitionsException when #brokers != replication factor")
       assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException], desc)
-      exceptionMsgStr = if (isKRaftTest()) {
-        "The manual partition assignment includes a partition with 2 replica(s), but this is not " +
+      exceptionMsgStr = "The manual partition assignment includes a partition with 2 replica(s), but this is not " +
           "consistent with previous partitions, which have 1 replica(s)."
-      } else {
-        "Inconsistent replication factor between partitions, partition 0 has 1 while partitions [3] " +
-          "have replication factors [2], respectively."
-      }
       assertEquals(exceptionMsgStr, e.getCause.getMessage, desc)
       assertEquals(3, numPartitions(topic1, expectedNumPartitionsOpt = Some(3)), desc)
 
@@ -1283,11 +1254,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
         () => s"$desc: Expect InvalidReplicaAssignmentException when #assignments != newCount - oldCount")
       assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException], desc)
-      exceptionMsgStr = if (isKRaftTest()) {
-        "Attempted to add 3 additional partition(s), but only 1 assignment(s) were specified."
-      } else {
-        "Increasing the number of partitions by 3 but 1 assignments provided."
-      }
+      exceptionMsgStr = "Attempted to add 3 additional partition(s), but only 1 assignment(s) were specified."
       assertEquals(exceptionMsgStr, e.getCause.getMessage, desc)
       assertEquals(3, numPartitions(topic1, expectedNumPartitionsOpt = Some(3)), desc)
 
@@ -1296,11 +1263,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         NewPartitions.increaseTo(4, asList(asList(1), asList(2)))).asJava, option)
       e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
         () => s"$desc: Expect InvalidReplicaAssignmentException when #assignments != newCount - oldCount")
-      exceptionMsgStr = if (isKRaftTest()) {
-        "Attempted to add 1 additional partition(s), but only 2 assignment(s) were specified."
-      } else {
-        "Increasing the number of partitions by 1 but 2 assignments provided."
-      }
+      exceptionMsgStr = "Attempted to add 1 additional partition(s), but only 2 assignment(s) were specified."
       assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException], desc)
       assertEquals(exceptionMsgStr, e.getCause.getMessage, desc)
       assertEquals(3, numPartitions(topic1, expectedNumPartitionsOpt = Some(3)), desc)
@@ -1311,11 +1274,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
         () => s"$desc: Expect InvalidReplicaAssignmentException when assignments has duplicate brokers")
       assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException], desc)
-      exceptionMsgStr = if (isKRaftTest()) {
-        "The manual partition assignment includes the broker 1 more than once."
-      } else {
-        "Duplicate brokers not allowed in replica assignment: 1, 1 for partition id 3."
-      }
+      exceptionMsgStr = "The manual partition assignment includes the broker 1 more than once."
       assertEquals(exceptionMsgStr, e.getCause.getMessage, desc)
       assertEquals(3, numPartitions(topic1, expectedNumPartitionsOpt = Some(3)), desc)
 
@@ -1325,13 +1284,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
         () => s"$desc: Expect InvalidReplicaAssignmentException when assignments have differently sized inner lists")
       assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException], desc)
-      exceptionMsgStr = if (isKRaftTest()) {
-        "The manual partition assignment includes a partition with 2 replica(s), but this is not " +
+      exceptionMsgStr = "The manual partition assignment includes a partition with 2 replica(s), but this is not " +
           "consistent with previous partitions, which have 1 replica(s)."
-      } else {
-        "Inconsistent replication factor between partitions, partition 0 has 1 " +
-          "while partitions [4] have replication factors [2], respectively."
-      }
       assertEquals(exceptionMsgStr, e.getCause.getMessage, desc)
       assertEquals(3, numPartitions(topic1, expectedNumPartitionsOpt = Some(3)), desc)
 
@@ -1341,11 +1295,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
         () => s"$desc: Expect InvalidReplicaAssignmentException when assignments contains an unknown broker")
       assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException], desc)
-      exceptionMsgStr = if (isKRaftTest()) {
-        "The manual partition assignment includes broker 12, but no such broker is registered."
-      } else {
-        "Unknown broker(s) in replica assignment: 12."
-      }
+      exceptionMsgStr = "The manual partition assignment includes broker 12, but no such broker is registered."
       assertEquals(exceptionMsgStr, e.getCause.getMessage, desc)
       assertEquals(3, numPartitions(topic1, expectedNumPartitionsOpt = Some(3)), desc)
 
@@ -1355,11 +1305,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
         () => s"$desc: Expect InvalidReplicaAssignmentException when assignments is empty")
       assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException], desc)
-      exceptionMsgStr = if (isKRaftTest()) {
-        "Attempted to add 1 additional partition(s), but only 0 assignment(s) were specified."
-      } else {
-        "Increasing the number of partitions by 1 but 0 assignments provided."
-      }
+      exceptionMsgStr = "Attempted to add 1 additional partition(s), but only 0 assignment(s) were specified."
       assertEquals(exceptionMsgStr, e.getCause.getMessage, desc)
       assertEquals(3, numPartitions(topic1, expectedNumPartitionsOpt = Some(3)), desc)
     }
@@ -1373,34 +1319,24 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     TestUtils.waitForAllPartitionsMetadata(brokers, topic1, expectedNumPartitions = 4)
     var e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic2).get)
     assertTrue(e.getCause.isInstanceOf[InvalidPartitionsException])
-    val exceptionMsgStr = if (isKRaftTest()) {
-      "The topic create-partitions-topic-2 currently has 3 partition(s); 2 would not be an increase."
-    } else {
-      "Topic currently has 3 partitions, which is higher than the requested 2."
-    }
+    val exceptionMsgStr = "The topic create-partitions-topic-2 currently has 3 partition(s); 2 would not be an increase."
     assertEquals(exceptionMsgStr, e.getCause.getMessage)
     TestUtils.waitForAllPartitionsMetadata(brokers, topic2, expectedNumPartitions = 3)
 
-    // Delete the topic. Verify addition of partitions to deleted topic is not possible. In
-    // Zookeeper mode, the topic is queued for deletion. In KRaft, the deletion occurs
-    // immediately and hence we have a different Exception thrown in the response.
+    // Delete the topic. Verify addition of partitions to deleted topic is not possible.
+    // In KRaft, the deletion occurs immediately and hence we have a different Exception thrown in the response.
     val deleteResult = client.deleteTopics(asList(topic1))
     deleteResult.topicNameValues.get(topic1).get
     alterResult = client.createPartitions(Map(topic1 ->
       NewPartitions.increaseTo(4)).asJava, validateOnly)
     e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic1).get,
       () => "Expect InvalidTopicException or UnknownTopicOrPartitionException when the topic is queued for deletion")
-    if (isKRaftTest()) {
-      assertTrue(e.getCause.isInstanceOf[UnknownTopicOrPartitionException], e.toString)
-      assertEquals("This server does not host this topic-partition.", e.getCause.getMessage)
-    } else {
-      assertTrue(e.getCause.isInstanceOf[InvalidTopicException], e.toString)
-      assertEquals("The topic is queued for deletion.", e.getCause.getMessage)
-    }
+    assertTrue(e.getCause.isInstanceOf[UnknownTopicOrPartitionException], e.toString)
+    assertEquals("This server does not host this topic-partition.", e.getCause.getMessage)
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testSeekAfterDeleteRecords(quorum: String): Unit = {
     createTopic(topic, numPartitions = 2, replicationFactor = brokerCount)
 
@@ -1430,7 +1366,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testLogStartOffsetCheckpoint(quorum: String): Unit = {
     createTopic(topic, numPartitions = 2, replicationFactor = brokerCount)
 
@@ -1470,7 +1406,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testLogStartOffsetAfterDeleteRecords(quorum: String): Unit = {
     createTopic(topic, numPartitions = 2, replicationFactor = brokerCount)
 
@@ -1491,7 +1427,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testReplicaCanFetchFromLogStartOffsetAfterDeleteRecords(quorum: String): Unit = {
     val leaders = createTopic(topic, replicationFactor = brokerCount)
     val followerIndex = if (leaders(0) != brokers.head.config.brokerId) 0 else 1
@@ -1540,7 +1476,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testAlterLogDirsAfterDeleteRecords(quorum: String): Unit = {
     client = createAdminClient
     createTopic(topic, replicationFactor = brokerCount)
@@ -1573,7 +1509,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testOffsetsForTimesAfterDeleteRecords(quorum: String): Unit = {
     createTopic(topic, numPartitions = 2, replicationFactor = brokerCount)
 
@@ -1596,7 +1532,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testConsumeAfterDeleteRecords(quorum: String): Unit = {
     val consumer = createConsumer()
     subscribeAndWaitForAssignment(topic, consumer)
@@ -1620,7 +1556,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDeleteRecordsWithException(quorum: String): Unit = {
     val consumer = createConsumer()
     subscribeAndWaitForAssignment(topic, consumer)
@@ -1640,7 +1576,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDescribeConfigsForTopic(quorum: String): Unit = {
     createTopic(topic, numPartitions = 2, replicationFactor = brokerCount)
     client = createAdminClient
@@ -1660,7 +1596,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testIncludeDocumentation(quorum: String): Unit = {
     createTopic(topic)
     client = createAdminClient
@@ -1696,7 +1632,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testInvalidAlterConfigs(quorum: String): Unit = {
     client = createAdminClient
     checkInvalidAlterConfigs(this, client)
@@ -1708,7 +1644,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
    * when the authorizer is enabled.
    */
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testAclOperations(quorum: String): Unit = {
     val acl = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "mytopic3", PatternType.LITERAL),
       new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))
@@ -1725,7 +1661,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     * since they can be done within the timeout.  New calls should receive exceptions.
     */
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDelayedClose(quorum: String): Unit = {
     client = createAdminClient
     val topics = Seq("mytopic", "mytopic2")
@@ -1743,7 +1679,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     * timeouts in progress.  The calls should be aborted after the hard shutdown timeout elapses.
     */
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testForceClose(quorum: String): Unit = {
     val config = createConfig
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, s"localhost:${TestUtils.IncorrectBrokerPort}")
@@ -1761,7 +1697,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     * even when the default request timeout is shorter.
     */
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testMinimumRequestTimeouts(quorum: String): Unit = {
     val config = createConfig
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, s"localhost:${TestUtils.IncorrectBrokerPort}")
@@ -1779,7 +1715,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     * Test injecting timeouts for calls that are in flight.
     */
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testCallInFlightTimeouts(quorum: String): Unit = {
     val config = createConfig
     config.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "100000000")
@@ -1799,7 +1735,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
    * Test the consumer group APIs.
    */
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testConsumerGroups(quorum: String): Unit = {
     val config = createConfig
     client = Admin.create(config)
@@ -2068,7 +2004,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDeleteConsumerGroupOffsets(quorum: String): Unit = {
     val config = createConfig
     client = Admin.create(config)
@@ -2291,7 +2227,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testElectPreferredLeaders(quorum: String): Unit = {
     client = createAdminClient
 
@@ -2376,11 +2312,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     ): Unit = {
       val exception = result.partitions.get.get(topicPartition).get
       assertEquals(classOf[UnknownTopicOrPartitionException], exception.getClass)
-      if (isKRaftTest()) {
-        assertEquals(s"No such topic as ${topicPartition.topic()}", exception.getMessage)
-      } else {
-        assertEquals("The partition does not exist.", exception.getMessage)
-      }
+      assertEquals(s"No such topic as ${topicPartition.topic()}", exception.getMessage)
     }
 
     // unknown topic
@@ -2419,15 +2351,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     ): Unit = {
       val exception = result.partitions.get.get(topicPartition).get
       assertEquals(classOf[PreferredLeaderNotAvailableException], exception.getClass)
-      if (isKRaftTest()) {
-        assertTrue(exception.getMessage.contains(
-          "The preferred leader was not available."),
-          s"Unexpected message: ${exception.getMessage}")
-      } else {
-        assertTrue(exception.getMessage.contains(
-          s"Failed to elect leader for partition $topicPartition under strategy PreferredReplicaPartitionLeaderElectionStrategy"),
-          s"Unexpected message: ${exception.getMessage}")
-      }
+      assertTrue(exception.getMessage.contains(
+        "The preferred leader was not available."),
+        s"Unexpected message: ${exception.getMessage}")
     }
 
     // ... now what happens if we try to elect the preferred leader and it's down?
@@ -2450,7 +2376,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testElectUncleanLeadersForOnePartition(quorum: String): Unit = {
     // Case: unclean leader election with one topic partition
     client = createAdminClient
@@ -2478,7 +2404,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testElectUncleanLeadersForManyPartitions(quorum: String): Unit = {
     // Case: unclean leader election with many topic partitions
     client = createAdminClient
@@ -2518,7 +2444,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testElectUncleanLeadersForAllPartitions(quorum: String): Unit = {
     // Case: noop unclean leader election and valid unclean leader election for all partitions
     client = createAdminClient
@@ -2558,7 +2484,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testElectUncleanLeadersForUnknownPartitions(quorum: String): Unit = {
     // Case: unclean leader election for unknown topic
     client = createAdminClient
@@ -2584,7 +2510,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testElectUncleanLeadersWhenNoLiveBrokers(quorum: String): Unit = {
     // Case: unclean leader election with no live brokers
     client = createAdminClient
@@ -2613,7 +2539,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testElectUncleanLeadersNoop(quorum: String): Unit = {
     // Case: noop unclean leader election with explicit topic partitions
     client = createAdminClient
@@ -2641,7 +2567,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testElectUncleanLeadersAndNoop(quorum: String): Unit = {
     // Case: one noop unclean leader election and one valid unclean leader election
     client = createAdminClient
@@ -2681,7 +2607,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testListReassignmentsDoesNotShowNonReassigningPartitions(quorum: String): Unit = {
     client = createAdminClient
 
@@ -2698,7 +2624,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testListReassignmentsDoesNotShowDeletedPartitions(quorum: String): Unit = {
     client = createAdminClient
 
@@ -2713,7 +2639,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testValidIncrementalAlterConfigs(quorum: String): Unit = {
     client = createAdminClient
 
@@ -2823,17 +2749,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       topic1Resource -> topic1AlterConfigs
     ).asJava, new AlterConfigsOptions().validateOnly(true))
 
-    if (isKRaftTest()) {
-      assertFutureExceptionTypeEquals(alterResult.values().get(topic1Resource), classOf[InvalidConfigurationException],
-        Some("Invalid value zip for configuration compression.type"))
-    } else {
-      assertFutureExceptionTypeEquals(alterResult.values().get(topic1Resource), classOf[InvalidConfigurationException],
-        Some("Invalid config value for resource"))
-    }
+    assertFutureExceptionTypeEquals(alterResult.values().get(topic1Resource), classOf[InvalidConfigurationException],
+      Some("Invalid value zip for configuration compression.type"))
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testAppendAlreadyExistsConfigsAndSubtractNotExistsConfigs(quorum: String): Unit = {
     client = createAdminClient
 
@@ -2874,7 +2795,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testIncrementalAlterConfigsDeleteAndSetBrokerConfigs(quorum: String): Unit = {
     client = createAdminClient
     val broker0Resource = new ConfigResource(ConfigResource.Type.BROKER, "0")
@@ -2908,7 +2829,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testIncrementalAlterConfigsDeleteBrokerConfigs(quorum: String): Unit = {
     client = createAdminClient
     val broker0Resource = new ConfigResource(ConfigResource.Type.BROKER, "0")
@@ -2945,7 +2866,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testInvalidIncrementalAlterConfigs(quorum: String): Unit = {
     client = createAdminClient
 
@@ -3009,18 +2930,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(Set(topic1Resource, topic2Resource).asJava, alterResult.values.keySet)
 
     assertFutureExceptionTypeEquals(alterResult.values().get(topic1Resource), classOf[InvalidConfigurationException],
-      if (isKRaftTest()) {
-        Some("Can't APPEND to key compression.type because its type is not LIST.")
-      } else {
-        Some("Config value append is not allowed for config")
-      })
+      Some("Can't APPEND to key compression.type because its type is not LIST."))
 
     assertFutureExceptionTypeEquals(alterResult.values().get(topic2Resource), classOf[InvalidConfigurationException],
-      if (isKRaftTest()) {
-        Some("Can't SUBTRACT to key compression.type because its type is not LIST.")
-      } else {
-        Some("Config value subtract is not allowed for config")
-      })
+      Some("Can't SUBTRACT to key compression.type because its type is not LIST."))
 
     // Try to add invalid config
     topic1AlterConfigs = Seq(
@@ -3033,15 +2946,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(Set(topic1Resource).asJava, alterResult.values.keySet)
 
     assertFutureExceptionTypeEquals(alterResult.values().get(topic1Resource), classOf[InvalidConfigurationException],
-      if (isKRaftTest()) {
-        Some("Invalid value 1.1 for configuration min.cleanable.dirty.ratio: Value must be no more than 1")
-      } else {
-        Some("Invalid config value for resource")
-      })
+      Some("Invalid value 1.1 for configuration min.cleanable.dirty.ratio: Value must be no more than 1"))
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testInvalidAlterPartitionReassignments(quorum: String): Unit = {
     client = createAdminClient
     val topic = "alter-reassignments-topic-1"
@@ -3081,7 +2990,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testLongTopicNames(quorum: String): Unit = {
     val client = createAdminClient
     val longTopicName = String.join("", Collections.nCopies(249, "x"));
@@ -3101,17 +3010,13 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
   // Verify that createTopics and alterConfigs fail with null values
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testNullConfigs(quorum: String): Unit = {
 
     def validateLogConfig(compressionType: String): Unit = {
-      val logConfig = if (isKRaftTest()) {
-        ensureConsistentKRaftMetadata()
-        val topicProps = brokers.head.metadataCache.asInstanceOf[KRaftMetadataCache].topicConfig(topic)
-        LogConfig.fromProps(Collections.emptyMap[String, AnyRef], topicProps)
-      } else {
-        zkClient.getLogConfigs(Set(topic), Collections.emptyMap[String, AnyRef])._1(topic)
-      }
+      ensureConsistentKRaftMetadata()
+      val topicProps = brokers.head.metadataCache.asInstanceOf[KRaftMetadataCache].topicConfig(topic)
+      val logConfig = LogConfig.fromProps(Collections.emptyMap[String, AnyRef], topicProps)
 
       assertEquals(compressionType, logConfig.originals.get(TopicConfig.COMPRESSION_TYPE_CONFIG))
       assertNull(logConfig.originals.get(TopicConfig.RETENTION_BYTES_CONFIG))
@@ -3149,7 +3054,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDescribeConfigsForLog4jLogLevels(quorum: String): Unit = {
     client = createAdminClient
     LoggerFactory.getLogger("kafka.cluster.Replica").trace("Message to create the logger")
@@ -3166,7 +3071,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   @Disabled // To be re-enabled once KAFKA-8779 is resolved
   def testIncrementalAlterConfigsForLog4jLogLevels(quorum: String): Unit = {
     client = createAdminClient
@@ -3231,7 +3136,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     * 5. Ensure the kafka.controller.KafkaController logger's level is ERROR (the current root logger level)
     */
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   @Disabled // To be re-enabled once KAFKA-8779 is resolved
   def testIncrementalAlterConfigsForLog4jLogLevelsCanResetLoggerToCurrentRoot(quorum: String): Unit = {
     client = createAdminClient
@@ -3274,8 +3179,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  @Disabled // Zk to be re-enabled once KAFKA-8779 is resolved
+  @ValueSource(strings = Array("kraft"))
+  @Disabled // to be re-enabled once KAFKA-8779 is resolved
   def testIncrementalAlterConfigsForLog4jLogLevelsCannotResetRootLogger(quorum: String): Unit = {
     client = createAdminClient
     val deleteRootLoggerEntry = Seq(
@@ -3286,7 +3191,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   @Disabled // To be re-enabled once KAFKA-8779 is resolved
   def testIncrementalAlterConfigsForLog4jLogLevelsDoesNotWorkWithInvalidConfigs(quorum: String): Unit = {
     client = createAdminClient
@@ -3331,7 +3236,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     */
   @nowarn("cat=deprecation")
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft")) // Zk to be re-enabled once KAFKA-8779 is resolved
+  @ValueSource(strings = Array("kraft"))
   def testAlterConfigsForLog4jLogLevelsDoesNotWork(quorum: String): Unit = {
     client = createAdminClient
 
@@ -3378,13 +3283,13 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testAppendConfigToEmptyDefaultValue(ignored: String): Unit = {
     testAppendConfig(new Properties(), "0:0", "0:0")
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testAppendConfigToExistentValue(ignored: String): Unit = {
     val props = new Properties()
     props.setProperty(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "1:1")
@@ -3446,7 +3351,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
    * BaseAdminIntegrationTest.modifyConfigs.
    */
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testCreateTopicsReturnsConfigs(quorum: String): Unit = {
     client = Admin.create(super.createConfig)
 
@@ -3460,17 +3365,15 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     TestUtils.incrementalAlterConfigs(brokers, client, newLogCleanerDeleteRetention, perBrokerConfig = true)
       .all().get(15, TimeUnit.SECONDS)
 
-    if (isKRaftTest()) {
-      // In KRaft mode, we don't yet support altering configs on controller nodes, except by setting
-      // default node configs. Therefore, we have to set the dynamic config directly to test this.
-      val controllerNodeResource = new ConfigResource(ConfigResource.Type.BROKER,
-        controllerServer.config.nodeId.toString)
-      controllerServer.controller.incrementalAlterConfigs(ANONYMOUS_CONTEXT,
-        Collections.singletonMap(controllerNodeResource,
-          Collections.singletonMap(CleanerConfig.LOG_CLEANER_DELETE_RETENTION_MS_PROP,
-            new SimpleImmutableEntry(AlterConfigOp.OpType.SET, "34"))), false).get()
-      ensureConsistentKRaftMetadata()
-    }
+    // In KRaft mode, we don't yet support altering configs on controller nodes, except by setting
+    // default node configs. Therefore, we have to set the dynamic config directly to test this.
+    val controllerNodeResource = new ConfigResource(ConfigResource.Type.BROKER,
+      controllerServer.config.nodeId.toString)
+    controllerServer.controller.incrementalAlterConfigs(ANONYMOUS_CONTEXT,
+      Collections.singletonMap(controllerNodeResource,
+        Collections.singletonMap(CleanerConfig.LOG_CLEANER_DELETE_RETENTION_MS_PROP,
+          new SimpleImmutableEntry(AlterConfigOp.OpType.SET, "34"))), false).get()
+    ensureConsistentKRaftMetadata()
 
     waitUntilTrue(() => brokers.forall(_.config.originals.getOrDefault(
       CleanerConfig.LOG_CLEANER_DELETE_RETENTION_MS_PROP, "").toString.equals("34")),
@@ -3522,11 +3425,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       topicConfigs.get(TopicConfig.SEGMENT_JITTER_MS_CONFIG))
 
     // From static broker config by the synonym LogRollTimeHoursProp.
-    val segmentMsPropType = if (isKRaftTest()) {
-      ConfigSource.STATIC_BROKER_CONFIG
-    } else {
-      ConfigSource.DEFAULT_CONFIG
-    }
+    val segmentMsPropType = ConfigSource.STATIC_BROKER_CONFIG
     assertEquals(new ConfigEntry(TopicConfig.SEGMENT_MS_CONFIG, "7200000",
       segmentMsPropType, false, false, Collections.emptyList(), null, null),
       topicConfigs.get(TopicConfig.SEGMENT_MS_CONFIG))
@@ -3632,7 +3531,7 @@ object PlaintextAdminIntegrationTest {
     var topicConfigEntries2 = Seq(new ConfigEntry(TopicConfig.COMPRESSION_TYPE_CONFIG, "snappy")).asJava
 
     val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, test.brokers.head.config.brokerId.toString)
-    val brokerConfigEntries = Seq(new ConfigEntry(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")).asJava
+    val brokerConfigEntries = Seq(new ConfigEntry(ServerConfigs.BROKER_ID_CONFIG, "10")).asJava
 
     // Alter configs: first and third are invalid, second is valid
     var alterResult = admin.alterConfigs(Map(

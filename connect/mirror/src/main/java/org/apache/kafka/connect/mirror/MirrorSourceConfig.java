@@ -18,7 +18,6 @@ package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.utils.ConfigUtils;
 
 import java.time.Duration;
 import java.util.List;
@@ -40,13 +39,11 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
     public static final String TOPICS_DEFAULT = DefaultTopicFilter.TOPICS_INCLUDE_DEFAULT;
     private static final String TOPICS_DOC = "Topics to replicate. Supports comma-separated topic names and regexes.";
     public static final String TOPICS_EXCLUDE = DefaultTopicFilter.TOPICS_EXCLUDE_CONFIG;
-    public static final String TOPICS_EXCLUDE_ALIAS = DefaultTopicFilter.TOPICS_EXCLUDE_CONFIG_ALIAS;
     public static final String TOPICS_EXCLUDE_DEFAULT = DefaultTopicFilter.TOPICS_EXCLUDE_DEFAULT;
     private static final String TOPICS_EXCLUDE_DOC = "Excluded topics. Supports comma-separated topic names and regexes."
             + " Excludes take precedence over includes.";
 
     public static final String CONFIG_PROPERTIES_EXCLUDE = DefaultConfigPropertyFilter.CONFIG_PROPERTIES_EXCLUDE_CONFIG;
-    public static final String CONFIG_PROPERTIES_EXCLUDE_ALIAS = DefaultConfigPropertyFilter.CONFIG_PROPERTIES_EXCLUDE_ALIAS_CONFIG;
     public static final String CONFIG_PROPERTIES_EXCLUDE_DEFAULT = DefaultConfigPropertyFilter.CONFIG_PROPERTIES_EXCLUDE_DEFAULT;
     private static final String CONFIG_PROPERTIES_EXCLUDE_DOC = "Topic config properties that should not be replicated. Supports "
             + "comma-separated property names and regexes.";
@@ -97,9 +94,7 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
     public static final String OFFSET_SYNCS_TARGET_ADMIN_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "target-admin";
 
     public MirrorSourceConfig(Map<String, String> props) {
-        super(CONNECTOR_CONFIG_DEF, ConfigUtils.translateDeprecatedConfigs(props, new String[][]{
-                {TOPICS_EXCLUDE, TOPICS_EXCLUDE_ALIAS},
-                {CONFIG_PROPERTIES_EXCLUDE, CONFIG_PROPERTIES_EXCLUDE_ALIAS}}));
+        super(CONNECTOR_CONFIG_DEF, props);
     }
 
     public MirrorSourceConfig(ConfigDef configDef, Map<String, String> props) {
@@ -213,23 +208,11 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
                         ConfigDef.Importance.HIGH,
                         TOPICS_EXCLUDE_DOC)
                 .define(
-                        TOPICS_EXCLUDE_ALIAS,
-                        ConfigDef.Type.LIST,
-                        null,
-                        ConfigDef.Importance.HIGH,
-                        "Deprecated. Use " + TOPICS_EXCLUDE + " instead.")
-                .define(
                         CONFIG_PROPERTIES_EXCLUDE,
                         ConfigDef.Type.LIST,
                         CONFIG_PROPERTIES_EXCLUDE_DEFAULT,
                         ConfigDef.Importance.HIGH,
                         CONFIG_PROPERTIES_EXCLUDE_DOC)
-                .define(
-                        CONFIG_PROPERTIES_EXCLUDE_ALIAS,
-                        ConfigDef.Type.LIST,
-                        null,
-                        ConfigDef.Importance.HIGH,
-                        "Deprecated. Use " + CONFIG_PROPERTIES_EXCLUDE + " instead.")
                 .define(
                         TOPIC_FILTER_CLASS,
                         ConfigDef.Type.CLASS,

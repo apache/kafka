@@ -49,6 +49,15 @@
                         <li>The <code>add.source.alias.to.metrics</code> configuration was removed from <code>MirrorSourceConnector</code>.
                             The source cluster alias is now always added to the metrics.
                         </li>
+                        <li>The <code>config.properties.blacklist</code> was removed from the <code>org.apache.kafka.connect.mirror.MirrorSourceConfig</code>
+                            Please use <code>config.properties.exclude</code> instead.
+                        </li>
+                        <li>The <code>topics.blacklist</code> was removed from the <code>org.apache.kafka.connect.mirror.MirrorSourceConfig</code>
+                            Please use <code>topics.exclude</code> instead.
+                        </li>
+                        <li>The <code>groups.blacklist</code> was removed from the <code>org.apache.kafka.connect.mirror.MirrorSourceConfig</code>
+                            Please use <code>groups.exclude</code> instead.
+                        </li>
                     </ul>
                 </li>
                 <li><b>Tools</b>
@@ -75,10 +84,21 @@
                         </li>
                     </ul>
                 </li>
+                <li><b>Consumer</b>
+                    <ul>
+                        <li>The <code>committed(TopicPartition)</code> and <code>committed(TopicPartition, Duration)</code> methods were removed from the consumer.
+                            Please use <code>committed(Set&ltTopicPartition&gt)</code> and <code>committed(Set&ltTopicPartition&gt, Duration)</code> instead.
+                        </li>
+                    </ul>
+                </li>
             </ul>
         </li>
         <li>Other changes:
             <ul>
+                <li>
+                    Scala 2.12 support has been removed in Apache Kafka 4.0
+                    See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308218">KIP-751</a> for more details
+                </li>
                 <li>The <code>--delete-config</code> option in the <code>kafka-topics</code> command line tool has been deprecated.
                 </li>
             </ul>

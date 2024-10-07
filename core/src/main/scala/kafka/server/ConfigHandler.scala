@@ -24,7 +24,6 @@ import kafka.log.UnifiedLog
 import kafka.network.ConnectionQuotas
 import kafka.server.Constants._
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.utils.Implicits._
 import kafka.utils.Logging
 import org.apache.kafka.server.config.{QuotaConfigs, ReplicationConfigs, ZooKeeperInternals}
 import org.apache.kafka.common.config.TopicConfig
@@ -64,7 +63,7 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     // Validate the configurations.
     val configNamesToExclude = excludedConfigs(topic, topicConfig)
     val props = new Properties()
-    topicConfig.asScala.forKeyValue { (key, value) =>
+    topicConfig.asScala.foreachEntry { (key, value) =>
       if (!configNamesToExclude.contains(key)) props.put(key, value)
     }
 
