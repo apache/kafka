@@ -17,18 +17,21 @@
 
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 
+import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Objects;
 
 /**
- * Event to perform {@link AsyncKafkaConsumer#seekToBeginning(Collection)} and {@link AsyncKafkaConsumer#seekToEnd(Collection)}
- * in the background thread. This can avoid race conditions when subscription state is updated. When a ResetOffsetEvent is completed
- * successfully, it does not guarantee the position reset request have been sent.
+ * This event indicates that partition offsets should be reset according to the specified strategy. The actual reset of
+ * the positions will occur during the next update of fetch positions via {@link KafkaConsumer#poll(Duration)} or
+ * {@link KafkaConsumer#position(TopicPartition)}.
+ * This mechanism is used to execute {@link AsyncKafkaConsumer#seekToBeginning(Collection)} and {@link AsyncKafkaConsumer#seekToEnd(Collection)}.
  */
 public class ResetOffsetEvent extends CompletableApplicationEvent<Void> {
 
