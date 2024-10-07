@@ -43,7 +43,6 @@ import java.time.Duration;
  * @param <R> {@link KeyValue} return type (both key and value type can be set
  *            arbitrarily)
  * @see TransformerSupplier
- * @see KStream#transform(TransformerSupplier, String...)
  * @see ValueTransformer
  * @see KStream#map(KeyValueMapper)
  * @see KStream#flatMap(KeyValueMapper)
@@ -71,9 +70,6 @@ public interface Transformer<K, V, R> {
 
     /**
      * Transform the record with the given key and value.
-     * Additionally, any {@link StateStore state} that is {@link KStream#transform(TransformerSupplier, String...)
-     * attached} to this operator can be accessed and modified
-     * arbitrarily (cf. {@link ProcessorContext#getStateStore(String)}).
      * <p>
      * If only one record should be forward downstream, {@code transform} can return a new {@link KeyValue}. If
      * more than one output record should be forwarded downstream, {@link ProcessorContext#forward(Object, Object)}

@@ -55,7 +55,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.ThreadMetadata;
@@ -71,7 +70,6 @@ import org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
-import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
@@ -2287,85 +2285,6 @@ public class StreamThreadTest {
         // we should skip stream time punctuation, only trigger wall-clock time punctuation
         assertEquals(1, punctuatedStreamTime.size());
         assertEquals(2, punctuatedWallClockTime.size());
-    }
-
-    @ParameterizedTest
-    @MethodSource("data")        
-    @SuppressWarnings("deprecation")
-    public void shouldPunctuateWithTimestampPreservedInProcessorContext(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        assumeFalse(processingThreadsEnabled);
-
-        final org.apache.kafka.streams.kstream.TransformerSupplier<Object, Object, KeyValue<Object, Object>> punctuateProcessor =
-            () -> new org.apache.kafka.streams.kstream.Transformer<Object, Object, KeyValue<Object, Object>>() {
-                @Override
-                public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
-                    context.schedule(Duration.ofMillis(100L), PunctuationType.WALL_CLOCK_TIME, timestamp -> context.forward("key", "value"));
-                    context.schedule(Duration.ofMillis(100L), PunctuationType.STREAM_TIME, timestamp -> context.forward("key", "value"));
-                }
-
-                @Override
-                public KeyValue<Object, Object> transform(final Object key, final Object value) {
-                        return null;
-                    }
-
-                @Override
-                public void close() {}
-            };
-
-        final List<Long> peekedContextTime = new ArrayList<>();
-        final ProcessorSupplier<Object, Object, Void, Void> peekProcessor =
-            () -> (Processor<Object, Object, Void, Void>) record -> peekedContextTime.add(record.timestamp());
-
-        internalStreamsBuilder.stream(Collections.singleton(topic1), consumed)
-            .transform(punctuateProcessor)
-            .process(peekProcessor);
-        internalStreamsBuilder.buildAndOptimizeTopology();
-
-        final long currTime = mockTime.milliseconds();
-        thread = createStreamThread(CLIENT_ID, stateUpdaterEnabled, processingThreadsEnabled);
-
-        thread.setState(StreamThread.State.STARTING);
-        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
-        final List<TopicPartition> assignedPartitions = new ArrayList<>();
-
-        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
-
-        // assign single partition
-        assignedPartitions.add(t1p1);
-        activeTasks.put(task1, Collections.singleton(t1p1));
-
-        thread.taskManager().handleAssignment(activeTasks, emptyMap());
-
-        clientSupplier.consumer.assign(assignedPartitions);
-        clientSupplier.consumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
-        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
-
-        runOnce(processingThreadsEnabled);
-        assertEquals(0, peekedContextTime.size());
-
-        mockTime.sleep(100L);
-        runOnce(processingThreadsEnabled);
-
-        assertEquals(1, peekedContextTime.size());
-        assertEquals(currTime + 100L, peekedContextTime.get(0).longValue());
-
-        clientSupplier.consumer.addRecord(new ConsumerRecord<>(
-            topic1,
-            1,
-            110L,
-            110L,
-            TimestampType.CREATE_TIME,
-            "K".getBytes().length,
-            "V".getBytes().length,
-            "K".getBytes(),
-            "V".getBytes(),
-            new RecordHeaders(),
-            Optional.empty()));
-
-        runOnce(processingThreadsEnabled);
-
-        assertEquals(2, peekedContextTime.size());
-        assertEquals(110L, peekedContextTime.get(1).longValue());
     }
 
     @ParameterizedTest

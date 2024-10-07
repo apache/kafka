@@ -17,13 +17,11 @@
 package org.apache.kafka.streams.scala
 package kstream
 
-import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams.kstream.{
   GlobalKTable,
   JoinWindows,
   KStream => KStreamJ,
   Printed,
-  TransformerSupplier,
   ValueTransformerSupplier,
   ValueTransformerWithKeySupplier
 }
@@ -36,7 +34,6 @@ import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
   KeyValueMapperFromFunction,
   MapperFromFunction,
   PredicateFromFunction,
-  TransformerSupplierAsJava,
   ValueMapperFromFunction,
   ValueMapperWithKeyFromFunction,
   ValueTransformerSupplierAsJava,
@@ -494,98 +491,6 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    */
   def toTable(named: Named, materialized: Materialized[K, V, ByteArrayKeyValueStore]): KTable[K, V] =
     new KTable(inner.toTable(named, materialized))
-
-  /**
-   * Transform each record of the input stream into zero or more records in the output stream (both key and value type
-   * can be altered arbitrarily).
-   * A `Transformer` (provided by the given `TransformerSupplier`) is applied to each input record
-   * and computes zero or more output records.
-   * In order to assign a state, the state must be created and added via `addStateStore` before they can be connected
-   * to the `Transformer`.
-   * It's not required to connect global state stores that are added via `addGlobalStore`;
-   * read-only access to global state stores is available by default.
-   *
-   * @param transformerSupplier the `TransformerSuplier` that generates `Transformer`
-   * @param stateStoreNames     the names of the state stores used by the processor
-   * @return a [[KStream]] that contains more or less records with new key and value (possibly of different type)
-   * @see `org.apache.kafka.streams.kstream.KStream#transform`
-   */
-  @deprecated(since = "3.3", message = "Use process(ProcessorSupplier, String*) instead.")
-  def transform[K1, V1](
-    transformerSupplier: TransformerSupplier[K, V, KeyValue[K1, V1]],
-    stateStoreNames: String*
-  ): KStream[K1, V1] =
-    new KStream(inner.transform(transformerSupplier, stateStoreNames: _*))
-
-  /**
-   * Transform each record of the input stream into zero or more records in the output stream (both key and value type
-   * can be altered arbitrarily).
-   * A `Transformer` (provided by the given `TransformerSupplier`) is applied to each input record
-   * and computes zero or more output records.
-   * In order to assign a state, the state must be created and added via `addStateStore` before they can be connected
-   * to the `Transformer`.
-   * It's not required to connect global state stores that are added via `addGlobalStore`;
-   * read-only access to global state stores is available by default.
-   *
-   * @param transformerSupplier the `TransformerSuplier` that generates `Transformer`
-   * @param named               a [[Named]] config used to name the processor in the topology
-   * @param stateStoreNames     the names of the state stores used by the processor
-   * @return a [[KStream]] that contains more or less records with new key and value (possibly of different type)
-   * @see `org.apache.kafka.streams.kstream.KStream#transform`
-   */
-  @deprecated(since = "3.3", message = "Use process(ProcessorSupplier, Named, String*) instead.")
-  def transform[K1, V1](
-    transformerSupplier: TransformerSupplier[K, V, KeyValue[K1, V1]],
-    named: Named,
-    stateStoreNames: String*
-  ): KStream[K1, V1] =
-    new KStream(inner.transform(transformerSupplier, named, stateStoreNames: _*))
-
-  /**
-   * Transform each record of the input stream into zero or more records in the output stream (both key and value type
-   * can be altered arbitrarily).
-   * A `Transformer` (provided by the given `TransformerSupplier`) is applied to each input record
-   * and computes zero or more output records.
-   * In order to assign a state, the state must be created and added via `addStateStore` before they can be connected
-   * to the `Transformer`.
-   * It's not required to connect global state stores that are added via `addGlobalStore`;
-   * read-only access to global state stores is available by default.
-   *
-   * @param transformerSupplier the `TransformerSuplier` that generates `Transformer`
-   * @param stateStoreNames     the names of the state stores used by the processor
-   * @return a [[KStream]] that contains more or less records with new key and value (possibly of different type)
-   * @see `org.apache.kafka.streams.kstream.KStream#transform`
-   */
-  @deprecated(since = "3.3", message = "Use process(ProcessorSupplier, String*) instead.")
-  def flatTransform[K1, V1](
-    transformerSupplier: TransformerSupplier[K, V, Iterable[KeyValue[K1, V1]]],
-    stateStoreNames: String*
-  ): KStream[K1, V1] =
-    new KStream(inner.flatTransform(transformerSupplier.asJava, stateStoreNames: _*))
-
-  /**
-   * Transform each record of the input stream into zero or more records in the output stream (both key and value type
-   * can be altered arbitrarily).
-   * A `Transformer` (provided by the given `TransformerSupplier`) is applied to each input record
-   * and computes zero or more output records.
-   * In order to assign a state, the state must be created and added via `addStateStore` before they can be connected
-   * to the `Transformer`.
-   * It's not required to connect global state stores that are added via `addGlobalStore`;
-   * read-only access to global state stores is available by default.
-   *
-   * @param transformerSupplier the `TransformerSuplier` that generates `Transformer`
-   * @param named               a [[Named]] config used to name the processor in the topology
-   * @param stateStoreNames     the names of the state stores used by the processor
-   * @return a [[KStream]] that contains more or less records with new key and value (possibly of different type)
-   * @see `org.apache.kafka.streams.kstream.KStream#transform`
-   */
-  @deprecated(since = "3.3", message = "Use process(ProcessorSupplier, Named, String*) instead.")
-  def flatTransform[K1, V1](
-    transformerSupplier: TransformerSupplier[K, V, Iterable[KeyValue[K1, V1]]],
-    named: Named,
-    stateStoreNames: String*
-  ): KStream[K1, V1] =
-    new KStream(inner.flatTransform(transformerSupplier.asJava, named, stateStoreNames: _*))
 
   /**
    * Transform the value of each input record into zero or more records (with possible new type) in the
