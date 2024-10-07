@@ -98,11 +98,13 @@ public class StreamsStandByReplicaTest {
         streamsProperties.putAll(updated);
 
         if (!confirmCorrectConfigs(streamsProperties)) {
-            System.err.printf("ERROR: Did not have all required configs expected  to contain %s, %s,  %s,  %s%n",
-                                             StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG),
-                                             StreamsConfig.producerPrefix(ProducerConfig.RETRIES_CONFIG),
-                                             StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG),
-                                             StreamsConfig.producerPrefix(ProducerConfig.MAX_BLOCK_MS_CONFIG));
+            System.err.printf(
+                    "ERROR: Did not have all required configs expected  to contain %s, %s,  %s,  %s%n",
+                    StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG),
+                    StreamsConfig.producerPrefix(ProducerConfig.RETRIES_CONFIG),
+                    StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG),
+                    StreamsConfig.producerPrefix(ProducerConfig.MAX_BLOCK_MS_CONFIG)
+            );
 
             Exit.exit(1);
         }
