@@ -85,3 +85,28 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
         # restart broker with zookeeper.set.acl=true and acls
         self.kafka.zk_set_acl = True
         self.kafka.restart_cluster()
+
+    @cluster(num_nodes=9)
+    @matrix(security_protocol=["PLAINTEXT", "SSL", "SASL_SSL", "SASL_PLAINTEXT"])
+    def test_zk_security_upgrade(self, security_protocol):
+        self.zk.start()
+        self.kafka.security_protocol = security_protocol
+        self.kafka.interbroker_security_protocol = security_protocol
+
+        # set acls
+        if self.is_secure:
+            self.kafka.authorizer_class_name = KafkaService.ZK_ACL_AUTHORIZER
+            # Force use of direct ZooKeeper access because Kafka is not yet started
+            self.acls.set_acls(security_protocol, self.kafka, self.topic, self.group, force_use_zk_connection=True,
+                               additional_cluster_operations_to_grant=['Create'])
+
+        if self.no_sasl:
+            self.kafka.start()
+        else:
+            self.kafka.start(self.zk.zk_principals)
+
+        #Create Producer and Consumer
+        self.create_producer_and_consumer()
+
+        #Run upgrade
+        self.run_produce_consume_validate(self.run_zk_migration)
