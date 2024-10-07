@@ -213,7 +213,7 @@ public class CoordinatorStreamsRecordHelpers {
         for (Map.Entry<String, Set<Integer>> entry : activeTasks.entrySet()) {
             activeTaskIds.add(
                 new StreamsGroupTargetAssignmentMemberValue.TaskIds()
-                    .setSubtopology(entry.getKey())
+                    .setSubtopologyId(entry.getKey())
                     .setPartitions(new ArrayList<>(entry.getValue()))
             );
         }
@@ -221,7 +221,7 @@ public class CoordinatorStreamsRecordHelpers {
         for (Map.Entry<String, Set<Integer>> entry : standbyTasks.entrySet()) {
             standbyTaskIds.add(
                 new StreamsGroupTargetAssignmentMemberValue.TaskIds()
-                    .setSubtopology(entry.getKey())
+                    .setSubtopologyId(entry.getKey())
                     .setPartitions(new ArrayList<>(entry.getValue()))
             );
         }
@@ -229,7 +229,7 @@ public class CoordinatorStreamsRecordHelpers {
         for (Map.Entry<String, Set<Integer>> entry : warmupTasks.entrySet()) {
             warmupTaskIds.add(
                 new StreamsGroupTargetAssignmentMemberValue.TaskIds()
-                    .setSubtopology(entry.getKey())
+                    .setSubtopologyId(entry.getKey())
                     .setPartitions(new ArrayList<>(entry.getValue()))
             );
         }
@@ -366,7 +366,7 @@ public class CoordinatorStreamsRecordHelpers {
         List<StreamsGroupCurrentMemberAssignmentValue.TaskIds> taskIds = new ArrayList<>(tasks.size());
         tasks.forEach((subtopologyId, partitions) ->
             taskIds.add(new StreamsGroupCurrentMemberAssignmentValue.TaskIds()
-                .setSubtopology(subtopologyId)
+                .setSubtopologyId(subtopologyId)
                 .setPartitions(new ArrayList<>(partitions)))
         );
         return taskIds;
@@ -399,7 +399,7 @@ public class CoordinatorStreamsRecordHelpers {
                 return new StreamsGroupTopologyValue.TopicInfo().setName(topicInfo.name()).setTopicConfigs(topicConfigs);
             }).collect(Collectors.toList());
 
-            value.topology().add(new StreamsGroupTopologyValue.Subtopology().setSubtopology(subtopology.subtopologyId())
+            value.topology().add(new StreamsGroupTopologyValue.Subtopology().setSubtopologyId(subtopology.subtopologyId())
                 .setSourceTopics(subtopology.sourceTopics()).setRepartitionSinkTopics(subtopology.repartitionSinkTopics())
                 .setRepartitionSourceTopics(repartitionSourceTopics).setStateChangelogTopics(stateChangelogTopics));
         });

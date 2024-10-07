@@ -108,19 +108,19 @@ public class Assignment {
         return new Assignment(
             record.activeTasks().stream()
                 .collect(Collectors.toMap(
-                        StreamsGroupTargetAssignmentMemberValue.TaskIds::subtopology,
+                        StreamsGroupTargetAssignmentMemberValue.TaskIds::subtopologyId,
                         taskId -> new HashSet<>(taskId.partitions())
                     )
                 ),
             record.standbyTasks().stream()
                 .collect(Collectors.toMap(
-                        StreamsGroupTargetAssignmentMemberValue.TaskIds::subtopology,
+                        StreamsGroupTargetAssignmentMemberValue.TaskIds::subtopologyId,
                         taskId -> new HashSet<>(taskId.partitions())
                     )
                 ),
             record.warmupTasks().stream()
                 .collect(Collectors.toMap(
-                        StreamsGroupTargetAssignmentMemberValue.TaskIds::subtopology,
+                        StreamsGroupTargetAssignmentMemberValue.TaskIds::subtopologyId,
                         taskId -> new HashSet<>(taskId.partitions())
                     )
                 )

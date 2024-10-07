@@ -64,7 +64,7 @@ class CoordinatorStreamsRecordHelpersTest {
 
         List<StreamsGroupTopologyValue.Subtopology> expectedTopology =
             Collections.singletonList(new StreamsGroupTopologyValue.Subtopology()
-                .setSubtopology("subtopology-id")
+                .setSubtopologyId("subtopology-id")
                 .setRepartitionSinkTopics(Collections.singletonList("foo"))
                 .setSourceTopics(Collections.singletonList("bar"))
                 .setRepartitionSourceTopics(

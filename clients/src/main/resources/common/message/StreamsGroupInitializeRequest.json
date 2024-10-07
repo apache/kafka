@@ -29,15 +29,15 @@
       "about": "The sub-topologies of the streams application.",
       "fields": [
         { "name": "SubtopologyId", "type": "string", "versions": "0+",
-          "about": "String to uniquely identify the sub-topology. Deterministically generated from the topology" },
+          "about": "String to uniquely identify the subtopology. Deterministically generated from the topology." },
         { "name": "SourceTopics", "type": "[]string", "versions": "0+",
           "about": "The topics the topology reads from." },
         { "name": "SourceTopicRegex", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
-          "about": "The regular expressions identifying topics the sub-topology reads from." },
+          "about": "The regular expressions identifying topics the subtopology reads from." },
         { "name": "StateChangelogTopics", "type": "[]TopicInfo", "versions": "0+",
-          "about": "The set of state changelog topics associated with this sub-topology. Created automatically." },
+          "about": "The set of state changelog topics associated with this subtopology. Created automatically." },
         { "name": "RepartitionSinkTopics", "type": "[]string", "versions": "0+",
-          "about": "The repartition topics the sub-topology writes to." },
+          "about": "The repartition topics the subtopology writes to." },
         { "name": "RepartitionSourceTopics", "type": "[]TopicInfo", "versions": "0+",
           "about": "The set of source topics that are internally created repartition topics. Created automatically." }
       ]
