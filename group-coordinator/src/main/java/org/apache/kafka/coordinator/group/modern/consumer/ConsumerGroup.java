@@ -528,6 +528,40 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord(groupId()));
     }
 
+    /**
+     * Populates the list of records with tombstone(s) for deleting the group.
+     * If the removed member is the leaving member, create its tombstone with
+     * the joining member id.
+     *
+     * @param records           The list of records.
+     * @param leavingMemberId   The leaving member id.
+     * @param joiningMemberId   The joining member id.
+     */
+    public void createGroupTombstoneRecordsWithReplacedMember(
+        List<CoordinatorRecord> records,
+        String leavingMemberId,
+        String joiningMemberId
+    ) {
+        members().forEach((memberId, __) -> {
+            String removedMemberId = memberId.equals(leavingMemberId) ? joiningMemberId : memberId;
+            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId(), removedMemberId));
+        });
+
+        members().forEach((memberId, __) -> {
+            String removedMemberId = memberId.equals(leavingMemberId) ? joiningMemberId : memberId;
+            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId(), removedMemberId));
+        });
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord(groupId()));
+
+        members().forEach((memberId,  __) -> {
+            String removedMemberId = memberId.equals(leavingMemberId) ? joiningMemberId : memberId;
+            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId(), removedMemberId));
+        });
+
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord(groupId()));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord(groupId()));
+    }
+
     @Override
     public boolean isEmpty() {
         return state() == ConsumerGroupState.EMPTY;
