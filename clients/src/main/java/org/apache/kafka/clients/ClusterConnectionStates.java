@@ -154,7 +154,9 @@ final class ClusterConnectionStates {
             connectingNodes.add(id);
             return;
         } else if (connectionState != null) {
-            log.info("Hostname for node {} changed from {} to {}.", id, connectionState.host(), host);
+            if (log.isInfoEnabled()){
+                log.info("Hostname for node {} changed from {} to {}.", id, connectionState.host(), host);
+            }
         }
 
         // Create a new NodeConnectionState if nodeState does not already contain one
@@ -463,7 +465,7 @@ final class ClusterConnectionStates {
     /**
      * The state of our connection to a node.
      */
-    private static class NodeConnectionState {
+    private final static class NodeConnectionState {
         private final String host;
         private final HostResolver hostResolver;
         private final Logger log;
