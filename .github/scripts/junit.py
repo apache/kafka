@@ -111,9 +111,10 @@ class TestCatalogExporter:
 
     def export(self, out_dir: str):
         if not os.path.exists(out_dir):
-            logger.debug(f"Creating output directory {out_dir}.")
+            logger.debug(f"Creating output directory {out_dir} for test catalog export.")
             os.makedirs(out_dir)
 
+        total_count = 0
         for module, module_tests in self.all_tests.items():
             sorted_tests = {}
             count = 0
@@ -124,8 +125,11 @@ class TestCatalogExporter:
 
             out_path = os.path.join(out_dir, f"{module}.yaml")
             logger.debug(f"Writing {count} tests for {module} into {out_path}.")
+            total_count += 0
             with open(out_path, "w") as fp:
                 yaml.dump(sorted_tests, fp)
+
+        logger.debug(f"Collected {total_count} tests into test catalog.")
 
 
 def parse_report(workspace_path, report_path, fp) -> Iterable[TestSuite]:
@@ -204,6 +208,7 @@ if __name__ == "__main__":
                         help="Path to XML files. Glob patterns are supported.")
     parser.add_argument("--export-test-catalog",
                         required=False,
+                        default="",
                         help="Optional path to dump all tests")
 
     if not os.getenv("GITHUB_WORKSPACE"):
@@ -229,6 +234,9 @@ if __name__ == "__main__":
     failed_table = []
     flaky_table = []
     skipped_table = []
+
+    if args.export_test_catalog:
+        logger.debug("Generating test catalog as we parse JUnit reports")
 
     exporter = TestCatalogExporter()
 

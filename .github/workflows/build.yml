@@ -145,6 +145,14 @@ jobs:
             **/build/reports/tests/*
           compression-level: 9
           if-no-files-found: ignore
+      - name: Archive JUnit XML
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-xml-${{ matrix.java }}
+          path: |
+            build/junit-xml/**/*.xml
+          compression-level: 9
+          if-no-files-found: ignore
       - name: Archive Thread Dumps
         id: thread-dump-upload-artifact
         if: always() && steps.junit-test.outputs.exitcode == '124'
@@ -156,12 +164,20 @@ jobs:
           compression-level: 9
           if-no-files-found: ignore
       - name: Parse JUnit tests
-        run: python .github/scripts/junit.py >> $GITHUB_STEP_SUMMARY
+        run: python .github/scripts/junit.py --export-test-catalog ./test-catalog >> $GITHUB_STEP_SUMMARY
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
           JUNIT_REPORT_URL: ${{ steps.junit-upload-artifact.outputs.artifact-url }}
           THREAD_DUMP_URL: ${{ steps.thread-dump-upload-artifact.outputs.artifact-url }}
           GRADLE_EXIT_CODE: ${{ steps.junit-test.outputs.exitcode }}
+      - name: Archive Test Catalog
+        if: ${{ always() && matrix.java == '21' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-catalog
+          path: test-catalog
+          compression-level: 9
+          if-no-files-found: ignore
       - name: Archive Build Scan
         if: always()
         uses: actions/upload-artifact@v4
