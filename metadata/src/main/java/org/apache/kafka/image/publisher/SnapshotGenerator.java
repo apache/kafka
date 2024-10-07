@@ -240,7 +240,11 @@ public class SnapshotGenerator implements MetadataPublisher {
         LogDeltaManifest manifest
     ) {
         bytesSinceLastSnapshot += manifest.numBytes();
-        if (bytesSinceLastSnapshot >= maxBytesSinceLastSnapshot) {
+        if (!manifest.provenance().isOffsetBatchAligned()) {
+            if (log.isTraceEnabled()) {
+                log.trace("Not scheduling snapshot because last contained offset is not aligned to a batch boundary.");
+            }
+        } else if (bytesSinceLastSnapshot >= maxBytesSinceLastSnapshot) {
             if (eventQueue.isEmpty()) {
                 scheduleEmit("we have replayed at least " + maxBytesSinceLastSnapshot +
                     " bytes", newImage);
