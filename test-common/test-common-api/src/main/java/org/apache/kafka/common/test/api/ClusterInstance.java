@@ -222,7 +222,7 @@ public interface ClusterInstance {
                 authorizer.acls(filter).forEach(aclBinding -> accessControlEntrySet.add(aclBinding.entry()));
                 actualEntries.set(accessControlEntrySet);
                 return accessControlEntrySet.containsAll(entries) && entries.containsAll(accessControlEntrySet);
-            }, () -> "expected acls: " + entries + ", actual acls: " + actualEntries.get());
+            }, "expected acls: " + entries + ", actual acls: " + actualEntries.get());
         }
     }
 

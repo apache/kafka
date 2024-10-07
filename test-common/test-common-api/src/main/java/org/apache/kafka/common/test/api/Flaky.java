@@ -14,22 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.test;
 
-/**
- * This class can be used in the callback given to {@link TestUtils#retryOnExceptionWithTimeout(long, long, ValuelessCallable)}
- * to indicate that a particular exception should not be retried. Instead the retry operation will
- * be aborted immediately and the exception will be rethrown.
- */
-public class NoRetryException extends RuntimeException {
-    private final Throwable cause;
+package org.apache.kafka.common.test.api;
 
-    public NoRetryException(Throwable cause) {
-        this.cause = cause;
-    }
+import org.junit.jupiter.api.Tag;
 
-    @Override
-    public Throwable getCause() {
-        return this.cause;
-    }
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
+@Target({ElementType.TYPE, ElementType.METHOD})
+@Retention(RetentionPolicy.RUNTIME)
+@Tag("flaky")
+public @interface Flaky {
+    /**
+     * Required reference to a KAFKA Jira ticket.
+     */
+    String value();
+
+    /**
+     * Optional comment describing the reason for quarantined.
+     */
+    String comment() default "";
 }

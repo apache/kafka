@@ -628,7 +628,7 @@ object ConfigCommand extends Logging {
 
   private def describeQuotaConfigs(adminClient: Admin, entityTypes: List[String], entityNames: List[String]): Unit = {
     val quotaConfigs = getAllClientQuotasConfigs(adminClient, entityTypes, entityNames)
-    quotaConfigs.forKeyValue { (entity, entries) =>
+    quotaConfigs.foreachEntry { (entity, entries) =>
       val entityEntries = entity.entries.asScala
 
       def entitySubstr(entityType: String): Option[String] =
