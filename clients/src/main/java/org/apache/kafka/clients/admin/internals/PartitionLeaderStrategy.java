@@ -19,8 +19,6 @@ package org.apache.kafka.clients.admin.internals;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidTopicException;
-import org.apache.kafka.common.errors.LeaderNotAvailableException;
-import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.MetadataRequestData;
@@ -241,8 +239,9 @@ public class PartitionLeaderStrategy implements AdminApiLookupStrategy<TopicPart
         @Override
         public Map<TopicPartition, Integer> cachedKeyBrokerIdMapping() {
             Map<TopicPartition, Integer> mapping = new HashMap<>();
-            partitionLeaderCache.forEach((tp, brokerId) -> {
-                if (requestKeys.contains(tp)) {
+            requestKeys.forEach(tp -> {
+                Integer brokerId = partitionLeaderCache.get(tp);
+                if (brokerId != null) {
                     mapping.put(tp, brokerId);
                 }
             });
@@ -273,9 +272,7 @@ public class PartitionLeaderStrategy implements AdminApiLookupStrategy<TopicPart
         }
 
         private void completeExceptionally(TopicPartition key, Throwable t) {
-            if (t instanceof NotLeaderOrFollowerException || t instanceof LeaderNotAvailableException) {
-                partitionLeaderCache.remove(key);
-            }
+            partitionLeaderCache.remove(key);
             futureOrThrow(key).completeExceptionally(t);
         }
 
