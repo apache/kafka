@@ -31,7 +31,6 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
-import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -54,7 +53,6 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.event.Level;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -564,35 +562,6 @@ public class ConnectWorkerIntegrationTest {
                 CONNECTOR_NAME,
                 "Connector wasn't deleted in time"
         );
-    }
-
-    /**
-     * The <strong><em>GET /connectors/{connector}/tasks-config</em></strong> endpoint was deprecated in
-     * <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-970%3A+Deprecate+and+remove+Connect%27s+redundant+task+configurations+endpoint">KIP-970</a>
-     * and is slated for removal in the next major release. This test verifies that the deprecation warning log is emitted on trying to use the
-     * deprecated endpoint.
-     */
-    @Test
-    public void testTasksConfigDeprecation() throws Exception {
-        connect = connectBuilder.build();
-        // start the clusters
-        connect.start();
-
-        connect.configureConnector(CONNECTOR_NAME, defaultSourceConnectorProps(TOPIC_NAME));
-        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
-            CONNECTOR_NAME,
-            NUM_TASKS,
-            "Connector tasks did not start in time"
-        );
-
-        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(ConnectorsResource.class)) {
-            connect.requestGet(connect.endpointForResource("connectors/" + CONNECTOR_NAME + "/tasks-config"));
-            List<LogCaptureAppender.Event> logEvents = logCaptureAppender.getEvents();
-            assertEquals(1, logEvents.size());
-            assertEquals(Level.WARN.toString(), logEvents.get(0).getLevel());
-            assertTrue(logEvents.get(0).getMessage().contains("deprecated"));
-        }
-
     }
 
     @Test
