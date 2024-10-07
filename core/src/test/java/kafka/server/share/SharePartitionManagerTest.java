@@ -16,6 +16,7 @@
  */
 package kafka.server.share;
 
+import kafka.server.DelayedActionQueue;
 import kafka.server.DelayedOperationPurgatory;
 import kafka.server.LogReadResult;
 import kafka.server.ReplicaManager;
@@ -51,14 +52,14 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.share.CachedSharePartition;
 import org.apache.kafka.server.share.ErroneousAndValidPartitionData;
-import org.apache.kafka.server.share.NoOpShareStatePersister;
-import org.apache.kafka.server.share.Persister;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
 import org.apache.kafka.server.share.context.FinalContext;
 import org.apache.kafka.server.share.context.ShareFetchContext;
 import org.apache.kafka.server.share.context.ShareSessionContext;
 import org.apache.kafka.server.share.fetch.ShareFetchData;
+import org.apache.kafka.server.share.persister.NoOpShareStatePersister;
+import org.apache.kafka.server.share.persister.Persister;
 import org.apache.kafka.server.share.session.ShareSession;
 import org.apache.kafka.server.share.session.ShareSessionCache;
 import org.apache.kafka.server.share.session.ShareSessionKey;
@@ -130,10 +131,10 @@ public class SharePartitionManagerTest {
     private static final int RECORD_LOCK_DURATION_MS = 30000;
     private static final int MAX_DELIVERY_COUNT = 5;
     private static final short MAX_IN_FLIGHT_MESSAGES = 200;
-    static final int PARTITION_MAX_BYTES = 40000;
     private static final int DELAYED_SHARE_FETCH_MAX_WAIT_MS = 2000;
-    private static final int DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL = 1000;
     private static final int DELAYED_SHARE_FETCH_TIMEOUT_MS = 3000;
+    static final int PARTITION_MAX_BYTES = 40000;
+    static final int DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL = 1000;
 
     private static Timer mockTimer;
 
@@ -2270,7 +2271,7 @@ public class SharePartitionManagerTest {
         assertEquals(expectedValidSet, actualValidPartitions);
     }
 
-    private Seq<Tuple2<TopicIdPartition, LogReadResult>> buildLogReadResult(Set<TopicIdPartition> topicIdPartitions) {
+    static Seq<Tuple2<TopicIdPartition, LogReadResult>> buildLogReadResult(Set<TopicIdPartition> topicIdPartitions) {
         List<Tuple2<TopicIdPartition, LogReadResult>> logReadResults = new ArrayList<>();
         topicIdPartitions.forEach(topicIdPartition -> logReadResults.add(new Tuple2<>(topicIdPartition, new LogReadResult(
             new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
@@ -2297,6 +2298,7 @@ public class SharePartitionManagerTest {
         private Metrics metrics = new Metrics();
         private ConcurrentLinkedQueue<ShareFetchData> fetchQueue = new ConcurrentLinkedQueue<>();
         private DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = mock(DelayedOperationPurgatory.class);
+        private final DelayedActionQueue delayedActionsQueue = mock(DelayedActionQueue.class);
 
         private SharePartitionManagerBuilder withReplicaManager(ReplicaManager replicaManager) {
             this.replicaManager = replicaManager;
@@ -2359,7 +2361,8 @@ public class SharePartitionManagerTest {
                     MAX_IN_FLIGHT_MESSAGES,
                     persister,
                     metrics,
-                    delayedShareFetchPurgatory);
+                    delayedShareFetchPurgatory,
+                    delayedActionsQueue);
         }
     }
 }

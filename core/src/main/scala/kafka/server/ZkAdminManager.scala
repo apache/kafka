@@ -22,7 +22,6 @@ import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.server.ConfigAdminManager.{prepareIncrementalConfigs, toLoggableProps}
 import kafka.server.metadata.ZkConfigRepository
 import kafka.utils._
-import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.admin.AdminUtils
 import org.apache.kafka.clients.admin.{AlterConfigOp, ScramMechanism}
@@ -963,7 +962,7 @@ class ZkAdminManager(val config: KafkaConfig,
         }
       ).toMap
 
-    illegalRequestsByUser.forKeyValue { (user, errorMessage) =>
+    illegalRequestsByUser.foreachEntry { (user, errorMessage) =>
       retval.results.add(new AlterUserScramCredentialsResult().setUser(user)
         .setErrorCode(if (errorMessage == unknownScramMechanismMsg) {Errors.UNSUPPORTED_SASL_MECHANISM.code} else {Errors.UNACCEPTABLE_CREDENTIAL.code})
         .setErrorMessage(errorMessage)) }
@@ -1028,7 +1027,7 @@ class ZkAdminManager(val config: KafkaConfig,
     }).collect { case (user: String, exception: Exception) => (user, exception) }.toMap
 
     // report failures
-    usersFailedToPrepareProperties.++(usersFailedToPersist).forKeyValue { (user, exception) =>
+    usersFailedToPrepareProperties.++(usersFailedToPersist).foreachEntry { (user, exception) =>
       val error = Errors.forException(exception)
       retval.results.add(new AlterUserScramCredentialsResult()
         .setUser(user)

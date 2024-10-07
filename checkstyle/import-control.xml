@@ -312,6 +312,9 @@
     <allow pkg="scala.collection" />
     <allow pkg="org.apache.kafka.coordinator.transaction" />
     <allow pkg="org.apache.kafka.coordinator.group" />
+    <allow pkg="org.apache.kafka.tools" />
+    <allow pkg="org.apache.kafka.tools.api" />
+    <allow pkg="org.apache.kafka.tools.filter" />
 
     <subpackage name="consumer">
       <allow pkg="org.apache.kafka.tools"/>
@@ -365,6 +368,7 @@
     <allow pkg="com.fasterxml.jackson" />
     <allow pkg="com.fasterxml.jackson.annotation" />
     <allow pkg="net.sourceforge.argparse4j" />
+    <allow pkg="org.apache.kafka.message" />
     <allow pkg="org.apache.message" />
   </subpackage>
 

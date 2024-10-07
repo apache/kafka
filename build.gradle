@@ -85,6 +85,9 @@ ext {
   userMaxTestRetries = project.hasProperty('maxTestRetries') ? maxTestRetries.toInteger() : 0
   userMaxTestRetryFailures = project.hasProperty('maxTestRetryFailures') ? maxTestRetryFailures.toInteger() : 0
 
+  userMaxQuarantineTestRetries = project.hasProperty('maxQuarantineTestRetries') ? maxQuarantineTestRetries.toInteger() : 0
+  userMaxQuarantineTestRetryFailures = project.hasProperty('maxQuarantineTestRetryFailures') ? maxQuarantineTestRetryFailures.toInteger() : 0
+
   skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
   shouldSign = !skipSigning && !version.endsWith("SNAPSHOT")
 
@@ -122,6 +125,11 @@ ext {
     if (name == "compileTestJava" || name == "compileTestScala")
       options.compilerArgs << "-parameters"
   }
+
+  runtimeTestLibs = [
+    libs.slf4jReload4j,
+    libs.junitPlatformLanucher,
+  ]
 }
 
 allprojects {
@@ -496,6 +504,7 @@ subprojects {
 
     useJUnitPlatform {
       includeEngines 'junit-jupiter'
+      excludeTags 'flaky'
     }
 
     develocity {
@@ -519,7 +528,7 @@ subprojects {
       if (ext.isGithubActions) {
         def dest = rootProject.layout.buildDirectory.dir("junit-xml/${project.name}").get().asFile
         println "Copy JUnit XML for ${project.name} to $dest"
-        ant.copy(todir: "$dest") {
+        ant.copy(todir: "$dest/test") {
           ant.fileset(dir: "${test.reports.junitXml.entryPoint}")
         }
 
@@ -527,6 +536,62 @@ subprojects {
         // from being cached.
         if (ext.hadFailure) {
           throw new GradleException("Failing this task since '${project.name}:${name}' had test failures.")
+        }
+      }
+    }
+  }
+
+  task quarantinedTest(type: Test, dependsOn: compileJava) {
+    ext {
+      isGithubActions = System.getenv('GITHUB_ACTIONS') != null
+    }
+
+    // Disable caching and up-to-date for this task. We always want quarantined tests
+    // to run and never want to cache their results. Since we do this, we can avoid
+    // explicitly failing the build like we do in "test" with ext.hadFailure.
+    outputs.upToDateWhen { false }
+    outputs.cacheIf { false }
+
+    maxParallelForks = maxTestForks
+    ignoreFailures = userIgnoreFailures
+
+    maxHeapSize = defaultMaxHeapSize
+    jvmArgs = defaultJvmArgs
+
+    // KAFKA-17433 Used by deflake.yml github action to repeat individual tests
+    systemProperty("kafka.cluster.test.repeat", project.findProperty("kafka.cluster.test.repeat"))
+
+    testLogging {
+      events = userTestLoggingEvents ?: testLoggingEvents
+      showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
+      exceptionFormat = testExceptionFormat
+      displayGranularity = 0
+    }
+    logTestStdout.rehydrate(delegate, owner, this)()
+
+    useJUnitPlatform {
+      includeEngines 'junit-jupiter'
+      includeTags 'flaky'
+    }
+
+    develocity {
+      testRetry {
+        maxRetries = userMaxQuarantineTestRetries
+        maxFailures = userMaxQuarantineTestRetryFailures
+      }
+    }
+
+    // This closure will copy JUnit XML files out of the sub-project's build directory and into
+    // a top-level build/junit-xml directory. This is necessary to avoid reporting on tests which
+    // were not run, but instead were restored via FROM-CACHE. See KAFKA-17479 for more details.
+    doLast {
+      if (ext.isGithubActions) {
+        def dest = rootProject.layout.buildDirectory.dir("junit-xml/${project.name}").get().asFile
+        println "Copy JUnit XML for ${project.name} to $dest"
+        ant.copy(todir: "$dest/quarantinedTest", failonerror: "false") {
+          ant.fileset(dir: "${quarantinedTest.reports.junitXml.entryPoint}") {
+            ant.include(name: "**/*.xml")
+          }
         }
       }
     }
@@ -708,25 +773,11 @@ subprojects {
       scalaCompileOptions.additionalParameters += inlineFrom
     }
 
-    if (versions.baseScala != '2.12') {
-      scalaCompileOptions.additionalParameters += ["-opt-warnings", "-Xlint:strict-unsealed-patmat"]
-      // Scala 2.13.2 introduces compiler warnings suppression, which is a pre-requisite for -Xfatal-warnings
-      scalaCompileOptions.additionalParameters += ["-Xfatal-warnings"]
-    }
+    scalaCompileOptions.additionalParameters += ["-opt-warnings", "-Xlint:strict-unsealed-patmat"]
+    // Scala 2.13.2 introduces compiler warnings suppression, which is a pre-requisite for -Xfatal-warnings
+    scalaCompileOptions.additionalParameters += ["-Xfatal-warnings"]
 
-    // these options are valid for Scala versions < 2.13 only
-    // Scala 2.13 removes them, see https://github.com/scala/scala/pull/6502 and https://github.com/scala/scala/pull/5969
-    if (versions.baseScala == '2.12') {
-      scalaCompileOptions.additionalParameters += [
-        "-Xlint:by-name-right-associative",
-        "-Xlint:nullary-override",
-        "-Xlint:unsound-match"
-      ]
-    }
-
-    // Scalac 2.12 `-release` requires Java 9 or higher, but Scala 2.13 doesn't have that restriction
-    if (versions.baseScala == "2.13" || JavaVersion.current().isJava9Compatible())
-      scalaCompileOptions.additionalParameters += ["-release", String.valueOf(minJavaVersion)]
+    scalaCompileOptions.additionalParameters += ["-release", String.valueOf(minJavaVersion)]
 
     addParametersForTests(name, options)
 
@@ -1031,7 +1082,6 @@ project(':core') {
     implementation libs.joptSimple
     implementation libs.jose4j
     implementation libs.metrics
-    implementation libs.scalaCollectionCompat
     implementation libs.scalaJava8Compat
     // only needed transitively, but set it explicitly to ensure it has the same version as scala-library
     implementation libs.scalaReflect
@@ -1476,8 +1526,7 @@ project(':group-coordinator') {
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
 
-    testRuntimeOnly libs.slf4jReload4j
-    testRuntimeOnly libs.junitPlatformLanucher
+    testRuntimeOnly runtimeTestLibs
 
     generator project(':generator')
   }
@@ -1538,8 +1587,8 @@ project(':test-common') {
     implementation libs.slf4jApi
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    testRuntimeOnly libs.slf4jReload4j
-    testRuntimeOnly libs.junitPlatformLanucher
+    
+    testRuntimeOnly runtimeTestLibs
   }
 
   sourceSets {
@@ -1556,7 +1605,7 @@ project(':test-common') {
   }
 
   checkstyle {
-    sourceSets = []
+    configProperties = checkstyleConfigProperties("import-control-test-common.xml")
   }
 
   javadoc {
@@ -1599,7 +1648,7 @@ project(':test-common:test-common-api') {
   }
 
   checkstyle {
-    sourceSets = []
+    configProperties = checkstyleConfigProperties("import-control-test-common-api.xml")
   }
 
   javadoc {
@@ -1681,8 +1730,7 @@ project(':coordinator-common') {
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
 
-    testRuntimeOnly libs.slf4jReload4j
-    testRuntimeOnly libs.junitPlatformLanucher
+    testRuntimeOnly runtimeTestLibs
   }
 
   sourceSets {
@@ -1733,8 +1781,7 @@ project(':share-coordinator') {
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
 
-    testRuntimeOnly libs.slf4jReload4j
-    testRuntimeOnly libs.junitPlatformLanucher
+    testRuntimeOnly runtimeTestLibs
 
     generator project(':generator')
   }
@@ -1848,10 +1895,9 @@ project(':clients') {
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
 
-    testRuntimeOnly libs.slf4jReload4j
     testRuntimeOnly libs.jacksonDatabind
     testRuntimeOnly libs.jacksonJDK8Datatypes
-    testRuntimeOnly libs.junitPlatformLanucher
+    testRuntimeOnly runtimeTestLibs
 
     generator project(':generator')
   }
@@ -2016,8 +2062,7 @@ project(':raft') {
     testImplementation libs.jqwik
     testImplementation libs.hamcrest
 
-    testRuntimeOnly libs.slf4jReload4j
-    testRuntimeOnly libs.junitPlatformLanucher
+    testRuntimeOnly runtimeTestLibs
 
     generator project(':generator')
   }
@@ -2112,8 +2157,7 @@ project(':server-common') {
     testImplementation libs.mockitoCore
     testImplementation libs.hamcrest
 
-    testRuntimeOnly libs.slf4jReload4j
-    testRuntimeOnly libs.junitPlatformLanucher
+    testRuntimeOnly runtimeTestLibs
   }
 
   task createVersionFile() {
@@ -2171,8 +2215,7 @@ project(':storage:storage-api') {
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
 
-    testRuntimeOnly libs.slf4jReload4j
-    testRuntimeOnly libs.junitPlatformLanucher
+    testRuntimeOnly runtimeTestLibs
   }
 
   task createVersionFile() {
@@ -2261,8 +2304,7 @@ project(':storage') {
     testImplementation libs.mockitoCore
     testImplementation libs.bcpkix
 
-    testRuntimeOnly libs.slf4jReload4j
-    testRuntimeOnly libs.junitPlatformLanucher
+    testRuntimeOnly runtimeTestLibs
 
     generator project(':generator')
   }
@@ -2513,8 +2555,7 @@ project(':trogdor') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.mockitoCore
 
-    testRuntimeOnly libs.slf4jReload4j
-    testRuntimeOnly libs.junitPlatformLanucher
+    testRuntimeOnly runtimeTestLibs
   }
 
   javadoc {
@@ -2561,8 +2602,7 @@ project(':shell') {
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.junitJupiter
 
-    testRuntimeOnly libs.slf4jReload4j
-    testRuntimeOnly libs.junitPlatformLanucher
+    testRuntimeOnly runtimeTestLibs
   }
 
   javadoc {
@@ -2627,8 +2667,7 @@ project(':streams') {
     testImplementation project(':group-coordinator')
 
     testRuntimeOnly project(':streams:test-utils')
-    testRuntimeOnly libs.slf4jReload4j
-    testRuntimeOnly libs.junitPlatformLanucher
+    testRuntimeOnly runtimeTestLibs
 
     generator project(':generator')
   }
@@ -2759,14 +2798,6 @@ project(':streams:streams-scala') {
     api project(':streams')
 
     api libs.scalaLibrary
-    if ( versions.baseScala == '2.12' ) {
-      // Scala-Collection-Compat isn't required when compiling with Scala 2.13 or later,
-      // and having it in the dependencies could lead to classpath conflicts in Scala 3
-      // projects that use kafka-streams-kafka_2.13 (because we don't have a Scala 3 version yet)
-      // but also pull in scala-collection-compat_3 via another dependency.
-      // So we make sure to not include it in the dependencies.
-      api libs.scalaCollectionCompat
-    }
     testImplementation project(':group-coordinator')
     testImplementation project(':core')
     testImplementation project(':test-common')
@@ -2779,8 +2810,7 @@ project(':streams:streams-scala') {
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testImplementation libs.hamcrest
-    testRuntimeOnly libs.slf4jReload4j
-    testRuntimeOnly libs.junitPlatformLanucher
+    testRuntimeOnly runtimeTestLibs
   }
 
   javadoc {
@@ -2832,8 +2862,7 @@ project(':streams:test-utils') {
     testImplementation libs.mockitoCore
     testImplementation libs.hamcrest
 
-    testRuntimeOnly libs.slf4jReload4j
-    testRuntimeOnly libs.junitPlatformLanucher
+    testRuntimeOnly runtimeTestLibs
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
@@ -3366,9 +3395,9 @@ project(':connect:api') {
     implementation libs.jaxrsApi
 
     testImplementation libs.junitJupiter
-    testRuntimeOnly libs.junitPlatformLanucher
-    testRuntimeOnly libs.slf4jReload4j
     testImplementation project(':clients').sourceSets.test.output
+
+    testRuntimeOnly runtimeTestLibs
   }
 
   javadoc {
@@ -3402,9 +3431,9 @@ project(':connect:transforms') {
 
     testImplementation libs.junitJupiter
 
-    testRuntimeOnly libs.slf4jReload4j
-    testRuntimeOnly libs.junitPlatformLanucher
     testImplementation project(':clients').sourceSets.test.output
+
+    testRuntimeOnly runtimeTestLibs
   }
 
   javadoc {
@@ -3442,9 +3471,9 @@ project(':connect:json') {
 
     testImplementation libs.junitJupiter
 
-    testRuntimeOnly libs.slf4jReload4j
-    testRuntimeOnly libs.junitPlatformLanucher
     testImplementation project(':clients').sourceSets.test.output
+
+    testRuntimeOnly runtimeTestLibs
   }
 
   javadoc {
@@ -3515,6 +3544,7 @@ project(':connect:runtime') {
     testImplementation project(':storage')
     testImplementation project(':connect:test-plugins')
     testImplementation project(':server-common').sourceSets.test.output
+    testImplementation project(':test-common:test-common-api')
 
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
@@ -3522,9 +3552,8 @@ project(':connect:runtime') {
     testImplementation libs.mockitoJunitJupiter
     testImplementation libs.httpclient
 
-    testRuntimeOnly libs.slf4jReload4j
     testRuntimeOnly libs.bcpkix
-    testRuntimeOnly libs.junitPlatformLanucher
+    testRuntimeOnly runtimeTestLibs
   }
 
   javadoc {
@@ -3621,15 +3650,14 @@ project(':connect:file') {
 
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-
-    testRuntimeOnly libs.slf4jReload4j
-    testRuntimeOnly libs.junitPlatformLanucher
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':connect:runtime')
     testImplementation project(':connect:runtime').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':test-common')
     testImplementation project(':server-common').sourceSets.test.output
+
+    testRuntimeOnly runtimeTestLibs
   }
 
   javadoc {
@@ -3667,9 +3695,8 @@ project(':connect:basic-auth-extension') {
     testImplementation libs.junitJupiter
     testImplementation project(':clients').sourceSets.test.output
 
-    testRuntimeOnly libs.slf4jReload4j
     testRuntimeOnly libs.jerseyContainerServlet
-    testRuntimeOnly libs.junitPlatformLanucher
+    testRuntimeOnly runtimeTestLibs
   }
 
   javadoc {
@@ -3728,9 +3755,8 @@ project(':connect:mirror') {
     testImplementation project(':server-common').sourceSets.test.output
 
     testRuntimeOnly project(':connect:runtime')
-    testRuntimeOnly libs.slf4jReload4j
     testRuntimeOnly libs.bcpkix
-    testRuntimeOnly libs.junitPlatformLanucher
+    testRuntimeOnly runtimeTestLibs
   }
 
   javadoc {
@@ -3792,8 +3818,7 @@ project(':connect:mirror-client') {
     testImplementation libs.junitJupiter
     testImplementation project(':clients').sourceSets.test.output
 
-    testRuntimeOnly libs.slf4jReload4j
-    testRuntimeOnly libs.junitPlatformLanucher
+    testRuntimeOnly runtimeTestLibs
   }
 
   javadoc {

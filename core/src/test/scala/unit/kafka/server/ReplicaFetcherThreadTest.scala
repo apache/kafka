@@ -35,6 +35,7 @@ import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBat
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, UpdateMetadataRequest}
 import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.server.BrokerFeatures
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
@@ -1314,7 +1315,6 @@ class ReplicaFetcherThreadTest {
     when(partition.localLogOrException).thenReturn(log)
     when(partition.appendRecordsToFollowerOrFutureReplica(any[MemoryRecords], any[Boolean])).thenReturn(appendInfo)
 
-    // In Scala 2.12, the partitionsWithNewHighWatermark buffer is cleared before the replicaManager mock is verified.
     // Capture the argument at the time of invocation.
     val completeDelayedFetchRequestsArgument = mutable.Buffer.empty[TopicPartition]
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
