@@ -17,10 +17,7 @@
 
 package kafka.server
 
-import kafka.test.ClusterInstance
-import kafka.test.annotation._
-import kafka.test.junit.ClusterTestExtensions
-import kafka.test.junit.RaftClusterInvocationContext.RaftClusterInstance
+import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterInstance, ClusterTest, ClusterTestExtensions, Type}
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.{BrokerRegistrationRequestData, CreateTopicsRequestData}
@@ -33,7 +30,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Node, Uuid}
 import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.apache.kafka.server.common.{Features, MetadataVersion}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.extension.ExtendWith
 
 import java.util
@@ -202,90 +199,6 @@ class BrokerRegistrationRequestTest {
       assertEquals(
         Errors.NONE,
         registerBroker(channelManager, clusterId, 100, None, Some((MetadataVersion.IBP_3_3_IV3, MetadataVersion.IBP_3_4_IV0))))
-    } finally {
-      channelManager.shutdown()
-    }
-  }
-
-  @ClusterTest(
-    types = Array(Type.KRAFT),
-    brokers = 1,
-    controllers = 1,
-    metadataVersion = MetadataVersion.IBP_3_4_IV0,
-    autoStart = AutoStart.NO,
-    serverProperties = Array(new ClusterConfigProperty(key = "zookeeper.metadata.migration.enable", value = "true")))
-  def testRegisterZkWithKRaftMigrationEnabled(clusterInstance: ClusterInstance): Unit = {
-    clusterInstance.asInstanceOf[RaftClusterInstance].controllers().values().forEach(_.startup())
-
-    val clusterId = clusterInstance.clusterId()
-    val channelManager = brokerToControllerChannelManager(clusterInstance)
-    try {
-      channelManager.start()
-
-      assertEquals(
-        Errors.NONE,
-        registerBroker(channelManager, clusterId, 100, Some(1), Some((MetadataVersion.IBP_3_4_IV0, MetadataVersion.IBP_3_4_IV0))))
-
-      assertEquals(
-        Errors.UNSUPPORTED_VERSION,
-        registerBroker(channelManager, clusterId, 100, Some(1), None))
-
-      assertEquals(
-        Errors.UNSUPPORTED_VERSION,
-        registerBroker(channelManager, clusterId, 100, Some(1), Some((MetadataVersion.IBP_3_3_IV3, MetadataVersion.IBP_3_3_IV3))))
-
-      // Cannot register KRaft broker when in pre-migration
-      assertEquals(
-        Errors.BROKER_ID_NOT_REGISTERED,
-        registerBroker(channelManager, clusterId, 100, None, Some((MetadataVersion.IBP_3_4_IV0, MetadataVersion.IBP_3_4_IV0))))
-    } finally {
-      channelManager.shutdown()
-    }
-  }
-
-  @ClusterTest(
-    types = Array(Type.KRAFT),
-    brokers = 1,
-    controllers = 1,
-    metadataVersion = MetadataVersion.IBP_3_9_IV0,
-    autoStart = AutoStart.NO,
-    serverProperties = Array(new ClusterConfigProperty(key = "zookeeper.metadata.migration.enable", value = "true")))
-  def testRegisterZkWithKRaftMigrationEnabledKRaftV1(clusterInstance: ClusterInstance): Unit = {
-    clusterInstance.asInstanceOf[RaftClusterInstance].controllers().values().forEach(_.startup())
-
-    val clusterId = clusterInstance.clusterId()
-    val channelManager = brokerToControllerChannelManager(clusterInstance)
-    try {
-      channelManager.start()
-
-      assertEquals(
-        Errors.NONE,
-        registerBroker(channelManager, clusterId, 100, Some(1), Some((MetadataVersion.IBP_3_9_IV0, MetadataVersion.IBP_3_9_IV0))))
-
-      // Cannot register KRaft broker when in pre-migration
-      assertEquals(
-        Errors.BROKER_ID_NOT_REGISTERED,
-        registerBroker(channelManager, clusterId, 100, None, Some((MetadataVersion.IBP_3_9_IV0, MetadataVersion.IBP_3_9_IV0))))
-    } finally {
-      channelManager.shutdown()
-    }
-  }
-
-  /**
-   * Start a KRaft cluster with migrations enabled, verify that the controller does not accept metadata changes
-   * through the RPCs. The migration never proceeds past pre-migration since no ZK brokers are registered.
-   */
-  @ClusterTests(Array(
-    new ClusterTest(types = Array(Type.KRAFT), autoStart = AutoStart.NO, controllers = 1, metadataVersion = MetadataVersion.IBP_3_4_IV0,
-      serverProperties = Array(new ClusterConfigProperty(key = "zookeeper.metadata.migration.enable", value = "true")))
-  ))
-  def testNoMetadataChangesInPreMigrationMode(clusterInstance: ClusterInstance): Unit = {
-    clusterInstance.asInstanceOf[RaftClusterInstance].controllers().values().forEach(_.startup())
-
-    val channelManager = brokerToControllerChannelManager(clusterInstance)
-    try {
-      channelManager.start()
-      assertThrows(classOf[TimeoutException], () => createTopics(channelManager, "test-pre-migration"))
     } finally {
       channelManager.shutdown()
     }

@@ -21,7 +21,6 @@ import kafka.controller.KafkaController;
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
 import kafka.server.AutoTopicCreationManager;
-import kafka.server.BrokerFeatures;
 import kafka.server.ClientQuotaManager;
 import kafka.server.ClientRequestQuotaManager;
 import kafka.server.ControllerMutationQuotaManager;
@@ -60,6 +59,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupCoordinator;
 import org.apache.kafka.network.RequestConvertToJson;
 import org.apache.kafka.network.metrics.RequestChannelMetrics;
+import org.apache.kafka.server.BrokerFeatures;
 import org.apache.kafka.server.common.FinalizedFeatures;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ServerConfigs;
@@ -207,7 +207,6 @@ public class MetadataRequestBenchmark {
             setTokenManager(null).
             setApiVersionManager(new SimpleApiVersionManager(
                     ApiMessageType.ListenerType.ZK_BROKER,
-                    false,
                     false,
                     () -> FinalizedFeatures.fromKRaftVersion(MetadataVersion.latestTesting()))).
             build();
