@@ -1015,7 +1015,7 @@ public class KafkaStreams implements AutoCloseable {
         log.info("Kafka Streams commit ID: {}", ClientMetrics.commitId());
 
         metrics = createMetrics(applicationConfigs, time, clientId);
-        final StreamsClientMetricsDelegatingReporter reporter = new StreamsClientMetricsDelegatingReporter(adminClient);
+        final StreamsClientMetricsDelegatingReporter reporter = new StreamsClientMetricsDelegatingReporter(adminClient, clientId);
         metrics.addReporter(reporter);
         
         streamsMetrics = new StreamsMetricsImpl(
