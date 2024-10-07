@@ -26,7 +26,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -73,19 +74,24 @@ class StreamsGroupInitializeRequestManagerTest {
         final Set<String> sourceTopics = mkSet("sourceTopic1", "sourceTopic2");
         final Set<String> sinkTopics = mkSet("sinkTopic1", "sinkTopic2", "sinkTopic3");
         final Map<String, StreamsAssignmentInterface.TopicInfo> repartitionTopics = mkMap(
-            mkEntry("repartitionTopic1", new StreamsAssignmentInterface.TopicInfo(Optional.of(2), Collections.emptyMap())),
-            mkEntry("repartitionTopic2", new StreamsAssignmentInterface.TopicInfo(Optional.of(3), Collections.emptyMap()))
+            mkEntry("repartitionTopic1", new StreamsAssignmentInterface.TopicInfo(Optional.of(2), Optional.of((short) 1), Collections.emptyMap())),
+            mkEntry("repartitionTopic2", new StreamsAssignmentInterface.TopicInfo(Optional.of(3), Optional.of((short) 3), Collections.emptyMap()))
         );
         final Map<String, StreamsAssignmentInterface.TopicInfo> changelogTopics = mkMap(
-            mkEntry("changelogTopic1", new StreamsAssignmentInterface.TopicInfo(Optional.empty(), Collections.emptyMap())),
-            mkEntry("changelogTopic2", new StreamsAssignmentInterface.TopicInfo(Optional.empty(), Collections.emptyMap())),
-            mkEntry("changelogTopic3", new StreamsAssignmentInterface.TopicInfo(Optional.empty(), Collections.emptyMap()))
+            mkEntry("changelogTopic1", new StreamsAssignmentInterface.TopicInfo(Optional.empty(), Optional.of((short) 1), Collections.emptyMap())),
+            mkEntry("changelogTopic2", new StreamsAssignmentInterface.TopicInfo(Optional.empty(), Optional.of((short) 2), Collections.emptyMap())),
+            mkEntry("changelogTopic3", new StreamsAssignmentInterface.TopicInfo(Optional.empty(), Optional.of((short) 3), Collections.emptyMap()))
+        );
+        final Collection<Set<String>> copartitionGroup = mkSet(
+            mkSet("sourceTopic1", "repartitionTopic2"),
+            mkSet("sourceTopic2", "repartitionTopic1")
         );
         final StreamsAssignmentInterface.Subtopology subtopology1 = new StreamsAssignmentInterface.Subtopology(
             sourceTopics,
             sinkTopics,
             repartitionTopics,
-            changelogTopics
+            changelogTopics,
+            copartitionGroup
         );
         final String subtopologyName1 = "subtopology1";
         when(streamsAssignmentInterface.subtopologyMap()).thenReturn(
@@ -116,17 +122,28 @@ class StreamsGroupInitializeRequestManagerTest {
         assertEquals(1, subtopologies.size());
         final StreamsGroupInitializeRequestData.Subtopology subtopology = subtopologies.get(0);
         assertEquals(subtopologyName1, subtopology.subtopologyId());
-        assertEquals(new ArrayList<>(sourceTopics), subtopology.sourceTopics());
-        assertEquals(new ArrayList<>(sinkTopics), subtopology.repartitionSinkTopics());
+        assertEquals(Arrays.asList("sourceTopic1", "sourceTopic2"), subtopology.sourceTopics());
+        assertEquals(Arrays.asList("sinkTopic1", "sinkTopic2", "sinkTopic3"), subtopology.repartitionSinkTopics());
         assertEquals(repartitionTopics.size(), subtopology.repartitionSourceTopics().size());
         subtopology.repartitionSourceTopics().forEach(topicInfo -> {
             final StreamsAssignmentInterface.TopicInfo repartitionTopic = repartitionTopics.get(topicInfo.name());
             assertEquals(repartitionTopic.numPartitions.get(), topicInfo.partitions());
+            assertEquals(repartitionTopic.replicationFactor.get(), topicInfo.replicationFactor());
         });
         assertEquals(changelogTopics.size(), subtopology.stateChangelogTopics().size());
         subtopology.stateChangelogTopics().forEach(topicInfo -> {
             assertTrue(changelogTopics.containsKey(topicInfo.name()));
             assertEquals(0, topicInfo.partitions());
+            final StreamsAssignmentInterface.TopicInfo changelogTopic = changelogTopics.get(topicInfo.name());
+            assertEquals(changelogTopic.replicationFactor.get(), topicInfo.replicationFactor());
         });
+
+        assertEquals(2, subtopology.copartitionGroups().size());
+        final StreamsGroupInitializeRequestData.CopartitionGroup copartitionGroupData1 = subtopology.copartitionGroups().get(0);
+        assertEquals(Collections.singletonList(0), copartitionGroupData1.sourceTopics());
+        assertEquals(Collections.singletonList(1), copartitionGroupData1.repartitionSourceTopics());
+        final StreamsGroupInitializeRequestData.CopartitionGroup copartitionGroupData2 = subtopology.copartitionGroups().get(1);
+        assertEquals(Collections.singletonList(1), copartitionGroupData2.sourceTopics());
+        assertEquals(Collections.singletonList(0), copartitionGroupData2.repartitionSourceTopics());
     }
 }

@@ -145,40 +145,60 @@ public class StreamsTopologyTest {
     public void asStreamsGroupDescribeTopologyShouldReturnCorrectSubtopologies() {
         Map<String, Subtopology> subtopologies = mkMap(
             mkEntry("subtopology-1", new Subtopology()
-                .setSourceTopicRegex("regex-1")
+                .setSourceTopicRegex(Collections.singletonList("regex-1"))
                 .setSubtopologyId("subtopology-1")
                 .setSourceTopics(Collections.singletonList("source-topic-1"))
                 .setRepartitionSinkTopics(Collections.singletonList("sink-topic-1"))
                 .setRepartitionSourceTopics(
-                    Collections.singletonList(new TopicInfo().setName("repartition-topic-1")))
+                    Collections.singletonList(new TopicInfo()
+                        .setName("repartition-topic-1")
+                        .setReplicationFactor((short) 3)
+                        .setPartitions(2)))
                 .setStateChangelogTopics(
-                    Collections.singletonList(new TopicInfo().setName("changelog-topic-1")))
+                    Collections.singletonList(new TopicInfo()
+                        .setName("changelog-topic-1")
+                        .setReplicationFactor((short) 2)
+                        .setPartitions(1)))
             ),
             mkEntry("subtopology-2", new Subtopology()
-                .setSourceTopicRegex("regex-2")
+                .setSourceTopicRegex(Collections.singletonList("regex-2"))
                 .setSubtopologyId("subtopology-2")
                 .setSourceTopics(Collections.singletonList("source-topic-2"))
                 .setRepartitionSinkTopics(Collections.singletonList("sink-topic-2"))
                 .setRepartitionSourceTopics(
-                    Collections.singletonList(new TopicInfo().setName("repartition-topic-2")))
+                    Collections.singletonList(new TopicInfo()
+                        .setName("repartition-topic-2")
+                        .setReplicationFactor((short) 3)
+                        .setPartitions(2)))
                 .setStateChangelogTopics(
-                    Collections.singletonList(new TopicInfo().setName("changelog-topic-2")))
+                    Collections.singletonList(new TopicInfo()
+                        .setName("changelog-topic-2")
+                        .setReplicationFactor((short) 2)
+                        .setPartitions(1)))
             )
         );
         StreamsTopology topology = new StreamsTopology("topology-id", subtopologies);
         List<StreamsGroupDescribeResponseData.Subtopology> result = topology.asStreamsGroupDescribeTopology();
         assertEquals(2, result.size());
-        assertEquals("regex-1", result.get(0).sourceTopicRegex());
+        assertEquals(Collections.singletonList("regex-1"), result.get(0).sourceTopicRegex());
         assertEquals("subtopology-1", result.get(0).subtopologyId());
         assertEquals(Collections.singletonList("source-topic-1"), result.get(0).sourceTopics());
         assertEquals(Collections.singletonList("sink-topic-1"), result.get(0).repartitionSinkTopics());
         assertEquals("repartition-topic-1", result.get(0).repartitionSourceTopics().get(0).name());
+        assertEquals((short) 3, result.get(0).repartitionSourceTopics().get(0).replicationFactor());
+        assertEquals(2, result.get(0).repartitionSourceTopics().get(0).partitions());
         assertEquals("changelog-topic-1", result.get(0).stateChangelogTopics().get(0).name());
-        assertEquals("regex-2", result.get(1).sourceTopicRegex());
+        assertEquals((short) 2, result.get(0).stateChangelogTopics().get(0).replicationFactor());
+        assertEquals(1, result.get(0).stateChangelogTopics().get(0).partitions());
+        assertEquals(Collections.singletonList("regex-2"), result.get(1).sourceTopicRegex());
         assertEquals("subtopology-2", result.get(1).subtopologyId());
         assertEquals(Collections.singletonList("source-topic-2"), result.get(1).sourceTopics());
         assertEquals(Collections.singletonList("sink-topic-2"), result.get(1).repartitionSinkTopics());
         assertEquals("repartition-topic-2", result.get(1).repartitionSourceTopics().get(0).name());
+        assertEquals((short) 3, result.get(1).repartitionSourceTopics().get(0).replicationFactor());
+        assertEquals(2, result.get(1).repartitionSourceTopics().get(0).partitions());
         assertEquals("changelog-topic-2", result.get(1).stateChangelogTopics().get(0).name());
+        assertEquals((short) 2, result.get(1).stateChangelogTopics().get(0).replicationFactor());
+        assertEquals(1, result.get(1).stateChangelogTopics().get(0).partitions());
     }
 }
