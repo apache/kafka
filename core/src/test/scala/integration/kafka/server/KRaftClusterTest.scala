@@ -1698,6 +1698,8 @@ class KRaftClusterTest {
   def testIncreaseNumIoThreads(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
+        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
+        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(1).
         setNumControllerNodes(1).build()).
       setConfigProp(ServerConfigs.NUM_IO_THREADS_CONFIG, "4").

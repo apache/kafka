@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.testkit;
+package org.apache.kafka.common.test;
 
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
