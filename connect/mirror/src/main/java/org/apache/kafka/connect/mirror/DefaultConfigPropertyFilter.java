@@ -20,7 +20,6 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
-import org.apache.kafka.common.utils.ConfigUtils;
 
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -29,7 +28,6 @@ import java.util.regex.Pattern;
 public class DefaultConfigPropertyFilter implements ConfigPropertyFilter {
     
     public static final String CONFIG_PROPERTIES_EXCLUDE_CONFIG = "config.properties.exclude";
-    public static final String CONFIG_PROPERTIES_EXCLUDE_ALIAS_CONFIG = "config.properties.blacklist";
     public static final String USE_DEFAULTS_FROM = "use.defaults.from";
     private static final String USE_DEFAULTS_FROM_DOC = "Which cluster's defaults (source or target) to use "
                                                         + "when syncing topic configurations that have default values.";
@@ -75,11 +73,6 @@ public class DefaultConfigPropertyFilter implements ConfigPropertyFilter {
                     CONFIG_PROPERTIES_EXCLUDE_DEFAULT,
                     Importance.HIGH,
                     CONFIG_PROPERTIES_EXCLUDE_DOC)
-            .define(CONFIG_PROPERTIES_EXCLUDE_ALIAS_CONFIG,
-                    Type.LIST,
-                    null,
-                    Importance.HIGH,
-                    "Deprecated. Use " + CONFIG_PROPERTIES_EXCLUDE_CONFIG + " instead.")
             .define(USE_DEFAULTS_FROM,
                     Type.STRING,
                     USE_DEFAULTS_FROM_DEFAULT,
@@ -88,8 +81,7 @@ public class DefaultConfigPropertyFilter implements ConfigPropertyFilter {
 
 
         ConfigPropertyFilterConfig(Map<String, ?> props) {
-            super(DEF, ConfigUtils.translateDeprecatedConfigs(props, new String[][]{
-                {CONFIG_PROPERTIES_EXCLUDE_CONFIG, CONFIG_PROPERTIES_EXCLUDE_ALIAS_CONFIG}}), false);
+            super(DEF, props, false);
         }
 
         Pattern excludePattern() {
