@@ -826,14 +826,21 @@ public class StateDirectoryTest {
 
     @Test
     public void shouldNotInitializeStandbyTasksWhenNoLocalState() {
+        final TaskId taskId = new TaskId(0, 0);
         initializeTasksForLocalState(new TaskId(0, 0), false);
+        assertFalse(directory.hasPendingTasks());
+        assertNull(directory.removePendingTask(taskId));
         assertFalse(directory.hasPendingTasks());
     }
 
     @Test
     public void shouldInitializeStandbyTasksForLocalState() {
+        final TaskId taskId = new TaskId(0, 0);
         initializeTasksForLocalState(new TaskId(0, 0), true);
         assertTrue(directory.hasPendingTasks());
+        assertNotNull(directory.removePendingTask(taskId));
+        assertFalse(directory.hasPendingTasks());
+        assertNull(directory.removePendingTask(taskId));
     }
 
     @Test
