@@ -26,6 +26,7 @@ import org.apache.kafka.coordinator.group.taskassignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.taskassignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.taskassignor.TaskAssignor;
 import org.apache.kafka.image.TopicsImage;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;

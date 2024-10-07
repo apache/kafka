@@ -755,6 +755,15 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY =>
           new ReadShareGroupStateSummaryRequest.Builder(new ReadShareGroupStateSummaryRequestData(), true)
 
+        case ApiKeys.STREAMS_GROUP_DESCRIBE =>
+          new StreamsGroupDescribeRequest.Builder(new StreamsGroupDescribeRequestData(), true)
+
+        case ApiKeys.STREAMS_GROUP_HEARTBEAT =>
+          new StreamsGroupHeartbeatRequest.Builder(new StreamsGroupHeartbeatRequestData(), true)
+
+        case ApiKeys.STREAMS_GROUP_INITIALIZE =>
+          new StreamsGroupInitializeRequest.Builder(new StreamsGroupInitializeRequestData(), true)
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }

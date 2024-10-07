@@ -16,14 +16,15 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.nio.ByteBuffer;
-import java.util.List;
-import java.util.stream.Collectors;
 import org.apache.kafka.common.message.StreamsGroupDescribeRequestData;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+
+import java.nio.ByteBuffer;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class StreamsGroupDescribeRequest extends AbstractRequest {
 

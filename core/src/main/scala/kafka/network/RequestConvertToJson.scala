@@ -115,6 +115,9 @@ object RequestConvertToJson {
       case req: AddRaftVoterRequest => AddRaftVoterRequestDataJsonConverter.write(req.data, request.version)
       case req: RemoveRaftVoterRequest => RemoveRaftVoterRequestDataJsonConverter.write(req.data, request.version)
       case req: UpdateRaftVoterRequest => UpdateRaftVoterRequestDataJsonConverter.write(req.data, request.version)
+      case req: StreamsGroupDescribeRequest => StreamsGroupDescribeRequestDataJsonConverter.write(req.data, request.version)
+      case req: StreamsGroupInitializeRequest => StreamsGroupInitializeRequestDataJsonConverter.write(req.data, request.version)
+      case req: StreamsGroupHeartbeatRequest => StreamsGroupHeartbeatRequestDataJsonConverter.write(req.data, request.version)
       case _ => throw new IllegalStateException(s"ApiKey ${request.apiKey} is not currently handled in `request`, the " +
         "code should be updated to do so.")
     }
@@ -210,6 +213,9 @@ object RequestConvertToJson {
       case res: AddRaftVoterResponse => AddRaftVoterResponseDataJsonConverter.write(res.data, version)
       case res: RemoveRaftVoterResponse => RemoveRaftVoterResponseDataJsonConverter.write(res.data, version)
       case res: UpdateRaftVoterResponse => UpdateRaftVoterResponseDataJsonConverter.write(res.data, version)
+      case res: StreamsGroupDescribeResponse => StreamsGroupDescribeResponseDataJsonConverter.write(res.data, version)
+      case res: StreamsGroupInitializeResponse => StreamsGroupInitializeResponseDataJsonConverter.write(res.data, version)
+      case res: StreamsGroupHeartbeatResponse => StreamsGroupHeartbeatResponseDataJsonConverter.write(res.data, version)
       case _ => throw new IllegalStateException(s"ApiKey ${response.apiKey} is not currently handled in `response`, the " +
         "code should be updated to do so.")
     }

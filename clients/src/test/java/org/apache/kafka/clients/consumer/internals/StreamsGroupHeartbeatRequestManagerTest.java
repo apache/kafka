@@ -29,6 +29,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData.TopicPartitions;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -37,10 +38,10 @@ import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.utils.LogContext;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -290,9 +291,9 @@ class StreamsGroupHeartbeatRequestManagerTest {
 
         mockResponse(data);
 
-        ArgumentCaptor<ConsumerGroupHeartbeatResponseData> captor = ArgumentCaptor.forClass(ConsumerGroupHeartbeatResponseData.class);
-        verify(membershipManager, times(1)).onHeartbeatSuccess(new ConsumerGroupHeartbeatResponse(captor.capture()));
-        ConsumerGroupHeartbeatResponseData response = captor.getValue();
+        ArgumentCaptor<ConsumerGroupHeartbeatResponse> captor = ArgumentCaptor.forClass(ConsumerGroupHeartbeatResponse.class);
+        verify(membershipManager, times(1)).onHeartbeatSuccess(captor.capture());
+        ConsumerGroupHeartbeatResponseData response = captor.getValue().data();
         assertEquals(Errors.NONE.code(), response.errorCode());
         assertEquals(TEST_MEMBER_ID, response.memberId());
         assertEquals(TEST_MEMBER_EPOCH, response.memberEpoch());

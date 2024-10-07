@@ -21,6 +21,7 @@ import org.apache.kafka.common.message.StreamsGroupInitializeRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.StreamsGroupInitializeRequest;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;

@@ -21,6 +21,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
