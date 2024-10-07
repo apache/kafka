@@ -133,6 +133,10 @@ public class GroupConfig extends AbstractConfig {
             throw new InvalidConfigurationException(SHARE_RECORD_LOCK_DURATION_MS_CONFIG + " must be less than or equal to " +
                 ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG);
         }
+        if (consumerSessionTimeout <= consumerHeartbeatInterval) {
+            throw new InvalidConfigurationException(CONSUMER_SESSION_TIMEOUT_MS_CONFIG + " must be greater than " +
+                CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
+        }
     }
 
     /**

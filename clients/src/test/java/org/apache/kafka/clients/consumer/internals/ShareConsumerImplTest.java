@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.AcknowledgementCommitCallback;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -25,6 +26,7 @@ import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeOnCloseEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackRegistrationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareUnsubscribeEvent;
 import org.apache.kafka.common.KafkaException;
@@ -66,9 +68,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @SuppressWarnings("unchecked")
@@ -248,6 +252,41 @@ public class ShareConsumerImplTest {
         consumer.close();
         verify(applicationEventHandler).addAndGet(any(ShareAcknowledgeOnCloseEvent.class));
         verify(applicationEventHandler).add(any(ShareUnsubscribeEvent.class));
+    }
+
+    @Test
+    public void testAcknowledgementCommitCallbackRegistrationEvent() {
+        consumer = newConsumer();
+        AcknowledgementCommitCallback callback = mock(AcknowledgementCommitCallback.class);
+
+        consumer.setAcknowledgementCommitCallback(callback);
+        verify(applicationEventHandler).add(argThat(event ->
+            event instanceof ShareAcknowledgementCommitCallbackRegistrationEvent &&
+            ((ShareAcknowledgementCommitCallbackRegistrationEvent) event).isCallbackRegistered()
+        ));
+
+        consumer.setAcknowledgementCommitCallback(callback);
+        // As we have already set the callback, we should not add another event. We only add when we initially register.
+        verify(applicationEventHandler, times(1)).add(any(ShareAcknowledgementCommitCallbackRegistrationEvent.class));
+    }
+
+    @Test
+    public void testAcknowledgementCommitCallbackRegistrationEvent_Null() {
+        consumer = newConsumer();
+        AcknowledgementCommitCallback callback = mock(AcknowledgementCommitCallback.class);
+
+        consumer.setAcknowledgementCommitCallback(null);
+        // Initially callback is set to null, setting again to null should not add an event.
+        verify(applicationEventHandler, times(0)).add(any(ShareAcknowledgementCommitCallbackRegistrationEvent.class));
+
+        consumer.setAcknowledgementCommitCallback(callback);
+        verify(applicationEventHandler, times(1)).add(any(ShareAcknowledgementCommitCallbackRegistrationEvent.class));
+
+        // Now we are changing from a non-null callback to null, this should add an event.
+        consumer.setAcknowledgementCommitCallback(null);
+        verify(applicationEventHandler).add(argThat(event ->
+                event instanceof ShareAcknowledgementCommitCallbackRegistrationEvent &&
+                !((ShareAcknowledgementCommitCallbackRegistrationEvent) event).isCallbackRegistered()));
     }
 
     @Test
