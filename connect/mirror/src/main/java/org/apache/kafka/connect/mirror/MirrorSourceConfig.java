@@ -18,7 +18,6 @@ package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.utils.ConfigUtils;
 
 import java.time.Duration;
 import java.util.List;
@@ -95,9 +94,7 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
     public static final String OFFSET_SYNCS_TARGET_ADMIN_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "target-admin";
 
     public MirrorSourceConfig(Map<String, String> props) {
-        super(CONNECTOR_CONFIG_DEF, ConfigUtils.translateDeprecatedConfigs(props, new String[][]{
-                {TOPICS_EXCLUDE},
-                {CONFIG_PROPERTIES_EXCLUDE}}));
+        super(CONNECTOR_CONFIG_DEF, props);
     }
 
     public MirrorSourceConfig(ConfigDef configDef, Map<String, String> props) {
