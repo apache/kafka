@@ -129,7 +129,7 @@ class TestCatalogExporter:
             with open(out_path, "w") as fp:
                 yaml.dump(sorted_tests, fp)
 
-        logger.debug(f"Collected {total_count} tests into test catalog.")
+        logger.debug(f"Wrote {total_count} tests into test catalog.")
 
 
 def parse_report(workspace_path, report_path, fp) -> Iterable[TestSuite]:
@@ -218,7 +218,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     reports = glob(pathname=args.path, recursive=True)
-    logger.debug(f"Found {len(reports)} JUnit results")
+    logger.info(f"Found {len(reports)} JUnit results")
     workspace_path = get_env("GITHUB_WORKSPACE") # e.g., /home/runner/work/apache/kafka
 
     total_file_count = 0
@@ -235,11 +235,9 @@ if __name__ == "__main__":
     flaky_table = []
     skipped_table = []
 
-    if args.export_test_catalog:
-        logger.debug("Generating test catalog as we parse JUnit reports")
-
     exporter = TestCatalogExporter()
 
+    logger.debug(f"::group::Parsing {len(reports)} JUnit Report Files")
     for report in reports:
         module_name = os.path.split(os.path.dirname(report))[-1]    # a bit of an assumption, but seems ok
         with open(report, "r") as fp:
@@ -255,10 +253,8 @@ if __name__ == "__main__":
                 # failed for each suite. Then we can find flakes by taking the intersection of those two.
                 all_suite_passed = {test.key() for test in suite.passed_tests}
                 all_suite_failed = {test.key(): test for test in suite.failed_tests}
-                skipped = {test.key() for test in suite.skipped_tests}
                 flaky = all_suite_passed & all_suite_failed.keys()
                 all_tests = all_suite_passed | all_suite_failed.keys()
-
                 total_tests += len(all_tests)
                 total_flaky += len(flaky)
                 total_failures += len(all_suite_failed) - len(flaky)
@@ -285,8 +281,12 @@ if __name__ == "__main__":
                 if args.export_test_catalog:
                     exporter.handle_suite(module_name, suite)
 
+    logger.debug("::endgroup::")
+
     if args.export_test_catalog:
+        logger.debug(f"::group::Generating Test Catalog Files")
         exporter.export(args.export_test_catalog)
+        logger.debug("::endgroup::")
 
     duration = pretty_time_duration(total_time)
     logger.info(f"Finished processing {len(reports)} reports")
