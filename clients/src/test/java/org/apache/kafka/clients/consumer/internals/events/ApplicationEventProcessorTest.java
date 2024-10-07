@@ -50,7 +50,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.RESET_OFFSET;
 import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -184,16 +183,11 @@ public class ApplicationEventProcessorTest {
     public void testResetOffsetEvent() {
         Collection<TopicPartition> tp = Collections.singleton(new TopicPartition("topic", 0));
         OffsetResetStrategy strategy = OffsetResetStrategy.LATEST;
+        ResetOffsetEvent event = new ResetOffsetEvent(tp, strategy, 12345);
 
-        ResetOffsetEvent event = mock(ResetOffsetEvent.class);
-        doReturn(strategy).when(event).offsetResetStrategy();
-        doReturn(tp).when(event).topicPartitions();
-        doReturn(RESET_OFFSET).when(event).type();
-        doReturn(CompletableFuture.completedFuture(null)).when(event).future();
         setupProcessor(false);
-
         processor.process(event);
-        verify(subscriptionState).requestOffsetReset(tp, strategy);
+        verify(subscriptionState).requestOffsetReset(event.topicPartitions(), event.offsetResetStrategy());
     }
 
     @Test

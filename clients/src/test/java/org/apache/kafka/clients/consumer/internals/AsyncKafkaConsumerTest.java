@@ -777,6 +777,13 @@ public class AsyncKafkaConsumerTest {
         return allValues.get(allValues.size() - 1);
     }
 
+    private <T> CompletableApplicationEvent<T> addAndGetLastEnqueuedEvent() {
+        final ArgumentCaptor<CompletableApplicationEvent<T>> eventArgumentCaptor = ArgumentCaptor.forClass(CompletableApplicationEvent.class);
+        verify(applicationEventHandler, atLeast(1)).addAndGet(eventArgumentCaptor.capture());
+        final List<CompletableApplicationEvent<T>> allValues = eventArgumentCaptor.getAllValues();
+        return allValues.get(allValues.size() - 1);
+    }
+
     @Test
     public void testPollTriggersFencedExceptionFromCommitAsync() {
         final String groupId = "consumerGroupA";
@@ -1907,64 +1914,40 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testSeekToBeginning() {
-        SubscriptionState subscriptions = mock(SubscriptionState.class);
         Collection<TopicPartition> topics = Collections.singleton(new TopicPartition("test", 0));
-        consumer = newConsumer(
-                mock(FetchBuffer.class),
-                new ConsumerInterceptors<>(Collections.emptyList()),
-                mock(ConsumerRebalanceListenerInvoker.class),
-                subscriptions,
-                "group-id",
-                "client-id");
-        completeResetOffsetEventSuccessfully();
+        time = new MockTime(1);
+        consumer = newConsumer();
         consumer.seekToBeginning(topics);
-        verify(subscriptions).requestOffsetReset(topics, OffsetResetStrategy.EARLIEST);
+        CompletableApplicationEvent<Void> offsetEvent = addAndGetLastEnqueuedEvent();
+        assertSame(offsetEvent.getClass(), ResetOffsetEvent.class);
+        assertSame(((ResetOffsetEvent) offsetEvent).offsetResetStrategy(), OffsetResetStrategy.EARLIEST);
     }
 
     @Test
     public void testSeekToBeginningWithException() {
-        SubscriptionState subscriptions = mock(SubscriptionState.class);
         Collection<TopicPartition> topics = Collections.singleton(new TopicPartition("test", 0));
-        consumer = newConsumer(
-                mock(FetchBuffer.class),
-                new ConsumerInterceptors<>(Collections.emptyList()),
-                mock(ConsumerRebalanceListenerInvoker.class),
-                subscriptions,
-                "group-id",
-                "client-id");
+        consumer = newConsumer();
         completeResetOffsetEventExceptionally(new TimeoutException());
         assertThrows(TimeoutException.class, () -> consumer.seekToBeginning(topics));
     }
 
     @Test
     public void testSeekToEndWithException() {
-        SubscriptionState subscriptions = mock(SubscriptionState.class);
         Collection<TopicPartition> topics = Collections.singleton(new TopicPartition("test", 0));
-        consumer = newConsumer(
-                mock(FetchBuffer.class),
-                new ConsumerInterceptors<>(Collections.emptyList()),
-                mock(ConsumerRebalanceListenerInvoker.class),
-                subscriptions,
-                "group-id",
-                "client-id");
+        consumer = newConsumer();
         completeResetOffsetEventExceptionally(new TimeoutException());
         assertThrows(TimeoutException.class, () -> consumer.seekToEnd(topics));
     }
 
     @Test
     public void testSeekToEnd() {
-        SubscriptionState subscriptions = mock(SubscriptionState.class);
         Collection<TopicPartition> topics = Collections.singleton(new TopicPartition("test", 0));
-        consumer = newConsumer(
-                mock(FetchBuffer.class),
-                new ConsumerInterceptors<>(Collections.emptyList()),
-                mock(ConsumerRebalanceListenerInvoker.class),
-                subscriptions,
-                "group-id",
-                "client-id");
-        completeResetOffsetEventSuccessfully();
+        time = new MockTime(1);
+        consumer = newConsumer();
         consumer.seekToEnd(topics);
-        verify(subscriptions).requestOffsetReset(topics, OffsetResetStrategy.LATEST);
+        CompletableApplicationEvent<Void> offsetEvent = addAndGetLastEnqueuedEvent();
+        assertSame(offsetEvent.getClass(), ResetOffsetEvent.class);
+        assertSame(((ResetOffsetEvent) offsetEvent).offsetResetStrategy(), OffsetResetStrategy.LATEST);
     }
 
     private void verifyUnsubscribeEvent(SubscriptionState subscriptions) {
@@ -2020,16 +2003,6 @@ public class AsyncKafkaConsumerTest {
             event.future().completeExceptionally(ex);
             return null;
         }).when(applicationEventHandler).add(ArgumentMatchers.isA(SyncCommitEvent.class));
-    }
-
-    private void completeResetOffsetEventSuccessfully() {
-        doAnswer(invocation -> {
-            ResetOffsetEvent event = invocation.getArgument(0);
-            // Collections.unmodifiedCollection does not support hashcode compare so we need to create a new one
-            Collection<TopicPartition> partitions = Collections.singleton(event.topicPartitions().iterator().next());
-            consumer.subscriptions().requestOffsetReset(partitions, event.offsetResetStrategy());
-            return true;
-        }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ResetOffsetEvent.class));
     }
 
     private void completeResetOffsetEventExceptionally(Exception ex) {
