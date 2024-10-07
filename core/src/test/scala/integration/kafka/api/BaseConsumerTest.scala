@@ -162,7 +162,7 @@ object BaseConsumerTest {
       serializer.serialize(topic, data)
     }
 
-    override def configure(configs: util.Map[String, _], isKey: Boolean): Unit = serializer.configure(configs, isKey)
+    override def configure(configs: java.util.Map[String, _], isKey: Boolean): Unit = serializer.configure(configs, isKey)
 
     override def close(): Unit = serializer.close()
 
@@ -181,7 +181,7 @@ object BaseConsumerTest {
       deserializer.deserialize(topic, data)
     }
 
-    override def configure(configs: util.Map[String, _], isKey: Boolean): Unit = deserializer.configure(configs, isKey)
+    override def configure(configs: java.util.Map[String, _], isKey: Boolean): Unit = deserializer.configure(configs, isKey)
 
     override def close(): Unit = deserializer.close()
 
