@@ -348,7 +348,10 @@ public class TransactionManager {
                             .setTransactionalId(transactionalId)
                             .setProducerId(producerIdAndEpoch.producerId)
                             .setProducerEpoch(producerIdAndEpoch.epoch)
-                            .setCommitted(transactionResult.id));
+                            .setCommitted(transactionResult.id),
+                    true,
+                    isTransactionV2Enabled
+            );
 
             EndTxnHandler handler = new EndTxnHandler(builder);
             enqueueRequest(handler);
