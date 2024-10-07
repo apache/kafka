@@ -19,6 +19,8 @@ build:
       - '.github/**'
       - 'gradle/**'
       - '*gradlew*'
+      - 'build.gradle'
+      - 'settings.gradle'
 
 clients:
 - changed-files:
