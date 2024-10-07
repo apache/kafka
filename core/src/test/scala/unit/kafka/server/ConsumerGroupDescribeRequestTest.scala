@@ -16,9 +16,9 @@
  */
 package kafka.server
 
-import kafka.test.ClusterInstance
-import kafka.test.annotation._
-import kafka.test.junit.ClusterTestExtensions
+import org.apache.kafka.common.test.api.ClusterInstance
+import org.apache.kafka.common.test.api._
+import org.apache.kafka.common.test.api.ClusterTestExtensions
 import kafka.utils.TestUtils
 import org.apache.kafka.common.ConsumerGroupState
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData.{Assignment, DescribedGroup, TopicPartitions}
@@ -31,40 +31,14 @@ import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.common.Features
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.extension.ExtendWith
 
 import java.lang.{Byte => JByte}
 import scala.jdk.CollectionConverters._
 
-@Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(types = Array(Type.KRAFT), brokers = 1)
 class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
-
-  @ClusterTest(types = Array(Type.ZK), serverProperties = Array(
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
-  ))
-  def testConsumerGroupDescribeWithZookeeperCluster(): Unit = {
-    val consumerGroupDescribeRequest = new ConsumerGroupDescribeRequest.Builder(
-      new ConsumerGroupDescribeRequestData().setGroupIds(List("grp-1", "grp-2").asJava)
-    ).build(ApiKeys.CONSUMER_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled))
-
-    val consumerGroupDescribeResponse = connectAndReceive[ConsumerGroupDescribeResponse](consumerGroupDescribeRequest)
-    val expectedResponse = new ConsumerGroupDescribeResponseData()
-    expectedResponse.groups().add(
-      new ConsumerGroupDescribeResponseData.DescribedGroup()
-        .setGroupId("grp-1")
-        .setErrorCode(Errors.UNSUPPORTED_VERSION.code)
-    )
-    expectedResponse.groups.add(
-      new ConsumerGroupDescribeResponseData.DescribedGroup()
-        .setGroupId("grp-2")
-        .setErrorCode(Errors.UNSUPPORTED_VERSION.code)
-    )
-
-    assertEquals(expectedResponse, consumerGroupDescribeResponse.data)
-  }
 
   @ClusterTest(
     types = Array(Type.KRAFT),

@@ -56,12 +56,14 @@
             <allow pkg="org.apache.kafka.metadata" />
             <allow pkg="org.apache.kafka.server.common" />
             <allow pkg="org.apache.kafka.server.config" />
-            <allow pkg="org.apache.kafka.server.group.share" />
+            <allow pkg="org.apache.kafka.server.share" />
             <allow pkg="org.apache.kafka.server.record" />
             <allow pkg="org.apache.kafka.server.util" />
             <allow pkg="org.apache.kafka.server.util.timer" />
             <allow pkg="org.apache.kafka.timeline" />
             <allow pkg="org.junit.jupiter.api" />
+            <allow pkg="org.junit.jupiter.params" />
+            <allow pkg="org.junit.jupiter.provider" />
             <allow pkg="org.mockito" />
             <allow pkg="org.slf4j" />
             <subpackage name="generated">

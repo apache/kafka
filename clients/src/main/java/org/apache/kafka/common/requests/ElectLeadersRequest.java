@@ -31,7 +31,10 @@ import org.apache.kafka.common.protocol.MessageUtil;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class ElectLeadersRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<ElectLeadersRequest> {
@@ -85,6 +88,25 @@ public class ElectLeadersRequest extends AbstractRequest {
 
             return data;
         }
+    }
+
+
+    public Set<TopicPartition> topicPartitions() {
+        if (this.data.topicPartitions() == null) {
+            return Collections.emptySet();
+        }
+        return this.data.topicPartitions().stream()
+            .flatMap(topicPartition -> topicPartition.partitions().stream()
+                    .map(partitionId -> new TopicPartition(topicPartition.topic(), partitionId))
+            )
+            .collect(Collectors.toSet());
+    }
+
+    public ElectionType electionType() {
+        if (this.version() == 0) {
+            return ElectionType.PREFERRED;
+        }
+        return ElectionType.valueOf(this.data.electionType());
     }
 
     private final ElectLeadersRequestData data;

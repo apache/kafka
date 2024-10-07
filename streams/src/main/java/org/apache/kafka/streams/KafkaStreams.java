@@ -226,11 +226,23 @@ public class KafkaStreams implements AutoCloseable {
      *
      * </pre>
      * Note the following:
-     * - RUNNING state will transit to REBALANCING if any of its threads is in PARTITION_REVOKED or PARTITIONS_ASSIGNED state
-     * - REBALANCING state will transit to RUNNING if all of its threads are in RUNNING state
-     * - Any state except NOT_RUNNING, PENDING_ERROR or ERROR can go to PENDING_SHUTDOWN (whenever close is called)
-     * - Of special importance: If the global stream thread dies, or all stream threads die (or both) then
-     *   the instance will be in the ERROR state. The user will not need to close it.
+     * <ul>
+     *   <li>
+     *     RUNNING state will transit to REBALANCING if any of its threads is in PARTITION_REVOKED or PARTITIONS_ASSIGNED state
+     *   </li>
+     *   <li>
+     *     REBALANCING state will transit to RUNNING if all of its threads are in RUNNING state
+     *     (Note: a thread transits to RUNNING state, if all active tasks got restored are are ready for processing.
+     *     Standby tasks are not considered.)
+     *   </li>
+     *   <li>
+     *     Any state except NOT_RUNNING, PENDING_ERROR or ERROR can go to PENDING_SHUTDOWN (whenever close is called)
+     *   </li>
+     *   <li>
+     *     Of special importance: If the global stream thread dies, or all stream threads die (or both) then
+     *     the instance will be in the ERROR state. The user will not need to close it.
+     *   </li>
+     * </ul>
      */
     public enum State {
         // Note: if you add a new state, check the below methods and how they are used within Streams to see if
@@ -323,11 +335,11 @@ public class KafkaStreams implements AutoCloseable {
 
             if (state == State.PENDING_SHUTDOWN && newState != State.NOT_RUNNING) {
                 // when the state is already in PENDING_SHUTDOWN, all other transitions than NOT_RUNNING (due to thread dying) will be
-                // refused but we do not throw exception here, to allow appropriate error handling
+                // refused, but we do not throw exception here, to allow appropriate error handling
                 return false;
             } else if (state == State.NOT_RUNNING && (newState == State.PENDING_SHUTDOWN || newState == State.NOT_RUNNING)) {
                 // when the state is already in NOT_RUNNING, its transition to PENDING_SHUTDOWN or NOT_RUNNING (due to consecutive close calls)
-                // will be refused but we do not throw exception here, to allow idempotent close calls
+                // will be refused, but we do not throw exception here, to allow idempotent close calls
                 return false;
             } else if (state == State.REBALANCING && newState == State.REBALANCING) {
                 // when the state is already in REBALANCING, it should not transit to REBALANCING again
@@ -337,7 +349,7 @@ public class KafkaStreams implements AutoCloseable {
                 return false;
             } else if (state == State.PENDING_ERROR && newState != State.ERROR) {
                 // when the state is already in PENDING_ERROR, all other transitions than ERROR (due to thread dying) will be
-                // refused but we do not throw exception here, to allow appropriate error handling
+                // refused, but we do not throw exception here, to allow appropriate error handling
                 return false;
             } else if (!state.isValidTransition(newState)) {
                 throw new IllegalStateException("Stream-client " + clientId + ": Unexpected state transition from " + oldState + " to " + newState);
@@ -453,7 +465,7 @@ public class KafkaStreams implements AutoCloseable {
      * The handler will execute on the thread that produced the exception.
      * In order to get the thread that threw the exception, use {@code Thread.currentThread()}.
      * <p>
-     * Note, this handler must be threadsafe, since it will be shared among all threads, and invoked from any
+     * Note, this handler must be thread safe, since it will be shared among all threads, and invoked from any
      * thread that encounters such an exception.
      *
      * @param userStreamsUncaughtExceptionHandler the uncaught exception handler of type {@link StreamsUncaughtExceptionHandler} for all internal threads
@@ -539,9 +551,12 @@ public class KafkaStreams implements AutoCloseable {
                 }
                 break;
             case SHUTDOWN_CLIENT:
-                log.error("Encountered the following exception during processing " +
-                        "and the registered exception handler opted to " + action + "." +
-                        " The streams client is going to shut down now. ", throwable);
+                log.error(
+                    "Encountered the following exception during processing and the registered exception handler" +
+                        "opted to {}. The streams client is going to shut down now.",
+                    action,
+                    throwable
+                );
                 closeToError();
                 break;
             case SHUTDOWN_APPLICATION:
@@ -979,7 +994,7 @@ public class KafkaStreams implements AutoCloseable {
         // The application ID is a required config and hence should always have value
         final String userClientId = applicationConfigs.getString(StreamsConfig.CLIENT_ID_CONFIG);
         final String applicationId = applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG);
-        if (userClientId.length() <= 0) {
+        if (userClientId.isEmpty()) {
             clientId = applicationId + "-" + processId;
         } else {
             clientId = userClientId;
@@ -999,7 +1014,6 @@ public class KafkaStreams implements AutoCloseable {
         streamsMetrics = new StreamsMetricsImpl(
             metrics,
             clientId,
-            applicationConfigs.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG),
             time
         );
 
@@ -1194,7 +1208,7 @@ public class KafkaStreams implements AutoCloseable {
                 for (final StreamThread streamThread : new ArrayList<>(threads)) {
                     final boolean callingThreadIsNotCurrentStreamThread = !streamThread.getName().equals(Thread.currentThread().getName());
                     if (streamThread.isThreadAlive() && (callingThreadIsNotCurrentStreamThread || numLiveStreamThreads() == 1)) {
-                        log.info("Removing StreamThread " + streamThread.getName());
+                        log.info("Removing StreamThread {}", streamThread.getName());
                         final Optional<String> groupInstanceID = streamThread.groupInstanceID();
                         streamThread.requestLeaveGroupDuringShutdown();
                         streamThread.shutdown();
@@ -1268,7 +1282,7 @@ public class KafkaStreams implements AutoCloseable {
             }
             log.warn("There are no threads eligible for removal");
         } else {
-            log.warn("Cannot remove a stream thread when Kafka Streams client is in state  " + state());
+            log.warn("Cannot remove a stream thread when Kafka Streams client is in state {}", state());
         }
         return Optional.empty();
     }
@@ -1276,9 +1290,10 @@ public class KafkaStreams implements AutoCloseable {
     /*
      * Takes a snapshot and counts the number of stream threads which are not in PENDING_SHUTDOWN or DEAD
      *
-     * note: iteration over SynchronizedList is not thread safe so it must be manually synchronized. However, we may
-     * require other locks when looping threads and it could cause deadlock. Hence, we create a copy to avoid holding
+     * Note: iteration over SynchronizedList is not thread safe, so it must be manually synchronized. However, we may
+     * require other locks when looping threads, and it could cause deadlock. Hence, we create a copy to avoid holding
      * threads lock when looping threads.
+     *
      * @return number of alive stream threads
      */
     private int numLiveStreamThreads() {
@@ -1305,7 +1320,7 @@ public class KafkaStreams implements AutoCloseable {
         final AtomicInteger maxThreadId = new AtomicInteger(1);
         synchronized (threads) {
             processStreamThread(thread -> {
-                // trim any DEAD threads from the list so we can reuse the thread.id
+                // trim any DEAD threads from the list, so we can reuse the thread.id
                 // this is only safe to do once the thread has fully completed shutdown
                 if (thread.state() == StreamThread.State.DEAD) {
                     threads.remove(thread);
@@ -1452,7 +1467,7 @@ public class KafkaStreams implements AutoCloseable {
      * This will block until all threads have stopped.
      */
     public void close() {
-        close(Long.MAX_VALUE, false);
+        close(Optional.empty(), false);
     }
 
     private Thread shutdownHelper(final boolean error, final long timeoutMs, final boolean leaveGroup) {
@@ -1531,7 +1546,15 @@ public class KafkaStreams implements AutoCloseable {
         }, clientId + "-CloseThread");
     }
 
-    private boolean close(final long timeoutMs, final boolean leaveGroup) {
+    private boolean close(final Optional<Long> timeout, final boolean leaveGroup) {
+        final long timeoutMs;
+        if (timeout.isPresent()) {
+            timeoutMs = timeout.get();
+            log.debug("Stopping Streams client with timeout = {}ms.", timeoutMs);
+        } else {
+            timeoutMs = Long.MAX_VALUE;
+        }
+
         if (state.hasCompletedShutdown()) {
             log.info("Streams client is already in the terminal {} state, all resources are closed and the client has stopped.", state);
             return true;
@@ -1574,7 +1597,7 @@ public class KafkaStreams implements AutoCloseable {
 
     private void closeToError() {
         if (!setState(State.PENDING_ERROR)) {
-            log.info("Skipping shutdown since we are already in " + state());
+            log.info("Skipping shutdown since we are already in {}", state());
         } else {
             final Thread shutdownThread = shutdownHelper(true, -1, false);
 
@@ -1586,10 +1609,10 @@ public class KafkaStreams implements AutoCloseable {
     /**
      * Shutdown this {@code KafkaStreams} by signaling all the threads to stop, and then wait up to the timeout for the
      * threads to join.
-     * A {@code timeout} of Duration.ZERO (or any other zero duration) makes the close operation asynchronous.
+     * A {@code timeout} of {@link Duration#ZERO} (or any other zero duration) makes the close operation asynchronous.
      * Negative-duration timeouts are rejected.
      *
-     * @param timeout  how long to wait for the threads to shutdown
+     * @param timeout how long to wait for the threads to shut down
      * @return {@code true} if all threads were successfully stopped&mdash;{@code false} if the timeout was reached
      * before all threads stopped
      * Note that this method must not be called in the {@link StateListener#onChange(KafkaStreams.State, KafkaStreams.State)} callback of {@link StateListener}.
@@ -1602,15 +1625,13 @@ public class KafkaStreams implements AutoCloseable {
             throw new IllegalArgumentException("Timeout can't be negative.");
         }
 
-        log.debug("Stopping Streams client with timeoutMillis = {} ms.", timeoutMs);
-
-        return close(timeoutMs, false);
+        return close(Optional.of(timeoutMs), false);
     }
 
     /**
      * Shutdown this {@code KafkaStreams} by signaling all the threads to stop, and then wait up to the timeout for the
      * threads to join.
-     * @param options  contains timeout to specify how long to wait for the threads to shutdown, and a flag leaveGroup to
+     * @param options  contains timeout to specify how long to wait for the threads to shut down, and a flag leaveGroup to
      *                 trigger consumer leave call
      * @return {@code true} if all threads were successfully stopped&mdash;{@code false} if the timeout was reached
      * before all threads stopped
@@ -1624,8 +1645,8 @@ public class KafkaStreams implements AutoCloseable {
         if (timeoutMs < 0) {
             throw new IllegalArgumentException("Timeout can't be negative.");
         }
-        log.debug("Stopping Streams client with timeoutMillis = {} ms.", timeoutMs);
-        return close(timeoutMs, options.leaveGroup);
+
+        return close(Optional.of(timeoutMs), options.leaveGroup);
     }
 
     private Consumer<StreamThread> streamThreadLeaveConsumerGroup(final long remainingTimeMs) {
@@ -1656,7 +1677,7 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     /**
-     * Do a clean up of the local {@link StateStore} directory ({@link StreamsConfig#STATE_DIR_CONFIG}) by deleting all
+     * Do a cleanup of the local {@link StateStore} directory ({@link StreamsConfig#STATE_DIR_CONFIG}) by deleting all
      * data with regard to the {@link StreamsConfig#APPLICATION_ID_CONFIG application ID}.
      * <p>
      * May only be called either before this {@code KafkaStreams} instance is {@link #start() started} or after the
@@ -1679,7 +1700,7 @@ public class KafkaStreams implements AutoCloseable {
      * {@link StreamsConfig#APPLICATION_ID_CONFIG application ID} as this instance (i.e., all instances that belong to
      * the same Kafka Streams application) and return {@link StreamsMetadata} for each discovered instance.
      * <p>
-     * Note: this is a point in time view and it may change due to partition reassignment.
+     * Note: this is a point in time view, and it may change due to partition reassignment.
      *
      * @return {@link StreamsMetadata} for each {@code KafkaStreams} instances of this application
      */
@@ -1697,10 +1718,10 @@ public class KafkaStreams implements AutoCloseable {
      * </ul>
      * and return {@link StreamsMetadata} for each discovered instance.
      * <p>
-     * Note: this is a point in time view and it may change due to partition reassignment.
+     * Note: this is a point in time view, and it may change due to partition reassignment.
      *
      * @param storeName the {@code storeName} to find metadata for
-     * @return {@link StreamsMetadata} for each {@code KafkaStreams} instances with the provide {@code storeName} of
+     * @return {@link StreamsMetadata} for each {@code KafkaStreams} instances with the provided {@code storeName} of
      * this application
      */
     public Collection<StreamsMetadata> streamsMetadataForStore(final String storeName) {
@@ -1730,9 +1751,9 @@ public class KafkaStreams implements AutoCloseable {
      *
      * @param storeName     the {@code storeName} to find metadata for
      * @param key           the key to find metadata for
-     * @param partitioner the partitioner to be use to locate the host for the key
+     * @param partitioner   the partitioner to be used to locate the host for the key
      * @param <K>           key type
-     * Returns {@link KeyQueryMetadata} containing all metadata about hosting the given key for the given store, using the
+     * Returns {@link KeyQueryMetadata} containing all metadata about hosting the given key for the given store, using
      * the supplied partitioner, or {@code null} if no matching metadata could be found.
      */
     public <K> KeyQueryMetadata queryMetadataForKey(final String storeName,
@@ -1772,7 +1793,7 @@ public class KafkaStreams implements AutoCloseable {
     /**
      *  This method pauses processing for the KafkaStreams instance.
      *
-     *  <p>Paused topologies will only skip over a) processing, b) punctuation, and c) standby tasks.
+     *  <p>Paused topologies will only skip over (a) processing, (b) punctuation, and (c) standby tasks.
      *  Notably, paused topologies will still poll Kafka consumers, and commit offsets.
      *  This method sets transient state that is not maintained or managed among instances.
      *  Note that pause() can be called before start() in order to start a KafkaStreams instance
@@ -1817,8 +1838,8 @@ public class KafkaStreams implements AutoCloseable {
 
     /**
      * handle each stream thread in a snapshot of threads.
-     * noted: iteration over SynchronizedList is not thread safe so it must be manually synchronized. However, we may
-     * require other locks when looping threads and it could cause deadlock. Hence, we create a copy to avoid holding
+     * noted: iteration over SynchronizedList is not thread safe, so it must be manually synchronized. However, we may
+     * require other locks when looping threads, and it could cause deadlock. Hence, we create a copy to avoid holding
      * threads lock when looping threads.
      * @param consumer handler
      */
@@ -2060,7 +2081,7 @@ public class KafkaStreams implements AutoCloseable {
     /**
      * Run an interactive query against a state store.
      * <p>
-     * This method allows callers outside of the Streams runtime to access the internal state of
+     * This method allows callers outside the Streams runtime to access the internal state of
      * stateful processors. See <a href="https://kafka.apache.org/documentation/streams/developer-guide/interactive-queries.html">IQ docs</a>
      * for more information.
      * <p>
