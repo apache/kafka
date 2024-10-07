@@ -283,20 +283,6 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
         output = self.nodes[0].account.ssh_output(cmd)
         self.logger.debug(output)
 
-    def list_acls(self, topic):
-        """
-        List ACLs for the given topic using the AclCommand CLI
-        """
-
-        kafka_run_class = self.path.script("kafka-run-class.sh", DEV_BRANCH)
-        cmd = "%s kafka.admin.AclCommand --authorizer-properties zookeeper.connect=%s %s --list --topic %s" % \
-              (kafka_run_class, self.connect_setting(force_tls=self.zk_client_secure_port),
-               self.zkTlsConfigFileOption(),
-               topic)
-        self.logger.debug(cmd)
-        output = self.nodes[0].account.ssh_output(cmd)
-        self.logger.debug(output)
-
     def java_class_name(self):
         """ The class name of the Zookeeper quorum peers. """
         return "org.apache.zookeeper.server.quorum.QuorumPeerMain"
