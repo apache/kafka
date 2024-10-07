@@ -161,8 +161,7 @@ public class ToolsUtils {
     /**
      * This is a simple wrapper around `CommandLineUtils.printUsageAndExit`.
      * It is needed for tools migration (KAFKA-14525), as there is no Java equivalent for return type `Nothing`.
-     * Can be removed once [[kafka.tools.ConsoleConsumer]]
-     * and [[kafka.tools.ConsoleProducer]] are migrated.
+     * Can be removed once [[kafka.tools.ConsoleConsumer]] are migrated.
      *
      * @param parser Command line options parser.
      * @param message Error message.
