@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.util;
+package org.apache.kafka.tools.filter;
 
 import java.util.Set;
 

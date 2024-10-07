@@ -314,6 +314,7 @@
     <allow pkg="org.apache.kafka.coordinator.group" />
     <allow pkg="org.apache.kafka.tools" />
     <allow pkg="org.apache.kafka.tools.api" />
+    <allow pkg="org.apache.kafka.tools.filter" />
 
     <subpackage name="consumer">
       <allow pkg="org.apache.kafka.tools"/>

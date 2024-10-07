@@ -14,10 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.util;
+package org.apache.kafka.tools.filter;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.server.util.TopicFilter.IncludeList;
+import org.apache.kafka.tools.filter.TopicFilter.IncludeList;
 
 import java.util.List;
 
