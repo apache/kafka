@@ -92,6 +92,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     private final long retryBackoffMaxMs;
     private boolean closing = false;
     private final CompletableFuture<Void> closeFuture;
+    private boolean isAcknowledgementCommitCallbackRegistered = false;
 
     ShareConsumeRequestManager(final Time time,
                                final LogContext logContext,
@@ -206,6 +207,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             log.debug("Fetch more data");
             fetchMoreRecords = true;
         }
+
         acknowledgementsMap.forEach((tip, acks) -> fetchAcknowledgementsMap.merge(tip, acks, Acknowledgements::merge));
     }
 
@@ -269,6 +271,17 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
     private boolean isNodeFree(int nodeId) {
         return !nodesWithPendingRequests.contains(nodeId);
+    }
+
+    public void setAcknowledgementCommitCallbackRegistered(boolean isAcknowledgementCommitCallbackRegistered) {
+        this.isAcknowledgementCommitCallbackRegistered = isAcknowledgementCommitCallbackRegistered;
+    }
+
+    private void maybeSendShareAcknowledgeCommitCallbackEvent(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap) {
+        if (isAcknowledgementCommitCallbackRegistered) {
+            ShareAcknowledgementCommitCallbackEvent event = new ShareAcknowledgementCommitCallbackEvent(acknowledgementsMap);
+            backgroundEventHandler.add(event);
+        }
     }
 
     private Optional<UnsentRequest> maybeBuildRequest(AcknowledgeRequestState acknowledgeRequestState,
@@ -588,8 +601,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     }
                     acks.setAcknowledgeErrorCode(Errors.forCode(partitionData.acknowledgeErrorCode()));
                     Map<TopicIdPartition, Acknowledgements> acksMap = Collections.singletonMap(tip, acks);
-                    ShareAcknowledgementCommitCallbackEvent event = new ShareAcknowledgementCommitCallbackEvent(acksMap);
-                    backgroundEventHandler.add(event);
+                    maybeSendShareAcknowledgeCommitCallbackEvent(acksMap);
                 }
 
                 Errors partitionError = Errors.forCode(partitionData.errorCode());
@@ -650,8 +662,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     metricsManager.recordFailedAcknowledgements(acks.size());
                     acks.setAcknowledgeErrorCode(Errors.forException(error));
                     Map<TopicIdPartition, Acknowledgements> acksMap = Collections.singletonMap(tip, acks);
-                    ShareAcknowledgementCommitCallbackEvent event = new ShareAcknowledgementCommitCallbackEvent(acksMap);
-                    backgroundEventHandler.add(event);
+                    maybeSendShareAcknowledgeCommitCallbackEvent(acksMap);
                 }
             }));
         } finally {
@@ -745,8 +756,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                         acknowledgeRequestState.onFailedAttempt(responseCompletionTimeMs);
                     } else {
                         acknowledgeRequestState.onSuccessfulAttempt(responseCompletionTimeMs);
+                        acknowledgeRequestState.processingComplete();
                     }
-                    acknowledgeRequestState.processingComplete();
                 }
             }
 
@@ -1085,8 +1096,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             // For commitAsync, we do not wait for other results to complete, we prepare a background event
             // for every ShareAcknowledgeResponse.
             if (isCommitAsync || (remainingResults  != null && remainingResults.decrementAndGet() == 0)) {
-                ShareAcknowledgementCommitCallbackEvent event = new ShareAcknowledgementCommitCallbackEvent(result);
-                backgroundEventHandler.add(event);
+                maybeSendShareAcknowledgeCommitCallbackEvent(result);
                 future.ifPresent(future -> future.complete(result));
             }
         }
