@@ -21,6 +21,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metrics.KafkaMetric;
 
 import java.io.Closeable;
 import java.time.Duration;
@@ -122,6 +123,15 @@ public interface Consumer<K, V> extends Closeable {
      */
     void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback);
 
+    /**
+     * @see KafkaConsumer#registerMetricForSubscription(KafkaMetric)
+     */
+    void registerMetricForSubscription(KafkaMetric metric);
+
+    /**
+     * @see KafkaConsumer#unregisterMetricFromSubscription(KafkaMetric)
+     */
+    void unregisterMetricFromSubscription(KafkaMetric metric);
     /**
      * @see KafkaConsumer#seek(TopicPartition, long)
      */

@@ -1,5 +1,4 @@
-#!/usr/bin/env sh
-
+#!/bin/bash
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -15,11 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Convenient way to invoke a gradle command with all Scala versions supported
-# by default
-# This script was originally designed to support multiple Scala versions (2.12 and 2.13),
-# but as Scala 2.12 is no longer supported, this script is no longer necessary.
-# We are keeping it for backwards compatibility. It will be removed in a future release.
-echo "Warning: This script is deprecated and will be removed in a future release."
-./gradlew "$@" -PscalaVersion=2.13
+LABEL_NAME=small
+MAX_SIZE=100
 
+pr_diff=$(gh pr diff $PR_NUM -R $GITHUB_REPOSITORY)
+
+insertions=$(printf "$pr_diff" | grep '^+' | wc -l)
+deletions=$(printf "$pr_diff" | grep '^-' | wc -l)
+
+total_changes=$((insertions + deletions))
+if [ "$total_changes" -lt "$MAX_SIZE" ]; then
+    gh issue edit $PR_NUM --add-label $LABEL_NAME -R $GITHUB_REPOSITORY
+else
+    gh issue edit $PR_NUM --remove-label $LABEL_NAME -R $GITHUB_REPOSITORY
+fi
