@@ -21,7 +21,7 @@ on:
       - 'trunk'
 
   schedule:
-    - cron: '0 11 * * *'    # Run at 11:00 UTC daily
+    - cron: '0 0 * * *'    # Run daily at midnight UTC
 
   pull_request:
     types: [ opened, synchronize, ready_for_review, reopened ]
