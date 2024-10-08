@@ -34,6 +34,7 @@ import org.apache.kafka.common.utils.LogContext;
 
 import org.slf4j.Logger;
 
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -97,6 +98,10 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
             case LIST_OFFSETS:
                 process((ListOffsetsEvent) event);
+                return;
+
+            case RESET_OFFSET:
+                process((ResetOffsetEvent) event);
                 return;
 
             case CHECK_AND_UPDATE_POSITIONS:
@@ -262,6 +267,17 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             // If the consumer is not using the group management capabilities, we still need to clear all assignments it may have.
             subscriptions.unsubscribe();
             event.future().complete(null);
+        }
+    }
+
+    private void process(final ResetOffsetEvent event) {
+        try {
+            Collection<TopicPartition> parts = event.topicPartitions().isEmpty() ?
+                    subscriptions.assignedPartitions() : event.topicPartitions();
+            subscriptions.requestOffsetReset(parts, event.offsetResetStrategy());
+            event.future().complete(null);
+        } catch (Exception e) {
+            event.future().completeExceptionally(e);
         }
     }
 
