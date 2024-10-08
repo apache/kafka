@@ -58,7 +58,7 @@ jobs:
       - name: Setup Gradle
         uses: ./.github/actions/setup-gradle
         with:
-          java-version: 21
+          java-version: 17
           gradle-cache-read-only: ${{ inputs.gradle-cache-read-only }}
           gradle-cache-write-only: ${{ inputs.gradle-cache-write-only }}
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
@@ -101,7 +101,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java: [ 21, 11 ]  # If we change these, make sure to adjust ci-complete.yml
+        java: [ 17, 11 ]  # If we change these, make sure to adjust ci-complete.yml
     name: JUnit tests Java ${{ matrix.java }}
     steps:
       - name: Checkout code
