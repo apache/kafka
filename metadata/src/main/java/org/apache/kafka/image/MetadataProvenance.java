@@ -27,7 +27,7 @@ import java.util.Objects;
  * Information about the source of a metadata image.
  */
 public final class MetadataProvenance {
-    public static final MetadataProvenance EMPTY = new MetadataProvenance(-1L, -1, -1L, true);
+    public static final MetadataProvenance EMPTY = new MetadataProvenance(-1L, -1, -1L, false);
 
     private final long lastContainedOffset;
     private final int lastContainedEpoch;

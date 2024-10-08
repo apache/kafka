@@ -81,7 +81,7 @@ public class SnapshotGeneratorTest {
 
     static LogDeltaManifest.Builder logDeltaManifestBuilder() {
         return LogDeltaManifest.newBuilder()
-            .provenance(MetadataProvenance.EMPTY)
+            .provenance(new MetadataProvenance(-1L, -1, -1L, true))
             .leaderAndEpoch(LeaderAndEpoch.UNKNOWN)
             .numBatches(1)
             .elapsedNs(100)
@@ -90,7 +90,7 @@ public class SnapshotGeneratorTest {
 
     static LogDeltaManifest.Builder notBatchAlignedLogDeltaManifestBuilder() {
         return LogDeltaManifest.newBuilder()
-                .provenance(new MetadataProvenance(-1L, -1, -1L, false))
+                .provenance(MetadataProvenance.EMPTY)
                 .leaderAndEpoch(LeaderAndEpoch.UNKNOWN)
                 .numBatches(1)
                 .elapsedNs(100)
