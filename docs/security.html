@@ -1374,13 +1374,13 @@ RULE:[n:string](regexp)s/pattern/replacement/g/U</code></pre>
         </tr>
         <tr>
             <td>--bootstrap-server</td>
-            <td>A list of host/port pairs to use for establishing the connection to the Kafka cluster broker. Only one of --bootstrap-server, --bootstrap-controller, or --authorizer option must be specified.</td>
+            <td>A list of host/port pairs to use for establishing the connection to the Kafka cluster broker. Only one of --bootstrap-server or --bootstrap-controller option must be specified.</td>
             <td></td>
             <td>Configuration</td>
         </tr>
         <tr>
             <td>--bootstrap-controller</td>
-            <td>A list of host/port pairs to use for establishing the connection to the Kafka cluster controller. Only one of --bootstrap-server, --bootstrap-controller, or --authorizer option must be specified.</td>
+            <td>A list of host/port pairs to use for establishing the connection to the Kafka cluster controller. Only one of --bootstrap-server or --bootstrap-controller option must be specified.</td>
             <td></td>
             <td>Configuration</td>
         </tr>
@@ -1519,31 +1519,6 @@ RULE:[n:string](regexp)s/pattern/replacement/g/U</code></pre>
             <td> Convenience option to assume yes to all queries and do not prompt.</td>
             <td></td>
             <td>Convenience</td>
-        </tr>
-        <tr>
-            <td>--authorizer</td>
-            <td>(DEPRECATED: not supported in KRaft) Fully qualified class name of the authorizer.</td>
-            <td>kafka.security.authorizer.AclAuthorizer</td>
-            <td>Configuration</td>
-        </tr>
-        <tr>
-            <td>--authorizer-properties</td>
-            <td>(DEPRECATED: not supported in KRaft) key=val pairs that will be passed to authorizer for initialization. For the default authorizer in ZK clsuters, the example values are: zookeeper.connect=localhost:2181</td>
-            <td></td>
-            <td>Configuration</td>
-        </tr>
-        <tr>
-            <td>--zk-tls-config-file</td>
-            <td>(DEPRECATED: not supported in KRaft) Identifies the file where ZooKeeper client TLS connectivity properties for the authorizer are defined.
-                Any properties other than the following (with or without an "authorizer." prefix) are ignored:
-                zookeeper.clientCnxnSocket, zookeeper.ssl.cipher.suites, zookeeper.ssl.client.enable,
-                zookeeper.ssl.crl.enable, zookeeper.ssl.enabled.protocols, zookeeper.ssl.endpoint.identification.algorithm,
-                zookeeper.ssl.keystore.location, zookeeper.ssl.keystore.password, zookeeper.ssl.keystore.type,
-                zookeeper.ssl.ocsp.enable, zookeeper.ssl.protocol, zookeeper.ssl.truststore.location,
-                zookeeper.ssl.truststore.password, zookeeper.ssl.truststore.type
-            </td>
-            <td></td>
-            <td>Configuration</td>
         </tr>
     </table>
 
