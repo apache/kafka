@@ -2155,6 +2155,7 @@ project(':server-common') {
     testImplementation libs.mockitoCore
 
     testRuntimeOnly runtimeTestLibs
+    testRuntimeOnly project(":test-common")
   }
 
   task createVersionFile() {
@@ -2506,6 +2507,7 @@ project(':tools') {
     testImplementation libs.apachedsLdifPartition
 
     testRuntimeOnly libs.junitPlatformLanucher
+    testRuntimeOnly project(':test-common')
   }
 
   javadoc {
