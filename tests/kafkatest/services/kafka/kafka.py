@@ -279,7 +279,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             self.quorum_info = quorum_info_provider(self)
         self.controller_quorum = None # will define below if necessary
         self.isolated_controller_quorum = None # will define below if necessary
-        self.configured_for_zk_migration = False
         self.dynamicRaftQuorum = False
 
         # Set use_new_coordinator based on context and arguments.
@@ -808,7 +807,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         return cmd
 
     def controller_listener_name_list(self, node):
-        if self.quorum_info.using_zk and self.configured_for_zk_migration:
+        if self.quorum_info.using_zk:
             return [self.controller_listener_name(self.controller_quorum.controller_security_protocol)]
         elif self.quorum_info.using_zk:
             return []
