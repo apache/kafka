@@ -716,7 +716,7 @@
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
-  "name":"kafka.tools.ConsoleProducer$LineMessageReader",
+  "name":"org.apache.kafka.tools.LineMessageReader",
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
