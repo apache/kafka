@@ -88,6 +88,10 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
     private static final String OFFSET_LAG_MAX_DOC = "How out-of-sync a remote partition can be before it is resynced.";
     public static final long OFFSET_LAG_MAX_DEFAULT = 100L;
 
+    public static final String HEARTBEATS_REPLICATION_ENABLED = "heartbeats.replication" + ENABLED_SUFFIX;
+    private static final String HEARTBEATS_REPLICATION_ENABLED_DOC = "Whether to replicate the heartbeats topics even when the topic filter does not include them.";
+    public static final boolean HEARTBEATS_REPLICATION_ENABLED_DEFAULT = true;
+
     public static final String OFFSET_SYNCS_SOURCE_PRODUCER_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "source-producer";
     public static final String OFFSET_SYNCS_TARGET_PRODUCER_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "target-producer";
     public static final String OFFSET_SYNCS_SOURCE_ADMIN_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "source-admin";
@@ -191,6 +195,10 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
 
     boolean emitOffsetSyncsEnabled() {
         return getBoolean(EMIT_OFFSET_SYNCS_ENABLED);
+    }
+
+    boolean heartbeatsReplicationEnabled() {
+        return getBoolean(HEARTBEATS_REPLICATION_ENABLED);
     }
 
     private static ConfigDef defineSourceConfig(ConfigDef baseConfig) {
@@ -298,6 +306,13 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
                         EMIT_OFFSET_SYNCS_ENABLED_DEFAULT,
                         ConfigDef.Importance.LOW,
                         EMIT_OFFSET_SYNCS_ENABLED_DOC
+                )
+                .define(
+                        HEARTBEATS_REPLICATION_ENABLED,
+                        ConfigDef.Type.BOOLEAN,
+                        HEARTBEATS_REPLICATION_ENABLED_DEFAULT,
+                        ConfigDef.Importance.LOW,
+                        HEARTBEATS_REPLICATION_ENABLED_DOC
                 );
     }
 
