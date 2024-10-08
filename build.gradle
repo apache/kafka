@@ -1897,6 +1897,7 @@ project(':clients') {
 
     testRuntimeOnly libs.jacksonDatabind
     testRuntimeOnly libs.jacksonJDK8Datatypes
+    testRuntimeOnly runtimeTestLibs
 
     generator project(':generator')
   }
