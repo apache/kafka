@@ -777,9 +777,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testSeekThrowsIllegalStateIfPartitionsNotAssigned(quorum: String, groupProtocol: String): Unit = {
     val tp = new TopicPartition(topic, 0)
-    consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "my-group-id")
-    consumerConfig.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "my-instance-id")
-
     val consumer = createConsumer(configOverrides = consumerConfig)
     val e: Exception = assertThrows(classOf[IllegalStateException], () => consumer.seekToEnd(Collections.singletonList(tp)))
     assertEquals("No current assignment for partition " + tp, e.getMessage)
