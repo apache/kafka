@@ -342,12 +342,19 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      * consumer join the share group if it is not part of it yet, or send the updated subscription if
      * it is already a member.
      */
-    private void process(final ShareSubscriptionChangeEvent ignored) {
+    private void process(final ShareSubscriptionChangeEvent event) {
         if (!requestManagers.shareHeartbeatRequestManager.isPresent()) {
             log.warn("Group membership manager not present when processing a subscribe event");
+            event.future().complete(null);
             return;
         }
+
+        if (subscriptions.subscribeToShareGroup(event.topics()))
+            metadata.requestUpdateForNewTopics();
+
         requestManagers.shareHeartbeatRequestManager.get().membershipManager().onSubscriptionUpdated();
+
+        event.future().complete(null);
     }
 
     /**
@@ -364,6 +371,9 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             event.future().completeExceptionally(error);
             return;
         }
+
+        subscriptions.unsubscribe();
+
         CompletableFuture<Void> future = requestManagers.shareHeartbeatRequestManager.get().membershipManager().leaveGroup();
         // The future will be completed on heartbeat sent
         future.whenComplete(complete(event.future()));

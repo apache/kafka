@@ -80,7 +80,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -519,12 +518,10 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 }
 
                 log.info("Subscribed to topic(s): {}", String.join(", ", topics));
-                if (subscriptions.subscribeToShareGroup(new HashSet<>(topics)))
-                    metadata.requestUpdateForNewTopics();
 
                 // Trigger subscribe event to effectively join the group if not already part of it,
                 // or just send the new subscription to the broker.
-                applicationEventHandler.add(new ShareSubscriptionChangeEvent());
+                applicationEventHandler.addAndGet(new ShareSubscriptionChangeEvent(topics));
             }
         } finally {
             release();
@@ -538,12 +535,11 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     public void unsubscribe() {
         acquireAndEnsureOpen();
         try {
-            Timer timer = time.timer(Long.MAX_VALUE);
-            ShareUnsubscribeEvent unsubscribeApplicationEvent = new ShareUnsubscribeEvent(calculateDeadlineMs(timer));
-            applicationEventHandler.add(unsubscribeApplicationEvent);
             log.info("Unsubscribing all topics");
 
-            subscriptions.unsubscribe();
+            Timer timer = time.timer(Long.MAX_VALUE);
+            ShareUnsubscribeEvent unsubscribeApplicationEvent = new ShareUnsubscribeEvent(calculateDeadlineMs(timer));
+            applicationEventHandler.addAndGet(unsubscribeApplicationEvent);
         } finally {
             release();
         }
