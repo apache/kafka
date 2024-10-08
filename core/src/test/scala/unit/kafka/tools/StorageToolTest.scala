@@ -21,7 +21,7 @@ import java.io.{ByteArrayOutputStream, File, PrintStream}
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.util
-import java.util.{Optional, Properties}
+import java.util.Properties
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import net.sourceforge.argparse4j.inf.ArgumentParserException
@@ -39,7 +39,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 import scala.collection.mutable.ListBuffer
-import scala.jdk.CollectionConverters.IterableHasAsScala
+import scala.jdk.CollectionConverters._
 
 @Timeout(value = 40)
 class StorageToolTest {
@@ -454,7 +454,7 @@ Found problem:
 
     // Not doing full SCRAM record validation since that's covered elsewhere.
     // Just checking that we generate the correct number of records
-    val bootstrapMetadata = new BootstrapDirectory(availableDirs.head.toString, Optional.empty).read
+    val bootstrapMetadata = new BootstrapDirectory(availableDirs.head.toString, java.util.Optional.empty()).read
     val scramRecords = bootstrapMetadata.records().asScala
       .filter(apiMessageAndVersion => apiMessageAndVersion.message().isInstanceOf[UserScramCredentialRecord])
       .map(apiMessageAndVersion => apiMessageAndVersion.message().asInstanceOf[UserScramCredentialRecord])
