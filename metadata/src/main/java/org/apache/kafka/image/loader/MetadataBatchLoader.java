@@ -143,7 +143,8 @@ public class MetadataBatchLoader {
             // 1) this is not the first record in this batch
             // 2) this is not the first batch since last emitting a delta
             if (transactionState == TransactionState.STARTED_TRANSACTION && (indexWithinBatch > 0 || numBatches > 0)) {
-                MetadataProvenance provenance = new MetadataProvenance(lastOffset, lastEpoch, lastContainedLogTimeMs, lastOffset == batch.baseOffset() - 1);
+                // Accumulated delta is aligned on batch boundaries iff the BeginTransactionRecord is the first record in a batch
+                MetadataProvenance provenance = new MetadataProvenance(lastOffset, lastEpoch, lastContainedLogTimeMs, indexWithinBatch == 0);
                 LogDeltaManifest manifest = LogDeltaManifest.newBuilder()
                     .provenance(provenance)
                     .leaderAndEpoch(leaderAndEpoch)
