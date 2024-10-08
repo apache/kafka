@@ -359,7 +359,7 @@ class LogCleanerManagerTest extends Logging {
 
     log.appendAsLeader(records, leaderEpoch = 0)
     log.roll()
-    log.appendAsLeader(records, leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.singletonRecords("test2".getBytes, key="test2".getBytes), leaderEpoch = 0)
     log.updateHighWatermark(2L)
 
     // simulate cleanup thread working on the log partition
