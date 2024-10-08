@@ -1918,10 +1918,9 @@ public class AsyncKafkaConsumerTest {
         consumer = newConsumer();
         consumer.seekToBeginning(topics);
         CompletableApplicationEvent<Void> event = addAndGetLastEnqueuedEvent();
-        assertInstanceOf(ResetOffsetEvent.class, event);
-        ResetOffsetEvent resetOffsetEvent = (ResetOffsetEvent) event;
+        ResetOffsetEvent resetOffsetEvent = assertInstanceOf(ResetOffsetEvent.class, event);
         assertEquals(topics, new HashSet<>(resetOffsetEvent.topicPartitions()));
-        assertSame(resetOffsetEvent.offsetResetStrategy(), OffsetResetStrategy.EARLIEST);
+        assertEquals(OffsetResetStrategy.EARLIEST, resetOffsetEvent.offsetResetStrategy());
     }
 
     @Test
@@ -1946,10 +1945,9 @@ public class AsyncKafkaConsumerTest {
         consumer = newConsumer();
         consumer.seekToEnd(topics);
         CompletableApplicationEvent<Void> event = addAndGetLastEnqueuedEvent();
-        assertInstanceOf(ResetOffsetEvent.class, event);
-        ResetOffsetEvent resetOffsetEvent = (ResetOffsetEvent) event;
+        ResetOffsetEvent resetOffsetEvent = assertInstanceOf(ResetOffsetEvent.class, event);
         assertEquals(topics, new HashSet<>(resetOffsetEvent.topicPartitions()));
-        assertSame(resetOffsetEvent.offsetResetStrategy(), OffsetResetStrategy.LATEST);
+        assertEquals(OffsetResetStrategy.LATEST, resetOffsetEvent.offsetResetStrategy());
     }
 
     private void verifyUnsubscribeEvent(SubscriptionState subscriptions) {
