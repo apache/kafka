@@ -3563,7 +3563,7 @@ public class StreamThreadTest {
         final StreamsConfig config = new StreamsConfig(streamsConfigProps);
         final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
-        when(mainConsumer.poll(Mockito.any(Duration.class))).thenReturn(new ConsumerRecords<>(Collections.emptyMap()));
+        when(mainConsumer.poll(Mockito.any(Duration.class))).thenReturn(new ConsumerRecords<>(Collections.emptyMap(), Collections.emptyMap()));
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         final TaskManager taskManager = Mockito.mock(TaskManager.class);
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);

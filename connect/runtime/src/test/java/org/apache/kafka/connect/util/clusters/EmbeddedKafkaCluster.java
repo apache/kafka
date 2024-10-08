@@ -35,6 +35,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -480,7 +481,7 @@ public class EmbeddedKafkaCluster {
                     consumedRecords += r.size();
                 }
                 if (consumedRecords >= n) {
-                    return new ConsumerRecords<>(records);
+                    return new ConsumerRecords<>(records, rec.nextOffsets());
                 }
                 allowedDuration = maxDuration - (System.currentTimeMillis() - startMillis);
             }
@@ -535,6 +536,7 @@ public class EmbeddedKafkaCluster {
                         Function.identity(),
                         tp -> new ArrayList<>()
                 ));
+        Map<TopicPartition, OffsetAndMetadata> nextOffsets = new HashMap<>();
         try (Consumer<byte[], byte[]> consumer = createConsumer(consumerProps != null ? consumerProps : Collections.emptyMap())) {
             consumer.assign(topicPartitions);
 
@@ -558,12 +560,13 @@ public class EmbeddedKafkaCluster {
                         recordBatch.partitions().forEach(tp -> records.get(tp)
                                 .addAll(recordBatch.records(tp))
                         );
+                        nextOffsets.putAll(recordBatch.nextOffsets());
                     }
                 }
             }
         }
 
-        return new ConsumerRecords<>(records);
+        return new ConsumerRecords<>(records, nextOffsets);
     }
 
     public long endOffset(TopicPartition topicPartition) throws TimeoutException, InterruptedException, ExecutionException {

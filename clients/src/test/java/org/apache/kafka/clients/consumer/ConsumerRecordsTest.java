@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -178,6 +179,7 @@ public class ConsumerRecordsTest {
                                                                    int emptyPartitionIndex,
                                                                    Collection<String> topics) {
         Map<TopicPartition, List<ConsumerRecord<Integer, String>>> partitionToRecords = new LinkedHashMap<>();
+        Map<TopicPartition, OffsetAndMetadata> nextOffsets = new HashMap<>();
         for (String topic : topics) {
             for (int i = 0; i < partitionSize; i++) {
                 List<ConsumerRecord<Integer, String>> records = new ArrayList<>(recordSize);
@@ -189,11 +191,13 @@ public class ConsumerRecordsTest {
                         );
                     }
                 }
-                partitionToRecords.put(new TopicPartition(topic, i), records);
+                final TopicPartition tp = new TopicPartition(topic, i);
+                partitionToRecords.put(tp, records);
+                nextOffsets.put(tp, new OffsetAndMetadata(recordSize, Optional.empty(), ""));
             }
         }
 
-        return new ConsumerRecords<>(partitionToRecords);
+        return new ConsumerRecords<>(partitionToRecords, nextOffsets);
     }
 
     private void validateEmptyPartition(ConsumerRecord<Integer, String> record, int emptyPartitionIndex) {

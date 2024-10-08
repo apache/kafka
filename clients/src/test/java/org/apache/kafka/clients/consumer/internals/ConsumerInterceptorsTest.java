@@ -75,11 +75,14 @@ public class ConsumerInterceptorsTest {
 
             // filters out topic/partitions with partition == FILTER_PARTITION
             Map<TopicPartition, List<ConsumerRecord<K, V>>> recordMap = new HashMap<>();
+            Map<TopicPartition, OffsetAndMetadata> nextOffsetAndMetadata = new HashMap<>();
             for (TopicPartition tp : records.partitions()) {
-                if (tp.partition() != filterPartition)
+                if (tp.partition() != filterPartition) {
                     recordMap.put(tp, records.records(tp));
+                    nextOffsetAndMetadata.putAll(records.nextOffsets());
+                }
             }
-            return new ConsumerRecords<>(recordMap);
+            return new ConsumerRecords<>(recordMap, nextOffsetAndMetadata);
         }
 
         @Override
@@ -117,6 +120,8 @@ public class ConsumerInterceptorsTest {
 
         // verify that onConsumer modifies ConsumerRecords
         Map<TopicPartition, List<ConsumerRecord<Integer, Integer>>> records = new HashMap<>();
+        Map<TopicPartition, OffsetAndMetadata> nextOffsets = new HashMap<>();
+
         List<ConsumerRecord<Integer, Integer>> list1 = new ArrayList<>();
         list1.add(consumerRecord);
         List<ConsumerRecord<Integer, Integer>> list2 = new ArrayList<>();
@@ -126,9 +131,15 @@ public class ConsumerInterceptorsTest {
         list3.add(new ConsumerRecord<>(filterTopicPart2.topic(), filterTopicPart2.partition(), 0, 0L, TimestampType.CREATE_TIME,
             0, 0, 1, 1, new RecordHeaders(), Optional.empty()));
         records.put(tp, list1);
+        nextOffsets.put(tp, new OffsetAndMetadata(1, Optional.empty(), ""));
+
         records.put(filterTopicPart1, list2);
+        nextOffsets.put(filterTopicPart1, new OffsetAndMetadata(1, Optional.empty(), ""));
+
         records.put(filterTopicPart2, list3);
-        ConsumerRecords<Integer, Integer> consumerRecords = new ConsumerRecords<>(records);
+        nextOffsets.put(filterTopicPart2, new OffsetAndMetadata(1, Optional.empty(), ""));
+
+        ConsumerRecords<Integer, Integer> consumerRecords = new ConsumerRecords<>(records, nextOffsets);
         ConsumerRecords<Integer, Integer> interceptedRecords = interceptors.onConsume(consumerRecords);
         assertEquals(1, interceptedRecords.count());
         assertTrue(interceptedRecords.partitions().contains(tp));

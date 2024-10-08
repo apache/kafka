@@ -700,7 +700,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                             + "since the consumer's position has advanced for at least one topic partition");
                     }
 
-                    return interceptors.onConsume(new ConsumerRecords<>(fetch.records()));
+                    return interceptors.onConsume(new ConsumerRecords<>(fetch.records(), fetch.nextOffsetAndMetadata()));
                 }
                 // We will wait for retryBackoffMs
             } while (timer.notExpired());

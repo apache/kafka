@@ -19,7 +19,14 @@ package org.apache.kafka.clients.consumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.AbstractIterator;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 
 /**
  * A container that holds the list {@link ConsumerRecord} per partition for a
@@ -27,7 +34,7 @@ import java.util.*;
  * partition returned by a {@link Consumer#poll(java.time.Duration)} operation.
  */
 public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
-    public static final ConsumerRecords<Object, Object> EMPTY = new ConsumerRecords<>(Collections.emptyMap());
+    public static final ConsumerRecords<Object, Object> EMPTY = new ConsumerRecords<>(Collections.emptyMap(), Collections.emptyMap());
 
     private final Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
     private final Map<TopicPartition, OffsetAndMetadata> nextOffsets;
