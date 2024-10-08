@@ -30,6 +30,7 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -99,10 +100,13 @@ public class StreamsGroupInitializeRequestManager implements RequestManager {
                                                                                            final StreamsAssignmentInterface.Subtopology subtopology) {
         final StreamsGroupInitializeRequestData.Subtopology subtopologyData = new StreamsGroupInitializeRequestData.Subtopology();
         subtopologyData.setSubtopologyId(subtopologyName);
-        subtopologyData.setSourceTopics(new ArrayList<>(subtopology.sourceTopics));
-        Collections.sort(subtopologyData.sourceTopics());
-        subtopologyData.setRepartitionSinkTopics(new ArrayList<>(subtopology.sinkTopics));
-        Collections.sort(subtopologyData.repartitionSinkTopics());
+        ArrayList<String> sortedSourceTopics = new ArrayList<>(subtopology.sourceTopics);
+        Collections.sort(sortedSourceTopics);
+        subtopologyData.setSourceTopics(sortedSourceTopics);
+        // TODO: We should only encode the repartition sink topics here.
+        ArrayList<String> sortedSinkTopics = new ArrayList<>(subtopology.sinkTopics);
+        Collections.sort(sortedSinkTopics);
+        subtopologyData.setRepartitionSinkTopics(sortedSinkTopics);
         subtopologyData.setRepartitionSourceTopics(getRepartitionTopicsInfoFromStreams(subtopology));
         subtopologyData.setStateChangelogTopics(getChangelogTopicsInfoFromStreams(subtopology));
         subtopologyData.setCopartitionGroups(
@@ -114,17 +118,17 @@ public class StreamsGroupInitializeRequestManager implements RequestManager {
         final Collection<Set<String>> copartitionGroups,
         final StreamsGroupInitializeRequestData.Subtopology subtopologyData) {
 
-        final Map<String, Integer> sourceTopicsMap =
+        final Map<String, Short> sourceTopicsMap =
             IntStream.range(0, subtopologyData.sourceTopics().size())
                 .boxed()
-                .collect(Collectors.toMap(subtopologyData.sourceTopics()::get, i -> i));
+                .collect(Collectors.toMap(subtopologyData.sourceTopics()::get, Integer::shortValue));
 
-        final Map<String, Integer> repartitionSourceTopics =
+        final Map<String, Short> repartitionSourceTopics =
             IntStream.range(0, subtopologyData.repartitionSourceTopics().size())
                 .boxed()
                 .collect(
                     Collectors.toMap(x -> subtopologyData.repartitionSourceTopics().get(x).name(),
-                        i -> i));
+                        Integer::shortValue));
 
         return copartitionGroups.stream()
             .map(x -> getCopartitionGroupFromStreams(x, sourceTopicsMap, repartitionSourceTopics))
@@ -133,8 +137,8 @@ public class StreamsGroupInitializeRequestManager implements RequestManager {
 
     private static CopartitionGroup getCopartitionGroupFromStreams(
         final Set<String> topicNames,
-        final Map<String, Integer> sourceTopicsMap,
-        final Map<String, Integer> repartitionSourceTopics) {
+        final Map<String, Short> sourceTopicsMap,
+        final Map<String, Short> repartitionSourceTopics) {
         CopartitionGroup copartitionGroup = new CopartitionGroup();
 
         topicNames.forEach(topicName -> {
@@ -161,6 +165,7 @@ public class StreamsGroupInitializeRequestManager implements RequestManager {
             repartitionTopic.getValue().replicationFactor.ifPresent(repartitionTopicInfo::setReplicationFactor);
             repartitionTopicsInfo.add(repartitionTopicInfo);
         }
+        repartitionTopicsInfo.sort(Comparator.comparing(StreamsGroupInitializeRequestData.TopicInfo::name));
         return repartitionTopicsInfo;
     }
 
@@ -172,6 +177,7 @@ public class StreamsGroupInitializeRequestManager implements RequestManager {
             changelogTopic.getValue().replicationFactor.ifPresent(changelogTopicInfo::setReplicationFactor);
             changelogTopicsInfo.add(changelogTopicInfo);
         }
+        changelogTopicsInfo.sort(Comparator.comparing(StreamsGroupInitializeRequestData.TopicInfo::name));
         return changelogTopicsInfo;
     }
 

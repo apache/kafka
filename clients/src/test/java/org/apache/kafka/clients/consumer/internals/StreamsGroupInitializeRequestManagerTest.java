@@ -140,10 +140,10 @@ class StreamsGroupInitializeRequestManagerTest {
 
         assertEquals(2, subtopology.copartitionGroups().size());
         final StreamsGroupInitializeRequestData.CopartitionGroup copartitionGroupData1 = subtopology.copartitionGroups().get(0);
-        assertEquals(Collections.singletonList(0), copartitionGroupData1.sourceTopics());
-        assertEquals(Collections.singletonList(1), copartitionGroupData1.repartitionSourceTopics());
+        assertEquals(Collections.singletonList((short) 0), copartitionGroupData1.sourceTopics());
+        assertEquals(Collections.singletonList((short) 1), copartitionGroupData1.repartitionSourceTopics());
         final StreamsGroupInitializeRequestData.CopartitionGroup copartitionGroupData2 = subtopology.copartitionGroups().get(1);
-        assertEquals(Collections.singletonList(1), copartitionGroupData2.sourceTopics());
-        assertEquals(Collections.singletonList(0), copartitionGroupData2.repartitionSourceTopics());
+        assertEquals(Collections.singletonList((short) 1), copartitionGroupData2.sourceTopics());
+        assertEquals(Collections.singletonList((short) 0), copartitionGroupData2.repartitionSourceTopics());
     }
 }

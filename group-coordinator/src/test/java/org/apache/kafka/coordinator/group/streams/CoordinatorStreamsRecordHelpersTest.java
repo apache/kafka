@@ -67,10 +67,10 @@ class CoordinatorStreamsRecordHelpersTest {
                 )
                 .setCopartitionGroups(Arrays.asList(
                     new StreamsGroupInitializeRequestData.CopartitionGroup()
-                        .setSourceTopics(Collections.singletonList(0))
-                        .setRepartitionSourceTopics(Collections.singletonList(0)),
+                        .setSourceTopics(Collections.singletonList((short) 0))
+                        .setRepartitionSourceTopics(Collections.singletonList((short) 0)),
                     new StreamsGroupInitializeRequestData.CopartitionGroup()
-                        .setSourceTopicRegex(Collections.singletonList(0))
+                        .setSourceTopicRegex(Collections.singletonList((short) 0))
                 ))
             );
 
@@ -107,10 +107,10 @@ class CoordinatorStreamsRecordHelpersTest {
                 )
                 .setCopartitionGroups(Arrays.asList(
                     new StreamsGroupTopologyValue.CopartitionGroup()
-                        .setSourceTopics(Collections.singletonList(0))
-                        .setRepartitionSourceTopics(Collections.singletonList(0)),
+                        .setSourceTopics(Collections.singletonList((short) 0))
+                        .setRepartitionSourceTopics(Collections.singletonList((short) 0)),
                     new StreamsGroupTopologyValue.CopartitionGroup()
-                        .setSourceTopicRegex(Collections.singletonList(0))
+                        .setSourceTopicRegex(Collections.singletonList((short) 0))
                 ))
             );
 

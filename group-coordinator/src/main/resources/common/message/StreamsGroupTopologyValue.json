@@ -40,11 +40,11 @@
         { "name": "CopartitionGroups", "type": "[]CopartitionGroup", "versions": "0+",
           "about": "A subset of source topics that must be copartitioned.",
           "fields": [
-            { "name": "SourceTopics", "type": "[]int32", "versions": "0+",
+            { "name": "SourceTopics", "type": "[]int16", "versions": "0+",
               "about": "The topics the topology reads from. Index into the array on the subtopology level." },
-            { "name": "SourceTopicRegex", "type": "[]int32", "versions": "0+",
+            { "name": "SourceTopicRegex", "type": "[]int16", "versions": "0+",
               "about": "Regular expressions identifying topics the subtopology reads from. Index into the array on the subtopology level." },
-            { "name": "RepartitionSourceTopics", "type": "[]int32", "versions": "0+",
+            { "name": "RepartitionSourceTopics", "type": "[]int16", "versions": "0+",
               "about": "The set of source topics that are internally created repartition topics. Index into the array on the subtopology level." }
           ]
         }
