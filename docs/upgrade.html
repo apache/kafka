@@ -49,6 +49,15 @@
                         <li>The <code>add.source.alias.to.metrics</code> configuration was removed from <code>MirrorSourceConnector</code>.
                             The source cluster alias is now always added to the metrics.
                         </li>
+                        <li>The <code>config.properties.blacklist</code> was removed from the <code>org.apache.kafka.connect.mirror.MirrorSourceConfig</code>
+                            Please use <code>config.properties.exclude</code> instead.
+                        </li>
+                        <li>The <code>topics.blacklist</code> was removed from the <code>org.apache.kafka.connect.mirror.MirrorSourceConfig</code>
+                            Please use <code>topics.exclude</code> instead.
+                        </li>
+                        <li>The <code>groups.blacklist</code> was removed from the <code>org.apache.kafka.connect.mirror.MirrorSourceConfig</code>
+                            Please use <code>groups.exclude</code> instead.
+                        </li>
                     </ul>
                 </li>
                 <li><b>Tools</b>
@@ -65,6 +74,17 @@
                         </li>
                         <li>The <code>--whitelist</code> option was removed from the <code>kafka-console-consumer</code> command line tool.
                             Please use <code>--include</code> instead.
+                        </li>
+                        <li>Redirections from the old tools packages have been removed: 
+                            <code>kafka.admin.FeatureCommand</code>, 
+                            <code>kafka.tools.ClusterTool</code>, 
+                            <code>kafka.tools.EndToEndLatency</code>,
+                            <code>kafka.tools.StateChangeLogMerger</code>, 
+                            <code>kafka.tools.StreamsResetter</code>, 
+                            <code>kafka.tools.JmxTool</code>.
+                        </li>
+                        <li>The <code>--authorizer</code>, <code>--authorizer-properties</code>, and <code>--zk-tls-config-file</code> options were removed from the <code>kafka-acls</code> command line tool.
+                            Please use <code>--bootstrap-server</code> or <code>--bootstrap-controller</code> instead.
                         </li>
                     </ul>
                 </li>
@@ -86,6 +106,10 @@
         </li>
         <li>Other changes:
             <ul>
+                <li>
+                    Scala 2.12 support has been removed in Apache Kafka 4.0
+                    See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308218">KIP-751</a> for more details
+                </li>
                 <li>The <code>--delete-config</code> option in the <code>kafka-topics</code> command line tool has been deprecated.
                 </li>
             </ul>

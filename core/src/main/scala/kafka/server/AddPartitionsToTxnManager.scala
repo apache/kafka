@@ -18,7 +18,6 @@
 package kafka.server
 
 import kafka.server.AddPartitionsToTxnManager.{VerificationFailureRateMetricName, VerificationTimeMsMetricName}
-import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientResponse, NetworkClient, RequestCompletionHandler}
 import org.apache.kafka.common.internals.Topic
@@ -99,7 +98,7 @@ class AddPartitionsToTxnManager(
       callback(topicPartitions.map(tp => tp -> Errors.COORDINATOR_NOT_AVAILABLE).toMap)
     } else {
       val topicCollection = new AddPartitionsToTxnTopicCollection()
-      topicPartitions.groupBy(_.topic).forKeyValue { (topic, tps) =>
+      topicPartitions.groupBy(_.topic).foreachEntry { (topic, tps) =>
         topicCollection.add(new AddPartitionsToTxnTopic()
           .setName(topic)
           .setPartitions(tps.map(tp => Int.box(tp.partition)).toList.asJava))

@@ -43,7 +43,7 @@ import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorRec
 import org.apache.kafka.image.publisher.{BrokerRegistrationTracker, MetadataPublisher}
 import org.apache.kafka.metadata.{BrokerState, ListenerInfo}
 import org.apache.kafka.security.CredentialProvider
-import org.apache.kafka.server.{AssignmentsManager, ClientMetricsManager, NodeToControllerChannelManager}
+import org.apache.kafka.server.{AssignmentsManager, BrokerFeatures, ClientMetricsManager, NodeToControllerChannelManager}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, TopicIdPartition}
 import org.apache.kafka.server.config.ConfigType
@@ -320,6 +320,11 @@ class BrokerServer(
           lifecycleManager.propagateDirectoryFailure(directoryId, config.logDirFailureTimeoutMs)
       }
 
+      /**
+       * TODO: move this action queue to handle thread so we can simplify concurrency handling
+       */
+      val defaultActionQueue = new DelayedActionQueue
+
       this._replicaManager = new ReplicaManager(
         config = config,
         metrics = metrics,
@@ -338,7 +343,8 @@ class BrokerServer(
         delayedRemoteFetchPurgatoryParam = None,
         brokerEpochSupplier = () => lifecycleManager.brokerEpoch,
         addPartitionsToTxnManager = Some(addPartitionsToTxnManager),
-        directoryEventHandler = directoryEventHandler
+        directoryEventHandler = directoryEventHandler,
+        defaultActionQueue = defaultActionQueue
       )
 
       /* start token manager */
@@ -372,7 +378,7 @@ class BrokerServer(
         ConfigType.CLIENT_METRICS -> new ClientMetricsConfigHandler(clientMetricsManager),
         ConfigType.GROUP -> new GroupConfigHandler(groupCoordinator))
 
-      val featuresRemapped = BrokerFeatures.createDefaultFeatureMap(brokerFeatures).asJava
+      val featuresRemapped = BrokerFeatures.createDefaultFeatureMap(brokerFeatures)
 
       val brokerLifecycleChannelManager = new NodeToControllerChannelManagerImpl(
         controllerNodeProvider,
@@ -423,6 +429,7 @@ class BrokerServer(
         config.shareGroupConfig.shareGroupPartitionMaxRecordLocks,
         config.shareGroupConfig.shareFetchPurgatoryPurgeIntervalRequests,
         persister,
+        defaultActionQueue,
         new Metrics()
       )
 
