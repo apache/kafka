@@ -90,6 +90,7 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
      * @param time              The time.
      * @param eventAccumulator  The event accumulator.
      */
+    @SuppressWarnings("this-escape")
     public MultiThreadedEventProcessor(
         LogContext logContext,
         String threadPrefix,
