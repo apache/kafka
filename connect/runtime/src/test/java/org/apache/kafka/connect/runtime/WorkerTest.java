@@ -144,9 +144,6 @@ import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.GRO
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG;
 import static org.apache.kafka.connect.sink.SinkTask.TOPICS_CONFIG;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -343,12 +340,8 @@ public class WorkerTest {
 
         FutureCallback<TargetState> onSecondStart = new FutureCallback<>();
         worker.startConnector(CONNECTOR_ID, connectorProps, ctx, connectorStatusListener, TargetState.STARTED, onSecondStart);
-        try {
-            onSecondStart.get(0, TimeUnit.MILLISECONDS);
-            fail("Should have failed while trying to start second connector with same name");
-        } catch (ExecutionException e) {
-            assertThat(e.getCause(), instanceOf(ConnectException.class));
-        }
+        Exception exc = assertThrows(ExecutionException.class, () -> onSecondStart.get(0, TimeUnit.MILLISECONDS));
+        assertInstanceOf(ConnectException.class, exc.getCause());
 
         assertStatistics(worker, 1, 0);
         assertStartupStatistics(worker, 1, 0, 0, 0);
@@ -565,12 +558,8 @@ public class WorkerTest {
 
         FutureCallback<TargetState> onSecondStart = new FutureCallback<>();
         worker.startConnector(CONNECTOR_ID, connectorProps, ctx, connectorStatusListener, TargetState.STARTED, onSecondStart);
-        try {
-            onSecondStart.get(0, TimeUnit.MILLISECONDS);
-            fail("Should have failed while trying to start second connector with same name");
-        } catch (ExecutionException e) {
-            assertThat(e.getCause(), instanceOf(ConnectException.class));
-        }
+        Exception exc = assertThrows(ExecutionException.class, () -> onSecondStart.get(0, TimeUnit.MILLISECONDS));
+        assertInstanceOf(ConnectException.class, exc.getCause());
 
         Map<String, String> connProps = new HashMap<>(connectorProps);
         connProps.put(ConnectorConfig.TASKS_MAX_CONFIG, "2");
@@ -2631,7 +2620,7 @@ public class WorkerTest {
                 offsetWriter, Thread.currentThread().getContextClassLoader(), cb);
         ExecutionException e = assertThrows(ExecutionException.class, () -> cb.get(1000, TimeUnit.MILLISECONDS).message());
         assertEquals(ConnectException.class, e.getCause().getClass());
-        assertThat(e.getCause().getMessage(), containsString("Timed out"));
+        assertTrue(e.getCause().getMessage().contains("Timed out"));
 
         verify(offsetStore).start();
         verify(offsetStore, timeout(1000)).stop();
@@ -2664,7 +2653,7 @@ public class WorkerTest {
                 Thread.currentThread().getContextClassLoader(), cb);
         ExecutionException e = assertThrows(ExecutionException.class, () -> cb.get(1000, TimeUnit.MILLISECONDS).message());
         assertEquals(ConnectException.class, e.getCause().getClass());
-        assertThat(e.getCause().getMessage(), containsString("Timed out"));
+        assertTrue(e.getCause().getMessage().contains("Timed out"));
 
         verify(admin, timeout(1000)).close();
         verifyKafkaClusterId();
