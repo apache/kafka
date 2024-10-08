@@ -32,7 +32,6 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Disabled, Test}
 
 import java.time.Duration
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.{Seq, mutable}
 
@@ -390,15 +389,13 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     checkCloseDuringRebalance("group1", topic, executor, brokersAvailableDuringClose = true)
   }
 
-  @nowarn("cat=deprecation")
   private def checkCloseDuringRebalance(groupId: String, topic: String, executor: ExecutorService, brokersAvailableDuringClose: Boolean): Unit = {
 
     def subscribeAndPoll(consumer: Consumer[Array[Byte], Array[Byte]], revokeSemaphore: Option[Semaphore] = None): Future[Any] = {
       executor.submit(() => {
         consumer.subscribe(Collections.singletonList(topic))
         revokeSemaphore.foreach(s => s.release())
-        // requires to used deprecated `poll(long)` to trigger metadata update
-          consumer.poll(0L)
+          consumer.poll(Duration.ofMillis(500))
         }, 0)
     }
 
