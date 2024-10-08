@@ -33,17 +33,6 @@ import scala.jdk.CollectionConverters._
 @Timeout(600)
 class PlaintextConsumerPollTest extends AbstractConsumerTest {
 
-  // Deprecated poll(timeout) not supported for consumer group protocol
-  @deprecated("poll(Duration) is the replacement", since = "2.0")
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
-  def testDeprecatedPollBlocksForAssignment(quorum: String, groupProtocol: String): Unit = {
-    val consumer = createConsumer()
-    consumer.subscribe(Set(topic).asJava)
-    consumer.poll(0)
-    assertEquals(Set(tp, tp2), consumer.assignment().asScala)
-  }
-
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testMaxPollRecords(quorum: String, groupProtocol: String): Unit = {

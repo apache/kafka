@@ -100,6 +100,10 @@
                 </li>
                 <li><b>Consumer</b>
                     <ul>
+                        <li>The <code>poll(long)</code> method was removed from the consumer. Please use <code>poll(Duration)</code> instead. Note that there is
+                            a difference in behavior between the two methods. The <code>poll(Duration)</code> method does not block beyond the timeout awaiting
+                            partition assignment, whereas the earlier <code>poll(long)</code> method used to wait beyond the timeout.
+                        </li>
                         <li>The <code>committed(TopicPartition)</code> and <code>committed(TopicPartition, Duration)</code> methods were removed from the consumer.
                             Please use <code>committed(Set&ltTopicPartition&gt)</code> and <code>committed(Set&ltTopicPartition&gt, Duration)</code> instead.
                         </li>
