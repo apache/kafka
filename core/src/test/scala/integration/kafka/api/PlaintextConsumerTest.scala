@@ -739,6 +739,15 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testSeekThrowsIllegalStateIfPartitionsNotAssigned(quorum: String, groupProtocol: String): Unit = {
+    val tp = new TopicPartition(topic, 0)
+    val consumer = createConsumer(configOverrides = consumerConfig)
+    val e: Exception = assertThrows(classOf[IllegalStateException], () => consumer.seekToEnd(Collections.singletonList(tp)))
+    assertEquals("No current assignment for partition " + tp, e.getMessage)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testFetchOffsetsForTime(quorum: String, groupProtocol: String): Unit = {
     val numPartitions = 2
     val producer = createProducer()
