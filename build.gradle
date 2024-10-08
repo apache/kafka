@@ -1384,7 +1384,6 @@ project(':metadata') {
     compileOnly libs.reload4j
     testImplementation libs.junitJupiter
     testImplementation libs.jqwik
-    testImplementation libs.hamcrest
     testImplementation libs.mockitoCore
     testImplementation libs.slf4jReload4j
     testImplementation project(':clients').sourceSets.test.output
@@ -2060,7 +2059,6 @@ project(':raft') {
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.jqwik
-    testImplementation libs.hamcrest
 
     testRuntimeOnly runtimeTestLibs
 
@@ -2155,7 +2153,6 @@ project(':server-common') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    testImplementation libs.hamcrest
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -3548,7 +3545,6 @@ project(':connect:runtime') {
 
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    testImplementation libs.hamcrest
     testImplementation libs.mockitoJunitJupiter
     testImplementation libs.httpclient
 
