@@ -46,8 +46,9 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "bidirectional")
     )
   )
-  def testUpgradeFromEmptyClassicToConsumerGroupWithBidirectionalPolicy(): Unit =
+  def testUpgradeFromEmptyClassicToConsumerGroupWithBidirectionalPolicy(): Unit = {
     testUpgradeFromEmptyClassicToConsumerGroup()
+  }
 
   @ClusterTest(
     serverProperties = Array(
@@ -56,8 +57,9 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "upgrade")
     )
   )
-  def testUpgradeFromEmptyClassicToConsumerGroupWithUpgradePolicy(): Unit =
+  def testUpgradeFromEmptyClassicToConsumerGroupWithUpgradePolicy(): Unit = {
     testUpgradeFromEmptyClassicToConsumerGroup()
+  }
 
   @ClusterTest(
     serverProperties = Array(
@@ -66,8 +68,9 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "downgrade")
     )
   )
-  def testUpgradeFromEmptyClassicToConsumerGroupWithDowngradePolicy(): Unit =
+  def testUpgradeFromEmptyClassicToConsumerGroupWithDowngradePolicy(): Unit = {
     testUpgradeFromEmptyClassicToConsumerGroup()
+  }
 
   @ClusterTest(
     serverProperties = Array(
@@ -76,8 +79,9 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "disabled")
     )
   )
-  def testUpgradeFromEmptyClassicToConsumerGroupWithDisabledPolicy(): Unit =
+  def testUpgradeFromEmptyClassicToConsumerGroupWithDisabledPolicy(): Unit = {
     testUpgradeFromEmptyClassicToConsumerGroup()
+  }
 
   @ClusterTest(
     serverProperties = Array(
@@ -86,8 +90,9 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "bidirectional")
     )
   )
-  def testDowngradeFromEmptyConsumerToClassicGroupWithBidirectionalPolicy(): Unit =
+  def testDowngradeFromEmptyConsumerToClassicGroupWithBidirectionalPolicy(): Unit = {
     testDowngradeFromEmptyConsumerToClassicGroup()
+  }
 
   @ClusterTest(
     serverProperties = Array(
@@ -96,8 +101,9 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "upgrade")
     )
   )
-  def testDowngradeFromEmptyConsumerToClassicGroupWithUpgradePolicy(): Unit =
+  def testDowngradeFromEmptyConsumerToClassicGroupWithUpgradePolicy(): Unit = {
     testDowngradeFromEmptyConsumerToClassicGroup()
+  }
 
   @ClusterTest(
     serverProperties = Array(
@@ -106,8 +112,9 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "downgrade")
     )
   )
-  def testDowngradeFromEmptyConsumerToClassicGroupWithDowngradePolicy(): Unit =
+  def testDowngradeFromEmptyConsumerToClassicGroupWithDowngradePolicy(): Unit = {
     testDowngradeFromEmptyConsumerToClassicGroup()
+  }
 
   @ClusterTest(
     serverProperties = Array(
@@ -116,8 +123,9 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "disabled")
     )
   )
-  def testDowngradeFromEmptyConsumerToClassicGroupWithDisabledPolicy(): Unit =
+  def testDowngradeFromEmptyConsumerToClassicGroupWithDisabledPolicy(): Unit = {
     testDowngradeFromEmptyConsumerToClassicGroup()
+  }
 
   @ClusterTest(
     serverProperties = Array(
@@ -126,8 +134,9 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "bidirectional")
     )
   )
-  def testUpgradeFromSimpleGroupToConsumerGroupWithBidirectionalPolicy(): Unit =
+  def testUpgradeFromSimpleGroupToConsumerGroupWithBidirectionalPolicy(): Unit = {
     testUpgradeFromSimpleGroupToConsumerGroup()
+  }
 
   @ClusterTest(
     serverProperties = Array(
@@ -136,8 +145,9 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "upgrade")
     )
   )
-  def testUpgradeFromSimpleGroupToConsumerGroupWithUpgradePolicy(): Unit =
+  def testUpgradeFromSimpleGroupToConsumerGroupWithUpgradePolicy(): Unit = {
     testUpgradeFromSimpleGroupToConsumerGroup()
+  }
 
   @ClusterTest(
     serverProperties = Array(
@@ -146,8 +156,9 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "downgrade")
     )
   )
-  def testUpgradeFromSimpleGroupToConsumerGroupWithDowngradePolicy(): Unit =
+  def testUpgradeFromSimpleGroupToConsumerGroupWithDowngradePolicy(): Unit = {
     testUpgradeFromSimpleGroupToConsumerGroup()
+  }
 
   @ClusterTest(
     serverProperties = Array(
@@ -156,8 +167,9 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "disabled")
     )
   )
-  def testUpgradeFromSimpleGroupToConsumerGroupWithDisabledPolicy(): Unit =
+  def testUpgradeFromSimpleGroupToConsumerGroupWithDisabledPolicy(): Unit = {
     testUpgradeFromSimpleGroupToConsumerGroup()
+  }
 
   @ClusterTest(
     serverProperties = Array(
@@ -166,8 +178,9 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "bidirectional")
     )
   )
-  def testOnlineMigrationWithEagerAssignmentStrategyAndDynamicMembers(): Unit =
+  def testOnlineMigrationWithEagerAssignmentStrategyAndDynamicMembers(): Unit = {
     testOnlineMigrationWithEagerAssignmentStrategy(useStaticMembers = false)
+  }
 
   @ClusterTest(
     serverProperties = Array(
@@ -176,8 +189,9 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "bidirectional")
     )
   )
-  def testOnlineMigrationWithEagerAssignmentStrategyAndStaticMembers(): Unit =
+  def testOnlineMigrationWithEagerAssignmentStrategyAndStaticMembers(): Unit = {
     testOnlineMigrationWithEagerAssignmentStrategy(useStaticMembers = true)
+  }
 
   @ClusterTest(
     serverProperties = Array(
@@ -186,8 +200,9 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "bidirectional")
     )
   )
-  def testOnlineMigrationWithCooperativeAssignmentStrategyAndDynamicMembers(): Unit =
+  def testOnlineMigrationWithCooperativeAssignmentStrategyAndDynamicMembers(): Unit = {
     testOnlineMigrationWithCooperativeAssignmentStrategy(useStaticMembers = false)
+  }
 
   @ClusterTest(
     serverProperties = Array(
@@ -196,8 +211,9 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "bidirectional")
     )
   )
-  def testOnlineMigrationWithCooperativeAssignmentStrategyAndStaticMembers(): Unit =
+  def testOnlineMigrationWithCooperativeAssignmentStrategyAndStaticMembers(): Unit = {
     testOnlineMigrationWithCooperativeAssignmentStrategy(useStaticMembers = true)
+  }
 
   @ClusterTest(
     serverProperties = Array(
@@ -443,7 +459,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       groupId = groupId,
       memberId = joinGroupResponseData.memberId,
       metadata = metadata(List.empty)
-    ).memberId
+    )
 
     // Try to downgrade the group by leaving member 1.
     leaveGroupWithNewProtocol(
