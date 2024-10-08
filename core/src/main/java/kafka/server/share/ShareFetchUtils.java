@@ -23,7 +23,6 @@ import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
-import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.ShareFetchData;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
 
@@ -49,14 +48,13 @@ public class ShareFetchUtils {
     static CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> processFetchResponse(
             ShareFetchData shareFetchData,
             Map<TopicIdPartition, FetchPartitionData> responseData,
-            Map<SharePartitionKey, SharePartition> partitionCacheMap,
+            SharePartitionManager sharePartitionManager,
             ReplicaManager replicaManager
     ) {
         Map<TopicIdPartition, CompletableFuture<ShareFetchResponseData.PartitionData>> futures = new HashMap<>();
         responseData.forEach((topicIdPartition, fetchPartitionData) -> {
 
-            SharePartition sharePartition = partitionCacheMap.get(new SharePartitionKey(
-                shareFetchData.groupId(), topicIdPartition));
+            SharePartition sharePartition = sharePartitionManager.fetchSharePartition(shareFetchData.groupId(), topicIdPartition);
             futures.put(topicIdPartition, sharePartition.acquire(shareFetchData.memberId(), fetchPartitionData)
                     .handle((acquiredRecords, throwable) -> {
                         log.trace("Acquired records for topicIdPartition: {} with share fetch data: {}, records: {}",

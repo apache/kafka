@@ -23,7 +23,6 @@ import kafka.server.ReplicaManager;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.requests.FetchRequest;
-import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.ShareFetchData;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
 
@@ -53,7 +52,6 @@ public class DelayedShareFetch extends DelayedOperation {
 
     private final ShareFetchData shareFetchData;
     private final ReplicaManager replicaManager;
-    private final Map<SharePartitionKey, SharePartition> partitionCacheMap;
 
     private Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionDataFromTryComplete;
     private final SharePartitionManager sharePartitionManager;
@@ -61,12 +59,10 @@ public class DelayedShareFetch extends DelayedOperation {
     DelayedShareFetch(
             ShareFetchData shareFetchData,
             ReplicaManager replicaManager,
-            Map<SharePartitionKey, SharePartition> partitionCacheMap,
             SharePartitionManager sharePartitionManager) {
         super(shareFetchData.fetchParams().maxWaitMs, Option.empty());
         this.shareFetchData = shareFetchData;
         this.replicaManager = replicaManager;
-        this.partitionCacheMap = partitionCacheMap;
         this.topicPartitionDataFromTryComplete = new LinkedHashMap<>();
         this.sharePartitionManager = sharePartitionManager;
     }
@@ -124,7 +120,7 @@ public class DelayedShareFetch extends DelayedOperation {
             });
 
             log.trace("Data successfully retrieved by replica manager: {}", responseData);
-            ShareFetchUtils.processFetchResponse(shareFetchData, responseData, partitionCacheMap, replicaManager)
+            ShareFetchUtils.processFetchResponse(shareFetchData, responseData, sharePartitionManager, replicaManager)
                 .whenComplete((result, throwable) -> {
                     if (throwable != null) {
                         log.error("Error processing fetch response for share partitions", throwable);
@@ -177,8 +173,7 @@ public class DelayedShareFetch extends DelayedOperation {
         Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData = new LinkedHashMap<>();
 
         shareFetchData.partitionMaxBytes().keySet().forEach(topicIdPartition -> {
-            SharePartition sharePartition = partitionCacheMap.get(new SharePartitionKey(
-                shareFetchData.groupId(), topicIdPartition));
+            SharePartition sharePartition = sharePartitionManager.fetchSharePartition(shareFetchData.groupId(), topicIdPartition);
 
             int partitionMaxBytes = shareFetchData.partitionMaxBytes().getOrDefault(topicIdPartition, 0);
             // Add the share partition to the list of partitions to be fetched only if we can
@@ -207,7 +202,6 @@ public class DelayedShareFetch extends DelayedOperation {
     }
 
     private void releasePartitionLocks(String groupId, Set<TopicIdPartition> topicIdPartitions) {
-        topicIdPartitions.forEach(tp -> partitionCacheMap.get(new
-                SharePartitionKey(groupId, tp)).releaseFetchLock());
+        topicIdPartitions.forEach(tp -> sharePartitionManager.fetchSharePartition(groupId, tp).releaseFetchLock());
     }
 }

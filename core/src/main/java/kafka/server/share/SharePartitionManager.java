@@ -304,7 +304,7 @@ public class SharePartitionManager implements AutoCloseable {
 
                 // If we have an acknowledgement completed for a topic-partition, then we should check if
                 // there is a pending share fetch request for the topic-partition and complete it.
-                DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchKey(groupId, topicIdPartition);
+                DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchGroupKey(groupId, topicIdPartition);
                 delayedShareFetchPurgatory.checkAndComplete(delayedShareFetchKey);
 
                 futures.put(topicIdPartition, future);
@@ -328,7 +328,7 @@ public class SharePartitionManager implements AutoCloseable {
         delayedActionsQueue.add(() -> {
             topicIdPartitions.forEach(topicIdPartition ->
                 delayedShareFetchPurgatory.checkAndComplete(
-                    new DelayedShareFetchKey(groupId, topicIdPartition)));
+                    new DelayedShareFetchGroupKey(groupId, topicIdPartition)));
             return BoxedUnit.UNIT;
         });
     }
@@ -382,7 +382,7 @@ public class SharePartitionManager implements AutoCloseable {
                 });
                 // If we have a release acquired request completed for a topic-partition, then we should check if
                 // there is a pending share fetch request for the topic-partition and complete it.
-                DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchKey(groupId, topicIdPartition);
+                DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchGroupKey(groupId, topicIdPartition);
                 delayedShareFetchPurgatory.checkAndComplete(delayedShareFetchKey);
 
                 futuresMap.put(topicIdPartition, future);
@@ -542,7 +542,7 @@ public class SharePartitionManager implements AutoCloseable {
 
     // Add the share fetch request to the delayed share fetch purgatory to process the fetch request if it can be
     // completed else watch until it can be completed/timeout.
-    private void addDelayedShareFetch(DelayedShareFetch delayedShareFetch, Set<Object> keys) {
+    private void addDelayedShareFetch(DelayedShareFetch delayedShareFetch, Set<DelayedShareFetchKey> keys) {
         delayedShareFetchPurgatory.tryCompleteElseWatch(delayedShareFetch,
             CollectionConverters.asScala(keys).toSeq().indices());
     }
@@ -616,15 +616,21 @@ public class SharePartitionManager implements AutoCloseable {
                 });
             });
 
-            Set<Object> delayedShareFetchWatchKeys = new HashSet<>();
+            Set<DelayedShareFetchKey> delayedShareFetchWatchKeys = new HashSet<>();
             shareFetchData.partitionMaxBytes().keySet().forEach(
                 topicIdPartition -> {
-                    delayedShareFetchWatchKeys.add(new DelayedShareFetchKey(shareFetchData.groupId(), topicIdPartition));
-                    delayedShareFetchWatchKeys.add(topicIdPartition);
+                    // We add a key corresponding to each share partition in the request so that when there are
+                    // acknowledgements/acquisition lock timeout etc, we have a way to perform checkAndComplete for all
+                    // such requests which are delayed because of lack of data to acquire for the share partition.
+                    delayedShareFetchWatchKeys.add(new DelayedShareFetchGroupKey(shareFetchData.groupId(), topicIdPartition));
+                    // We add a key corresponding to each topic partition in the request so that when the HWM is updated
+                    // for any topic partition, we have a way to perform checkAndComplete for all such requests which are
+                    // delayed because of lack of data to acquire for the topic partition.
+                    delayedShareFetchWatchKeys.add(new DelayedShareFetchPartitionKey(topicIdPartition));
                 });
 
             // Add the share fetch to the delayed share fetch purgatory to process the fetch request.
-            addDelayedShareFetch(new DelayedShareFetch(shareFetchData, replicaManager, partitionCacheMap, this),
+            addDelayedShareFetch(new DelayedShareFetch(shareFetchData, replicaManager, this),
                 delayedShareFetchWatchKeys);
 
             // Release the lock so that other threads can process the queue.
@@ -704,6 +710,16 @@ public class SharePartitionManager implements AutoCloseable {
 
     private SharePartitionKey sharePartitionKey(String groupId, TopicIdPartition topicIdPartition) {
         return new SharePartitionKey(groupId, topicIdPartition);
+    }
+
+    /**
+     *
+     * @param groupId The share group id, this is used to identify the share group.
+     * @param topicIdPartition The topic partition that the group is subscribed to.
+     * @return The share partition stored for the share group topic-partition.
+     */
+    protected SharePartition fetchSharePartition(String groupId, TopicIdPartition topicIdPartition) {
+        return partitionCacheMap.get(sharePartitionKey(groupId, topicIdPartition));
     }
 
     static class ShareGroupMetrics {
