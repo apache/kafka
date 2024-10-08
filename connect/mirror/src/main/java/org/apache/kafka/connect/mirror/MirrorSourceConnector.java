@@ -105,7 +105,7 @@ public class MirrorSourceConnector extends SourceConnector {
     private int replicationFactor;
     private Admin sourceAdminClient;
     private Admin targetAdminClient;
-    private boolean heartbeatsReplicationEnabled = true;
+    private boolean heartbeatsReplicationEnabled;
 
     public MirrorSourceConnector() {
         // nop
