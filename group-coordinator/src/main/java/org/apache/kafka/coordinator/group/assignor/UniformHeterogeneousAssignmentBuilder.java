@@ -809,7 +809,7 @@ public class UniformHeterogeneousAssignmentBuilder {
         // Redistribute partitions from the most loaded subscriber to the least loaded subscriber
         // until the topic's subscribers are balanced.
         while (!memberAssignmentBalancer.isBalanced()) {
-            // NB: The condition above does not do much. This loop will terminate due to the chekcs
+            // NB: The condition above does not do much. This loop will terminate due to the checks
             //     inside instead.
 
             // First, choose a member from the most loaded range to reassign a partition from.
