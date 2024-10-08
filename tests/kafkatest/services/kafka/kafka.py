@@ -460,38 +460,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         """
         return self.idx(node) + config_property.FIRST_CONTROLLER_ID - 1
 
-    def reconfigure_zk_for_migration(self, kraft_quorum):
-        self.configured_for_zk_migration = True
-        self.controller_quorum = kraft_quorum
-
-        # Set the migration properties
-        self.server_prop_overrides.extend([
-            ["zookeeper.metadata.migration.enable", "true"],
-            ["controller.quorum.voters", kraft_quorum.controller_quorum_voters],
-            ["controller.listener.names", kraft_quorum.controller_listener_names]
-        ])
-
-        # Add a port mapping for the controller listener.
-        # This is not added to "advertised.listeners" because of configured_for_zk_migration=True
-        self.port_mappings[kraft_quorum.controller_listener_names] = kraft_quorum.port_mappings.get(kraft_quorum.controller_listener_names)
-
-    def reconfigure_zk_as_kraft(self, kraft_quorum):
-        self.configured_for_zk_migration = True
-
-        # Remove the configs we set in reconfigure_zk_for_migration
-        props = []
-        for prop in self.server_prop_overrides:
-            if not prop[0].startswith("controller"):
-                props.append(prop)
-        self.server_prop_overrides.clear()
-        self.server_prop_overrides.extend(props)
-        del self.port_mappings[kraft_quorum.controller_listener_names]
-
-        # Set the quorum info to isolated KRaft
-        self.quorum_info = quorum.ServiceQuorumInfo(quorum.isolated_kraft, self)
-        self.isolated_controller_quorum = kraft_quorum
-        self.controller_quorum = kraft_quorum
-
     def num_kraft_controllers(self, num_nodes_broker_role, controller_num_nodes_override):
         if controller_num_nodes_override < 0:
             raise Exception("controller_num_nodes_override must not be negative: %i" % controller_num_nodes_override)
