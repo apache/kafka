@@ -75,6 +75,17 @@
                         <li>The <code>--whitelist</code> option was removed from the <code>kafka-console-consumer</code> command line tool.
                             Please use <code>--include</code> instead.
                         </li>
+                        <li>Redirections from the old tools packages have been removed: 
+                            <code>kafka.admin.FeatureCommand</code>, 
+                            <code>kafka.tools.ClusterTool</code>, 
+                            <code>kafka.tools.EndToEndLatency</code>,
+                            <code>kafka.tools.StateChangeLogMerger</code>, 
+                            <code>kafka.tools.StreamsResetter</code>, 
+                            <code>kafka.tools.JmxTool</code>.
+                        </li>
+                        <li>The <code>--authorizer</code>, <code>--authorizer-properties</code>, and <code>--zk-tls-config-file</code> options were removed from the <code>kafka-acls</code> command line tool.
+                            Please use <code>--bootstrap-server</code> or <code>--bootstrap-controller</code> instead.
+                        </li>
                     </ul>
                 </li>
                 <li><b>Connect</b>

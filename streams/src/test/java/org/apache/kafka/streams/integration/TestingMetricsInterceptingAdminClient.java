@@ -419,6 +419,16 @@ public class TestingMetricsInterceptingAdminClient extends AdminClient {
     }
 
     @Override
+    public void registerMetricForSubscription(final KafkaMetric metric) {
+        throw new UnsupportedOperationException("not implemented");
+    }
+
+    @Override
+    public void unregisterMetricFromSubscription(final KafkaMetric metric) {
+        throw new UnsupportedOperationException("not implemented");
+    }
+
+    @Override
     public Map<MetricName, ? extends Metric> metrics() {
         return adminDelegate.metrics();
     }
