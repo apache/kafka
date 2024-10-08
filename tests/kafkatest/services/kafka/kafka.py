@@ -808,8 +808,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def controller_listener_name_list(self, node):
         if self.quorum_info.using_zk:
-            return [self.controller_listener_name(self.controller_quorum.controller_security_protocol)]
-        elif self.quorum_info.using_zk:
             return []
         broker_to_controller_listener_name = self.controller_listener_name(self.controller_quorum.controller_security_protocol)
         # Brokers always use the first controller listener, so include a second, inter-controller listener if and only if:
