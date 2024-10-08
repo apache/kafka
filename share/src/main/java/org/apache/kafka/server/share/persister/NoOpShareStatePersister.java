@@ -35,7 +35,7 @@ public class NoOpShareStatePersister implements Persister {
         static final Persister INSTANCE = new NoOpShareStatePersister();
     }
 
-    public static Persister getInstance() {
+    public static Persister instance() {
         return InstanceHolder.INSTANCE;
     }
 

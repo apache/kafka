@@ -36,6 +36,8 @@ import org.apache.kafka.common.requests.WriteShareGroupStateResponse;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.util.MockTime;
+import org.apache.kafka.server.util.timer.MockTimer;
+import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -60,6 +62,7 @@ class PersisterStateManagerTest {
 
     private static final KafkaClient CLIENT = mock(KafkaClient.class);
     private static final Time MOCK_TIME = new MockTime();
+    private static final Timer MOCK_TIMER = new MockTimer();
     private static final ShareCoordinatorMetadataCacheHelper CACHE_HELPER = mock(ShareCoordinatorMetadataCacheHelper.class);
     private static final int MAX_FIND_COORD_ATTEMPTS = 5;
     public static final long REQUEST_BACKOFF_MS = 1_000L;
@@ -72,6 +75,7 @@ class PersisterStateManagerTest {
 
         private KafkaClient client = CLIENT;
         private Time time = MOCK_TIME;
+        private Timer timer = MOCK_TIMER;
         private ShareCoordinatorMetadataCacheHelper cacheHelper = CACHE_HELPER;
 
         private PersisterStateManagerBuilder withKafkaClient(KafkaClient client) {
@@ -94,19 +98,29 @@ class PersisterStateManagerTest {
         }
 
         public PersisterStateManager build() {
-            return new PersisterStateManager(client, time, cacheHelper);
+            return new PersisterStateManager(client, cacheHelper, time, timer);
         }
     }
+
     private abstract class TestStateHandler extends PersisterStateManager.PersisterStateManagerHandler {
 
-        private final CompletableFuture<Errors> result;
+        private final CompletableFuture<TestHandlerResponse> result;
+
+        private class TestHandlerResponseData extends WriteShareGroupStateResponseData {
+        }
+
+        private class TestHandlerResponse extends WriteShareGroupStateResponse {
+            public TestHandlerResponse(WriteShareGroupStateResponseData data) {
+                super(data);
+            }
+        }
 
         TestStateHandler(
             PersisterStateManager stateManager,
             String groupId,
             Uuid topicId,
             int partition,
-            CompletableFuture<Errors> result,
+            CompletableFuture<TestHandlerResponse> result,
             long backoffMs,
             long backoffMaxMs,
             int maxFindCoordAttempts) {
@@ -116,26 +130,39 @@ class PersisterStateManagerTest {
 
         @Override
         protected void handleRequestResponse(ClientResponse response) {
-            result.complete(Errors.NONE);
+            this.result.complete(new TestHandlerResponse(new TestHandlerResponseData()
+                .setResults(Collections.singletonList(new WriteShareGroupStateResponseData.WriteStateResult()
+                    .setPartitions(Collections.singletonList(new WriteShareGroupStateResponseData.PartitionResult()
+                        .setPartition(partition)
+                        .setErrorMessage(Errors.NONE.message())
+                        .setErrorCode(Errors.NONE.code()))
+                    )
+                ))
+            ));
         }
 
         @Override
-        protected boolean isRequestResponse(ClientResponse response) {
+        protected boolean isResponseForRequest(ClientResponse response) {
             return true;
         }
 
         @Override
         protected void findCoordinatorErrorResponse(Errors error, Exception exception) {
-            result.complete(error);
+            this.result.complete(new TestHandlerResponse(new TestHandlerResponseData()
+                .setResults(Collections.singletonList(new WriteShareGroupStateResponseData.WriteStateResult()
+                    .setTopicId(topicId)
+                    .setPartitions(Collections.singletonList(new WriteShareGroupStateResponseData.PartitionResult()
+                        .setPartition(partition)
+                        .setErrorMessage(exception == null ? error.message() : exception.getMessage())
+                        .setErrorCode(error.code()))
+                    )
+                ))
+            ));
         }
 
         @Override
         protected String name() {
             return "TestStateHandler";
-        }
-
-        CompletableFuture<Errors> getResult() {
-            return this.result;
         }
 
         @Override
@@ -146,6 +173,11 @@ class PersisterStateManagerTest {
         @Override
         protected PersisterStateManager.RPCType rpcType() {
             return PersisterStateManager.RPCType.UNKNOWN;
+        }
+
+        @Override
+        protected CompletableFuture<TestHandlerResponse> result() {
+            return this.result;
         }
     }
 
@@ -226,7 +258,7 @@ class PersisterStateManagerTest {
 
         stateManager.start();
 
-        CompletableFuture<Errors> future = new CompletableFuture<>();
+        CompletableFuture<TestStateHandler.TestHandlerResponse> future = new CompletableFuture<>();
 
         TestStateHandler handler = spy(new TestStateHandler(
             stateManager,
@@ -246,22 +278,20 @@ class PersisterStateManagerTest {
 
         stateManager.enqueue(handler);
 
-        CompletableFuture<Errors> resultFuture = handler.getResult();
-
-        Errors result = null;
+        TestStateHandler.TestHandlerResponse result = null;
         try {
-            result = resultFuture.get();
+            result = handler.result().get();
         } catch (Exception e) {
             fail("Failed to get result from future", e);
         }
 
-        assertEquals(Errors.UNKNOWN_SERVER_ERROR.code(), result.code());
+        assertEquals(Errors.UNKNOWN_SERVER_ERROR.code(), result.data().results().get(0).partitions().get(0).errorCode());
         verify(handler, times(1)).findShareCoordinatorBuilder();
 
         try {
             // Stopping the state manager
             stateManager.stop();
-        } catch (InterruptedException e) {
+        } catch (Exception e) {
             fail("Failed to stop state manager", e);
         }
     }
@@ -322,7 +352,7 @@ class PersisterStateManagerTest {
 
         stateManager.start();
 
-        CompletableFuture<Errors> future = new CompletableFuture<>();
+        CompletableFuture<TestStateHandler.TestHandlerResponse> future = new CompletableFuture<>();
 
         int maxAttempts = 2;
 
@@ -344,22 +374,20 @@ class PersisterStateManagerTest {
 
         stateManager.enqueue(handler);
 
-        CompletableFuture<Errors> resultFuture = handler.getResult();
-
-        Errors result = null;
+        TestStateHandler.TestHandlerResponse result = null;
         try {
-            result = resultFuture.get();
+            result = handler.result.get();
         } catch (Exception e) {
             fail("Failed to get result from future", e);
         }
 
-        assertEquals(Errors.COORDINATOR_NOT_AVAILABLE.code(), result.code());
+        assertEquals(Errors.COORDINATOR_NOT_AVAILABLE.code(), result.data().results().get(0).partitions().get(0).errorCode());
         verify(handler, times(2)).findShareCoordinatorBuilder();
 
         try {
             // Stopping the state manager
             stateManager.stop();
-        } catch (InterruptedException e) {
+        } catch (Exception e) {
             fail("Failed to stop state manager", e);
         }
     }
@@ -443,7 +471,7 @@ class PersisterStateManagerTest {
 
         stateManager.enqueue(handler);
 
-        CompletableFuture<ReadShareGroupStateResponse> resultFuture = handler.getResult();
+        CompletableFuture<ReadShareGroupStateResponse> resultFuture = handler.result();
 
         ReadShareGroupStateResponse result = null;
         try {
@@ -458,7 +486,7 @@ class PersisterStateManagerTest {
         try {
             // Stopping the state manager
             stateManager.stop();
-        } catch (InterruptedException e) {
+        } catch (Exception e) {
             fail("Failed to stop state manager", e);
         }
     }
@@ -545,7 +573,7 @@ class PersisterStateManagerTest {
 
         stateManager.enqueue(handler);
 
-        CompletableFuture<WriteShareGroupStateResponse> resultFuture = handler.getResult();
+        CompletableFuture<WriteShareGroupStateResponse> resultFuture = handler.result();
 
         WriteShareGroupStateResponse result = null;
         try {
@@ -569,7 +597,7 @@ class PersisterStateManagerTest {
         try {
             // Stopping the state manager
             stateManager.stop();
-        } catch (InterruptedException e) {
+        } catch (Exception e) {
             fail("Failed to stop state manager", e);
         }
     }
@@ -656,7 +684,7 @@ class PersisterStateManagerTest {
 
         stateManager.enqueue(handler);
 
-        CompletableFuture<WriteShareGroupStateResponse> resultFuture = handler.getResult();
+        CompletableFuture<WriteShareGroupStateResponse> resultFuture = handler.result();
 
         WriteShareGroupStateResponse result = null;
         try {
@@ -680,7 +708,7 @@ class PersisterStateManagerTest {
         try {
             // Stopping the state manager
             stateManager.stop();
-        } catch (InterruptedException e) {
+        } catch (Exception e) {
             fail("Failed to stop state manager", e);
         }
     }
@@ -780,7 +808,7 @@ class PersisterStateManagerTest {
 
         stateManager.enqueue(handler);
 
-        CompletableFuture<WriteShareGroupStateResponse> resultFuture = handler.getResult();
+        CompletableFuture<WriteShareGroupStateResponse> resultFuture = handler.result();
 
         WriteShareGroupStateResponse result = null;
         try {
@@ -804,7 +832,7 @@ class PersisterStateManagerTest {
         try {
             // Stopping the state manager
             stateManager.stop();
-        } catch (InterruptedException e) {
+        } catch (Exception e) {
             fail("Failed to stop state manager", e);
         }
     }
@@ -872,7 +900,7 @@ class PersisterStateManagerTest {
 
         stateManager.enqueue(handler);
 
-        CompletableFuture<WriteShareGroupStateResponse> resultFuture = handler.getResult();
+        CompletableFuture<WriteShareGroupStateResponse> resultFuture = handler.result();
 
         WriteShareGroupStateResponse result = null;
         try {
@@ -896,13 +924,13 @@ class PersisterStateManagerTest {
         try {
             // Stopping the state manager
             stateManager.stop();
-        } catch (InterruptedException e) {
+        } catch (Exception e) {
             fail("Failed to stop state manager", e);
         }
     }
 
     @Test
-    public void testWriteStateRequestBatchingWithCoordinatorNode() throws ExecutionException, InterruptedException {
+    public void testWriteStateRequestBatchingWithCoordinatorNode() throws ExecutionException, Exception {
 
         MockClient client = new MockClient(MOCK_TIME);
 
@@ -977,7 +1005,7 @@ class PersisterStateManagerTest {
         }
 
         CompletableFuture.allOf(handlers.stream()
-            .map(PersisterStateManager.WriteStateHandler::getResult).toArray(CompletableFuture[]::new)).get();
+            .map(PersisterStateManager.WriteStateHandler::result).toArray(CompletableFuture[]::new)).get();
 
         TestUtils.waitForCondition(isBatchingSuccess::get, TestUtils.DEFAULT_MAX_WAIT_MS, 10L, () -> "unable to verify batching");
     }
@@ -1061,7 +1089,7 @@ class PersisterStateManagerTest {
 
         stateManager.enqueue(handler);
 
-        CompletableFuture<ReadShareGroupStateResponse> resultFuture = handler.getResult();
+        CompletableFuture<ReadShareGroupStateResponse> resultFuture = handler.result();
 
         ReadShareGroupStateResponse result = null;
         try {
@@ -1087,7 +1115,114 @@ class PersisterStateManagerTest {
         try {
             // Stopping the state manager
             stateManager.stop();
-        } catch (InterruptedException e) {
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
+    public void testReadStateRequestIllegalStateCoordinatorFoundSuccessfully() {
+
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+
+        Node suppliedNode = new Node(0, HOST, PORT);
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        String coordinatorKey = SharePartitionKey.asCoordinatorKey(groupId, topicId, partition);
+
+        client.prepareResponseFrom(body -> body instanceof FindCoordinatorRequest
+                && ((FindCoordinatorRequest) body).data().keyType() == FindCoordinatorRequest.CoordinatorType.SHARE.id()
+                && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
+            new FindCoordinatorResponse(
+                new FindCoordinatorResponseData()
+                    .setCoordinators(Collections.singletonList(
+                        new FindCoordinatorResponseData.Coordinator()
+                            .setNodeId(1)
+                            .setHost(HOST)
+                            .setPort(PORT)
+                            .setErrorCode(Errors.NONE.code())
+                    ))
+            ),
+            suppliedNode
+        );
+
+        client.prepareResponseFrom(body -> {
+            ReadShareGroupStateRequest request = (ReadShareGroupStateRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new ReadShareGroupStateResponse(
+            new ReadShareGroupStateResponseData()
+                .setResults(Collections.singletonList(
+                    new ReadShareGroupStateResponseData.ReadStateResult()
+                        .setTopicId(Uuid.randomUuid())
+                        .setPartitions(Collections.singletonList(
+                            new ReadShareGroupStateResponseData.PartitionResult()
+                                .setPartition(500)
+                                .setErrorCode(Errors.NONE.code())
+                                .setErrorMessage("")
+                                .setStateEpoch(1)
+                                .setStartOffset(0)
+                                .setStateBatches(Collections.emptyList())
+                        ))
+                ))
+        ), coordinatorNode);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getDefaultCacheHelper(suppliedNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<ReadShareGroupStateResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.ReadStateHandler handler = spy(stateManager.new ReadStateHandler(
+            groupId,
+            topicId,
+            partition,
+            0,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_FIND_COORD_ATTEMPTS,
+            null
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<ReadShareGroupStateResponse> resultFuture = handler.result();
+
+        ReadShareGroupStateResponse result = null;
+        try {
+            result = resultFuture.get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        ReadShareGroupStateResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        verify(handler, times(1)).findShareCoordinatorBuilder();
+        verify(handler, times(0)).requestBuilder();
+
+        // Verifying the coordinator node was populated correctly by the FIND_COORDINATOR request
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned in correct
+        assertEquals(Errors.UNKNOWN_SERVER_ERROR.code(), partitionResult.errorCode());
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
             fail("Failed to stop state manager", e);
         }
     }
@@ -1168,7 +1303,7 @@ class PersisterStateManagerTest {
 
         stateManager.enqueue(handler);
 
-        CompletableFuture<ReadShareGroupStateResponse> resultFuture = handler.getResult();
+        CompletableFuture<ReadShareGroupStateResponse> resultFuture = handler.result();
 
         ReadShareGroupStateResponse result = null;
         try {
@@ -1192,7 +1327,7 @@ class PersisterStateManagerTest {
         try {
             // Stopping the state manager
             stateManager.stop();
-        } catch (InterruptedException e) {
+        } catch (Exception e) {
             fail("Failed to stop state manager", e);
         }
     }
@@ -1289,7 +1424,7 @@ class PersisterStateManagerTest {
 
         stateManager.enqueue(handler);
 
-        CompletableFuture<ReadShareGroupStateResponse> resultFuture = handler.getResult();
+        CompletableFuture<ReadShareGroupStateResponse> resultFuture = handler.result();
 
         ReadShareGroupStateResponse result = null;
         try {
@@ -1315,7 +1450,7 @@ class PersisterStateManagerTest {
         try {
             // Stopping the state manager
             stateManager.stop();
-        } catch (InterruptedException e) {
+        } catch (Exception e) {
             fail("Failed to stop state manager", e);
         }
     }
@@ -1380,7 +1515,7 @@ class PersisterStateManagerTest {
 
         stateManager.enqueue(handler);
 
-        CompletableFuture<ReadShareGroupStateResponse> resultFuture = handler.getResult();
+        CompletableFuture<ReadShareGroupStateResponse> resultFuture = handler.result();
 
         ReadShareGroupStateResponse result = null;
         try {
@@ -1406,7 +1541,7 @@ class PersisterStateManagerTest {
         try {
             // Stopping the state manager
             stateManager.stop();
-        } catch (InterruptedException e) {
+        } catch (Exception e) {
             fail("Failed to stop state manager", e);
         }
     }

@@ -17,20 +17,24 @@
 
 package org.apache.kafka.server.share.persister;
 
+import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ReadShareGroupStateResponse;
 import org.apache.kafka.common.requests.WriteShareGroupStateResponse;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.util.timer.SystemTimer;
+import org.apache.kafka.server.util.timer.SystemTimerReaper;
+import org.apache.kafka.server.util.timer.Timer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collection;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
@@ -43,10 +47,37 @@ import java.util.stream.Collectors;
  */
 public class DefaultStatePersister implements Persister {
     private PersisterStateManager stateManager;
+    private Timer timer;
 
     private static final Logger log = LoggerFactory.getLogger(DefaultStatePersister.class);
 
     private DefaultStatePersister() {
+    }
+
+    public void configure(
+        KafkaClient client,
+        ShareCoordinatorMetadataCacheHelper cacheHelper) {
+        stateManager = new PersisterStateManager(
+            client,
+            cacheHelper,
+            time(),
+            timer()
+        );
+
+        stateManager.start();
+    }
+
+    // for test visibility
+    Timer timer() {
+        return new SystemTimerReaper(
+            "persister-state-manager-reaper",
+            new SystemTimer("persister")
+        );
+    }
+
+    // for test visibility
+    Time time() {
+        return Time.SYSTEM;
     }
 
     // avoid double check locking - safer, neater
@@ -54,23 +85,15 @@ public class DefaultStatePersister implements Persister {
         static final Persister INSTANCE = new DefaultStatePersister();
     }
 
-    public static Persister getInstance() {
+    public static Persister instance() {
         return InstanceHolder.INSTANCE;
-    }
-
-    @Override
-    public void configure(PersisterConfig config) {
-        Objects.requireNonNull(config);
-        this.stateManager = Objects.requireNonNull(config.stateManager);
-        this.stateManager.start();
     }
 
     @Override
     public void stop() {
         try {
-            // in case called without configure
-            if (this.stateManager != null) {
-                this.stateManager.stop();
+            if (stateManager != null) {
+                stateManager.stop();
             }
         } catch (Exception e) {
             log.error("Unable to stop state manager", e);
@@ -82,7 +105,7 @@ public class DefaultStatePersister implements Persister {
      * This is an inter-broker RPC authorized as a cluster action.
      *
      * @param request InitializeShareGroupStateParameters
-     * @return InitializeShareGroupStateResult
+     * @return A completable future of InitializeShareGroupStateResult
      */
     public CompletableFuture<InitializeShareGroupStateResult> initializeState(InitializeShareGroupStateParameters request) throws IllegalArgumentException {
         throw new RuntimeException("not implemented");
@@ -93,7 +116,7 @@ public class DefaultStatePersister implements Persister {
      * This is an inter-broker RPC authorized as a cluster action.
      *
      * @param request WriteShareGroupStateParameters
-     * @return WriteShareGroupStateResult
+     * @return A completable future of WriteShareGroupStateResult
      */
     public CompletableFuture<WriteShareGroupStateResult> writeState(WriteShareGroupStateParameters request) throws IllegalArgumentException {
         validate(request);
@@ -101,26 +124,36 @@ public class DefaultStatePersister implements Persister {
         String groupId = gtp.groupId();
 
         Map<Uuid, Map<Integer, CompletableFuture<WriteShareGroupStateResponse>>> futureMap = new HashMap<>();
+        List<PersisterStateManager.WriteStateHandler> handlers = new ArrayList<>();
 
-        List<PersisterStateManager.WriteStateHandler> handlers = gtp.topicsData().stream()
-            .map(topicData -> topicData.partitions().stream()
-                .map(partitionData -> {
-                    Map<Integer, CompletableFuture<WriteShareGroupStateResponse>> partMap = futureMap.computeIfAbsent(topicData.topicId(), k -> new HashMap<>());
-                    partMap.computeIfAbsent(partitionData.partition(), k -> new CompletableFuture<>());
-                    return stateManager.new WriteStateHandler(
-                        groupId, topicData.topicId(), partitionData.partition(), partitionData.stateEpoch(), partitionData.leaderEpoch(), partitionData.startOffset(), partitionData.stateBatches(),
-                        partMap.get(partitionData.partition()), null);
-                })
-                .collect(Collectors.toList()))
-            .flatMap(Collection::stream)
-            .collect(Collectors.toList());
+        gtp.topicsData().forEach(topicData -> {
+            topicData.partitions().forEach(partitionData -> {
+                CompletableFuture<WriteShareGroupStateResponse> future = futureMap
+                    .computeIfAbsent(topicData.topicId(), k -> new HashMap<>())
+                    .computeIfAbsent(partitionData.partition(), k -> new CompletableFuture<>());
+
+                handlers.add(
+                    stateManager.new WriteStateHandler(
+                        groupId,
+                        topicData.topicId(),
+                        partitionData.partition(),
+                        partitionData.stateEpoch(),
+                        partitionData.leaderEpoch(),
+                        partitionData.startOffset(),
+                        partitionData.stateBatches(),
+                        future, null)
+                );
+            });
+        });
 
         for (PersisterStateManager.PersisterStateManagerHandler handler : handlers) {
             stateManager.enqueue(handler);
         }
 
-        CompletableFuture<Void> combinedFuture = CompletableFuture.allOf(futureMap.values().stream()
-            .flatMap(partMap -> partMap.values().stream()).toArray(CompletableFuture[]::new));
+        CompletableFuture<Void> combinedFuture = CompletableFuture.allOf(
+            handlers.stream()
+                .map(PersisterStateManager.WriteStateHandler::result)
+                .toArray(CompletableFuture[]::new));
 
         return combinedFuture.thenApply(v -> {
             List<TopicData<PartitionErrorData>> topicsData = futureMap.keySet().stream()
@@ -132,7 +165,10 @@ public class DefaultStatePersister implements Persister {
                             try {
                                 WriteShareGroupStateResponse partitionResponse = future.get();
                                 return partitionResponse.data().results().get(0).partitions().stream()
-                                    .map(partitionResult -> PartitionFactory.newPartitionErrorData(partitionResult.partition(), partitionResult.errorCode(), partitionResult.errorMessage()))
+                                    .map(partitionResult -> PartitionFactory.newPartitionErrorData(
+                                        partitionResult.partition(),
+                                        partitionResult.errorCode(),
+                                        partitionResult.errorMessage()))
                                     .collect(Collectors.toList());
                             } catch (InterruptedException | ExecutionException e) {
                                 log.error("Unexpected exception while writing data to share coordinator", e);
@@ -159,38 +195,42 @@ public class DefaultStatePersister implements Persister {
      * This is an inter-broker RPC authorized as a cluster action.
      *
      * @param request ReadShareGroupStateParameters
-     * @return ReadShareGroupStateResult
+     * @return A completable future of ReadShareGroupStateResult
      */
     public CompletableFuture<ReadShareGroupStateResult> readState(ReadShareGroupStateParameters request) throws IllegalArgumentException {
         validate(request);
         GroupTopicPartitionData<PartitionIdLeaderEpochData> gtp = request.groupTopicPartitionData();
         String groupId = gtp.groupId();
-        Map<Uuid, HashMap<Integer, CompletableFuture<ReadShareGroupStateResponse>>> futureMap = new HashMap<>();
-        List<PersisterStateManager.ReadStateHandler> handlers = gtp.topicsData().stream()
-            .map(topicData -> topicData.partitions().stream()
-                .map(partitionData -> {
-                    Map<Integer, CompletableFuture<ReadShareGroupStateResponse>> partMap =
-                        futureMap.computeIfAbsent(topicData.topicId(), k -> new HashMap<>());
-                    partMap.computeIfAbsent(partitionData.partition(), k -> new CompletableFuture<>());
-                    return stateManager.new ReadStateHandler(
+        Map<Uuid, Map<Integer, CompletableFuture<ReadShareGroupStateResponse>>> futureMap = new HashMap<>();
+        List<PersisterStateManager.ReadStateHandler> handlers = new ArrayList<>();
+
+        gtp.topicsData().forEach(topicData -> {
+            topicData.partitions().forEach(partitionData -> {
+                CompletableFuture<ReadShareGroupStateResponse> future = futureMap
+                    .computeIfAbsent(topicData.topicId(), k -> new HashMap<>())
+                    .computeIfAbsent(partitionData.partition(), k -> new CompletableFuture<>());
+
+                handlers.add(
+                    stateManager.new ReadStateHandler(
                         groupId,
                         topicData.topicId(),
                         partitionData.partition(),
                         partitionData.leaderEpoch(),
-                        partMap.get(partitionData.partition()),
-                        null);
-                })
-                .collect(Collectors.toList()))
-            .flatMap(Collection::stream)
-            .collect(Collectors.toList());
+                        future,
+                        null)
+                );
+            });
+        });
 
         for (PersisterStateManager.PersisterStateManagerHandler handler : handlers) {
             stateManager.enqueue(handler);
         }
 
         // Combine all futures into a single CompletableFuture<Void>
-        CompletableFuture<Void> combinedFuture = CompletableFuture.allOf(futureMap.values().stream()
-            .flatMap(map -> map.values().stream()).toArray(CompletableFuture[]::new));
+        CompletableFuture<Void> combinedFuture = CompletableFuture.allOf(
+            handlers.stream()
+                .map(PersisterStateManager.ReadStateHandler::result)
+                .toArray(CompletableFuture[]::new));
 
         // Transform the combined CompletableFuture<Void> into CompletableFuture<ReadShareGroupStateResult>
         return combinedFuture.thenApply(v -> {
@@ -240,7 +280,7 @@ public class DefaultStatePersister implements Persister {
      * This is an inter-broker RPC authorized as a cluster action.
      *
      * @param request DeleteShareGroupStateParameters
-     * @return DeleteShareGroupStateResult
+     * @return A completable future of DeleteShareGroupStateResult
      */
     public CompletableFuture<DeleteShareGroupStateResult> deleteState(DeleteShareGroupStateParameters request) throws IllegalArgumentException {
         throw new RuntimeException("not implemented");
@@ -251,7 +291,7 @@ public class DefaultStatePersister implements Persister {
      * This is an inter-broker RPC authorized as a cluster action.
      *
      * @param request ReadShareGroupStateSummaryParameters
-     * @return ReadShareGroupStateSummaryResult
+     * @return A completable future of  ReadShareGroupStateSummaryResult
      */
     public CompletableFuture<ReadShareGroupStateSummaryResult> readSummary(ReadShareGroupStateSummaryParameters request) throws IllegalArgumentException {
         throw new RuntimeException("not implemented");
