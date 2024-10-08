@@ -1704,7 +1704,8 @@ public class AsyncKafkaConsumerTest {
         final TopicPartition tp = new TopicPartition("topic", 0);
         final List<ConsumerRecord<String, String>> records = singletonList(
                 new ConsumerRecord<>("topic", 0, 2, "key1", "value1"));
-        doAnswer(invocation -> Fetch.forPartition(tp, records, true))
+        final OffsetAndMetadata nextOffsetAndMetadata = new OffsetAndMetadata(0, Optional.empty(), "");
+        doAnswer(invocation -> Fetch.forPartition(tp, records, true, nextOffsetAndMetadata))
                 .when(fetchCollector)
                 .collectFetch(Mockito.any(FetchBuffer.class));
         when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);

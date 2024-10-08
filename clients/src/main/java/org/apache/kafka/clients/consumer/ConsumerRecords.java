@@ -19,12 +19,7 @@ package org.apache.kafka.clients.consumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.AbstractIterator;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * A container that holds the list {@link ConsumerRecord} per partition for a
@@ -35,9 +30,17 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
     public static final ConsumerRecords<Object, Object> EMPTY = new ConsumerRecords<>(Collections.emptyMap());
 
     private final Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
+    private final Map<TopicPartition, OffsetAndMetadata> nextOffsets;
 
+    @Deprecated
     public ConsumerRecords(Map<TopicPartition, List<ConsumerRecord<K, V>>> records) {
         this.records = records;
+        this.nextOffsets = new HashMap<>();
+    }
+
+    public ConsumerRecords(Map<TopicPartition, List<ConsumerRecord<K, V>>> records, final Map<TopicPartition, OffsetAndMetadata> nextOffsets) {
+        this.records = records;
+        this.nextOffsets = nextOffsets;
     }
 
     /**
@@ -51,6 +54,13 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
             return Collections.emptyList();
         else
             return Collections.unmodifiableList(recs);
+    }
+
+    /**
+     * Get just the next offsets that the consumer will consume
+     */
+    public Map<TopicPartition, OffsetAndMetadata> nextOffsets() {
+        return nextOffsets;
     }
 
     /**
