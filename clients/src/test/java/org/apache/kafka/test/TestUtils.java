@@ -68,6 +68,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
@@ -77,7 +79,6 @@ import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -556,10 +557,14 @@ public class TestUtils {
      * @return The caught exception cause
      */
     public static <T extends Throwable> T assertFutureThrows(Future<?> future, Class<T> exceptionCauseClass) {
-        ExecutionException exception = assertThrows(ExecutionException.class, future::get);
-        assertInstanceOf(exceptionCauseClass, exception.getCause(),
-            "Unexpected exception cause " + exception.getCause());
-        return exceptionCauseClass.cast(exception.getCause());
+        try {
+            future.get(DEFAULT_MAX_WAIT_MS, TimeUnit.MILLISECONDS);
+            fail("Future should throw expected exception " + exceptionCauseClass.getSimpleName() + " but succeed.");
+        } catch (TimeoutException | InterruptedException | ExecutionException e) {
+            assertInstanceOf(exceptionCauseClass, e.getCause(), "Expected a" + exceptionCauseClass.getSimpleName() + "but got" + e.getCause());
+            return exceptionCauseClass.cast(e.getCause());
+        }
+        throw new RuntimeException("Future should throw expected exception but unexpected error happened.");
     }
 
     public static <T extends Throwable> void assertFutureThrows(
@@ -574,13 +579,12 @@ public class TestUtils {
     public static void assertFutureError(Future<?> future, Class<? extends Throwable> exceptionClass)
         throws InterruptedException {
         try {
-            future.get();
+            future.get(DEFAULT_MAX_WAIT_MS, TimeUnit.MILLISECONDS);
             fail("Expected a " + exceptionClass.getSimpleName() + " exception, but got success.");
         } catch (ExecutionException ee) {
-            Throwable cause = ee.getCause();
-            assertEquals(exceptionClass, cause.getClass(),
-                "Expected a " + exceptionClass.getSimpleName() + " exception, but got " +
-                    cause.getClass().getSimpleName());
+            assertInstanceOf(exceptionClass, ee.getCause(), "Expected a" + exceptionClass.getSimpleName() + "but got" + ee.getCause());
+        } catch (TimeoutException e) {
+            fail("Future did not throw expected exception " + exceptionClass.getSimpleName() + " in time.");
         }
     }
 
