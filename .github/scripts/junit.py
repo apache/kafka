@@ -21,6 +21,7 @@ from glob import glob
 import logging
 import os
 import os.path
+import pathlib
 import re
 import sys
 from typing import Tuple, Optional, List, Iterable
@@ -239,7 +240,10 @@ if __name__ == "__main__":
 
     logger.debug(f"::group::Parsing {len(reports)} JUnit Report Files")
     for report in reports:
-        module_name = os.path.split(os.path.dirname(report))[-1]    # a bit of an assumption, but seems ok
+        # Test report paths look like module/[test,quarantinedTest]/TEST-class.method.xml
+        report_path = pathlib.Path(report)
+        module_name = report_path.parent.parent.name
+        print(f"Module: {module_name}")
         with open(report, "r") as fp:
             logger.debug(f"Parsing {report}")
             for suite in parse_report(workspace_path, report, fp):
