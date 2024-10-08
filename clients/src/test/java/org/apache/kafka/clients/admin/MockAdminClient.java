@@ -48,6 +48,7 @@ import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
@@ -93,6 +94,7 @@ public class MockAdminClient extends AdminClient {
     private final Map<String, Map<String, String>> clientMetricsConfigs;
     private final Map<String, Map<String, String>> groupConfigs;
     private final Map<String, String> defaultGroupConfigs;
+    private final List<KafkaMetric> addedMetrics = new ArrayList<>();
 
     private Node controller;
     private int timeoutNextRequests = 0;
@@ -1259,15 +1261,14 @@ public class MockAdminClient extends AdminClient {
         Map<String, FeatureUpdate> featureUpdates,
         UpdateFeaturesOptions options
     ) {
-        Map<String, KafkaFuture<Void>> results = new HashMap<>();
+        Throwable error = null;
         for (Map.Entry<String, FeatureUpdate> entry : featureUpdates.entrySet()) {
-            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
             String feature = entry.getKey();
+            short cur = featureLevels.getOrDefault(feature, (short) 0);
+            short next = entry.getValue().maxVersionLevel();
+            short min = minSupportedFeatureLevels.getOrDefault(feature, (short) 0);
+            short max = maxSupportedFeatureLevels.getOrDefault(feature, (short) 0);
             try {
-                short cur = featureLevels.getOrDefault(feature, (short) 0);
-                short next = entry.getValue().maxVersionLevel();
-                short min = minSupportedFeatureLevels.getOrDefault(feature, (short) 0);
-                short max = maxSupportedFeatureLevels.getOrDefault(feature, (short) 0);
                 switch (entry.getValue().upgradeType()) {
                     case UNKNOWN:
                         throw new InvalidRequestException("Invalid upgrade type.");
@@ -1302,16 +1303,30 @@ public class MockAdminClient extends AdminClient {
                 if (next > max) {
                     throw new InvalidUpdateVersionException("Can't upgrade above " + max);
                 }
-                if (!options.validateOnly()) {
-                    featureLevels.put(feature, next);
-                }
-                future.complete(null);
             } catch (Exception e) {
-                future.completeExceptionally(e);
+                error = invalidUpdateVersion(feature, next, e.getMessage());
+                break;
             }
-            results.put(feature, future);
         }
+        Map<String, KafkaFuture<Void>> results = new HashMap<>();
+        for (Map.Entry<String, FeatureUpdate> entry : featureUpdates.entrySet()) {
+            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+            if (error == null) {
+                future.complete(null);
+                if (!options.validateOnly()) {
+                    featureLevels.put(entry.getKey(), entry.getValue().maxVersionLevel());
+                }
+            } else {
+                future.completeExceptionally(error);
+            }
+            results.put(entry.getKey(), future);
+        }
+
         return new UpdateFeaturesResult(results);
+    }
+
+    private InvalidRequestException invalidUpdateVersion(String feature, short version, String message) {
+        return new InvalidRequestException(String.format("Invalid update version %d for feature %s. %s", version, feature, message));
     }
 
     @Override
@@ -1483,5 +1498,19 @@ public class MockAdminClient extends AdminClient {
 
     public synchronized Node broker(int index) {
         return brokers.get(index);
+    }
+
+    public List<KafkaMetric> addedMetrics() {
+        return Collections.unmodifiableList(addedMetrics);
+    }
+
+    @Override
+    public void registerMetricForSubscription(KafkaMetric metric) {
+        addedMetrics.add(metric);
+    }
+
+    @Override
+    public void unregisterMetricFromSubscription(KafkaMetric metric) {
+        addedMetrics.remove(metric);
     }
 }
