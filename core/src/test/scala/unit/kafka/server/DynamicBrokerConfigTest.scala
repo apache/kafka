@@ -674,18 +674,17 @@ class DynamicBrokerConfigTest {
     assertEquals(classOf[JmxReporter].getName, m.currentReporters.keySet.head)
 
     val props = new Properties()
-    props.put(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, classOf[MockMetricsReporter].getName)
+    props.put(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, s"${classOf[JmxReporter].getName},${classOf[MockMetricsReporter].getName}")
     config.dynamicConfig.updateDefaultConfig(props)
     assertEquals(2, m.currentReporters.size)
     assertEquals(Set(classOf[JmxReporter].getName, classOf[MockMetricsReporter].getName), m.currentReporters.keySet)
   }
 
   @Test
-  @nowarn("cat=deprecation")
   def testUpdateMetricReportersNoJmxReporter(): Unit = {
     val brokerId = 0
     val origProps = TestUtils.createBrokerConfig(brokerId, null, port = 8181)
-    origProps.put(MetricConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false")
+    origProps.put(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, "")
 
     val config = KafkaConfig(origProps)
     val serverMock = Mockito.mock(classOf[KafkaBroker])

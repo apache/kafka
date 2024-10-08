@@ -19,7 +19,6 @@ package org.apache.kafka.clients;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
@@ -126,13 +125,9 @@ public class CommonClientConfigs {
             "\n" +
             "TRACE level records all possible metrics, capturing every detail about the system's performance and operation. It's best for controlled environments where in-depth analysis is required, though it can introduce significant overhead.";
     public static final String METRIC_REPORTER_CLASSES_CONFIG = "metric.reporters";
-    public static final String METRIC_REPORTER_CLASSES_DOC = "A list of classes to use as metrics reporters. Implementing the <code>org.apache.kafka.common.metrics.MetricsReporter</code> interface allows plugging in classes that will be notified of new metric creation. The JmxReporter is always included to register JMX statistics.";
+    public static final String METRIC_REPORTER_CLASSES_DOC = "A list of classes to use as metrics reporters. Implementing the <code>org.apache.kafka.common.metrics.MetricsReporter</code> interface allows plugging in classes that will be notified of new metric creation.";
 
     public static final String METRICS_CONTEXT_PREFIX = "metrics.context.";
-
-    @Deprecated
-    public static final String AUTO_INCLUDE_JMX_REPORTER_CONFIG = "auto.include.jmx.reporter";
-    public static final String AUTO_INCLUDE_JMX_REPORTER_DOC = "Deprecated. Whether to automatically include JmxReporter even if it's not listed in <code>metric.reporters</code>. This configuration will be removed in Kafka 4.0, users should instead include <code>org.apache.kafka.common.metrics.JmxReporter</code> in <code>metric.reporters</code> in order to enable the JmxReporter.";
 
     public static final String SECURITY_PROTOCOL_CONFIG = "security.protocol";
     public static final String SECURITY_PROTOCOL_DOC = "Protocol used to communicate with brokers. Valid values are: " +
@@ -305,15 +300,8 @@ public class CommonClientConfigs {
     }
 
     public static List<MetricsReporter> metricsReporters(Map<String, Object> clientIdOverride, AbstractConfig config) {
-        List<MetricsReporter> reporters = config.getConfiguredInstances(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
+        return config.getConfiguredInstances(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
                 MetricsReporter.class, clientIdOverride);
-        if (config.getBoolean(CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG) &&
-                reporters.stream().noneMatch(r -> JmxReporter.class.equals(r.getClass()))) {
-            JmxReporter jmxReporter = new JmxReporter();
-            jmxReporter.configure(config.originals(clientIdOverride));
-            reporters.add(jmxReporter);
-        }
-        return reporters;
     }
 
     public static Optional<ClientTelemetryReporter> telemetryReporter(String clientId, AbstractConfig config) {

@@ -467,7 +467,7 @@ public class KafkaProducerTest {
         KafkaProducer<String, String> producer = new KafkaProducer<>(
                 props, new StringSerializer(), new StringSerializer());
 
-        assertEquals(3, producer.metrics.reporters().size());
+        assertEquals(2, producer.metrics.reporters().size());
 
         MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) producer.metrics.reporters().stream()
             .filter(reporter -> reporter instanceof MockMetricsReporter).findFirst().get();
@@ -477,11 +477,10 @@ public class KafkaProducerTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void testDisableJmxAndClientTelemetryReporter() {
         Properties props = new Properties();
         props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        props.setProperty(ProducerConfig.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false");
+        props.setProperty(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG, "");
         props.setProperty(ProducerConfig.ENABLE_METRICS_PUSH_CONFIG, "false");
         KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
         assertTrue(producer.metrics.reporters().isEmpty());
@@ -501,11 +500,10 @@ public class KafkaProducerTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void testExplicitlyOnlyEnableClientTelemetryReporter() {
         Properties props = new Properties();
         props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        props.setProperty(ProducerConfig.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false");
+        props.setProperty(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG, "");
         KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
         assertEquals(1, producer.metrics.reporters().size());
         assertInstanceOf(ClientTelemetryReporter.class, producer.metrics.reporters().get(0));

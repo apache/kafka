@@ -29,6 +29,7 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -631,11 +632,6 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;
 
-    /** {@code auto.include.jmx.reporter}
-     * @deprecated and will be removed in 4.0.0 */
-    @Deprecated
-    public static final String AUTO_INCLUDE_JMX_REPORTER_CONFIG = CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG;
-
     /** {@code num.standby.replicas} */
     @SuppressWarnings("WeakerAccess")
     public static final String NUM_STANDBY_REPLICAS_CONFIG = "num.standby.replicas";
@@ -1095,7 +1091,7 @@ public class StreamsConfig extends AbstractConfig {
                     CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
             .define(METRIC_REPORTER_CLASSES_CONFIG,
                     Type.LIST,
-                    "",
+                    JmxReporter.class.getName(),
                     Importance.LOW,
                     CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
             .define(METRICS_RECORDING_LEVEL_CONFIG,
@@ -1110,11 +1106,6 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0),
                     Importance.LOW,
                     CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC)
-            .define(AUTO_INCLUDE_JMX_REPORTER_CONFIG,
-                    Type.BOOLEAN,
-                    true,
-                    Importance.LOW,
-                    CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_DOC)
             .define(POLL_MS_CONFIG,
                     Type.LONG,
                     100L,

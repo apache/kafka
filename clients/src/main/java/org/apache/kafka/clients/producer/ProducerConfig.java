@@ -25,6 +25,7 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SecurityConfig;
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -253,10 +254,6 @@ public class ProducerConfig extends AbstractConfig {
     /** <code>metric.reporters</code> */
     public static final String METRIC_REPORTER_CLASSES_CONFIG = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG;
 
-    /** <code>auto.include.jmx.reporter</code> */
-    @Deprecated
-    public static final String AUTO_INCLUDE_JMX_REPORTER_CONFIG = CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG;
-
     // max.in.flight.requests.per.connection should be less than or equal to 5 when idempotence producer enabled to ensure message ordering
     private static final int MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_FOR_IDEMPOTENCE = 5;
 
@@ -449,15 +446,10 @@ public class ProducerConfig extends AbstractConfig {
                                         CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
                                 .define(METRIC_REPORTER_CLASSES_CONFIG,
                                         Type.LIST,
-                                        Collections.emptyList(),
+                                        JmxReporter.class.getName(),
                                         new ConfigDef.NonNullValidator(),
                                         Importance.LOW,
                                         CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
-                                .define(AUTO_INCLUDE_JMX_REPORTER_CONFIG,
-                                        Type.BOOLEAN,
-                                        true,
-                                        Importance.LOW,
-                                        CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_DOC)
                                 .define(MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION,
                                         Type.INT,
                                         5,

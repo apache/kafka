@@ -234,7 +234,7 @@ public class KafkaConsumerTest {
         props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
         consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
 
-        assertEquals(3, consumer.metricsRegistry().reporters().size());
+        assertEquals(2, consumer.metricsRegistry().reporters().size());
 
         MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) consumer.metricsRegistry().reporters().stream()
             .filter(reporter -> reporter instanceof MockMetricsReporter).findFirst().get();
@@ -243,12 +243,11 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
-    @SuppressWarnings("deprecation")
     public void testDisableJmxAndClientTelemetryReporter(GroupProtocol groupProtocol) {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        props.setProperty(ConsumerConfig.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false");
+        props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, "");
         props.setProperty(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG, "false");
         consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
         assertTrue(consumer.metricsRegistry().reporters().isEmpty());
@@ -269,12 +268,11 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
-    @SuppressWarnings("deprecation")
     public void testExplicitlyOnlyEnableClientTelemetryReporter(GroupProtocol groupProtocol) {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        props.setProperty(ConsumerConfig.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false");
+        props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, "");
         consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
         assertEquals(1, consumer.metricsRegistry().reporters().size());
         assertInstanceOf(ClientTelemetryReporter.class, consumer.metricsRegistry().reporters().get(0));

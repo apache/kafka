@@ -53,7 +53,7 @@ import org.apache.kafka.common.config.provider.FileConfigProvider
 import org.apache.kafka.common.errors.{AuthenticationException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.MetadataRequestData
-import org.apache.kafka.common.metrics.{KafkaMetric, MetricsContext, MetricsReporter, Quota}
+import org.apache.kafka.common.metrics.{JmxReporter, KafkaMetric, MetricsContext, MetricsReporter, Quota}
 import org.apache.kafka.common.network.{ConnectionMode, ListenerName}
 import org.apache.kafka.common.network.CertStores.{KEYSTORE_PROPS, TRUSTSTORE_PROPS}
 import org.apache.kafka.common.record.TimestampType
@@ -955,7 +955,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     // Add a new metrics reporter
     val newProps = new Properties
     newProps.put(TestMetricsReporter.PollingIntervalProp, "100")
-    configureMetricsReporters(Seq(classOf[TestMetricsReporter]), newProps)
+    configureMetricsReporters(Seq(classOf[JmxReporter], classOf[TestMetricsReporter]), newProps)
 
     val reporters = TestMetricsReporter.waitForReporters(servers.size)
     reporters.foreach { reporter =>
