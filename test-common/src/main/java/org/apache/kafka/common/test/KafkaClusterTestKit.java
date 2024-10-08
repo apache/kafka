@@ -154,9 +154,9 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
         public Builder(TestKitNodes nodes) {
             this.nodes = nodes;
-            this.brokerListenerName = nodes.externalListenerName().value();
+            this.brokerListenerName = nodes.brokerListenerName().value();
             this.controllerListenerName = nodes.controllerListenerName().value();
-            this.brokerSecurityProtocol = nodes.externalListenerProtocol().name;
+            this.brokerSecurityProtocol = nodes.brokerListenerProtocol().name;
             this.controllerSecurityProtocol = nodes.controllerListenerProtocol().name;
         }
 
@@ -528,7 +528,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
         for (Entry<Integer, BrokerServer> entry : brokers.entrySet()) {
             int brokerId = entry.getKey();
             BrokerServer broker = entry.getValue();
-            ListenerName listenerName = nodes.externalListenerName();
+            ListenerName listenerName = nodes.brokerListenerName();
             int port = broker.boundPort(listenerName);
             if (port <= 0) {
                 throw new RuntimeException("Broker " + brokerId + " does not yet " +

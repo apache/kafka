@@ -45,6 +45,7 @@ public class TestKitNodes {
 
     public static final int CONTROLLER_ID_OFFSET = 3000;
     public static final int BROKER_ID_OFFSET = 0;
+    public static final String DEFAULT_BROKER_LISTENER_NAME = "EXTERNAL";
 
     public static class Builder {
         private boolean combined;
@@ -55,8 +56,10 @@ public class TestKitNodes {
         private Map<Integer, Map<String, String>> perServerProperties = Collections.emptyMap();
         private BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
             fromVersion(MetadataVersion.latestTesting(), "testkit");
-        private ListenerName listenerName;
-        private SecurityProtocol securityProtocol;
+        // The brokerListenerName and brokerSecurityProtocol configurations must
+        // be kept in sync with the default values in ClusterTest.
+        private ListenerName brokerListenerName = ListenerName.normalised(DEFAULT_BROKER_LISTENER_NAME);
+        private SecurityProtocol brokerSecurityProtocol = SecurityProtocol.PLAINTEXT;
 
         public Builder setClusterId(String clusterId) {
             this.clusterId = clusterId;
@@ -100,13 +103,13 @@ public class TestKitNodes {
             return this;
         }
 
-        public Builder setListenerName(ListenerName listenerName) {
-            this.listenerName = listenerName;
+        public Builder setBrokerListenerName(ListenerName listenerName) {
+            this.brokerListenerName = listenerName;
             return this;
         }
 
-        public Builder setSecurityProtocol(SecurityProtocol securityProtocol) {
-            this.securityProtocol = securityProtocol;
+        public Builder setBrokerSecurityProtocol(SecurityProtocol securityProtocol) {
+            this.brokerSecurityProtocol = securityProtocol;
             return this;
         }
 
@@ -121,7 +124,7 @@ public class TestKitNodes {
                 throw new IllegalArgumentException("Invalid value for numDisksPerBroker");
             }
             // TODO: remove this assertion after https://issues.apache.org/jira/browse/KAFKA-16680 is finished
-            if (securityProtocol != SecurityProtocol.PLAINTEXT) {
+            if (brokerSecurityProtocol != SecurityProtocol.PLAINTEXT) {
                 throw new IllegalArgumentException("Currently only support PLAINTEXT security protocol");
             }
 
@@ -178,7 +181,7 @@ public class TestKitNodes {
             }
 
             return new TestKitNodes(baseDirectory, clusterId, bootstrapMetadata, controllerNodes, brokerNodes,
-                    listenerName, securityProtocol, new ListenerName("CONTROLLER"), SecurityProtocol.PLAINTEXT);
+                brokerListenerName, brokerSecurityProtocol, new ListenerName("CONTROLLER"), SecurityProtocol.PLAINTEXT);
         }
     }
 
@@ -238,11 +241,11 @@ public class TestKitNodes {
         return brokerNodes;
     }
 
-    public ListenerName externalListenerName() {
+    public ListenerName brokerListenerName() {
         return brokerListenerName;
     }
 
-    public SecurityProtocol externalListenerProtocol() {
+    public SecurityProtocol brokerListenerProtocol() {
         return brokerSecurityProtocol;
     }
 

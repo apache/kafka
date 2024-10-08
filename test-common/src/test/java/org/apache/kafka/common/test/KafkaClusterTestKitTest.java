@@ -17,9 +17,6 @@
 
 package org.apache.kafka.common.test;
 
-import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.security.auth.SecurityProtocol;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -81,8 +78,6 @@ public class KafkaClusterTestKitTest {
 
         IllegalArgumentException e = assertThrowsExactly(IllegalArgumentException.class, () -> new KafkaClusterTestKit.Builder(
                 new TestKitNodes.Builder()
-                        .setSecurityProtocol(SecurityProtocol.PLAINTEXT)
-                        .setListenerName(ListenerName.normalised("EXTERNAL"))
                         .setNumBrokerNodes(1)
                         .setNumControllerNodes(1)
                         .setPerServerProperties(perServerProperties)
@@ -96,8 +91,6 @@ public class KafkaClusterTestKitTest {
     public void testCreateClusterAndCloseWithMultipleLogDirs(boolean combined) {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
                 new TestKitNodes.Builder().
-                        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-                        setListenerName(ListenerName.normalised("EXTERNAL")).
                         setNumBrokerNodes(5).
                         setNumDisksPerBroker(2).
                         setCombined(combined).

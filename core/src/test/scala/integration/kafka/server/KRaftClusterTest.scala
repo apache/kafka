@@ -37,7 +37,7 @@ import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.quota.ClientQuotaAlteration.Op
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.{ApiError, DescribeClusterRequest, DescribeClusterResponse}
-import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{Cluster, Endpoint, Reconfigurable, TopicPartition, TopicPartitionInfo}
 import org.apache.kafka.controller.{QuorumController, QuorumControllerIntegrationTestUtils}
 import org.apache.kafka.image.ClusterImage
@@ -78,8 +78,6 @@ class KRaftClusterTest {
   def testCreateClusterAndClose(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(1).
         setNumControllerNodes(1).build()).build()
     try {
@@ -94,8 +92,6 @@ class KRaftClusterTest {
   def testCreateClusterAndRestartBrokerNode(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(1).
         setNumControllerNodes(1).build()).build()
     try {
@@ -113,8 +109,6 @@ class KRaftClusterTest {
   def testCreateClusterAndRestartControllerNode(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(1).
         setNumControllerNodes(3).build()).build()
     try {
@@ -144,8 +138,6 @@ class KRaftClusterTest {
   def testCreateClusterAndWaitForBrokerInRunningState(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(1).
         setNumControllerNodes(1).build()).build()
     try {
@@ -171,8 +163,6 @@ class KRaftClusterTest {
   def testCreateClusterAndCreateListDeleteTopic(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(3).
         setNumControllerNodes(3).build()).build()
     try {
@@ -210,8 +200,6 @@ class KRaftClusterTest {
   def testCreateClusterAndCreateAndManyTopics(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(3).
         setNumControllerNodes(3).build()).build()
     try {
@@ -246,8 +234,6 @@ class KRaftClusterTest {
   def testClientQuotas(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(1).
         setNumControllerNodes(1).build()).build()
     try {
@@ -368,8 +354,6 @@ class KRaftClusterTest {
   def testDefaultClientQuotas(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(1).
         setNumControllerNodes(1).build()).build()
     try {
@@ -416,19 +400,17 @@ class KRaftClusterTest {
     })
 
     val nodes = new TestKitNodes.Builder()
-      .setSecurityProtocol(SecurityProtocol.PLAINTEXT)
-      .setListenerName(ListenerName.normalised("EXTERNAL"))
       .setNumControllerNodes(1)
       .setNumBrokerNodes(3)
       .setPerServerProperties(brokerPropertyOverrides)
       .build()
 
     doOnStartedKafkaCluster(nodes) { implicit cluster =>
-      sendDescribeClusterRequestToBoundPortUntilAllBrokersPropagated(cluster.nodes.externalListenerName, (15L, SECONDS))
+      sendDescribeClusterRequestToBoundPortUntilAllBrokersPropagated(cluster.nodes.brokerListenerName, (15L, SECONDS))
         .nodes.values.forEach { broker =>
           assertEquals("localhost", broker.host,
             "Did not advertise configured advertised host")
-          assertEquals(cluster.brokers.get(broker.id).socketServer.boundPort(cluster.nodes.externalListenerName), broker.port,
+          assertEquals(cluster.brokers.get(broker.id).socketServer.boundPort(cluster.nodes.brokerListenerName), broker.port,
             "Did not advertise bound socket port")
         }
     }
@@ -445,8 +427,6 @@ class KRaftClusterTest {
     })
 
     val nodes = new TestKitNodes.Builder()
-      .setSecurityProtocol(SecurityProtocol.PLAINTEXT)
-      .setListenerName(ListenerName.normalised("EXTERNAL"))
       .setNumControllerNodes(1)
       .setNumBrokerNodes(3)
       .setNumDisksPerBroker(1)
@@ -454,7 +434,7 @@ class KRaftClusterTest {
       .build()
 
     doOnStartedKafkaCluster(nodes) { implicit cluster =>
-      sendDescribeClusterRequestToBoundPortUntilAllBrokersPropagated(cluster.nodes.externalListenerName, (15L, SECONDS))
+      sendDescribeClusterRequestToBoundPortUntilAllBrokersPropagated(cluster.nodes.brokerListenerName, (15L, SECONDS))
         .nodes.values.forEach { broker =>
           assertEquals(s"advertised-host-${broker.id}", broker.host, "Did not advertise configured advertised host")
           assertEquals(broker.id + 100, broker.port, "Did not advertise configured advertised port")
@@ -469,8 +449,6 @@ class KRaftClusterTest {
         new KafkaClusterTestKit.Builder(
           new TestKitNodes.Builder().
             setBootstrapMetadataVersion(MetadataVersion.IBP_2_7_IV0).
-            setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-            setListenerName(ListenerName.normalised("EXTERNAL")).
             setNumBrokerNodes(1).
             setNumControllerNodes(1).build()).build()
     }).getMessage)
@@ -541,8 +519,6 @@ class KRaftClusterTest {
   def testCreateClusterAndPerformReassignment(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(4).
         setNumControllerNodes(3).build()).build()
     try {
@@ -711,8 +687,6 @@ class KRaftClusterTest {
   def testIncrementalAlterConfigs(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(4).
         setNumControllerNodes(3).build()).build()
     try {
@@ -769,8 +743,6 @@ class KRaftClusterTest {
   def testSetLog4jConfigurations(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(4).
         setNumControllerNodes(3).build()).build()
     try {
@@ -845,8 +817,6 @@ class KRaftClusterTest {
   def testLegacyAlterConfigs(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(4).
         setNumControllerNodes(3).build()).build()
     try {
@@ -904,8 +874,6 @@ class KRaftClusterTest {
   def testCreatePartitions(metadataVersionString: String): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(4).
         setBootstrapMetadataVersion(MetadataVersion.fromVersionString(metadataVersionString)).
         setNumControllerNodes(3).build()).
@@ -962,8 +930,6 @@ class KRaftClusterTest {
   def testUnregisterBroker(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(4).
         setNumControllerNodes(3).build()).build()
     try {
@@ -999,8 +965,6 @@ class KRaftClusterTest {
   def testDescribeQuorumRequestToBrokers() : Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(4).
         setNumControllerNodes(3).build()).build()
     try {
@@ -1058,8 +1022,6 @@ class KRaftClusterTest {
   def testUpdateMetadataVersion(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setBootstrapMetadataVersion(MetadataVersion.MINIMUM_BOOTSTRAP_VERSION).
         setNumBrokerNodes(4).
         setNumControllerNodes(3).build()).build()
@@ -1089,8 +1051,6 @@ class KRaftClusterTest {
   def testRemoteLogManagerInstantiation(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(1).
         setNumControllerNodes(1).build())
       .setConfigProp(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true.toString)
@@ -1117,8 +1077,6 @@ class KRaftClusterTest {
   def testCreateClusterAndCreateTopicWithRemoteLogManagerInstantiation(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(1).
         setNumControllerNodes(1).build())
       .setConfigProp(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true.toString)
@@ -1162,8 +1120,6 @@ class KRaftClusterTest {
   def testSnapshotCount(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp("metadata.log.max.snapshot.interval.ms", "500")
@@ -1199,8 +1155,6 @@ class KRaftClusterTest {
   def testAuthorizerFailureFoundInControllerStartup(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumControllerNodes(3).build()).
       setConfigProp("authorizer.class.name", classOf[BadAuthorizer].getName).build()
     try {
@@ -1221,8 +1175,6 @@ class KRaftClusterTest {
   def testSingleControllerSingleBrokerCluster(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setBootstrapMetadataVersion(MetadataVersion.MINIMUM_BOOTSTRAP_VERSION).
         setNumBrokerNodes(1).
         setNumControllerNodes(1).build()).build()
@@ -1240,8 +1192,6 @@ class KRaftClusterTest {
   def testReconfigureControllerClientQuotas(combinedController: Boolean): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(1).
         setCombined(combinedController).
         setNumControllerNodes(1).build()).
@@ -1284,8 +1234,6 @@ class KRaftClusterTest {
   def testReconfigureControllerAuthorizer(combinedMode: Boolean): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(1).
         setCombined(combinedMode).
         setNumControllerNodes(1).build()).
@@ -1326,8 +1274,6 @@ class KRaftClusterTest {
   def testOverlyLargeCreateTopics(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(1).
         setNumControllerNodes(1).build()).build()
     try {
@@ -1357,8 +1303,6 @@ class KRaftClusterTest {
   def testTimedOutHeartbeats(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(3).
         setNumControllerNodes(1).build()).
       setConfigProp(KRaftConfigs.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG, 10.toString).
@@ -1386,8 +1330,6 @@ class KRaftClusterTest {
   def testRegisteredControllerEndpoints(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(1).
         setNumControllerNodes(3).build()).
       build()
@@ -1412,8 +1354,6 @@ class KRaftClusterTest {
   def testDirectToControllerCommunicationFailsOnOlderMetadataVersion(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_6_IV2).
         setNumBrokerNodes(1).
         setNumControllerNodes(1).build()).
@@ -1450,8 +1390,6 @@ class KRaftClusterTest {
         setValue("9"), 0.toShort))
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setBootstrapMetadata(BootstrapMetadata.fromRecords(bootstrapRecords, "testRecords")).
         setNumBrokerNodes(1).
         setNumControllerNodes(1).build()).
@@ -1473,8 +1411,6 @@ class KRaftClusterTest {
   def testTopicDeletedAndRecreatedWhileBrokerIsDown(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_6_IV2).
         setNumBrokerNodes(3).
         setNumControllerNodes(1).build()).
@@ -1529,8 +1465,6 @@ class KRaftClusterTest {
   def testAbandonedFutureReplicaRecovered_mainReplicaInOfflineLogDir(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_7_IV2).
         setNumBrokerNodes(3).
         setNumDisksPerBroker(2).
@@ -1587,8 +1521,6 @@ class KRaftClusterTest {
   def testAbandonedFutureReplicaRecovered_mainReplicaInOnlineLogDir(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_7_IV2).
         setNumBrokerNodes(3).
         setNumDisksPerBroker(2).
@@ -1658,8 +1590,6 @@ class KRaftClusterTest {
   def testControllerFailover(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(1).
         setNumControllerNodes(5).build()).build()
     try {
@@ -1698,8 +1628,6 @@ class KRaftClusterTest {
   def testIncreaseNumIoThreads(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
-        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(1).
         setNumControllerNodes(1).build()).
       setConfigProp(ServerConfigs.NUM_IO_THREADS_CONFIG, "4").

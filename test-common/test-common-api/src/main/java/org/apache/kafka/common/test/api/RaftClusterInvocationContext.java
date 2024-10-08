@@ -113,8 +113,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         RaftClusterInstance(ClusterConfig clusterConfig, boolean isCombined) {
             this.clusterConfig = clusterConfig;
             this.isCombined = isCombined;
-            this.listenerName = clusterConfig.listenerName().map(ListenerName::normalised)
-                    .orElseGet(() -> ListenerName.forSecurityProtocol(clusterConfig.securityProtocol()));
+            this.listenerName = clusterConfig.listenerName();
         }
 
         @Override
@@ -285,8 +284,8 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                         .setNumDisksPerBroker(clusterConfig.numDisksPerBroker())
                         .setPerServerProperties(clusterConfig.perServerOverrideProperties())
                         .setNumControllerNodes(clusterConfig.numControllers())
-                        .setListenerName(listenerName)
-                        .setSecurityProtocol(clusterConfig.securityProtocol())
+                        .setBrokerListenerName(listenerName)
+                        .setBrokerSecurityProtocol(clusterConfig.securityProtocol())
                         .build();
                 KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(nodes);
                 // Copy properties into the TestKit builder
