@@ -24,6 +24,7 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -38,11 +39,13 @@ class CoordinatorStreamsRecordHelpersTest {
                 .setSubtopologyId("subtopology-id")
                 .setRepartitionSinkTopics(Collections.singletonList("foo"))
                 .setSourceTopics(Collections.singletonList("bar"))
+                .setSourceTopicRegex(Collections.singletonList("regex"))
                 .setRepartitionSourceTopics(
                     Collections.singletonList(
                         new StreamsGroupInitializeRequestData.TopicInfo()
                             .setName("repartition")
                             .setPartitions(4)
+                            .setReplicationFactor((short) 3)
                             .setTopicConfigs(Collections.singletonList(
                                 new StreamsGroupInitializeRequestData.TopicConfig()
                                     .setKey("config-name1")
@@ -54,6 +57,7 @@ class CoordinatorStreamsRecordHelpersTest {
                     Collections.singletonList(
                         new StreamsGroupInitializeRequestData.TopicInfo()
                             .setName("changelog")
+                            .setReplicationFactor((short) 2)
                             .setTopicConfigs(Collections.singletonList(
                                 new StreamsGroupInitializeRequestData.TopicConfig()
                                     .setKey("config-name2")
@@ -61,6 +65,13 @@ class CoordinatorStreamsRecordHelpersTest {
                             ))
                     )
                 )
+                .setCopartitionGroups(Arrays.asList(
+                    new StreamsGroupInitializeRequestData.CopartitionGroup()
+                        .setSourceTopics(Collections.singletonList((short) 0))
+                        .setRepartitionSourceTopics(Collections.singletonList((short) 0)),
+                    new StreamsGroupInitializeRequestData.CopartitionGroup()
+                        .setSourceTopicRegex(Collections.singletonList((short) 0))
+                ))
             );
 
         List<StreamsGroupTopologyValue.Subtopology> expectedTopology =
@@ -68,11 +79,13 @@ class CoordinatorStreamsRecordHelpersTest {
                 .setSubtopologyId("subtopology-id")
                 .setRepartitionSinkTopics(Collections.singletonList("foo"))
                 .setSourceTopics(Collections.singletonList("bar"))
+                .setSourceTopicRegex(Collections.singletonList("regex"))
                 .setRepartitionSourceTopics(
                     Collections.singletonList(
                         new StreamsGroupTopologyValue.TopicInfo()
                             .setName("repartition")
                             .setPartitions(4)
+                            .setReplicationFactor((short) 3)
                             .setTopicConfigs(Collections.singletonList(
                                 new StreamsGroupTopologyValue.TopicConfig()
                                     .setKey("config-name1")
@@ -84,6 +97,7 @@ class CoordinatorStreamsRecordHelpersTest {
                     Collections.singletonList(
                         new StreamsGroupTopologyValue.TopicInfo()
                             .setName("changelog")
+                            .setReplicationFactor((short) 2)
                             .setTopicConfigs(Collections.singletonList(
                                 new StreamsGroupTopologyValue.TopicConfig()
                                     .setKey("config-name2")
@@ -91,6 +105,13 @@ class CoordinatorStreamsRecordHelpersTest {
                             ))
                     )
                 )
+                .setCopartitionGroups(Arrays.asList(
+                    new StreamsGroupTopologyValue.CopartitionGroup()
+                        .setSourceTopics(Collections.singletonList((short) 0))
+                        .setRepartitionSourceTopics(Collections.singletonList((short) 0)),
+                    new StreamsGroupTopologyValue.CopartitionGroup()
+                        .setSourceTopicRegex(Collections.singletonList((short) 0))
+                ))
             );
 
         CoordinatorRecord expectedRecord = new CoordinatorRecord(
@@ -108,4 +129,5 @@ class CoordinatorStreamsRecordHelpersTest {
             topology
         ));
     }
+
 }

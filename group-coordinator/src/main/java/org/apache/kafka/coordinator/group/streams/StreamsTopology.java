@@ -17,12 +17,10 @@
 package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
-import org.apache.kafka.common.message.StreamsGroupInitializeRequestData;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.TopicInfo;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -43,35 +41,6 @@ public class StreamsTopology {
                            final Map<String, Subtopology> subtopologies) {
         this.topologyId = topologyId;
         this.subtopologies = subtopologies;
-    }
-
-    public StreamsTopology(final String topologyId,
-                           final List<StreamsGroupInitializeRequestData.Subtopology> subtopologies) {
-        this.topologyId = topologyId;
-        this.subtopologies = new HashMap<>();
-        subtopologies.forEach(subtopology -> {
-            List<StreamsGroupTopologyValue.TopicInfo> repartitionSourceTopics = subtopology.repartitionSourceTopics().stream()
-                .map(topicInfo -> {
-                    List<StreamsGroupTopologyValue.TopicConfig> topicConfigs =  topicInfo.topicConfigs() != null ? topicInfo.topicConfigs().stream()
-                        .map(config -> new StreamsGroupTopologyValue.TopicConfig().setKey(config.key()).setValue(config.value()))
-                        .collect(Collectors.toList()) : null;
-                    return new StreamsGroupTopologyValue.TopicInfo().setName(topicInfo.name()).setTopicConfigs(topicConfigs)
-                        .setPartitions(topicInfo.partitions());
-                }).collect(Collectors.toList());
-
-            List<StreamsGroupTopologyValue.TopicInfo> stateChangelogTopics = subtopology.stateChangelogTopics().stream().map(topicInfo -> {
-                List<StreamsGroupTopologyValue.TopicConfig> topicConfigs = topicInfo.topicConfigs() != null ? topicInfo.topicConfigs().stream()
-                    .map(config -> new StreamsGroupTopologyValue.TopicConfig().setKey(config.key()).setValue(config.value()))
-                    .collect(Collectors.toList()) : null;
-                return new StreamsGroupTopologyValue.TopicInfo().setName(topicInfo.name()).setTopicConfigs(topicConfigs);
-            }).collect(Collectors.toList());
-
-            this.subtopologies.put(
-                subtopology.subtopologyId(),
-                new StreamsGroupTopologyValue.Subtopology().setSubtopologyId(subtopology.subtopologyId())
-                    .setSourceTopics(subtopology.sourceTopics()).setRepartitionSinkTopics(subtopology.repartitionSinkTopics())
-                    .setRepartitionSourceTopics(repartitionSourceTopics).setStateChangelogTopics(stateChangelogTopics));
-        });
     }
 
     public String topologyId() {
@@ -141,6 +110,7 @@ public class StreamsTopology {
             new StreamsGroupDescribeResponseData.TopicInfo()
                 .setName(x.name())
                 .setPartitions(x.partitions())
+                .setReplicationFactor(x.replicationFactor())
                 .setTopicConfigs(
                     x.topicConfigs() != null ?
                         x.topicConfigs().stream().map(

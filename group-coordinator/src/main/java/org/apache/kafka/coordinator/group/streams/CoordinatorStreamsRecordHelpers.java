@@ -381,34 +381,76 @@ public class CoordinatorStreamsRecordHelpers {
      */
     public static CoordinatorRecord newStreamsGroupTopologyRecord(String groupId,
                                                                   List<StreamsGroupInitializeRequestData.Subtopology> subtopologies) {
-        StreamsGroupTopologyValue value = new StreamsGroupTopologyValue();
-        subtopologies.forEach(subtopology -> {
-            List<StreamsGroupTopologyValue.TopicInfo> repartitionSourceTopics = subtopology.repartitionSourceTopics().stream()
-                .map(topicInfo -> {
-                    List<StreamsGroupTopologyValue.TopicConfig> topicConfigs =  topicInfo.topicConfigs() != null ? topicInfo.topicConfigs().stream()
-                        .map(config -> new StreamsGroupTopologyValue.TopicConfig().setKey(config.key()).setValue(config.value()))
-                        .collect(Collectors.toList()) : null;
-                    return new StreamsGroupTopologyValue.TopicInfo().setName(topicInfo.name()).setTopicConfigs(topicConfigs)
-                        .setPartitions(topicInfo.partitions());
-                }).collect(Collectors.toList());
+        return newStreamsGroupTopologyRecord(groupId, convertToStreamsGroupTopologyRecord(subtopologies));
+    }
 
-            List<StreamsGroupTopologyValue.TopicInfo> stateChangelogTopics = subtopology.stateChangelogTopics().stream().map(topicInfo -> {
-                List<StreamsGroupTopologyValue.TopicConfig> topicConfigs = topicInfo.topicConfigs() != null ? topicInfo.topicConfigs().stream()
-                    .map(config -> new StreamsGroupTopologyValue.TopicConfig().setKey(config.key()).setValue(config.value()))
-                    .collect(Collectors.toList()) : null;
-                return new StreamsGroupTopologyValue.TopicInfo().setName(topicInfo.name()).setTopicConfigs(topicConfigs);
-            }).collect(Collectors.toList());
-
-            value.topology().add(new StreamsGroupTopologyValue.Subtopology().setSubtopologyId(subtopology.subtopologyId())
-                .setSourceTopics(subtopology.sourceTopics()).setRepartitionSinkTopics(subtopology.repartitionSinkTopics())
-                .setRepartitionSourceTopics(repartitionSourceTopics).setStateChangelogTopics(stateChangelogTopics));
-        });
+    /**
+     * Creates a StreamsTopology record.
+     *
+     * @param groupId       The consumer group id.
+     * @param value         The encoded topology record value.
+     * @return The record.
+     */
+    public static CoordinatorRecord newStreamsGroupTopologyRecord(String groupId, StreamsGroupTopologyValue value) {
 
         return new CoordinatorRecord(new ApiMessageAndVersion(
             new StreamsGroupTopologyKey()
                 .setGroupId(groupId),
             (short) 21),
             new ApiMessageAndVersion(value, (short) 0));
+    }
+
+    /**
+     * Encodes subtopologies from the initialize RPC to a StreamsTopology record value.
+     *
+     * @param subtopologies The subtopologies in the new topology.
+     * @return The record value.
+     */
+    public static StreamsGroupTopologyValue convertToStreamsGroupTopologyRecord(List<StreamsGroupInitializeRequestData.Subtopology> subtopologies) {
+        StreamsGroupTopologyValue value = new StreamsGroupTopologyValue();
+        subtopologies.forEach(subtopology -> {
+            List<StreamsGroupTopologyValue.TopicInfo> repartitionSourceTopics =
+                subtopology.repartitionSourceTopics().stream()
+                    .map(CoordinatorStreamsRecordHelpers::convertToTopicInfo)
+                    .collect(Collectors.toList());
+
+            List<StreamsGroupTopologyValue.TopicInfo> stateChangelogTopics =
+                subtopology.stateChangelogTopics().stream()
+                    .map(CoordinatorStreamsRecordHelpers::convertToTopicInfo)
+                    .collect(Collectors.toList());
+
+            List<StreamsGroupTopologyValue.CopartitionGroup> copartitionGroups =
+                subtopology.copartitionGroups().stream()
+                    .map(copartitionGroup -> new StreamsGroupTopologyValue.CopartitionGroup()
+                        .setSourceTopics(copartitionGroup.sourceTopics())
+                        .setSourceTopicRegex(copartitionGroup.sourceTopicRegex())
+                        .setRepartitionSourceTopics(copartitionGroup.repartitionSourceTopics())
+                    )
+                    .collect(Collectors.toList());
+
+            value.topology().add(
+                new StreamsGroupTopologyValue.Subtopology()
+                    .setSubtopologyId(subtopology.subtopologyId())
+                    .setSourceTopics(subtopology.sourceTopics())
+                    .setSourceTopicRegex(subtopology.sourceTopicRegex())
+                    .setRepartitionSinkTopics(subtopology.repartitionSinkTopics())
+                    .setRepartitionSourceTopics(repartitionSourceTopics)
+                    .setStateChangelogTopics(stateChangelogTopics)
+                    .setCopartitionGroups(copartitionGroups)
+            );
+        });
+        return value;
+    }
+
+    private static StreamsGroupTopologyValue.TopicInfo convertToTopicInfo(StreamsGroupInitializeRequestData.TopicInfo topicInfo) {
+        List<StreamsGroupTopologyValue.TopicConfig> topicConfigs =  topicInfo.topicConfigs() != null ? topicInfo.topicConfigs().stream()
+            .map(config -> new StreamsGroupTopologyValue.TopicConfig().setKey(config.key()).setValue(config.value()))
+            .collect(Collectors.toList()) : null;
+        return new StreamsGroupTopologyValue.TopicInfo()
+            .setName(topicInfo.name())
+            .setTopicConfigs(topicConfigs)
+            .setPartitions(topicInfo.partitions())
+            .setReplicationFactor(topicInfo.replicationFactor());
     }
 
     /**

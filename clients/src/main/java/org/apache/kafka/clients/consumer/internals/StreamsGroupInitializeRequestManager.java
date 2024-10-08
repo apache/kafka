@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.common.message.StreamsGroupInitializeRequestData;
+import org.apache.kafka.common.message.StreamsGroupInitializeRequestData.CopartitionGroup;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.StreamsGroupInitializeRequest;
 import org.apache.kafka.common.requests.StreamsGroupInitializeResponse;
@@ -27,9 +28,15 @@ import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public class StreamsGroupInitializeRequestManager implements RequestManager {
 
@@ -72,9 +79,8 @@ public class StreamsGroupInitializeRequestManager implements RequestManager {
         streamsGroupInitializeRequestData.setTopologyId(streamsAssignmentInterface.topologyId());
         final List<StreamsGroupInitializeRequestData.Subtopology> topology = getTopologyFromStreams();
         streamsGroupInitializeRequestData.setTopology(topology);
-        final StreamsGroupInitializeRequest.Builder streamsGroupInitializeRequestBuilder = new StreamsGroupInitializeRequest.Builder(
-            streamsGroupInitializeRequestData
-        );
+        final StreamsGroupInitializeRequest.Builder streamsGroupInitializeRequestBuilder =
+            new StreamsGroupInitializeRequest.Builder(streamsGroupInitializeRequestData);
         return new NetworkClientDelegate.UnsentRequest(
             streamsGroupInitializeRequestBuilder,
             coordinatorRequestManager.coordinator()
@@ -94,11 +100,60 @@ public class StreamsGroupInitializeRequestManager implements RequestManager {
                                                                                            final StreamsAssignmentInterface.Subtopology subtopology) {
         final StreamsGroupInitializeRequestData.Subtopology subtopologyData = new StreamsGroupInitializeRequestData.Subtopology();
         subtopologyData.setSubtopologyId(subtopologyName);
-        subtopologyData.setSourceTopics(new ArrayList<>(subtopology.sourceTopics));
-        subtopologyData.setRepartitionSinkTopics(new ArrayList<>(subtopology.sinkTopics));
+        ArrayList<String> sortedSourceTopics = new ArrayList<>(subtopology.sourceTopics);
+        Collections.sort(sortedSourceTopics);
+        subtopologyData.setSourceTopics(sortedSourceTopics);
+        // TODO: We should only encode the repartition sink topics here.
+        ArrayList<String> sortedSinkTopics = new ArrayList<>(subtopology.sinkTopics);
+        Collections.sort(sortedSinkTopics);
+        subtopologyData.setRepartitionSinkTopics(sortedSinkTopics);
         subtopologyData.setRepartitionSourceTopics(getRepartitionTopicsInfoFromStreams(subtopology));
         subtopologyData.setStateChangelogTopics(getChangelogTopicsInfoFromStreams(subtopology));
+        subtopologyData.setCopartitionGroups(
+            getCopartitionGroupsFromStreams(subtopology.copartitionGroups, subtopologyData));
         return subtopologyData;
+    }
+
+    private static List<CopartitionGroup> getCopartitionGroupsFromStreams(
+        final Collection<Set<String>> copartitionGroups,
+        final StreamsGroupInitializeRequestData.Subtopology subtopologyData) {
+
+        final Map<String, Short> sourceTopicsMap =
+            IntStream.range(0, subtopologyData.sourceTopics().size())
+                .boxed()
+                .collect(Collectors.toMap(subtopologyData.sourceTopics()::get, Integer::shortValue));
+
+        final Map<String, Short> repartitionSourceTopics =
+            IntStream.range(0, subtopologyData.repartitionSourceTopics().size())
+                .boxed()
+                .collect(
+                    Collectors.toMap(x -> subtopologyData.repartitionSourceTopics().get(x).name(),
+                        Integer::shortValue));
+
+        return copartitionGroups.stream()
+            .map(x -> getCopartitionGroupFromStreams(x, sourceTopicsMap, repartitionSourceTopics))
+            .collect(Collectors.toList());
+    }
+
+    private static CopartitionGroup getCopartitionGroupFromStreams(
+        final Set<String> topicNames,
+        final Map<String, Short> sourceTopicsMap,
+        final Map<String, Short> repartitionSourceTopics) {
+        CopartitionGroup copartitionGroup = new CopartitionGroup();
+
+        topicNames.forEach(topicName -> {
+            if (sourceTopicsMap.containsKey(topicName)) {
+                copartitionGroup.sourceTopics().add(sourceTopicsMap.get(topicName));
+            } else if (repartitionSourceTopics.containsKey(topicName)) {
+                copartitionGroup.repartitionSourceTopics()
+                    .add(repartitionSourceTopics.get(topicName));
+            } else {
+                throw new IllegalStateException(
+                    "Source topic not found in subtopology: " + topicName);
+            }
+        });
+
+        return copartitionGroup;
     }
 
     private static List<StreamsGroupInitializeRequestData.TopicInfo> getRepartitionTopicsInfoFromStreams(final StreamsAssignmentInterface.Subtopology subtopologyDataFromStreams) {
@@ -107,8 +162,10 @@ public class StreamsGroupInitializeRequestManager implements RequestManager {
             final StreamsGroupInitializeRequestData.TopicInfo repartitionTopicInfo = new StreamsGroupInitializeRequestData.TopicInfo();
             repartitionTopicInfo.setName(repartitionTopic.getKey());
             repartitionTopic.getValue().numPartitions.ifPresent(repartitionTopicInfo::setPartitions);
+            repartitionTopic.getValue().replicationFactor.ifPresent(repartitionTopicInfo::setReplicationFactor);
             repartitionTopicsInfo.add(repartitionTopicInfo);
         }
+        repartitionTopicsInfo.sort(Comparator.comparing(StreamsGroupInitializeRequestData.TopicInfo::name));
         return repartitionTopicsInfo;
     }
 
@@ -117,11 +174,13 @@ public class StreamsGroupInitializeRequestManager implements RequestManager {
         for (final Map.Entry<String, StreamsAssignmentInterface.TopicInfo> changelogTopic : subtopologyDataFromStreams.stateChangelogTopics.entrySet()) {
             final StreamsGroupInitializeRequestData.TopicInfo changelogTopicInfo = new StreamsGroupInitializeRequestData.TopicInfo();
             changelogTopicInfo.setName(changelogTopic.getKey());
+            changelogTopic.getValue().replicationFactor.ifPresent(changelogTopicInfo::setReplicationFactor);
             changelogTopicsInfo.add(changelogTopicInfo);
         }
+        changelogTopicsInfo.sort(Comparator.comparing(StreamsGroupInitializeRequestData.TopicInfo::name));
         return changelogTopicsInfo;
     }
-    
+
     private void onResponse(final ClientResponse response, final Throwable exception) {
         if (exception != null) {
             // todo: handle error

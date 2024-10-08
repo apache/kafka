@@ -205,6 +205,7 @@ import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CONSUMER_GROUP_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.STREAMS_GROUP_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember.hasAssignedPartitionsChanged;
+import static org.apache.kafka.coordinator.group.streams.CoordinatorStreamsRecordHelpers.convertToStreamsGroupTopologyRecord;
 import static org.apache.kafka.coordinator.group.streams.CoordinatorStreamsRecordHelpers.newStreamsGroupCurrentAssignmentRecord;
 import static org.apache.kafka.coordinator.group.streams.CoordinatorStreamsRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.streams.CoordinatorStreamsRecordHelpers.newStreamsGroupEpochRecord;
@@ -2622,6 +2623,8 @@ public class GroupMetadataManager {
             }
         }
 
+        StreamsGroupTopologyValue recordValue = convertToStreamsGroupTopologyRecord(subtopologies);
+
         cancelStreamsGroupTopologyInitializationTimeout(groupId, topologyId);
 
         if (!missingTopics.isEmpty()) {
@@ -2632,9 +2635,12 @@ public class GroupMetadataManager {
 
             return new CoordinatorResult<>(records, response);
         } else {
-            records.add(newStreamsGroupTopologyRecord(groupId, subtopologies));
+            records.add(newStreamsGroupTopologyRecord(groupId, recordValue));
 
-            final StreamsTopology topology = new StreamsTopology(topologyId, subtopologies);
+            final Map<String, StreamsGroupTopologyValue.Subtopology> subtopologyMap = recordValue.topology().stream()
+                .collect(Collectors.toMap(StreamsGroupTopologyValue.Subtopology::subtopologyId, x -> x));
+
+            final StreamsTopology topology = new StreamsTopology(topologyId, subtopologyMap);
 
             computeFirstTargetAssignmentAfterTopologyInitialization(group, records, topology);
 
