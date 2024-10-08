@@ -19,6 +19,7 @@ package kafka.server
 
 import kafka.server.metadata.{FeatureCacheUpdateException, ZkMetadataCache}
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
+import org.apache.kafka.server.BrokerFeatures
 import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
@@ -40,8 +41,7 @@ class FinalizedFeatureCacheTest {
   def testUpdateOrThrowFailedDueToInvalidEpoch(): Unit = {
     val supportedFeatures = Map[String, SupportedVersionRange](
       "feature_1" -> new SupportedVersionRange(1, 4))
-    val brokerFeatures = BrokerFeatures.createDefault(true)
-    brokerFeatures.setSupportedFeatures(Features.supportedFeatures(supportedFeatures.asJava))
+    val brokerFeatures = BrokerFeatures.createDefault(true, Features.supportedFeatures(supportedFeatures.asJava))
 
     val finalizedFeatures = Map[String, Short]("feature_1" -> 4)
 
@@ -63,8 +63,7 @@ class FinalizedFeatureCacheTest {
   def testUpdateOrThrowFailedDueToInvalidFeatures(): Unit = {
     val supportedFeatures =
       Map[String, SupportedVersionRange]("feature_1" -> new SupportedVersionRange(1, 1))
-    val brokerFeatures = BrokerFeatures.createDefault(true)
-    brokerFeatures.setSupportedFeatures(Features.supportedFeatures(supportedFeatures.asJava))
+    val brokerFeatures = BrokerFeatures.createDefault(true, Features.supportedFeatures(supportedFeatures.asJava))
 
     val finalizedFeatures = Map[String, Short]("feature_1" -> 2)
 
@@ -79,8 +78,7 @@ class FinalizedFeatureCacheTest {
   def testUpdateOrThrowSuccess(): Unit = {
     val supportedFeatures =
       Map[String, SupportedVersionRange]("feature_1" -> new SupportedVersionRange(1, 4))
-    val brokerFeatures = BrokerFeatures.createDefault(true)
-    brokerFeatures.setSupportedFeatures(Features.supportedFeatures(supportedFeatures.asJava))
+    val brokerFeatures = BrokerFeatures.createDefault(true, Features.supportedFeatures(supportedFeatures.asJava))
 
     val finalizedFeatures = Map[String, Short]("feature_1" -> 3)
 
@@ -95,8 +93,7 @@ class FinalizedFeatureCacheTest {
   def testClear(): Unit = {
     val supportedFeatures =
       Map[String, SupportedVersionRange]("feature_1" -> new SupportedVersionRange(1, 4))
-    val brokerFeatures = BrokerFeatures.createDefault(true)
-    brokerFeatures.setSupportedFeatures(Features.supportedFeatures(supportedFeatures.asJava))
+    val brokerFeatures = BrokerFeatures.createDefault(true, Features.supportedFeatures(supportedFeatures.asJava))
 
     val finalizedFeatures = Map[String, Short]("feature_1" -> 3)
 

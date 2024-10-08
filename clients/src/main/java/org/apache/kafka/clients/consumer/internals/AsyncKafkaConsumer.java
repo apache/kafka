@@ -77,6 +77,7 @@ import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.requests.JoinGroupRequest;
@@ -640,6 +641,16 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 )
             )
         );
+    }
+
+    @Override
+    public void registerMetricForSubscription(KafkaMetric metric) {
+        throw new UnsupportedOperationException("not implemented");
+    }
+
+    @Override
+    public void unregisterMetricFromSubscription(KafkaMetric metric) {
+        throw new UnsupportedOperationException("not implemented");
     }
 
     /**
@@ -1494,13 +1505,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     oldGroupMetadata.groupInstanceId()
                 ))
         );
-    }
-
-    @Override
-    @Deprecated
-    public ConsumerRecords<K, V> poll(final long timeoutMs) {
-        throw new UnsupportedOperationException("Consumer.poll(long) is not supported when \"group.protocol\" is \"consumer\". " +
-             "This method is deprecated and will be removed in the next major release.");
     }
 
     // Visible for testing

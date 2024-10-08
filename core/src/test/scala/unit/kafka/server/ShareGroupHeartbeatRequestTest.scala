@@ -580,8 +580,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
       new ClusterConfigProperty(key = "group.share.heartbeat.interval.ms", value = "500"),
       new ClusterConfigProperty(key = "group.share.min.heartbeat.interval.ms", value = "500"),
-      new ClusterConfigProperty(key = "group.share.session.timeout.ms", value = "500"),
-      new ClusterConfigProperty(key = "group.share.min.session.timeout.ms", value = "500")
+      new ClusterConfigProperty(key = "group.share.session.timeout.ms", value = "501"),
+      new ClusterConfigProperty(key = "group.share.min.session.timeout.ms", value = "501")
     ))
   def testMemberJoiningAndExpiring(): Unit = {
     val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
