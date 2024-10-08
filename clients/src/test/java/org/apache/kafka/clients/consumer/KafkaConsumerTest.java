@@ -3444,7 +3444,6 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
             "Try tuning default.api.timeout.ms larger to relax the threshold.", timeoutException.getMessage());
     }
 
-    @SuppressWarnings("deprecation")
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class)
     public void testPreventMultiThread(GroupProtocol groupProtocol) throws InterruptedException {
@@ -3472,7 +3471,7 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
             assertThrows(ConcurrentModificationException.class, () -> consumer.seekToBeginning(Collections.singleton(tp)));
             assertThrows(ConcurrentModificationException.class, () -> consumer.seekToEnd(Collections.singleton(tp)));
             assertThrows(ConcurrentModificationException.class, () -> consumer.position(tp));
-            assertThrows(ConcurrentModificationException.class, () -> consumer.committed(tp));
+            assertThrows(ConcurrentModificationException.class, () -> consumer.committed(Collections.singleton(tp)));
             assertThrows(ConcurrentModificationException.class, () -> consumer.listTopics());
             assertThrows(ConcurrentModificationException.class, () -> consumer.paused());
             assertThrows(ConcurrentModificationException.class, () -> consumer.resume(Collections.emptyList()));
