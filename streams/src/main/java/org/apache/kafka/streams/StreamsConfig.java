@@ -1227,6 +1227,13 @@ public class StreamsConfig extends AbstractConfig {
         CONSUMER_EOS_OVERRIDES = Collections.unmodifiableMap(tempConsumerDefaultOverrides);
     }
 
+    private static final Map<String, Object> ADMIN_CLIENT_OVERRIDES;
+    static {
+        final Map<String, Object> tempAdminClientDefaultOverrides = new HashMap<>();
+        tempAdminClientDefaultOverrides.put(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, "true");
+        ADMIN_CLIENT_OVERRIDES = Collections.unmodifiableMap(tempAdminClientDefaultOverrides);
+    }
+
     public static class InternalConfig {
         // This is settable in the main Streams config, but it's a private API for now
         public static final String INTERNAL_TASK_ASSIGNOR_CLASS = "internal.task.assignor.class";
@@ -1434,6 +1441,7 @@ public class StreamsConfig extends AbstractConfig {
             verifyEOSTransactionTimeoutCompatibility();
         }
         verifyTopologyOptimizationConfigs(getString(TOPOLOGY_OPTIMIZATION_CONFIG));
+        verifyClientTelemetryConfigs();
     }
 
     private void verifyEOSTransactionTimeoutCompatibility() {
@@ -1456,6 +1464,43 @@ public class StreamsConfig extends AbstractConfig {
                 transactionTimeout,
                 commitInterval
             ));
+        }
+    }
+
+    private void verifyClientTelemetryConfigs() {
+        final String mainConsumerMetricsPushKey = mainConsumerPrefix(ENABLE_METRICS_PUSH_CONFIG);
+        final String adminClientMetricsPushKey = adminClientPrefix(ENABLE_METRICS_PUSH_CONFIG);
+        final boolean streamTelemetryEnabled =
+                !originals().containsKey(ENABLE_METRICS_PUSH_CONFIG) || (boolean) Objects.requireNonNull(
+                        parseType(ENABLE_METRICS_PUSH_CONFIG, originals().get(ENABLE_METRICS_PUSH_CONFIG), Type.BOOLEAN),
+                        "Can't parse " + ENABLE_METRICS_PUSH_CONFIG + " because it's null");
+
+        final boolean mainConsumerMetricsDisabled =
+                !originals().containsKey(mainConsumerMetricsPushKey) || (boolean) Objects.requireNonNull(
+                parseType(mainConsumerMetricsPushKey, originals().get(mainConsumerMetricsPushKey), Type.BOOLEAN),
+                "Can't parse " + mainConsumerMetricsPushKey + " because it's null");
+
+        final boolean adminMetricsEnabled =
+                !originals().containsKey(adminClientMetricsPushKey) || (boolean) Objects.requireNonNull(
+                        parseType(adminClientMetricsPushKey, originals().get(adminClientMetricsPushKey), Type.BOOLEAN),
+                        "Can't parse " + adminClientMetricsPushKey + " because it's null");
+
+        final String baseMetricsMisconfigurationMessage = "KafkaStreams has metrics push enabled" +
+                " but the %s metrics push is disabled. Enable " +
+                " metrics push for the %s";
+
+        if (streamTelemetryEnabled) {
+            if (!mainConsumerMetricsDisabled && !adminMetricsEnabled) {
+                throw new ConfigException(String.format(baseMetricsMisconfigurationMessage, "main consumer and admin client", "main consumer and the admin client"));
+            }
+
+            if (!mainConsumerMetricsDisabled) {
+                throw new ConfigException(String.format(baseMetricsMisconfigurationMessage, "main consumer", "main consumer"));
+            }
+
+            if (!adminMetricsEnabled) {
+                throw new ConfigException(String.format(baseMetricsMisconfigurationMessage, "admin client", "admin client"));
+            }
         }
     }
 
@@ -1797,7 +1842,7 @@ public class StreamsConfig extends AbstractConfig {
     public Map<String, Object> getAdminConfigs(final String clientId) {
         final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(ADMIN_CLIENT_PREFIX, AdminClientConfig.configNames());
 
-        final Map<String, Object> props = new HashMap<>();
+        final Map<String, Object> props = new HashMap<>(ADMIN_CLIENT_OVERRIDES);
         props.putAll(getClientCustomProps());
         props.putAll(clientProvidedProps);
 
