@@ -455,9 +455,9 @@ object ConfigCommand extends Logging {
     }
 
     if (entityNameHead.nonEmpty)
-      println(s"Completed updating config for ${entityTypeHead.dropRight(1)} $entityNameHead.")
+      System.out.println(s"Completed updating config for ${entityTypeHead.dropRight(1)} $entityNameHead.")
     else
-      println(s"Completed updating default config for $entityTypeHead in the cluster.")
+      System.out.println(s"Completed updating default config for $entityTypeHead in the cluster.")
   }
 
   private def alterUserScramCredentialConfigs(adminClient: Admin, user: String, scramConfigsToAddMap: Map[String, ConfigEntry], scramConfigsToDelete: Seq[String]) = {
