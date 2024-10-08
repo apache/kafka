@@ -3473,7 +3473,6 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
             assertThrows(ConcurrentModificationException.class, () -> consumer.seekToEnd(Collections.singleton(tp)));
             assertThrows(ConcurrentModificationException.class, () -> consumer.position(tp));
             assertThrows(ConcurrentModificationException.class, () -> consumer.committed(tp));
-//            assertThrows(ConcurrentModificationException.class, () -> consumer.metrics());
             assertThrows(ConcurrentModificationException.class, () -> consumer.listTopics());
             assertThrows(ConcurrentModificationException.class, () -> consumer.paused());
             assertThrows(ConcurrentModificationException.class, () -> consumer.resume(Collections.emptyList()));
@@ -3481,8 +3480,6 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
             assertThrows(ConcurrentModificationException.class, () -> consumer.beginningOffsets(Collections.emptyList(), Duration.ZERO));
             assertThrows(ConcurrentModificationException.class, () -> consumer.endOffsets(Collections.emptyList(), Duration.ZERO));
             assertThrows(ConcurrentModificationException.class, () -> consumer.currentLag(tp));
-//            assertThrows(ConcurrentModificationException.class, () -> consumer.groupMetadata());
-//            assertThrows(ConcurrentModificationException.class, () -> consumer.enforceRebalance());
             client.wakeup();
             consumer.wakeup();
         } finally {
