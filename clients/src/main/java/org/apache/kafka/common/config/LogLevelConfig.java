@@ -22,12 +22,18 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * This class holds definitions for log level configurations related to Kafka's application logging. See KIP-412 for additional information
+ * This class holds definitions for log level configurations related to Kafka's application logging.
+ * See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-412%3A+Extend+Admin+API+to+support+dynamic+application+log+levels"></a>KIP-412 and <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-817%3A+Fix+inconsistency+in+dynamic+application+log+levels">KIP-817</a> for additional information.
  */
 public class LogLevelConfig {
     /*
      * NOTE: DO NOT CHANGE EITHER CONFIG NAMES AS THESE ARE PART OF THE PUBLIC API AND CHANGE WILL BREAK USER CODE.
      */
+
+    /**
+     * The <code>OFF</code> level turns off the logging.
+     */
+    public static final String OFF_LOG_LEVEL = "OFF";
 
     /**
      * The <code>FATAL</code> level designates a very severe error
@@ -64,8 +70,12 @@ public class LogLevelConfig {
      */
     public static final String TRACE_LOG_LEVEL = "TRACE";
 
+    /**
+     * The set of all available log levels, i.e., <code>OFF</code>, <code>FATAL</code>, <code>ERROR</code>
+     * , <code>WARN</code>, <code>INFO</code>, <code>DEBUG</code>, and <code>TRACE</code>.
+     */
     public static final Set<String> VALID_LOG_LEVELS = new HashSet<>(Arrays.asList(
-            FATAL_LOG_LEVEL, ERROR_LOG_LEVEL, WARN_LOG_LEVEL,
+        OFF_LOG_LEVEL, FATAL_LOG_LEVEL, ERROR_LOG_LEVEL, WARN_LOG_LEVEL,
             INFO_LOG_LEVEL, DEBUG_LOG_LEVEL, TRACE_LOG_LEVEL
     ));
 }
