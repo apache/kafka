@@ -169,12 +169,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
-        <!-- A spurious null check after inlining by the scalac optimizer confuses spotBugs -->
-        <Class name="kafka.tools.StateChangeLogMerger$"/>
-        <Bug pattern="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE"/>
-    </Match>
-
-    <Match>
         <Or>
             <!-- Unboxing to Int to make scalac happy makes spotBugs unhappy -->
             <Class name="kafka.tools.ConsoleConsumer$ConsumerConfig"/>

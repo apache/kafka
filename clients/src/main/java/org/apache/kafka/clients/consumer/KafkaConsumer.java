@@ -797,45 +797,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * consumed offset can be manually set through {@link #seek(TopicPartition, long)} or automatically set as the last committed
      * offset for the subscribed list of partitions
      *
-     *
-     * @param timeoutMs The time, in milliseconds, spent waiting in poll if data is not available in the buffer.
-     *            If 0, returns immediately with any records that are available currently in the buffer, else returns empty.
-     *            Must not be negative.
-     * @return map of topic to records since the last fetch for the subscribed list of topics and partitions
-     *
-     * @throws org.apache.kafka.clients.consumer.InvalidOffsetException if the offset for a partition or set of
-     *             partitions is undefined or out of range and no offset reset policy has been configured
-     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
-     *             function is called
-     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
-     *             this function is called
-     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
-     * @throws org.apache.kafka.common.errors.AuthorizationException if caller lacks Read access to any of the subscribed
-     *             topics or to the configured groupId. See the exception for more details
-     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. invalid groupId or
-     *             session timeout, errors deserializing key/value pairs, or any new error cases in future versions)
-     * @throws java.lang.IllegalArgumentException if the timeout value is negative
-     * @throws java.lang.IllegalStateException if the consumer is not subscribed to any topics or manually assigned any
-     *             partitions to consume from
-     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
-     *
-     * @deprecated Since 2.0. Use {@link #poll(Duration)}, which does not block beyond the timeout awaiting partition
-     *             assignment. See <a href="https://cwiki.apache.org/confluence/x/5kiHB">KIP-266</a> for more information.
-     */
-    @Deprecated
-    @Override
-    public ConsumerRecords<K, V> poll(final long timeoutMs) {
-        return delegate.poll(timeoutMs);
-    }
-
-    /**
-     * Fetch data for the topics or partitions specified using one of the subscribe/assign APIs. It is an error to not have
-     * subscribed to any topics or partitions before polling for data.
-     * <p>
-     * On each poll, consumer will try to use the last consumed offset as the starting offset and fetch sequentially. The last
-     * consumed offset can be manually set through {@link #seek(TopicPartition, long)} or automatically set as the last committed
-     * offset for the subscribed list of partitions
-     *
      * <p>
      * This method returns immediately if there are records available or if the position advances past control records
      * or aborted transactions when isolation.level=read_committed.
