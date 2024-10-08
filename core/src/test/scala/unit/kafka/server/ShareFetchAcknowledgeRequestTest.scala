@@ -284,15 +284,15 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
   @ClusterTests(
     Array(
-//      new ClusterTest(
-//        serverProperties = Array(
-//          new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer,share"),
-//          new ClusterConfigProperty(key = "group.share.enable", value = "true"),
-//          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-//          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
-//        ),
-//        brokers = 3
-//      ),
+      new ClusterTest(
+        serverProperties = Array(
+          new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer,share"),
+          new ClusterConfigProperty(key = "group.share.enable", value = "true"),
+          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+        ),
+        brokers = 3
+      ),
       new ClusterTest(
         serverProperties = Array(
           new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer,share"),
