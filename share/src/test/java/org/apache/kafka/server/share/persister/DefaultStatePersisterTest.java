@@ -50,15 +50,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.when;
 
 class DefaultStatePersisterTest {
-
     private static final KafkaClient CLIENT = mock(KafkaClient.class);
     private static final Time MOCK_TIME = new MockTime();
     private static final Timer MOCK_TIMER = new MockTimer();
-    private static final Node MOCK_NODE = mock(Node.class);
     private static final ShareCoordinatorMetadataCacheHelper CACHE_HELPER = mock(ShareCoordinatorMetadataCacheHelper.class);
 
     private static final String HOST = "localhost";
@@ -69,11 +65,25 @@ class DefaultStatePersisterTest {
         private KafkaClient client = CLIENT;
         private Time time = MOCK_TIME;
         private Timer timer = MOCK_TIMER;
-        private Node node = MOCK_NODE;
         private ShareCoordinatorMetadataCacheHelper cacheHelper = CACHE_HELPER;
 
         private DefaultStatePersisterBuilder withKafkaClient(KafkaClient client) {
             this.client = client;
+            return this;
+        }
+
+        private DefaultStatePersisterBuilder withCacheHelper(ShareCoordinatorMetadataCacheHelper cacheHelper) {
+            this.cacheHelper = cacheHelper;
+            return this;
+        }
+
+        private DefaultStatePersisterBuilder withTime(Time time) {
+            this.time = time;
+            return this;
+        }
+
+        private DefaultStatePersisterBuilder withTimer(Timer timer) {
+            this.timer = timer;
             return this;
         }
 
@@ -82,11 +92,8 @@ class DefaultStatePersisterTest {
         }
 
         public DefaultStatePersister build() {
-            Persister defaultStatePersister = spy(DefaultStatePersister.instance());
-            ((DefaultStatePersister) defaultStatePersister).configure(client, cacheHelper);
-            when(((DefaultStatePersister) defaultStatePersister).time()).thenReturn(MOCK_TIME);
-            when(((DefaultStatePersister) defaultStatePersister).timer()).thenReturn(MOCK_TIMER);
-            return (DefaultStatePersister) defaultStatePersister;
+            PersisterStateManager persisterStateManager = new PersisterStateManager(client, cacheHelper, time, timer);
+            return new DefaultStatePersister(persisterStateManager);
         }
     }
 
@@ -330,8 +337,11 @@ class DefaultStatePersisterTest {
             new WriteShareGroupStateResponse(WriteShareGroupStateResponse.toResponseData(topicId2, partition2)),
             coordinatorNode2);
 
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getDefaultCacheHelper(suppliedNode);
+
         DefaultStatePersister defaultStatePersister = DefaultStatePersisterBuilder.builder()
             .withKafkaClient(client)
+            .withCacheHelper(cacheHelper)
             .build();
 
         WriteShareGroupStateParameters request = WriteShareGroupStateParameters.from(
@@ -491,8 +501,11 @@ class DefaultStatePersisterTest {
                         .setDeliveryState((byte) 0)))),
             coordinatorNode2);
 
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getDefaultCacheHelper(suppliedNode);
+
         DefaultStatePersister defaultStatePersister = DefaultStatePersisterBuilder.builder()
             .withKafkaClient(client)
+            .withCacheHelper(cacheHelper)
             .build();
 
         ReadShareGroupStateParameters request = ReadShareGroupStateParameters.from(

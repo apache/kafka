@@ -165,17 +165,16 @@ public class PersisterStateManager {
     }
 
     public void start() {
-        if (!isStarted.get()) {
+        if (isStarted.compareAndSet(false, true)) {
             this.sender.start();
             isStarted.set(true);
         }
     }
 
     public void stop() throws Exception {
-        if (isStarted.get()) {
+        if (isStarted.compareAndSet(true, false)) {
             this.sender.shutdown();
             Utils.closeQuietly(this.timer, "PersisterStateManager timer");
-            isStarted.set(false);
         }
     }
 

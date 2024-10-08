@@ -17,15 +17,10 @@
 
 package org.apache.kafka.server.share.persister;
 
-import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ReadShareGroupStateResponse;
 import org.apache.kafka.common.requests.WriteShareGroupStateResponse;
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.server.util.timer.SystemTimer;
-import org.apache.kafka.server.util.timer.SystemTimerReaper;
-import org.apache.kafka.server.util.timer.Timer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,47 +41,13 @@ import java.util.stream.Collectors;
  * which is responsible for persisting the share-partition state.
  */
 public class DefaultStatePersister implements Persister {
-    private PersisterStateManager stateManager;
-    private Timer timer;
+    private final PersisterStateManager stateManager;
 
     private static final Logger log = LoggerFactory.getLogger(DefaultStatePersister.class);
 
-    private DefaultStatePersister() {
-    }
-
-    public void configure(
-        KafkaClient client,
-        ShareCoordinatorMetadataCacheHelper cacheHelper) {
-        stateManager = new PersisterStateManager(
-            client,
-            cacheHelper,
-            time(),
-            timer()
-        );
-
-        stateManager.start();
-    }
-
-    // for test visibility
-    Timer timer() {
-        return new SystemTimerReaper(
-            "persister-state-manager-reaper",
-            new SystemTimer("persister")
-        );
-    }
-
-    // for test visibility
-    Time time() {
-        return Time.SYSTEM;
-    }
-
-    // avoid double check locking - safer, neater
-    private static final class InstanceHolder {
-        static final Persister INSTANCE = new DefaultStatePersister();
-    }
-
-    public static Persister instance() {
-        return InstanceHolder.INSTANCE;
+    public DefaultStatePersister(PersisterStateManager stateManager) {
+        this.stateManager = stateManager;
+        this.stateManager.start();
     }
 
     @Override

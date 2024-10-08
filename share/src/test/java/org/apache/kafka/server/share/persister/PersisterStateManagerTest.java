@@ -93,6 +93,11 @@ class PersisterStateManagerTest {
             return this;
         }
 
+        private PersisterStateManagerBuilder withTimer(Timer timer) {
+            this.timer = timer;
+            return this;
+        }
+
         public static PersisterStateManagerBuilder builder() {
             return new PersisterStateManagerBuilder();
         }

@@ -47,7 +47,7 @@ import org.apache.kafka.server.{AssignmentsManager, BrokerFeatures, ClientMetric
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, TopicIdPartition}
 import org.apache.kafka.server.config.ConfigType
-import org.apache.kafka.server.share.persister.{DefaultStatePersister, NoOpShareStatePersister, Persister}
+import org.apache.kafka.server.share.persister.{DefaultStatePersister, NoOpShareStatePersister, Persister, PersisterStateManager}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.{ClientMetricsReceiverPlugin, KafkaYammerMetrics}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
@@ -356,28 +356,6 @@ class BrokerServer(
 
       /* create persister */
       persister = createShareStatePersister()
-//      if (config.shareGroupConfig.isShareGroupEnabled) {
-//        // user has specified some persister or
-//        // left out the config completely, so default one is used
-//        if (config.shareGroupConfig.shareGroupPersisterClassName().nonEmpty) {
-//          // create share coordinator
-//          shareCoordinator = createShareCoordinator()
-//          // create default persister
-//          val klass = Utils.loadClass(config.shareGroupConfig.shareGroupPersisterClassName, classOf[Object]).asInstanceOf[Class[Persister]]
-//          persister = klass.getDeclaredMethod("instance")
-//            .invoke(null)
-//            .asInstanceOf[Persister]
-//        } else {
-//          // user has deliberately not specified the persister
-//          // use NoOpPersister and no need to instantiate share coordinator
-//          warn("Share coordinator config is enabled but persister config is empty. Will not create share coordinator.")
-//          persister = NoOpShareStatePersister.instance
-//        }
-//      } else {
-//        // share coordinator not enabled
-//        // use NoOpPersister
-//        persister = NoOpShareStatePersister.instance
-//      }
 
       groupCoordinator = createGroupCoordinator()
 
@@ -703,14 +681,18 @@ class BrokerServer(
       val klass = Utils.loadClass(config.shareGroupConfig.shareGroupPersisterClassName, classOf[Object]).asInstanceOf[Class[Persister]]
 
       if (klass.getName.equals(classOf[DefaultStatePersister].getName)) {
-        val persisterInstance = klass.getDeclaredMethod("instance")
-          .invoke(null)
-          .asInstanceOf[DefaultStatePersister]
-        persisterInstance.configure(
-          NetworkUtils.buildNetworkClient("Persister", config, metrics, Time.SYSTEM, new LogContext(s"[Persister broker=${config.brokerId}]")),
-          new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.get.partitionFor(key), config.interBrokerListenerName)
-        )
-        persisterInstance
+        klass.getConstructor(classOf[PersisterStateManager])
+          .newInstance(
+            new PersisterStateManager(
+              NetworkUtils.buildNetworkClient("Persister", config, metrics, Time.SYSTEM, new LogContext(s"[Persister broker=${config.brokerId}]")),
+              new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.get.partitionFor(key), config.interBrokerListenerName),
+              Time.SYSTEM,
+              new SystemTimerReaper(
+                "persister-state-manager-reaper",
+                new SystemTimer("persister")
+              )
+            )
+          )
       } else if (klass.getName.equals(classOf[NoOpShareStatePersister].getName)) {
         info("Using no op persister")
         NoOpShareStatePersister.instance
