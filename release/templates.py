@@ -167,23 +167,23 @@ Now you should sanity check it before proceeding. All subsequent steps start mak
 
 Some suggested steps:
 
- * Grab the source archive and make sure it compiles: https://home.apache.org/~{apache_id}/kafka-{rc_tag}/kafka-{release_version}-src.tgz
- * Grab one of the binary distros and run the quickstarts against them: https://home.apache.org/~{apache_id}/kafka-{rc_tag}/kafka_2.13-{release_version}.tgz
- * Extract and verify one of the site docs jars: https://home.apache.org/~{apache_id}/kafka-{rc_tag}/kafka_2.13-{release_version}-site-docs.tgz
+ * Grab the source archive and make sure it compiles: https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/kafka-{release_version}-src.tgz
+ * Grab one of the binary distros and run the quickstarts against them: https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/kafka_2.13-{release_version}.tgz
+ * Extract and verify one of the site docs jars: https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/kafka_2.13-{release_version}-site-docs.tgz
  * Build a sample against jars in the staging repo: (TODO: Can we get a temporary URL before "closing" the staged artifacts?)
  * Validate GPG signatures on at least one file:
-      wget https://home.apache.org/~{apache_id}/kafka-{rc_tag}/kafka-{release_version}-src.tgz &&
-      wget https://home.apache.org/~{apache_id}/kafka-{rc_tag}/kafka-{release_version}-src.tgz.asc &&
-      wget https://home.apache.org/~{apache_id}/kafka-{rc_tag}/kafka-{release_version}-src.tgz.md5 &&
-      wget https://home.apache.org/~{apache_id}/kafka-{rc_tag}/kafka-{release_version}-src.tgz.sha1 &&
-      wget https://home.apache.org/~{apache_id}/kafka-{rc_tag}/kafka-{release_version}-src.tgz.sha512 &&
+      wget https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/kafka-{release_version}-src.tgz &&
+      wget https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/kafka-{release_version}-src.tgz.asc &&
+      wget https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/kafka-{release_version}-src.tgz.md5 &&
+      wget https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/kafka-{release_version}-src.tgz.sha1 &&
+      wget https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/kafka-{release_version}-src.tgz.sha512 &&
       gpg --verify kafka-{release_version}-src.tgz.asc kafka-{release_version}-src.tgz &&
       gpg --print-md md5 kafka-{release_version}-src.tgz | diff - kafka-{release_version}-src.tgz.md5 &&
       gpg --print-md sha1 kafka-{release_version}-src.tgz | diff - kafka-{release_version}-src.tgz.sha1 &&
       gpg --print-md sha512 kafka-{release_version}-src.tgz | diff - kafka-{release_version}-src.tgz.sha512 &&
       rm kafka-{release_version}-src.tgz* &&
       echo "OK" || echo "Failed"
- * Validate the javadocs look ok. They are at https://home.apache.org/~{apache_id}/kafka-{rc_tag}/javadoc/
+ * Validate the javadocs look ok. They are at https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/javadoc/
 
 *******************************************************************************************************************************************************
 """
@@ -201,7 +201,7 @@ This is the first candidate for release of Apache Kafka {release_version}.
 <DESCRIPTION OF MAJOR CHANGES, INCLUDE INDICATION OF MAJOR/MINOR RELEASE>
 
 Release notes for the {release_version} release:
-https://home.apache.org/~{apache_id}/kafka-{rc_tag}/RELEASE_NOTES.html
+https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/RELEASE_NOTES.html
 
 *** Please download, test and vote by <VOTING DEADLINE, e.g. Monday, March 28, 9am PT>
 <THE RELEASE POLICY (https://www.apache.org/legal/release-policy.html#release-approval) REQUIRES VOTES TO BE OPEN FOR MINIMUM OF 3 DAYS THEREFORE VOTING DEADLINE SHOULD BE AT LEAST 72 HOURS FROM THE TIME THIS EMAIL IS SENT.>
@@ -210,7 +210,7 @@ Kafka's KEYS file containing PGP keys we use to sign the release:
 https://kafka.apache.org/KEYS
 
 * Release artifacts to be voted upon (source and binary):
-https://home.apache.org/~{apache_id}/kafka-{rc_tag}/
+https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/
 
 <USE docker/README.md FOR STEPS TO CREATE RELEASE CANDIDATE DOCKER IMAGE>
 * Docker release artifacts to be voted upon:
@@ -221,7 +221,7 @@ apache/kafka-native:{rc_tag}
 https://repository.apache.org/content/groups/staging/org/apache/kafka/
 
 * Javadoc:
-https://home.apache.org/~{apache_id}/kafka-{rc_tag}/javadoc/
+https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/javadoc/
 
 * Tag to be voted upon (off {dev_branch} branch) is the {release_version} tag:
 https://github.com/apache/kafka/releases/tag/{rc_tag}

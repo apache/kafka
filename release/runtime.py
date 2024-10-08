@@ -133,12 +133,12 @@ def cmd(action, cmd_arg, *args, **kwargs):
         try:
             output = execute(cmd_arg, *args, stderr=subprocess.STDOUT, **kwargs)
             print(_prefix("> ", output.strip()))
-            return
+            return True
         except subprocess.CalledProcessError as e:
             print(e.output.decode("utf-8"))
 
             if allow_failure:
-                return
+                return False
 
             retry = confirm("Retry?")
 
