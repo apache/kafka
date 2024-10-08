@@ -23,12 +23,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -64,8 +64,8 @@ public class TimelineHashMapTest {
         TimelineHashMap<Integer, String> map = new TimelineHashMap<>(registry, 1);
         map.put(123, "abc");
         map.put(456, "def");
-        assertTrue(iteratorToList(map.keySet().iterator()).containsAll(asList(123, 456)));
-        assertTrue(iteratorToList(map.values().iterator()).containsAll(asList("abc", "def")));
+        assertTrue(iteratorToList(map.keySet().iterator()).containsAll(Arrays.asList(123, 456)));
+        assertTrue(iteratorToList(map.values().iterator()).containsAll(Arrays.asList("abc", "def")));
         assertTrue(map.containsValue("abc"));
         assertTrue(map.containsKey(456));
         assertFalse(map.isEmpty());
@@ -76,7 +76,7 @@ public class TimelineHashMapTest {
         snapshotValues.add(iter.next().getValue());
         snapshotValues.add(iter.next().getValue());
         assertFalse(iter.hasNext());
-        assertTrue(snapshotValues.containsAll(asList("abc", "def")));
+        assertTrue(snapshotValues.containsAll(Arrays.asList("abc", "def")));
         assertFalse(map.isEmpty(2));
         assertTrue(map.isEmpty());
     }
