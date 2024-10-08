@@ -94,7 +94,7 @@ public class ConfigCommandIntegrationTest {
             "--entity-type", "users",
             "--entity-name", "admin",
             "--alter", "--add-config", "consumer_byte_rate=20000"));
-        String message = captureStandardMsg(false, run(command));
+        String message = captureStandardStream(false, run(command));
         assertEquals("Completed updating config for user admin.", message);
     }
 
@@ -104,14 +104,14 @@ public class ConfigCommandIntegrationTest {
             "--entity-type", "groups",
             "--entity-name", "group",
             "--alter", "--add-config", "consumer.session.timeout.ms=50000"));
-        String message = captureStandardMsg(false, run(command));
+        String message = captureStandardStream(false, run(command));
         assertEquals("Completed updating config for group group.", message);
 
         // Test for the --group alias
         command = Stream.concat(quorumArgs(), Stream.of(
             "--group", "group",
             "--alter", "--add-config", "consumer.session.timeout.ms=50000"));
-        message = captureStandardMsg(false, run(command));
+        message = captureStandardStream(false, run(command));
         assertEquals("Completed updating config for group group.", message);
     }
 
@@ -121,14 +121,14 @@ public class ConfigCommandIntegrationTest {
                 "--entity-type", "client-metrics",
                 "--entity-name", "cm",
                 "--alter", "--add-config", "metrics=org.apache"));
-        String message = captureStandardMsg(false, run(command));
+        String message = captureStandardStream(false, run(command));
         assertEquals("Completed updating config for client-metric cm.", message);
 
         // Test for the --client-metrics alias
         command = Stream.concat(quorumArgs(), Stream.of(
                 "--client-metrics", "cm",
                 "--alter", "--add-config", "metrics=org.apache"));
-        message = captureStandardMsg(false, run(command));
+        message = captureStandardStream(false, run(command));
         assertEquals("Completed updating config for client-metric cm.", message);
     }
 
@@ -305,7 +305,7 @@ public class ConfigCommandIntegrationTest {
             throw new RuntimeException();
         });
 
-        String errOut = captureStandardMsg(true, run(args));
+        String errOut = captureStandardStream(true, run(args));
 
         checkErrOut.accept(errOut);
         assertNotNull(exitStatus.get());
@@ -455,10 +455,6 @@ public class ConfigCommandIntegrationTest {
         return Stream.of(lists).flatMap(List::stream).toArray(String[]::new);
     }
 
-    private String captureStandardMsg(boolean isErr, Runnable runnable) {
-        return captureStandardStream(isErr, runnable);
-    }
-
     private String transferConfigMapToString(Map<String, String> configs) {
         return configs.entrySet()
                 .stream()
@@ -467,7 +463,7 @@ public class ConfigCommandIntegrationTest {
     }
 
     // Copied from ToolsTestUtils.java, can be removed after we move ConfigCommand to tools module
-    private static String captureStandardStream(boolean isErr, Runnable runnable) {
+    static String captureStandardStream(boolean isErr, Runnable runnable) {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         PrintStream currentStream = isErr ? System.err : System.out;
         PrintStream tempStream = new PrintStream(outputStream);
