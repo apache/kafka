@@ -1393,7 +1393,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             } else {
                 // Try to close gracefully.
                 final Timer closeTimer = time.timer(timeout);
-                clientTelemetryReporter.ifPresent(reporter -> reporter.initiateClose(closeTimer.remainingMs()));
+                clientTelemetryReporter.ifPresent(ClientTelemetryReporter::initiateClose);
                 closeTimer.update();
 
                 if (this.sender != null) {

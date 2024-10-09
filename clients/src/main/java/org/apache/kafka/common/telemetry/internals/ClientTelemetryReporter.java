@@ -218,10 +218,10 @@ public class ClientTelemetryReporter implements MetricsReporter {
         telemetryProvider.updateLabels(labels);
     }
 
-    public void initiateClose(long timeoutMs) {
+    public void initiateClose() {
         log.debug("Initiate close of ClientTelemetryReporter");
         try {
-            clientTelemetrySender.initiateClose(timeoutMs);
+            clientTelemetrySender.initiateClose();
         } catch (Exception exception) {
             log.error("Failed to initiate close of client telemetry reporter", exception);
         }
@@ -601,8 +601,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
         }
 
         @Override
-        public void initiateClose(long timeoutMs) {
-            log.debug("initiate close for client telemetry, check if terminal push required. Timeout {} ms.", timeoutMs);
+        public void initiateClose() {
+            log.debug("initiate close for client telemetry, check if terminal push required.");
 
             lock.writeLock().lock();
             try {

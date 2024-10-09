@@ -736,14 +736,14 @@ public class ClientTelemetryReporterTest {
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
 
-        clientTelemetryReporter.initiateClose(60000);
+        clientTelemetryReporter.initiateClose();
         assertEquals(ClientTelemetryState.TERMINATING_PUSH_NEEDED, ((ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter
             .telemetrySender()).state());
     }
 
     @Test
     public void testTelemetryReporterInitiateCloseNoSubscription() {
-        clientTelemetryReporter.initiateClose(60000);
+        clientTelemetryReporter.initiateClose();
         assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, ((ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter
             .telemetrySender()).state());
     }
@@ -756,17 +756,17 @@ public class ClientTelemetryReporterTest {
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.TERMINATING_PUSH_NEEDED));
 
-        clientTelemetryReporter.initiateClose(60000);
+        clientTelemetryReporter.initiateClose();
         assertEquals(ClientTelemetryState.TERMINATING_PUSH_NEEDED, ((ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter
             .telemetrySender()).state());
 
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS));
-        clientTelemetryReporter.initiateClose(60000);
+        clientTelemetryReporter.initiateClose();
         assertEquals(ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS, ((ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter
             .telemetrySender()).state());
 
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.TERMINATED));
-        clientTelemetryReporter.initiateClose(60000);
+        clientTelemetryReporter.initiateClose();
         assertEquals(ClientTelemetryState.TERMINATED, ((ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter
             .telemetrySender()).state());
     }
