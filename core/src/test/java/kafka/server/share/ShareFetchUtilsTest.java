@@ -317,7 +317,6 @@ public class ShareFetchUtilsTest {
         FileRecords.TimestampAndOffset timestampAndOffset = new FileRecords.TimestampAndOffset(100L, 1L, Optional.empty());
         doReturn(new OffsetResultHolder(Option.apply(timestampAndOffset), Option.empty())).when(replicaManager).fetchOffsetForTimestamp(any(TopicPartition.class), anyLong(), any(), any(), anyBoolean());
 
-        when(sp0.nextFetchOffset()).thenReturn((long) 0);
         when(sp0.acquire(anyString(), any(FetchPartitionData.class))).thenReturn(Collections.emptyList());
         doNothing().when(sp0).updateCacheAndOffsets(any(Long.class));
 
@@ -327,8 +326,9 @@ public class ShareFetchUtilsTest {
             new SimpleRecord("2".getBytes(), "v".getBytes()),
             new SimpleRecord(null, "value".getBytes()));
 
+        // When no records are acquired from share partition.
         Map<TopicIdPartition, FetchPartitionData> responseData = Collections.singletonMap(
-            tp0, new FetchPartitionData(Errors.OFFSET_OUT_OF_RANGE, 0L, 0L,
+            tp0, new FetchPartitionData(Errors.NONE, 0L, 0L,
                 records, Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -342,7 +342,21 @@ public class ShareFetchUtilsTest {
         assertTrue(resultData.get(tp0).acquiredRecords().isEmpty());
         assertEquals(Errors.NONE.code(), resultData.get(tp0).errorCode());
 
+        // When fetch partition data has OFFSET_OUT_OF_RANGE error.
+        responseData = Collections.singletonMap(
+            tp0, new FetchPartitionData(Errors.OFFSET_OUT_OF_RANGE, 0L, 0L,
+                records, Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false));
+
+        resultData = ShareFetchUtils.processFetchResponse(shareFetchData, responseData, partitionCacheMap, replicaManager);
+
+        assertEquals(1, resultData.size());
+        assertTrue(resultData.containsKey(tp0));
+        assertEquals(0, resultData.get(tp0).partitionIndex());
+        assertNull(resultData.get(tp0).records());
+        assertTrue(resultData.get(tp0).acquiredRecords().isEmpty());
+        assertEquals(Errors.NONE.code(), resultData.get(tp0).errorCode());
+
         Mockito.verify(sp0, times(1)).updateCacheAndOffsets(any(Long.class));
     }
-
 }

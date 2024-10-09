@@ -45,8 +45,10 @@ import scala.Option;
 public class ShareFetchUtils {
     private static final Logger log = LoggerFactory.getLogger(ShareFetchUtils.class);
 
-    // Process the replica manager fetch response to update share partitions and futures. We acquire the fetched data
-    // from share partitions.
+    /**
+     * Process the replica manager fetch response to create share fetch response. The response is created
+     * by acquiring records from the share partition.
+     */
     static Map<TopicIdPartition, ShareFetchResponseData.PartitionData> processFetchResponse(
             ShareFetchData shareFetchData,
             Map<TopicIdPartition, FetchPartitionData> responseData,
@@ -59,8 +61,7 @@ public class ShareFetchUtils {
             SharePartition sharePartition = partitionCacheMap.get(new SharePartitionKey(
                 shareFetchData.groupId(), topicIdPartition));
             ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
-                .setPartitionIndex(topicIdPartition.partition())
-                .setAcknowledgeErrorCode(Errors.NONE.code());
+                .setPartitionIndex(topicIdPartition.partition());
 
             if (fetchPartitionData.error.code() != Errors.NONE.code()) {
                 partitionData
@@ -88,7 +89,6 @@ public class ShareFetchUtils {
                 if (acquiredRecords.isEmpty()) {
                     partitionData
                         .setRecords(null)
-                        .setErrorCode(Errors.NONE.code())
                         .setAcquiredRecords(Collections.emptyList());
                 } else {
                     partitionData
