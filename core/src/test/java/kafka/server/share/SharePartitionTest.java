@@ -4925,7 +4925,7 @@ public class SharePartitionTest {
         private int acquisitionLockTimeoutMs = 30000;
         private int maxDeliveryCount = MAX_DELIVERY_COUNT;
         private int maxInflightMessages = MAX_IN_FLIGHT_MESSAGES;
-        private Persister persister = NoOpShareStatePersister.instance();
+        private Persister persister = new NoOpShareStatePersister();
         private final DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = Mockito.mock(DelayedOperationPurgatory.class);
 
         private SharePartitionBuilder withMaxInflightMessages(int maxInflightMessages) {
