@@ -92,7 +92,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -1259,16 +1258,28 @@ public class SharePartitionManagerTest {
     public void testCloseShouldCompletePendingFetchRequests() throws Exception {
         String groupId = "grp";
         Uuid memberId = Uuid.randomUuid();
-        FetchParams fetchParams = new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, 0,
+        FetchParams fetchParams = new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, DELAYED_SHARE_FETCH_MAX_WAIT_MS,
             1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty());
         Uuid fooId = Uuid.randomUuid();
         TopicIdPartition tp0 = new TopicIdPartition(fooId, new TopicPartition("foo", 0));
         Map<TopicIdPartition, Integer> partitionMaxBytes = Collections.singletonMap(tp0, PARTITION_MAX_BYTES);
 
-        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder().build();
+        SharePartition sp0 = mock(SharePartition.class);
+        when(sp0.maybeInitialize()).thenReturn(CompletableFuture.completedFuture(null));
+        when(sp0.maybeAcquireFetchLock()).thenReturn(false);
 
-        // Acquire the fetch lock so fetch requests keep waiting in the queue.
-        assertTrue(sharePartitionManager.acquireProcessFetchQueueLock());
+        Map<SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
+        partitionCacheMap.put(new SharePartitionKey(groupId, tp0), sp0);
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
+            "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
+            DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
+
+        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withPartitionCacheMap(partitionCacheMap)
+            .withDelayedShareFetchPurgatory(delayedShareFetchPurgatory)
+            .build();
+
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
             sharePartitionManager.fetchMessages(groupId, memberId.toString(), fetchParams, partitionMaxBytes);
         // Verify that the fetch request is not completed.
@@ -1652,17 +1663,6 @@ public class SharePartitionManagerTest {
         final Time time = new MockTime();
         ReplicaManager replicaManager = mock(ReplicaManager.class);
 
-        ShareFetchData shareFetchData1 = new ShareFetchData(
-                fetchParams, groupId, memberId, new CompletableFuture<>(), Collections.emptyMap());
-        ShareFetchData shareFetchData2 = new ShareFetchData(
-            fetchParams, groupId, memberId, new CompletableFuture<>(), partitionMaxBytes);
-
-        ConcurrentLinkedQueue<ShareFetchData> fetchQueue = new ConcurrentLinkedQueue<>();
-        // First request added to fetch queue is empty i.e. no topic partitions to fetch.
-        fetchQueue.add(shareFetchData1);
-        // Second request added to fetch queue has a topic partition to fetch.
-        fetchQueue.add(shareFetchData2);
-
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
                 "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
                 DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
@@ -1672,11 +1672,12 @@ public class SharePartitionManagerTest {
             .withTime(time)
             .withTimer(mockTimer)
             .withDelayedShareFetchPurgatory(delayedShareFetchPurgatory)
-            .withFetchQueue(fetchQueue).build();
+            .build();
 
         doAnswer(invocation -> buildLogReadResult(partitionMaxBytes.keySet())).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
-        sharePartitionManager.maybeProcessFetchQueue();
+        sharePartitionManager.fetchMessages(groupId, memberId, fetchParams, Collections.emptyMap());
+        sharePartitionManager.fetchMessages(groupId, memberId, fetchParams, partitionMaxBytes);
 
         // Verifying that the second item in the fetchQueue is processed, even though the first item is empty.
         verify(replicaManager, times(1)).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
@@ -2296,7 +2297,6 @@ public class SharePartitionManagerTest {
         private Persister persister = NoOpShareStatePersister.getInstance();
         private Timer timer = new MockTimer();
         private Metrics metrics = new Metrics();
-        private ConcurrentLinkedQueue<ShareFetchData> fetchQueue = new ConcurrentLinkedQueue<>();
         private DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = mock(DelayedOperationPurgatory.class);
         private final DelayedActionQueue delayedActionsQueue = mock(DelayedActionQueue.class);
 
@@ -2335,12 +2335,7 @@ public class SharePartitionManagerTest {
             return this;
         }
 
-        private SharePartitionManagerBuilder withFetchQueue(ConcurrentLinkedQueue<ShareFetchData> fetchQueue) {
-            this.fetchQueue = fetchQueue;
-            return this;
-        }
-
-        private SharePartitionManagerBuilder withDelayedShareFetchPurgatory(DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory) {
+        SharePartitionManagerBuilder withDelayedShareFetchPurgatory(DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory) {
             this.delayedShareFetchPurgatory = delayedShareFetchPurgatory;
             return this;
         }
@@ -2354,7 +2349,6 @@ public class SharePartitionManagerTest {
                     time,
                     cache,
                     partitionCacheMap,
-                    fetchQueue,
                     RECORD_LOCK_DURATION_MS,
                     timer,
                     MAX_DELIVERY_COUNT,
