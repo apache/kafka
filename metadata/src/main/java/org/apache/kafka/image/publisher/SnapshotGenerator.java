@@ -244,7 +244,7 @@ public class SnapshotGenerator implements MetadataPublisher {
             if (eventQueue.isEmpty()) {
                 if (manifest.provenance().isOffsetBatchAligned()) {
                     scheduleEmit("we have replayed at least " + maxBytesSinceLastSnapshot +
-                            " bytes", newImage);
+                        " bytes", newImage);
                 } else if (log.isDebugEnabled()) {
                     log.debug("Not scheduling snapshot because last contained offset is not aligned to a batch boundary.");
                 }
@@ -256,7 +256,7 @@ public class SnapshotGenerator implements MetadataPublisher {
             if (eventQueue.isEmpty()) {
                 if (manifest.provenance().isOffsetBatchAligned()) {
                     scheduleEmit("we have waited at least " +
-                            TimeUnit.NANOSECONDS.toMinutes(maxTimeSinceLastSnapshotNs) + " minute(s)", newImage);
+                        TimeUnit.NANOSECONDS.toMinutes(maxTimeSinceLastSnapshotNs) + " minute(s)", newImage);
                 } else if (log.isDebugEnabled()) {
                     log.debug("Not scheduling snapshot because last contained offset is not aligned to a batch boundary.");
                 }
