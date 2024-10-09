@@ -2824,15 +2824,12 @@ project(':streams:streams-scala') {
     dependsOn 'copyDependantLibs'
   }
 
-  // spotless 6.25 requires Java 11 at runtime
-  if (JavaVersion.current().isJava11Compatible()) {
-    apply plugin: 'com.diffplug.spotless'
-    spotless {
-      scala {
-        target '**/*.scala'
-        scalafmt("$versions.scalafmt").configFile('../../checkstyle/.scalafmt.conf').scalaMajorVersion(versions.baseScala)
-        licenseHeaderFile '../../checkstyle/java.header', 'package'
-      }
+  apply plugin: 'com.diffplug.spotless'
+  spotless {
+    scala {
+      target '**/*.scala'
+      scalafmt("$versions.scalafmt").configFile('../../checkstyle/.scalafmt.conf').scalaMajorVersion(versions.baseScala)
+      licenseHeaderFile '../../checkstyle/java.header', 'package'
     }
   }
 }
