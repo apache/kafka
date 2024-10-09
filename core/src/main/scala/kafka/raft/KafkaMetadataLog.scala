@@ -22,11 +22,11 @@ import kafka.raft.KafkaMetadataLog.RetentionMsBreach
 import kafka.raft.KafkaMetadataLog.RetentionSizeBreach
 import kafka.raft.KafkaMetadataLog.SnapshotDeletionReason
 import kafka.raft.KafkaMetadataLog.UnknownReason
-import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.Logging
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.record.{MemoryRecords, Records}
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.raft.{Isolation, KafkaRaftClient, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, OffsetAndEpoch, OffsetMetadata, ReplicatedLog, ValidOffsetAndEpoch}
 import org.apache.kafka.server.common.RequestLocal
@@ -683,7 +683,7 @@ object KafkaMetadataLog extends Logging {
   ): Unit = {
     expiredSnapshots.foreach { case (snapshotId, snapshotReader) =>
       snapshotReader.foreach { reader =>
-        CoreUtils.swallow(reader.close(), logging)
+        Utils.closeQuietly(reader, "reader")
       }
       Snapshots.deleteIfExists(logDir, snapshotId)
     }

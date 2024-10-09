@@ -54,7 +54,7 @@ import org.apache.kafka.metadata.{BrokerState, MetadataRecordSerde, VersionRange
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.raft.Endpoints
 import org.apache.kafka.security.CredentialProvider
-import org.apache.kafka.server.NodeToControllerChannelManager
+import org.apache.kafka.server.{BrokerFeatures, NodeToControllerChannelManager}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
@@ -472,7 +472,7 @@ class KafkaServer(
               setSecurityProtocol(ep.securityProtocol.id))
           }
 
-          val features = BrokerFeatures.createDefaultFeatureMap(BrokerFeatures.createDefault(config.unstableFeatureVersionsEnabled))
+          val features = BrokerFeatures.createDefaultFeatureMap(BrokerFeatures.createDefault(config.unstableFeatureVersionsEnabled)).asScala
 
           // Even though ZK brokers don't use "metadata.version" feature, we need to overwrite it with our IBP as part of registration
           // so the KRaft controller can verify that all brokers are on the same IBP before starting the migration.
@@ -1015,7 +1015,7 @@ class KafkaServer(
           CoreUtils.swallow(dataPlaneRequestProcessor.close(), this)
         if (controlPlaneRequestProcessor != null)
           CoreUtils.swallow(controlPlaneRequestProcessor.close(), this)
-        CoreUtils.swallow(authorizer.foreach(_.close()), this)
+        authorizer.foreach(Utils.closeQuietly(_, "authorizer"))
         if (adminManager != null)
           CoreUtils.swallow(adminManager.shutdown(), this)
 
@@ -1048,13 +1048,12 @@ class KafkaServer(
         // Close remote log manager before stopping processing requests, to give a chance to any
         // of its underlying clients (especially in RemoteStorageManager and RemoteLogMetadataManager)
         // to close gracefully.
-        CoreUtils.swallow(remoteLogManagerOpt.foreach(_.close()), this)
+        remoteLogManagerOpt.foreach(Utils.closeQuietly(_, "remote log manager"))
 
         if (featureChangeListener != null)
           CoreUtils.swallow(featureChangeListener.close(), this)
 
-        if (zkClient != null)
-          CoreUtils.swallow(zkClient.close(), this)
+        Utils.closeQuietly(zkClient, "zk client")
 
         if (quotaManagers != null)
           CoreUtils.swallow(quotaManagers.shutdown(), this)
@@ -1065,10 +1064,8 @@ class KafkaServer(
         if (socketServer != null)
           CoreUtils.swallow(socketServer.shutdown(), this)
         unregisterCurrentControllerIdMetric()
-        if (metrics != null)
-          CoreUtils.swallow(metrics.close(), this)
-        if (brokerTopicStats != null)
-          CoreUtils.swallow(brokerTopicStats.close(), this)
+        Utils.closeQuietly(metrics, "metrics")
+        Utils.closeQuietly(brokerTopicStats, "broker topic stats")
 
         // Clear all reconfigurable instances stored in DynamicBrokerConfig
         config.dynamicConfig.clear()

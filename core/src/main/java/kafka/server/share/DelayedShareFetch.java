@@ -23,7 +23,6 @@ import kafka.server.ReplicaManager;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.requests.FetchRequest;
-import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.ShareFetchData;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
 
@@ -53,19 +52,19 @@ public class DelayedShareFetch extends DelayedOperation {
 
     private final ShareFetchData shareFetchData;
     private final ReplicaManager replicaManager;
-    private final Map<SharePartitionKey, SharePartition> partitionCacheMap;
 
     private Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionDataFromTryComplete;
+    private final SharePartitionManager sharePartitionManager;
 
     DelayedShareFetch(
             ShareFetchData shareFetchData,
             ReplicaManager replicaManager,
-            Map<SharePartitionKey, SharePartition> partitionCacheMap) {
+            SharePartitionManager sharePartitionManager) {
         super(shareFetchData.fetchParams().maxWaitMs, Option.empty());
         this.shareFetchData = shareFetchData;
         this.replicaManager = replicaManager;
-        this.partitionCacheMap = partitionCacheMap;
         this.topicPartitionDataFromTryComplete = new LinkedHashMap<>();
+        this.sharePartitionManager = sharePartitionManager;
     }
 
     @Override
@@ -121,7 +120,7 @@ public class DelayedShareFetch extends DelayedOperation {
             });
 
             log.trace("Data successfully retrieved by replica manager: {}", responseData);
-            ShareFetchUtils.processFetchResponse(shareFetchData, responseData, partitionCacheMap, replicaManager)
+            ShareFetchUtils.processFetchResponse(shareFetchData, responseData, sharePartitionManager, replicaManager)
                 .whenComplete((result, throwable) -> {
                     if (throwable != null) {
                         log.error("Error processing fetch response for share partitions", throwable);
@@ -131,6 +130,11 @@ public class DelayedShareFetch extends DelayedOperation {
                     }
                     // Releasing the lock to move ahead with the next request in queue.
                     releasePartitionLocks(shareFetchData.groupId(), topicPartitionData.keySet());
+                    // If we have a fetch request completed for a topic-partition, we release the locks for that partition,
+                    // then we should check if there is a pending share fetch request for the topic-partition and complete it.
+                    // We add the action to delayed actions queue to avoid an infinite call stack, which could happen if
+                    // we directly call delayedShareFetchPurgatory.checkAndComplete
+                    sharePartitionManager.addPurgatoryCheckAndCompleteDelayedActionToActionQueue(result.keySet(), shareFetchData.groupId());
                 });
 
         } catch (Exception e) {
@@ -169,8 +173,11 @@ public class DelayedShareFetch extends DelayedOperation {
         Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData = new LinkedHashMap<>();
 
         shareFetchData.partitionMaxBytes().keySet().forEach(topicIdPartition -> {
-            SharePartition sharePartition = partitionCacheMap.get(new SharePartitionKey(
-                shareFetchData.groupId(), topicIdPartition));
+            SharePartition sharePartition = sharePartitionManager.sharePartition(shareFetchData.groupId(), topicIdPartition);
+            if (sharePartition == null) {
+                log.error("Encountered null share partition for groupId={}, topicIdPartition={}. Skipping it.", shareFetchData.groupId(), topicIdPartition);
+                return;
+            }
 
             int partitionMaxBytes = shareFetchData.partitionMaxBytes().getOrDefault(topicIdPartition, 0);
             // Add the share partition to the list of partitions to be fetched only if we can
@@ -199,7 +206,13 @@ public class DelayedShareFetch extends DelayedOperation {
     }
 
     private void releasePartitionLocks(String groupId, Set<TopicIdPartition> topicIdPartitions) {
-        topicIdPartitions.forEach(tp -> partitionCacheMap.get(new
-                SharePartitionKey(groupId, tp)).releaseFetchLock());
+        topicIdPartitions.forEach(tp -> {
+            SharePartition sharePartition = sharePartitionManager.sharePartition(groupId, tp);
+            if (sharePartition == null) {
+                log.error("Encountered null share partition for groupId={}, topicIdPartition={}. Skipping it.", shareFetchData.groupId(), tp);
+                return;
+            }
+            sharePartition.releaseFetchLock();
+        });
     }
 }
