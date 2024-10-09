@@ -27,7 +27,7 @@ import java.util.function.BiFunction;
 public class CoordinatorOperationExceptionHelper {
     /**
      * This is the handler commonly used by all the operations that requires to convert errors to
-     * coordinator errors. The handler also handles and log unexpected errors.
+     * coordinator errors. The handler also handles and logs unexpected errors.
      *
      * @param operationName     The name of the operation.
      * @param operationInput    The operation's input for logging purposes.

@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group.metrics;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
@@ -41,7 +42,7 @@ public class GroupCoordinatorMetricsShardTest {
         MetricsRegistry registry = new MetricsRegistry();
         Metrics metrics = new Metrics();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        TopicPartition tp = new TopicPartition("__consumer_offsets", 0);
+        TopicPartition tp = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0);
         GroupCoordinatorMetrics coordinatorMetrics = new GroupCoordinatorMetrics(registry, metrics);
         GroupCoordinatorMetricsShard shard = coordinatorMetrics.newMetricsShard(snapshotRegistry, tp);
 
@@ -94,7 +95,7 @@ public class GroupCoordinatorMetricsShardTest {
         MetricsRegistry registry = new MetricsRegistry();
         Metrics metrics = new Metrics();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        TopicPartition tp = new TopicPartition("__consumer_offsets", 0);
+        TopicPartition tp = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0);
         GroupCoordinatorMetrics coordinatorMetrics = new GroupCoordinatorMetrics(registry, metrics);
         GroupCoordinatorMetricsShard shard = coordinatorMetrics.newMetricsShard(snapshotRegistry, tp);
         coordinatorMetrics.activateMetricsShard(shard);
