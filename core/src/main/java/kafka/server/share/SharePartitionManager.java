@@ -170,8 +170,8 @@ public class SharePartitionManager implements AutoCloseable {
         int shareFetchPurgatoryPurgeIntervalRequests,
         Persister persister,
         ActionQueue delayedActionsQueue,
-        Metrics metrics,
-        GroupConfigManager groupConfigManager
+        GroupConfigManager groupConfigManager,
+        Metrics metrics
     ) {
         this(replicaManager,
             time,
@@ -183,8 +183,8 @@ public class SharePartitionManager implements AutoCloseable {
             shareFetchPurgatoryPurgeIntervalRequests,
             persister,
             delayedActionsQueue,
-            metrics,
-            groupConfigManager
+            groupConfigManager,
+            metrics
         );
     }
 
@@ -199,8 +199,8 @@ public class SharePartitionManager implements AutoCloseable {
         int shareFetchPurgatoryPurgeIntervalRequests,
         Persister persister,
         ActionQueue delayedActionsQueue,
-        Metrics metrics,
-        GroupConfigManager groupConfigManager
+        GroupConfigManager groupConfigManager,
+        Metrics metrics
     ) {
         this.replicaManager = replicaManager;
         this.time = time;
@@ -214,10 +214,10 @@ public class SharePartitionManager implements AutoCloseable {
         this.maxDeliveryCount = maxDeliveryCount;
         this.maxInFlightMessages = maxInFlightMessages;
         this.persister = persister;
-        this.shareGroupMetrics = new ShareGroupMetrics(Objects.requireNonNull(metrics), time);
         this.delayedShareFetchPurgatory = new DelayedOperationPurgatory<>("ShareFetch", this.timer, this.replicaManager.localBrokerId(), shareFetchPurgatoryPurgeIntervalRequests, true, true);
         this.delayedActionsQueue = delayedActionsQueue;
         this.groupConfigManager = groupConfigManager;
+        this.shareGroupMetrics = new ShareGroupMetrics(Objects.requireNonNull(metrics), time);
     }
 
     // Visible for testing.
@@ -233,10 +233,10 @@ public class SharePartitionManager implements AutoCloseable {
             int maxDeliveryCount,
             int maxInFlightMessages,
             Persister persister,
-            Metrics metrics,
             DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory,
             ActionQueue delayedActionsQueue,
-            GroupConfigManager groupConfigManager
+            GroupConfigManager groupConfigManager,
+            Metrics metrics
     ) {
         this.replicaManager = replicaManager;
         this.time = time;
@@ -249,10 +249,10 @@ public class SharePartitionManager implements AutoCloseable {
         this.maxDeliveryCount = maxDeliveryCount;
         this.maxInFlightMessages = maxInFlightMessages;
         this.persister = persister;
-        this.shareGroupMetrics = new ShareGroupMetrics(Objects.requireNonNull(metrics), time);
         this.delayedShareFetchPurgatory = delayedShareFetchPurgatory;
         this.delayedActionsQueue = delayedActionsQueue;
         this.groupConfigManager = groupConfigManager;
+        this.shareGroupMetrics = new ShareGroupMetrics(Objects.requireNonNull(metrics), time);
     }
 
     /**

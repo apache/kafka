@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -363,6 +364,16 @@ public class GroupCoordinatorConfig {
         require(shareGroupHeartbeatIntervalMs < shareGroupSessionTimeoutMs,
             String.format("%s must be less than %s",
                 SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG));
+    }
+
+    /**
+     * Copy the subset of properties that are relevant to consumer group and share group.
+     */
+    public Map<String, Integer> extractGroupConfigMap(ShareGroupConfig shareGroupConfig) {
+        Map<String, Integer> defaultConfigs = new HashMap<>();
+        defaultConfigs.putAll(extractConsumerGroupConfigMap());
+        defaultConfigs.putAll(shareGroupConfig.extractShareGroupConfigMap());
+        return Collections.unmodifiableMap(defaultConfigs);
     }
 
     /**

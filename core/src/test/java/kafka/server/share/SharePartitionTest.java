@@ -84,10 +84,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 public class SharePartitionTest {
 
@@ -153,15 +149,15 @@ public class SharePartitionTest {
 
     @Test
     public void testMaybeInitialize() {
-        Persister persister = mock(Persister.class);
-        ReadShareGroupStateResult readShareGroupStateResult = mock(ReadShareGroupStateResult.class);
-        when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        Persister persister = Mockito.mock(Persister.class);
+        ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                 PartitionFactory.newPartitionAllData(0, 3, 5L, Errors.NONE.code(), Errors.NONE.message(),
                     Arrays.asList(
                         new PersisterStateBatch(5L, 10L, RecordState.AVAILABLE.id, (short) 2),
                         new PersisterStateBatch(11L, 15L, RecordState.ARCHIVED.id, (short) 3)))))));
-        when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         CompletableFuture<Void> result = sharePartition.maybeInitialize();
@@ -192,15 +188,15 @@ public class SharePartitionTest {
 
     @Test
     public void testMaybeInitializeSharePartitionAgain() {
-        Persister persister = mock(Persister.class);
-        ReadShareGroupStateResult readShareGroupStateResult = mock(ReadShareGroupStateResult.class);
-        when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        Persister persister = Mockito.mock(Persister.class);
+        ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                 PartitionFactory.newPartitionAllData(0, 3, 5L, Errors.NONE.code(), Errors.NONE.message(),
                     Arrays.asList(
                         new PersisterStateBatch(5L, 10L, RecordState.AVAILABLE.id, (short) 2),
                         new PersisterStateBatch(11L, 15L, RecordState.ARCHIVED.id, (short) 3)))))));
-        when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         CompletableFuture<Void> result = sharePartition.maybeInitialize();
@@ -215,20 +211,20 @@ public class SharePartitionTest {
         assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
 
         // Verify the persister read state is called only once.
-        verify(persister, Mockito.times(1)).readState(Mockito.any());
+        Mockito.verify(persister, Mockito.times(1)).readState(Mockito.any());
     }
 
     @Test
     public void testMaybeInitializeSharePartitionAgainConcurrentRequests() throws InterruptedException {
-        Persister persister = mock(Persister.class);
-        ReadShareGroupStateResult readShareGroupStateResult = mock(ReadShareGroupStateResult.class);
-        when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        Persister persister = Mockito.mock(Persister.class);
+        ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                 PartitionFactory.newPartitionAllData(0, 3, 5L, Errors.NONE.code(), Errors.NONE.message(),
                     Arrays.asList(
                         new PersisterStateBatch(5L, 10L, RecordState.AVAILABLE.id, (short) 2),
                         new PersisterStateBatch(11L, 15L, RecordState.ARCHIVED.id, (short) 3)))))));
-        when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         // No need to send mock persister response again as only 1 thread should read state from persister.
@@ -253,18 +249,18 @@ public class SharePartitionTest {
 
         assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
         // Verify the persister read state is called only once.
-        verify(persister, Mockito.times(1)).readState(Mockito.any());
+        Mockito.verify(persister, Mockito.times(1)).readState(Mockito.any());
     }
 
     @Test
     public void testMaybeInitializeWithEmptyStateBatches() {
-        Persister persister = mock(Persister.class);
-        ReadShareGroupStateResult readShareGroupStateResult = mock(ReadShareGroupStateResult.class);
-        when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        Persister persister = Mockito.mock(Persister.class);
+        ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                 PartitionFactory.newPartitionAllData(0, 5, 10L, Errors.NONE.code(), Errors.NONE.message(), Collections.emptyList()))))
         );
-        when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         CompletableFuture<Void> result = sharePartition.maybeInitialize();
@@ -281,15 +277,15 @@ public class SharePartitionTest {
 
     @Test
     public void testMaybeInitializeWithErrorPartitionResponse() {
-        Persister persister = mock(Persister.class);
-        ReadShareGroupStateResult readShareGroupStateResult = mock(ReadShareGroupStateResult.class);
+        Persister persister = Mockito.mock(Persister.class);
+        ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
 
         // Mock NOT_COORDINATOR error.
-        when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                 PartitionFactory.newPartitionAllData(0, 5, 10L, Errors.NOT_COORDINATOR.code(), Errors.NOT_COORDINATOR.message(),
                     Collections.emptyList())))));
-        when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         CompletableFuture<Void> result = sharePartition.maybeInitialize();
@@ -299,11 +295,11 @@ public class SharePartitionTest {
         assertEquals(SharePartitionState.FAILED, sharePartition.partitionState());
 
         // Mock COORDINATOR_NOT_AVAILABLE error.
-        when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                 PartitionFactory.newPartitionAllData(0, 5, 10L, Errors.COORDINATOR_NOT_AVAILABLE.code(), Errors.COORDINATOR_NOT_AVAILABLE.message(),
                     Collections.emptyList())))));
-        when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
         sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         result = sharePartition.maybeInitialize();
@@ -313,11 +309,11 @@ public class SharePartitionTest {
         assertEquals(SharePartitionState.FAILED, sharePartition.partitionState());
 
         // Mock COORDINATOR_LOAD_IN_PROGRESS error.
-        when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                 PartitionFactory.newPartitionAllData(0, 5, 10L, Errors.COORDINATOR_LOAD_IN_PROGRESS.code(), Errors.COORDINATOR_LOAD_IN_PROGRESS.message(),
                     Collections.emptyList())))));
-        when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
         sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         result = sharePartition.maybeInitialize();
@@ -327,11 +323,11 @@ public class SharePartitionTest {
         assertEquals(SharePartitionState.FAILED, sharePartition.partitionState());
 
         // Mock GROUP_ID_NOT_FOUND error.
-        when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                 PartitionFactory.newPartitionAllData(0, 5, 10L, Errors.GROUP_ID_NOT_FOUND.code(), Errors.GROUP_ID_NOT_FOUND.message(),
                     Collections.emptyList())))));
-        when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
         sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         result = sharePartition.maybeInitialize();
@@ -341,11 +337,11 @@ public class SharePartitionTest {
         assertEquals(SharePartitionState.FAILED, sharePartition.partitionState());
 
         // Mock UNKNOWN_TOPIC_OR_PARTITION error.
-        when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                 PartitionFactory.newPartitionAllData(0, 5, 10L, Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), Errors.UNKNOWN_TOPIC_OR_PARTITION.message(),
                     Collections.emptyList())))));
-        when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
         sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         result = sharePartition.maybeInitialize();
@@ -355,11 +351,11 @@ public class SharePartitionTest {
         assertEquals(SharePartitionState.FAILED, sharePartition.partitionState());
 
         // Mock FENCED_STATE_EPOCH error.
-        when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                 PartitionFactory.newPartitionAllData(0, 5, 10L, Errors.FENCED_STATE_EPOCH.code(), Errors.FENCED_STATE_EPOCH.message(),
                     Collections.emptyList())))));
-        when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
         sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         result = sharePartition.maybeInitialize();
@@ -369,11 +365,11 @@ public class SharePartitionTest {
         assertEquals(SharePartitionState.FAILED, sharePartition.partitionState());
 
         // Mock FENCED_LEADER_EPOCH error.
-        when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                 PartitionFactory.newPartitionAllData(0, 5, 10L, Errors.FENCED_LEADER_EPOCH.code(), Errors.FENCED_LEADER_EPOCH.message(),
                     Collections.emptyList())))));
-        when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
         sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         result = sharePartition.maybeInitialize();
@@ -383,11 +379,11 @@ public class SharePartitionTest {
         assertEquals(SharePartitionState.FAILED, sharePartition.partitionState());
 
         // Mock UNKNOWN_SERVER_ERROR error.
-        when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                 PartitionFactory.newPartitionAllData(0, 5, 10L, Errors.UNKNOWN_SERVER_ERROR.code(), Errors.UNKNOWN_SERVER_ERROR.message(),
                     Collections.emptyList())))));
-        when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
         sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         result = sharePartition.maybeInitialize();
@@ -399,15 +395,15 @@ public class SharePartitionTest {
 
     @Test
     public void testMaybeInitializeWithInvalidStartOffsetStateBatches() {
-        Persister persister = mock(Persister.class);
-        ReadShareGroupStateResult readShareGroupStateResult = mock(ReadShareGroupStateResult.class);
-        when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        Persister persister = Mockito.mock(Persister.class);
+        ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                 PartitionFactory.newPartitionAllData(0, 3, 6L, Errors.NONE.code(), Errors.NONE.message(),
                     Arrays.asList(
                         new PersisterStateBatch(5L, 10L, RecordState.AVAILABLE.id, (short) 2),
                         new PersisterStateBatch(11L, 15L, RecordState.ARCHIVED.id, (short) 3)))))));
-        when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         CompletableFuture<Void> result = sharePartition.maybeInitialize();
@@ -419,15 +415,15 @@ public class SharePartitionTest {
 
     @Test
     public void testMaybeInitializeWithInvalidTopicIdResponse() {
-        Persister persister = mock(Persister.class);
-        ReadShareGroupStateResult readShareGroupStateResult = mock(ReadShareGroupStateResult.class);
-        when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        Persister persister = Mockito.mock(Persister.class);
+        ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
             new TopicData<>(Uuid.randomUuid(), Collections.singletonList(
                 PartitionFactory.newPartitionAllData(0, 3, 5L, Errors.NONE.code(), Errors.NONE.message(),
                     Arrays.asList(
                         new PersisterStateBatch(5L, 10L, RecordState.AVAILABLE.id, (short) 2),
                         new PersisterStateBatch(11L, 15L, RecordState.ARCHIVED.id, (short) 3)))))));
-        when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         CompletableFuture<Void> result = sharePartition.maybeInitialize();
@@ -439,15 +435,15 @@ public class SharePartitionTest {
 
     @Test
     public void testMaybeInitializeWithInvalidPartitionResponse() {
-        Persister persister = mock(Persister.class);
-        ReadShareGroupStateResult readShareGroupStateResult = mock(ReadShareGroupStateResult.class);
-        when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        Persister persister = Mockito.mock(Persister.class);
+        ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                 PartitionFactory.newPartitionAllData(1, 3, 5L, Errors.NONE.code(), Errors.NONE.message(),
                     Arrays.asList(
                         new PersisterStateBatch(5L, 10L, RecordState.AVAILABLE.id, (short) 2),
                         new PersisterStateBatch(11L, 15L, RecordState.ARCHIVED.id, (short) 3)))))));
-        when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         CompletableFuture<Void> result = sharePartition.maybeInitialize();
@@ -474,8 +470,8 @@ public class SharePartitionTest {
 
     @Test
     public void testMaybeInitializeWithNullResponse() {
-        Persister persister = mock(Persister.class);
-        when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(null));
+        Persister persister = Mockito.mock(Persister.class);
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(null));
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         CompletableFuture<Void> result = sharePartition.maybeInitialize();
@@ -487,10 +483,10 @@ public class SharePartitionTest {
 
     @Test
     public void testMaybeInitializeWithNullTopicsData() {
-        Persister persister = mock(Persister.class);
-        ReadShareGroupStateResult readShareGroupStateResult = mock(ReadShareGroupStateResult.class);
-        when(readShareGroupStateResult.topicsData()).thenReturn(null);
-        when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+        Persister persister = Mockito.mock(Persister.class);
+        ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(null);
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         CompletableFuture<Void> result = sharePartition.maybeInitialize();
@@ -502,10 +498,10 @@ public class SharePartitionTest {
 
     @Test
     public void testMaybeInitializeWithEmptyTopicsData() {
-        Persister persister = mock(Persister.class);
-        ReadShareGroupStateResult readShareGroupStateResult = mock(ReadShareGroupStateResult.class);
-        when(readShareGroupStateResult.topicsData()).thenReturn(Collections.emptyList());
-        when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+        Persister persister = Mockito.mock(Persister.class);
+        ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.emptyList());
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         CompletableFuture<Void> result = sharePartition.maybeInitialize();
@@ -517,9 +513,9 @@ public class SharePartitionTest {
 
     @Test
     public void testMaybeInitializeWithReadException() {
-        Persister persister = mock(Persister.class);
+        Persister persister = Mockito.mock(Persister.class);
         // Complete the future exceptionally for read state.
-        when(persister.readState(Mockito.any())).thenReturn(FutureUtils.failedFuture(new RuntimeException("Read exception")));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(FutureUtils.failedFuture(new RuntimeException("Read exception")));
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         CompletableFuture<Void> result = sharePartition.maybeInitialize();
@@ -528,9 +524,9 @@ public class SharePartitionTest {
         assertFutureThrows(result, RuntimeException.class);
         assertEquals(SharePartitionState.FAILED, sharePartition.partitionState());
 
-        persister = mock(Persister.class);
+        persister = Mockito.mock(Persister.class);
         // Throw exception for read state.
-        when(persister.readState(Mockito.any())).thenThrow(new RuntimeException("Read exception"));
+        Mockito.when(persister.readState(Mockito.any())).thenThrow(new RuntimeException("Read exception"));
         sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         result = sharePartition.maybeInitialize();
@@ -2021,18 +2017,18 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquisitionLockOnBatchWithWriteShareGroupStateFailure() throws InterruptedException {
-        Persister persister = mock(Persister.class);
+        Persister persister = Mockito.mock(Persister.class);
         mockPersisterReadStateMethod(persister);
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister)
                 .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
                 .build();
 
         // Mock persister writeState method so that sharePartition.isWriteShareGroupStateSuccessful() returns false.
-        WriteShareGroupStateResult writeShareGroupStateResult = mock(WriteShareGroupStateResult.class);
-        when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
                 new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                         PartitionFactory.newPartitionErrorData(0, Errors.GROUP_ID_NOT_FOUND.code(), Errors.GROUP_ID_NOT_FOUND.message())))));
-        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
         sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
@@ -2053,18 +2049,18 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquisitionLockOnOffsetWithWriteShareGroupStateFailure() throws InterruptedException {
-        Persister persister = mock(Persister.class);
+        Persister persister = Mockito.mock(Persister.class);
         mockPersisterReadStateMethod(persister);
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister)
                 .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
                 .build();
 
         // Mock persister writeState method so that sharePartition.isWriteShareGroupStateSuccessful() returns true for acknowledge to pass.
-        WriteShareGroupStateResult writeShareGroupStateResult = mock(WriteShareGroupStateResult.class);
-        when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
                 new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                         PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
-        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
         sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(6, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
@@ -2075,10 +2071,10 @@ public class SharePartitionTest {
         sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(new ShareAcknowledgementBatch(8, 9, Collections.singletonList((byte) 1))));
 
         // Mock persister writeState method so that sharePartition.isWriteShareGroupStateSuccessful() returns false.
-        when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
                 new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                         PartitionFactory.newPartitionErrorData(0, Errors.GROUP_ID_NOT_FOUND.code(), Errors.GROUP_ID_NOT_FOUND.message())))));
-        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
         // Allowing acquisition lock to expire. Even if write share group state RPC fails, state transition still happens.
         TestUtils.waitForCondition(
@@ -2605,16 +2601,16 @@ public class SharePartitionTest {
 
     @Test
     public void testReleaseBatchWithWriteShareGroupStateFailure() {
-        Persister persister = mock(Persister.class);
+        Persister persister = Mockito.mock(Persister.class);
         mockPersisterReadStateMethod(persister);
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         // Mock persister writeState method so that sharePartition.isWriteShareGroupStateSuccessful() returns false.
-        WriteShareGroupStateResult writeShareGroupStateResult = mock(WriteShareGroupStateResult.class);
-        when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
                 new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                         PartitionFactory.newPartitionErrorData(0, Errors.GROUP_ID_NOT_FOUND.code(), Errors.GROUP_ID_NOT_FOUND.message())))));
-        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
         sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -2632,16 +2628,16 @@ public class SharePartitionTest {
 
     @Test
     public void testReleaseOffsetWithWriteShareGroupStateFailure() {
-        Persister persister = mock(Persister.class);
+        Persister persister = Mockito.mock(Persister.class);
         mockPersisterReadStateMethod(persister);
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         // Mock persister writeState method so that sharePartition.isWriteShareGroupStateSuccessful() returns true for acknowledge to pass.
-        WriteShareGroupStateResult writeShareGroupStateResult = mock(WriteShareGroupStateResult.class);
-        when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
                 new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                         PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
-        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
         sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(6, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -2651,10 +2647,10 @@ public class SharePartitionTest {
                 Collections.singletonList(new ShareAcknowledgementBatch(8, 9, Collections.singletonList((byte) 1))));
 
         // Mock persister writeState method so that sharePartition.isWriteShareGroupStateSuccessful() returns false.
-        when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
                 new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                         PartitionFactory.newPartitionErrorData(0, Errors.GROUP_ID_NOT_FOUND.code(), Errors.GROUP_ID_NOT_FOUND.message())))));
-        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
         CompletableFuture<Void> releaseResult = sharePartition.releaseAcquiredRecords(MEMBER_ID);
         assertTrue(releaseResult.isCompletedExceptionally());
@@ -3637,11 +3633,11 @@ public class SharePartitionTest {
 
     @Test
     public void testScheduleAcquisitionLockTimeoutValueFromGroupConfig() {
-        GroupConfigManager groupConfigManager = mock(GroupConfigManager.class);
-        GroupConfig groupConfig = mock(GroupConfig.class);
+        GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
         int expectedDurationMs = 500;
-        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
-        when(groupConfig.shareRecordLockDurationMs()).thenReturn(expectedDurationMs);
+        Mockito.when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
+        Mockito.when(groupConfig.shareRecordLockDurationMs()).thenReturn(expectedDurationMs);
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
@@ -3649,20 +3645,20 @@ public class SharePartitionTest {
 
         SharePartition.AcquisitionLockTimerTask timerTask = sharePartition.scheduleAcquisitionLockTimeout(MEMBER_ID, 100L, 200L);
 
-        verify(groupConfigManager, times(2)).groupConfig(GROUP_ID);
-        verify(groupConfig).shareRecordLockDurationMs();
+        Mockito.verify(groupConfigManager, Mockito.times(2)).groupConfig(GROUP_ID);
+        Mockito.verify(groupConfig).shareRecordLockDurationMs();
         assertEquals(expectedDurationMs, timerTask.delayMs);
     }
 
     @Test
     public void testScheduleAcquisitionLockTimeoutValueUpdatesSuccessfully() {
-        GroupConfigManager groupConfigManager = mock(GroupConfigManager.class);
-        GroupConfig groupConfig = mock(GroupConfig.class);
+        GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
         int expectedDurationMs1 = 500;
         int expectedDurationMs2 = 1000;
-        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
+        Mockito.when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
         // First invocation of shareRecordLockDurationMs() returns 500, and the second invocation returns 1000
-        when(groupConfig.shareRecordLockDurationMs())
+        Mockito.when(groupConfig.shareRecordLockDurationMs())
             .thenReturn(expectedDurationMs1)
             .thenReturn(expectedDurationMs2);
 
@@ -3672,14 +3668,14 @@ public class SharePartitionTest {
 
         SharePartition.AcquisitionLockTimerTask timerTask1 = sharePartition.scheduleAcquisitionLockTimeout(MEMBER_ID, 100L, 200L);
 
-        verify(groupConfigManager, times(2)).groupConfig(GROUP_ID);
-        verify(groupConfig).shareRecordLockDurationMs();
+        Mockito.verify(groupConfigManager, Mockito.times(2)).groupConfig(GROUP_ID);
+        Mockito.verify(groupConfig).shareRecordLockDurationMs();
         assertEquals(expectedDurationMs1, timerTask1.delayMs);
 
         SharePartition.AcquisitionLockTimerTask timerTask2 = sharePartition.scheduleAcquisitionLockTimeout(MEMBER_ID, 100L, 200L);
 
-        verify(groupConfigManager, times(4)).groupConfig(GROUP_ID);
-        verify(groupConfig, times(2)).shareRecordLockDurationMs();
+        Mockito.verify(groupConfigManager, Mockito.times(4)).groupConfig(GROUP_ID);
+        Mockito.verify(groupConfig, Mockito.times(2)).shareRecordLockDurationMs();
         assertEquals(expectedDurationMs2, timerTask2.delayMs);
     }
 
@@ -3912,11 +3908,11 @@ public class SharePartitionTest {
 
     @Test
     public void testWriteShareGroupStateWithNullResponse() {
-        Persister persister = mock(Persister.class);
+        Persister persister = Mockito.mock(Persister.class);
         mockPersisterReadStateMethod(persister);
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
-        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(null));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(null));
         CompletableFuture<Void> result = sharePartition.writeShareGroupState(Collections.emptyList());
         assertTrue(result.isCompletedExceptionally());
         assertFutureThrows(result, IllegalStateException.class);
@@ -3924,13 +3920,13 @@ public class SharePartitionTest {
 
     @Test
     public void testWriteShareGroupStateWithNullTopicsData() {
-        Persister persister = mock(Persister.class);
+        Persister persister = Mockito.mock(Persister.class);
         mockPersisterReadStateMethod(persister);
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
-        WriteShareGroupStateResult writeShareGroupStateResult = mock(WriteShareGroupStateResult.class);
-        when(writeShareGroupStateResult.topicsData()).thenReturn(null);
-        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(null);
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
         CompletableFuture<Void> result = sharePartition.writeShareGroupState(Mockito.anyList());
         assertTrue(result.isCompletedExceptionally());
         assertFutureThrows(result, IllegalStateException.class);
@@ -3938,59 +3934,59 @@ public class SharePartitionTest {
 
     @Test
     public void testWriteShareGroupStateWithInvalidTopicsData() {
-        Persister persister = mock(Persister.class);
+        Persister persister = Mockito.mock(Persister.class);
         mockPersisterReadStateMethod(persister);
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
-        WriteShareGroupStateResult writeShareGroupStateResult = mock(WriteShareGroupStateResult.class);
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
         // TopicsData is empty.
-        when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.emptyList());
-        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.emptyList());
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
         CompletableFuture<Void> writeResult = sharePartition.writeShareGroupState(Mockito.anyList());
         assertTrue(writeResult.isCompletedExceptionally());
         assertFutureThrows(writeResult, IllegalStateException.class);
 
         // TopicsData contains more results than expected.
-        when(writeShareGroupStateResult.topicsData()).thenReturn(Arrays.asList(
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Arrays.asList(
                 new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.emptyList()),
                 new TopicData<>(Uuid.randomUuid(), Collections.emptyList())));
-        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
         writeResult = sharePartition.writeShareGroupState(Mockito.anyList());
         assertTrue(writeResult.isCompletedExceptionally());
         assertFutureThrows(writeResult, IllegalStateException.class);
 
         // TopicsData contains no partition data.
-        when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
                 new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.emptyList())));
-        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
         writeResult = sharePartition.writeShareGroupState(Mockito.anyList());
         assertTrue(writeResult.isCompletedExceptionally());
         assertFutureThrows(writeResult, IllegalStateException.class);
 
         // TopicsData contains wrong topicId.
-        when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
                 new TopicData<>(Uuid.randomUuid(), Collections.singletonList(
                         PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
-        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
         writeResult = sharePartition.writeShareGroupState(Mockito.anyList());
         assertTrue(writeResult.isCompletedExceptionally());
         assertFutureThrows(writeResult, IllegalStateException.class);
 
         // TopicsData contains more partition data than expected.
-        when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
                 new TopicData<>(TOPIC_ID_PARTITION.topicId(), Arrays.asList(
                         PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message()),
                         PartitionFactory.newPartitionErrorData(1, Errors.NONE.code(), Errors.NONE.message())))));
-        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
         writeResult = sharePartition.writeShareGroupState(Mockito.anyList());
         assertTrue(writeResult.isCompletedExceptionally());
         assertFutureThrows(writeResult, IllegalStateException.class);
 
         // TopicsData contains wrong partition.
-        when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
                 new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                         PartitionFactory.newPartitionErrorData(1, Errors.NONE.code(), Errors.NONE.message())))));
-        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
         writeResult = sharePartition.writeShareGroupState(Mockito.anyList());
         assertTrue(writeResult.isCompletedExceptionally());
         assertFutureThrows(writeResult, IllegalStateException.class);
@@ -3998,11 +3994,11 @@ public class SharePartitionTest {
 
     @Test
     public void testWriteShareGroupStateWithWriteException() {
-        Persister persister = mock(Persister.class);
+        Persister persister = Mockito.mock(Persister.class);
         mockPersisterReadStateMethod(persister);
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
-        when(persister.writeState(Mockito.any())).thenReturn(FutureUtils.failedFuture(new RuntimeException("Write exception")));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(FutureUtils.failedFuture(new RuntimeException("Write exception")));
         CompletableFuture<Void> writeResult = sharePartition.writeShareGroupState(Mockito.anyList());
         assertTrue(writeResult.isCompletedExceptionally());
         assertFutureThrows(writeResult, IllegalStateException.class);
@@ -4010,15 +4006,15 @@ public class SharePartitionTest {
 
     @Test
     public void testWriteShareGroupState() {
-        Persister persister = mock(Persister.class);
+        Persister persister = Mockito.mock(Persister.class);
         mockPersisterReadStateMethod(persister);
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
-        WriteShareGroupStateResult writeShareGroupStateResult = mock(WriteShareGroupStateResult.class);
-        when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
                 new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                         PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
-        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
         CompletableFuture<Void> result = sharePartition.writeShareGroupState(Mockito.anyList());
         assertNull(result.join());
@@ -4027,85 +4023,85 @@ public class SharePartitionTest {
 
     @Test
     public void testWriteShareGroupStateFailure() {
-        Persister persister = mock(Persister.class);
+        Persister persister = Mockito.mock(Persister.class);
         mockPersisterReadStateMethod(persister);
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
         // Mock Write state RPC to return error response, NOT_COORDINATOR.
-        WriteShareGroupStateResult writeShareGroupStateResult = mock(WriteShareGroupStateResult.class);
-        when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
                 new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                         PartitionFactory.newPartitionErrorData(0, Errors.NOT_COORDINATOR.code(), Errors.NOT_COORDINATOR.message())))));
-        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
         CompletableFuture<Void> result = sharePartition.writeShareGroupState(Mockito.anyList());
         assertTrue(result.isCompletedExceptionally());
         assertFutureThrows(result, CoordinatorNotAvailableException.class);
 
         // Mock Write state RPC to return error response, COORDINATOR_NOT_AVAILABLE.
-        when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                 PartitionFactory.newPartitionErrorData(0, Errors.COORDINATOR_NOT_AVAILABLE.code(), Errors.COORDINATOR_NOT_AVAILABLE.message())))));
-        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
         result = sharePartition.writeShareGroupState(Mockito.anyList());
         assertTrue(result.isCompletedExceptionally());
         assertFutureThrows(result, CoordinatorNotAvailableException.class);
 
         // Mock Write state RPC to return error response, COORDINATOR_LOAD_IN_PROGRESS.
-        when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                 PartitionFactory.newPartitionErrorData(0, Errors.COORDINATOR_LOAD_IN_PROGRESS.code(), Errors.COORDINATOR_LOAD_IN_PROGRESS.message())))));
-        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
         result = sharePartition.writeShareGroupState(Mockito.anyList());
         assertTrue(result.isCompletedExceptionally());
         assertFutureThrows(result, CoordinatorNotAvailableException.class);
 
         // Mock Write state RPC to return error response, GROUP_ID_NOT_FOUND.
-        when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                 PartitionFactory.newPartitionErrorData(0, Errors.GROUP_ID_NOT_FOUND.code(), Errors.GROUP_ID_NOT_FOUND.message())))));
-        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
         result = sharePartition.writeShareGroupState(Mockito.anyList());
         assertTrue(result.isCompletedExceptionally());
         assertFutureThrows(result, InvalidRequestException.class);
 
         // Mock Write state RPC to return error response, UNKNOWN_TOPIC_OR_PARTITION.
-        when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                 PartitionFactory.newPartitionErrorData(0, Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), Errors.UNKNOWN_TOPIC_OR_PARTITION.message())))));
-        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
         result = sharePartition.writeShareGroupState(Mockito.anyList());
         assertTrue(result.isCompletedExceptionally());
         assertFutureThrows(result, InvalidRequestException.class);
 
         // Mock Write state RPC to return error response, FENCED_STATE_EPOCH.
-        when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                 PartitionFactory.newPartitionErrorData(0, Errors.FENCED_STATE_EPOCH.code(), Errors.FENCED_STATE_EPOCH.message())))));
-        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
         result = sharePartition.writeShareGroupState(Mockito.anyList());
         assertTrue(result.isCompletedExceptionally());
         assertFutureThrows(result, FencedStateEpochException.class);
 
         // Mock Write state RPC to return error response, FENCED_LEADER_EPOCH.
-        when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                 PartitionFactory.newPartitionErrorData(0, Errors.FENCED_LEADER_EPOCH.code(), Errors.FENCED_LEADER_EPOCH.message())))));
-        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
         result = sharePartition.writeShareGroupState(Mockito.anyList());
         assertTrue(result.isCompletedExceptionally());
         assertFutureThrows(result, NotLeaderOrFollowerException.class);
 
         // Mock Write state RPC to return error response, UNKNOWN_SERVER_ERROR.
-        when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                 PartitionFactory.newPartitionErrorData(0, Errors.UNKNOWN_SERVER_ERROR.code(), Errors.UNKNOWN_SERVER_ERROR.message())))));
-        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
         result = sharePartition.writeShareGroupState(Mockito.anyList());
         assertTrue(result.isCompletedExceptionally());
@@ -4502,16 +4498,16 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeBatchWithWriteShareGroupStateFailure() {
-        Persister persister = mock(Persister.class);
+        Persister persister = Mockito.mock(Persister.class);
         mockPersisterReadStateMethod(persister);
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         // Mock persister writeState method so that sharePartition.isWriteShareGroupStateSuccessful() returns false.
-        WriteShareGroupStateResult writeShareGroupStateResult = mock(WriteShareGroupStateResult.class);
-        when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
                 new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                         PartitionFactory.newPartitionErrorData(0, Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), Errors.UNKNOWN_TOPIC_OR_PARTITION.message())))));
-        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
         sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -4530,16 +4526,16 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeOffsetWithWriteShareGroupStateFailure() {
-        Persister persister = mock(Persister.class);
+        Persister persister = Mockito.mock(Persister.class);
         mockPersisterReadStateMethod(persister);
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         // Mock persister writeState method so that sharePartition.isWriteShareGroupStateSuccessful() returns false.
-        WriteShareGroupStateResult writeShareGroupStateResult = mock(WriteShareGroupStateResult.class);
-        when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
                 new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                         PartitionFactory.newPartitionErrorData(0, Errors.GROUP_ID_NOT_FOUND.code(), Errors.GROUP_ID_NOT_FOUND.message())))));
-        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
         sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(6, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -4837,12 +4833,12 @@ public class SharePartitionTest {
         sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(
                 new ShareAcknowledgementBatch(2, 6, Collections.singletonList((byte) 1))));
         // Acknowledge records will induce 1 write state RPC call via function isWriteShareGroupStateSuccessful.
-        verify(sharePartition, Mockito.times(1)).writeShareGroupState(anyList());
+        Mockito.verify(sharePartition, Mockito.times(1)).writeShareGroupState(anyList());
 
         sharePartition.releaseAcquiredRecords(MEMBER_ID);
         // Release acquired records will induce 0 write state RPC call via function isWriteShareGroupStateSuccessful
         // because the in-flight batch has been acknowledged. Hence, the total calls remain 1.
-        verify(sharePartition, Mockito.times(1)).writeShareGroupState(anyList());
+        Mockito.verify(sharePartition, Mockito.times(1)).writeShareGroupState(anyList());
     }
 
     @Test
@@ -4909,13 +4905,13 @@ public class SharePartitionTest {
         }
         stateBatches.add(new PersisterStateBatch(232L, 232L, RecordState.ARCHIVED.id, (short) 1));
 
-        Persister persister = mock(Persister.class);
-        ReadShareGroupStateResult readShareGroupStateResult = mock(ReadShareGroupStateResult.class);
-        when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        Persister persister = Mockito.mock(Persister.class);
+        ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
                 new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                         PartitionFactory.newPartitionAllData(0, 3, 232L, Errors.NONE.code(), Errors.NONE.message(),
                                 stateBatches)))));
-        when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         CompletableFuture<Void> result = sharePartition.maybeInitialize();
@@ -4966,12 +4962,12 @@ public class SharePartitionTest {
     }
 
     public void mockPersisterReadStateMethod(Persister persister) {
-        ReadShareGroupStateResult readShareGroupStateResult = mock(ReadShareGroupStateResult.class);
-        when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+        ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
                 new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                         PartitionFactory.newPartitionAllData(0, 0, 0L, Errors.NONE.code(), Errors.NONE.message(),
                                 Collections.emptyList())))));
-        when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
     }
 
     private static class SharePartitionBuilder {
@@ -4980,8 +4976,8 @@ public class SharePartitionTest {
         private int maxDeliveryCount = MAX_DELIVERY_COUNT;
         private int maxInflightMessages = MAX_IN_FLIGHT_MESSAGES;
         private Persister persister = NoOpShareStatePersister.getInstance();
-        private final DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = mock(DelayedOperationPurgatory.class);
-        private GroupConfigManager groupConfigManager = new GroupConfigManager(new HashMap<>());
+        private final DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = Mockito.mock(DelayedOperationPurgatory.class);
+        private GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
 
         private SharePartitionBuilder withMaxInflightMessages(int maxInflightMessages) {
             this.maxInflightMessages = maxInflightMessages;

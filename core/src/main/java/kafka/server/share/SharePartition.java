@@ -1725,7 +1725,7 @@ public class SharePartition {
         }
     }
 
-    // Visible for Testing
+    // Visible for testing
     AcquisitionLockTimerTask scheduleAcquisitionLockTimeout(String memberId, long firstOffset, long lastOffset) {
         // The recordLockDuration value would depend on whether the dynamic config SHARE_RECORD_LOCK_DURATION_MS in
         // GroupConfig.java is set or not. If dynamic config is set, then that is used, otherwise the value of

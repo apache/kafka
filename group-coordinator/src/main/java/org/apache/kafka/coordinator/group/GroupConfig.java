@@ -66,7 +66,7 @@ public class GroupConfig extends AbstractConfig {
         .define(SHARE_RECORD_LOCK_DURATION_MS_CONFIG,
             INT,
             ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_DEFAULT,
-            atLeast(1),
+            atLeast(1000),
             MEDIUM,
             ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_DOC);
 

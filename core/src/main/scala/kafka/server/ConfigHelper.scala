@@ -37,7 +37,6 @@ import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms
 import org.apache.kafka.storage.internals.log.LogConfig
 
-import java.util
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Map, mutable}
 import scala.compat.java8.OptionConverters._
@@ -160,10 +159,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
               throw new InvalidRequestException("Group name must not be empty")
             } else {
               val groupProps = configRepository.groupConfig(group)
-              val defaultConfigs: util.HashMap[String, Integer] = new util.HashMap()
-              defaultConfigs.putAll(config.groupCoordinatorConfig.extractConsumerGroupConfigMap())
-              defaultConfigs.putAll(config.shareGroupConfig.extractShareGroupConfigMap())
-              val groupConfig = GroupConfig.fromProps(defaultConfigs, groupProps)
+              val groupConfig = GroupConfig.fromProps(config.groupCoordinatorConfig.extractGroupConfigMap(config.shareGroupConfig), groupProps)
               createResponseConfig(allConfigs(groupConfig), createGroupConfigEntry(groupConfig, groupProps, includeSynonyms, includeDocumentation))
             }
 

@@ -354,10 +354,7 @@ class BrokerServer(
       tokenManager.startup()
 
       /* initializing the groupConfigManager */
-      val defaultConfigs: util.Map[String, Integer] = new util.HashMap()
-      defaultConfigs.putAll(config.groupCoordinatorConfig.extractConsumerGroupConfigMap())
-      defaultConfigs.putAll(config.shareGroupConfig.extractShareGroupConfigMap())
-      groupConfigManager = new GroupConfigManager(defaultConfigs)
+      groupConfigManager = new GroupConfigManager(config.groupCoordinatorConfig.extractGroupConfigMap(config.shareGroupConfig))
 
       shareCoordinator = createShareCoordinator()
 
@@ -438,8 +435,8 @@ class BrokerServer(
         config.shareGroupConfig.shareFetchPurgatoryPurgeIntervalRequests,
         persister,
         defaultActionQueue,
-        new Metrics(),
-        groupConfigManager
+        groupConfigManager,
+        new Metrics()
       )
 
       // Create the request processor objects.

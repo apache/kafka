@@ -2361,10 +2361,10 @@ public class SharePartitionManagerTest {
                     MAX_DELIVERY_COUNT,
                     MAX_IN_FLIGHT_MESSAGES,
                     persister,
-                    metrics,
                     delayedShareFetchPurgatory,
                     delayedActionsQueue,
-                    new GroupConfigManager(new HashMap<>()));
+                    new GroupConfigManager(new HashMap<>()),
+                    metrics);
         }
     }
 }
