@@ -54,7 +54,11 @@ public class ShareFetchUtils {
         Map<TopicIdPartition, CompletableFuture<ShareFetchResponseData.PartitionData>> futures = new HashMap<>();
         responseData.forEach((topicIdPartition, fetchPartitionData) -> {
 
-            SharePartition sharePartition = sharePartitionManager.fetchSharePartition(shareFetchData.groupId(), topicIdPartition);
+            SharePartition sharePartition = sharePartitionManager.sharePartition(shareFetchData.groupId(), topicIdPartition);
+            if (sharePartition == null) {
+                log.error("Encountered null share partition for groupId={}, topicIdPartition={}. Skipping it.", shareFetchData.groupId(), topicIdPartition);
+                return;
+            }
             futures.put(topicIdPartition, sharePartition.acquire(shareFetchData.memberId(), fetchPartitionData)
                     .handle((acquiredRecords, throwable) -> {
                         log.trace("Acquired records for topicIdPartition: {} with share fetch data: {}, records: {}",

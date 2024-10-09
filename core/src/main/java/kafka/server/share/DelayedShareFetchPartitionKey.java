@@ -18,7 +18,7 @@ package kafka.server.share;
 
 import kafka.server.DelayedOperationKey;
 
-import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.Uuid;
 
 import java.util.Objects;
 
@@ -26,10 +26,12 @@ import java.util.Objects;
  * A key for delayed share fetch purgatory that refers to the topic partition.
  */
 public class DelayedShareFetchPartitionKey implements  DelayedShareFetchKey, DelayedOperationKey {
-    private final TopicIdPartition topicIdPartition;
+    private final Uuid topicId;
+    private final int partition;
 
-    DelayedShareFetchPartitionKey(TopicIdPartition topicIdPartition) {
-        this.topicIdPartition = topicIdPartition;
+    DelayedShareFetchPartitionKey(Uuid topicId, int partition) {
+        this.topicId = topicId;
+        this.partition = partition;
     }
 
     @Override
@@ -37,21 +39,22 @@ public class DelayedShareFetchPartitionKey implements  DelayedShareFetchKey, Del
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         DelayedShareFetchPartitionKey that = (DelayedShareFetchPartitionKey) o;
-        return topicIdPartition.equals(that.topicIdPartition);
+        return topicId.equals(that.topicId) && partition == that.partition;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(topicIdPartition);
+        return Objects.hash(topicId, partition);
     }
 
     @Override
     public String toString() {
-        return "DelayedShareFetchPartitionKey(topicIdPartition=" + topicIdPartition + ")";
+        return "DelayedShareFetchPartitionKey(topicId=" + topicId +
+            ", partition=" + partition + ")";
     }
 
     @Override
     public String keyLabel() {
-        return String.format("topicIdPartition=%s", topicIdPartition);
+        return String.format("topicId=%s, partition=%s", topicId, partition);
     }
 }

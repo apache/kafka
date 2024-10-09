@@ -91,8 +91,8 @@ public class ShareFetchUtilsTest {
         doNothing().when(sp0).updateCacheAndOffsets(any(Long.class));
 
         SharePartitionManager sharePartitionManager = mock(SharePartitionManager.class);
-        when(sharePartitionManager.fetchSharePartition(groupId, tp0)).thenReturn(sp0);
-        when(sharePartitionManager.fetchSharePartition(groupId, tp1)).thenReturn(sp1);
+        when(sharePartitionManager.sharePartition(groupId, tp0)).thenReturn(sp0);
+        when(sharePartitionManager.sharePartition(groupId, tp1)).thenReturn(sp1);
 
         ShareFetchData shareFetchData = new ShareFetchData(
                 new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, 0,
@@ -162,8 +162,8 @@ public class ShareFetchUtilsTest {
         doNothing().when(sp0).updateCacheAndOffsets(any(Long.class));
 
         SharePartitionManager sharePartitionManager = mock(SharePartitionManager.class);
-        when(sharePartitionManager.fetchSharePartition(groupId, tp0)).thenReturn(sp0);
-        when(sharePartitionManager.fetchSharePartition(groupId, tp1)).thenReturn(sp1);
+        when(sharePartitionManager.sharePartition(groupId, tp0)).thenReturn(sp0);
+        when(sharePartitionManager.sharePartition(groupId, tp1)).thenReturn(sp1);
 
         ShareFetchData shareFetchData = new ShareFetchData(
                 new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, 0,
@@ -208,8 +208,8 @@ public class ShareFetchUtilsTest {
         SharePartition sp1 = Mockito.mock(SharePartition.class);
 
         SharePartitionManager sharePartitionManager = mock(SharePartitionManager.class);
-        when(sharePartitionManager.fetchSharePartition(groupId, tp0)).thenReturn(sp0);
-        when(sharePartitionManager.fetchSharePartition(groupId, tp1)).thenReturn(sp1);
+        when(sharePartitionManager.sharePartition(groupId, tp0)).thenReturn(sp0);
+        when(sharePartitionManager.sharePartition(groupId, tp1)).thenReturn(sp1);
 
         ShareFetchData shareFetchData = new ShareFetchData(
                 new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, 0,

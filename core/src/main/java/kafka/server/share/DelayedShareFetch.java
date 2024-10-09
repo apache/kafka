@@ -173,7 +173,11 @@ public class DelayedShareFetch extends DelayedOperation {
         Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData = new LinkedHashMap<>();
 
         shareFetchData.partitionMaxBytes().keySet().forEach(topicIdPartition -> {
-            SharePartition sharePartition = sharePartitionManager.fetchSharePartition(shareFetchData.groupId(), topicIdPartition);
+            SharePartition sharePartition = sharePartitionManager.sharePartition(shareFetchData.groupId(), topicIdPartition);
+            if (sharePartition == null) {
+                log.error("Encountered null share partition for groupId={}, topicIdPartition={}. Skipping it.", shareFetchData.groupId(), topicIdPartition);
+                return;
+            }
 
             int partitionMaxBytes = shareFetchData.partitionMaxBytes().getOrDefault(topicIdPartition, 0);
             // Add the share partition to the list of partitions to be fetched only if we can
@@ -202,6 +206,13 @@ public class DelayedShareFetch extends DelayedOperation {
     }
 
     private void releasePartitionLocks(String groupId, Set<TopicIdPartition> topicIdPartitions) {
-        topicIdPartitions.forEach(tp -> sharePartitionManager.fetchSharePartition(groupId, tp).releaseFetchLock());
+        topicIdPartitions.forEach(tp -> {
+            SharePartition sharePartition = sharePartitionManager.sharePartition(groupId, tp);
+            if (sharePartition == null) {
+                log.error("Encountered null share partition for groupId={}, topicIdPartition={}. Skipping it.", shareFetchData.groupId(), tp);
+                return;
+            }
+            sharePartition.releaseFetchLock();
+        });
     }
 }

@@ -18,7 +18,7 @@ package kafka.server.share;
 
 import kafka.server.DelayedOperationKey;
 
-import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.Uuid;
 
 import java.util.Objects;
 
@@ -27,11 +27,13 @@ import java.util.Objects;
  */
 public class DelayedShareFetchGroupKey implements  DelayedShareFetchKey, DelayedOperationKey {
     private final String groupId;
-    private final TopicIdPartition topicIdPartition;
+    private final Uuid topicId;
+    private final int partition;
 
-    DelayedShareFetchGroupKey(String groupId, TopicIdPartition topicIdPartition) {
+    DelayedShareFetchGroupKey(String groupId, Uuid topicId, int partition) {
         this.groupId = groupId;
-        this.topicIdPartition = topicIdPartition;
+        this.topicId = topicId;
+        this.partition = partition;
     }
 
     @Override
@@ -39,23 +41,24 @@ public class DelayedShareFetchGroupKey implements  DelayedShareFetchKey, Delayed
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         DelayedShareFetchGroupKey that = (DelayedShareFetchGroupKey) o;
-        return topicIdPartition.equals(that.topicIdPartition) && groupId.equals(that.groupId);
+        return topicId.equals(that.topicId) && partition == that.partition && groupId.equals(that.groupId);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(topicIdPartition, groupId);
+        return Objects.hash(topicId, partition, groupId);
     }
 
     @Override
     public String toString() {
         return "DelayedShareFetchGroupKey(groupId=" + groupId +
-            ", topicIdPartition=" + topicIdPartition +
+            ", topicId=" + topicId +
+            ", partition=" + partition +
             ")";
     }
 
     @Override
     public String keyLabel() {
-        return String.format("groupId=%s, topicIdPartition=%s", groupId, topicIdPartition);
+        return String.format("groupId=%s, topicId=%s, partition=%s", groupId, topicId, partition);
     }
 }
