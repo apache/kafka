@@ -1241,18 +1241,15 @@ public class SharePartitionManagerTest {
     @Test
     public void testCloseSharePartitionManager() throws Exception {
         Timer timer = Mockito.mock(SystemTimerReaper.class);
-        Persister persister = Mockito.mock(Persister.class);
         SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
-                .withTimer(timer).withShareGroupPersister(persister).build();
+                .withTimer(timer).build();
 
-        // Verify that 0 calls are made to timer.close() and persister.stop().
+        // Verify that 0 calls are made to timer.close().
         Mockito.verify(timer, times(0)).close();
-        Mockito.verify(persister, times(0)).stop();
         // Closing the sharePartitionManager closes timer object in sharePartitionManager.
         sharePartitionManager.close();
-        // Verify that the timer object in sharePartitionManager is closed by checking the calls to timer.close() and persister.stop().
+        // Verify that the timer object in sharePartitionManager is closed by checking the calls to timer.close().
         Mockito.verify(timer, times(1)).close();
-        Mockito.verify(persister, times(1)).stop();
     }
 
     @Test

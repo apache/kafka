@@ -2048,4 +2048,28 @@ class PersisterStateManagerTest {
             fail("Failed to stop state manager", e);
         }
     }
+
+    @Test
+    public void testPersisterStateManagerClose() {
+        KafkaClient client = mock(KafkaClient.class);
+        Timer timer = mock(Timer.class);
+        PersisterStateManager psm = PersisterStateManagerBuilder
+            .builder()
+            .withTimer(timer)
+            .withKafkaClient(client)
+            .build();
+
+        try {
+            verify(client, times(0)).close();
+            verify(timer, times(0)).close();
+
+            psm.start();
+            psm.stop();
+
+            verify(client, times(1)).close();
+            verify(timer, times(1)).close();
+        } catch (Exception e) {
+            fail("unexpected exception", e);
+        }
+    }
 }

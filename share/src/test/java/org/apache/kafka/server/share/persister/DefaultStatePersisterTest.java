@@ -50,6 +50,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 class DefaultStatePersisterTest {
     private static final KafkaClient CLIENT = mock(KafkaClient.class);
@@ -560,5 +562,20 @@ class DefaultStatePersisterTest {
 
         assertEquals(2, result.topicsData().size());
         assertEquals(expectedResultMap, resultMap);
+    }
+
+    @Test
+    public void testDefaultPersisterClose() {
+        PersisterStateManager psm = mock(PersisterStateManager.class);
+        DefaultStatePersister dsp = new DefaultStatePersister(psm);
+        try {
+            verify(psm, times(0)).stop();
+
+            dsp.stop();
+            
+            verify(psm, times(1)).stop();
+        } catch (Exception e) {
+            fail("Unexpected exception", e);
+        }
     }
 }

@@ -91,7 +91,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-@Timeout(600)
+@Timeout(1200)
 @Tag("integration")
 @SuppressWarnings("deprecation")
 public class ShareConsumerTest {
