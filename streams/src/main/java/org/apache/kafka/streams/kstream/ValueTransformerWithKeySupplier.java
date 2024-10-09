@@ -32,11 +32,8 @@ import java.util.function.Supplier;
  * @param <VR> transformed value type
  * @see ValueTransformer
  * @see ValueTransformerWithKey
- * @see KStream#transformValues(ValueTransformerSupplier, String...)
- * @see KStream#transformValues(ValueTransformerWithKeySupplier, String...)
  * @see Transformer
  * @see TransformerSupplier
- * @see KStream#transform(TransformerSupplier, String...)
  */
 public interface ValueTransformerWithKeySupplier<K, V, VR> extends ConnectedStoreProvider, Supplier<ValueTransformerWithKey<K, V, VR>> {
 
