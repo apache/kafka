@@ -30,7 +30,6 @@ import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.requests.FetchRequest;
-import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.ShareFetchData;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchParams;
@@ -46,7 +45,6 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 
 import scala.Option;
 
@@ -93,9 +91,9 @@ public class ShareFetchUtilsTest {
         doNothing().when(sp1).updateCacheAndOffsets(any(Long.class));
         doNothing().when(sp0).updateCacheAndOffsets(any(Long.class));
 
-        Map<SharePartitionKey, SharePartition> partitionCacheMap = new ConcurrentHashMap<>();
-        partitionCacheMap.put(new SharePartitionKey(groupId, tp0), sp0);
-        partitionCacheMap.put(new SharePartitionKey(groupId, tp1), sp1);
+        SharePartitionManager sharePartitionManager = mock(SharePartitionManager.class);
+        when(sharePartitionManager.sharePartition(groupId, tp0)).thenReturn(sp0);
+        when(sharePartitionManager.sharePartition(groupId, tp1)).thenReturn(sp1);
 
         ShareFetchData shareFetchData = new ShareFetchData(
                 new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, 0,
@@ -122,7 +120,7 @@ public class ShareFetchUtilsTest {
                 records1, Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData =
-                ShareFetchUtils.processFetchResponse(shareFetchData, responseData, partitionCacheMap, mock(ReplicaManager.class));
+                ShareFetchUtils.processFetchResponse(shareFetchData, responseData, sharePartitionManager, mock(ReplicaManager.class));
 
         assertEquals(2, resultData.size());
         assertTrue(resultData.containsKey(tp0));
@@ -162,9 +160,9 @@ public class ShareFetchUtilsTest {
         doNothing().when(sp1).updateCacheAndOffsets(any(Long.class));
         doNothing().when(sp0).updateCacheAndOffsets(any(Long.class));
 
-        Map<SharePartitionKey, SharePartition> partitionCacheMap = new ConcurrentHashMap<>();
-        partitionCacheMap.put(new SharePartitionKey(groupId, tp0), sp0);
-        partitionCacheMap.put(new SharePartitionKey(groupId, tp1), sp1);
+        SharePartitionManager sharePartitionManager = mock(SharePartitionManager.class);
+        when(sharePartitionManager.sharePartition(groupId, tp0)).thenReturn(sp0);
+        when(sharePartitionManager.sharePartition(groupId, tp1)).thenReturn(sp1);
 
         ShareFetchData shareFetchData = new ShareFetchData(
                 new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, 0,
@@ -179,7 +177,7 @@ public class ShareFetchUtilsTest {
                 MemoryRecords.EMPTY, Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData =
-                ShareFetchUtils.processFetchResponse(shareFetchData, responseData, partitionCacheMap, mock(ReplicaManager.class));
+                ShareFetchUtils.processFetchResponse(shareFetchData, responseData, sharePartitionManager, mock(ReplicaManager.class));
 
         assertEquals(2, resultData.size());
         assertTrue(resultData.containsKey(tp0));
@@ -206,9 +204,9 @@ public class ShareFetchUtilsTest {
         SharePartition sp0 = Mockito.mock(SharePartition.class);
         SharePartition sp1 = Mockito.mock(SharePartition.class);
 
-        Map<SharePartitionKey, SharePartition> partitionCacheMap = new ConcurrentHashMap<>();
-        partitionCacheMap.put(new SharePartitionKey(groupId, tp0), sp0);
-        partitionCacheMap.put(new SharePartitionKey(groupId, tp1), sp1);
+        SharePartitionManager sharePartitionManager = mock(SharePartitionManager.class);
+        when(sharePartitionManager.sharePartition(groupId, tp0)).thenReturn(sp0);
+        when(sharePartitionManager.sharePartition(groupId, tp1)).thenReturn(sp1);
 
         ShareFetchData shareFetchData = new ShareFetchData(
                 new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, 0,
@@ -250,7 +248,7 @@ public class ShareFetchUtilsTest {
                 records1, Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData1 =
-                ShareFetchUtils.processFetchResponse(shareFetchData, responseData1, partitionCacheMap, replicaManager);
+                ShareFetchUtils.processFetchResponse(shareFetchData, responseData1, sharePartitionManager, replicaManager);
 
         assertEquals(2, resultData1.size());
         assertTrue(resultData1.containsKey(tp0));
@@ -279,7 +277,7 @@ public class ShareFetchUtilsTest {
                 MemoryRecords.EMPTY, Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData2 =
-                ShareFetchUtils.processFetchResponse(shareFetchData, responseData2, partitionCacheMap, replicaManager);
+                ShareFetchUtils.processFetchResponse(shareFetchData, responseData2, sharePartitionManager, replicaManager);
 
         assertEquals(2, resultData2.size());
         assertTrue(resultData2.containsKey(tp0));
@@ -304,7 +302,8 @@ public class ShareFetchUtilsTest {
         Map<TopicIdPartition, Integer> partitionMaxBytes = Collections.singletonMap(tp0, PARTITION_MAX_BYTES);
 
         SharePartition sp0 = Mockito.mock(SharePartition.class);
-        Map<SharePartitionKey, SharePartition> partitionCacheMap = Collections.singletonMap(new SharePartitionKey(groupId, tp0), sp0);
+        SharePartitionManager sharePartitionManager = mock(SharePartitionManager.class);
+        when(sharePartitionManager.sharePartition(groupId, tp0)).thenReturn(sp0);
 
         ShareFetchData shareFetchData = new ShareFetchData(
             new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, 0,
@@ -333,7 +332,7 @@ public class ShareFetchUtilsTest {
                 OptionalInt.empty(), false));
 
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData =
-            ShareFetchUtils.processFetchResponse(shareFetchData, responseData, partitionCacheMap, replicaManager);
+            ShareFetchUtils.processFetchResponse(shareFetchData, responseData, sharePartitionManager, replicaManager);
 
         assertEquals(1, resultData.size());
         assertTrue(resultData.containsKey(tp0));
@@ -348,7 +347,7 @@ public class ShareFetchUtilsTest {
                 records, Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
-        resultData = ShareFetchUtils.processFetchResponse(shareFetchData, responseData, partitionCacheMap, replicaManager);
+        resultData = ShareFetchUtils.processFetchResponse(shareFetchData, responseData, sharePartitionManager, replicaManager);
 
         assertEquals(1, resultData.size());
         assertTrue(resultData.containsKey(tp0));
