@@ -1468,40 +1468,33 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     private void verifyClientTelemetryConfigs() {
-        final String mainConsumerMetricsPushKey = mainConsumerPrefix(ENABLE_METRICS_PUSH_CONFIG);
-        final String adminClientMetricsPushKey = adminClientPrefix(ENABLE_METRICS_PUSH_CONFIG);
-        final boolean streamTelemetryEnabled =
-                !originals().containsKey(ENABLE_METRICS_PUSH_CONFIG) || (boolean) Objects.requireNonNull(
-                        parseType(ENABLE_METRICS_PUSH_CONFIG, originals().get(ENABLE_METRICS_PUSH_CONFIG), Type.BOOLEAN),
-                        "Can't parse " + ENABLE_METRICS_PUSH_CONFIG + " because it's null");
-
-        final boolean mainConsumerMetricsDisabled =
-                !originals().containsKey(mainConsumerMetricsPushKey) || (boolean) Objects.requireNonNull(
-                parseType(mainConsumerMetricsPushKey, originals().get(mainConsumerMetricsPushKey), Type.BOOLEAN),
-                "Can't parse " + mainConsumerMetricsPushKey + " because it's null");
-
-        final boolean adminMetricsEnabled =
-                !originals().containsKey(adminClientMetricsPushKey) || (boolean) Objects.requireNonNull(
-                        parseType(adminClientMetricsPushKey, originals().get(adminClientMetricsPushKey), Type.BOOLEAN),
-                        "Can't parse " + adminClientMetricsPushKey + " because it's null");
+        final boolean streamTelemetryEnabled = getBoolean(ENABLE_METRICS_PUSH_CONFIG);
+        final boolean mainConsumerMetricsEnabled = isMetricsPushEnabled(MAIN_CONSUMER_PREFIX);
+        final boolean consumerMetricsEnabled = isMetricsPushEnabled(CONSUMER_PREFIX);
+        final boolean adminMetricsEnabled = isMetricsPushEnabled(ADMIN_CLIENT_PREFIX);
 
         final String baseMetricsMisconfigurationMessage = "KafkaStreams has metrics push enabled" +
                 " but the %s metrics push is disabled. Enable " +
                 " metrics push for the %s";
 
         if (streamTelemetryEnabled) {
-            if (!mainConsumerMetricsDisabled && !adminMetricsEnabled) {
-                throw new ConfigException(String.format(baseMetricsMisconfigurationMessage, "main consumer and admin client", "main consumer and the admin client"));
+            if (!mainConsumerMetricsEnabled) {
+                if (!consumerMetricsEnabled) {
+                    throw new ConfigException(String.format(baseMetricsMisconfigurationMessage, "consumer clients", "main consumer"));
+                } else if (!adminMetricsEnabled) {
+                    throw new ConfigException(String.format(baseMetricsMisconfigurationMessage, "main consumer and admin client", "main consumer and the admin client"));
+                } else {
+                    throw new ConfigException(String.format(baseMetricsMisconfigurationMessage, "main consumer", "main consumer"));
+                }
             }
-
-            if (!mainConsumerMetricsDisabled) {
-                throw new ConfigException(String.format(baseMetricsMisconfigurationMessage, "main consumer", "main consumer"));
-            }
-
             if (!adminMetricsEnabled) {
                 throw new ConfigException(String.format(baseMetricsMisconfigurationMessage, "admin client", "admin client"));
             }
         }
+    }
+
+    private boolean isMetricsPushEnabled(final String prefix) {
+        return (boolean) originalsWithPrefix(prefix).getOrDefault(ENABLE_METRICS_PUSH_CONFIG, true);
     }
 
     @Override

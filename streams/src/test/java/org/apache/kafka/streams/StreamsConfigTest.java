@@ -65,6 +65,7 @@ import static org.apache.kafka.common.IsolationLevel.READ_UNCOMMITTED;
 import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.ENABLE_METRICS_PUSH_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH;
 import static org.apache.kafka.streams.StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH;
@@ -1252,7 +1253,7 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldEnableMetricCollectionForAllInternalClientsByDefault() {
-        props.put(StreamsConfig.ENABLE_METRICS_PUSH_CONFIG, true);
+        props.put(ENABLE_METRICS_PUSH_CONFIG, true);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
 
         assertTrue(
@@ -1279,7 +1280,7 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldDisableMetricCollectionForAllInternalClients() {
-        props.put(StreamsConfig.ENABLE_METRICS_PUSH_CONFIG, false);
+        props.put(ENABLE_METRICS_PUSH_CONFIG, false);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
 
         assertFalse(
@@ -1316,13 +1317,32 @@ public class StreamsConfigTest {
                         " but the main consumer metrics push is disabled. Enable " +
                         " metrics push for the main consumer")
         );
-        assertNull(
-            streamsConfig.getRestoreConsumerConfigs("clientId")
-                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionConsumerMetricsDisabledStreamsMetricsPushEnabled() {
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), false);
+        props.put(StreamsConfig.mainConsumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), false);
+
+        final Exception exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+
+        assertThat(
+                exception.getMessage(),
+                containsString("KafkaStreams has metrics push enabled" +
+                        " but the consumer clients metrics push is disabled. Enable " +
+                        " metrics push for the main consumer")
         );
-        assertNull(
-            streamsConfig.getGlobalConsumerConfigs("clientId")
-                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+    }
+
+    @Test
+    public void shouldEnableMetricsForMainConsumerWhenConsumerPrefixDisabledMetricsPushEnabled() {
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), false);
+        props.put(StreamsConfig.mainConsumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), true);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+        assertTrue(
+                (Boolean) streamsConfig.getMainConsumerConfigs("groupId", "clientId", 0)
+                        .get(StreamsConfig.mainConsumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG))
         );
     }
 
@@ -1338,14 +1358,6 @@ public class StreamsConfigTest {
                         " but the admin client metrics push is disabled. Enable " +
                         " metrics push for the admin client")
         );
-        assertNull(
-                streamsConfig.getRestoreConsumerConfigs("clientId")
-                        .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
-        );
-        assertNull(
-                streamsConfig.getGlobalConsumerConfigs("clientId")
-                        .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
-        );
     }
 
     @Test
@@ -1360,14 +1372,6 @@ public class StreamsConfigTest {
                 containsString("KafkaStreams has metrics push enabled" +
                         " but the main consumer and admin client metrics push is disabled. Enable " +
                         " metrics push for the main consumer and the admin client")
-        );
-        assertNull(
-                streamsConfig.getRestoreConsumerConfigs("clientId")
-                        .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
-        );
-        assertNull(
-                streamsConfig.getGlobalConsumerConfigs("clientId")
-                        .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
         );
     }
 
