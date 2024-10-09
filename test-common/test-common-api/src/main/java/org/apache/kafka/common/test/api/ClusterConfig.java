@@ -65,11 +65,11 @@ public class ClusterConfig {
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     private ClusterConfig(Set<Type> types, int brokers, int controllers, int disksPerBroker, boolean autoStart,
-                          SecurityProtocol brokerSecurityProtocol, ListenerName brokerListenerName, File trustStoreFile,
-                          MetadataVersion metadataVersion, Map<String, String> serverProperties, Map<String, String> producerProperties,
-                          Map<String, String> consumerProperties, Map<String, String> adminClientProperties, Map<String, String> saslServerProperties,
-                          Map<String, String> saslClientProperties, Map<Integer, Map<String, String>> perServerProperties, List<String> tags,
-                          Map<Features, Short> features) {
+                  SecurityProtocol brokerSecurityProtocol, ListenerName brokerListenerName, File trustStoreFile,
+                  MetadataVersion metadataVersion, Map<String, String> serverProperties, Map<String, String> producerProperties,
+                  Map<String, String> consumerProperties, Map<String, String> adminClientProperties, Map<String, String> saslServerProperties,
+                  Map<String, String> saslClientProperties, Map<Integer, Map<String, String>> perServerProperties, List<String> tags,
+                  Map<Features, Short> features) {
         // do fail fast. the following values are invalid for kraft modes.
         if (brokers < 0) throw new IllegalArgumentException("Number of brokers must be greater or equal to zero.");
         if (controllers < 0) throw new IllegalArgumentException("Number of controller must be greater or equal to zero.");
