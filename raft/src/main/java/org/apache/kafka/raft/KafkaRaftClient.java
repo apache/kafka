@@ -3036,11 +3036,13 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             logger.info("Become candidate due to fetch timeout");
             transitionToCandidate(currentTimeMs);
             backoffMs = 0;
-        } else if (state.hasUpdateVoterPeriodExpired(currentTimeMs) &&
-            partitionState.lastKraftVersion().isReconfigSupported() &&
-            partitionState.lastVoterSet().voterNodeNeedsUpdate(quorum.localVoterNodeOrThrow())
-        ) {
-            backoffMs = maybeSendUpdateVoterRequest(state, currentTimeMs);
+        } else if (state.hasUpdateVoterPeriodExpired(currentTimeMs)) {
+            if (partitionState.lastKraftVersion().isReconfigSupported() &&
+                partitionState.lastVoterSet().voterNodeNeedsUpdate(quorum.localVoterNodeOrThrow())) {
+                backoffMs = maybeSendUpdateVoterRequest(state, currentTimeMs);
+            } else {
+                backoffMs = maybeSendFetchOrFetchSnapshot(state, currentTimeMs);
+            }
             state.resetUpdateVoterPeriod(currentTimeMs);
         } else {
             backoffMs = maybeSendFetchOrFetchSnapshot(state, currentTimeMs);
