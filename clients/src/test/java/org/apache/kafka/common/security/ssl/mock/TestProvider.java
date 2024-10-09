@@ -24,11 +24,11 @@ public class TestProvider extends Provider {
     private static final String TRUST_MANAGER_FACTORY = String.format("TrustManagerFactory.%s", TestTrustManagerFactory.ALGORITHM);
 
     public TestProvider() {
-        this("TestProvider", 0.1, "provider for test cases");
+        this("TestProvider", "0.1", "provider for test cases");
     }
 
     @SuppressWarnings("this-escape")
-    protected TestProvider(String name, double version, String info) {
+    protected TestProvider(String name, String version, String info) {
         super(name, version, info);
         super.put(KEY_MANAGER_FACTORY, TestKeyManagerFactory.class.getName());
         super.put(TRUST_MANAGER_FACTORY, TestTrustManagerFactory.class.getName());
