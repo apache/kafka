@@ -146,10 +146,10 @@ public class DelayedShareFetch extends DelayedOperation {
             // We add the action to delayed actions queue to avoid an infinite call stack, which could happen if
             // we directly call delayedShareFetchPurgatory.checkAndComplete
             delayedActionQueue.add(() -> {
-              topicPartitionData.keySet().forEach(topicIdPartition ->
-                  delayedShareFetchPurgatory.checkAndComplete(
-                      new DelayedShareFetchKey(shareFetchData.groupId(), topicIdPartition)));
-              return BoxedUnit.UNIT;
+                topicPartitionData.keySet().forEach(topicIdPartition ->
+                    delayedShareFetchPurgatory.checkAndComplete(
+                        new DelayedShareFetchKey(shareFetchData.groupId(), topicIdPartition)));
+                return BoxedUnit.UNIT;
             });
         }
     }
