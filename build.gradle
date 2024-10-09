@@ -308,6 +308,17 @@ subprojects {
     addParametersForTests(name, options)
   }
 
+  java {
+    // We should only set this if Java version is < 9 (--release is recommended for >= 9), but the Scala plugin for IntelliJ sets
+    // `-target` incorrectly if this is unset
+    sourceCompatibility = minJavaVersion
+    targetCompatibility = minJavaVersion
+  }
+
+  compileJava {
+    options.release = minJavaVersion
+  }
+
   if (shouldPublish) {
 
     publishing {
