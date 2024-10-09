@@ -1733,26 +1733,25 @@ public class SharePartitionManagerTest {
         when(sp2.canAcquireRecords()).thenReturn(false);
 
         Set<Object> delayedShareFetchWatchKeys = new HashSet<>();
-        partitionMaxBytes.keySet().forEach(topicIdPartition -> delayedShareFetchWatchKeys.add(new DelayedShareFetchKey(groupId, topicIdPartition)));
-
-        DelayedShareFetch delayedShareFetch = DelayedShareFetchTest.DelayedShareFetchBuilder.builder()
-                .withShareFetchData(shareFetchData)
-                .withReplicaManager(replicaManager)
-                .withPartitionCacheMap(partitionCacheMap)
-                .build();
-
-        delayedShareFetchPurgatory.tryCompleteElseWatch(
-            delayedShareFetch, CollectionConverters.asScala(delayedShareFetchWatchKeys).toSeq());
-
-        // Since acquisition lock for sp1 and sp2 cannot be acquired, we should have 2 watched keys.
-        assertEquals(2, delayedShareFetchPurgatory.watched());
-
+        partitionMaxBytes.keySet().forEach(topicIdPartition -> delayedShareFetchWatchKeys.add(new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId(), topicIdPartition.partition())));
 
         SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withPartitionCacheMap(partitionCacheMap)
             .withReplicaManager(replicaManager)
             .withTimer(mockTimer)
             .build();
+
+        DelayedShareFetch delayedShareFetch = DelayedShareFetchTest.DelayedShareFetchBuilder.builder()
+            .withShareFetchData(shareFetchData)
+            .withReplicaManager(replicaManager)
+            .withSharePartitionManager(sharePartitionManager)
+            .build();
+
+        delayedShareFetchPurgatory.tryCompleteElseWatch(
+            delayedShareFetch, CollectionConverters.asScala(delayedShareFetchWatchKeys).toSeq());
+
+        // Since acquisition lock for sp1 and sp2 cannot be acquired, we should have 2 watched keys.
+        assertEquals(2, delayedShareFetchPurgatory.watched());
 
         doAnswer(invocation -> buildLogReadResult(partitionMaxBytes.keySet())).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
@@ -1832,25 +1831,25 @@ public class SharePartitionManagerTest {
         when(sp3.canAcquireRecords()).thenReturn(false);
 
         Set<Object> delayedShareFetchWatchKeys = new HashSet<>();
-        partitionMaxBytes.keySet().forEach(topicIdPartition -> delayedShareFetchWatchKeys.add(new DelayedShareFetchKey(groupId, topicIdPartition)));
+        partitionMaxBytes.keySet().forEach(topicIdPartition -> delayedShareFetchWatchKeys.add(new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId(), topicIdPartition.partition())));
+
+        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withPartitionCacheMap(partitionCacheMap)
+            .withReplicaManager(replicaManager)
+            .withTimer(mockTimer)
+            .build();
 
         DelayedShareFetch delayedShareFetch = DelayedShareFetchTest.DelayedShareFetchBuilder.builder()
-                .withShareFetchData(shareFetchData)
-                .withReplicaManager(replicaManager)
-                .withPartitionCacheMap(partitionCacheMap)
-                .build();
+            .withShareFetchData(shareFetchData)
+            .withReplicaManager(replicaManager)
+            .withSharePartitionManager(sharePartitionManager)
+            .build();
 
         delayedShareFetchPurgatory.tryCompleteElseWatch(
                 delayedShareFetch, CollectionConverters.asScala(delayedShareFetchWatchKeys).toSeq());
 
         // Since acquisition lock for sp1 and sp2 cannot be acquired, we should have 2 watched keys.
         assertEquals(2, delayedShareFetchPurgatory.watched());
-
-        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
-                .withPartitionCacheMap(partitionCacheMap)
-                .withReplicaManager(replicaManager)
-                .withTimer(mockTimer)
-                .build();
 
         Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgeTopics = new HashMap<>();
         acknowledgeTopics.put(tp3, Arrays.asList(
@@ -1923,26 +1922,26 @@ public class SharePartitionManagerTest {
         when(sp2.canAcquireRecords()).thenReturn(false);
 
         Set<Object> delayedShareFetchWatchKeys = new HashSet<>();
-        partitionMaxBytes.keySet().forEach(topicIdPartition -> delayedShareFetchWatchKeys.add(new DelayedShareFetchKey(groupId, topicIdPartition)));
+        partitionMaxBytes.keySet().forEach(topicIdPartition -> delayedShareFetchWatchKeys.add(new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId(), topicIdPartition.partition())));
+
+        SharePartitionManager sharePartitionManager = spy(SharePartitionManagerBuilder.builder()
+            .withPartitionCacheMap(partitionCacheMap)
+            .withCache(cache)
+            .withReplicaManager(replicaManager)
+            .withTimer(mockTimer)
+            .build());
 
         DelayedShareFetch delayedShareFetch = DelayedShareFetchTest.DelayedShareFetchBuilder.builder()
-                .withShareFetchData(shareFetchData)
-                .withReplicaManager(replicaManager)
-                .withPartitionCacheMap(partitionCacheMap)
-                .build();
+            .withShareFetchData(shareFetchData)
+            .withReplicaManager(replicaManager)
+            .withSharePartitionManager(sharePartitionManager)
+            .build();
 
         delayedShareFetchPurgatory.tryCompleteElseWatch(
                 delayedShareFetch, CollectionConverters.asScala(delayedShareFetchWatchKeys).toSeq());
 
         // Since acquisition lock for sp1 and sp2 cannot be acquired, we should have 2 watched keys.
         assertEquals(2, delayedShareFetchPurgatory.watched());
-
-        SharePartitionManager sharePartitionManager = spy(SharePartitionManagerBuilder.builder()
-                .withPartitionCacheMap(partitionCacheMap)
-                .withCache(cache)
-                .withReplicaManager(replicaManager)
-                .withTimer(mockTimer)
-                .build());
 
         doAnswer(invocation -> buildLogReadResult(partitionMaxBytes.keySet())).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
@@ -2025,26 +2024,26 @@ public class SharePartitionManagerTest {
         when(sp3.canAcquireRecords()).thenReturn(false);
 
         Set<Object> delayedShareFetchWatchKeys = new HashSet<>();
-        partitionMaxBytes.keySet().forEach(topicIdPartition -> delayedShareFetchWatchKeys.add(new DelayedShareFetchKey(groupId, topicIdPartition)));
+        partitionMaxBytes.keySet().forEach(topicIdPartition -> delayedShareFetchWatchKeys.add(new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId(), topicIdPartition.partition())));
+
+        SharePartitionManager sharePartitionManager = spy(SharePartitionManagerBuilder.builder()
+            .withPartitionCacheMap(partitionCacheMap)
+            .withCache(cache)
+            .withReplicaManager(replicaManager)
+            .withTimer(mockTimer)
+            .build());
 
         DelayedShareFetch delayedShareFetch = DelayedShareFetchTest.DelayedShareFetchBuilder.builder()
-                .withShareFetchData(shareFetchData)
-                .withReplicaManager(replicaManager)
-                .withPartitionCacheMap(partitionCacheMap)
-                .build();
+            .withShareFetchData(shareFetchData)
+            .withReplicaManager(replicaManager)
+            .withSharePartitionManager(sharePartitionManager)
+            .build();
 
         delayedShareFetchPurgatory.tryCompleteElseWatch(
                 delayedShareFetch, CollectionConverters.asScala(delayedShareFetchWatchKeys).toSeq());
 
         // Since acquisition lock for sp1 and sp2 cannot be acquired, we should have 2 watched keys.
         assertEquals(2, delayedShareFetchPurgatory.watched());
-
-        SharePartitionManager sharePartitionManager = spy(SharePartitionManagerBuilder.builder()
-                .withPartitionCacheMap(partitionCacheMap)
-                .withCache(cache)
-                .withReplicaManager(replicaManager)
-                .withTimer(mockTimer)
-                .build());
 
         // The share session for this share group member returns tp1 and tp3. No topic partition is common in
         // both the delayed fetch request and the share session.
@@ -2293,7 +2292,7 @@ public class SharePartitionManagerTest {
     }
 
     static void mockReplicaManagerDelayedShareFetch(ReplicaManager replicaManager,
-                                                     DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory) {
+                                                    DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory) {
         doAnswer(invocationOnMock -> {
             Object[] args = invocationOnMock.getArguments();
             delayedShareFetchPurgatory.checkAndComplete((DelayedShareFetchKey) args[0]);
@@ -2307,7 +2306,7 @@ public class SharePartitionManagerTest {
         }).when(replicaManager).addDelayedShareFetchRequest(any(), any());
     }
 
-    private static class SharePartitionManagerBuilder {
+    static class SharePartitionManagerBuilder {
         private ReplicaManager replicaManager = mock(ReplicaManager.class);
         private Time time = new MockTime();
         private ShareSessionCache cache = new ShareSessionCache(10, 1000);
@@ -2316,7 +2315,7 @@ public class SharePartitionManagerTest {
         private Timer timer = new MockTimer();
         private Metrics metrics = new Metrics();
         private ConcurrentLinkedQueue<ShareFetchData> fetchQueue = new ConcurrentLinkedQueue<>();
-        private final DelayedActionQueue delayedActionsQueue = mock(DelayedActionQueue.class);
+        private DelayedActionQueue delayedActionsQueue = mock(DelayedActionQueue.class);
 
         private SharePartitionManagerBuilder withReplicaManager(ReplicaManager replicaManager) {
             this.replicaManager = replicaManager;
@@ -2333,7 +2332,7 @@ public class SharePartitionManagerTest {
             return this;
         }
 
-        private SharePartitionManagerBuilder withPartitionCacheMap(Map<SharePartitionKey, SharePartition> partitionCacheMap) {
+        SharePartitionManagerBuilder withPartitionCacheMap(Map<SharePartitionKey, SharePartition> partitionCacheMap) {
             this.partitionCacheMap = partitionCacheMap;
             return this;
         }
@@ -2355,6 +2354,11 @@ public class SharePartitionManagerTest {
 
         private SharePartitionManagerBuilder withFetchQueue(ConcurrentLinkedQueue<ShareFetchData> fetchQueue) {
             this.fetchQueue = fetchQueue;
+            return this;
+        }
+
+        SharePartitionManagerBuilder withDelayedActionsQueue(DelayedActionQueue delayedActionsQueue) {
+            this.delayedActionsQueue = delayedActionsQueue;
             return this;
         }
 

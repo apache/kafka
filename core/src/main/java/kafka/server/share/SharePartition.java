@@ -1791,7 +1791,7 @@ public class SharePartition {
 
                     // If we have an acquisition lock timeout for a share-partition, then we should check if
                     // there is a pending share fetch request for the share-partition and complete it.
-                    DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchKey(groupId, topicIdPartition);
+                    DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId(), topicIdPartition.partition());
                     replicaManager.completeDelayedShareFetchRequest(delayedShareFetchKey);
                 });
             }

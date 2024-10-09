@@ -73,6 +73,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import scala.jdk.javaapi.CollectionConverters;
+import scala.runtime.BoxedUnit;
 
 /**
  * The SharePartitionManager is responsible for managing the SharePartitions and ShareSessions.
@@ -291,7 +292,7 @@ public class SharePartitionManager implements AutoCloseable {
 
                 // If we have an acknowledgement completed for a topic-partition, then we should check if
                 // there is a pending share fetch request for the topic-partition and complete it.
-                DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchKey(groupId, topicIdPartition);
+                DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId(), topicIdPartition.partition());
                 replicaManager.completeDelayedShareFetchRequest(delayedShareFetchKey);
 
                 futures.put(topicIdPartition, future);
@@ -308,6 +309,15 @@ public class SharePartitionManager implements AutoCloseable {
                 .setPartitionIndex(topicIdPartition.partition())
                 .setErrorCode(future.join().code())));
             return result;
+        });
+    }
+
+    void addPurgatoryCheckAndCompleteDelayedActionToActionQueue(Set<TopicIdPartition> topicIdPartitions, String groupId) {
+        delayedActionsQueue.add(() -> {
+            topicIdPartitions.forEach(topicIdPartition ->
+                replicaManager.completeDelayedShareFetchRequest(
+                    new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId(), topicIdPartition.partition())));
+            return BoxedUnit.UNIT;
         });
     }
 
@@ -360,7 +370,7 @@ public class SharePartitionManager implements AutoCloseable {
                 });
                 // If we have a release acquired request completed for a topic-partition, then we should check if
                 // there is a pending share fetch request for the topic-partition and complete it.
-                DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchKey(groupId, topicIdPartition);
+                DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId(), topicIdPartition.partition());
                 replicaManager.completeDelayedShareFetchRequest(delayedShareFetchKey);
 
                 futuresMap.put(topicIdPartition, future);
@@ -579,7 +589,7 @@ public class SharePartitionManager implements AutoCloseable {
                     shareFetchData.groupId(),
                     topicIdPartition
                 );
-                SharePartition sharePartition = fetchSharePartition(sharePartitionKey);
+                SharePartition sharePartition = getOrCreateSharePartition(sharePartitionKey);
 
                 // The share partition is initialized asynchronously, so we need to wait for it to be initialized.
                 // But if the share partition is already initialized, then the future will be completed immediately.
@@ -595,11 +605,19 @@ public class SharePartitionManager implements AutoCloseable {
 
             Set<DelayedShareFetchKey> delayedShareFetchWatchKeys = new HashSet<>();
             shareFetchData.partitionMaxBytes().keySet().forEach(
-                topicIdPartition -> delayedShareFetchWatchKeys.add(
-                    new DelayedShareFetchKey(shareFetchData.groupId(), topicIdPartition)));
+                topicIdPartition -> {
+                    // We add a key corresponding to each share partition in the request in the group so that when there are
+                    // acknowledgements/acquisition lock timeout etc, we have a way to perform checkAndComplete for all
+                    // such requests which are delayed because of lack of data to acquire for the share partition.
+                    delayedShareFetchWatchKeys.add(new DelayedShareFetchGroupKey(shareFetchData.groupId(), topicIdPartition.topicId(), topicIdPartition.partition()));
+                    // We add a key corresponding to each topic partition in the request so that when the HWM is updated
+                    // for any topic partition, we have a way to perform checkAndComplete for all such requests which are
+                    // delayed because of lack of data to acquire for the topic partition.
+                    delayedShareFetchWatchKeys.add(new DelayedShareFetchPartitionKey(topicIdPartition.topicId(), topicIdPartition.partition()));
+                });
 
             // Add the share fetch to the delayed share fetch purgatory to process the fetch request.
-            addDelayedShareFetch(new DelayedShareFetch(shareFetchData, replicaManager, partitionCacheMap, delayedActionsQueue),
+            addDelayedShareFetch(new DelayedShareFetch(shareFetchData, replicaManager, this),
                 delayedShareFetchWatchKeys);
 
             // Release the lock so that other threads can process the queue.
@@ -618,7 +636,7 @@ public class SharePartitionManager implements AutoCloseable {
         }
     }
 
-    private SharePartition fetchSharePartition(SharePartitionKey sharePartitionKey) {
+    private SharePartition getOrCreateSharePartition(SharePartitionKey sharePartitionKey) {
         return partitionCacheMap.computeIfAbsent(sharePartitionKey,
                 k -> {
                     long start = time.hiResClockMs();
@@ -679,6 +697,16 @@ public class SharePartitionManager implements AutoCloseable {
 
     private SharePartitionKey sharePartitionKey(String groupId, TopicIdPartition topicIdPartition) {
         return new SharePartitionKey(groupId, topicIdPartition);
+    }
+
+    /**
+     *
+     * @param groupId The share group id, this is used to identify the share group.
+     * @param topicIdPartition The topic partition that the group is subscribed to.
+     * @return The share partition stored for the share group topic-partition.
+     */
+    protected SharePartition sharePartition(String groupId, TopicIdPartition topicIdPartition) {
+        return partitionCacheMap.get(sharePartitionKey(groupId, topicIdPartition));
     }
 
     static class ShareGroupMetrics {
