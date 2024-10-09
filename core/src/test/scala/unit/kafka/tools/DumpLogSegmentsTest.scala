@@ -28,7 +28,7 @@ import kafka.log.{LogTestUtils, UnifiedLog}
 import kafka.raft.{KafkaMetadataLog, MetadataLogConfig}
 import kafka.server.KafkaRaftServer
 import kafka.tools.DumpLogSegments.{OffsetsMessageParser, TimeIndexDumpErrors}
-import kafka.utils.{TestUtils, VerifiableProperties}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.{Assignment, Subscription}
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
@@ -41,16 +41,17 @@ import org.apache.kafka.common.utils.{Exit, Utils}
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde
 import org.apache.kafka.coordinator.group.generated.{ConsumerGroupMemberMetadataValue, ConsumerGroupMetadataKey, ConsumerGroupMetadataValue, GroupMetadataKey, GroupMetadataValue}
-import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.raft.{KafkaRaftClient, OffsetAndEpoch, VoterSetTest}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, KRaftVersion}
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteLogSegmentMetadataUpdate, RemoteLogSegmentState, RemotePartitionDeleteMetadata, RemotePartitionDeleteState}
+import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.snapshot.RecordsSnapshotWriter
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
@@ -93,8 +94,8 @@ class DumpLogSegmentsTest {
       time = time,
       brokerTopicStats = new BrokerTopicStats,
       maxTransactionTimeoutMs = 5 * 60 * 1000,
-      producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
-      producerIdExpirationCheckIntervalMs = TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
+      producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
+      producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
       logDirFailureChannel = new LogDirFailureChannel(10),
       topicId = None,
       keepPartitionMetadataFile = true
@@ -220,9 +221,9 @@ class DumpLogSegmentsTest {
     // Verify that records are printed with --print-data-log if --deep-iteration is also specified
     verifyRecordsInOutput(checkKeysAndValues = true, Array("--print-data-log", "--deep-iteration", "--files", logFilePath))
     // Verify that records are printed with --value-decoder even if --print-data-log is not specified
-    verifyRecordsInOutput(checkKeysAndValues = true, Array("--value-decoder-class", "kafka.serializer.StringDecoder", "--files", logFilePath))
+    verifyRecordsInOutput(checkKeysAndValues = true, Array("--value-decoder-class", "org.apache.kafka.tools.api.StringDecoder", "--files", logFilePath))
     // Verify that records are printed with --key-decoder even if --print-data-log is not specified
-    verifyRecordsInOutput(checkKeysAndValues = true, Array("--key-decoder-class", "kafka.serializer.StringDecoder", "--files", logFilePath))
+    verifyRecordsInOutput(checkKeysAndValues = true, Array("--key-decoder-class", "org.apache.kafka.tools.api.StringDecoder", "--files", logFilePath))
     // Verify that records are printed with --deep-iteration even if --print-data-log is not specified
     verifyRecordsInOutput(checkKeysAndValues = false, Array("--deep-iteration", "--files", logFilePath))
 
@@ -396,7 +397,7 @@ class DumpLogSegmentsTest {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
     log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
     log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*), leaderEpoch = 0)
-    val secondSegment = log.roll();
+    val secondSegment = log.roll()
     secondSegment.append(1L, RecordBatch.NO_TIMESTAMP, 1L, MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*))
     secondSegment.flush()
     log.flush(true)
@@ -828,26 +829,6 @@ class DumpLogSegmentsTest {
     )
   }
 
-  @Test
-  def testNewDecoder(): Unit = {
-    // Decoder translate should pass without exception
-    DumpLogSegments.newDecoder(classOf[DumpLogSegmentsTest.TestDecoder].getName)
-    DumpLogSegments.newDecoder(classOf[kafka.serializer.DefaultDecoder].getName)
-    assertThrows(classOf[Exception], () => DumpLogSegments.newDecoder(classOf[DumpLogSegmentsTest.TestDecoderWithoutVerifiableProperties].getName))
-  }
-
-  @Test
-  def testConvertDeprecatedDecoderClass(): Unit = {
-    assertEquals(classOf[org.apache.kafka.tools.api.DefaultDecoder].getName, DumpLogSegments.convertDeprecatedDecoderClass(
-      classOf[kafka.serializer.DefaultDecoder].getName))
-    assertEquals(classOf[org.apache.kafka.tools.api.IntegerDecoder].getName, DumpLogSegments.convertDeprecatedDecoderClass(
-      classOf[kafka.serializer.IntegerDecoder].getName))
-    assertEquals(classOf[org.apache.kafka.tools.api.LongDecoder].getName, DumpLogSegments.convertDeprecatedDecoderClass(
-      classOf[kafka.serializer.LongDecoder].getName))
-    assertEquals(classOf[org.apache.kafka.tools.api.StringDecoder].getName, DumpLogSegments.convertDeprecatedDecoderClass(
-      classOf[kafka.serializer.StringDecoder].getName))
-  }
-
   private def readBatchMetadata(lines: util.ListIterator[String]): Option[String] = {
     while (lines.hasNext) {
       val line = lines.next()
@@ -980,15 +961,5 @@ class DumpLogSegmentsTest {
         assertEquals(None, parsedRecord.get("compresscodec"))
       }
     }
-  }
-}
-
-object DumpLogSegmentsTest {
-  class TestDecoder(props: VerifiableProperties) extends kafka.serializer.Decoder[Array[Byte]] {
-    override def fromBytes(bytes: Array[Byte]): Array[Byte] = bytes
-  }
-
-  class TestDecoderWithoutVerifiableProperties() extends kafka.serializer.Decoder[Array[Byte]] {
-    override def fromBytes(bytes: Array[Byte]): Array[Byte] = bytes
   }
 }

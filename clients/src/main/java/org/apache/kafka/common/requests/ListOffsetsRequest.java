@@ -101,6 +101,11 @@ public class ListOffsetsRequest extends AbstractRequest {
             return this;
         }
 
+        public Builder setTimeoutMs(int timeoutMs) {
+            data.setTimeoutMs(timeoutMs);
+            return this;
+        }
+
         @Override
         public ListOffsetsRequest build(short version) {
             return new ListOffsetsRequest(data, version);
@@ -179,6 +184,10 @@ public class ListOffsetsRequest extends AbstractRequest {
 
     public Set<TopicPartition> duplicatePartitions() {
         return duplicatePartitions;
+    }
+
+    public int timeoutMs() {
+        return data.timeoutMs();
     }
 
     public static ListOffsetsRequest parse(ByteBuffer buffer, short version) {

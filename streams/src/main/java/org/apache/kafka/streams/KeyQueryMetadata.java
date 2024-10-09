@@ -61,7 +61,7 @@ public class KeyQueryMetadata {
     /**
      * Get the Kafka Streams instances that host the key as standbys.
      *
-     * @return set of standby {@link HostInfo} or a empty set, if no standbys are configured
+     * @return set of standby {@link HostInfo} or an empty set, if no standbys are configured
      */
     public Set<HostInfo> standbyHosts() {
         return standbyHosts;

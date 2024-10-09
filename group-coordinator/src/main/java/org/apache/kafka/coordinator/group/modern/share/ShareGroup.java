@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.modern.share;
 
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.protocol.Errors;
@@ -131,11 +132,12 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
      *                          created if it does not exist.
      *
      * @return A ShareGroupMember.
+     * @throws UnknownMemberIdException when the member does not exist and createIfNotExists is false.
      */
     public ShareGroupMember getOrMaybeCreateMember(
         String memberId,
         boolean createIfNotExists
-    ) {
+    ) throws UnknownMemberIdException {
         ShareGroupMember member = members.get(memberId);
         if (member != null) return member;
 
@@ -184,7 +186,7 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
         boolean isTransactional,
         short apiVersion
     ) {
-        throw new UnsupportedOperationException("validateOffsetCommit is not supported for Share Groups.");
+        throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.", groupId));
     }
 
     @Override
@@ -193,12 +195,12 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
         int memberEpoch,
         long lastCommittedOffset
     ) {
-        throw new UnsupportedOperationException("validateOffsetFetch is not supported for Share Groups.");
+        throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.", groupId));
     }
 
     @Override
     public void validateOffsetDelete() {
-        throw new UnsupportedOperationException("validateOffsetDelete is not supported for Share Groups.");
+        throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.", groupId));
     }
 
     /**

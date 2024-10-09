@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.ForwardingAdmin;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
@@ -258,7 +259,6 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
         return sourceClusterAlias() + "->" + targetClusterAlias() + "|" + connectorName();
     }
 
-    @SuppressWarnings("deprecation")
     protected static final ConfigDef BASE_CONNECTOR_CONFIG_DEF = new ConfigDef(ConnectorConfig.configDef())
             .define(
                     ENABLED,
@@ -296,11 +296,11 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
                     ConfigDef.Importance.LOW,
                     REPLICATION_POLICY_SEPARATOR_DOC)
             .define(
-                INTERNAL_TOPIC_SEPARATOR_ENABLED,
-                ConfigDef.Type.BOOLEAN,
-                INTERNAL_TOPIC_SEPARATOR_ENABLED_DEFAULT,
-                ConfigDef.Importance.LOW,
-                INTERNAL_TOPIC_SEPARATOR_ENABLED_DOC)
+                    INTERNAL_TOPIC_SEPARATOR_ENABLED,
+                    ConfigDef.Type.BOOLEAN,
+                    INTERNAL_TOPIC_SEPARATOR_ENABLED_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    INTERNAL_TOPIC_SEPARATOR_ENABLED_DOC)
             .define(
                     FORWARDING_ADMIN_CLASS,
                     ConfigDef.Type.CLASS,
@@ -310,7 +310,7 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
             .define(
                     CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
                     ConfigDef.Type.LIST,
-                    null,
+                    JmxReporter.class.getName(),
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
             .define(
@@ -320,13 +320,7 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
                     in(Utils.enumOptions(SecurityProtocol.class)),
                     ConfigDef.Importance.MEDIUM,
                     CommonClientConfigs.SECURITY_PROTOCOL_DOC)
-            .define(
-                    CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG,
-                    ConfigDef.Type.BOOLEAN,
-                    true,
-                    ConfigDef.Importance.LOW,
-                    CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_DOC
-            ).withClientSslSupport()
+            .withClientSslSupport()
             .withClientSaslSupport();
 
     public static void main(String[] args) {

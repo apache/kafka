@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
-import kafka.server.KafkaServer;
-import kafka.server.MetadataCache;
-
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -35,8 +32,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
-import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
@@ -53,7 +48,6 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentListener;
 import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
 import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.QueryResult;
@@ -75,6 +69,7 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -90,21 +85,16 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
-import scala.Option;
-
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.sleep;
 import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
-import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -294,7 +284,7 @@ public class IntegrationTestUtils {
                                             final int replicationCount,
                                             final String... topics) {
         try {
-            cluster.deleteAllTopicsAndWait(DEFAULT_TIMEOUT);
+            cluster.deleteAllTopics();
             for (final String topic : topics) {
                 cluster.createTopic(topic, partitionCount, replicationCount);
             }
@@ -306,9 +296,9 @@ public class IntegrationTestUtils {
     public static void quietlyCleanStateAfterTest(final EmbeddedKafkaCluster cluster, final KafkaStreams driver) {
         try {
             driver.cleanUp();
-            cluster.deleteAllTopicsAndWait(DEFAULT_TIMEOUT);
-        } catch (final RuntimeException | InterruptedException e) {
-            LOG.warn("Ignoring failure to clean test state", e);
+            cluster.deleteAllTopics();
+        } catch (final RuntimeException e) {
+            LOG.warn("Ignoring failure to clean test state");
         }
     }
 
@@ -635,6 +625,18 @@ public class IntegrationTestUtils {
     }
 
     /**
+     * Wait until enough restoring tasks have been started
+     */
+    public static void waitForActiveRestoringTask(final KafkaStreams streams,
+                                                  final int expectedTasks,
+                                                  final long timeoutMilliseconds) throws Exception {
+        TestUtils.waitForCondition(() -> streams.metrics().entrySet().stream()
+                        .filter(metric -> metric.getKey().name().equals("active-restoring-tasks"))
+                        .anyMatch(metric -> ((Number) metric.getValue().metricValue()).intValue() == expectedTasks),
+                timeoutMilliseconds, "Timed out waiting for active restoring task");
+    }
+
+    /**
      * Wait until enough data (consumer records) has been consumed.
      *
      * @param consumerConfig      Kafka Consumer configuration
@@ -881,21 +883,6 @@ public class IntegrationTestUtils {
      * @param consumerConfig     Kafka Consumer configuration
      * @param topic              Topic to consume from
      * @param expectedNumRecords Minimum number of expected records
-     * @return All the records consumed, or null if no records are consumed
-     * @throws AssertionError    if the given wait time elapses
-     */
-    public static <V> List<V> waitUntilMinValuesRecordsReceived(final Properties consumerConfig,
-                                                                final String topic,
-                                                                final int expectedNumRecords) throws Exception {
-        return waitUntilMinValuesRecordsReceived(consumerConfig, topic, expectedNumRecords, DEFAULT_TIMEOUT);
-    }
-
-    /**
-     * Wait until enough data (value records) has been consumed.
-     *
-     * @param consumerConfig     Kafka Consumer configuration
-     * @param topic              Topic to consume from
-     * @param expectedNumRecords Minimum number of expected records
      * @param waitTime           Upper bound of waiting time in milliseconds
      * @return All the records consumed, or null if no records are consumed
      * @throws AssertionError    if the given wait time elapses
@@ -920,53 +907,6 @@ public class IntegrationTestUtils {
             });
         }
         return accumData;
-    }
-
-    @SuppressWarnings("WeakerAccess")
-    public static void waitForTopicPartitions(final List<KafkaServer> servers,
-                                              final List<TopicPartition> partitions,
-                                              final long timeout) throws InterruptedException {
-        final long end = System.currentTimeMillis() + timeout;
-        for (final TopicPartition partition : partitions) {
-            final long remaining = end - System.currentTimeMillis();
-            if (remaining <= 0) {
-                throw new AssertionError("timed out while waiting for partitions to become available. Timeout=" + timeout);
-            }
-            waitUntilMetadataIsPropagated(servers, partition.topic(), partition.partition(), remaining);
-        }
-    }
-
-    private static void waitUntilMetadataIsPropagated(final List<KafkaServer> servers,
-                                                     final String topic,
-                                                     final int partition,
-                                                     final long timeout) throws InterruptedException {
-        final String baseReason = String.format("Metadata for topic=%s partition=%d was not propagated to all brokers within %d ms. ",
-            topic, partition, timeout);
-
-        retryOnExceptionWithTimeout(timeout, () -> {
-            final List<KafkaServer> emptyPartitionInfos = new ArrayList<>();
-            final List<KafkaServer> invalidBrokerIds = new ArrayList<>();
-
-            for (final KafkaServer server : servers) {
-                final MetadataCache metadataCache = server.dataPlaneRequestProcessor().metadataCache();
-                final Option<UpdateMetadataPartitionState> partitionInfo =
-                    metadataCache.getPartitionInfo(topic, partition);
-
-                if (partitionInfo.isEmpty()) {
-                    emptyPartitionInfos.add(server);
-                    continue;
-                }
-
-                final UpdateMetadataPartitionState metadataPartitionState = partitionInfo.get();
-                if (!FetchRequest.isValidBrokerId(metadataPartitionState.leader())) {
-                    invalidBrokerIds.add(server);
-                }
-            }
-
-            final String reason = baseReason + ". Brokers without partition info: " + emptyPartitionInfos +
-                ". Brokers with invalid broker id for partition leader: " + invalidBrokerIds;
-            assertThat(reason, emptyPartitionInfos.isEmpty() && invalidBrokerIds.isEmpty());
-        });
     }
 
     public static void startApplicationAndWaitUntilRunning(final KafkaStreams streams) throws Exception {
@@ -1155,6 +1095,10 @@ public class IntegrationTestUtils {
         if (results.size() != expected.size()) {
             throw new AssertionError(printRecords(results) + " != " + expected);
         }
+        // sort expected and results by key before comparing them
+        expected.sort(Comparator.comparing(e -> e.key().toString()));
+        results.sort(Comparator.comparing(e -> e.key().toString()));
+
         final Iterator<KeyValueTimestamp<K, V>> expectedIterator = expected.iterator();
         for (final ConsumerRecord<K, V> result : results) {
             final KeyValueTimestamp<K, V> expected1 = expectedIterator.next();
@@ -1164,28 +1108,6 @@ public class IntegrationTestUtils {
                 throw new AssertionError(printRecords(results) + " != " + expected, e);
             }
         }
-    }
-
-    public static void verifyKeyValueTimestamps(final Properties consumerConfig,
-                                                final String topic,
-                                                final Set<KeyValueTimestamp<String, Long>> expected) {
-        final List<ConsumerRecord<String, Long>> results;
-        try {
-            results = waitUntilMinRecordsReceived(consumerConfig, topic, expected.size());
-        } catch (final Exception e) {
-            throw new RuntimeException(e);
-        }
-
-        if (results.size() != expected.size()) {
-            throw new AssertionError(printRecords(results) + " != " + expected);
-        }
-
-        final Set<KeyValueTimestamp<String, Long>> actual =
-            results.stream()
-                   .map(result -> new KeyValueTimestamp<>(result.key(), result.value(), result.timestamp()))
-                   .collect(Collectors.toSet());
-
-        assertThat(actual, equalTo(expected));
     }
 
     private static <K, V> void compareKeyValueTimestamp(final ConsumerRecord<K, V> record,
@@ -1456,44 +1378,6 @@ public class IntegrationTestUtils {
         retryOnExceptionWithTimeout(10000, () -> {
             assertThat(getStreamsPollNumber(kafkaStreams), is(greaterThanOrEqualTo(initialCount + pollNumber)));
         });
-    }
-
-    public static class StableAssignmentListener implements AssignmentListener {
-        final AtomicInteger numStableAssignments = new AtomicInteger(0);
-        int nextExpectedNumStableAssignments;
-
-        @Override
-        public void onAssignmentComplete(final boolean stable) {
-            if (stable) {
-                numStableAssignments.incrementAndGet();
-            }
-        }
-
-        public int numStableAssignments() {
-            return numStableAssignments.get();
-        }
-
-        /**
-         * Saves the current number of stable rebalances so that we can tell when the next stable assignment has been
-         * reached. This should be called once for every invocation of {@link #waitForNextStableAssignment(long)},
-         * before the rebalance-triggering event.
-         */
-        public void prepareForRebalance() {
-            nextExpectedNumStableAssignments = numStableAssignments.get() + 1;
-        }
-
-        /**
-         * Waits for the assignment to stabilize after the group rebalances. You must call {@link #prepareForRebalance()}
-         * prior to the rebalance-triggering event before using this method to wait.
-         */
-        public void waitForNextStableAssignment(final long maxWaitMs) throws InterruptedException {
-            waitForCondition(
-                () -> numStableAssignments() >= nextExpectedNumStableAssignments,
-                maxWaitMs,
-                () -> "Client did not reach " + nextExpectedNumStableAssignments + " stable assignments on time, " +
-                    "numStableAssignments was " + numStableAssignments()
-            );
-        }
     }
 
     /**

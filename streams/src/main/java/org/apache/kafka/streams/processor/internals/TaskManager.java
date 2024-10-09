@@ -28,6 +28,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.LockException;
@@ -104,6 +105,8 @@ public class TaskManager {
     // includes assigned & initialized tasks and unassigned tasks we locked temporarily during rebalance
     private final Set<TaskId> lockedTaskDirectories = new HashSet<>();
 
+    private final Map<TaskId, BackoffRecord> taskIdToBackoffRecord = new HashMap<>();
+
     private final ActiveTaskCreator activeTaskCreator;
     private final StandbyTaskCreator standbyTaskCreator;
     private final StateUpdater stateUpdater;
@@ -170,12 +173,8 @@ public class TaskManager {
         mainConsumer.commitSync(offsets);
     }
 
-    StreamsProducer streamsProducerForTask(final TaskId taskId) {
-        return activeTaskCreator.streamsProducerForTask(taskId);
-    }
-
-    StreamsProducer threadProducer() {
-        return activeTaskCreator.threadProducer();
+    StreamsProducer streamsProducer() {
+        return activeTaskCreator.streamsProducer();
     }
 
     boolean rebalanceInProgress() {
@@ -197,7 +196,7 @@ public class TaskManager {
             mainConsumer.pause(mainConsumer.assignment());
         } else {
             // All tasks that are owned by the task manager are ready and do not need to be paused
-            final Set<TopicPartition> partitionsNotToPause = tasks.allTasks()
+            final Set<TopicPartition> partitionsNotToPause = tasks.allNonFailedTasks()
                 .stream()
                 .flatMap(task -> task.inputPartitions().stream())
                 .collect(Collectors.toSet());
@@ -523,7 +522,7 @@ public class TaskManager {
                                                 final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
                                                 final Map<Task, Set<TopicPartition>> tasksToRecycle,
                                                 final Set<Task> tasksToCloseClean) {
-        for (final Task task : tasks.allTasks()) {
+        for (final Task task : tasks.allNonFailedTasks()) {
             if (!task.isActive()) {
                 throw new IllegalStateException("Standby tasks should only be managed by the state updater, " +
                     "but standby task " + task.id() + " is managed by the stream thread");
@@ -685,7 +684,7 @@ public class TaskManager {
         final Task task = removedTaskResult.task();
         if (removedTaskResult.exception().isPresent()) {
             failedTasks.put(task.id(), removedTaskResult.exception().get());
-            tasks.addTask(task);
+            tasks.addFailedTask(task);
             return null;
         }
         return task;
@@ -826,9 +825,7 @@ public class TaskManager {
     }
 
     private StandbyTask convertActiveToStandby(final StreamTask activeTask, final Set<TopicPartition> partitions) {
-        final StandbyTask standbyTask = standbyTaskCreator.createStandbyTaskFromActive(activeTask, partitions);
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(activeTask.id());
-        return standbyTask;
+        return standbyTaskCreator.createStandbyTaskFromActive(activeTask, partitions);
     }
 
     private StreamTask convertStandbyToActive(final StandbyTask standbyTask, final Set<TopicPartition> partitions) {
@@ -953,9 +950,6 @@ public class TaskManager {
         try {
             task.suspend();
             task.closeClean();
-            if (task.isActive()) {
-                activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
-            }
         } catch (final RuntimeException e) {
             final String uncleanMessage = String.format("Failed to close task %s cleanly. " +
                 "Attempting to close remaining tasks before re-throwing:", task.id());
@@ -997,7 +991,7 @@ public class TaskManager {
                 addTaskToStateUpdater(task);
             } catch (final RuntimeException e) {
                 // need to add task back to the bookkeeping to be handled by the stream thread
-                tasks.addTask(task);
+                tasks.addFailedTask(task);
                 taskExceptions.put(task.id(), e);
             }
         }
@@ -1006,14 +1000,22 @@ public class TaskManager {
     }
 
     private void addTaskToStateUpdater(final Task task) {
+        final long nowMs = time.milliseconds();
         try {
-            task.initializeIfNeeded();
-            stateUpdater.add(task);
+            if (canTryInitializeTask(task.id(), nowMs)) {
+                task.initializeIfNeeded();
+                taskIdToBackoffRecord.remove(task.id());
+                stateUpdater.add(task);
+            } else {
+                log.trace("Task {} is still not allowed to retry acquiring the state directory lock", task.id());
+                tasks.addPendingTasksToInit(Collections.singleton(task));
+            }
         } catch (final LockException lockException) {
             // The state directory may still be locked by another thread, when the rebalance just happened.
             // Retry in the next iteration.
             log.info("Encountered lock exception. Reattempting locking the state in the next iteration.", lockException);
             tasks.addPendingTasksToInit(Collections.singleton(task));
+            updateOrCreateBackoffRecord(task.id(), nowMs);
         }
     }
 
@@ -1029,7 +1031,7 @@ public class TaskManager {
             final RuntimeException exception = exceptionAndTask.exception();
             final Task failedTask = exceptionAndTask.task();
             // need to add task back to the bookkeeping to be handled by the stream thread
-            tasks.addTask(failedTask);
+            tasks.addFailedTask(failedTask);
             taskExceptions.put(failedTask.id(), exception);
         }
 
@@ -1217,7 +1219,7 @@ public class TaskManager {
         removeLostActiveTasksFromStateUpdaterAndPendingTasksToInit();
 
         if (processingMode == EXACTLY_ONCE_V2) {
-            activeTaskCreator.reInitializeThreadProducer();
+            activeTaskCreator.reInitializeProducer();
         }
     }
 
@@ -1422,10 +1424,6 @@ public class TaskManager {
             if (removeFromTasksRegistry) {
                 tasks.removeTask(task);
             }
-
-            if (task.isActive()) {
-                activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
-            }
         } catch (final RuntimeException swallow) {
             log.error("Error removing dirty task {}: {}", task.id(), swallow.getMessage());
         }
@@ -1434,9 +1432,6 @@ public class TaskManager {
     private void closeTaskClean(final Task task) {
         task.closeClean();
         tasks.removeTask(task);
-        if (task.isActive()) {
-            activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
-        }
     }
 
     void shutdown(final boolean clean) {
@@ -1458,7 +1453,7 @@ public class TaskManager {
 
         executeAndMaybeSwallow(
             clean,
-            activeTaskCreator::closeThreadProducerIfNeeded,
+            activeTaskCreator::close,
             e -> firstException.compareAndSet(null, e),
             e -> log.warn("Ignoring an exception while closing thread producer.", e)
         );
@@ -1769,7 +1764,6 @@ public class TaskManager {
             return standbyTasksInTaskRegistry;
         }
     }
-
     // For testing only.
     int commitAll() {
         return commit(tasks.allTasks());
@@ -2054,7 +2048,7 @@ public class TaskManager {
         return activeTaskCreator.producerMetrics();
     }
 
-    Set<String> producerClientIds() {
+    String producerClientIds() {
         return activeTaskCreator.producerClientIds();
     }
 
@@ -2115,5 +2109,38 @@ public class TaskManager {
     // for testing only
     void addTask(final Task task) {
         tasks.addTask(task);
+    }
+
+    private boolean canTryInitializeTask(final TaskId taskId, final long nowMs) {
+        return !taskIdToBackoffRecord.containsKey(taskId) || taskIdToBackoffRecord.get(taskId).canAttempt(nowMs);
+    }
+
+    private void updateOrCreateBackoffRecord(final TaskId taskId, final long nowMs) {
+        if (taskIdToBackoffRecord.containsKey(taskId)) {
+            taskIdToBackoffRecord.get(taskId).recordAttempt(nowMs);
+        } else {
+            taskIdToBackoffRecord.put(taskId, new BackoffRecord(nowMs));
+        }
+    }
+
+    public static class BackoffRecord {
+        private long attempts;
+        private long lastAttemptMs;
+        private static final ExponentialBackoff EXPONENTIAL_BACKOFF = new ExponentialBackoff(1000, 2, 10000, 0.5);
+
+
+        public BackoffRecord(final long nowMs) {
+            this.attempts = 1;
+            this.lastAttemptMs = nowMs;
+        }
+
+        public void recordAttempt(final long nowMs) {
+            this.attempts++;
+            this.lastAttemptMs = nowMs;
+        }
+
+        public boolean canAttempt(final long nowMs) {
+            return nowMs - lastAttemptMs >= EXPONENTIAL_BACKOFF.backoff(attempts);
+        }
     }
 }

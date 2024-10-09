@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerHeartbeatRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMembershipManager;
@@ -38,6 +40,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -53,6 +56,8 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -65,6 +70,7 @@ public class ApplicationEventProcessorTest {
     private final CommitRequestManager commitRequestManager = mock(CommitRequestManager.class);
     private final ConsumerHeartbeatRequestManager heartbeatRequestManager = mock(ConsumerHeartbeatRequestManager.class);
     private final ConsumerMembershipManager membershipManager = mock(ConsumerMembershipManager.class);
+    private final OffsetsRequestManager offsetsRequestManager = mock(OffsetsRequestManager.class);
     private final SubscriptionState subscriptionState = mock(SubscriptionState.class);
     private final ConsumerMetadata metadata = mock(ConsumerMetadata.class);
     private ApplicationEventProcessor processor;
@@ -72,7 +78,7 @@ public class ApplicationEventProcessorTest {
     private void setupProcessor(boolean withGroupId) {
         RequestManagers requestManagers = new RequestManagers(
                 new LogContext(),
-                mock(OffsetsRequestManager.class),
+                offsetsRequestManager,
                 mock(TopicMetadataRequestManager.class),
                 mock(FetchRequestManager.class),
                 withGroupId ? Optional.of(mock(CoordinatorRequestManager.class)) : Optional.empty(),
@@ -122,11 +128,9 @@ public class ApplicationEventProcessorTest {
 
     private static Stream<Arguments> applicationEvents() {
         return Stream.of(
-                Arguments.of(new PollEvent(100)),
                 Arguments.of(new AsyncCommitEvent(new HashMap<>())),
                 Arguments.of(new SyncCommitEvent(new HashMap<>(), 500)),
-                Arguments.of(new ResetPositionsEvent(500)),
-                Arguments.of(new ValidatePositionsEvent(500)),
+                Arguments.of(new CheckAndUpdatePositionsEvent(500)),
                 Arguments.of(new TopicMetadataEvent("topic", Long.MAX_VALUE)),
                 Arguments.of(new AssignmentChangeEvent(12345, 12345, Collections.emptyList())));
     }
@@ -139,14 +143,6 @@ public class ApplicationEventProcessorTest {
         ApplicationEvent e = new ListOffsetsEvent(timestamps, calculateDeadlineMs(time, 100), requireTimestamp);
         applicationEventProcessor.process(e);
         verify(applicationEventProcessor).process(any(ListOffsetsEvent.class));
-    }
-
-    @Test
-    public void testResetPositionsProcess() {
-        ApplicationEventProcessor applicationEventProcessor = mock(ApplicationEventProcessor.class);
-        ResetPositionsEvent event = new ResetPositionsEvent(calculateDeadlineMs(time, 100));
-        applicationEventProcessor.process(event);
-        verify(applicationEventProcessor).process(any(ResetPositionsEvent.class));
     }
 
     @ParameterizedTest
@@ -181,6 +177,71 @@ public class ApplicationEventProcessorTest {
 
         ExecutionException e = assertThrows(ExecutionException.class, () -> event.future().get());
         assertInstanceOf(IllegalStateException.class, e.getCause());
+    }
+
+    @Test
+    public void testResetOffsetEvent() {
+        Collection<TopicPartition> tp = Collections.singleton(new TopicPartition("topic", 0));
+        OffsetResetStrategy strategy = OffsetResetStrategy.LATEST;
+        ResetOffsetEvent event = new ResetOffsetEvent(tp, strategy, 12345);
+
+        setupProcessor(false);
+        processor.process(event);
+        verify(subscriptionState).requestOffsetReset(event.topicPartitions(), event.offsetResetStrategy());
+    }
+
+    @Test
+    public void testSeekUnvalidatedEvent() {
+        TopicPartition tp = new TopicPartition("topic", 0);
+        SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
+                0, Optional.empty(), Metadata.LeaderAndEpoch.noLeaderOrEpoch());
+        SeekUnvalidatedEvent event = new SeekUnvalidatedEvent(12345, tp, 0, Optional.empty());
+
+        setupProcessor(false);
+        doReturn(Metadata.LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(tp);
+        doNothing().when(subscriptionState).seekUnvalidated(eq(tp), any());
+        processor.process(event);
+        verify(metadata).currentLeader(tp);
+        verify(subscriptionState).seekUnvalidated(tp, position);
+        assertDoesNotThrow(() -> event.future().get());
+    }
+
+    @Test
+    public void testSeekUnvalidatedEventWithException() {
+        TopicPartition tp = new TopicPartition("topic", 0);
+        SeekUnvalidatedEvent event = new SeekUnvalidatedEvent(12345, tp, 0, Optional.empty());
+
+        setupProcessor(false);
+        doReturn(Metadata.LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(tp);
+        doThrow(new IllegalStateException()).when(subscriptionState).seekUnvalidated(eq(tp), any());
+        processor.process(event);
+
+        ExecutionException e = assertThrows(ExecutionException.class, () -> event.future().get());
+        assertInstanceOf(IllegalStateException.class, e.getCause());
+    }
+
+    @Test
+    public void testPollEvent() {
+        PollEvent event = new PollEvent(12345);
+
+        setupProcessor(true);
+        when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
+        processor.process(event);
+        verify(commitRequestManager).updateAutoCommitTimer(12345);
+        verify(membershipManager).onConsumerPoll();
+        verify(heartbeatRequestManager).resetPollTimer(12345);
+    }
+
+    @Test
+    public void testSubscriptionChangeEvent() {
+        SubscriptionChangeEvent event = new SubscriptionChangeEvent();
+
+        setupProcessor(true);
+        when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
+        processor.process(event);
+        verify(membershipManager).onSubscriptionUpdated();
+        // verify member state doesn't transition to JOINING.
+        verify(membershipManager, never()).onConsumerPoll();
     }
 
     private List<NetworkClientDelegate.UnsentRequest> mockCommitResults() {
