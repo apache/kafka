@@ -54,6 +54,7 @@ import scala.jdk.javaapi.CollectionConverters;
 import static kafka.server.share.SharePartitionManagerTest.DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL;
 import static kafka.server.share.SharePartitionManagerTest.PARTITION_MAX_BYTES;
 import static kafka.server.share.SharePartitionManagerTest.buildLogReadResult;
+import static kafka.server.share.SharePartitionManagerTest.mockReplicaManagerDelayedShareFetch;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -330,6 +331,7 @@ public class DelayedShareFetchTest {
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
             "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
             DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
+        mockReplicaManagerDelayedShareFetch(replicaManager, delayedShareFetchPurgatory);
 
         Set<Object> delayedShareFetchWatchKeys = new HashSet<>();
         partitionMaxBytes1.keySet().forEach(topicIdPartition -> delayedShareFetchWatchKeys.add(new DelayedShareFetchKey(groupId, topicIdPartition)));
@@ -363,7 +365,6 @@ public class DelayedShareFetchTest {
             .withReplicaManager(replicaManager)
             .withPartitionCacheMap(partitionCacheMap)
             .withDelayedActionQueue(delayedActionQueue)
-            .withDelayedShareFetchPurgatory(delayedShareFetchPurgatory)
             .build();
 
         // sp1 can be acquired now
@@ -389,7 +390,6 @@ public class DelayedShareFetchTest {
         private ReplicaManager replicaManager = mock(ReplicaManager.class);
         private Map<SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
         private DelayedActionQueue delayedActionsQueue = mock(DelayedActionQueue.class);
-        private DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = mock(DelayedOperationPurgatory.class);
 
         DelayedShareFetchBuilder withShareFetchData(ShareFetchData shareFetchData) {
             this.shareFetchData = shareFetchData;
@@ -411,11 +411,6 @@ public class DelayedShareFetchTest {
             return this;
         }
 
-        DelayedShareFetchBuilder withDelayedShareFetchPurgatory(DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory) {
-            this.delayedShareFetchPurgatory = delayedShareFetchPurgatory;
-            return this;
-        }
-
         public static DelayedShareFetchBuilder builder() {
             return new DelayedShareFetchBuilder();
         }
@@ -425,8 +420,7 @@ public class DelayedShareFetchTest {
                 shareFetchData,
                 replicaManager,
                 partitionCacheMap,
-                delayedActionsQueue,
-                delayedShareFetchPurgatory);
+                delayedActionsQueue);
         }
     }
 }

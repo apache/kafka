@@ -25,6 +25,7 @@ import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.ReplicaManager.{AtMinIsrPartitionCountMetricName, FailedIsrUpdatesPerSecMetricName, IsrExpandsPerSecMetricName, IsrShrinksPerSecMetricName, LeaderCountMetricName, OfflineReplicaCountMetricName, PartitionCountMetricName, PartitionsWithLateTransactionsCountMetricName, ProducerIdCountMetricName, ReassigningPartitionsMetricName, UnderMinIsrPartitionCountMetricName, UnderReplicatedPartitionsMetricName, createLogReadResult, isListOffsetsTimestampUnsupported}
 import kafka.server.metadata.ZkMetadataCache
+import kafka.server.share.{DelayedShareFetch, DelayedShareFetchKey}
 import kafka.utils._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.errors._
@@ -286,6 +287,7 @@ class ReplicaManager(val config: KafkaConfig,
                      delayedElectLeaderPurgatoryParam: Option[DelayedOperationPurgatory[DelayedElectLeader]] = None,
                      delayedRemoteFetchPurgatoryParam: Option[DelayedOperationPurgatory[DelayedRemoteFetch]] = None,
                      delayedRemoteListOffsetsPurgatoryParam: Option[DelayedOperationPurgatory[DelayedRemoteListOffsets]] = None,
+                     delayedShareFetchPurgatoryParam: Option[DelayedOperationPurgatory[DelayedShareFetch]] = None,
                      threadNamePrefix: Option[String] = None,
                      val brokerEpochSupplier: () => Long = () => -1,
                      addPartitionsToTxnManager: Option[AddPartitionsToTxnManager] = None,
@@ -315,6 +317,10 @@ class ReplicaManager(val config: KafkaConfig,
   val delayedRemoteListOffsetsPurgatory = delayedRemoteListOffsetsPurgatoryParam.getOrElse(
     DelayedOperationPurgatory[DelayedRemoteListOffsets](
       purgatoryName = "RemoteListOffsets", brokerId = config.brokerId))
+  val delayedShareFetchPurgatory = delayedShareFetchPurgatoryParam.getOrElse(
+    DelayedOperationPurgatory[DelayedShareFetch](
+      purgatoryName = "ShareFetch", brokerId = config.brokerId,
+      purgeInterval = config.shareGroupConfig.shareFetchPurgatoryPurgeIntervalRequests))
 
   /* epoch of the controller that last changed the leader */
   @volatile private[server] var controllerEpoch: Int = KafkaController.InitialControllerEpoch
@@ -477,6 +483,21 @@ class ReplicaManager(val config: KafkaConfig,
    */
   private[server] def completeDelayedFetchRequests(topicPartitions: Seq[TopicPartition]): Unit = {
     topicPartitions.foreach(tp => delayedFetchPurgatory.checkAndComplete(TopicPartitionOperationKey(tp)))
+  }
+
+  /**
+   * Complete any delayed share fetch requests that have been unblocked since new data is available from the leader
+   * for one of the partitions. This could happen due to acknowledgements, acquisition lock timeout of records, partition
+   * locks getting freed and release of acquired records due to share session close.
+   * @param delayedShareFetchKey The key corresponding to which the share fetch request has been stored in the purgatory
+   */
+  private[server] def completeDelayedShareFetchRequest(delayedShareFetchKey: DelayedShareFetchKey): Unit = {
+    delayedShareFetchPurgatory.checkAndComplete(delayedShareFetchKey)
+  }
+
+  private[server] def addDelayedShareFetchRequest(delayedShareFetch: DelayedShareFetch,
+                                                  delayedShareFetchKeys : Seq[DelayedShareFetchKey]): Unit = {
+    delayedShareFetchPurgatory.tryCompleteElseWatch(delayedShareFetch, delayedShareFetchKeys)
   }
 
   /**
@@ -950,6 +971,7 @@ class ReplicaManager(val config: KafkaConfig,
             delayedProducePurgatory.checkAndComplete(requestKey)
             delayedFetchPurgatory.checkAndComplete(requestKey)
             delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
+            delayedShareFetchPurgatory.checkAndComplete(requestKey)
           case LeaderHwChange.SAME =>
             // probably unblock some follower fetch requests since log end offset has been updated
             delayedFetchPurgatory.checkAndComplete(requestKey)
@@ -2675,6 +2697,7 @@ class ReplicaManager(val config: KafkaConfig,
     delayedProducePurgatory.shutdown()
     delayedDeleteRecordsPurgatory.shutdown()
     delayedElectLeaderPurgatory.shutdown()
+    delayedShareFetchPurgatory.shutdown()
     if (checkpointHW)
       checkpointHighWatermarks()
     replicaSelectorOpt.foreach(_.close)

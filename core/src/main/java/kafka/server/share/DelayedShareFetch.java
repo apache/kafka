@@ -18,7 +18,6 @@ package kafka.server.share;
 
 import kafka.server.ActionQueue;
 import kafka.server.DelayedOperation;
-import kafka.server.DelayedOperationPurgatory;
 import kafka.server.LogReadResult;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
@@ -57,7 +56,6 @@ public class DelayedShareFetch extends DelayedOperation {
     private final ReplicaManager replicaManager;
     private final Map<SharePartitionKey, SharePartition> partitionCacheMap;
     private final ActionQueue delayedActionQueue;
-    private final DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory;
 
     private Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionDataFromTryComplete;
 
@@ -65,14 +63,12 @@ public class DelayedShareFetch extends DelayedOperation {
             ShareFetchData shareFetchData,
             ReplicaManager replicaManager,
             Map<SharePartitionKey, SharePartition> partitionCacheMap,
-            ActionQueue delayedActionQueue,
-            DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory) {
+            ActionQueue delayedActionQueue) {
         super(shareFetchData.fetchParams().maxWaitMs, Option.empty());
         this.shareFetchData = shareFetchData;
         this.replicaManager = replicaManager;
         this.partitionCacheMap = partitionCacheMap;
         this.delayedActionQueue = delayedActionQueue;
-        this.delayedShareFetchPurgatory = delayedShareFetchPurgatory;
         this.topicPartitionDataFromTryComplete = new LinkedHashMap<>();
     }
 
@@ -145,8 +141,7 @@ public class DelayedShareFetch extends DelayedOperation {
                     // we directly call delayedShareFetchPurgatory.checkAndComplete
                     delayedActionQueue.add(() -> {
                         result.keySet().forEach(topicIdPartition ->
-                            delayedShareFetchPurgatory.checkAndComplete(
-                                new DelayedShareFetchKey(shareFetchData.groupId(), topicIdPartition)));
+                            replicaManager.completeDelayedShareFetchRequest(new DelayedShareFetchKey(shareFetchData.groupId(), topicIdPartition)));
                         return BoxedUnit.UNIT;
                     });
                 });
