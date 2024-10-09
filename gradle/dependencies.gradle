@@ -90,6 +90,7 @@ versions += [
   // gradle/resources/dependencycheck-suppressions.xml
   checkstyle: "8.36.2",
   commonsCli: "1.4",
+  commonsIo: "2.14.0", // ZooKeeper dependency. Do not use, this is going away.
   commonsValidator: "1.7",
   dropwizardMetrics: "4.1.12.1",
   gradle: "8.8",
@@ -142,6 +143,7 @@ versions += [
   metrics: "2.2.0",
   netty: "4.1.111.Final",
   opentelemetryProto: "1.0.0-alpha",
+  protobuf: "3.25.5", // a dependency of opentelemetryProto
   pcollections: "4.0.1",
   reflections: "0.10.2",
   reload4j: "1.2.25",
@@ -179,6 +181,7 @@ libs += [
   bcpkix: "org.bouncycastle:bcpkix-jdk18on:$versions.bcpkix",
   caffeine: "com.github.ben-manes.caffeine:caffeine:$versions.caffeine",
   commonsCli: "commons-cli:commons-cli:$versions.commonsCli",
+  commonsIo: "commons-io:commons-io:$versions.commonsIo",
   commonsValidator: "commons-validator:commons-validator:$versions.commonsValidator",
   jacksonAnnotations: "com.fasterxml.jackson.core:jackson-annotations:$versions.jackson",
   jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jackson",
@@ -242,6 +245,7 @@ libs += [
   nettyTransportNativeEpoll: "io.netty:netty-transport-native-epoll:$versions.netty",
   pcollections: "org.pcollections:pcollections:$versions.pcollections",
   opentelemetryProto: "io.opentelemetry.proto:opentelemetry-proto:$versions.opentelemetryProto",
+  protobuf: "com.google.protobuf:protobuf-java:$versions.protobuf",
   reflections: "org.reflections:reflections:$versions.reflections",
   reload4j: "ch.qos.reload4j:reload4j:$versions.reload4j",
   rocksDBJni: "org.rocksdb:rocksdbjni:$versions.rocksDB",
