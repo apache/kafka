@@ -821,7 +821,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 log.debug("Setting telemetry state from {} to {}", oldState, newState);
                 return true;
             } catch (IllegalStateException e) {
-                log.warn("Error updating client telemetry state, disabled telemetry", e);
+                log.warn("Error updating client telemetry state, disabled telemetry");
                 enabled = false;
                 return false;
             } finally {
