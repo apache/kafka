@@ -19,7 +19,6 @@ package org.apache.kafka.jmh.server;
 import kafka.cluster.Partition;
 import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
-import kafka.server.BrokerFeatures;
 import kafka.server.KafkaConfig;
 import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory;
@@ -67,6 +66,8 @@ import java.util.stream.Collectors;
 import scala.Option;
 import scala.collection.JavaConverters;
 
+import static org.apache.kafka.server.common.KRaftVersion.KRAFT_VERSION_1;
+
 @Warmup(iterations = 5)
 @Measurement(iterations = 5)
 @Fork(3)
@@ -102,7 +103,7 @@ public class CheckpointBench {
     public void setup() {
         this.scheduler = new KafkaScheduler(1, true, "scheduler-thread");
         this.brokerProperties = KafkaConfig.fromProps(TestUtils.createBrokerConfig(
-                0, TestUtils.MockZkConnect(), true, true, 9092, Option.empty(), Option.empty(),
+                0, null, true, true, 9092, Option.empty(), Option.empty(),
                 Option.empty(), true, false, 0, false, 0, false, 0, Option.empty(), 1, true, 1,
                 (short) 1, false));
         this.metrics = new Metrics();
@@ -116,9 +117,7 @@ public class CheckpointBench {
         scheduler.startup();
         final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
         final MetadataCache metadataCache =
-                MetadataCache.zkMetadataCache(this.brokerProperties.brokerId(),
-                    this.brokerProperties.interBrokerProtocolVersion(),
-                    BrokerFeatures.createEmpty(), false);
+                MetadataCache.kRaftMetadataCache(this.brokerProperties.brokerId(), () -> KRAFT_VERSION_1);
         this.quotaManagers =
                 QuotaFactory.instantiate(this.brokerProperties,
                         this.metrics,

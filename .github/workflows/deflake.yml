@@ -60,7 +60,9 @@ jobs:
           -PtestLoggingEvents=started,passed,skipped,failed \
           -PignoreFailures=true -PmaxParallelForks=2 \
           -Pkafka.cluster.test.repeat=${{ inputs.test-repeat }} \
-          ${{ inputs.test-module }}:test --tests ${{ inputs.test-pattern }}
+          -PmaxTestRetries=${{ inputs.test-repeat }} -PmaxTestRetryFailures=0 \
+          -PmaxQuarantineTestRetries=${{ inputs.test-repeat }} -PmaxQuarantineTestRetryFailures=0 \
+          ${{ inputs.test-module }}:test ${{ inputs.test-module }}:quarantinedTest --tests ${{ inputs.test-pattern }}
           exitcode="$?"
           echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
       - name: Archive JUnit reports

@@ -18,7 +18,6 @@ package kafka.server
 
 import com.yammer.metrics.core.Meter
 import kafka.log.AsyncOffsetReadFutureHolder
-import kafka.utils.Implicits._
 import kafka.utils.Pool
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ApiException
@@ -58,7 +57,7 @@ class DelayedRemoteListOffsets(delayMs: Long,
 
   // Mark the status as completed, if there is no async task to track.
   // If there is a task to track, then build the response as REQUEST_TIMED_OUT by default.
-  metadata.statusByPartition.forKeyValue { (topicPartition, status) =>
+  metadata.statusByPartition.foreachEntry { (topicPartition, status) =>
     status.completed = status.futureHolderOpt.isEmpty
     if (status.futureHolderOpt.isDefined) {
       status.responseOpt = Some(buildErrorResponse(Errors.REQUEST_TIMED_OUT, topicPartition.partition()))
@@ -70,7 +69,7 @@ class DelayedRemoteListOffsets(delayMs: Long,
    * Call-back to execute when a delayed operation gets expired and hence forced to complete.
    */
   override def onExpiration(): Unit = {
-    metadata.statusByPartition.forKeyValue { (topicPartition, status) =>
+    metadata.statusByPartition.foreachEntry { (topicPartition, status) =>
       if (!status.completed) {
         debug(s"Expiring list offset request for partition $topicPartition with status $status")
         status.futureHolderOpt.foreach(futureHolder => futureHolder.jobFuture.cancel(true))
@@ -100,7 +99,7 @@ class DelayedRemoteListOffsets(delayMs: Long,
    */
   override def tryComplete(): Boolean = {
     var completable = true
-    metadata.statusByPartition.forKeyValue { (partition, status) =>
+    metadata.statusByPartition.foreachEntry { (partition, status) =>
       if (!status.completed) {
         status.futureHolderOpt.foreach { futureHolder =>
           if (futureHolder.taskFuture.isDone) {

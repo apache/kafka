@@ -32,18 +32,18 @@ import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.server.share.GroupTopicPartitionData;
-import org.apache.kafka.server.share.PartitionAllData;
-import org.apache.kafka.server.share.PartitionErrorData;
-import org.apache.kafka.server.share.PartitionFactory;
-import org.apache.kafka.server.share.PartitionIdLeaderEpochData;
-import org.apache.kafka.server.share.PartitionStateBatchData;
-import org.apache.kafka.server.share.Persister;
-import org.apache.kafka.server.share.PersisterStateBatch;
-import org.apache.kafka.server.share.ReadShareGroupStateParameters;
-import org.apache.kafka.server.share.TopicData;
-import org.apache.kafka.server.share.WriteShareGroupStateParameters;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
+import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
+import org.apache.kafka.server.share.persister.PartitionAllData;
+import org.apache.kafka.server.share.persister.PartitionErrorData;
+import org.apache.kafka.server.share.persister.PartitionFactory;
+import org.apache.kafka.server.share.persister.PartitionIdLeaderEpochData;
+import org.apache.kafka.server.share.persister.PartitionStateBatchData;
+import org.apache.kafka.server.share.persister.Persister;
+import org.apache.kafka.server.share.persister.PersisterStateBatch;
+import org.apache.kafka.server.share.persister.ReadShareGroupStateParameters;
+import org.apache.kafka.server.share.persister.TopicData;
+import org.apache.kafka.server.share.persister.WriteShareGroupStateParameters;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
@@ -1790,7 +1790,7 @@ public class SharePartition {
 
                     // If we have an acquisition lock timeout for a share-partition, then we should check if
                     // there is a pending share fetch request for the share-partition and complete it.
-                    DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchKey(groupId, topicIdPartition);
+                    DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId(), topicIdPartition.partition());
                     delayedShareFetchPurgatory.checkAndComplete(delayedShareFetchKey);
                 });
             }
