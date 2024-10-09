@@ -695,7 +695,7 @@ class BrokerServer(
           )
       } else if (klass.getName.equals(classOf[NoOpShareStatePersister].getName)) {
         info("Using no op persister")
-        NoOpShareStatePersister.instance
+        new NoOpShareStatePersister()
       } else {
         error("Unknown persister specified. Persister is only factory pluggable!")
         throw new IllegalArgumentException("Unknown persiser specified " + config.shareGroupConfig.shareGroupPersisterClassName)
@@ -704,7 +704,7 @@ class BrokerServer(
       // in case share coordinator not enabled or
       // persister class name deliberately empty (key=)
       info("Using no op persister")
-      NoOpShareStatePersister.instance
+      new NoOpShareStatePersister()
     }
   }
 

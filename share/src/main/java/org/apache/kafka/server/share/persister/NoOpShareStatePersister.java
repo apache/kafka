@@ -28,15 +28,7 @@ import java.util.stream.Collectors;
  */
 public class NoOpShareStatePersister implements Persister {
 
-    private NoOpShareStatePersister() {
-    }
-
-    private static final class InstanceHolder {
-        static final Persister INSTANCE = new NoOpShareStatePersister();
-    }
-
-    public static Persister instance() {
-        return InstanceHolder.INSTANCE;
+    public NoOpShareStatePersister() {
     }
 
     @Override

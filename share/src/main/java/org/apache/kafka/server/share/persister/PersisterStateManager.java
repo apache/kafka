@@ -351,7 +351,7 @@ public class PersisterStateManager {
             sender.wakeup();
         }
 
-        private void resetCoordinatorNode() {
+        protected void resetCoordinatorNode() {
             coordinatorNode = null;
         }
 
@@ -396,8 +396,8 @@ public class PersisterStateManager {
                         findCoordinatorErrorResponse(error, new Exception("Exhausted max retries to find coordinator without success."));
                         break;
                     }
-                    timer.add(new PersisterTimerTask(findCoordBackoff.backOff(), this));
                     resetCoordinatorNode();
+                    timer.add(new PersisterTimerTask(findCoordBackoff.backOff(), this));
                     break;
 
                 default:
@@ -526,13 +526,13 @@ public class PersisterStateManager {
                             // check retryable errors
                             case COORDINATOR_NOT_AVAILABLE:
                             case COORDINATOR_LOAD_IN_PROGRESS:
-                                writeStateBackoff.incrementAttempt();
                                 log.warn("Received retryable error in write state RPC: {}", error.message());
                                 if (!writeStateBackoff.canAttempt()) {
                                     log.error("Exhausted max retries for write state RPC without success.");
                                     writeStateErrorResponse(error, new Exception("Exhausted max retries to complete write state RPC without success."));
                                     return;
                                 }
+                                super.resetCoordinatorNode();
                                 timer.add(new PersisterTimerTask(writeStateBackoff.backOff(), this));
                                 return;
 
@@ -668,13 +668,13 @@ public class PersisterStateManager {
                             // check retryable errors
                             case COORDINATOR_NOT_AVAILABLE:
                             case COORDINATOR_LOAD_IN_PROGRESS:
-                                readStateBackoff.incrementAttempt();
                                 log.warn("Received retryable error in read state RPC: {}", error.message());
                                 if (!readStateBackoff.canAttempt()) {
                                     log.error("Exhausted max retries for read state RPC without success.");
-                                    readStateErrorReponse(error, new Exception("Exhausted max retries to complete write state RPC without success."));
+                                    readStateErrorReponse(error, new Exception("Exhausted max retries to complete read state RPC without success."));
                                     return;
                                 }
+                                super.resetCoordinatorNode();
                                 timer.add(new PersisterTimerTask(readStateBackoff.backOff(), this));
                                 return;
 
