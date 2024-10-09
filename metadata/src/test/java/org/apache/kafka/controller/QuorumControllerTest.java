@@ -622,8 +622,8 @@ public class QuorumControllerTest {
 
     @Test
     public void testNoOpRecordWriteAfterTimeout() throws Throwable {
-        long maxIdleIntervalNs = 1_000;
-        long maxReplicationDelayMs = 60_000;
+        long maxIdleIntervalNs = TimeUnit.MICROSECONDS.toNanos(100);
+        long maxReplicationDelayMs = 1_000;
         try (
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).
                 build();
