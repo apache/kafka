@@ -153,7 +153,8 @@ public class MetadataBatchLoader {
                     .numBytes(numBytes)     // This will be zero if we have not yet read a batch
                     .build();
                 if (log.isDebugEnabled()) {
-                    log.debug("handleCommit: Generated a metadata delta between {} and {} from {} batch(es) in {} us.",
+                    log.debug("handleCommit: Generated a {} metadata delta between {} and {} from {} batch(es) in {} us.",
+                            provenance.isOffsetBatchAligned() ? "batch-aligned" : "non-batch-aligned",
                             image.offset(), manifest.provenance().lastContainedOffset(),
                             manifest.numBatches(), NANOSECONDS.toMicros(manifest.elapsedNs()));
                 }
