@@ -38,6 +38,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import scala.Option;
@@ -60,6 +61,7 @@ public class DelayedShareFetch extends DelayedOperation {
     private final DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory;
 
     private Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionDataFromTryComplete;
+    private Map<TopicIdPartition, FetchPartitionData> replicaManagerFetchDataFromTryComplete;
 
     DelayedShareFetch(
             ShareFetchData shareFetchData,
@@ -214,6 +216,39 @@ public class DelayedShareFetch extends DelayedOperation {
             }
         });
         return topicPartitionData;
+    }
+
+    /**
+     * Prepare partitions fetch data structure for acquirable partitions in the share fetch request satisfying minBytes criteria.
+     */
+    Map<TopicIdPartition, FetchPartitionData> replicaManagerFetchData(Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData) {
+        log.trace("Fetchable share partitions data: {} with groupId: {} fetch params: {}", topicPartitionData,
+            shareFetchData.groupId(), shareFetchData.fetchParams());
+
+        Seq<Tuple2<TopicIdPartition, LogReadResult>> responseLogResult = replicaManager.readFromLog(
+            shareFetchData.fetchParams(),
+            CollectionConverters.asScala(
+                topicPartitionData.entrySet().stream().map(entry ->
+                    new Tuple2<>(entry.getKey(), entry.getValue())).collect(Collectors.toList())
+            ),
+            QuotaFactory.UnboundedQuota$.MODULE$,
+            true);
+
+        Map<TopicIdPartition, FetchPartitionData> responseData = new HashMap<>();
+        AtomicInteger accumulatedBytes = new AtomicInteger(0);
+
+        responseLogResult.foreach(tpLogResult -> {
+            TopicIdPartition topicIdPartition = tpLogResult._1();
+            LogReadResult logResult = tpLogResult._2();
+            FetchPartitionData fetchPartitionData = logResult.toFetchPartitionData(false);
+            responseData.put(topicIdPartition, fetchPartitionData);
+            accumulatedBytes.addAndGet(logResult.info().records.sizeInBytes());
+            return BoxedUnit.UNIT;
+        });
+
+        if (accumulatedBytes.get() >= shareFetchData.fetchParams().minBytes)
+            return responseData;
+        return Collections.emptyMap();
     }
 
     private void releasePartitionLocks(String groupId, Set<TopicIdPartition> topicIdPartitions) {
