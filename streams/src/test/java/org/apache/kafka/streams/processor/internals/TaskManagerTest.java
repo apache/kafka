@@ -442,7 +442,6 @@ public class TaskManagerTest {
 
         verify(activeTaskToClose).suspend();
         verify(activeTaskToClose).closeClean();
-        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(activeTaskToClose.id());
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
         verify(standbyTaskCreator).createTasks(Collections.emptyMap());
     }
@@ -464,7 +463,6 @@ public class TaskManagerTest {
         verify(activeTaskToClose).prepareCommit();
         verify(activeTaskToClose).suspend();
         verify(activeTaskToClose).closeDirty();
-        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(activeTaskToClose.id());
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
         verify(standbyTaskCreator).createTasks(Collections.emptyMap());
     }
@@ -898,7 +896,6 @@ public class TaskManagerTest {
         verify(tasks).addPendingTasksToInit(Collections.singleton(recycledActiveTask));
         verify(activeTaskToClose).suspend();
         verify(activeTaskToClose).closeClean();
-        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(activeTaskToClose.id());
         verify(standbyTaskCreator).createTasks(Collections.emptyMap());
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
     }
@@ -985,7 +982,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldAddRecycledStandbyTaskfromActiveToPendingTasksToInitWithStateUpdaterEnabled() {
+    public void shouldAddRecycledStandbyTasksFromActiveToPendingTasksToInitWithStateUpdaterEnabled() {
         final StreamTask activeTaskToRecycle = statefulTask(taskId01, taskId01ChangelogPartitions)
             .withInputPartitions(taskId01Partitions)
             .inState(State.RUNNING).build();
@@ -1001,7 +998,6 @@ public class TaskManagerTest {
         taskManager.handleAssignment(emptyMap(), mkMap(mkEntry(taskId01, taskId01Partitions)));
 
         verify(activeTaskToRecycle).prepareCommit();
-        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(activeTaskToRecycle.id());
         verify(tasks).addPendingTasksToInit(mkSet(standbyTask));
         verify(tasks).removeTask(activeTaskToRecycle);
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
@@ -1009,7 +1005,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldAddRecycledStandbyTaskfromActiveToTaskRegistryWithStateUpdaterDisabled() {
+    public void shouldAddRecycledStandbyTasksFromActiveToTaskRegistryWithStateUpdaterDisabled() {
         final StreamTask activeTaskToRecycle = statefulTask(taskId01, taskId01ChangelogPartitions)
             .withInputPartitions(taskId01Partitions)
             .inState(State.RUNNING).build();
@@ -1025,7 +1021,6 @@ public class TaskManagerTest {
         taskManager.handleAssignment(emptyMap(), mkMap(mkEntry(taskId01, taskId01Partitions)));
 
         verify(activeTaskToRecycle).prepareCommit();
-        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(activeTaskToRecycle.id());
         verify(tasks).replaceActiveWithStandby(standbyTask);
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
         verify(standbyTaskCreator).createTasks(Collections.emptyMap());
@@ -1065,7 +1060,6 @@ public class TaskManagerTest {
         taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap());
 
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
-        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(activeTaskToClose.id());
         verify(activeTaskToClose).prepareCommit();
         verify(activeTaskToClose).closeClean();
         verify(tasks).removeTask(activeTaskToClose);
@@ -2129,7 +2123,6 @@ public class TaskManagerTest {
         assertThat(task00.state(), is(Task.State.CLOSED));
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
-        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(taskId00);
     }
 
     @Test
@@ -2157,7 +2150,6 @@ public class TaskManagerTest {
             is("Encounter unexpected fatal error for task 0_0")
         );
         assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
-        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(taskId00);
     }
 
     @Test
@@ -2203,48 +2195,15 @@ public class TaskManagerTest {
         taskManager.handleRebalanceStart(emptySet());
 
         assertThat(taskManager.lockedTaskDirectories(), is(emptySet()));
-        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(taskId00);
     }
 
     @Test
-    public void shouldReInitializeThreadProducerOnHandleLostAllIfEosV2Enabled() {
+    public void shouldReInitializeStreamsProducerOnHandleLostAllIfEosV2Enabled() {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, false);
 
         taskManager.handleLostAll();
 
-        verify(activeTaskCreator).reInitializeThreadProducer();
-    }
-
-    @Test
-    public void shouldThrowWhenHandlingClosingTasksOnProducerCloseError() {
-        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
-        final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
-        task00.setCommittableOffsetsAndMetadata(offsets);
-
-        // `handleAssignment`
-        when(consumer.assignment()).thenReturn(assignment);
-        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
-
-        // `handleAssignment`
-        doThrow(new RuntimeException("KABOOM!")).when(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(taskId00);
-
-        taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
-        assertThat(task00.state(), is(Task.State.RUNNING));
-
-        taskManager.handleRevocation(taskId00Partitions);
-
-        final RuntimeException thrown = assertThrows(
-            RuntimeException.class,
-            () -> taskManager.handleAssignment(emptyMap(), emptyMap())
-        );
-
-        assertThat(
-            thrown.getMessage(),
-            is("Encounter unexpected fatal error for task 0_0")
-        );
-        assertThat(thrown.getCause(), instanceOf(RuntimeException.class));
-        assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
+        verify(activeTaskCreator).reInitializeProducer();
     }
 
     @Test
@@ -2552,7 +2511,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitWithALOS() {
+    public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitWithAlos() {
         final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
 
         final StateMachineTask corruptedActive = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
@@ -2613,7 +2572,7 @@ public class TaskManagerTest {
     public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitDuringHandleCorruptedWithEOS() {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, false);
         final StreamsProducer producer = mock(StreamsProducer.class);
-        when(activeTaskCreator.threadProducer()).thenReturn(producer);
+        when(activeTaskCreator.streamsProducer()).thenReturn(producer);
         final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
 
         final AtomicBoolean corruptedTaskChangelogMarkedAsCorrupted = new AtomicBoolean(false);
@@ -2691,7 +2650,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitDuringRevocationWithALOS() {
+    public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitDuringRevocationWithAlos() {
         final StateMachineTask revokedActiveTask = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
         final Map<TopicPartition, OffsetAndMetadata> offsets00 = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
         revokedActiveTask.setCommittableOffsetsAndMetadata(offsets00);
@@ -2745,7 +2704,7 @@ public class TaskManagerTest {
     public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitDuringRevocationWithEOS() {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, false);
         final StreamsProducer producer = mock(StreamsProducer.class);
-        when(activeTaskCreator.threadProducer()).thenReturn(producer);
+        when(activeTaskCreator.streamsProducer()).thenReturn(producer);
         final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
 
         final StateMachineTask revokedActiveTask = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
@@ -3021,7 +2980,7 @@ public class TaskManagerTest {
         when(activeTaskCreator.createTasks(any(), eq(assignmentActive)))
             .thenReturn(asList(task00, task01, task02));
 
-        when(activeTaskCreator.threadProducer()).thenReturn(producer);
+        when(activeTaskCreator.streamsProducer()).thenReturn(producer);
         when(standbyTaskCreator.createTasks(assignmentStandby))
             .thenReturn(singletonList(task10));
 
@@ -3176,7 +3135,6 @@ public class TaskManagerTest {
 
         taskManager.handleAssignment(emptyMap(), emptyMap());
         assertThat(task00.state(), is(Task.State.CLOSED));
-        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(taskId00);
     }
 
     @Test
@@ -3206,7 +3164,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldCloseActiveTasksAndPropagateExceptionsOnCleanShutdownWithExactlyOnceV2() {
-        when(activeTaskCreator.threadProducer()).thenReturn(mock(StreamsProducer.class));
+        when(activeTaskCreator.streamsProducer()).thenReturn(mock(StreamsProducer.class));
         shouldCloseActiveTasksAndPropagateExceptionsOnCleanShutdown(ProcessingMode.EXACTLY_ONCE_V2);
     }
 
@@ -3315,62 +3273,12 @@ public class TaskManagerTest {
         assertThat(task03.state(), is(Task.State.CLOSED));
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
-        verify(activeTaskCreator, times(4)).closeAndRemoveTaskProducerIfNeeded(any());
         // the active task creator should also get closed (so that it closes the thread producer if applicable)
-        verify(activeTaskCreator).closeThreadProducerIfNeeded();
+        verify(activeTaskCreator).close();
     }
 
     @Test
-    public void shouldCloseActiveTasksAndPropagateTaskProducerExceptionsOnCleanShutdown() {
-        final TopicPartition changelog = new TopicPartition("changelog", 0);
-        final Map<TaskId, Set<TopicPartition>> assignment = mkMap(
-            mkEntry(taskId00, taskId00Partitions)
-        );
-        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
-            @Override
-            public Set<TopicPartition> changelogPartitions() {
-                return singleton(changelog);
-            }
-        };
-        final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
-        task00.setCommittableOffsetsAndMetadata(offsets);
-
-        when(activeTaskCreator.createTasks(any(), eq(assignment))).thenReturn(singletonList(task00));
-        doThrow(new RuntimeException("whatever"))
-            .when(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(taskId00);
-
-        taskManager.handleAssignment(assignment, emptyMap());
-
-        assertThat(task00.state(), is(Task.State.CREATED));
-
-        taskManager.tryToCompleteRestoration(time.milliseconds(), null);
-
-        assertThat(task00.state(), is(Task.State.RESTORING));
-        assertThat(
-            taskManager.activeTaskMap(),
-            Matchers.equalTo(
-                mkMap(
-                    mkEntry(taskId00, task00)
-                )
-            )
-        );
-        assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
-        verify(changeLogReader).enforceRestoreActive();
-        verify(changeLogReader).completedChangelogs();
-
-        final RuntimeException exception = assertThrows(RuntimeException.class, () -> taskManager.shutdown(true));
-
-        assertThat(task00.state(), is(Task.State.CLOSED));
-        assertThat(exception.getCause().getMessage(), is("whatever"));
-        assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
-        assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
-        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(taskId00);
-        // the active task creator should also get closed (so that it closes the thread producer if applicable)
-        verify(activeTaskCreator).closeThreadProducerIfNeeded();
-    }
-
-    @Test
-    public void shouldCloseActiveTasksAndPropagateThreadProducerExceptionsOnCleanShutdown() {
+    public void shouldCloseActiveTasksAndPropagateStreamsProducerExceptionsOnCleanShutdown() {
         final TopicPartition changelog = new TopicPartition("changelog", 0);
         final Map<TaskId, Set<TopicPartition>> assignment = mkMap(
             mkEntry(taskId00, taskId00Partitions)
@@ -3383,7 +3291,7 @@ public class TaskManagerTest {
         };
 
         when(activeTaskCreator.createTasks(any(), eq(assignment))).thenReturn(singletonList(task00));
-        doThrow(new RuntimeException("whatever")).when(activeTaskCreator).closeThreadProducerIfNeeded();
+        doThrow(new RuntimeException("whatever")).when(activeTaskCreator).close();
 
         taskManager.handleAssignment(assignment, emptyMap());
 
@@ -3411,7 +3319,7 @@ public class TaskManagerTest {
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         // the active task creator should also get closed (so that it closes the thread producer if applicable)
-        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(taskId00);
+        verify(activeTaskCreator).close();
     }
 
     @Test
@@ -3505,8 +3413,7 @@ public class TaskManagerTest {
         };
 
         when(activeTaskCreator.createTasks(any(), eq(assignment))).thenReturn(asList(task00, task01, task02));
-        doThrow(new RuntimeException("whatever")).when(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(any());
-        doThrow(new RuntimeException("whatever all")).when(activeTaskCreator).closeThreadProducerIfNeeded();
+        doThrow(new RuntimeException("whatever")).when(activeTaskCreator).close();
 
         taskManager.handleAssignment(assignment, emptyMap());
 
@@ -3540,9 +3447,8 @@ public class TaskManagerTest {
         assertThat(task02.state(), is(Task.State.CLOSED));
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
-        verify(activeTaskCreator, times(3)).closeAndRemoveTaskProducerIfNeeded(any());
         // the active task creator should also get closed (so that it closes the thread producer if applicable)
-        verify(activeTaskCreator).closeThreadProducerIfNeeded();
+        verify(activeTaskCreator).close();
     }
 
     @Test
@@ -3566,7 +3472,7 @@ public class TaskManagerTest {
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         // the active task creator should also get closed (so that it closes the thread producer if applicable)
-        verify(activeTaskCreator).closeThreadProducerIfNeeded();
+        verify(activeTaskCreator).close();
         // `tryToCompleteRestoration`
         verify(consumer).assignment();
         verify(consumer).resume(eq(emptySet()));
@@ -3588,8 +3494,7 @@ public class TaskManagerTest {
 
         taskManager.shutdown(true);
 
-        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(failedStatefulTask.id());
-        verify(activeTaskCreator).closeThreadProducerIfNeeded();
+        verify(activeTaskCreator).close();
         verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
         verify(failedStatefulTask).prepareCommit();
         verify(failedStatefulTask).suspend();
@@ -3668,19 +3573,15 @@ public class TaskManagerTest {
         verify(removedFailedStatefulTask).prepareCommit();
         verify(removedFailedStatefulTask).suspend();
         verify(removedFailedStatefulTask).closeDirty();
-        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(taskId03);
         verify(removedFailedStandbyTask).prepareCommit();
         verify(removedFailedStandbyTask).suspend();
         verify(removedFailedStandbyTask).closeDirty();
-        verify(activeTaskCreator, never()).closeAndRemoveTaskProducerIfNeeded(taskId04);
         verify(removedFailedStatefulTaskDuringRemoval).prepareCommit();
         verify(removedFailedStatefulTaskDuringRemoval).suspend();
         verify(removedFailedStatefulTaskDuringRemoval).closeDirty();
-        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(taskId05);
         verify(removedFailedStandbyTaskDuringRemoval).prepareCommit();
         verify(removedFailedStandbyTaskDuringRemoval).suspend();
         verify(removedFailedStandbyTaskDuringRemoval).closeDirty();
-        verify(activeTaskCreator, never()).closeAndRemoveTaskProducerIfNeeded(taskId00);
     }
 
     @Test
@@ -3873,7 +3774,7 @@ public class TaskManagerTest {
     @Test
     public void shouldCommitViaProducerIfEosV2Enabled() {
         final StreamsProducer producer = mock(StreamsProducer.class);
-        when(activeTaskCreator.threadProducer()).thenReturn(producer);
+        when(activeTaskCreator.streamsProducer()).thenReturn(producer);
 
         final Map<TopicPartition, OffsetAndMetadata> offsetsT01 = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
         final Map<TopicPartition, OffsetAndMetadata> offsetsT02 = singletonMap(t1p2, new OffsetAndMetadata(1L, null));
@@ -3881,16 +3782,7 @@ public class TaskManagerTest {
         allOffsets.putAll(offsetsT01);
         allOffsets.putAll(offsetsT02);
 
-        shouldCommitViaProducerIfEosEnabled(ProcessingMode.EXACTLY_ONCE_V2, offsetsT01, offsetsT02);
-
-        verify(producer).commitTransaction(allOffsets, new ConsumerGroupMetadata("appId"));
-        verifyNoMoreInteractions(producer);
-    }
-
-    private void shouldCommitViaProducerIfEosEnabled(final ProcessingMode processingMode,
-                                                     final Map<TopicPartition, OffsetAndMetadata> offsetsT01,
-                                                     final Map<TopicPartition, OffsetAndMetadata> offsetsT02) {
-        final TaskManager taskManager = setUpTaskManager(processingMode, false);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, false);
 
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager);
         task01.setCommittableOffsetsAndMetadata(offsetsT01);
@@ -3904,6 +3796,9 @@ public class TaskManagerTest {
         when(consumer.groupMetadata()).thenReturn(new ConsumerGroupMetadata("appId"));
 
         taskManager.commitAll();
+
+        verify(producer).commitTransaction(allOffsets, new ConsumerGroupMetadata("appId"));
+        verifyNoMoreInteractions(producer);
     }
 
     @Test
@@ -4608,7 +4503,7 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, false);
 
         final StreamsProducer producer = mock(StreamsProducer.class);
-        when(activeTaskCreator.threadProducer()).thenReturn(producer);
+        when(activeTaskCreator.streamsProducer()).thenReturn(producer);
 
         final Map<TopicPartition, OffsetAndMetadata> offsetsT00 = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
         final Map<TopicPartition, OffsetAndMetadata> offsetsT01 = singletonMap(t1p1, new OffsetAndMetadata(1L, null));
@@ -4720,7 +4615,6 @@ public class TaskManagerTest {
         taskManager.handleAssignment(taskId00Assignment, Collections.emptyMap());
         taskManager.handleAssignment(Collections.emptyMap(), taskId00Assignment);
 
-        verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(taskId00);
         verify(activeTaskCreator).createTasks(any(), eq(emptyMap()));
         verify(standbyTaskCreator, times(2)).createTasks(Collections.emptyMap());
         verifyNoInteractions(consumer);

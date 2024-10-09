@@ -43,7 +43,6 @@ import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
-import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
@@ -89,7 +88,6 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.mock;
 
 public class GroupCoordinatorRecordHelpersTest {
 
@@ -514,8 +512,7 @@ public class GroupCoordinatorRecordHelpersTest {
             new LogContext(),
             "group-id",
             ClassicGroupState.PREPARING_REBALANCE,
-            time,
-            mock(GroupCoordinatorMetricsShard.class)
+            time
         );
 
         Map<String, byte[]> assignment = new HashMap<>();
@@ -585,8 +582,7 @@ public class GroupCoordinatorRecordHelpersTest {
             new LogContext(),
             "group-id",
             ClassicGroupState.PREPARING_REBALANCE,
-            time,
-            mock(GroupCoordinatorMetricsShard.class)
+            time
         );
 
         expectedMembers.forEach(member -> {
@@ -637,8 +633,7 @@ public class GroupCoordinatorRecordHelpersTest {
             new LogContext(),
             "group-id",
             ClassicGroupState.PREPARING_REBALANCE,
-            time,
-            mock(GroupCoordinatorMetricsShard.class)
+            time
         );
 
         expectedMembers.forEach(member -> {
@@ -697,8 +692,7 @@ public class GroupCoordinatorRecordHelpersTest {
             new LogContext(),
             "group-id",
             ClassicGroupState.PREPARING_REBALANCE,
-            time,
-            mock(GroupCoordinatorMetricsShard.class)
+            time
         );
 
         group.initNextGeneration();

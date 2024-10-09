@@ -16,7 +16,9 @@
  */
 package kafka.server.share;
 
+import kafka.server.ActionQueue;
 import kafka.server.DelayedOperation;
+import kafka.server.DelayedOperationPurgatory;
 import kafka.server.LogReadResult;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
@@ -55,17 +57,23 @@ public class DelayedShareFetch extends DelayedOperation {
     private final ShareFetchData shareFetchData;
     private final ReplicaManager replicaManager;
     private final Map<SharePartitionKey, SharePartition> partitionCacheMap;
+    private final ActionQueue delayedActionQueue;
+    private final DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory;
 
     private Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionDataFromTryComplete;
 
     DelayedShareFetch(
             ShareFetchData shareFetchData,
             ReplicaManager replicaManager,
-            Map<SharePartitionKey, SharePartition> partitionCacheMap) {
+            Map<SharePartitionKey, SharePartition> partitionCacheMap,
+            ActionQueue delayedActionQueue,
+            DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory) {
         super(shareFetchData.fetchParams().maxWaitMs, Option.empty());
         this.shareFetchData = shareFetchData;
         this.replicaManager = replicaManager;
         this.partitionCacheMap = partitionCacheMap;
+        this.delayedActionQueue = delayedActionQueue;
+        this.delayedShareFetchPurgatory = delayedShareFetchPurgatory;
         this.topicPartitionDataFromTryComplete = new LinkedHashMap<>();
     }
 
@@ -94,15 +102,16 @@ public class DelayedShareFetch extends DelayedOperation {
         // tryComplete invoked forceComplete, so we can use the data from tryComplete.
         else
             topicPartitionData = topicPartitionDataFromTryComplete;
-        try {
-            if (topicPartitionData.isEmpty()) {
-                // No locks for share partitions could be acquired, so we complete the request with an empty response.
-                shareFetchData.future().complete(Collections.emptyMap());
-                return;
-            }
-            log.trace("Fetchable share partitions data: {} with groupId: {} fetch params: {}",
-                    topicPartitionData, shareFetchData.groupId(), shareFetchData.fetchParams());
 
+        if (topicPartitionData.isEmpty()) {
+            // No locks for share partitions could be acquired, so we complete the request with an empty response.
+            shareFetchData.future().complete(Collections.emptyMap());
+            return;
+        }
+        log.trace("Fetchable share partitions data: {} with groupId: {} fetch params: {}",
+                topicPartitionData, shareFetchData.groupId(), shareFetchData.fetchParams());
+
+        try {
             Seq<Tuple2<TopicIdPartition, LogReadResult>> responseLogResult = replicaManager.readFromLog(
                 shareFetchData.fetchParams(),
                 CollectionConverters.asScala(
@@ -132,6 +141,16 @@ public class DelayedShareFetch extends DelayedOperation {
         } finally {
             // Releasing the lock to move ahead with the next request in queue.
             releasePartitionLocks(shareFetchData.groupId(), topicPartitionData.keySet());
+            // If we have a fetch request completed for a topic-partition, we release the locks for that partition,
+            // then we should check if there is a pending share fetch request for the topic-partition and complete it.
+            // We add the action to delayed actions queue to avoid an infinite call stack, which could happen if
+            // we directly call delayedShareFetchPurgatory.checkAndComplete
+            delayedActionQueue.add(() -> {
+              topicPartitionData.keySet().forEach(topicIdPartition ->
+                  delayedShareFetchPurgatory.checkAndComplete(
+                      new DelayedShareFetchKey(shareFetchData.groupId(), topicIdPartition)));
+              return BoxedUnit.UNIT;
+            });
         }
     }
 

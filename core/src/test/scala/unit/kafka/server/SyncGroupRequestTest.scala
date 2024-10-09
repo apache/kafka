@@ -16,9 +16,9 @@
  */
 package kafka.server
 
-import kafka.test.ClusterInstance
-import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
-import kafka.test.junit.ClusterTestExtensions
+import org.apache.kafka.common.test.api.ClusterInstance
+import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
+import org.apache.kafka.common.test.api.ClusterTestExtensions
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
@@ -69,7 +69,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
 
     for (version <- ApiKeys.SYNC_GROUP.oldestVersion() to ApiKeys.SYNC_GROUP.latestVersion(isUnstableApiEnabled)) {
       // Sync with unknown group id.
-      syncGroupWithOldProtocol(
+      verifySyncGroupWithOldProtocol(
         groupId = "grp-unknown",
         memberId = "member-id",
         generationId = -1,
@@ -100,7 +100,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
 
       if (version >= 5) {
         // Sync the leader with unmatched protocolName.
-        syncGroupWithOldProtocol(
+        verifySyncGroupWithOldProtocol(
           groupId = "grp",
           memberId = leaderMemberId,
           generationId = 1,
@@ -116,7 +116,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         )
 
         // Sync the leader with unmatched protocolType.
-        syncGroupWithOldProtocol(
+        verifySyncGroupWithOldProtocol(
           groupId = "grp",
           memberId = leaderMemberId,
           generationId = 1,
@@ -133,7 +133,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       }
 
       // Sync with unknown member id.
-      syncGroupWithOldProtocol(
+      verifySyncGroupWithOldProtocol(
         groupId = "grp",
         memberId = "member-id-unknown",
         generationId = -1,
@@ -144,7 +144,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       )
 
       // Sync with illegal generation id.
-      syncGroupWithOldProtocol(
+      verifySyncGroupWithOldProtocol(
         groupId = "grp",
         memberId = leaderMemberId,
         generationId = 2,
@@ -155,7 +155,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       )
 
       // Sync the leader with empty protocolType and protocolName if version < 5.
-      syncGroupWithOldProtocol(
+      verifySyncGroupWithOldProtocol(
         groupId = "grp",
         memberId = leaderMemberId,
         generationId = 1,
@@ -196,7 +196,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       val followerMemberId = joinFollowerFutureResponseData.memberId
 
       // Sync the leader ahead of the follower.
-      syncGroupWithOldProtocol(
+      verifySyncGroupWithOldProtocol(
         groupId = "grp",
         memberId = leaderMemberId,
         generationId = rejoinLeaderResponseData.generationId,
@@ -212,7 +212,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         version = version.toShort
       )
 
-      syncGroupWithOldProtocol(
+      verifySyncGroupWithOldProtocol(
         groupId = "grp",
         memberId = followerMemberId,
         generationId = joinFollowerFutureResponseData.generationId,
@@ -222,7 +222,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
 
       // Sync the follower ahead of the leader.
       val syncFollowerFuture = Future {
-        syncGroupWithOldProtocol(
+        verifySyncGroupWithOldProtocol(
           groupId = "grp",
           memberId = followerMemberId,
           generationId = 2,
@@ -231,7 +231,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         )
       }
 
-      syncGroupWithOldProtocol(
+      verifySyncGroupWithOldProtocol(
         groupId = "grp",
         memberId = leaderMemberId,
         generationId = 2,

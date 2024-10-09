@@ -17,11 +17,10 @@
 
 package org.apache.kafka.tools.consumer.group;
 
-import kafka.test.ClusterConfig;
-
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.utils.Utils;
 
 import java.time.Duration;
@@ -38,7 +37,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-import static kafka.test.annotation.Type.CO_KRAFT;
+import static org.apache.kafka.common.test.api.Type.CO_KRAFT;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG;
@@ -48,7 +47,6 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_
 /**
  * The old test framework {@link kafka.api.BaseConsumerTest#getTestQuorumAndGroupProtocolParametersAll} test for the following cases:
  * <ul>
- *     <li>(KRAFT servers) with (group.coordinator.new.enable=false) with (classic group protocol) = 1 cases</li>
  *     <li>(KRAFT server) with (group.coordinator.new.enable=true) with (classic group protocol) = 1 case</li>
  *     <li>(KRAFT server) with (group.coordinator.new.enable=true) with (consumer group protocol) = 1 case</li>
  * </ul>
@@ -65,7 +63,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_
  *     <li>(CO_KRAFT servers) with (group.coordinator.new.enable=true) with (classic / consumer group protocols) = 2 cases</li>
  * </ul>
  * <ul>
- *     <li>(KRAFT servers) with (group.coordinator.new.enable=false) with (classic group protocol) = 1 cases</li>
+ *     <li>(KRAFT server) with (group.coordinator.new.enable=false) with (classic group protocol) = 1 case</li>
  * </ul>
  */
 class ConsumerGroupCommandTestUtils {
