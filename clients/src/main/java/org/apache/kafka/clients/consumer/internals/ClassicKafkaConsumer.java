@@ -597,21 +597,15 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
     }
 
-    @Deprecated
-    @Override
-    public ConsumerRecords<K, V> poll(final long timeoutMs) {
-        return poll(time.timer(timeoutMs), false);
-    }
-
     @Override
     public ConsumerRecords<K, V> poll(final Duration timeout) {
-        return poll(time.timer(timeout), true);
+        return poll(time.timer(timeout));
     }
 
     /**
      * @throws KafkaException if the rebalance callback throws exception
      */
-    private ConsumerRecords<K, V> poll(final Timer timer, final boolean includeMetadataInTimeout) {
+    private ConsumerRecords<K, V> poll(final Timer timer) {
         acquireAndEnsureOpen();
         try {
             this.kafkaConsumerMetrics.recordPollStart(timer.currentTimeMs());
@@ -623,14 +617,8 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             do {
                 client.maybeTriggerWakeup();
 
-                if (includeMetadataInTimeout) {
-                    // try to update assignment metadata BUT do not need to block on the timer for join group
-                    updateAssignmentMetadataIfNeeded(timer, false);
-                } else {
-                    while (!updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE), true)) {
-                        log.warn("Still waiting for metadata");
-                    }
-                }
+                // try to update assignment metadata BUT do not need to block on the timer for join group
+                updateAssignmentMetadataIfNeeded(timer, false);
 
                 final Fetch<K, V> fetch = pollForFetches(timer);
                 if (!fetch.isEmpty()) {

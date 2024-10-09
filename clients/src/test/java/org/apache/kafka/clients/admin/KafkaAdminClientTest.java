@@ -445,16 +445,15 @@ public class KafkaAdminClientTest {
         MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) admin.metrics.reporters().get(0);
 
         assertEquals(admin.getClientId(), mockMetricsReporter.clientId);
-        assertEquals(2, admin.metrics.reporters().size());
+        assertEquals(1, admin.metrics.reporters().size());
         admin.close();
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void testDisableJmxReporter() {
         Properties props = new Properties();
         props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        props.setProperty(AdminClientConfig.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false");
+        props.setProperty(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG, "");
         KafkaAdminClient admin = (KafkaAdminClient) AdminClient.create(props);
         assertTrue(admin.metrics.reporters().isEmpty());
         admin.close();
