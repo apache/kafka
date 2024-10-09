@@ -67,6 +67,7 @@ public class ShareFetchUtils {
                 partitionData
                     .setRecords(null)
                     .setErrorCode(fetchPartitionData.error.code())
+                    .setErrorMessage(fetchPartitionData.error.message())
                     .setAcquiredRecords(Collections.emptyList());
 
                 // In case we get OFFSET_OUT_OF_RANGE error, that's because the Log Start Offset is later than the fetch offset.
@@ -78,6 +79,7 @@ public class ShareFetchUtils {
                     // We set the error code to NONE, as we have updated the start offset of the share partition
                     // and the client can retry the fetch.
                     partitionData.setErrorCode(Errors.NONE.code());
+                    partitionData.setErrorMessage(Errors.NONE.message());
                 }
             } else {
                 List<AcquiredRecords> acquiredRecords = sharePartition.acquire(shareFetchData.memberId(), fetchPartitionData);
@@ -93,7 +95,6 @@ public class ShareFetchUtils {
                 } else {
                     partitionData
                         .setRecords(fetchPartitionData.records)
-                        .setErrorCode(fetchPartitionData.error.code())
                         .setAcquiredRecords(acquiredRecords);
                 }
             }
