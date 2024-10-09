@@ -4,8 +4,8 @@ See our [web site](https://kafka.apache.org) for details on the project.
 
 You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
-We build and test Apache Kafka with Java 8, 11, 17 and 21. We set the `release` parameter in javac and scalac
-to `8` to ensure the generated binaries are compatible with Java 8 or higher (independently of the Java version
+We build and test Apache Kafka with 11, 17 and 21. We set the `release` parameter in javac and scalac
+to `11` to ensure the generated binaries are compatible with Java 11 or higher (independently of the Java version
 used for compilation). Java 8 support project-wide has been deprecated since Apache Kafka 3.0, Java 11 support for
 the broker and tools has been deprecated since Apache Kafka 3.7 and removal of both is planned for Apache Kafka 4.0 (
 see [KIP-750](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308223) and
