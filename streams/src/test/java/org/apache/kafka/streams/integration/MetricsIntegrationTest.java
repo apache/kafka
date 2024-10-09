@@ -68,7 +68,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 @Timeout(600)
 @Tag("integration")
-@SuppressWarnings("deprecation")
 public class MetricsIntegrationTest {
     private static final int NUM_BROKERS = 1;
     private static final int NUM_THREADS = 2;
@@ -326,7 +325,7 @@ public class MetricsIntegrationTest {
     }
 
     private void closeApplication() throws Exception {
-        kafkaStreams.close();
+        kafkaStreams.close(Duration.ofSeconds(60));
         kafkaStreams.cleanUp();
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
         final long timeout = 60000;
@@ -375,7 +374,7 @@ public class MetricsIntegrationTest {
         final Duration windowSize = Duration.ofMillis(50);
         builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()))
             .groupByKey()
-            .windowedBy(TimeWindows.of(windowSize).grace(Duration.ZERO))
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(windowSize))
             .aggregate(() -> 0L,
                 (aggKey, newValue, aggValue) -> aggValue,
                 Materialized.<Integer, Long, WindowStore<Bytes, byte[]>>as(TIME_WINDOWED_AGGREGATED_STREAM_STORE)
@@ -403,7 +402,7 @@ public class MetricsIntegrationTest {
         final Duration inactivityGap = Duration.ofMillis(50);
         builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()))
             .groupByKey()
-            .windowedBy(SessionWindows.with(inactivityGap).grace(Duration.ZERO))
+            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(inactivityGap))
             .aggregate(() -> 0L,
                 (aggKey, newValue, aggValue) -> aggValue,
                 (aggKey, leftAggValue, rightAggValue) -> leftAggValue,

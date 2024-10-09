@@ -91,8 +91,8 @@ public class ClusterControlManager {
         private long sessionTimeoutNs = DEFAULT_SESSION_TIMEOUT_NS;
         private ReplicaPlacer replicaPlacer = null;
         private FeatureControlManager featureControl = null;
-        private boolean zkMigrationEnabled = false;
         private BrokerUncleanShutdownHandler brokerUncleanShutdownHandler = null;
+        private String interBrokerListenerName = "PLAINTEXT";
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -129,13 +129,13 @@ public class ClusterControlManager {
             return this;
         }
 
-        Builder setZkMigrationEnabled(boolean zkMigrationEnabled) {
-            this.zkMigrationEnabled = zkMigrationEnabled;
+        Builder setBrokerUncleanShutdownHandler(BrokerUncleanShutdownHandler brokerUncleanShutdownHandler) {
+            this.brokerUncleanShutdownHandler = brokerUncleanShutdownHandler;
             return this;
         }
 
-        Builder setBrokerUncleanShutdownHandler(BrokerUncleanShutdownHandler brokerUncleanShutdownHandler) {
-            this.brokerUncleanShutdownHandler = brokerUncleanShutdownHandler;
+        Builder setInterBrokerListenerName(String interBrokerListenerName) {
+            this.interBrokerListenerName = interBrokerListenerName;
             return this;
         }
 
@@ -165,8 +165,8 @@ public class ClusterControlManager {
                 sessionTimeoutNs,
                 replicaPlacer,
                 featureControl,
-                zkMigrationEnabled,
-                brokerUncleanShutdownHandler
+                brokerUncleanShutdownHandler,
+                interBrokerListenerName
             );
         }
     }
@@ -253,12 +253,12 @@ public class ClusterControlManager {
      */
     private final FeatureControlManager featureControl;
 
-    /**
-     * True if migration from ZK is enabled.
-     */
-    private final boolean zkMigrationEnabled;
-
     private final BrokerUncleanShutdownHandler brokerUncleanShutdownHandler;
+
+    /**
+     * The statically configured inter-broker listener name.
+     */
+    private final String interBrokerListenerName;
 
     /**
      * Maps controller IDs to controller registrations.
@@ -278,8 +278,8 @@ public class ClusterControlManager {
         long sessionTimeoutNs,
         ReplicaPlacer replicaPlacer,
         FeatureControlManager featureControl,
-        boolean zkMigrationEnabled,
-        BrokerUncleanShutdownHandler brokerUncleanShutdownHandler
+        BrokerUncleanShutdownHandler brokerUncleanShutdownHandler,
+        String interBrokerListenerName
     ) {
         this.logContext = logContext;
         this.clusterId = clusterId;
@@ -292,10 +292,10 @@ public class ClusterControlManager {
         this.heartbeatManager = null;
         this.readyBrokersFuture = Optional.empty();
         this.featureControl = featureControl;
-        this.zkMigrationEnabled = zkMigrationEnabled;
         this.controllerRegistrations = new TimelineHashMap<>(snapshotRegistry, 0);
         this.directoryToBroker = new TimelineHashMap<>(snapshotRegistry, 0);
         this.brokerUncleanShutdownHandler = brokerUncleanShutdownHandler;
+        this.interBrokerListenerName = interBrokerListenerName;
     }
 
     ReplicaPlacer replicaPlacer() {
@@ -335,10 +335,6 @@ public class ClusterControlManager {
             .collect(Collectors.toSet());
     }
 
-    boolean zkRegistrationAllowed() {
-        return zkMigrationEnabled && featureControl.metadataVersion().isMigrationSupported();
-    }
-
     /**
      * Process an incoming broker registration request.
      */
@@ -368,13 +364,8 @@ public class ClusterControlManager {
             }
         }
 
-        if (request.isMigratingZkBroker() && !zkRegistrationAllowed()) {
+        if (request.isMigratingZkBroker()) {
             throw new BrokerIdNotRegisteredException("Controller does not support registering ZK brokers.");
-        }
-
-        if (!request.isMigratingZkBroker() && featureControl.inPreMigrationMode()) {
-            throw new BrokerIdNotRegisteredException("Controller is in pre-migration mode and cannot register KRaft " +
-                "brokers until the metadata migration is complete.");
         }
 
         if (featureControl.metadataVersion().isDirectoryAssignmentSupported()) {
@@ -489,7 +480,7 @@ public class ClusterControlManager {
         records.add(new ApiMessageAndVersion(new RegisterControllerRecord().
             setControllerId(request.controllerId()).
             setIncarnationId(request.incarnationId()).
-            setZkMigrationReady(request.zkMigrationReady()).
+            setZkMigrationReady(false).
             setEndPoints(listenerInfo.toControllerRegistrationRecord()).
             setFeatures(features),
                 (short) 0));

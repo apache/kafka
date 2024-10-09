@@ -202,11 +202,11 @@ class KafkaRaftManager[T](
 
   def shutdown(): Unit = {
     CoreUtils.swallow(expirationService.shutdown(), this)
-    CoreUtils.swallow(expirationTimer.close(), this)
+    Utils.closeQuietly(expirationTimer, "expiration timer")
     CoreUtils.swallow(clientDriver.shutdown(), this)
     CoreUtils.swallow(scheduler.shutdown(), this)
-    CoreUtils.swallow(netChannel.close(), this)
-    CoreUtils.swallow(replicatedLog.close(), this)
+    Utils.closeQuietly(netChannel, "net channel")
+    Utils.closeQuietly(replicatedLog, "replicated log")
     CoreUtils.swallow(dataDirLock.foreach(_.destroy()), this)
   }
 
@@ -247,7 +247,7 @@ class KafkaRaftManager[T](
 
   private def buildNetworkChannel(): KafkaNetworkChannel = {
     val (listenerName, netClient) = buildNetworkClient()
-    new KafkaNetworkChannel(time, listenerName, netClient, config.quorumRequestTimeoutMs, threadNamePrefix)
+    new KafkaNetworkChannel(time, listenerName, netClient, config.quorumConfig.requestTimeoutMs, threadNamePrefix)
   }
 
   private def createDataDir(): File = {
@@ -313,7 +313,7 @@ class KafkaRaftManager[T](
       reconnectBackoffMsMs,
       Selectable.USE_DEFAULT_BUFFER_SIZE,
       config.socketReceiveBufferBytes,
-      config.quorumRequestTimeoutMs,
+      config.quorumConfig.requestTimeoutMs,
       config.connectionSetupTimeoutMs,
       config.connectionSetupTimeoutMaxMs,
       time,

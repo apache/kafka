@@ -327,13 +327,14 @@ public class TargetAssignmentBuilder<T extends ModernGroupMember> {
      */
     public TargetAssignmentResult build() throws PartitionAssignorException {
         Map<String, MemberSubscriptionAndAssignmentImpl> memberSpecs = new HashMap<>();
+        TopicIds.TopicResolver topicResolver = new TopicIds.CachedTopicResolver(topicsImage);
 
         // Prepare the member spec for all members.
         members.forEach((memberId, member) ->
             memberSpecs.put(memberId, createMemberSubscriptionAndAssignment(
                 member,
                 targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
-                topicsImage
+                topicResolver
             ))
         );
 
@@ -355,7 +356,7 @@ public class TargetAssignmentBuilder<T extends ModernGroupMember> {
                 memberSpecs.put(memberId, createMemberSubscriptionAndAssignment(
                     updatedMemberOrNull,
                     assignment,
-                    topicsImage
+                    topicResolver
                 ));
             }
         });
@@ -420,12 +421,12 @@ public class TargetAssignmentBuilder<T extends ModernGroupMember> {
     static <T extends ModernGroupMember> MemberSubscriptionAndAssignmentImpl createMemberSubscriptionAndAssignment(
         T member,
         Assignment memberAssignment,
-        TopicsImage topicsImage
+        TopicIds.TopicResolver topicResolver
     ) {
         return new MemberSubscriptionAndAssignmentImpl(
             Optional.ofNullable(member.rackId()),
             Optional.ofNullable(member.instanceId()),
-            new TopicIds(member.subscribedTopicNames(), topicsImage),
+            new TopicIds(member.subscribedTopicNames(), topicResolver),
             memberAssignment
         );
     }

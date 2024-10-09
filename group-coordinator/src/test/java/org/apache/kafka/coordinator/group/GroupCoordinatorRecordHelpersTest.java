@@ -43,7 +43,6 @@ import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
-import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
@@ -89,7 +88,6 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.mock;
 
 public class GroupCoordinatorRecordHelpersTest {
 
@@ -165,14 +163,12 @@ public class GroupCoordinatorRecordHelpersTest {
         subscriptionMetadata.put("foo", new TopicMetadata(
             fooTopicId,
             "foo",
-            10,
-            mkMapOfPartitionRacks(10)
+            10
         ));
         subscriptionMetadata.put("bar", new TopicMetadata(
             barTopicId,
             "bar",
-            20,
-            mkMapOfPartitionRacks(20)
+            20
         ));
 
         CoordinatorRecord expectedRecord = new CoordinatorRecord(
@@ -187,13 +183,11 @@ public class GroupCoordinatorRecordHelpersTest {
                         new ConsumerGroupPartitionMetadataValue.TopicMetadata()
                             .setTopicId(fooTopicId)
                             .setTopicName("foo")
-                            .setNumPartitions(10)
-                            .setPartitionMetadata(mkListOfPartitionRacks(10)),
+                            .setNumPartitions(10),
                         new ConsumerGroupPartitionMetadataValue.TopicMetadata()
                             .setTopicId(barTopicId)
                             .setTopicName("bar")
-                            .setNumPartitions(20)
-                            .setPartitionMetadata(mkListOfPartitionRacks(20)))),
+                            .setNumPartitions(20))),
                 (short) 0));
 
         assertRecordEquals(expectedRecord, newConsumerGroupSubscriptionMetadataRecord(
@@ -226,14 +220,12 @@ public class GroupCoordinatorRecordHelpersTest {
         subscriptionMetadata.put("foo", new TopicMetadata(
             fooTopicId,
             "foo",
-            10,
-            Collections.emptyMap()
+            10
         ));
         subscriptionMetadata.put("bar", new TopicMetadata(
             barTopicId,
             "bar",
-            20,
-            Collections.emptyMap()
+            20
         ));
 
         CoordinatorRecord expectedRecord = new CoordinatorRecord(
@@ -248,13 +240,11 @@ public class GroupCoordinatorRecordHelpersTest {
                         new ConsumerGroupPartitionMetadataValue.TopicMetadata()
                             .setTopicId(fooTopicId)
                             .setTopicName("foo")
-                            .setNumPartitions(10)
-                            .setPartitionMetadata(Collections.emptyList()),
+                            .setNumPartitions(10),
                         new ConsumerGroupPartitionMetadataValue.TopicMetadata()
                             .setTopicId(barTopicId)
                             .setTopicName("bar")
-                            .setNumPartitions(20)
-                            .setPartitionMetadata(Collections.emptyList()))),
+                            .setNumPartitions(20))),
                 (short) 0));
 
         assertRecordEquals(expectedRecord, newConsumerGroupSubscriptionMetadataRecord(
@@ -522,8 +512,7 @@ public class GroupCoordinatorRecordHelpersTest {
             new LogContext(),
             "group-id",
             ClassicGroupState.PREPARING_REBALANCE,
-            time,
-            mock(GroupCoordinatorMetricsShard.class)
+            time
         );
 
         Map<String, byte[]> assignment = new HashMap<>();
@@ -593,8 +582,7 @@ public class GroupCoordinatorRecordHelpersTest {
             new LogContext(),
             "group-id",
             ClassicGroupState.PREPARING_REBALANCE,
-            time,
-            mock(GroupCoordinatorMetricsShard.class)
+            time
         );
 
         expectedMembers.forEach(member -> {
@@ -645,8 +633,7 @@ public class GroupCoordinatorRecordHelpersTest {
             new LogContext(),
             "group-id",
             ClassicGroupState.PREPARING_REBALANCE,
-            time,
-            mock(GroupCoordinatorMetricsShard.class)
+            time
         );
 
         expectedMembers.forEach(member -> {
@@ -705,8 +692,7 @@ public class GroupCoordinatorRecordHelpersTest {
             new LogContext(),
             "group-id",
             ClassicGroupState.PREPARING_REBALANCE,
-            time,
-            mock(GroupCoordinatorMetricsShard.class)
+            time
         );
 
         group.initNextGeneration();
@@ -819,28 +805,6 @@ public class GroupCoordinatorRecordHelpersTest {
 
         CoordinatorRecord record = GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("group-id", "foo", 1);
         assertEquals(expectedRecord, record);
-    }
-
-    /**
-     * Creates a list of values to be added to the record and assigns partitions to racks for testing.
-     *
-     * @param numPartitions The number of partitions for the topic.
-     *
-     * For testing purposes, the following criteria are used:
-     *      - Number of replicas for each partition: 2
-     *      - Number of racks available to the cluster: 4
-     */
-    public static List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> mkListOfPartitionRacks(int numPartitions) {
-        List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> partitionRacks = new ArrayList<>(numPartitions);
-        for (int i = 0; i < numPartitions; i++) {
-            List<String> racks = new ArrayList<>(Arrays.asList("rack" + i % 4, "rack" + (i + 1) % 4));
-            partitionRacks.add(
-                new ConsumerGroupPartitionMetadataValue.PartitionMetadata()
-                    .setPartition(i)
-                    .setRacks(racks)
-            );
-        }
-        return partitionRacks;
     }
 
     /**

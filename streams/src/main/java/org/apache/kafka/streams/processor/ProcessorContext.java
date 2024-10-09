@@ -17,12 +17,16 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.io.File;
 import java.time.Duration;
@@ -292,8 +296,9 @@ public interface ProcessorContext {
      * (including the currently processed record), i.e., it can be considered a high-watermark.
      * Stream-time is tracked on a per-task basis and is preserved across restarts and during task migration.
      *
-     * <p> Note: this method is not supported for global processors (cf. {@link Topology#addGlobalStore} (...)
-     * and {@link StreamsBuilder#addGlobalStore} (...),
+     * <p> Note: this method is not supported for global processors (cf.
+     * {@link Topology#addGlobalStore(StoreBuilder, String, Deserializer, Deserializer, String, String, ProcessorSupplier)  Topology.addGlobalStore(...)}
+     * and {@link StreamsBuilder#addGlobalStore(StoreBuilder, String, Consumed, ProcessorSupplier) StreamsBuilder.addGlobalStore(...)}),
      * because there is no concept of stream-time for this case.
      * Calling this method in a global processor will result in an {@link UnsupportedOperationException}.
      *

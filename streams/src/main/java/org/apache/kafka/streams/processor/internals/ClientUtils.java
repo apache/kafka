@@ -35,7 +35,6 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.TaskId;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,7 +64,6 @@ public class ClientUtils {
         }
     }
 
-
     public static String adminClientId(final String clientId) {
         return clientId + "-admin";
     }
@@ -78,12 +76,8 @@ public class ClientUtils {
         return threadClientId + "-restore-consumer";
     }
 
-    public static String threadProducerClientId(final String threadClientId) {
+    public static String producerClientId(final String threadClientId) {
         return threadClientId + "-producer";
-    }
-
-    public static String taskProducerClientId(final String threadClientId, final TaskId taskId) {
-        return threadClientId + "-" + taskId + "-producer";
     }
 
     public static Map<MetricName, Metric> consumerMetrics(final Consumer<byte[], byte[]> mainConsumer,
@@ -201,11 +195,6 @@ public class ClientUtils {
             return Collections.emptyMap();
         }
         return getEndOffsets(fetchEndOffsetsFuture(partitions, adminClient));
-    }
-
-    public static String extractThreadId(final String fullThreadName) {
-        final int index = fullThreadName.indexOf("StreamThread-");
-        return fullThreadName.substring(index);
     }
 
     public static long producerRecordSizeInBytes(final ProducerRecord<byte[], byte[]> record) {

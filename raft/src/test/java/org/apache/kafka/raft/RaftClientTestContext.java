@@ -20,6 +20,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.AddRaftVoterRequestData;
@@ -383,14 +384,14 @@ public final class RaftClientTestContext {
                     Endpoints.empty() :
                 this.localListeners;
 
-            QuorumConfig quorumConfig = new QuorumConfig(
-                requestTimeoutMs,
-                RETRY_BACKOFF_MS,
-                electionTimeoutMs,
-                ELECTION_BACKOFF_MAX_MS,
-                FETCH_TIMEOUT_MS,
-                appendLingerMs
-            );
+            Map<String, Integer> configMap = new HashMap<>();
+            configMap.put(QuorumConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs);
+            configMap.put(QuorumConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG, RETRY_BACKOFF_MS);
+            configMap.put(QuorumConfig.QUORUM_ELECTION_TIMEOUT_MS_CONFIG, electionTimeoutMs);
+            configMap.put(QuorumConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG, ELECTION_BACKOFF_MAX_MS);
+            configMap.put(QuorumConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG, FETCH_TIMEOUT_MS);
+            configMap.put(QuorumConfig.QUORUM_LINGER_MS_CONFIG, appendLingerMs);
+            QuorumConfig quorumConfig = new QuorumConfig(new AbstractConfig(QuorumConfig.CONFIG_DEF, configMap));
 
             List<InetSocketAddress> computedBootstrapServers = bootstrapServers.orElseGet(() -> {
                 if (isStartingVotersStatic) {
@@ -1367,6 +1368,14 @@ public final class RaftClientTestContext {
         return beginEpochRequest(clusterId, epoch, leaderId);
     }
 
+    BeginQuorumEpochRequestData beginEpochRequest(int epoch, int leaderId, Endpoints endpoints) {
+        ReplicaKey localReplicaKey = kip853Rpc ?
+            ReplicaKey.of(localIdOrThrow(), localDirectoryId) :
+            ReplicaKey.of(-1, ReplicaKey.NO_DIRECTORY_ID);
+
+        return beginEpochRequest(clusterId, epoch, leaderId, endpoints, localReplicaKey);
+    }
+
     BeginQuorumEpochRequestData beginEpochRequest(String clusterId, int epoch, int leaderId) {
         ReplicaKey localReplicaKey = kip853Rpc ?
             ReplicaKey.of(localIdOrThrow(), localDirectoryId) :
@@ -1381,12 +1390,28 @@ public final class RaftClientTestContext {
         int leaderId,
         ReplicaKey voterKey
     ) {
+        return beginEpochRequest(
+            clusterId,
+            epoch,
+            leaderId,
+            startingVoters.listeners(leaderId),
+            voterKey
+        );
+    }
+
+    BeginQuorumEpochRequestData beginEpochRequest(
+        String clusterId,
+        int epoch,
+        int leaderId,
+        Endpoints endpoints,
+        ReplicaKey voterKey
+    ) {
         return RaftUtil.singletonBeginQuorumEpochRequest(
             metadataPartition,
             clusterId,
             epoch,
             leaderId,
-            startingVoters.listeners(leaderId),
+            endpoints,
             voterKey
         );
     }

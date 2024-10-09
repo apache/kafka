@@ -25,6 +25,7 @@ import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.internals.SecurityManagerCompatibility;
 import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
 import org.apache.kafka.common.network.Authenticator;
@@ -73,8 +74,6 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashSet;
@@ -82,6 +81,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.CompletionException;
 import java.util.function.Function;
 
 import javax.net.ssl.SSLSession;
@@ -205,12 +205,12 @@ public class SaslServerAuthenticator implements Authenticator {
             saslServer = createSaslKerberosServer(callbackHandler, configs, subject);
         } else {
             try {
-                saslServer = Subject.doAs(subject, (PrivilegedExceptionAction<SaslServer>) () ->
+                saslServer = SecurityManagerCompatibility.get().callAs(subject, () ->
                     Sasl.createSaslServer(saslMechanism, "kafka", serverAddress().getHostName(), configs, callbackHandler));
                 if (saslServer == null) {
                     throw new SaslException("Kafka Server failed to create a SaslServer to interact with a client during session authentication with server mechanism " + saslMechanism);
                 }
-            } catch (PrivilegedActionException e) {
+            } catch (CompletionException e) {
                 throw new SaslException("Kafka Server failed to create a SaslServer to interact with a client during session authentication with server mechanism " + saslMechanism, e.getCause());
             }
         }
@@ -231,9 +231,9 @@ public class SaslServerAuthenticator implements Authenticator {
         LOG.debug("Creating SaslServer for {} with mechanism {}", kerberosName, saslMechanism);
 
         try {
-            return Subject.doAs(subject, (PrivilegedExceptionAction<SaslServer>) () ->
+            return SecurityManagerCompatibility.get().callAs(subject, () ->
                     Sasl.createSaslServer(saslMechanism, servicePrincipalName, serviceHostname, configs, saslServerCallbackHandler));
-        } catch (PrivilegedActionException e) {
+        } catch (CompletionException e) {
             throw new SaslException("Kafka Server failed to create a SaslServer to interact with a client during session authentication", e.getCause());
         }
     }

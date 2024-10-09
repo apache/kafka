@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.AcknowledgementCommitCallback;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -25,6 +26,7 @@ import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeOnCloseEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackRegistrationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareUnsubscribeEvent;
 import org.apache.kafka.common.KafkaException;
@@ -66,9 +68,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @SuppressWarnings("unchecked")
@@ -166,6 +170,19 @@ public class ShareConsumerImplTest {
     }
 
     @Test
+    public void testFailConstructor() {
+        final Properties props = requiredConsumerProperties();
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "group-id");
+        props.put(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, "an.invalid.class");
+        final ConsumerConfig config = new ConsumerConfig(props);
+        KafkaException ce = assertThrows(
+                KafkaException.class,
+                () -> newConsumer(config));
+        assertTrue(ce.getMessage().contains("Failed to construct Kafka share consumer"), "Unexpected exception message: " + ce.getMessage());
+        assertTrue(ce.getCause().getMessage().contains("Class an.invalid.class cannot be found"), "Unexpected cause: " + ce.getCause());
+    }
+
+    @Test
     public void testWakeupBeforeCallingPoll() {
         consumer = newConsumer();
         final String topicName = "foo";
@@ -176,6 +193,45 @@ public class ShareConsumerImplTest {
 
         assertThrows(WakeupException.class, () -> consumer.poll(Duration.ZERO));
         assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
+    }
+
+    @Test
+    public void testWakeupAfterEmptyFetch() {
+        consumer = newConsumer();
+        final String topicName = "foo";
+        final int partition = 3;
+        doAnswer(invocation -> {
+            consumer.wakeup();
+            return ShareFetch.empty();
+        }).doAnswer(invocation -> ShareFetch.empty()).when(fetchCollector).collect(any(ShareFetchBuffer.class));
+
+        consumer.subscribe(singletonList(topicName));
+
+        assertThrows(WakeupException.class, () -> consumer.poll(Duration.ofMinutes(1)));
+        assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
+    }
+
+    @Test
+    public void testWakeupAfterNonEmptyFetch() {
+        consumer = newConsumer();
+        final String topicName = "foo";
+        final int partition = 3;
+        final TopicIdPartition tip = new TopicIdPartition(Uuid.randomUuid(), partition, topicName);
+        final ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(tip);
+        batch.addRecord(new ConsumerRecord<>(topicName, partition, 2, "key1", "value1"));
+        doAnswer(invocation -> {
+            consumer.wakeup();
+            final ShareFetch<String, String> fetch = ShareFetch.empty();
+            fetch.add(tip, batch);
+            return fetch;
+        }).when(fetchCollector).collect(Mockito.any(ShareFetchBuffer.class));
+
+        consumer.subscribe(singletonList(topicName));
+
+        // since wakeup() is called when the non-empty fetch is returned the wakeup should be ignored
+        assertDoesNotThrow(() -> consumer.poll(Duration.ofMinutes(1)));
+        // the previously ignored wake-up should not be ignored in the next call
+        assertThrows(WakeupException.class, () -> consumer.poll(Duration.ZERO));
     }
 
     @Test
@@ -196,6 +252,41 @@ public class ShareConsumerImplTest {
         consumer.close();
         verify(applicationEventHandler).addAndGet(any(ShareAcknowledgeOnCloseEvent.class));
         verify(applicationEventHandler).add(any(ShareUnsubscribeEvent.class));
+    }
+
+    @Test
+    public void testAcknowledgementCommitCallbackRegistrationEvent() {
+        consumer = newConsumer();
+        AcknowledgementCommitCallback callback = mock(AcknowledgementCommitCallback.class);
+
+        consumer.setAcknowledgementCommitCallback(callback);
+        verify(applicationEventHandler).add(argThat(event ->
+            event instanceof ShareAcknowledgementCommitCallbackRegistrationEvent &&
+            ((ShareAcknowledgementCommitCallbackRegistrationEvent) event).isCallbackRegistered()
+        ));
+
+        consumer.setAcknowledgementCommitCallback(callback);
+        // As we have already set the callback, we should not add another event. We only add when we initially register.
+        verify(applicationEventHandler, times(1)).add(any(ShareAcknowledgementCommitCallbackRegistrationEvent.class));
+    }
+
+    @Test
+    public void testAcknowledgementCommitCallbackRegistrationEvent_Null() {
+        consumer = newConsumer();
+        AcknowledgementCommitCallback callback = mock(AcknowledgementCommitCallback.class);
+
+        consumer.setAcknowledgementCommitCallback(null);
+        // Initially callback is set to null, setting again to null should not add an event.
+        verify(applicationEventHandler, times(0)).add(any(ShareAcknowledgementCommitCallbackRegistrationEvent.class));
+
+        consumer.setAcknowledgementCommitCallback(callback);
+        verify(applicationEventHandler, times(1)).add(any(ShareAcknowledgementCommitCallbackRegistrationEvent.class));
+
+        // Now we are changing from a non-null callback to null, this should add an event.
+        consumer.setAcknowledgementCommitCallback(null);
+        verify(applicationEventHandler).add(argThat(event ->
+                event instanceof ShareAcknowledgementCommitCallbackRegistrationEvent &&
+                !((ShareAcknowledgementCommitCallbackRegistrationEvent) event).isCallbackRegistered()));
     }
 
     @Test

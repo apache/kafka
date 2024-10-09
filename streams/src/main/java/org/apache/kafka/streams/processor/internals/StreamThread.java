@@ -408,6 +408,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             time,
             clientSupplier,
             threadId,
+            threadIdx,
             processId,
             log,
             stateUpdaterEnabled,
@@ -685,7 +686,6 @@ public class StreamThread extends Thread implements ProcessingThread {
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException      if the store's change log does not contain the partition
      */
-    @SuppressWarnings("deprecation") // Needed to include StreamsConfig.EXACTLY_ONCE_BETA in error log for UnsupportedVersionException
     boolean runLoop() {
         subscribeConsumer();
 
@@ -742,9 +742,9 @@ public class StreamThread extends Thread implements ProcessingThread {
                     errorMessage.startsWith("Broker unexpectedly doesn't support requireStable flag on version ")) {
 
                     log.error("Shutting down because the Kafka cluster seems to be on a too old version. " +
-                              "Setting {}=\"{}\"/\"{}\" requires broker version 2.5 or higher.",
+                              "Setting {}=\"{}\" requires broker version 2.5 or higher.",
                           StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
-                          StreamsConfig.EXACTLY_ONCE_V2, StreamsConfig.EXACTLY_ONCE_BETA);
+                          StreamsConfig.EXACTLY_ONCE_V2);
                 }
                 failedStreamThreadSensor.record();
                 this.streamsUncaughtExceptionHandler.accept(new StreamsException(e), false);
@@ -812,7 +812,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                 if (fetchDeadlineClientInstanceId >= time.milliseconds()) {
                     try {
                         threadProducerInstanceIdFuture.complete(
-                            taskManager.threadProducer().kafkaProducer().clientInstanceId(Duration.ZERO)
+                            taskManager.streamsProducer().kafkaProducer().clientInstanceId(Duration.ZERO)
                         );
                     } catch (final IllegalStateException disabledError) {
                         // if telemetry is disabled on a client, we swallow the error,
@@ -931,14 +931,14 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     /**
      * One iteration of a thread includes the following steps:
-     *
+     * <p>
      * 1. poll records from main consumer and add to buffer;
      * 2. restore from restore consumer and update standby tasks if necessary;
      * 3. process active tasks from the buffers;
      * 4. punctuate active tasks if necessary;
      * 5. commit all tasks if necessary;
      *
-     * Among them, step 3/4/5 is done in batches in which we try to process as much as possible while trying to
+     * <p> Among them, step 3/4/5 is done in batches in which we try to process as much as possible while trying to
      * stop iteration to call the next iteration when it's close to the next main consumer's poll deadline
      *
      * @throws IllegalStateException If store gets registered after initialized is already finished
@@ -1083,7 +1083,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     /**
      * One iteration of a thread includes the following steps:
-     *
+     * <p>
      * 1. poll records from main consumer and add to buffer;
      * 2. check the task manager for any exceptions to be handled
      * 3. commit all tasks if necessary;
@@ -1367,11 +1367,10 @@ public class StreamThread extends Thread implements ProcessingThread {
     /**
      * Try to commit all active tasks owned by this thread.
      *
-     * Visible for testing.
-     *
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      */
+    // visible for testing
     int maybeCommit() {
         final int committed;
         if (now - lastCommitMs > commitTimeMs) {
