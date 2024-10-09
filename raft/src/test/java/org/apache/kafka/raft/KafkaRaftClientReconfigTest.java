@@ -2165,7 +2165,10 @@ public class KafkaRaftClientReconfigTest {
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
-        context.time.sleep(context.fetchTimeoutMs - 1);
+
+        // after more than 3 fetch timeouts the update voter period timer should have expired.
+        // check that the update voter period timer doesn't remain at zero (0) and cause the message queue to get
+        // called with a zero (0) timeout and result in a busy-loop.
         assertNotEquals(OptionalLong.of(0L), context.messageQueue.lastPollTimeoutMs());
     }
 
