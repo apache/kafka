@@ -36,10 +36,6 @@ public final class Java {
         return new Version(majorVersion, minorVersion);
     }
 
-    // Having these as static final provides the best opportunity for compiler optimization
-    public static final boolean IS_JAVA9_COMPATIBLE = VERSION.isJava9Compatible();
-    public static final boolean IS_JAVA11_COMPATIBLE = VERSION.isJava11Compatible();
-
     public static boolean isIbmJdk() {
         return System.getProperty("java.vendor").contains("IBM");
     }

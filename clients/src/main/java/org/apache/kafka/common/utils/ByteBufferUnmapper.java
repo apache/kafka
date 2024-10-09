@@ -87,10 +87,7 @@ public final class ByteBufferUnmapper {
     private static MethodHandle lookupUnmapMethodHandle() {
         final MethodHandles.Lookup lookup = lookup();
         try {
-            if (Java.IS_JAVA9_COMPATIBLE)
-                return unmapJava9(lookup);
-            else
-                return unmapJava7Or8(lookup);
+            return unmapJava9(lookup);
         } catch (ReflectiveOperationException | RuntimeException e1) {
             throw new UnsupportedOperationException("Unmapping is not supported on this platform, because internal " +
                 "Java APIs are not compatible with this Kafka version", e1);
