@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerHeartbeatRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMembershipManager;
@@ -39,6 +40,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -175,6 +177,17 @@ public class ApplicationEventProcessorTest {
 
         ExecutionException e = assertThrows(ExecutionException.class, () -> event.future().get());
         assertInstanceOf(IllegalStateException.class, e.getCause());
+    }
+
+    @Test
+    public void testResetOffsetEvent() {
+        Collection<TopicPartition> tp = Collections.singleton(new TopicPartition("topic", 0));
+        OffsetResetStrategy strategy = OffsetResetStrategy.LATEST;
+        ResetOffsetEvent event = new ResetOffsetEvent(tp, strategy, 12345);
+
+        setupProcessor(false);
+        processor.process(event);
+        verify(subscriptionState).requestOffsetReset(event.topicPartitions(), event.offsetResetStrategy());
     }
 
     @Test

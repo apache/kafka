@@ -29,6 +29,9 @@
                         <li>The <code>metrics.jmx.blacklist</code> and <code>metrics.jmx.whitelist</code> configurations were removed from the <code>org.apache.kafka.common.metrics.JmxReporter</code>
                             Please use <code>metrics.jmx.exclude</code> and <code>metrics.jmx.include</code> respectively instead.
                         </li>
+                        <li>The <code>auto.include.jmx.reporter</code> configuration was removed. The <code>metric.reporters</code> configuration
+                            is now set to <code>org.apache.kafka.common.metrics.JmxReporter</code> by default.
+                        </li>
                     </ul>
                 </li>
                 <li><b>Broker</b>
@@ -81,7 +84,11 @@
                             <code>kafka.tools.EndToEndLatency</code>,
                             <code>kafka.tools.StateChangeLogMerger</code>, 
                             <code>kafka.tools.StreamsResetter</code>, 
-                            <code>kafka.tools.JmxTool</code>.</li>
+                            <code>kafka.tools.JmxTool</code>.
+                        </li>
+                        <li>The <code>--authorizer</code>, <code>--authorizer-properties</code>, and <code>--zk-tls-config-file</code> options were removed from the <code>kafka-acls</code> command line tool.
+                            Please use <code>--bootstrap-server</code> or <code>--bootstrap-controller</code> instead.
+                        </li>
                     </ul>
                 </li>
                 <li><b>Connect</b>
@@ -93,6 +100,10 @@
                 </li>
                 <li><b>Consumer</b>
                     <ul>
+                        <li>The <code>poll(long)</code> method was removed from the consumer. Please use <code>poll(Duration)</code> instead. Note that there is
+                            a difference in behavior between the two methods. The <code>poll(Duration)</code> method does not block beyond the timeout awaiting
+                            partition assignment, whereas the earlier <code>poll(long)</code> method used to wait beyond the timeout.
+                        </li>
                         <li>The <code>committed(TopicPartition)</code> and <code>committed(TopicPartition, Duration)</code> methods were removed from the consumer.
                             Please use <code>committed(Set&ltTopicPartition&gt)</code> and <code>committed(Set&ltTopicPartition&gt, Duration)</code> instead.
                         </li>
