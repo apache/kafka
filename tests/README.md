@@ -45,7 +45,7 @@ TC_PATHS="tests/kafkatest/tests/streams/streams_upgrade_test.py::StreamsUpgradeT
 ```
 * Run tests with a specific image name
 ```
-image_name="ducker-ak-openjdk-8" bash tests/docker/run_tests.sh
+image_name="ducker-ak-openjdk-11" bash tests/docker/run_tests.sh
 ```
 * Run tests with a different JVM
 ```
