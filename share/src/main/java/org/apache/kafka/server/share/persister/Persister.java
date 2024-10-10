@@ -17,8 +17,6 @@
 
 package org.apache.kafka.server.share.persister;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -27,7 +25,6 @@ import java.util.concurrent.CompletableFuture;
  * For KIP-932, the default {@link Persister} uses a share coordinator to store information in
  * an internal topic.
  */
-@InterfaceStability.Evolving
 public interface Persister {
     /**
      * Initialize the share partition state.
