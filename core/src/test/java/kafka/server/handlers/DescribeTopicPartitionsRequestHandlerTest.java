@@ -495,7 +495,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
     void updateKraftMetadataCache(KRaftMetadataCache kRaftMetadataCache, List<ApiMessage> records) {
         MetadataImage image = kRaftMetadataCache.currentImage();
         MetadataImage partialImage = new MetadataImage(
-            new MetadataProvenance(100L, 10, 1000L),
+            new MetadataProvenance(100L, 10, 1000L, true),
             image.features(),
             ClusterImage.EMPTY,
             image.topics(),
@@ -508,7 +508,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         );
         MetadataDelta delta = new MetadataDelta.Builder().setImage(partialImage).build();
         records.stream().forEach(record -> delta.replay(record));
-        kRaftMetadataCache.setImage(delta.apply(new MetadataProvenance(100L, 10, 1000L)));
+        kRaftMetadataCache.setImage(delta.apply(new MetadataProvenance(100L, 10, 1000L, true)));
     }
 
     private RequestChannel.Request buildRequest(AbstractRequest request,

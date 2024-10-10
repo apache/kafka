@@ -117,7 +117,7 @@ class ControllerRegistrationManagerTest {
         }
       }
     }
-    val provenance = new MetadataProvenance(100, 200, 300)
+    val provenance = new MetadataProvenance(100, 200, 300, true)
     val newImage = delta.apply(provenance)
     val manifest = if (!prevImage.features().metadataVersion().equals(metadataVersion)) {
       new SnapshotManifest(provenance, 1000)

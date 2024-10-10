@@ -363,7 +363,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                     metrics.updateBatchSize(batch.records().size());
                     metrics.updateBatchProcessingTimeNs(elapsedNs);
                 }
-                batchLoader.maybeFlushBatches(currentLeaderAndEpoch);
+                batchLoader.maybeFlushBatches(currentLeaderAndEpoch, true);
             } catch (Throwable e) {
                 // This is a general catch-all block where we don't expect to end up;
                 // failure-prone operations should have individual try/catch blocks around them.
@@ -434,7 +434,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         }
         delta.finishSnapshot();
         MetadataProvenance provenance = new MetadataProvenance(reader.lastContainedLogOffset(),
-                reader.lastContainedLogEpoch(), reader.lastContainedLogTimestamp());
+                reader.lastContainedLogEpoch(), reader.lastContainedLogTimestamp(), true);
         return new SnapshotManifest(provenance,
                 time.nanoseconds() - startNs);
     }
