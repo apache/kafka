@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -325,40 +326,39 @@ public class GroupCoordinatorConfig {
 
         // New group coordinator configs validation.
         require(consumerGroupMaxHeartbeatIntervalMs >= consumerGroupMinHeartbeatIntervalMs,
-                String.format("%s must be greater than or equals to %s", CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG));
+                String.format("%s must be greater than or equal to %s", CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG));
         require(consumerGroupHeartbeatIntervalMs >= consumerGroupMinHeartbeatIntervalMs,
-                String.format("%s must be greater than or equals to %s", CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG));
+                String.format("%s must be greater than or equal to %s", CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG));
         require(consumerGroupHeartbeatIntervalMs <= consumerGroupMaxHeartbeatIntervalMs,
-                String.format("%s must be less than or equals to %s", CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG));
+                String.format("%s must be less than or equal to %s", CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG));
 
         require(consumerGroupMaxSessionTimeoutMs >= consumerGroupMinSessionTimeoutMs,
-                String.format("%s must be greater than or equals to %s", CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG));
+                String.format("%s must be greater than or equal to %s", CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG));
         require(consumerGroupSessionTimeoutMs >= consumerGroupMinSessionTimeoutMs,
-                String.format("%s must be greater than or equals to %s", CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG, CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG));
+                String.format("%s must be greater than or equal to %s", CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG, CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG));
         require(consumerGroupSessionTimeoutMs <= consumerGroupMaxSessionTimeoutMs,
-                String.format("%s must be less than or equals to %s", CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG, CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG));
-
+                String.format("%s must be less than or equal to %s", CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG, CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG));
         require(consumerGroupHeartbeatIntervalMs < consumerGroupSessionTimeoutMs,
                 String.format("%s must be less than %s", CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG));
         // Share group configs validation.
         require(shareGroupMaxHeartbeatIntervalMs >= shareGroupMinHeartbeatIntervalMs,
-            String.format("%s must be greater than or equals to %s",
+            String.format("%s must be greater than or equal to %s",
                 SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG));
         require(shareGroupHeartbeatIntervalMs >= shareGroupMinHeartbeatIntervalMs,
-            String.format("%s must be greater than or equals to %s",
+            String.format("%s must be greater than or equal to %s",
                 SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG));
         require(shareGroupHeartbeatIntervalMs <= shareGroupMaxHeartbeatIntervalMs,
-            String.format("%s must be less than or equals to %s",
+            String.format("%s must be less than or equal to %s",
                 SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG));
 
         require(shareGroupMaxSessionTimeoutMs >= shareGroupMinSessionTimeoutMs,
-            String.format("%s must be greater than or equals to %s",
+            String.format("%s must be greater than or equal to %s",
                 SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG));
         require(shareGroupSessionTimeoutMs >= shareGroupMinSessionTimeoutMs,
-            String.format("%s must be greater than or equals to %s",
+            String.format("%s must be greater than or equal to %s",
                 SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG));
         require(shareGroupSessionTimeoutMs <= shareGroupMaxSessionTimeoutMs,
-            String.format("%s must be less than or equals to %s",
+            String.format("%s must be less than or equal to %s",
                 SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG));
 
         require(shareGroupHeartbeatIntervalMs < shareGroupSessionTimeoutMs,
@@ -367,13 +367,23 @@ public class GroupCoordinatorConfig {
     }
 
     /**
+     * Copy the subset of properties that are relevant to consumer group and share group.
+     */
+    public Map<String, Integer> extractGroupConfigMap(ShareGroupConfig shareGroupConfig) {
+        Map<String, Integer> defaultConfigs = new HashMap<>();
+        defaultConfigs.putAll(extractConsumerGroupConfigMap());
+        defaultConfigs.putAll(shareGroupConfig.extractShareGroupConfigMap());
+        return Collections.unmodifiableMap(defaultConfigs);
+    }
+
+    /**
      * Copy the subset of properties that are relevant to consumer group.
      */
-    public Map<String, Integer> extractGroupConfigMap() {
+    public Map<String, Integer> extractConsumerGroupConfigMap() {
         Map<String, Integer> groupProps = new HashMap<>();
         groupProps.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, consumerGroupSessionTimeoutMs());
         groupProps.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, consumerGroupHeartbeatIntervalMs());
-        return groupProps;
+        return Collections.unmodifiableMap(groupProps);
     }
 
     /**
