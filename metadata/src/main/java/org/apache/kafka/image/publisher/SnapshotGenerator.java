@@ -266,18 +266,17 @@ public class SnapshotGenerator implements MetadataPublisher {
         MetadataImage image,
         boolean isOffsetBatchAligned
     ) {
-        if (isOffsetBatchAligned) {
-            this.disabledReason.compareAndSet("metadata image is not batch aligned", null);
+        String currentDisabledReason = disabledReason.get();
+        if (currentDisabledReason != null) {
+            log.error("Not emitting {} despite the fact that {} because snapshots are " +
+                            "disabled; {}", image.provenance().snapshotName(), reason,
+                    currentDisabledReason);
+        } else if (!isOffsetBatchAligned) {
+            log.debug("Not emitting {} despite the fact that {} because snapshots are " +
+                            "disabled; {}", image.provenance().snapshotName(), reason,
+                    "metadata image is not batch aligned");
         } else {
-            this.disabledReason.compareAndSet(null, "metadata image is not batch aligned");
-        }
-        eventQueue.append(() -> {
-            String currentDisabledReason = disabledReason.get();
-            if (currentDisabledReason != null) {
-                log.error("Not emitting {} despite the fact that {} because snapshots are " +
-                    "disabled; {}", image.provenance().snapshotName(), reason,
-                        currentDisabledReason);
-            } else {
+            eventQueue.append(() -> {
                 resetSnapshotCounters();
                 log.info("Creating new KRaft snapshot file {} because {}.",
                         image.provenance().snapshotName(), reason);
@@ -286,8 +285,8 @@ public class SnapshotGenerator implements MetadataPublisher {
                 } catch (Throwable e) {
                     faultHandler.handleFault("KRaft snapshot file generation error", e);
                 }
-            }
-        });
+            });
+        }
     }
 
     public void beginShutdown() {

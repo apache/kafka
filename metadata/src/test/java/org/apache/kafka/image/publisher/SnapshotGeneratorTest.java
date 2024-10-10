@@ -152,6 +152,29 @@ public class SnapshotGeneratorTest {
     }
 
     @Test
+    public void testSnapshotsCreatedAgainWhenLastOffsetIsAligned() throws Exception {
+        MockFaultHandler faultHandler = new MockFaultHandler("SnapshotGenerator");
+        MockEmitter emitter = new MockEmitter();
+        MetadataImage batchAlignedImage = TEST_DELTA.apply(
+                new MetadataProvenance(-1L, -1, -1L, true));
+        try (SnapshotGenerator generator = new SnapshotGenerator.Builder(emitter).
+                setFaultHandler(faultHandler).
+                setMaxBytesSinceLastSnapshot(100).
+                setMaxTimeSinceLastSnapshotNs(TimeUnit.DAYS.toNanos(10)).
+                build()) {
+            // These should not be published despite meeting the max bytes threshold since they are not batch aligned.
+            generator.publishLogDelta(TEST_DELTA, TEST_IMAGE, notBatchAlignedLogDeltaManifestBuilder().build());
+            generator.publishLogDelta(TEST_DELTA, TEST_IMAGE, notBatchAlignedLogDeltaManifestBuilder().build());
+            // This snapshot should get published since it is batch aligned.
+            generator.publishLogDelta(TEST_DELTA, batchAlignedImage, logDeltaManifestBuilder().build());
+            assertEquals(Collections.emptyList(), emitter.images());
+            emitter.setReady();
+        }
+        assertEquals(Collections.singletonList(batchAlignedImage), emitter.images());
+        faultHandler.maybeRethrowFirstException();
+    }
+
+    @Test
     public void testSnapshotsDisabled() throws Exception {
         MockFaultHandler faultHandler = new MockFaultHandler("SnapshotGenerator");
         MockEmitter emitter = new MockEmitter().setReady();
