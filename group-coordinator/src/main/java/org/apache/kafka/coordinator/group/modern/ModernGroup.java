@@ -35,6 +35,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
@@ -388,15 +389,74 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
         subscribedTopicNames.forEach((topicName, count) -> {
             TopicImage topicImage = topicsImage.getTopic(topicName);
             if (topicImage != null) {
+                Map<Integer, Set<String>> partitionRacks = computePartitionRacks(topicImage, clusterImage);
+
                 newSubscriptionMetadata.put(topicName, new TopicMetadata(
                     topicImage.id(),
                     topicImage.name(),
-                    topicImage.partitions().size()
+                    topicImage.partitions().size(),
+                    partitionRacks.hashCode()
                 ));
             }
         });
 
         return Collections.unmodifiableMap(newSubscriptionMetadata);
+    }
+
+    /**
+     * Computes the partition racks for a topic
+     *
+     * @param topicImage                The current metadata for a topic.
+     * @param clusterImage              The current metadata for the Kafka cluster.
+     *
+     * @return An immutable map of partition racks for a topic.
+     */
+    public Map<Integer, Set<String>> computePartitionRacks(
+            TopicImage topicImage,
+            ClusterImage clusterImage
+    ) {
+        Map<Integer, Set<String>> partitionRacks = new HashMap<>();
+        topicImage.partitions().forEach((partition, partitionRegistration) -> {
+            Set<String> racks = new HashSet<>();
+            for (int replica : partitionRegistration.replicas) {
+                Optional<String> rackOptional = clusterImage.broker(replica).rack();
+                // Only add the rack if it is available for the broker/replica.
+                rackOptional.ifPresent(racks::add);
+            }
+            // If rack information is unavailable for all replicas of this partition,
+            // no corresponding entry will be stored for it in the map.
+            if (!racks.isEmpty())
+                partitionRacks.put(partition, racks);
+        });
+
+        return Collections.unmodifiableMap(partitionRacks);
+    }
+
+    /**
+     * Computes the partition racks for each subscribed topic based on the current subscription info.
+     *
+     * @param subscribedTopicNames      Map of topic names to the number of subscribers.
+     * @param topicsImage               The current metadata for all available topics.
+     * @param clusterImage              The current metadata for the Kafka cluster.
+     *
+     * @return An immutable map of partition racks for each topic that the consumer group is subscribed to.
+     */
+    public Map<Uuid, Map<Integer, Set<String>>> computeSubscriptionTopicPartitionRacks(
+            Map<String, Integer> subscribedTopicNames,
+            TopicsImage topicsImage,
+            ClusterImage clusterImage
+    ) {
+        // Create the topic metadata for each subscribed topic.
+        Map<Uuid, Map<Integer, Set<String>>> newSubscriptionTopicPartitionRacks = new HashMap<>(subscribedTopicNames.size());
+
+        subscribedTopicNames.forEach((topicName, count) -> {
+            TopicImage topicImage = topicsImage.getTopic(topicName);
+            if (topicImage != null) {
+                newSubscriptionTopicPartitionRacks.put(topicImage.id(), computePartitionRacks(topicImage, clusterImage));
+            }
+        });
+
+        return Collections.unmodifiableMap(newSubscriptionTopicPartitionRacks);
     }
 
     /**

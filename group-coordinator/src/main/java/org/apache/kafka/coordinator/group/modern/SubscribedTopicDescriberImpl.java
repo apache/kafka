@@ -36,8 +36,15 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
      */
     private final Map<Uuid, TopicMetadata> topicMetadata;
 
+    private final Map<Uuid, Map<Integer, Set<String>>> topicPartitionRacks;
+
     public SubscribedTopicDescriberImpl(Map<Uuid, TopicMetadata> topicMetadata) {
+        this(topicMetadata, Collections.emptyMap());
+    }
+
+    public SubscribedTopicDescriberImpl(Map<Uuid, TopicMetadata> topicMetadata, Map<Uuid, Map<Integer, Set<String>>> topicPartitionRacks) {
         this.topicMetadata = Objects.requireNonNull(topicMetadata);
+        this.topicPartitionRacks = Objects.requireNonNull(topicPartitionRacks);
     }
 
     /**
@@ -72,7 +79,7 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
      */
     @Override
     public Set<String> racksForPartition(Uuid topicId, int partition) {
-        return Collections.emptySet();
+        return topicPartitionRacks.getOrDefault(topicId, Collections.emptyMap()).getOrDefault(partition, Collections.emptySet());
     }
 
     @Override

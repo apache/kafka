@@ -41,10 +41,24 @@ public class TopicMetadata {
      */
     private final int numPartitions;
 
+    /**
+     * The hash code of the partitions racks.
+     */
+    private final int partitionsRacksHashCode;
+
     public TopicMetadata(
         Uuid id,
         String name,
         int numPartitions
+    ) {
+        this(id, name, numPartitions, 0);
+    }
+
+    public TopicMetadata(
+            Uuid id,
+            String name,
+            int numPartitions,
+            int partitionsRacksHashCode
     ) {
         this.id = Objects.requireNonNull(id);
         if (Uuid.ZERO_UUID.equals(id)) {
@@ -58,6 +72,7 @@ public class TopicMetadata {
         if (numPartitions < 0) {
             throw new IllegalArgumentException("Number of partitions cannot be negative.");
         }
+        this.partitionsRacksHashCode = partitionsRacksHashCode;
     }
 
     /**
@@ -81,6 +96,13 @@ public class TopicMetadata {
         return this.numPartitions;
     }
 
+    /**
+     * @return The hash code of the partitions racks.
+     */
+    public int partitionsRacksHashCode() {
+        return this.partitionsRacksHashCode;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -90,7 +112,8 @@ public class TopicMetadata {
 
         if (!id.equals(that.id)) return false;
         if (!name.equals(that.name)) return false;
-        return numPartitions == that.numPartitions;
+        if (numPartitions != that.numPartitions) return false;
+        return partitionsRacksHashCode == that.partitionsRacksHashCode;
     }
 
     @Override
@@ -98,6 +121,7 @@ public class TopicMetadata {
         int result = id.hashCode();
         result = 31 * result + name.hashCode();
         result = 31 * result + numPartitions;
+        result = 31 * result + partitionsRacksHashCode;
         return result;
     }
 
@@ -107,6 +131,7 @@ public class TopicMetadata {
             "id=" + id +
             ", name=" + name +
             ", numPartitions=" + numPartitions +
+            ", partitionsRacksHashCode=" + partitionsRacksHashCode +
             ')';
     }
 
