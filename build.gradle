@@ -1668,7 +1668,7 @@ project(':transaction-coordinator') {
   sourceSets {
     main {
       java {
-        srcDirs = ["src/main/java"]
+        srcDirs = ["src/main/java", "${projectDir}/build/generated/main/java"]
       }
     }
     test {
