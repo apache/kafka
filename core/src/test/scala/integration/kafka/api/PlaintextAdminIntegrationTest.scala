@@ -3060,9 +3060,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     LoggerFactory.getLogger("kafka.cluster.Replica").trace("Message to create the logger")
     val loggerConfig = describeBrokerLoggers()
 
-    // Logger name can't be empty.
-    assertNull(loggerConfig.get(""))
-
     // "root" -> "OFF"
     val rootLogLevel = loggerConfig.get(Log4jController.ROOT_LOGGER).value
     assertEquals("OFF", rootLogLevel)

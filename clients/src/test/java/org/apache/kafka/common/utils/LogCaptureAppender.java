@@ -126,15 +126,15 @@ public class LogCaptureAppender extends AbstractAppender implements AutoCloseabl
     @Override
     public void append(final LogEvent event) {
         synchronized (events) {
-            events.add(event.toImmutable());
+            events.add(event);
         }
     }
 
     public List<String> getMessages(String level) {
         return getEvents().stream()
-            .filter(e -> level.equals(e.getLevel()))
-            .map(Event::getMessage)
-            .collect(Collectors.toList());
+                .filter(e -> level.equals(e.getLevel()))
+                .map(Event::getMessage)
+                .collect(Collectors.toList());
     }
 
     public List<String> getMessages() {

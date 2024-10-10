@@ -28,11 +28,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
@@ -105,7 +107,7 @@ public class Loggers {
                 .forEach(logger -> result.put(logger.getName(), loggerLevel(logger)));
 
         org.apache.logging.log4j.Logger root = rootLogger();
-        if (!root.getLevel().equals(Level.OFF)) {
+        if (root.getLevel() != null && !root.getLevel().equals(Level.OFF)) {
             result.put(ROOT_LOGGER_NAME, loggerLevel(root));
         }
 
@@ -179,10 +181,16 @@ public class Loggers {
 
     List<org.apache.logging.log4j.Logger> currentLoggers() {
         LoggerContext context = (LoggerContext) LogManager.getContext(false);
-        return context.getLoggers()
-                .stream()
-                .filter(logger -> !logger.getName().equals(ROOT_LOGGER_NAME))
-                .collect(Collectors.toList());
+        Collection<LoggerConfig> loggerConfigs = context.getConfiguration().getLoggers().values();
+        Set<String> loggerNames = loggerConfigs.stream()
+            .map(LoggerConfig::getName)
+            .collect(Collectors.toSet());
+
+        List<org.apache.logging.log4j.Logger> loggers = new ArrayList<>();
+        for (String name : loggerNames) {
+            loggers.add(LogManager.getLogger(name));
+        }
+        return loggers;
     }
 
     // visible for testing
@@ -203,7 +211,7 @@ public class Loggers {
 
         log.debug("Setting level of logger {} (excluding children) to {}", loggerName, level);
         Configurator.setLevel(loggerName, level);
-        context.updateLoggers();
+//        context.updateLoggers();
         lastModifiedTimes.put(loggerName, time.milliseconds());
     }
 
