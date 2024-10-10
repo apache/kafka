@@ -119,6 +119,7 @@ import org.apache.kafka.common.errors.SnapshotNotFoundException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.StreamsGroupUninitializedException;
+import org.apache.kafka.common.errors.StreamsInconsistentInternalTopicsException;
 import org.apache.kafka.common.errors.StreamsInconsistentTopologyException;
 import org.apache.kafka.common.errors.StreamsInvalidTopologyException;
 import org.apache.kafka.common.errors.StreamsMissingSourceTopicsException;
@@ -421,7 +422,8 @@ public enum Errors {
     STREAMS_INCONSISTENT_TOPOLOGY(130, "The topology hash supplied is inconsistent with the topology for this consumer group.", StreamsInconsistentTopologyException::new),
     STREAMS_MISSING_SOURCE_TOPICS(131, "One or more source topics are missing.", StreamsMissingSourceTopicsException::new),
     STREAMS_GROUP_UNINITIALIZED(132, "The group is not (fully) initialized, broker-side topology information or internal topics are missing.", StreamsGroupUninitializedException::new),
-    STREAMS_SHUTDOWN_APPLICATION(133, "A client requested the shutdown of the whole application.", StreamsShutdownApplicationException::new);
+    STREAMS_SHUTDOWN_APPLICATION(133, "A client requested the shutdown of the whole application.", StreamsShutdownApplicationException::new),
+    STREAMS_INCONSISTENT_INTERNAL_TOPICS(134, "The internal topics are inconsistent with the broker-side topology information.", StreamsInconsistentInternalTopicsException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

@@ -63,6 +63,7 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupInitializeResult;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
@@ -150,9 +151,9 @@ public class GroupCoordinatorShardTest {
 
         RequestContext context = requestContext(ApiKeys.STREAMS_GROUP_INITIALIZE);
         StreamsGroupInitializeRequestData request = new StreamsGroupInitializeRequestData();
-        CoordinatorResult<StreamsGroupInitializeResponseData, CoordinatorRecord> result = new CoordinatorResult<>(
+        CoordinatorResult<StreamsGroupInitializeResult, CoordinatorRecord> result = new CoordinatorResult<>(
             Collections.emptyList(),
-            new StreamsGroupInitializeResponseData()
+            new StreamsGroupInitializeResult(new StreamsGroupInitializeResponseData())
         );
 
         when(groupMetadataManager.streamsGroupInitialize(

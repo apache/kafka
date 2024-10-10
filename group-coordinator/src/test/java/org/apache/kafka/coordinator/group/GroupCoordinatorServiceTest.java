@@ -77,6 +77,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupInitializeResult;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.util.FutureUtils;
 
@@ -274,14 +275,15 @@ public class GroupCoordinatorServiceTest {
         StreamsGroupInitializeRequestData request = new StreamsGroupInitializeRequestData()
             .setGroupId("foo");
 
-        CompletableFuture<StreamsGroupInitializeResponseData> future = service.streamsGroupInitialize(
+        CompletableFuture<StreamsGroupInitializeResult> future = service.streamsGroupInitialize(
             requestContext(ApiKeys.STREAMS_GROUP_INITIALIZE),
             request
         );
 
         assertEquals(
-            new StreamsGroupInitializeResponseData()
-                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
+            new StreamsGroupInitializeResult(
+                new StreamsGroupInitializeResponseData()
+                    .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())),
             future.get()
         );
     }
@@ -311,7 +313,7 @@ public class GroupCoordinatorServiceTest {
             new StreamsGroupInitializeResponseData()
         ));
 
-        CompletableFuture<StreamsGroupInitializeResponseData> future = service.streamsGroupInitialize(
+        CompletableFuture<StreamsGroupInitializeResult> future = service.streamsGroupInitialize(
             requestContext(ApiKeys.STREAMS_GROUP_INITIALIZE),
             request
         );
@@ -362,7 +364,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(exception));
 
-        CompletableFuture<StreamsGroupInitializeResponseData> future = service.streamsGroupInitialize(
+        CompletableFuture<StreamsGroupInitializeResult> future = service.streamsGroupInitialize(
             requestContext(ApiKeys.STREAMS_GROUP_INITIALIZE),
             request
         );
@@ -371,7 +373,7 @@ public class GroupCoordinatorServiceTest {
             new StreamsGroupInitializeResponseData()
                 .setErrorCode(expectedErrorCode)
                 .setErrorMessage(expectedErrorMessage),
-            future.get(5, TimeUnit.SECONDS)
+            future.get(5, TimeUnit.SECONDS).data()
         );
     }
 
