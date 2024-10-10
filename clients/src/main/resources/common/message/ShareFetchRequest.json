@@ -39,7 +39,7 @@
       "about": "The maximum bytes to fetch.  See KIP-74 for cases where this limit may not be honored." },
     { "name": "Topics", "type": "[]FetchTopic", "versions": "0+",
       "about": "The topics to fetch.", "fields": [
-      { "name": "TopicId", "type": "uuid", "versions": "0+", "ignorable": true, "about": "The unique topic ID."},
+      { "name": "TopicId", "type": "uuid", "versions": "0+", "about": "The unique topic ID."},
       { "name": "Partitions", "type": "[]FetchPartition", "versions": "0+",
         "about": "The partitions to fetch.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
