@@ -41,6 +41,9 @@
                     See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-956+Tiered+Storage+Quotas">KIP-956</a> for more details.</li>
             </ul>
         </li>
+        <li>In 3.8.0 the <code>kafka.utils.Thottler</code> metric was accidentally renamed to <code>org.apache.kafka.storage.internals.utils.Throttler</code>.
+            This change has been reverted and the metric is now named <code>kafka.utils.Thottler</code> again.
+        </li>
     </ul>
 
 <h4><a id="upgrade_3_8_0" href="#upgrade_3_8_0">Upgrading to 3.8.0 from any version 0.8.x through 3.7.x</a></h4>
