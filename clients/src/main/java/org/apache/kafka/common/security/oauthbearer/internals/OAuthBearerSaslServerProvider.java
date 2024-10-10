@@ -27,7 +27,7 @@ public class OAuthBearerSaslServerProvider extends Provider {
 
     @SuppressWarnings("this-escape")
     protected OAuthBearerSaslServerProvider() {
-        super("SASL/OAUTHBEARER Server Provider", 1.0, "SASL/OAUTHBEARER Server Provider for Kafka");
+        super("SASL/OAUTHBEARER Server Provider", "1.0", "SASL/OAUTHBEARER Server Provider for Kafka");
         put("SaslServerFactory." + OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
                 OAuthBearerSaslServerFactory.class.getName());
     }

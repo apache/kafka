@@ -27,7 +27,7 @@ public class PlainSaslServerProvider extends Provider {
 
     @SuppressWarnings("this-escape")
     protected PlainSaslServerProvider() {
-        super("Simple SASL/PLAIN Server Provider", 1.0, "Simple SASL/PLAIN Server Provider for Kafka");
+        super("Simple SASL/PLAIN Server Provider", "1.0", "Simple SASL/PLAIN Server Provider for Kafka");
         put("SaslServerFactory." + PlainSaslServer.PLAIN_MECHANISM, PlainSaslServerFactory.class.getName());
     }
 

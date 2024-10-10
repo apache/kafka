@@ -27,7 +27,7 @@ public class ScramSaslServerProvider extends Provider {
 
     @SuppressWarnings("this-escape")
     protected ScramSaslServerProvider() {
-        super("SASL/SCRAM Server Provider", 1.0, "SASL/SCRAM Server Provider for Kafka");
+        super("SASL/SCRAM Server Provider", "1.0", "SASL/SCRAM Server Provider for Kafka");
         for (ScramMechanism mechanism : ScramMechanism.values())
             put("SaslServerFactory." + mechanism.mechanismName(), ScramSaslServerFactory.class.getName());
     }

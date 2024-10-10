@@ -32,6 +32,7 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
@@ -254,9 +255,10 @@ public final class LocalTieredStorage implements RemoteStorageManager {
 
         if (transfererClass != null) {
             try {
-                transferer = (Transferer) getClass().getClassLoader().loadClass(transfererClass).newInstance();
-
-            } catch (InstantiationException | IllegalAccessException | ClassNotFoundException | ClassCastException e) {
+                transferer = (Transferer) getClass().getClassLoader().loadClass(transfererClass)
+                        .getDeclaredConstructor().newInstance();
+            } catch (InstantiationException | IllegalAccessException | ClassNotFoundException | ClassCastException |
+                     InvocationTargetException | NoSuchMethodException e) {
                 throw new RuntimeException(format("Cannot create transferer from class '%s'", transfererClass), e);
             }
         }

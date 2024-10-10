@@ -34,6 +34,7 @@ import org.apache.kafka.trogdor.workload.TopicsSpec;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -74,7 +75,10 @@ public class JsonSerializationTest {
         Class<T> clazz = (Class<T>) val1.getClass();
         T val2 = JsonUtil.JSON_SERDE.readValue(bytes, clazz);
         for (Field field : clazz.getDeclaredFields()) {
-            boolean wasAccessible = field.isAccessible();
+            if (Modifier.isStatic(field.getModifiers())) {
+                continue;
+            }
+            boolean wasAccessible = field.canAccess(val2);
             field.setAccessible(true);
             assertNotNull(field.get(val2), "Field " + field + " was null.");
             field.setAccessible(wasAccessible);
