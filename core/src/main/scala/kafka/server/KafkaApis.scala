@@ -633,10 +633,10 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     produceRequest.data.topicData.forEach { topic =>
       topic.partitionData.forEach { partition =>
-        val (topicName, topicId) = if (produceRequest.version() >= 12) {
-          (metadataCache.getTopicName(topic.topicId).getOrElse(topic.name), topic.topicId())
-        } else {
+        val (topicName, topicId) = if (topic.topicId().equals(Uuid.ZERO_UUID)) {
           (topic.name(), metadataCache.getTopicId(topic.name()))
+        } else {
+          (metadataCache.getTopicName(topic.topicId).getOrElse(topic.name), topic.topicId())
         }
 
         val topicPartition = new TopicPartition(topicName, partition.index())

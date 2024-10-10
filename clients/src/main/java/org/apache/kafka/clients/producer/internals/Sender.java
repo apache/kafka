@@ -883,10 +883,6 @@ public class Sender implements Runnable {
                 minUsedMagic = batch.magic();
         }
         Map<String, Uuid> topicIds = getTopicIdsForBatches(batches);
-        // Use topic id if the max supported producer request version >= 12 and metadata has topic ids for all topics
-        // Otherwise send the request with topic name and the broker
-        boolean canUseTopicId = apiVersions.maxSupportedProduceVersion() >= 12 && topicIds.values().stream().anyMatch(id -> id != Uuid.ZERO_UUID);
-
         ProduceRequestData.TopicProduceDataCollection tpd = new ProduceRequestData.TopicProduceDataCollection();
         for (ProducerBatch batch : batches) {
             TopicPartition tp = batch.topicPartition;
@@ -901,19 +897,12 @@ public class Sender implements Runnable {
             // which is supporting the new magic version to one which doesn't, then we will need to convert.
             if (!records.hasMatchingMagic(minUsedMagic))
                 records = batch.records().downConvert(minUsedMagic, 0, time).records();
-            ProduceRequestData.TopicProduceData tpData = canUseTopicId ?
-                    tpd.find(tp.topic(), topicIds.get(tp.topic())) :
-                    tpd.find(new ProduceRequestData.TopicProduceData().setName(tp.topic()));
+            ProduceRequestData.TopicProduceData tpData = tpd.find(tp.topic(), topicIds.get(tp.topic()));
 
             if (tpData == null) {
-                tpData = new ProduceRequestData.TopicProduceData();
-
-                if (canUseTopicId) {
-                    tpData.setTopicId(topicIds.get(tp.topic()));
-                } else {
-                    tpData.setName(tp.topic());
-                }
-
+                Uuid topicId = metadata.topicIds().getOrDefault(tp.topic(), Uuid.ZERO_UUID);
+                tpData = new ProduceRequestData.TopicProduceData()
+                        .setTopicId(topicId).setName(tp.topic());
                 tpd.add(tpData);
             }
 
