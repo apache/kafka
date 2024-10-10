@@ -27,7 +27,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-
 /**
  * A container that holds the list {@link ConsumerRecord} per partition for a
  * particular topic. There is one {@link ConsumerRecord} list for every topic
@@ -64,10 +63,11 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
     }
 
     /**
-     * Get just the next offsets that the consumer will consume
+     * Get the next offsets and metadata corresponding to all partitions fetched from the last batch.
+     * @return the next offsets that the consumer will consume
      */
     public Map<TopicPartition, OffsetAndMetadata> nextOffsets() {
-        return nextOffsets;
+        return Collections.unmodifiableMap(nextOffsets);
     }
 
     /**

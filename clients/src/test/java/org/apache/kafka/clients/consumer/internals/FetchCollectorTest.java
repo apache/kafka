@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
@@ -117,6 +118,10 @@ public class FetchCollectorTest {
         Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
         assertFalse(fetch.isEmpty());
         assertEquals(recordCount, fetch.numRecords());
+        assertEquals(1, fetch.nextOffsetAndMetadata().size());
+        assertEquals(new OffsetAndMetadata(recordCount, Optional.empty(), ""), fetch.nextOffsetAndMetadata().get(topicAPartition0));
+
+
 
         // When we collected the data from the buffer, this will cause the completed fetch to get initialized.
         assertTrue(completedFetch.isInitialized());

@@ -106,7 +106,7 @@ public class Fetch<K, V> {
      * @return the next offsets and metadata (last epochs is included)
      */
     public Map<TopicPartition, OffsetAndMetadata> nextOffsetAndMetadata() {
-        return nextOffsetAndMetadata;
+        return Collections.unmodifiableMap(nextOffsetAndMetadata);
     }
 
     /**

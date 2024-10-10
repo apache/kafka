@@ -64,6 +64,7 @@ public class MockConsumerTest {
         assertFalse(iter.hasNext());
         final TopicPartition tp = new TopicPartition("test", 0);
         assertEquals(2L, consumer.position(tp));
+        assertEquals(1, recs.nextOffsets().size());
         assertEquals(new OffsetAndMetadata(2, Optional.empty(), ""), recs.nextOffsets().get(tp));
         consumer.commitSync();
         assertEquals(2L, consumer.committed(Collections.singleton(tp)).get(tp).offset());
@@ -95,6 +96,7 @@ public class MockConsumerTest {
         consumer.resume(testPartitionList);
         ConsumerRecords<String, String> recordsSecondPoll = consumer.poll(Duration.ofMillis(1));
         assertEquals(1, recordsSecondPoll.count());
+        assertEquals(1, recordsSecondPoll.nextOffsets().size());
         assertEquals(new OffsetAndMetadata(1, Optional.empty(), ""), recordsSecondPoll.nextOffsets().get(new TopicPartition("test", 0)));
     }
 

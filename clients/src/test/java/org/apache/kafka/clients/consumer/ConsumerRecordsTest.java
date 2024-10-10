@@ -82,6 +82,7 @@ public class ConsumerRecordsTest {
 
         ConsumerRecords<Integer, String> consumerRecords = buildTopicTestRecords(recordSize, partitionSize, emptyPartitionIndex, topics);
 
+        assertEquals(partitionSize * topics.size(), consumerRecords.nextOffsets().size());
         for (String topic : topics) {
             for (int partition = 0; partition < partitionSize; partition++) {
                 TopicPartition topicPartition = new TopicPartition(topic, partition);
@@ -91,6 +92,8 @@ public class ConsumerRecordsTest {
                     assertTrue(records.isEmpty());
                 } else {
                     assertEquals(recordSize, records.size());
+                    final ConsumerRecord<Integer, String> lastRecord = records.get(recordSize - 1);
+                    assertEquals(new OffsetAndMetadata(lastRecord.offset() + 1, lastRecord.leaderEpoch(), ""), consumerRecords.nextOffsets().get(topicPartition));
                     for (int i = 0; i < records.size(); i++) {
                         ConsumerRecord<Integer, String> record = records.get(i);
                         validateRecordPayload(topic, record, partition, i, recordSize);
@@ -117,6 +120,8 @@ public class ConsumerRecordsTest {
         int expectedTotalRecordSizeOfEachTopic = recordSize * (partitionSize - 1);
 
         ConsumerRecords<Integer, String> consumerRecords = buildTopicTestRecords(recordSize, partitionSize, emptyPartitionIndex, topics);
+
+        assertEquals(partitionSize * topics.size(), consumerRecords.nextOffsets().size());
 
         for (String topic : topics) {
             Iterable<ConsumerRecord<Integer, String>> records = consumerRecords.records(topic);
@@ -157,6 +162,7 @@ public class ConsumerRecordsTest {
         ConsumerRecords<Integer, String> records = buildTopicTestRecords(recordSize, partitionSize, emptyPartitionIndex, Collections.singleton(topic));
         ConsumerRecords<Integer, String> emptyRecords = ConsumerRecords.empty();
 
+        assertEquals(partitionSize, records.nextOffsets().size());
         // check records(TopicPartition) / partitions by add method
         // check iterator / records(String) by remove method
         // check data count after all operations
