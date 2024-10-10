@@ -31,10 +31,22 @@ import com.yammer.metrics.core.Timer;
 import org.apache.kafka.common.utils.Sanitizer;
 
 public class KafkaMetricsGroup {
-    private final Class<?> klass;
+
+    private final String pkg;
+    private final String simpleName;
 
     public KafkaMetricsGroup(Class<?> klass) {
-        this.klass = klass;
+        this(klass.getPackage() == null ? "" : klass.getPackage().getName(), klass.getSimpleName().replaceAll("\\$$", ""));
+    }
+
+    /**
+     * This constructor allows caller to build metrics name with custom package and class name. This is useful to keep metrics
+     * compatibility in migrating scala code, since the difference of either package or class name will impact the mbean name and
+     * that will break the backward compatibility.
+     */
+    public KafkaMetricsGroup(String packageName, String simpleName) {
+        this.pkg = packageName;
+        this.simpleName = simpleName;
     }
 
     /**
@@ -45,9 +57,7 @@ public class KafkaMetricsGroup {
      * @return Sanitized metric name object.
      */
     public MetricName metricName(String name, Map<String, String> tags) {
-        String pkg = klass.getPackage() == null ? "" : klass.getPackage().getName();
-        String simpleName = klass.getSimpleName().replaceAll("\\$$", "");
-        return explicitMetricName(pkg, simpleName, name, tags);
+        return explicitMetricName(this.pkg, this.simpleName, name, tags);
     }
 
     public static MetricName explicitMetricName(String group, String typeName,
