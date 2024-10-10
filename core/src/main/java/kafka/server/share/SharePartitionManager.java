@@ -38,6 +38,7 @@ import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.server.share.CachedSharePartition;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
@@ -114,9 +115,15 @@ public class SharePartitionManager implements AutoCloseable {
     private final AtomicBoolean processFetchQueueLock;
 
     /**
-     * The record lock duration is the time in milliseconds that a record lock is held for.
+     * The group config manager is used to retrieve the values for dynamic group configurations
      */
-    private final int recordLockDurationMs;
+    private final GroupConfigManager groupConfigManager;
+
+    /**
+     * The default record lock duration is the time in milliseconds that a record lock is held for.
+     * This default value can be overridden by a group-specific configuration.
+     */
+    private final int defaultRecordLockDurationMs;
 
     /**
      * The timer is used to schedule the records lock timeout.
@@ -152,22 +159,24 @@ public class SharePartitionManager implements AutoCloseable {
         ReplicaManager replicaManager,
         Time time,
         ShareSessionCache cache,
-        int recordLockDurationMs,
+        int defaultRecordLockDurationMs,
         int maxDeliveryCount,
         int maxInFlightMessages,
         Persister persister,
         ActionQueue delayedActionsQueue,
+        GroupConfigManager groupConfigManager,
         Metrics metrics
     ) {
         this(replicaManager,
             time,
             cache,
             new ConcurrentHashMap<>(),
-            recordLockDurationMs,
+            defaultRecordLockDurationMs,
             maxDeliveryCount,
             maxInFlightMessages,
             persister,
             delayedActionsQueue,
+            groupConfigManager,
             metrics
         );
     }
@@ -177,11 +186,12 @@ public class SharePartitionManager implements AutoCloseable {
         Time time,
         ShareSessionCache cache,
         Map<SharePartitionKey, SharePartition> partitionCacheMap,
-        int recordLockDurationMs,
+        int defaultRecordLockDurationMs,
         int maxDeliveryCount,
         int maxInFlightMessages,
         Persister persister,
         ActionQueue delayedActionsQueue,
+        GroupConfigManager groupConfigManager,
         Metrics metrics
     ) {
         this.replicaManager = replicaManager;
@@ -190,30 +200,33 @@ public class SharePartitionManager implements AutoCloseable {
         this.partitionCacheMap = partitionCacheMap;
         this.fetchQueue = new ConcurrentLinkedQueue<>();
         this.processFetchQueueLock = new AtomicBoolean(false);
-        this.recordLockDurationMs = recordLockDurationMs;
+        this.defaultRecordLockDurationMs = defaultRecordLockDurationMs;
         this.timer = new SystemTimerReaper("share-group-lock-timeout-reaper",
             new SystemTimer("share-group-lock-timeout"));
         this.maxDeliveryCount = maxDeliveryCount;
         this.maxInFlightMessages = maxInFlightMessages;
         this.persister = persister;
-        this.shareGroupMetrics = new ShareGroupMetrics(Objects.requireNonNull(metrics), time);
         this.delayedActionsQueue = delayedActionsQueue;
+        this.groupConfigManager = groupConfigManager;
+        this.shareGroupMetrics = new ShareGroupMetrics(Objects.requireNonNull(metrics), time);
     }
 
     // Visible for testing.
+    @SuppressWarnings({"checkstyle:ParameterNumber"})
     SharePartitionManager(
             ReplicaManager replicaManager,
             Time time,
             ShareSessionCache cache,
             Map<SharePartitionKey, SharePartition> partitionCacheMap,
             ConcurrentLinkedQueue<ShareFetchData> fetchQueue,
-            int recordLockDurationMs,
+            int defaultRecordLockDurationMs,
             Timer timer,
             int maxDeliveryCount,
             int maxInFlightMessages,
             Persister persister,
-            Metrics metrics,
-            ActionQueue delayedActionsQueue
+            ActionQueue delayedActionsQueue,
+            GroupConfigManager groupConfigManager,
+            Metrics metrics
     ) {
         this.replicaManager = replicaManager;
         this.time = time;
@@ -221,13 +234,14 @@ public class SharePartitionManager implements AutoCloseable {
         this.partitionCacheMap = partitionCacheMap;
         this.fetchQueue = fetchQueue;
         this.processFetchQueueLock = new AtomicBoolean(false);
-        this.recordLockDurationMs = recordLockDurationMs;
+        this.defaultRecordLockDurationMs = defaultRecordLockDurationMs;
         this.timer = timer;
         this.maxDeliveryCount = maxDeliveryCount;
         this.maxInFlightMessages = maxInFlightMessages;
         this.persister = persister;
-        this.shareGroupMetrics = new ShareGroupMetrics(Objects.requireNonNull(metrics), time);
         this.delayedActionsQueue = delayedActionsQueue;
+        this.groupConfigManager = groupConfigManager;
+        this.shareGroupMetrics = new ShareGroupMetrics(Objects.requireNonNull(metrics), time);
     }
 
     /**
@@ -645,11 +659,12 @@ public class SharePartitionManager implements AutoCloseable {
                             sharePartitionKey.topicIdPartition(),
                             maxInFlightMessages,
                             maxDeliveryCount,
-                            recordLockDurationMs,
+                            defaultRecordLockDurationMs,
                             timer,
                             time,
                             persister,
-                            replicaManager
+                            replicaManager,
+                            groupConfigManager
                     );
                     this.shareGroupMetrics.partitionLoadTime(start);
                     return partition;
