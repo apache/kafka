@@ -126,7 +126,6 @@ public class DelayedShareFetch extends DelayedOperation {
                 ShareFetchUtils.processFetchResponse(shareFetchData, responseData, sharePartitionManager, replicaManager);
             shareFetchData.future().complete(result);
         } catch (Exception e) {
-            // Release the locks acquired for the partitions in the share fetch request in case there is an exception
             log.error("Error processing delayed share fetch request", e);
             shareFetchData.future().completeExceptionally(e);
         } finally {
