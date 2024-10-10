@@ -236,7 +236,6 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         // update the consumed offset
         final Map<TopicPartition, List<ConsumerRecord<K, V>>> results = new HashMap<>();
         final Map<TopicPartition, OffsetAndMetadata> nextOffsetAndMetadata = new HashMap<>();
-
         final List<TopicPartition> toClear = new ArrayList<>();
 
         for (Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>> entry : this.records.entrySet()) {

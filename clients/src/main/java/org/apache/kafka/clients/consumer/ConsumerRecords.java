@@ -40,13 +40,12 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
 
     @Deprecated
     public ConsumerRecords(Map<TopicPartition, List<ConsumerRecord<K, V>>> records) {
-        this.records = records;
-        this.nextOffsets = new HashMap<>();
+        this(records, Collections.emptyMap());
     }
 
     public ConsumerRecords(Map<TopicPartition, List<ConsumerRecord<K, V>>> records, final Map<TopicPartition, OffsetAndMetadata> nextOffsets) {
         this.records = records;
-        this.nextOffsets = nextOffsets;
+        this.nextOffsets = Collections.unmodifiableMap(nextOffsets);
     }
 
     /**
