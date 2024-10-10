@@ -349,7 +349,7 @@ public class PositionRestartIntegrationTest {
     @AfterEach
     public void afterTest() {
         if (kafkaStreams != null) {
-            kafkaStreams.close();
+            kafkaStreams.close(Duration.ofSeconds(60));
             kafkaStreams.cleanUp();
         }
     }

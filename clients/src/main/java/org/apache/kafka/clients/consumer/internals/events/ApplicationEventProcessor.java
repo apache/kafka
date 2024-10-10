@@ -34,6 +34,7 @@ import org.apache.kafka.common.utils.LogContext;
 
 import org.slf4j.Logger;
 
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -99,6 +100,10 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 process((ListOffsetsEvent) event);
                 return;
 
+            case RESET_OFFSET:
+                process((ResetOffsetEvent) event);
+                return;
+
             case CHECK_AND_UPDATE_POSITIONS:
                 process((CheckAndUpdatePositionsEvent) event);
                 return;
@@ -141,6 +146,10 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
             case SHARE_ACKNOWLEDGE_ON_CLOSE:
                 process((ShareAcknowledgeOnCloseEvent) event);
+                return;
+
+            case SHARE_ACKNOWLEDGEMENT_COMMIT_CALLBACK_REGISTRATION:
+                process((ShareAcknowledgementCommitCallbackRegistrationEvent) event);
                 return;
 
             case SEEK_UNVALIDATED:
@@ -258,6 +267,17 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             // If the consumer is not using the group management capabilities, we still need to clear all assignments it may have.
             subscriptions.unsubscribe();
             event.future().complete(null);
+        }
+    }
+
+    private void process(final ResetOffsetEvent event) {
+        try {
+            Collection<TopicPartition> parts = event.topicPartitions().isEmpty() ?
+                    subscriptions.assignedPartitions() : event.topicPartitions();
+            subscriptions.requestOffsetReset(parts, event.offsetResetStrategy());
+            event.future().complete(null);
+        } catch (Exception e) {
+            event.future().completeExceptionally(e);
         }
     }
 
@@ -382,6 +402,20 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         ShareConsumeRequestManager manager = requestManagers.shareConsumeRequestManager.get();
         CompletableFuture<Void> future = manager.acknowledgeOnClose(event.acknowledgementsMap(), event.deadlineMs());
         future.whenComplete(complete(event.future()));
+    }
+
+    /**
+     * Process event indicating whether the AcknowledgeCommitCallbackHandler is configured by the user.
+     *
+     * @param event Event containing a boolean to indicate if the callback handler is configured or not.
+     */
+    private void process(final ShareAcknowledgementCommitCallbackRegistrationEvent event) {
+        if (!requestManagers.shareConsumeRequestManager.isPresent()) {
+            return;
+        }
+
+        ShareConsumeRequestManager manager = requestManagers.shareConsumeRequestManager.get();
+        manager.setAcknowledgementCommitCallbackRegistered(event.isCallbackRegistered());
     }
 
     private <T> BiConsumer<? super T, ? super Throwable> complete(final CompletableFuture<T> b) {

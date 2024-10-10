@@ -16,9 +16,9 @@
  */
 package kafka.server
 
-import kafka.test.ClusterInstance
-import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, Type}
-import kafka.test.junit.ClusterTestExtensions
+import org.apache.kafka.common.test.api.ClusterInstance
+import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, Type}
+import org.apache.kafka.common.test.api.ClusterTestExtensions
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
@@ -128,7 +128,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       }
 
       // Send a SyncGroup request.
-      syncGroupWithOldProtocol(
+      verifySyncGroupWithOldProtocol(
         groupId = "grp",
         memberId = leaderMemberId,
         generationId = 1,
@@ -231,7 +231,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       )
 
       // Sync the leader.
-      syncGroupWithOldProtocol(
+      verifySyncGroupWithOldProtocol(
         groupId = "grp",
         memberId = leaderMemberId,
         generationId = rejoinLeaderResponseData.generationId,
@@ -247,7 +247,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       )
 
       // Sync the follower.
-      syncGroupWithOldProtocol(
+      verifySyncGroupWithOldProtocol(
         groupId = "grp",
         memberId = followerMemberId,
         generationId = joinFollowerFutureResponseData.generationId,

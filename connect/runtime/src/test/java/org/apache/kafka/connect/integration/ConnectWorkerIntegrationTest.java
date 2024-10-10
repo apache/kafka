@@ -105,8 +105,6 @@ import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.REB
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG;
 import static org.apache.kafka.connect.util.clusters.ConnectAssertions.CONNECTOR_SETUP_DURATION_MS;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -592,7 +590,7 @@ public class ConnectWorkerIntegrationTest {
             List<LogCaptureAppender.Event> logEvents = logCaptureAppender.getEvents();
             assertEquals(1, logEvents.size());
             assertEquals(Level.WARN.toString(), logEvents.get(0).getLevel());
-            assertThat(logEvents.get(0).getMessage(), containsString("deprecated"));
+            assertTrue(logEvents.get(0).getMessage().contains("deprecated"));
         }
 
     }
@@ -1042,7 +1040,7 @@ public class ConnectWorkerIntegrationTest {
                 maxTasks
         );
         String errorMessage = connect.connectorStatus(CONNECTOR_NAME).connector().trace();
-        assertThat(errorMessage, containsString(expectedErrorSnippet));
+        assertTrue(errorMessage.contains(expectedErrorSnippet));
 
         // Stop all workers in the cluster
         connect.workers().forEach(connect::removeWorker);

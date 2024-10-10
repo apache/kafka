@@ -23,8 +23,7 @@ import java.io._
 import com.fasterxml.jackson.databind.node.{IntNode, JsonNodeFactory, ObjectNode, TextNode}
 import kafka.coordinator.transaction.TransactionLog
 import kafka.log._
-import kafka.utils.Implicits._
-import kafka.utils.{CoreUtils, VerifiableProperties}
+import kafka.utils.CoreUtils
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.message.ConsumerProtocolAssignment
 import org.apache.kafka.common.message.ConsumerProtocolAssignmentJsonConverter
@@ -38,7 +37,7 @@ import org.apache.kafka.common.metadata.{MetadataJsonConverters, MetadataRecordT
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, Message}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.coordinator.group.generated.{ConsumerGroupCurrentMemberAssignmentKey, ConsumerGroupCurrentMemberAssignmentKeyJsonConverter, ConsumerGroupCurrentMemberAssignmentValue, ConsumerGroupCurrentMemberAssignmentValueJsonConverter, ConsumerGroupMemberMetadataKey, ConsumerGroupMemberMetadataKeyJsonConverter, ConsumerGroupMemberMetadataValue, ConsumerGroupMemberMetadataValueJsonConverter, ConsumerGroupMetadataKey, ConsumerGroupMetadataKeyJsonConverter, ConsumerGroupMetadataValue, ConsumerGroupMetadataValueJsonConverter, ConsumerGroupPartitionMetadataKey, ConsumerGroupPartitionMetadataKeyJsonConverter, ConsumerGroupPartitionMetadataValue, ConsumerGroupPartitionMetadataValueJsonConverter, ConsumerGroupTargetAssignmentMemberKey, ConsumerGroupTargetAssignmentMemberKeyJsonConverter, ConsumerGroupTargetAssignmentMemberValue, ConsumerGroupTargetAssignmentMemberValueJsonConverter, ConsumerGroupTargetAssignmentMetadataKey, ConsumerGroupTargetAssignmentMetadataKeyJsonConverter, ConsumerGroupTargetAssignmentMetadataValue, ConsumerGroupTargetAssignmentMetadataValueJsonConverter, GroupMetadataKey, GroupMetadataKeyJsonConverter, GroupMetadataValue, GroupMetadataValueJsonConverter, OffsetCommitKey, OffsetCommitKeyJsonConverter, OffsetCommitValue, OffsetCommitValueJsonConverter}
+import org.apache.kafka.coordinator.group.generated.{ConsumerGroupCurrentMemberAssignmentKey, ConsumerGroupCurrentMemberAssignmentKeyJsonConverter, ConsumerGroupCurrentMemberAssignmentValue, ConsumerGroupCurrentMemberAssignmentValueJsonConverter, ConsumerGroupMemberMetadataKey, ConsumerGroupMemberMetadataKeyJsonConverter, ConsumerGroupMemberMetadataValue, ConsumerGroupMemberMetadataValueJsonConverter, ConsumerGroupMetadataKey, ConsumerGroupMetadataKeyJsonConverter, ConsumerGroupMetadataValue, ConsumerGroupMetadataValueJsonConverter, ConsumerGroupPartitionMetadataKey, ConsumerGroupPartitionMetadataKeyJsonConverter, ConsumerGroupPartitionMetadataValue, ConsumerGroupPartitionMetadataValueJsonConverter, ConsumerGroupTargetAssignmentMemberKey, ConsumerGroupTargetAssignmentMemberKeyJsonConverter, ConsumerGroupTargetAssignmentMemberValue, ConsumerGroupTargetAssignmentMemberValueJsonConverter, ConsumerGroupTargetAssignmentMetadataKey, ConsumerGroupTargetAssignmentMetadataKeyJsonConverter, ConsumerGroupTargetAssignmentMetadataValue, ConsumerGroupTargetAssignmentMetadataValueJsonConverter, GroupMetadataKey, GroupMetadataKeyJsonConverter, GroupMetadataValue, GroupMetadataValueJsonConverter, OffsetCommitKey, OffsetCommitKeyJsonConverter, OffsetCommitValue, OffsetCommitValueJsonConverter, ShareGroupCurrentMemberAssignmentKey, ShareGroupCurrentMemberAssignmentKeyJsonConverter, ShareGroupCurrentMemberAssignmentValue, ShareGroupCurrentMemberAssignmentValueJsonConverter, ShareGroupMemberMetadataKey, ShareGroupMemberMetadataKeyJsonConverter, ShareGroupMemberMetadataValue, ShareGroupMemberMetadataValueJsonConverter, ShareGroupMetadataKey, ShareGroupMetadataKeyJsonConverter, ShareGroupMetadataValue, ShareGroupMetadataValueJsonConverter, ShareGroupPartitionMetadataKey, ShareGroupPartitionMetadataKeyJsonConverter, ShareGroupPartitionMetadataValue, ShareGroupPartitionMetadataValueJsonConverter, ShareGroupStatePartitionMetadataKey, ShareGroupStatePartitionMetadataKeyJsonConverter, ShareGroupStatePartitionMetadataValue, ShareGroupStatePartitionMetadataValueJsonConverter, ShareGroupTargetAssignmentMemberKey, ShareGroupTargetAssignmentMemberKeyJsonConverter, ShareGroupTargetAssignmentMemberValue, ShareGroupTargetAssignmentMemberValueJsonConverter, ShareGroupTargetAssignmentMetadataKey, ShareGroupTargetAssignmentMetadataKeyJsonConverter, ShareGroupTargetAssignmentMetadataValue, ShareGroupTargetAssignmentMetadataValueJsonConverter}
 import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader.UnknownRecordTypeException
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde
 import org.apache.kafka.metadata.MetadataRecordSerde
@@ -47,7 +46,7 @@ import org.apache.kafka.snapshot.Snapshots
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.storage.internals.log.{CorruptSnapshotException, LogFileUtils, OffsetIndex, ProducerStateManager, TimeIndex, TransactionIndex}
-import org.apache.kafka.tools.api.{Decoder, DefaultDecoder, IntegerDecoder, LongDecoder, StringDecoder}
+import org.apache.kafka.tools.api.{Decoder, StringDecoder}
 
 import java.nio.ByteBuffer
 import scala.jdk.CollectionConverters._
@@ -90,7 +89,7 @@ object DumpLogSegments {
       }
     }
 
-    misMatchesForIndexFilesMap.forKeyValue { (fileName, listOfMismatches) =>
+    misMatchesForIndexFilesMap.foreachEntry { (fileName, listOfMismatches) =>
       System.err.println(s"Mismatches in :$fileName")
       listOfMismatches.foreach { case (indexOffset, logOffset) =>
         System.err.println(s"  Index offset: $indexOffset, log offset: $logOffset")
@@ -99,7 +98,7 @@ object DumpLogSegments {
 
     timeIndexDumpErrors.printErrors()
 
-    nonConsecutivePairsForLogFilesMap.forKeyValue { (fileName, listOfNonConsecutivePairs) =>
+    nonConsecutivePairsForLogFilesMap.foreachEntry { (fileName, listOfNonConsecutivePairs) =>
       System.err.println(s"Non-consecutive offsets in $fileName")
       listOfNonConsecutivePairs.foreach { case (first, second) =>
         System.err.println(s"  $first is followed by $second")
@@ -439,6 +438,20 @@ object DumpLogSegments {
           ConsumerGroupTargetAssignmentMemberKeyJsonConverter.write(m, version)
         case m: ConsumerGroupCurrentMemberAssignmentKey =>
           ConsumerGroupCurrentMemberAssignmentKeyJsonConverter.write(m, version)
+        case m: ShareGroupMetadataKey =>
+          ShareGroupMetadataKeyJsonConverter.write(m, version)
+        case m: ShareGroupPartitionMetadataKey =>
+          ShareGroupPartitionMetadataKeyJsonConverter.write(m, version)
+        case m: ShareGroupMemberMetadataKey =>
+          ShareGroupMemberMetadataKeyJsonConverter.write(m, version)
+        case m: ShareGroupTargetAssignmentMetadataKey =>
+          ShareGroupTargetAssignmentMetadataKeyJsonConverter.write(m, version)
+        case m: ShareGroupTargetAssignmentMemberKey =>
+          ShareGroupTargetAssignmentMemberKeyJsonConverter.write(m, version)
+        case m: ShareGroupCurrentMemberAssignmentKey =>
+          ShareGroupCurrentMemberAssignmentKeyJsonConverter.write(m, version)
+        case m: ShareGroupStatePartitionMetadataKey =>
+          ShareGroupStatePartitionMetadataKeyJsonConverter.write(m, version)
         case _ => throw new UnknownRecordTypeException(version)
       }
 
@@ -519,6 +532,20 @@ object DumpLogSegments {
           ConsumerGroupTargetAssignmentMemberValueJsonConverter.write(m, version)
         case m: ConsumerGroupCurrentMemberAssignmentValue =>
           ConsumerGroupCurrentMemberAssignmentValueJsonConverter.write(m, version)
+        case m: ShareGroupMetadataValue =>
+          ShareGroupMetadataValueJsonConverter.write(m, version)
+        case m: ShareGroupPartitionMetadataValue =>
+          ShareGroupPartitionMetadataValueJsonConverter.write(m, version)
+        case m: ShareGroupMemberMetadataValue =>
+          ShareGroupMemberMetadataValueJsonConverter.write(m, version)
+        case m: ShareGroupTargetAssignmentMetadataValue =>
+          ShareGroupTargetAssignmentMetadataValueJsonConverter.write(m, version)
+        case m: ShareGroupTargetAssignmentMemberValue =>
+          ShareGroupTargetAssignmentMemberValueJsonConverter.write(m, version)
+        case m: ShareGroupCurrentMemberAssignmentValue =>
+          ShareGroupCurrentMemberAssignmentValueJsonConverter.write(m, version)
+        case m: ShareGroupStatePartitionMetadataValue =>
+          ShareGroupStatePartitionMetadataValueJsonConverter.write(m, version)
         case _ => throw new IllegalStateException(s"Message value ${message.getClass.getSimpleName} is not supported.")
       }
 
@@ -649,8 +676,8 @@ object DumpLogSegments {
       } else if (options.has(remoteMetadataOpt)) {
         new RemoteMetadataLogMessageParser  
       } else {
-        val valueDecoder = newDecoder(options.valueOf(valueDecoderOpt))
-        val keyDecoder = newDecoder(options.valueOf(keyDecoderOpt))
+        val valueDecoder = CoreUtils.createObject[org.apache.kafka.tools.api.Decoder[_]](options.valueOf(valueDecoderOpt))
+        val keyDecoder = CoreUtils.createObject[org.apache.kafka.tools.api.Decoder[_]](options.valueOf(keyDecoderOpt))
         new DecoderMessageParser(keyDecoder, valueDecoder)
       }
 
@@ -671,43 +698,5 @@ object DumpLogSegments {
     lazy val maxBytes: Int = options.valueOf(maxBytesOpt).intValue()
 
     def checkArgs(): Unit = CommandLineUtils.checkRequiredArgs(parser, options, filesOpt)
-  }
-
-  /*
-   * The kafka.serializer.Decoder is deprecated in 3.8.0. This method is used to transfer the deprecated
-   * decoder to the new org.apache.kafka.tools.api.Decoder. Old decoders have an input VerifiableProperties.
-   * Remove it in new interface since it's always empty.
-   */
-  private[tools] def newDecoder(className: String): Decoder[_] = {
-    try {
-      CoreUtils.createObject[org.apache.kafka.tools.api.Decoder[_]](convertDeprecatedDecoderClass(className))
-    } catch  {
-      case _: Exception =>
-        // Old decoders always have an default VerifiableProperties input, because DumpLogSegments didn't provide
-        // any way to pass custom configs.
-        val decoder = CoreUtils.createObject[kafka.serializer.Decoder[_]](className, new VerifiableProperties())
-        (bytes: Array[Byte]) => decoder.fromBytes(bytes)
-    }
-  }
-
-  /*
-   * Covert deprecated decoder implementation to new decoder class.
-   */
-  private[tools] def convertDeprecatedDecoderClass(className: String): String = {
-    if (className == "kafka.serializer.StringDecoder") {
-      println("kafka.serializer.StringDecoder is deprecated. Please use org.apache.kafka.tools.api.StringDecoder instead")
-      classOf[StringDecoder].getName
-    } else if (className == "kafka.serializer.LongDecoder") {
-      println("kafka.serializer.LongDecoder is deprecated. Please use org.apache.kafka.tools.api.LongDecoder instead")
-      classOf[LongDecoder].getName
-    } else if (className == "kafka.serializer.IntegerDecoder") {
-      println("kafka.serializer.IntegerDecoder is deprecated. Please use org.apache.kafka.tools.api.IntegerDecoder instead")
-      classOf[IntegerDecoder].getName
-    } else if (className == "kafka.serializer.DefaultDecoder") {
-      println("kafka.serializer.DefaultDecoder is deprecated. Please use org.apache.kafka.tools.api.DefaultDecoder instead")
-      classOf[DefaultDecoder].getName
-    } else {
-      className
-    }
   }
 }
