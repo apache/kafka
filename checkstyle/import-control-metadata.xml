@@ -172,6 +172,7 @@
             <allow pkg="org.apache.kafka.controller" />
             <allow pkg="org.apache.kafka.metadata" />
             <allow pkg="org.apache.kafka.common.internals" />
+            <disallow pkg="java.util.stream" />
         </subpackage>
         <subpackage name="bootstrap">
             <allow pkg="org.apache.kafka.snapshot" />

@@ -553,4 +553,18 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Bug pattern="STCAL_INVOKE_ON_STATIC_DATE_FORMAT_INSTANCE"/>
     </Match>
 
+    <Match>
+        <!-- Suppress the warnings about the caller not using the return value from Consumer. Walker expects
+             predicate to do much of the work, which confuses SpotBugs. -->
+        <Class name="org.apache.kafka.metadata.authorizer.trie.Walker"/>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
+    </Match>
+
+    <Match>
+        <Class name="org.apache.kafka.metadata.authorizer.TrieAuthorizerData$TrieData"/>
+        <Method name="acls"/>"
+        <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
+    </Match>
+
+
 </FindBugsFilter>

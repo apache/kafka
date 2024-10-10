@@ -21,8 +21,11 @@ import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
+import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.resource.ResourcePattern;
+import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
@@ -40,6 +43,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
+import static org.apache.kafka.common.resource.PatternType.LITERAL;
 import static org.apache.kafka.server.authorizer.AuthorizationResult.ALLOWED;
 import static org.apache.kafka.server.authorizer.AuthorizationResult.DENIED;
 
@@ -63,7 +67,20 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
      * expect one writer and multiple readers accessing the ACL data, and we use the lock to make
      * sure we have consistent reads when writer tries to change the data.
      */
-    private volatile StandardAuthorizerData data = StandardAuthorizerData.createEmpty();
+    private volatile AuthorizerData data;
+
+    public StandardAuthorizer() {
+        this(StandardAuthorizerData.createEmpty());
+    }
+
+    protected StandardAuthorizer(AuthorizerData data) {
+        this.data = data;
+    }
+
+    protected AuthorizerData getData() {
+        return data;
+    }
+
 
     @Override
     public void setAclMutator(AclMutator aclMutator) {
@@ -72,7 +89,7 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
 
     @Override
     public AclMutator aclMutatorOrException() {
-        AclMutator aclMutator = data.aclMutator;
+        AclMutator aclMutator = data.aclMutator();
         if (aclMutator == null) {
             throw new NotControllerException("The current node is not the active controller.");
         }
@@ -82,7 +99,7 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
     @Override
     public void completeInitialLoad() {
         data = data.copyWithNewLoadingComplete(true);
-        data.log.info("Completed initial ACL load process.");
+        data.log().info("Completed initial ACL load process.");
         initialLoadFuture.complete(null);
     }
 
@@ -94,7 +111,7 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
     @Override
     public void completeInitialLoad(Exception e) {
         if (!initialLoadFuture.isDone()) {
-            data.log.error("Failed to complete initial ACL load process.", e);
+            data.log().error("Failed to complete initial ACL load process.", e);
             initialLoadFuture.completeExceptionally(e);
         }
     }
@@ -111,11 +128,7 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
 
     @Override
     public void loadSnapshot(Map<Uuid, StandardAcl> acls) {
-        StandardAuthorizerData newData = StandardAuthorizerData.createEmpty();
-        for (Map.Entry<Uuid, StandardAcl> entry : acls.entrySet()) {
-            newData.addAcl(entry.getKey(), entry.getValue());
-        }
-        data = data.copyWithNewAcls(newData.getAclCache());
+        data = data.copyWithNewAcls(acls);
     }
 
     @Override
@@ -138,7 +151,7 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
             AuthorizableRequestContext requestContext,
             List<Action> actions) {
         List<AuthorizationResult> results = new ArrayList<>(actions.size());
-        StandardAuthorizerData curData = data;
+        AuthorizerData curData = data;
         for (Action action : actions) {
             AuthorizationResult result = curData.authorize(requestContext, action);
             results.add(result);
@@ -176,17 +189,18 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
             nodeId = -1;
         }
         data = data.copyWithNewConfig(nodeId, superUsers, defaultResult);
-        this.data.log.info("set super.users={}, default result={}", String.join(",", superUsers), defaultResult);
-    }
-
-    // VisibleForTesting
-    Set<String> superUsers()  {
-        return new HashSet<>(data.superUsers());
+        this.data.log().info("set super.users={}, default result={}", String.join(",", superUsers), defaultResult);
     }
 
     AuthorizationResult defaultResult() {
         return data.defaultResult();
     }
+
+    /**
+     * Get the set of super users as specificed in a configuration map.
+     * @param configs the configuration map.
+     * @return the set of super users..
+     */
 
     static Set<String> getConfiguredSuperUsers(Map<String, ?> configs) {
         Object configValue = configs.get(SUPER_USERS_CONFIG);
@@ -203,9 +217,33 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
         return result;
     }
 
+    /**
+     * Get the specified default Result from a configuration map.
+     * @param configs the configuration map.
+     * @return the default AuthorizationResult.
+     */
     static AuthorizationResult getDefaultResult(Map<String, ?> configs) {
         Object configValue = configs.get(ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG);
         if (configValue == null) return DENIED;
         return Boolean.parseBoolean(configValue.toString().trim()) ? ALLOWED : DENIED;
+    }
+
+    @Override
+    public AuthorizationResult authorizeByResourceType(AuthorizableRequestContext requestContext, AclOperation operation, ResourceType resourceType) {
+        SecurityUtils.authorizeByResourceTypeCheckArgs(operation, resourceType);
+        // super users are granted access regardless of DENY ACLs.
+        if (data.superUsers().contains(requestContext.principal().toString())) {
+            return AuthorizationResult.ALLOWED;
+        }
+        if (data.defaultResult() == ALLOWED) {
+            // we only have to check if there is a literal prohibition on resource "*"
+            ResourcePattern pattern = new ResourcePattern(resourceType, "*", LITERAL);
+            Action action = new Action(operation, pattern, 1, false, false);
+
+            return authorize(requestContext, Collections.singletonList(action)).get(0);
+        }
+
+        String host = requestContext.clientAddress().getHostAddress();
+        return this.data.authorizeByResourceType(requestContext.principal(), host, operation, resourceType);
     }
 }

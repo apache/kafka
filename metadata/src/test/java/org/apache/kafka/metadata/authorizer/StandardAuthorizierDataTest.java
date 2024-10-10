@@ -16,17 +16,9 @@
  */
 package org.apache.kafka.metadata.authorizer;
 
-
-import java.util.Collections;
-
-import static org.apache.kafka.metadata.authorizer.StandardAuthorizerTest.PLAINTEXT;
-
-public class StandardAuthorizerPropertyTest extends AbstractAuthorizerPropertyTest {
-
-    protected StandardAuthorizer buildAuthorizer() {
-        StandardAuthorizer authorizer = new StandardAuthorizer();
-        authorizer.start(new StandardAuthorizerTest.AuthorizerTestServerInfo(Collections.singletonList(PLAINTEXT)));
-        authorizer.completeInitialLoad();
-        return authorizer;
+public class StandardAuthorizierDataTest extends AbstractAuthorizerDataTest {
+    @Override
+    public AuthorizerData  getAuthorizerData() {
+        return StandardAuthorizerData.createEmpty();
     }
 }
