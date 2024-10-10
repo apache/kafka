@@ -28,8 +28,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -59,7 +59,7 @@ public class ShareGroupMemberTest {
         assertEquals("rack-id", member.rackId());
         assertEquals("client-id", member.clientId());
         assertEquals("hostname", member.clientHost());
-        assertEquals(mkSet("bar", "foo"), member.subscribedTopicNames());
+        assertEquals(Set.of("bar", "foo"), member.subscribedTopicNames());
         assertEquals(mkAssignment(mkTopicAssignment(topicId1, 1, 2, 3)), member.assignedPartitions());
     }
 
@@ -123,7 +123,7 @@ public class ShareGroupMemberTest {
         assertNull(member.instanceId());
         assertEquals("new-rack-id", updatedMember.rackId());
         // Names are sorted.
-        assertEquals(mkSet("zar"), updatedMember.subscribedTopicNames());
+        assertEquals(Set.of("zar"), updatedMember.subscribedTopicNames());
     }
 
     @Test
@@ -142,7 +142,7 @@ public class ShareGroupMemberTest {
         assertEquals("rack-id", member.rackId());
         assertEquals("client-id", member.clientId());
         assertEquals("host-id", member.clientHost());
-        assertEquals(mkSet("bar", "foo"), member.subscribedTopicNames());
+        assertEquals(Set.of("bar", "foo"), member.subscribedTopicNames());
     }
 
     @Test

@@ -126,7 +126,6 @@ import static org.apache.kafka.clients.consumer.CooperativeStickyAssignor.COOPER
 import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.test.TestUtils.toSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -275,7 +274,7 @@ public abstract class ConsumerCoordinatorTest {
         assertEquals(0.0d, getMetric("assigned-partitions").metricValue());
         subscriptions.assignFromUser(Collections.singleton(t1p));
         assertEquals(1.0d, getMetric("assigned-partitions").metricValue());
-        subscriptions.assignFromUser(Utils.mkSet(t1p, t2p));
+        subscriptions.assignFromUser(Set.of(t1p, t2p));
         assertEquals(2.0d, getMetric("assigned-partitions").metricValue());
     }
 
@@ -1091,7 +1090,7 @@ public abstract class ConsumerCoordinatorTest {
         assertEquals(toSet(oldSubscription), subscriptions.metadataTopics());
 
         subscriptions.subscribe(toSet(newSubscription), Optional.of(rebalanceListener));
-        assertEquals(Utils.mkSet(topic1, topic2), subscriptions.metadataTopics());
+        assertEquals(Set.of(topic1, topic2), subscriptions.metadataTopics());
 
         prepareJoinAndSyncResponse(consumerId, 2, newSubscription, newAssignment);
         coordinator.poll(time.timer(Long.MAX_VALUE));
@@ -1750,7 +1749,7 @@ public abstract class ConsumerCoordinatorTest {
 
     @Test
     public void testPatternJoinGroupFollower() {
-        final Set<String> subscription = Utils.mkSet(topic1, topic2);
+        final Set<String> subscription = Set.of(topic1, topic2);
         final List<TopicPartition> owned = Collections.emptyList();
         final List<TopicPartition> assigned = Arrays.asList(t1p, t2p);
 
@@ -2023,7 +2022,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.poll(time.timer(Long.MAX_VALUE));
 
         assertFalse(coordinator.rejoinNeededOrPending());
-        assertEquals(mkSet(topic1, topic2), coordinator.subscriptionState().metadataTopics());
+        assertEquals(Set.of(topic1, topic2), coordinator.subscriptionState().metadataTopics());
 
         // a new partition is added to the topic2 that only consumerId2 is subscribed to
         metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWith(1, singletonMap(topic2, 2)), false, time.milliseconds());
@@ -2089,7 +2088,7 @@ public abstract class ConsumerCoordinatorTest {
     @Test
     public void testSubscriptionChangeWithAuthorizationFailure() {
         // Subscribe to two topics of which only one is authorized and verify that metadata failure is propagated.
-        subscriptions.subscribe(Utils.mkSet(topic1, topic2), Optional.of(rebalanceListener));
+        subscriptions.subscribe(Set.of(topic1, topic2), Optional.of(rebalanceListener));
         client.prepareMetadataUpdate(RequestTestUtils.metadataUpdateWith("kafka-cluster", 1,
                 Collections.singletonMap(topic2, Errors.TOPIC_AUTHORIZATION_FAILED), singletonMap(topic1, 1)));
         assertThrows(TopicAuthorizationException.class, () -> coordinator.poll(time.timer(Long.MAX_VALUE)));
@@ -2104,7 +2103,7 @@ public abstract class ConsumerCoordinatorTest {
 
         // Change subscription to include only the authorized topic. Complete rebalance and check that
         // references to topic2 have been removed from SubscriptionState.
-        subscriptions.subscribe(Utils.mkSet(topic1), Optional.of(rebalanceListener));
+        subscriptions.subscribe(Set.of(topic1), Optional.of(rebalanceListener));
         assertEquals(Collections.singleton(topic1), subscriptions.metadataTopics());
         client.prepareMetadataUpdate(RequestTestUtils.metadataUpdateWith("kafka-cluster", 1,
                 Collections.emptyMap(), singletonMap(topic1, 1)));
