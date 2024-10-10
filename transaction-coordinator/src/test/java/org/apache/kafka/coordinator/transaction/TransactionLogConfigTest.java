@@ -25,8 +25,8 @@ import java.lang.reflect.Field;
 import java.util.HashSet;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -39,17 +39,12 @@ class TransactionLogConfigTest {
         for (Field field : TransactionLogConfig.class.getDeclaredFields()) {
             if (field.getName().endsWith("_CONFIG")) {
                 field.setAccessible(true);
-                try {
-                    declaredConfigs.add((String) field.get(null));
-                } catch (IllegalAccessException e) {
-                    throw new RuntimeException(e);
-                }
+                assertDoesNotThrow(() -> declaredConfigs.add((String) field.get(null)));
             }
         }
 
         Set<String> definedInConfigDef = TransactionLogConfig.CONFIG_DEF.names();
-        assertTrue(declaredConfigs.containsAll(definedInConfigDef));
-        assertTrue(definedInConfigDef.containsAll(declaredConfigs));
+        assertEquals(declaredConfigs, definedInConfigDef);
     }
 
     @Test
