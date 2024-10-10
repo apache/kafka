@@ -289,7 +289,7 @@ public class ShareFetchUtilsTest {
 
         // Since we don't see any exception for tp1 and tp2 from SharePartition class,
         // the updateCacheAndOffsets calls should remain the same as the previous case.
-        Mockito.verify(sp0, times(1)).updateCacheAndOffsets(any(Long.class));
+        Mockito.verify(sp0, times(1)).updateCacheAndOffsets(1L);
         Mockito.verify(sp1, times(0)).updateCacheAndOffsets(any(Long.class));
     }
 
@@ -356,6 +356,6 @@ public class ShareFetchUtilsTest {
         assertTrue(resultData.get(tp0).acquiredRecords().isEmpty());
         assertEquals(Errors.NONE.code(), resultData.get(tp0).errorCode());
 
-        Mockito.verify(sp0, times(1)).updateCacheAndOffsets(any(Long.class));
+        Mockito.verify(sp0, times(1)).updateCacheAndOffsets(1L);
     }
 }
