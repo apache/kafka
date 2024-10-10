@@ -269,12 +269,10 @@ public class SnapshotGenerator implements MetadataPublisher {
         String currentDisabledReason = disabledReason.get();
         if (currentDisabledReason != null) {
             log.error("Not emitting {} despite the fact that {} because snapshots are " +
-                            "disabled; {}", image.provenance().snapshotName(), reason,
-                    currentDisabledReason);
+                "disabled; {}", image.provenance().snapshotName(), reason, currentDisabledReason);
         } else if (!isOffsetBatchAligned) {
             log.debug("Not emitting {} despite the fact that {} because snapshots are " +
-                            "disabled; {}", image.provenance().snapshotName(), reason,
-                    "metadata image is not batch aligned");
+                "disabled; {}", image.provenance().snapshotName(), reason, "metadata image is not batch aligned");
         } else {
             eventQueue.append(() -> {
                 resetSnapshotCounters();
