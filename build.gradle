@@ -315,10 +315,6 @@ subprojects {
     targetCompatibility = minJavaVersion
   }
 
-  compileJava {
-    options.release = minJavaVersion
-  }
-
   if (shouldPublish) {
 
     publishing {
