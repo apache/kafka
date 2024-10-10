@@ -2724,8 +2724,10 @@ public class KafkaAdminClient extends AdminClient {
         final Map<Integer, Map<ConfigResource, KafkaFutureImpl<Config>>> nodeFutures = new HashMap<>(configResources.size());
 
         for (ConfigResource resource : configResources) {
+            // nodeFor will return null if the resource is not of type BROKER
             Integer broker = nodeFor(resource);
             nodeFutures.compute(broker, (key, value) -> {
+                // since the resource is of type TOPIC, key will be null
                 if (value == null) {
                     value = new HashMap<>();
                 }
@@ -2736,11 +2738,13 @@ public class KafkaAdminClient extends AdminClient {
 
         final long now = time.milliseconds();
         for (Map.Entry<Integer, Map<ConfigResource, KafkaFutureImpl<Config>>> entry : nodeFutures.entrySet()) {
+            // This node will be null if the resource is of type TOPIC
             final Integer node = entry.getKey();
             Map<ConfigResource, KafkaFutureImpl<Config>> unified = entry.getValue();
 
             runnable.call(new Call("describeConfigs", calcDeadlineMs(now, options.timeoutMs()),
-                node != null ? new ConstantNodeIdProvider(node, true) : new LeastLoadedBrokerOrActiveKController()) {
+                    // if node is null, new LeastLoadedBrokerOrActiveKController is passed here
+                    node != null ? new ConstantNodeIdProvider(node, true) : new LeastLoadedBrokerOrActiveKController()) {
 
                 @Override
                 DescribeConfigsRequest.Builder createRequest(int timeoutMs) {
