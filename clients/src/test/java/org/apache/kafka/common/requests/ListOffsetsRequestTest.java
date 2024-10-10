@@ -155,21 +155,6 @@ public class ListOffsetsRequestTest {
         assertTrue(topic.partitions().contains(lop1));
     }
 
-    private void testUnsupportedVersion(int version, long timestamp) {
-        if (timestamp == EARLIEST_LOCAL_TIMESTAMP && version < 8) {
-            assertUnsupportedVersion(version);
-        } else if (timestamp == LATEST_TIERED_TIMESTAMP && version < 9) {
-            assertUnsupportedVersion(version);
-        }
-    }
-
-    private void assertUnsupportedVersion(int version) {
-        ApiKeys apiKey = ApiKeys.LIST_OFFSETS;
-        UnsupportedVersionException exception = assertThrows(UnsupportedVersionException.class,
-                () -> versionInfo.latestUsableVersion(apiKey, (short) version, apiKey.latestVersion()));
-        assertEquals("The node does not support " + apiKey, exception.getMessage());
-    }
-
     @Test
     public void testListOffsetsRequestOldestVersion() {
         ListOffsetsRequest.Builder consumerRequestBuilder = ListOffsetsRequest.Builder
