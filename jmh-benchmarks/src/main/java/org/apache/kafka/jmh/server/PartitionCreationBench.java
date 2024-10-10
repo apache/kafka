@@ -100,7 +100,6 @@ public class PartitionCreationBench {
     private AlterPartitionManager alterPartitionManager;
     private List<TopicPartition> topicPartitions;
 
-    @SuppressWarnings("deprecation")
     @Setup(Level.Invocation)
     public void setup() {
         if (useTopicIds)
