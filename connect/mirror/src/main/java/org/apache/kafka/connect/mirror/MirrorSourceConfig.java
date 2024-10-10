@@ -89,7 +89,9 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
     public static final long OFFSET_LAG_MAX_DEFAULT = 100L;
 
     public static final String HEARTBEATS_REPLICATION_ENABLED = "heartbeats.replication" + ENABLED_SUFFIX;
-    private static final String HEARTBEATS_REPLICATION_ENABLED_DOC = "Whether to replicate the heartbeats topics even when the topic filter does not include them.";
+    private static final String HEARTBEATS_REPLICATION_ENABLED_DOC = "Whether to replicate the heartbeats topics even when the topic filter does not include them." +
+            " If set to true, heartbeats topics identified by the replication policy will always be replicated, regardless of the topic filter configuration." +
+            " If set to false, heartbeats topics will only be replicated if the topic filter allows.";
     public static final boolean HEARTBEATS_REPLICATION_ENABLED_DEFAULT = true;
 
     public static final String OFFSET_SYNCS_SOURCE_PRODUCER_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "source-producer";
