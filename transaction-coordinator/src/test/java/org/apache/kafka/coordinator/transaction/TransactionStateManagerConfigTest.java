@@ -18,6 +18,7 @@
 package org.apache.kafka.coordinator.transaction;
 
 import org.apache.kafka.common.config.AbstractConfig;
+
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
