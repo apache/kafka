@@ -212,7 +212,22 @@ def determineCommitId() {
   }
 }
 
-
+/**
+ * For a given Project, compute a nice dash separated directory name
+ * to store the JUnit XML files in. E.g., Project ":connect:api" -> "connect-api"
+ */
+static def projectToJUnitXmlPath(project) {
+  var p = project
+  var projectNames = []
+  while (p != null) {
+    projectNames.push(p.name)
+    p = p.parent
+    if (p.name == "kafka") {
+      break;
+    }
+  }
+  return projectNames.join("-")
+}
 
 
 apply from: file('wrapper.gradle')
@@ -526,7 +541,8 @@ subprojects {
     // were not run, but instead were restored via FROM-CACHE. See KAFKA-17479 for more details.
     doLast {
       if (ext.isGithubActions) {
-        def dest = rootProject.layout.buildDirectory.dir("junit-xml/${project.name}").get().asFile
+        def moduleDirPath = projectToJUnitXmlPath(project)
+        def dest = rootProject.layout.buildDirectory.dir("junit-xml/${moduleDirPath}").get().asFile
         println "Copy JUnit XML for ${project.name} to $dest"
         ant.copy(todir: "$dest/test") {
           ant.fileset(dir: "${test.reports.junitXml.entryPoint}")

@@ -126,7 +126,7 @@ class TestCatalogExporter:
 
             out_path = os.path.join(out_dir, f"{module}.yaml")
             logger.debug(f"Writing {count} tests for {module} into {out_path}.")
-            total_count += 0
+            total_count += count
             with open(out_path, "w") as fp:
                 yaml.dump(sorted_tests, fp)
 
@@ -240,10 +240,10 @@ if __name__ == "__main__":
 
     logger.debug(f"::group::Parsing {len(reports)} JUnit Report Files")
     for report in reports:
-        # Test report paths look like module/[test,quarantinedTest]/TEST-class.method.xml
+        # Test report paths look like junit-xml/module/[test,quarantinedTest]/TEST-class.method.xml
         report_path = pathlib.Path(report)
         module_name = report_path.parent.parent.name
-        print(f"Module: {module_name}")
+        logger.debug(f"Module: {module_name}")
         with open(report, "r") as fp:
             logger.debug(f"Parsing {report}")
             for suite in parse_report(workspace_path, report, fp):
