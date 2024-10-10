@@ -62,6 +62,9 @@ public final class MetadataProvenance {
         return lastContainedLogTimeMs;
     }
 
+    /**
+     * Returns whether lastContainedOffset is the last offset in a record batch
+     */
     public boolean isOffsetBatchAligned() {
         return isOffsetBatchAligned;
     }

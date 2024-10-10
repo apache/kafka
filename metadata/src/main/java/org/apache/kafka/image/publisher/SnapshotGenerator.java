@@ -242,24 +242,17 @@ public class SnapshotGenerator implements MetadataPublisher {
         bytesSinceLastSnapshot += manifest.numBytes();
         if (bytesSinceLastSnapshot >= maxBytesSinceLastSnapshot) {
             if (eventQueue.isEmpty()) {
-                if (manifest.provenance().isOffsetBatchAligned()) {
-                    scheduleEmit("we have replayed at least " + maxBytesSinceLastSnapshot +
-                        " bytes", newImage);
-                } else if (log.isDebugEnabled()) {
-                    log.debug("Not scheduling snapshot because last contained offset is not aligned to a batch boundary.");
-                }
+                maybeScheduleEmit("we have replayed at least " + maxBytesSinceLastSnapshot +
+                    " bytes", newImage, manifest.provenance().isOffsetBatchAligned());
             } else if (log.isTraceEnabled()) {
                 log.trace("Not scheduling bytes-based snapshot because event queue is not empty yet.");
             }
         } else if (maxTimeSinceLastSnapshotNs != 0 &&
                 (time.nanoseconds() - lastSnapshotTimeNs >= maxTimeSinceLastSnapshotNs)) {
             if (eventQueue.isEmpty()) {
-                if (manifest.provenance().isOffsetBatchAligned()) {
-                    scheduleEmit("we have waited at least " +
-                        TimeUnit.NANOSECONDS.toMinutes(maxTimeSinceLastSnapshotNs) + " minute(s)", newImage);
-                } else if (log.isDebugEnabled()) {
-                    log.debug("Not scheduling snapshot because last contained offset is not aligned to a batch boundary.");
-                }
+                maybeScheduleEmit("we have waited at least " +
+                    TimeUnit.NANOSECONDS.toMinutes(maxTimeSinceLastSnapshotNs) +
+                    " minute(s)", newImage, manifest.provenance().isOffsetBatchAligned());
             } else if (log.isTraceEnabled()) {
                 log.trace("Not scheduling time-based snapshot because event queue is not empty yet.");
             }
@@ -268,11 +261,16 @@ public class SnapshotGenerator implements MetadataPublisher {
         }
     }
 
-    void scheduleEmit(
+    void maybeScheduleEmit(
         String reason,
-        MetadataImage image
+        MetadataImage image,
+        boolean isOffsetBatchAligned
     ) {
-        resetSnapshotCounters();
+        if (isOffsetBatchAligned) {
+            this.disabledReason.compareAndSet("metadata image is not batch aligned", null);
+        } else {
+            this.disabledReason.compareAndSet(null, "metadata image is not batch aligned");
+        }
         eventQueue.append(() -> {
             String currentDisabledReason = disabledReason.get();
             if (currentDisabledReason != null) {
@@ -280,6 +278,7 @@ public class SnapshotGenerator implements MetadataPublisher {
                     "disabled; {}", image.provenance().snapshotName(), reason,
                         currentDisabledReason);
             } else {
+                resetSnapshotCounters();
                 log.info("Creating new KRaft snapshot file {} because {}.",
                         image.provenance().snapshotName(), reason);
                 try {
