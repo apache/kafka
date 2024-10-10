@@ -111,6 +111,7 @@
     <allow pkg="kafka.zk" />
     <allow pkg="org.apache.kafka.clients.admin"/>
     <allow pkg="org.apache.kafka.clients.consumer"/>
+    <allow pkg="org.apache.kafka.clients.producer"/>
     <allow pkg="org.apache.kafka.coordinator.group"/>
     <allow pkg="org.apache.kafka.coordinator.transaction"/>
     <subpackage name="annotation">

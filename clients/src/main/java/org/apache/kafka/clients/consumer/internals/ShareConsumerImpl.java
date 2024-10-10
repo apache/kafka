@@ -43,6 +43,7 @@ import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeAsyncE
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeSyncEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackRegistrationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareFetchEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareUnsubscribeEvent;
@@ -765,8 +766,16 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             if (callback != null) {
+                if (acknowledgementCommitCallbackHandler == null) {
+                    ShareAcknowledgementCommitCallbackRegistrationEvent event = new ShareAcknowledgementCommitCallbackRegistrationEvent(true);
+                    applicationEventHandler.add(event);
+                }
                 acknowledgementCommitCallbackHandler = new AcknowledgementCommitCallbackHandler(callback);
             } else {
+                if (acknowledgementCommitCallbackHandler != null) {
+                    ShareAcknowledgementCommitCallbackRegistrationEvent event = new ShareAcknowledgementCommitCallbackRegistrationEvent(false);
+                    applicationEventHandler.add(event);
+                }
                 completedAcknowledgements.clear();
                 acknowledgementCommitCallbackHandler = null;
             }
@@ -831,7 +840,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         wakeupTrigger.disableWakeups();
 
         final Timer closeTimer = time.timer(timeout);
-        clientTelemetryReporter.ifPresent(reporter -> reporter.initiateClose(timeout.toMillis()));
+        clientTelemetryReporter.ifPresent(ClientTelemetryReporter::initiateClose);
         closeTimer.update();
 
         // Prepare shutting down the network thread

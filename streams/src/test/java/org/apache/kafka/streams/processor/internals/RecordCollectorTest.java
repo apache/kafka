@@ -46,7 +46,6 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.ErrorHandlerContext;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
@@ -60,7 +59,6 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.test.InternalMockProcessorContext;
-import org.apache.kafka.test.MockClientSupplier;
 
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.core.filter.ThresholdFilter;
@@ -115,10 +113,6 @@ public class RecordCollectorTest {
     private final TaskId taskId = new TaskId(0, 0);
     private final ProductionExceptionHandler productionExceptionHandler = new DefaultProductionExceptionHandler();
     private final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(new Metrics());
-    private final StreamsConfig config = new StreamsConfig(mkMap(
-        mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
-        mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234")
-    ));
 
     private final String topic = "topic";
     private final String sinkNodeName = "output-node";
@@ -140,7 +134,9 @@ public class RecordCollectorTest {
     private final StreamPartitioner<String, Object> streamPartitioner =
         (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(Integer.parseInt(key) % numPartitions));
 
-    private MockProducer<byte[], byte[]> mockProducer;
+    private final MockProducer<byte[], byte[]> mockProducer
+        = new MockProducer<>(cluster, true, new ByteArraySerializer(), new ByteArraySerializer());
+
     private StreamsProducer streamsProducer;
     private ProcessorTopology topology;
     private final InternalProcessorContext<Void, Void> context = new InternalMockProcessorContext<>();
@@ -149,9 +145,6 @@ public class RecordCollectorTest {
 
     @BeforeEach
     public void setup() {
-        final MockClientSupplier clientSupplier = new MockClientSupplier();
-        clientSupplier.setCluster(cluster);
-        mockProducer = (MockProducer<byte[], byte[]>) clientSupplier.getProducer(config.originals());
         streamsProducer = new StreamsProducer(
             StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
             mockProducer,
