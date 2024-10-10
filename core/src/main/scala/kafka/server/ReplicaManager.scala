@@ -25,7 +25,7 @@ import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.ReplicaManager.{AtMinIsrPartitionCountMetricName, FailedIsrUpdatesPerSecMetricName, IsrExpandsPerSecMetricName, IsrShrinksPerSecMetricName, LeaderCountMetricName, OfflineReplicaCountMetricName, PartitionCountMetricName, PartitionsWithLateTransactionsCountMetricName, ProducerIdCountMetricName, ReassigningPartitionsMetricName, UnderMinIsrPartitionCountMetricName, UnderReplicatedPartitionsMetricName, createLogReadResult, isListOffsetsTimestampUnsupported}
 import kafka.server.metadata.ZkMetadataCache
-import kafka.server.share.{DelayedShareFetch, DelayedShareFetchKey}
+import kafka.server.share.{DelayedShareFetch, DelayedShareFetchKey, DelayedShareFetchPartitionKey}
 import kafka.utils._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.errors._
@@ -495,6 +495,23 @@ class ReplicaManager(val config: KafkaConfig,
     delayedShareFetchPurgatory.checkAndComplete(delayedShareFetchKey)
   }
 
+  /**
+   * Complete any delayed share fetch requests that have been unblocked since new data is available from the leader
+   * for one of the partitions. This could happen due to movement of HWM, replica becoming a follower or replica is
+   * deleted from a broker.
+   * @param topicPartition The topicPartition for which we can prepare a key corresponding to which the share fetch
+   *                       request has been stored in the purgatory
+   */
+  private[server] def completeDelayedShareFetchRequest(topicPartition: TopicPartition): Unit = {
+    delayedShareFetchPurgatory.checkAndComplete(new DelayedShareFetchPartitionKey(topicPartition.topic(), topicPartition.partition()))
+  }
+
+  /**
+   * Add and watch a share fetch request in the delayed share fetch purgatory corresponding to a set of keys in case it cannot be
+   * completed instantaneously, otherwise complete it.
+   * @param delayedShareFetch Refers to the DelayedOperation over share fetch request
+   * @param delayedShareFetchKeys The keys corresponding to which the delayed share fetch request will be stored in the purgatory
+   */
   private[server] def addDelayedShareFetchRequest(delayedShareFetch: DelayedShareFetch,
                                                   delayedShareFetchKeys : Seq[DelayedShareFetchKey]): Unit = {
     delayedShareFetchPurgatory.tryCompleteElseWatch(delayedShareFetch, delayedShareFetchKeys)
@@ -971,7 +988,7 @@ class ReplicaManager(val config: KafkaConfig,
             delayedProducePurgatory.checkAndComplete(requestKey)
             delayedFetchPurgatory.checkAndComplete(requestKey)
             delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
-            delayedShareFetchPurgatory.checkAndComplete(requestKey)
+            delayedShareFetchPurgatory.checkAndComplete(new DelayedShareFetchPartitionKey(topicPartition.topic(), topicPartition.partition()))
           case LeaderHwChange.SAME =>
             // probably unblock some follower fetch requests since log end offset has been updated
             delayedFetchPurgatory.checkAndComplete(requestKey)
@@ -3052,6 +3069,7 @@ class ReplicaManager(val config: KafkaConfig,
       stateChangeLogger.info(s"Started fetchers as part of become-follower for ${partitionsToStartFetching.size} partitions")
 
       partitionsToStartFetching.keySet.foreach(completeDelayedFetchOrProduceRequests)
+      partitionsToStartFetching.keySet.foreach(completeDelayedShareFetchRequest)
 
       updateLeaderAndFollowerMetrics(followerTopicSet)
     }

@@ -2297,7 +2297,7 @@ public class SharePartitionManagerTest {
             Object[] args = invocationOnMock.getArguments();
             delayedShareFetchPurgatory.checkAndComplete((DelayedShareFetchKey) args[0]);
             return null;
-        }).when(replicaManager).completeDelayedShareFetchRequest(any());
+        }).when(replicaManager).completeDelayedShareFetchRequest(any(DelayedShareFetchKey.class));
 
         doAnswer(invocationOnMock -> {
             Object[] args = invocationOnMock.getArguments();

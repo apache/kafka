@@ -18,19 +18,21 @@ package kafka.server.share;
 
 import kafka.server.DelayedOperationKey;
 
-import org.apache.kafka.common.Uuid;
-
 import java.util.Objects;
 
 /**
- * A key for delayed share fetch purgatory that refers to the topic partition.
+ * A key for delayed share fetch purgatory that refers to the topic partition. Since the below replicaManager functionalities
+ * use TopicPartition and not TopicIdPartition, hence we are using the same here.
+ * 1. Determine if HWM has moved
+ * 2. Determine if a replica becomes a follower
+ * 3. Know if the replica is deleted from a broker
  */
 public class DelayedShareFetchPartitionKey implements  DelayedShareFetchKey, DelayedOperationKey {
-    private final Uuid topicId;
+    private final String topic;
     private final int partition;
 
-    DelayedShareFetchPartitionKey(Uuid topicId, int partition) {
-        this.topicId = topicId;
+    public DelayedShareFetchPartitionKey(String topic, int partition) {
+        this.topic = topic;
         this.partition = partition;
     }
 
@@ -39,22 +41,22 @@ public class DelayedShareFetchPartitionKey implements  DelayedShareFetchKey, Del
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         DelayedShareFetchPartitionKey that = (DelayedShareFetchPartitionKey) o;
-        return topicId.equals(that.topicId) && partition == that.partition;
+        return topic.equals(that.topic) && partition == that.partition;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(topicId, partition);
+        return Objects.hash(topic, partition);
     }
 
     @Override
     public String toString() {
-        return "DelayedShareFetchPartitionKey(topicId=" + topicId +
+        return "DelayedShareFetchPartitionKey(topic=" + topic +
             ", partition=" + partition + ")";
     }
 
     @Override
     public String keyLabel() {
-        return String.format("topicId=%s, partition=%s", topicId, partition);
+        return String.format("topic=%s, partition=%s", topic, partition);
     }
 }
