@@ -90,6 +90,9 @@
             For example, this could be done via the <code>KAFKA_OPTS</code> environment variable like follows: <code>export KAFKA_OPTS="-DZstdTempFolder=/opt/kafka/tmp -Dorg.xerial.snappy.tempdir=/opt/kafka/tmp"</code>.
             This is a known issue for version 3.8.0.
         </li>
+        <li>In 3.8.0 the <code>kafka.utils.Thottler</code> metric was accidentally renamed to <code>org.apache.kafka.storage.internals.utils.Throttler</code>.
+            This change has been reverted and the metric is now named <code>kafka.utils.Thottler</code> again.
+        </li>
     </ul>
 
     <h5><a id="upgrade_380_notable" href="#upgrade_380_notable">Notable changes in 3.8.0</a></h5>
