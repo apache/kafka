@@ -1130,7 +1130,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         AtomicReference<Throwable> firstException = new AtomicReference<>();
 
         final Timer closeTimer = createTimerForRequest(timeout);
-        clientTelemetryReporter.ifPresent(reporter -> reporter.initiateClose(timeout.toMillis()));
+        clientTelemetryReporter.ifPresent(ClientTelemetryReporter::initiateClose);
         closeTimer.update();
         // Close objects with a timeout. The timeout is required because the coordinator & the fetcher send requests to
         // the server in the process of closing which may not respect the overall timeout defined for closing the
