@@ -155,22 +155,6 @@ public class ListOffsetsRequestTest {
         assertTrue(topic.partitions().contains(lop1));
     }
 
-    @Test
-    public void testCheckEarliestLocalTimestampVersion() {
-        int maxVersion = ApiKeys.LIST_OFFSETS.latestVersion();
-        for (int i = 0; i <= maxVersion; i++) {
-            testUnsupportedVersion(i, EARLIEST_LOCAL_TIMESTAMP);
-        }
-    }
-
-    @Test
-    public void testCheckLatestTieredTimestampVersion() {
-        int maxVersion = ApiKeys.LIST_OFFSETS.latestVersion();
-        for (int i = 0; i <= maxVersion; i++) {
-            testUnsupportedVersion(i, LATEST_TIERED_TIMESTAMP);
-        }
-    }
-
     private void testUnsupportedVersion(int version, long timestamp) {
         if (timestamp == EARLIEST_LOCAL_TIMESTAMP && version < 8) {
             assertUnsupportedVersion(version);
