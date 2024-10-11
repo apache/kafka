@@ -79,7 +79,7 @@ public class ConsumerInterceptorsTest {
             for (TopicPartition tp : records.partitions()) {
                 if (tp.partition() != filterPartition) {
                     recordMap.put(tp, records.records(tp));
-                    nextOffsetAndMetadata.putAll(records.nextOffsets());
+                    nextOffsetAndMetadata.put(tp, records.nextOffsets().get(tp));
                 }
             }
             return new ConsumerRecords<>(recordMap, nextOffsetAndMetadata);
@@ -146,7 +146,7 @@ public class ConsumerInterceptorsTest {
         assertFalse(interceptedRecords.partitions().contains(filterTopicPart1));
         assertFalse(interceptedRecords.partitions().contains(filterTopicPart2));
         assertEquals(2, onConsumeCount);
-        validateNextOffsets(interceptedRecords.nextOffsets());
+        validateNextOffsets(interceptedRecords.nextOffsets(), 1);
 
         // verify that even if one of the intermediate interceptors throws an exception, all interceptors' onConsume are called
         interceptor1.injectOnConsumeError(true);
@@ -155,7 +155,7 @@ public class ConsumerInterceptorsTest {
         assertTrue(partInterceptedRecs.partitions().contains(filterTopicPart1));  // since interceptor1 threw exception
         assertFalse(partInterceptedRecs.partitions().contains(filterTopicPart2)); // interceptor2 should still be called
         assertEquals(4, onConsumeCount);
-        validateNextOffsets(interceptedRecords.nextOffsets());
+        validateNextOffsets(partInterceptedRecs.nextOffsets(), 2);
 
         // if all interceptors throw an exception, records should be unmodified
         interceptor2.injectOnConsumeError(true);
@@ -163,7 +163,7 @@ public class ConsumerInterceptorsTest {
         assertEquals(noneInterceptedRecs, consumerRecords);
         assertEquals(3, noneInterceptedRecs.count());
         assertEquals(6, onConsumeCount);
-        validateNextOffsets(interceptedRecords.nextOffsets());
+        validateNextOffsets(noneInterceptedRecs.nextOffsets(), 3);
 
         interceptors.close();
     }
@@ -193,10 +193,17 @@ public class ConsumerInterceptorsTest {
         interceptors.close();
     }
 
-    private void validateNextOffsets(Map<TopicPartition, OffsetAndMetadata> nextOffsetAndMetadataMap) {
-        assertEquals(3, nextOffsetAndMetadataMap.size());
-        assertEquals(new OffsetAndMetadata(1, Optional.empty(), ""), nextOffsetAndMetadataMap.get(tp));
-        assertEquals(new OffsetAndMetadata(1, Optional.empty(), ""), nextOffsetAndMetadataMap.get(filterTopicPart1));
-        assertEquals(new OffsetAndMetadata(1, Optional.empty(), ""), nextOffsetAndMetadataMap.get(filterTopicPart2));
+    private void validateNextOffsets(Map<TopicPartition, OffsetAndMetadata> nextOffsetAndMetadataMap, int size) {
+        assertEquals(size, nextOffsetAndMetadataMap.size());
+        if (size == 1) {
+            assertEquals(new OffsetAndMetadata(1, Optional.empty(), ""), nextOffsetAndMetadataMap.get(tp));
+        } else if (size == 2) {
+            assertEquals(new OffsetAndMetadata(1, Optional.empty(), ""), nextOffsetAndMetadataMap.get(tp));
+            assertEquals(new OffsetAndMetadata(1, Optional.empty(), ""), nextOffsetAndMetadataMap.get(filterTopicPart1));
+        } else if (size == 3) {
+            assertEquals(new OffsetAndMetadata(1, Optional.empty(), ""), nextOffsetAndMetadataMap.get(tp));
+            assertEquals(new OffsetAndMetadata(1, Optional.empty(), ""), nextOffsetAndMetadataMap.get(filterTopicPart1));
+            assertEquals(new OffsetAndMetadata(1, Optional.empty(), ""), nextOffsetAndMetadataMap.get(filterTopicPart2));
+        }
     }
 }
