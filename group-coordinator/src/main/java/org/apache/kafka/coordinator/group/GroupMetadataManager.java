@@ -3945,13 +3945,14 @@ public class GroupMetadataManager {
      * ClassicGroup: Complete all awaiting join and sync futures. Transition group to Dead.
      */
     public void onUnloaded() {
+        groupRegexManager.onUnloaded();
+
         groups.values().forEach(group -> {
             switch (group.type()) {
                 case CONSUMER:
                     ConsumerGroup consumerGroup = (ConsumerGroup) group;
                     log.info("[GroupId={}] Unloaded group metadata for group epoch {}.",
                         consumerGroup.groupId(), consumerGroup.groupEpoch());
-                    groupRegexManager.onUnloaded();
                     break;
                 case CLASSIC:
                     ClassicGroup classicGroup = (ClassicGroup) group;
