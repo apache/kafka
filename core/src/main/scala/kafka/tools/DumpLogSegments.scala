@@ -40,6 +40,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.generated.{ConsumerGroupCurrentMemberAssignmentKey, ConsumerGroupCurrentMemberAssignmentKeyJsonConverter, ConsumerGroupCurrentMemberAssignmentValue, ConsumerGroupCurrentMemberAssignmentValueJsonConverter, ConsumerGroupMemberMetadataKey, ConsumerGroupMemberMetadataKeyJsonConverter, ConsumerGroupMemberMetadataValue, ConsumerGroupMemberMetadataValueJsonConverter, ConsumerGroupMetadataKey, ConsumerGroupMetadataKeyJsonConverter, ConsumerGroupMetadataValue, ConsumerGroupMetadataValueJsonConverter, ConsumerGroupPartitionMetadataKey, ConsumerGroupPartitionMetadataKeyJsonConverter, ConsumerGroupPartitionMetadataValue, ConsumerGroupPartitionMetadataValueJsonConverter, ConsumerGroupTargetAssignmentMemberKey, ConsumerGroupTargetAssignmentMemberKeyJsonConverter, ConsumerGroupTargetAssignmentMemberValue, ConsumerGroupTargetAssignmentMemberValueJsonConverter, ConsumerGroupTargetAssignmentMetadataKey, ConsumerGroupTargetAssignmentMetadataKeyJsonConverter, ConsumerGroupTargetAssignmentMetadataValue, ConsumerGroupTargetAssignmentMetadataValueJsonConverter, GroupMetadataKey, GroupMetadataKeyJsonConverter, GroupMetadataValue, GroupMetadataValueJsonConverter, OffsetCommitKey, OffsetCommitKeyJsonConverter, OffsetCommitValue, OffsetCommitValueJsonConverter, ShareGroupCurrentMemberAssignmentKey, ShareGroupCurrentMemberAssignmentKeyJsonConverter, ShareGroupCurrentMemberAssignmentValue, ShareGroupCurrentMemberAssignmentValueJsonConverter, ShareGroupMemberMetadataKey, ShareGroupMemberMetadataKeyJsonConverter, ShareGroupMemberMetadataValue, ShareGroupMemberMetadataValueJsonConverter, ShareGroupMetadataKey, ShareGroupMetadataKeyJsonConverter, ShareGroupMetadataValue, ShareGroupMetadataValueJsonConverter, ShareGroupPartitionMetadataKey, ShareGroupPartitionMetadataKeyJsonConverter, ShareGroupPartitionMetadataValue, ShareGroupPartitionMetadataValueJsonConverter, ShareGroupStatePartitionMetadataKey, ShareGroupStatePartitionMetadataKeyJsonConverter, ShareGroupStatePartitionMetadataValue, ShareGroupStatePartitionMetadataValueJsonConverter, ShareGroupTargetAssignmentMemberKey, ShareGroupTargetAssignmentMemberKeyJsonConverter, ShareGroupTargetAssignmentMemberValue, ShareGroupTargetAssignmentMemberValueJsonConverter, ShareGroupTargetAssignmentMetadataKey, ShareGroupTargetAssignmentMetadataKeyJsonConverter, ShareGroupTargetAssignmentMetadataValue, ShareGroupTargetAssignmentMetadataValueJsonConverter}
 import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader.UnknownRecordTypeException
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde
+import org.apache.kafka.coordinator.share.generated.{ShareSnapshotKey, ShareSnapshotKeyJsonConverter, ShareSnapshotValue, ShareSnapshotValueJsonConverter, ShareUpdateKey, ShareUpdateKeyJsonConverter, ShareUpdateValue, ShareUpdateValueJsonConverter}
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
 import org.apache.kafka.snapshot.Snapshots
@@ -452,6 +453,10 @@ object DumpLogSegments {
           ShareGroupCurrentMemberAssignmentKeyJsonConverter.write(m, version)
         case m: ShareGroupStatePartitionMetadataKey =>
           ShareGroupStatePartitionMetadataKeyJsonConverter.write(m, version)
+        case m: ShareSnapshotKey =>
+          ShareSnapshotKeyJsonConverter.write(m, version)
+        case m: ShareUpdateKey =>
+          ShareUpdateKeyJsonConverter.write(m, version)
         case _ => throw new UnknownRecordTypeException(version)
       }
 
@@ -546,6 +551,10 @@ object DumpLogSegments {
           ShareGroupCurrentMemberAssignmentValueJsonConverter.write(m, version)
         case m: ShareGroupStatePartitionMetadataValue =>
           ShareGroupStatePartitionMetadataValueJsonConverter.write(m, version)
+        case m: ShareSnapshotValue =>
+          ShareSnapshotValueJsonConverter.write(m, version)
+        case m: ShareUpdateValue =>
+          ShareUpdateValueJsonConverter.write(m, version)
         case _ => throw new IllegalStateException(s"Message value ${message.getClass.getSimpleName} is not supported.")
       }
 
