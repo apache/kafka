@@ -360,8 +360,8 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      */
     private void process(final ShareSubscriptionChangeEvent event) {
         if (!requestManagers.shareHeartbeatRequestManager.isPresent()) {
-            log.warn("Group membership manager not present when processing a subscribe event");
-            event.future().complete(null);
+            KafkaException error = new KafkaException("Group membership manager not present when processing a subscribe event");
+            event.future().completeExceptionally(error);
             return;
         }
 

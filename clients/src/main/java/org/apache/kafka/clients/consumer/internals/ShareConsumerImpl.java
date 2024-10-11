@@ -517,11 +517,11 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                         throw new IllegalArgumentException("Topic collection to subscribe to cannot contain null or empty topic");
                 }
 
-                log.info("Subscribed to topic(s): {}", String.join(", ", topics));
-
                 // Trigger subscribe event to effectively join the group if not already part of it,
                 // or just send the new subscription to the broker.
                 applicationEventHandler.addAndGet(new ShareSubscriptionChangeEvent(topics));
+
+                log.info("Subscribed to topics: {}", String.join(", ", topics));
             }
         } finally {
             release();
@@ -535,11 +535,11 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     public void unsubscribe() {
         acquireAndEnsureOpen();
         try {
-            log.info("Unsubscribing all topics");
-
-            Timer timer = time.timer(Long.MAX_VALUE);
+            Timer timer = time.timer(defaultApiTimeoutMs);
             ShareUnsubscribeEvent unsubscribeApplicationEvent = new ShareUnsubscribeEvent(calculateDeadlineMs(timer));
             applicationEventHandler.addAndGet(unsubscribeApplicationEvent);
+
+            log.info("Unsubscribed all topics");
         } finally {
             release();
         }

@@ -131,6 +131,16 @@ public class ShareConsumerImplTest {
     }
 
     private ShareConsumerImpl<String, String> newConsumer(
+        SubscriptionState subscriptions
+    ) {
+        return newConsumer(
+                mock(ShareFetchBuffer.class),
+                subscriptions,
+                "group-id",
+                "client-id");
+    }
+
+    private ShareConsumerImpl<String, String> newConsumer(
             ShareFetchBuffer fetchBuffer,
             SubscriptionState subscriptions,
             String groupId,
@@ -160,11 +170,8 @@ public class ShareConsumerImplTest {
     @Test
     public void testSuccessfulStartupShutdown() {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
-        consumer = newConsumer(
-            mock(ShareFetchBuffer.class),
-            subscriptions,
-            "group-id",
-            "client-id");
+        consumer = newConsumer(subscriptions);
+
         completeShareAcknowledgeOnCloseApplicationEventSuccessfully();
         completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
         assertDoesNotThrow(() -> consumer.close());
@@ -192,11 +199,8 @@ public class ShareConsumerImplTest {
     @Test
     public void testWakeupBeforeCallingPoll() {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
-        consumer = newConsumer(
-            mock(ShareFetchBuffer.class),
-            subscriptions,
-            "group-id",
-            "client-id");
+        consumer = newConsumer(subscriptions);
+
         final String topicName = "foo";
         doReturn(ShareFetch.empty()).when(fetchCollector).collect(any(ShareFetchBuffer.class));
 
@@ -213,11 +217,8 @@ public class ShareConsumerImplTest {
     @Test
     public void testWakeupAfterEmptyFetch() {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
-        consumer = newConsumer(
-            mock(ShareFetchBuffer.class),
-            subscriptions,
-            "group-id",
-            "client-id");
+        consumer = newConsumer(subscriptions);
+
         final String topicName = "foo";
         doAnswer(invocation -> {
             consumer.wakeup();
@@ -235,11 +236,8 @@ public class ShareConsumerImplTest {
     @Test
     public void testWakeupAfterNonEmptyFetch() {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
-        consumer = newConsumer(
-            mock(ShareFetchBuffer.class),
-            subscriptions,
-            "group-id",
-            "client-id");
+        consumer = newConsumer(subscriptions);
+
         final String topicName = "foo";
         final int partition = 3;
         final TopicIdPartition tip = new TopicIdPartition(Uuid.randomUuid(), partition, topicName);
@@ -265,11 +263,8 @@ public class ShareConsumerImplTest {
     @Test
     public void testFailOnClosedConsumer() {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
-        consumer = newConsumer(
-            mock(ShareFetchBuffer.class),
-            subscriptions,
-            "group-id",
-            "client-id");
+        consumer = newConsumer(subscriptions);
+
         completeShareAcknowledgeOnCloseApplicationEventSuccessfully();
         completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
         consumer.close();
@@ -280,11 +275,8 @@ public class ShareConsumerImplTest {
     @Test
     public void testVerifyApplicationEventOnShutdown() {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
-        consumer = newConsumer(
-            mock(ShareFetchBuffer.class),
-            subscriptions,
-            "group-id",
-            "client-id");
+        consumer = newConsumer(subscriptions);
+
         completeShareAcknowledgeOnCloseApplicationEventSuccessfully();
         completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
         consumer.close();
@@ -345,11 +337,8 @@ public class ShareConsumerImplTest {
     @Test
     public void testSubscribeGeneratesEvent() {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
-        consumer = newConsumer(
-            mock(ShareFetchBuffer.class),
-            subscriptions,
-            "group-id",
-            "client-id");
+        consumer = newConsumer(subscriptions);
+
         String topic = "topic1";
         final List<String> subscriptionTopic = singletonList(topic);
         completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, subscriptionTopic);
@@ -361,11 +350,8 @@ public class ShareConsumerImplTest {
     @Test
     public void testUnsubscribeGeneratesUnsubscribeEvent() {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
-        consumer = newConsumer(
-            mock(ShareFetchBuffer.class),
-            subscriptions,
-            "group-id",
-            "client-id");
+        consumer = newConsumer(subscriptions);
+
         completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
 
         consumer.unsubscribe();
@@ -377,11 +363,8 @@ public class ShareConsumerImplTest {
     @Test
     public void testSubscribeToEmptyListActsAsUnsubscribe() {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
-        consumer = newConsumer(
-            mock(ShareFetchBuffer.class),
-            subscriptions,
-            "group-id",
-            "client-id");
+        consumer = newConsumer(subscriptions);
+
         completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
 
         consumer.subscribe(Collections.emptyList());
@@ -480,11 +463,8 @@ public class ShareConsumerImplTest {
     @Test
     public void testEnsurePollEventSentOnConsumerPoll() {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
-        consumer = newConsumer(
-                mock(ShareFetchBuffer.class),
-                subscriptions,
-                "group-id",
-                "client-id");
+        consumer = newConsumer(subscriptions);
+
         final TopicPartition tp = new TopicPartition("topic", 0);
         final TopicIdPartition tip = new TopicIdPartition(Uuid.randomUuid(), tp);
         final ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(tip);
