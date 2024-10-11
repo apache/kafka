@@ -17,7 +17,6 @@
 package org.apache.kafka.common.config;
 
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
-import org.apache.kafka.common.utils.Utils;
 
 import java.util.Set;
 
