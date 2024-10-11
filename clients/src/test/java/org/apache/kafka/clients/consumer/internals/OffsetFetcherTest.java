@@ -84,7 +84,6 @@ import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH;
 import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.test.TestUtils.assertOptional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -747,7 +746,7 @@ public class OffsetFetcherTest {
         for (Errors retriableError : retriableErrors) {
             buildFetcher();
 
-            subscriptions.assignFromUser(mkSet(tp0, tp1));
+            subscriptions.assignFromUser(Set.of(tp0, tp1));
             client.updateMetadata(initialUpdateResponse);
 
             final long fetchTimestamp = 10L;
@@ -897,7 +896,7 @@ public class OffsetFetcherTest {
     public void testGetOffsetsForTimesWhenSomeTopicPartitionLeadersNotKnownInitially() {
         buildFetcher();
 
-        subscriptions.assignFromUser(mkSet(tp0, tp1));
+        subscriptions.assignFromUser(Set.of(tp0, tp1));
         final String anotherTopic = "another-topic";
         final TopicPartition t2p0 = new TopicPartition(anotherTopic, 0);
 
@@ -944,7 +943,7 @@ public class OffsetFetcherTest {
         buildFetcher();
         final String anotherTopic = "another-topic";
         final TopicPartition t2p0 = new TopicPartition(anotherTopic, 0);
-        subscriptions.assignFromUser(mkSet(tp0, t2p0));
+        subscriptions.assignFromUser(Set.of(tp0, t2p0));
 
         client.reset();
 
@@ -1132,7 +1131,7 @@ public class OffsetFetcherTest {
     @Test
     public void testOffsetValidationRequestGrouping() {
         buildFetcher();
-        assignFromUser(mkSet(tp0, tp1, tp2, tp3));
+        assignFromUser(Set.of(tp0, tp1, tp2, tp3));
 
         metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWithIds("dummy", 3,
             Collections.emptyMap(), singletonMap(topicName, 4),

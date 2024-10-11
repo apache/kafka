@@ -151,7 +151,7 @@ public class SslConfigs {
                 .define(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, ConfigDef.Type.CLASS, null, ConfigDef.Importance.LOW, SslConfigs.SSL_ENGINE_FACTORY_CLASS_DOC);
     }
 
-    public static final Set<String> RECONFIGURABLE_CONFIGS = Utils.mkSet(
+    public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
             SslConfigs.SSL_KEYSTORE_TYPE_CONFIG,
             SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
             SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
@@ -163,7 +163,7 @@ public class SslConfigs {
             SslConfigs.SSL_KEYSTORE_KEY_CONFIG,
             SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG);
 
-    public static final Set<String> NON_RECONFIGURABLE_CONFIGS = Utils.mkSet(
+    public static final Set<String> NON_RECONFIGURABLE_CONFIGS = Set.of(
             BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG,
             SslConfigs.SSL_PROTOCOL_CONFIG,
             SslConfigs.SSL_PROVIDER_CONFIG,
