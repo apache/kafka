@@ -1537,7 +1537,7 @@ public final class Utils {
      * @return true if the string is null, empty or whitespace only; otherwise, return false.
      */
     public static boolean isBlank(String str) {
-        return str == null || str.trim().isEmpty();
+        return str == null || str.isBlank();
     }
 
     /**

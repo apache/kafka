@@ -27,7 +27,6 @@ import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.platform.commons.util.StringUtils;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -48,6 +47,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
+import static org.apache.kafka.common.utils.Utils.isBlank;
 import static org.apache.kafka.security.PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -97,7 +97,7 @@ public class ConfigCommandIntegrationTest {
             "--alter", "--add-config", "consumer_byte_rate=20000"));
         String message = captureStandardMsg(run(command));
 
-        assertTrue(StringUtils.isBlank(message), message);
+        assertTrue(isBlank(message), message);
     }
 
     @ClusterTest
@@ -107,14 +107,14 @@ public class ConfigCommandIntegrationTest {
             "--entity-name", "group",
             "--alter", "--add-config", "consumer.session.timeout.ms=50000"));
         String message = captureStandardMsg(run(command));
-        assertTrue(StringUtils.isBlank(message), message);
+        assertTrue(isBlank(message), message);
 
         // Test for the --group alias
         command = Stream.concat(quorumArgs(), Stream.of(
             "--group", "group",
             "--alter", "--add-config", "consumer.session.timeout.ms=50000"));
         message = captureStandardMsg(run(command));
-        assertTrue(StringUtils.isBlank(message), message);
+        assertTrue(isBlank(message), message);
     }
 
     @ClusterTest
@@ -124,14 +124,14 @@ public class ConfigCommandIntegrationTest {
                 "--entity-name", "cm",
                 "--alter", "--add-config", "metrics=org.apache"));
         String message = captureStandardMsg(run(command));
-        assertTrue(StringUtils.isBlank(message), message);
+        assertTrue(isBlank(message), message);
 
         // Test for the --client-metrics alias
         command = Stream.concat(quorumArgs(), Stream.of(
                 "--client-metrics", "cm",
                 "--alter", "--add-config", "metrics=org.apache"));
         message = captureStandardMsg(run(command));
-        assertTrue(StringUtils.isBlank(message), message);
+        assertTrue(isBlank(message), message);
     }
 
     @ClusterTest
