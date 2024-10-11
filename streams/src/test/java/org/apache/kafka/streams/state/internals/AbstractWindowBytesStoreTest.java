@@ -27,7 +27,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -247,14 +246,14 @@ public abstract class AbstractWindowBytesStoreTest {
 
         final Map<Integer, Set<String>> entriesByKey = entriesByKey(changeLog, defaultStartTime);
 
-        assertEquals(Utils.mkSet("zero@0"), entriesByKey.get(0));
-        assertEquals(Utils.mkSet("one@1"), entriesByKey.get(1));
+        assertEquals(Set.of("zero@0"), entriesByKey.get(0));
+        assertEquals(Set.of("one@1"), entriesByKey.get(1));
         assertEquals(
-            Utils.mkSet("two@2", "two+1@3", "two+2@4", "two+3@5", "two+4@6", "two+5@7", "two+6@8"),
+            Set.of("two@2", "two+1@3", "two+2@4", "two+3@5", "two+4@6", "two+5@7", "two+6@8"),
             entriesByKey.get(2));
-        assertEquals(Utils.mkSet("three@2"), entriesByKey.get(3));
-        assertEquals(Utils.mkSet("four@4"), entriesByKey.get(4));
-        assertEquals(Utils.mkSet("five@5"), entriesByKey.get(5));
+        assertEquals(Set.of("three@2"), entriesByKey.get(3));
+        assertEquals(Set.of("four@4"), entriesByKey.get(4));
+        assertEquals(Set.of("five@5"), entriesByKey.get(5));
         assertNull(entriesByKey.get(6));
     }
 
@@ -638,12 +637,12 @@ public abstract class AbstractWindowBytesStoreTest {
         }
 
         final Map<Integer, Set<String>> entriesByKey = entriesByKey(changeLog, defaultStartTime);
-        assertEquals(Utils.mkSet("zero@0"), entriesByKey.get(0));
-        assertEquals(Utils.mkSet("one@1"), entriesByKey.get(1));
-        assertEquals(Utils.mkSet("two@2", "two+1@3", "two+2@4", "two+3@5", "two+4@6", "two+5@7", "two+6@8"), entriesByKey.get(2));
-        assertEquals(Utils.mkSet("three@2"), entriesByKey.get(3));
-        assertEquals(Utils.mkSet("four@4"), entriesByKey.get(4));
-        assertEquals(Utils.mkSet("five@5"), entriesByKey.get(5));
+        assertEquals(Set.of("zero@0"), entriesByKey.get(0));
+        assertEquals(Set.of("one@1"), entriesByKey.get(1));
+        assertEquals(Set.of("two@2", "two+1@3", "two+2@4", "two+3@5", "two+4@6", "two+5@7", "two+6@8"), entriesByKey.get(2));
+        assertEquals(Set.of("three@2"), entriesByKey.get(3));
+        assertEquals(Set.of("four@4"), entriesByKey.get(4));
+        assertEquals(Set.of("five@5"), entriesByKey.get(5));
         assertNull(entriesByKey.get(6));
     }
 
@@ -749,14 +748,14 @@ public abstract class AbstractWindowBytesStoreTest {
 
         final Map<Integer, Set<String>> entriesByKey = entriesByKey(changeLog, defaultStartTime);
 
-        assertEquals(Utils.mkSet("zero@0"), entriesByKey.get(0));
-        assertEquals(Utils.mkSet("one@1"), entriesByKey.get(1));
+        assertEquals(Set.of("zero@0"), entriesByKey.get(0));
+        assertEquals(Set.of("one@1"), entriesByKey.get(1));
         assertEquals(
-            Utils.mkSet("two@2", "two+1@3", "two+2@4", "two+3@5", "two+4@6", "two+5@7", "two+6@8"),
+            Set.of("two@2", "two+1@3", "two+2@4", "two+3@5", "two+4@6", "two+5@7", "two+6@8"),
             entriesByKey.get(2));
-        assertEquals(Utils.mkSet("three@2"), entriesByKey.get(3));
-        assertEquals(Utils.mkSet("four@4"), entriesByKey.get(4));
-        assertEquals(Utils.mkSet("five@5"), entriesByKey.get(5));
+        assertEquals(Set.of("three@2"), entriesByKey.get(3));
+        assertEquals(Set.of("four@4"), entriesByKey.get(4));
+        assertEquals(Set.of("five@5"), entriesByKey.get(5));
         assertNull(entriesByKey.get(6));
     }
 
@@ -818,7 +817,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
         final Map<Integer, Set<String>> entriesByKey = entriesByKey(changeLog, defaultStartTime);
 
-        assertEquals(Utils.mkSet("zero@0", "zero@0", "zero+@0", "zero++@0"), entriesByKey.get(0));
+        assertEquals(new HashSet<>(asList("zero@0", "zero@0", "zero+@0", "zero++@0")), entriesByKey.get(0));
     }
 
     @Test
