@@ -35,11 +35,11 @@
       "about": "The maximum time in milliseconds to wait for the response." },
     { "name": "MinBytes", "type": "int32", "versions": "0+",
       "about": "The minimum bytes to accumulate in the response." },
-    { "name": "MaxBytes", "type": "int32", "versions": "0+", "default": "0x7fffffff", "ignorable": true,
+    { "name": "MaxBytes", "type": "int32", "versions": "0+", "default": "0x7fffffff",
       "about": "The maximum bytes to fetch.  See KIP-74 for cases where this limit may not be honored." },
     { "name": "Topics", "type": "[]FetchTopic", "versions": "0+",
       "about": "The topics to fetch.", "fields": [
-      { "name": "TopicId", "type": "uuid", "versions": "0+", "ignorable": true, "about": "The unique topic ID."},
+      { "name": "TopicId", "type": "uuid", "versions": "0+", "about": "The unique topic ID."},
       { "name": "Partitions", "type": "[]FetchPartition", "versions": "0+",
         "about": "The partitions to fetch.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
@@ -57,9 +57,9 @@
         ]}
       ]}
     ]},
-    { "name": "ForgottenTopicsData", "type": "[]ForgottenTopic", "versions": "0+", "ignorable": false,
+    { "name": "ForgottenTopicsData", "type": "[]ForgottenTopic", "versions": "0+",
       "about": "The partitions to remove from this share session.", "fields": [
-      { "name": "TopicId", "type": "uuid", "versions": "0+", "ignorable": true, "about": "The unique topic ID."},
+      { "name": "TopicId", "type": "uuid", "versions": "0+", "about": "The unique topic ID."},
       { "name": "Partitions", "type": "[]int32", "versions": "0+",
         "about": "The partitions indexes to forget." }
     ]}
