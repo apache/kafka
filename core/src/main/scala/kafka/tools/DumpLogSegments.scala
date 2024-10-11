@@ -40,6 +40,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.generated.{ConsumerGroupCurrentMemberAssignmentKey, ConsumerGroupCurrentMemberAssignmentKeyJsonConverter, ConsumerGroupCurrentMemberAssignmentValue, ConsumerGroupCurrentMemberAssignmentValueJsonConverter, ConsumerGroupMemberMetadataKey, ConsumerGroupMemberMetadataKeyJsonConverter, ConsumerGroupMemberMetadataValue, ConsumerGroupMemberMetadataValueJsonConverter, ConsumerGroupMetadataKey, ConsumerGroupMetadataKeyJsonConverter, ConsumerGroupMetadataValue, ConsumerGroupMetadataValueJsonConverter, ConsumerGroupPartitionMetadataKey, ConsumerGroupPartitionMetadataKeyJsonConverter, ConsumerGroupPartitionMetadataValue, ConsumerGroupPartitionMetadataValueJsonConverter, ConsumerGroupTargetAssignmentMemberKey, ConsumerGroupTargetAssignmentMemberKeyJsonConverter, ConsumerGroupTargetAssignmentMemberValue, ConsumerGroupTargetAssignmentMemberValueJsonConverter, ConsumerGroupTargetAssignmentMetadataKey, ConsumerGroupTargetAssignmentMetadataKeyJsonConverter, ConsumerGroupTargetAssignmentMetadataValue, ConsumerGroupTargetAssignmentMetadataValueJsonConverter, GroupMetadataKey, GroupMetadataKeyJsonConverter, GroupMetadataValue, GroupMetadataValueJsonConverter, OffsetCommitKey, OffsetCommitKeyJsonConverter, OffsetCommitValue, OffsetCommitValueJsonConverter, ShareGroupCurrentMemberAssignmentKey, ShareGroupCurrentMemberAssignmentKeyJsonConverter, ShareGroupCurrentMemberAssignmentValue, ShareGroupCurrentMemberAssignmentValueJsonConverter, ShareGroupMemberMetadataKey, ShareGroupMemberMetadataKeyJsonConverter, ShareGroupMemberMetadataValue, ShareGroupMemberMetadataValueJsonConverter, ShareGroupMetadataKey, ShareGroupMetadataKeyJsonConverter, ShareGroupMetadataValue, ShareGroupMetadataValueJsonConverter, ShareGroupPartitionMetadataKey, ShareGroupPartitionMetadataKeyJsonConverter, ShareGroupPartitionMetadataValue, ShareGroupPartitionMetadataValueJsonConverter, ShareGroupStatePartitionMetadataKey, ShareGroupStatePartitionMetadataKeyJsonConverter, ShareGroupStatePartitionMetadataValue, ShareGroupStatePartitionMetadataValueJsonConverter, ShareGroupTargetAssignmentMemberKey, ShareGroupTargetAssignmentMemberKeyJsonConverter, ShareGroupTargetAssignmentMemberValue, ShareGroupTargetAssignmentMemberValueJsonConverter, ShareGroupTargetAssignmentMetadataKey, ShareGroupTargetAssignmentMetadataKeyJsonConverter, ShareGroupTargetAssignmentMetadataValue, ShareGroupTargetAssignmentMetadataValueJsonConverter}
 import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader.UnknownRecordTypeException
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde
+import org.apache.kafka.coordinator.share.ShareCoordinatorRecordSerde
 import org.apache.kafka.coordinator.share.generated.{ShareSnapshotKey, ShareSnapshotKeyJsonConverter, ShareSnapshotValue, ShareSnapshotValueJsonConverter, ShareUpdateKey, ShareUpdateKeyJsonConverter, ShareUpdateValue, ShareUpdateValueJsonConverter}
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
@@ -453,10 +454,6 @@ object DumpLogSegments {
           ShareGroupCurrentMemberAssignmentKeyJsonConverter.write(m, version)
         case m: ShareGroupStatePartitionMetadataKey =>
           ShareGroupStatePartitionMetadataKeyJsonConverter.write(m, version)
-        case m: ShareSnapshotKey =>
-          ShareSnapshotKeyJsonConverter.write(m, version)
-        case m: ShareUpdateKey =>
-          ShareUpdateKeyJsonConverter.write(m, version)
         case _ => throw new UnknownRecordTypeException(version)
       }
 
@@ -551,10 +548,6 @@ object DumpLogSegments {
           ShareGroupCurrentMemberAssignmentValueJsonConverter.write(m, version)
         case m: ShareGroupStatePartitionMetadataValue =>
           ShareGroupStatePartitionMetadataValueJsonConverter.write(m, version)
-        case m: ShareSnapshotValue =>
-          ShareSnapshotValueJsonConverter.write(m, version)
-        case m: ShareUpdateValue =>
-          ShareUpdateValueJsonConverter.write(m, version)
         case _ => throw new IllegalStateException(s"Message value ${message.getClass.getSimpleName} is not supported.")
       }
 
@@ -637,6 +630,68 @@ object DumpLogSegments {
     }
   }
 
+  // for test visibility
+  class ShareGroupStateMessageParser extends MessageParser[String, String] {
+    private val serde = new ShareCoordinatorRecordSerde()
+
+    private def prepareKey(message: Message, version: Short): String = {
+      val messageAsJson = message match {
+        case m: ShareSnapshotKey =>
+          ShareSnapshotKeyJsonConverter.write(m, version)
+        case m: ShareUpdateKey =>
+          ShareUpdateKeyJsonConverter.write(m, version)
+        case _ => throw new IllegalStateException(s"Message key ${message.getClass.getSimpleName} is not supported.")
+      }
+
+      jsonString(messageAsJson, version)
+    }
+
+    private def prepareValue(message: Message, version: Short): String = {
+      val messageAsJson = message match {
+        case m: ShareSnapshotValue =>
+          ShareSnapshotValueJsonConverter.write(m, version)
+        case m: ShareUpdateValue =>
+          ShareUpdateValueJsonConverter.write(m, version)
+        case _ => throw new IllegalStateException(s"Message value ${message.getClass.getSimpleName} is not supported.")
+      }
+
+      jsonString(messageAsJson, version)
+    }
+
+    private def jsonString(jsonNode: JsonNode, version: Short): String = {
+      val json = new ObjectNode(JsonNodeFactory.instance)
+      json.set("type", new TextNode(version.toString))
+      json.set("data", jsonNode)
+      json.toString
+    }
+
+    override def parse(record: Record): (Option[String], Option[String]) = {
+      if (!record.hasKey)
+        throw new RuntimeException(s"Failed to decode message at offset ${record.offset} using offset " +
+          "topic decoder (message had a missing key)")
+
+      try {
+        val r = serde.deserialize(record.key, record.value)
+        (
+          Some(prepareKey(r.key.message, r.key.version)),
+          Option(r.value).map(v => prepareValue(v.message, v.version)).orElse(Some("<DELETE>"))
+        )
+      } catch {
+        case e: UnknownRecordTypeException =>
+          (
+            Some(s"Unknown record type ${e.unknownType} at offset ${record.offset}, skipping."),
+            None
+          )
+
+        case e: Throwable =>
+          (
+            Some(s"Error at offset ${record.offset}, skipping. ${e.getMessage}"),
+            None
+          )
+      }
+    }
+  }
+
   private class DumpLogSegmentsOptions(args: Array[String]) extends CommandDefaultOptions(args) {
     private val printOpt = parser.accepts("print-data-log", "If set, printing the messages content when dumping data logs. Automatically set if any decoder option is specified.")
     private val verifyOpt = parser.accepts("verify-index-only", "If set, just verify the index log without printing its content.")
@@ -672,6 +727,8 @@ object DumpLogSegments {
     private val clusterMetadataOpt = parser.accepts("cluster-metadata-decoder", "If set, log data will be parsed as cluster metadata records.")
     private val remoteMetadataOpt = parser.accepts("remote-log-metadata-decoder", "If set, log data will be parsed as TopicBasedRemoteLogMetadataManager (RLMM) metadata records." + 
       " Instead, the value-decoder-class option can be used if a custom RLMM implementation is configured.")
+    private val shareStateOpt = parser.accepts("share-group-state-decoder", "If set, log data will be parsed as share group state data from the " +
+      "__share_group_state topic.")
     private val skipRecordMetadataOpt = parser.accepts("skip-record-metadata", "Whether to skip printing metadata for each record.")
     options = parser.parse(args : _*)
 
@@ -683,7 +740,9 @@ object DumpLogSegments {
       } else if (options.has(clusterMetadataOpt)) {
         new ClusterMetadataLogMessageParser
       } else if (options.has(remoteMetadataOpt)) {
-        new RemoteMetadataLogMessageParser  
+        new RemoteMetadataLogMessageParser
+      } else if (options.has(shareStateOpt)) {
+        new ShareGroupStateMessageParser
       } else {
         val valueDecoder = CoreUtils.createObject[org.apache.kafka.tools.api.Decoder[_]](options.valueOf(valueDecoderOpt))
         val keyDecoder = CoreUtils.createObject[org.apache.kafka.tools.api.Decoder[_]](options.valueOf(keyDecoderOpt))
@@ -696,7 +755,8 @@ object DumpLogSegments {
       options.has(clusterMetadataOpt) ||
       options.has(remoteMetadataOpt) ||
       options.has(valueDecoderOpt) ||
-      options.has(keyDecoderOpt)
+      options.has(keyDecoderOpt) ||
+      options.has(shareStateOpt)
 
     lazy val skipRecordMetadata: Boolean = options.has(skipRecordMetadataOpt)
     lazy val isDeepIteration: Boolean = options.has(deepIterationOpt) || shouldPrintDataLog
