@@ -41,6 +41,7 @@ import org.apache.kafka.connect.storage.AppliedConnectorConfig;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -92,7 +93,7 @@ public class WorkerCoordinatorTest {
     private final ConnectorTaskId taskId3x0 = new ConnectorTaskId(connectorId3, 0);
 
     private final String groupId = "test-group";
-    private final int sessionTimeoutMs = 10;
+    private final int sessionTimeoutMs = 30;
     private final int rebalanceTimeoutMs = 60;
     private final int heartbeatIntervalMs = 2;
     private final long retryBackoffMs = 100;
@@ -122,7 +123,7 @@ public class WorkerCoordinatorTest {
         );
     }
 
-    public void setup(ConnectProtocolCompatibility compatibility) {
+    public void setup(ConnectProtocolCompatibility compatibility, int rebalanceTimeoutMs) {
         LogContext logContext = new LogContext();
 
         this.time = new MockTime();
@@ -229,6 +230,10 @@ public class WorkerCoordinatorTest {
                 Collections.emptySet(),
                 Collections.emptySet()
         );
+    }
+
+    public void setup(ConnectProtocolCompatibility compatibility) {
+        setup(compatibility, rebalanceTimeoutMs);
     }
 
     @AfterEach
@@ -551,6 +556,29 @@ public class WorkerCoordinatorTest {
         verify(configStorage).snapshot();
     }
 
+    @ParameterizedTest
+    @MethodSource("mode")
+    public void testRevokeAssignmentsOnPollTimeoutExpiry(ConnectProtocolCompatibility compatibility) throws InterruptedException {
+        // We will create a new WorkerCoordinator object with a rebalance timeout smaller
+        // than session timeout. This might not happen in the real world, but it makes testing
+        // easier and the test non-flaky.
+        int smallRebalanceTimeout = 20;
+        setup(compatibility, smallRebalanceTimeout);
+        when(configStorage.snapshot()).thenReturn(configState1);
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+        client.prepareResponse(joinGroupFollowerResponse(1, "member", "leader", Errors.NONE));
+        client.prepareResponse(syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", configState1.offset(), Collections.emptyList(),
+            Collections.singletonList(taskId1x0), Errors.NONE));
+        coordinator.ensureActiveGroup();
+        coordinator.poll(0, () -> null);
+
+        time.sleep(smallRebalanceTimeout + 1);
+        // Rebalance timeout elapses while poll is never invoked causing a poll timeout expiry
+        TestUtils.waitForCondition(() -> rebalanceListener.numPollTimeoutExpirations == 1 && rebalanceListener.revokedCount == 1,
+            "Poll timeout expiry didn't revoke connectors and tasks in time.");
+    }
+
     private JoinGroupResponse joinGroupLeaderResponse(int generationId, String memberId,
                                                       Map<String, Long> configOffsets, Errors error) {
         List<JoinGroupResponseData.JoinGroupResponseMember> metadata = new ArrayList<>();
@@ -608,6 +636,8 @@ public class WorkerCoordinatorTest {
         public int revokedCount = 0;
         public int assignedCount = 0;
 
+        public int numPollTimeoutExpirations = 0;
+
         @Override
         public void onAssigned(ExtendedAssignment assignment, int generation) {
             this.assignment = assignment;
@@ -626,6 +656,8 @@ public class WorkerCoordinatorTest {
         }
 
         @Override
-        public void onPollTimeoutExpiry() {}
+        public void onPollTimeoutExpiry() {
+            this.numPollTimeoutExpirations++;
+        }
     }
 }

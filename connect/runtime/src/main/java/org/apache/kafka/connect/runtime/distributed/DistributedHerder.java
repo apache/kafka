@@ -1488,7 +1488,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 if (assignment.tasks().contains(id)) {
                     try (TickThreadStage stage = new TickThreadStage("restarting task " + id)) {
                         worker.stopAndAwaitTask(id);
-                        if (startTask(id))
+                        // It could happen that by the time the stop finishes, the task might not be assigned to this
+                        // worker
+                        if (assignment.tasks().contains(id) && startTask(id))
                             callback.onCompletion(null, null);
                         else
                             callback.onCompletion(new ConnectException("Failed to start task: " + id), null);
