@@ -1,10 +1,21 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.tools.consumer.group.share;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.NullNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.databind.node.TextNode;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.protocol.ApiMessage;
@@ -18,6 +29,12 @@ import org.apache.kafka.coordinator.share.generated.ShareUpdateKeyJsonConverter;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateValueJsonConverter;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.NullNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
+
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.ByteBuffer;
@@ -29,7 +46,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 /**
  * Formatter for records of in __share_group_state topic.
  */
-public class ShareRecordFormatter implements MessageFormatter {
+public class ShareGroupStateMessageFormatter implements MessageFormatter {
 
     private static final String VERSION = "version";
     private static final String DATA = "data";
@@ -114,7 +131,8 @@ public class ShareRecordFormatter implements MessageFormatter {
      * readToValueJson whose signature does not allow for passing keyversion.
      *
      * @param byteBuffer - Represents the raw data read from the topic
-     * @param keyVersion - Version of the key component of the data read from topic
+     * @param keyVersion - Version of the actual key component of the data read from topic
+     * @param valueVersion - Version of the actual value component of the data read from topic
      * @return JsonNode corresponding to the raw data value component
      */
     protected JsonNode readToValueJson(ByteBuffer byteBuffer, short keyVersion, short valueVersion) {
