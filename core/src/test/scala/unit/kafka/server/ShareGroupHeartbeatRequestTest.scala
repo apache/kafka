@@ -457,8 +457,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       true
     ).build()
 
-    TestUtils.waitForAllPartitionsMetadata(cluster.brokers().values().asScala.toSeq, "foo", 2)
-    TestUtils.waitForAllPartitionsMetadata(cluster.brokers().values().asScala.toSeq, "bar", 3)
+    cluster.waitForTopic("foo", 2)
+    cluster.waitForTopic("bar", 3)
 
     TestUtils.waitUntilTrue(() => {
       shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
