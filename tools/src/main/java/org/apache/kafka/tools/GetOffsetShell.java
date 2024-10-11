@@ -256,7 +256,11 @@ public class GetOffsetShell {
                 }
 
                 if (partitionInfo.offset() != ListOffsetsResponse.UNKNOWN_OFFSET) {
-                    partitionOffsets.put(partition, partitionInfo.offset());
+                    if (offsetSpec instanceof OffsetSpec.LatestSpec) {
+                        partitionOffsets.put(partition, partitionInfo.offset() - 1);
+                    } else {
+                        partitionOffsets.put(partition, partitionInfo.offset());
+                    }
                 }
             }
 
