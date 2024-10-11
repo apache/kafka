@@ -474,7 +474,7 @@ public class ClientMetricsManager implements AutoCloseable {
         return clientConnectionIdMap;
     }
 
-    private static final class ClientConnectionDisconnectListener implements ConnectionDisconnectListener {
+    private final class ClientConnectionDisconnectListener implements ConnectionDisconnectListener {
 
         private final Cache<Uuid, ClientMetricsInstance> clientInstanceCache;
         private final Map<String, Uuid> clientConnectionIdMap;
