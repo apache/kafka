@@ -640,7 +640,7 @@ object DumpLogSegments {
           ShareSnapshotKeyJsonConverter.write(m, version)
         case m: ShareUpdateKey =>
           ShareUpdateKeyJsonConverter.write(m, version)
-        case _ => throw new IllegalStateException(s"Message key ${message.getClass.getSimpleName} is not supported.")
+        case _ => throw new UnknownRecordTypeException(version)
       }
 
       jsonString(messageAsJson, version)
@@ -667,7 +667,7 @@ object DumpLogSegments {
 
     override def parse(record: Record): (Option[String], Option[String]) = {
       if (!record.hasKey)
-        throw new RuntimeException(s"Failed to decode message at offset ${record.offset} using offset " +
+        throw new RuntimeException(s"Failed to decode message at offset ${record.offset} using share group state " +
           "topic decoder (message had a missing key)")
 
       try {
