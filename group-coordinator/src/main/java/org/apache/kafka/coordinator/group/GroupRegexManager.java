@@ -220,7 +220,7 @@ public class GroupRegexManager {
             }
         }
         log.info("Completed evaluating regex {} in {} ms against {} topics. Matching topics found: {}",
-            pattern, (System.currentTimeMillis() - start), allTopics.size(), matchingTopics);
+            pattern, System.currentTimeMillis() - start, allTopics.size(), matchingTopics);
 
         return new Resolution.Builder()
             .withMatchingTopics(matchingTopics)
