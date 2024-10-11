@@ -22,8 +22,10 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -35,16 +37,12 @@ import static org.mockito.Mockito.verify;
 class TransactionStateManagerConfigTest {
     @Test
     void ShouldDefineAllConfigInConfigDef() {
-        Set<String> declaredConfigs = new HashSet<>();
-        for (Field field : TransactionStateManagerConfig.class.getDeclaredFields()) {
-            if (field.getName().endsWith("_CONFIG")) {
-                field.setAccessible(true);
-                assertDoesNotThrow(() -> declaredConfigs.add((String) field.get(null)));
-            }
-        }
-
-        Set<String> definedInConfigDef = TransactionStateManagerConfig.CONFIG_DEF.names();
-        assertEquals(declaredConfigs, definedInConfigDef);
+        Set<String> declaredConfigs = Arrays.stream(TransactionStateManagerConfig.class.getDeclaredFields())
+                .filter(field -> field.getName().endsWith("_CONFIG"))
+                .peek(field -> field.setAccessible(true))
+                .map(field -> assertDoesNotThrow(() -> (String) field.get(null)))
+                .collect(Collectors.toSet());
+        assertEquals(declaredConfigs,  TransactionStateManagerConfig.CONFIG_DEF.names());
     }
 
     @Test
