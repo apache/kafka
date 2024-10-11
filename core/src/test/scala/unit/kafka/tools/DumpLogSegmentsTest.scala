@@ -41,7 +41,7 @@ import org.apache.kafka.common.utils.{Exit, Utils}
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde
 import org.apache.kafka.coordinator.group.generated.{ConsumerGroupMemberMetadataValue, ConsumerGroupMetadataKey, ConsumerGroupMetadataValue, GroupMetadataKey, GroupMetadataValue}
-import org.apache.kafka.coordinator.share.generated.{ShareSnapshotKey, ShareSnapshotValue, ShareUpdateValue}
+import org.apache.kafka.coordinator.share.generated.{ShareSnapshotKey, ShareSnapshotValue, ShareUpdateKey, ShareUpdateValue}
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorRecordSerde}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.MetadataRecordSerde
@@ -987,7 +987,7 @@ class DumpLogSegmentsTest {
       ).getMessage
     )
 
-    // A valid key and value should work.
+    // A valid key and value should work (ShareSnapshot).
     assertEquals(
       (
         Some("{\"type\":\"0\",\"data\":{\"groupId\":\"gs1\",\"topicId\":\"Uj5wn_FqTXirEASvVZRY1w\",\"partition\":0}}"),
@@ -1012,6 +1012,33 @@ class DumpLogSegmentsTest {
               .setDeliveryCount(1)
           ).asJava),
           ShareCoordinator.SHARE_SNAPSHOT_RECORD_VALUE_VERSION)
+      ))
+    )
+
+    // A valid key and value should work (ShareUpdate).
+    assertEquals(
+      (
+        Some("{\"type\":\"1\",\"data\":{\"groupId\":\"gs1\",\"topicId\":\"Uj5wn_FqTXirEASvVZRY1w\",\"partition\":0}}"),
+        Some("{\"type\":\"0\",\"data\":{\"snapshotEpoch\":0,\"leaderEpoch\":0,\"startOffset\":0,\"stateBatches\":[{\"firstOffset\":0,\"lastOffset\":4,\"deliveryState\":2,\"deliveryCount\":1}]}}")
+      ),
+      parser.parse(serializedRecord(
+        new ApiMessageAndVersion(new ShareUpdateKey()
+          .setGroupId("gs1")
+          .setTopicId(Uuid.fromString("Uj5wn_FqTXirEASvVZRY1w"))
+          .setPartition(0),
+          ShareCoordinator.SHARE_UPDATE_RECORD_KEY_VERSION),
+        new ApiMessageAndVersion(new ShareUpdateValue()
+          .setSnapshotEpoch(0)
+          .setLeaderEpoch(0)
+          .setStartOffset(0)
+          .setStateBatches(List[ShareUpdateValue.StateBatch](
+            new ShareUpdateValue.StateBatch()
+              .setFirstOffset(0)
+              .setLastOffset(4)
+              .setDeliveryState(2)
+              .setDeliveryCount(1)
+          ).asJava),
+          0.toShort)
       ))
     )
 
@@ -1061,20 +1088,21 @@ class DumpLogSegmentsTest {
     assertEquals(
       (
         Some(
-          "Error at offset 0, skipping. Could not read record with version 0 from value's buffer due to: null."
+          "Error at offset 0, skipping. Could not read record with version 0 from value's buffer due to: " +
+          "non-nullable field stateBatches was serialized as null."
         ),
         None
       ),
       parser.parse(serializedRecord(
         new ApiMessageAndVersion(
-          new ShareSnapshotKey()
+          new ShareUpdateKey()
             .setGroupId("group")
             .setTopicId(Uuid.fromString("Uj5wn_FqTXirEASvVZRY1w"))
             .setPartition(0),
-          0.toShort
+          1.toShort
         ),
         new ApiMessageAndVersion(
-          new ShareUpdateValue(), // The value does correspond to the record id.
+          new ShareSnapshotValue(), // incorrect class to deserialize the snapshot update value
           0.toShort
         )
       ))
