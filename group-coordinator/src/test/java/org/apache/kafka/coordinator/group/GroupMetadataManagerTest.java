@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import com.google.re2j.Pattern;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.TopicPartition;
@@ -27,6 +28,7 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
+import org.apache.kafka.common.errors.InvalidRegularExpression;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
@@ -144,6 +146,7 @@ import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.PREPA
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.STABLE;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CONSUMER_GROUP_REBALANCES_SENSOR_NAME;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -194,14 +197,14 @@ public class GroupMetadataManagerTest {
                 .setRebalanceTimeoutMs(5000)));
         assertEquals("TopicPartitions must be empty when (re-)joining.", ex.getMessage());
 
-        // SubscribedTopicNames must be present and empty in the first request (epoch == 0).
+        // SubscribedTopicNames or SubscribedTopicRegex must be present and empty in the first request (epoch == 0).
         ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId("foo")
                 .setMemberEpoch(0)
                 .setRebalanceTimeoutMs(5000)
                 .setTopicPartitions(Collections.emptyList())));
-        assertEquals("SubscribedTopicNames must be set in first request.", ex.getMessage());
+        assertEquals("SubscribedTopicNames or SubscribedTopicRegex must be set in first request.", ex.getMessage());
 
         // MemberId must be non-empty in all requests except for the first one where it
         // could be empty (epoch != 0).
@@ -257,14 +260,38 @@ public class GroupMetadataManagerTest {
             .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .build();
         Exception ex;
-        // Regex not supported for now. This test will evolve to actually validate the regex when it's supported
+
+        // Subscribed topics or regex must be present
         ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId("foo")
                 .setMemberEpoch(0)
                 .setRebalanceTimeoutMs(5000)
-                .setSubscribedTopicRegex("t*")));
-        assertEquals("SubscribedTopicRegex is not supported yet.", ex.getMessage());
+                .setTopicPartitions(Collections.emptyList())));
+        assertEquals("SubscribedTopicNames or SubscribedTopicRegex must be set in first request.", ex.getMessage());
+
+        // Invalid RE2J regex
+        ex = assertThrows(InvalidRegularExpression.class, () -> context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId("foo")
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setTopicPartitions(Collections.emptyList())
+                .setSubscribedTopicRegex("\\h")));
+        assertEquals("SubscribedTopicsPattern \\h is not a valid regular expression.", ex.getMessage());
+
+        // Empty regex ignored
+        assignor.prepareGroupAssignment(new GroupAssignment(
+            Collections.emptyMap()
+        ));
+        assertDoesNotThrow(() -> context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId("foo")
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setTopicPartitions(Collections.emptyList())
+                .setSubscribedTopicNames(Collections.singletonList("topic1"))
+                .setSubscribedTopicRegex("")));
     }
 
     @Test

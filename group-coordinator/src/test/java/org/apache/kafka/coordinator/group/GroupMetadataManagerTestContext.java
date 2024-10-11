@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import com.google.re2j.Pattern;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.TopicPartition;
@@ -109,6 +110,7 @@ import java.util.stream.IntStream;
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
 import static org.apache.kafka.coordinator.group.Assertions.assertSyncGroupResponseEquals;
 import static org.apache.kafka.coordinator.group.GroupConfigManagerTest.createConfigManager;
+import static org.apache.kafka.coordinator.group.GroupRegexManagerTest.createPatternManager;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESULT;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupHeartbeatKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupJoinKey;
@@ -402,6 +404,7 @@ public class GroupMetadataManagerTestContext {
         private final SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
         private MetadataImage metadataImage;
         private GroupConfigManager groupConfigManager;
+        private GroupRegexManager groupRegexManager;
         private List<ConsumerGroupPartitionAssignor> consumerGroupAssignors = Collections.singletonList(new MockPartitionAssignor("range"));
         private final List<ConsumerGroupBuilder> consumerGroupBuilders = new ArrayList<>();
         private int consumerGroupMaxSize = Integer.MAX_VALUE;
@@ -487,6 +490,7 @@ public class GroupMetadataManagerTestContext {
             if (metadataImage == null) metadataImage = MetadataImage.EMPTY;
             if (consumerGroupAssignors == null) consumerGroupAssignors = Collections.emptyList();
             if (groupConfigManager == null) groupConfigManager = createConfigManager();
+            if (groupRegexManager == null) groupRegexManager = createPatternManager(logContext, timer, metadataImage);
 
             GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext(
                 time,
@@ -514,8 +518,10 @@ public class GroupMetadataManagerTestContext {
                     .withShareGroupAssignor(shareGroupAssignor)
                     .withShareGroupMaxSize(shareGroupMaxSize)
                     .withGroupConfigManager(groupConfigManager)
+                    .withGroupRegexManager(groupRegexManager)
                     .build(),
                 groupConfigManager,
+                groupRegexManager,
                 classicGroupInitialRebalanceDelayMs,
                 classicGroupNewMemberJoinTimeoutMs
             );
@@ -535,6 +541,7 @@ public class GroupMetadataManagerTestContext {
     final GroupCoordinatorMetricsShard metrics;
     final GroupMetadataManager groupMetadataManager;
     final GroupConfigManager groupConfigManager;
+    final GroupRegexManager groupRegexManager;
     final int classicGroupInitialRebalanceDelayMs;
     final int classicGroupNewMemberJoinTimeoutMs;
 
@@ -548,6 +555,7 @@ public class GroupMetadataManagerTestContext {
         GroupCoordinatorMetricsShard metrics,
         GroupMetadataManager groupMetadataManager,
         GroupConfigManager groupConfigManager,
+        GroupRegexManager groupRegexManager,
         int classicGroupInitialRebalanceDelayMs,
         int classicGroupNewMemberJoinTimeoutMs
     ) {
@@ -557,6 +565,7 @@ public class GroupMetadataManagerTestContext {
         this.metrics = metrics;
         this.groupMetadataManager = groupMetadataManager;
         this.groupConfigManager = groupConfigManager;
+        this.groupRegexManager = groupRegexManager;
         this.classicGroupInitialRebalanceDelayMs = classicGroupInitialRebalanceDelayMs;
         this.classicGroupNewMemberJoinTimeoutMs = classicGroupNewMemberJoinTimeoutMs;
         snapshotRegistry.idempotentCreateSnapshot(lastWrittenOffset);
@@ -749,6 +758,15 @@ public class GroupMetadataManagerTestContext {
         MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
             timer.timeout(consumerGroupSyncKey(groupId, memberId));
         assertNull(timeout);
+    }
+
+    public void assertRegexEvalRequested(
+        String groupId,
+        Pattern regex
+    ) {
+        assertTrue(
+            groupRegexManager.awaitingEval(groupId).contains(regex) ||
+                groupRegexManager.isResolved(groupId, regex));
     }
 
     ClassicGroup createClassicGroup(String groupId) {
