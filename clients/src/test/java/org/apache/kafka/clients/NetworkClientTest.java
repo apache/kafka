@@ -20,6 +20,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.ApiMessageType;
@@ -33,6 +34,7 @@ import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.message.PushTelemetryRequestData;
 import org.apache.kafka.common.message.PushTelemetryResponseData;
 import org.apache.kafka.common.network.NetworkReceive;
+import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
@@ -58,7 +60,9 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -81,12 +85,16 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
 
 public class NetworkClientTest {
 
@@ -338,6 +346,31 @@ public class NetworkClientTest {
 
         // various assertions
         assertTrue(client.isReady(node, time.milliseconds()));
+    }
+
+    @Test
+    public void testAuthenticationFailureInConnect() throws IOException {
+        Selector selector = mock(Selector.class);
+
+        SaslAuthenticationException authenticationException = new SaslAuthenticationException("auth failure");
+        doThrow(authenticationException).
+        when(selector).connect(eq(node.idString()), any(InetSocketAddress.class), anyInt(), anyInt());
+
+        AddressChangeHostResolver mockHostResolver = new AddressChangeHostResolver(
+            initialAddresses.toArray(new InetAddress[0]), newAddresses.toArray(new InetAddress[0]));
+
+        ClientTelemetrySender mockClientTelemetrySender = mock(ClientTelemetrySender.class);
+        when(mockClientTelemetrySender.timeToNextUpdate(anyLong())).thenReturn(0L);
+
+        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Integer.MAX_VALUE,
+            reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
+            defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
+            time, false, new ApiVersions(), null, new LogContext(), mockHostResolver, mockClientTelemetrySender,
+            MetadataRecoveryStrategy.NONE);
+
+        assertFalse(client.ready(node, time.milliseconds()));
+        assertTrue(client.connectionFailed(node));
+        assertEquals(authenticationException, metadataUpdater.failure);
     }
 
     @Test

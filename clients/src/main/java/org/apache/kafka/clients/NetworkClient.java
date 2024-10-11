@@ -1080,12 +1080,13 @@ public class NetworkClient implements KafkaClient {
                     new InetSocketAddress(address, node.port()),
                     this.socketSendBuffer,
                     this.socketReceiveBuffer);
-        } catch (IOException e) {
+        } catch (IOException | AuthenticationException e) {
             log.warn("Error connecting to node {}", node, e);
             // Attempt failed, we'll try again after the backoff
             connectionStates.disconnected(nodeConnectionId, now);
             // Notify metadata updater of the connection failure
-            metadataUpdater.handleServerDisconnect(now, nodeConnectionId, Optional.empty());
+            metadataUpdater.handleServerDisconnect(now, nodeConnectionId,
+                e instanceof AuthenticationException ? Optional.of((AuthenticationException) e) : Optional.empty());
         }
     }
 
