@@ -48,7 +48,6 @@ import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_CLIENT_TAGS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_RACK_AWARE_ASSIGNMENT_TAGS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_TASKS;
@@ -139,7 +138,7 @@ public class HighAvailabilityTaskAssignorTest {
     @MethodSource("parameter")
     public void shouldBeStickyForActiveAndStandbyTasksWhileWarmingUp(final String rackAwareStrategy,
                                                                      final boolean enableRackAwareTaskAssignor) {
-        final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
+        final Set<TaskId> allTaskIds = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
         final ClientState clientState1 = new ClientState(allTaskIds, emptySet(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 0L)), EMPTY_CLIENT_TAGS, 1,
             PID_1
         );
@@ -167,9 +166,9 @@ public class HighAvailabilityTaskAssignorTest {
             rackAwareStrategy
         );
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1, TASK_0_2)),
-            mkEntry(new Subtopology(1, null), mkSet(TASK_1_0, TASK_1_1, TASK_1_2)),
-            mkEntry(new Subtopology(2, null), mkSet(TASK_2_0, TASK_2_1, TASK_2_2))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2)),
+            mkEntry(new Subtopology(2, null), Set.of(TASK_2_0, TASK_2_1, TASK_2_2))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -196,7 +195,7 @@ public class HighAvailabilityTaskAssignorTest {
     @MethodSource("parameter")
     public void shouldSkipWarmupsWhenAcceptableLagIsMax(final String rackAwareStrategy,
                                                         final boolean enableRackAwareTaskAssignor) {
-        final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
+        final Set<TaskId> allTaskIds = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
         final ClientState clientState1 = new ClientState(allTaskIds, emptySet(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 0L)), EMPTY_CLIENT_TAGS, 1,
             PID_1
         );
@@ -224,9 +223,9 @@ public class HighAvailabilityTaskAssignorTest {
             rackAwareStrategy
         );
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1, TASK_0_2)),
-            mkEntry(new Subtopology(1, null), mkSet(TASK_1_0, TASK_1_1, TASK_1_2)),
-            mkEntry(new Subtopology(2, null), mkSet(TASK_2_0, TASK_2_1, TASK_2_2))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2)),
+            mkEntry(new Subtopology(2, null), Set.of(TASK_2_0, TASK_2_1, TASK_2_2))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -251,7 +250,7 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldAssignActiveStatefulTasksEvenlyOverClientsWhereNumberOfClientsIntegralDivisorOfNumberOfTasks(final String rackAwareStrategy,
                                                                                                                    final boolean enableRackAwareTaskAssignor,
                                                                                                                    final int maxSkew) {
-        final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
+        final Set<TaskId> allTaskIds = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
         final Map<TaskId, Long> lags = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L));
         final ClientState clientState1 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 1,
             PID_1
@@ -275,9 +274,9 @@ public class HighAvailabilityTaskAssignorTest {
             rackAwareStrategy
         );
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1, TASK_0_2)),
-            mkEntry(new Subtopology(1, null), mkSet(TASK_1_0, TASK_1_1, TASK_1_2)),
-            mkEntry(new Subtopology(2, null), mkSet(TASK_2_0, TASK_2_1, TASK_2_2))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2)),
+            mkEntry(new Subtopology(2, null), Set.of(TASK_2_0, TASK_2_1, TASK_2_2))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -306,7 +305,7 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldAssignActiveStatefulTasksEvenlyOverClientsWhereNumberOfThreadsIntegralDivisorOfNumberOfTasks(final String rackAwareStrategy,
                                                                                                                    final boolean enableRackAwareTaskAssignor,
                                                                                                                    final int maxSkew) {
-        final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
+        final Set<TaskId> allTaskIds = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
         final Map<TaskId, Long> lags = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L));
         final ClientState clientState1 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 3,
             PID_1
@@ -330,9 +329,9 @@ public class HighAvailabilityTaskAssignorTest {
             rackAwareStrategy
         );
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1, TASK_0_2)),
-            mkEntry(new Subtopology(1, null), mkSet(TASK_1_0, TASK_1_1, TASK_1_2)),
-            mkEntry(new Subtopology(2, null), mkSet(TASK_2_0, TASK_2_1, TASK_2_2))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2)),
+            mkEntry(new Subtopology(2, null), Set.of(TASK_2_0, TASK_2_1, TASK_2_2))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -362,7 +361,7 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldAssignActiveStatefulTasksEvenlyOverClientsWhereNumberOfClientsNotIntegralDivisorOfNumberOfTasks(final String rackAwareStrategy,
                                                                                                                       final boolean enableRackAwareTaskAssignor,
                                                                                                                       final int maxSkew) {
-        final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
+        final Set<TaskId> allTaskIds = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
         final Map<TaskId, Long> lags = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L));
         final ClientState clientState1 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 1,
             PID_1
@@ -383,9 +382,9 @@ public class HighAvailabilityTaskAssignorTest {
             rackAwareStrategy
         );
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1, TASK_0_2)),
-            mkEntry(new Subtopology(1, null), mkSet(TASK_1_0, TASK_1_1, TASK_1_2)),
-            mkEntry(new Subtopology(2, null), mkSet(TASK_2_0, TASK_2_1, TASK_2_2))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2)),
+            mkEntry(new Subtopology(2, null), Set.of(TASK_2_0, TASK_2_1, TASK_2_2))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -410,7 +409,7 @@ public class HighAvailabilityTaskAssignorTest {
     @MethodSource("parameter")
     public void shouldAssignActiveStatefulTasksEvenlyOverUnevenlyDistributedStreamThreads(final String rackAwareStrategy,
                                                                                           final boolean enableRackAwareTaskAssignor) {
-        final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2);
+        final Set<TaskId> allTaskIds = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2);
         final Map<TaskId, Long> lags = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L));
         final ClientState clientState1 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 1,
             PID_1
@@ -434,8 +433,8 @@ public class HighAvailabilityTaskAssignorTest {
             rackAwareStrategy
         );
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1, TASK_0_2)),
-            mkEntry(new Subtopology(1, null), mkSet(TASK_1_0, TASK_1_1, TASK_1_2))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -468,7 +467,7 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldAssignActiveStatefulTasksEvenlyOverClientsWithMoreClientsThanTasks(final String rackAwareStrategy,
                                                                                          final boolean enableRackAwareTaskAssignor,
                                                                                          final int maxSkew) {
-        final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1);
+        final Set<TaskId> allTaskIds = Set.of(TASK_0_0, TASK_0_1);
         final Map<TaskId, Long> lags = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L));
         final ClientState clientState1 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 1,
             PID_1
@@ -492,7 +491,7 @@ public class HighAvailabilityTaskAssignorTest {
             rackAwareStrategy
         );
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -518,7 +517,7 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldAssignActiveStatefulTasksEvenlyOverClientsAndStreamThreadsWithEqualStreamThreadsPerClientAsTasks(final String rackAwareStrategy,
                                                                                                                        final boolean enableRackAwareTaskAssignor,
                                                                                                                        final int maxSkew) {
-        final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
+        final Set<TaskId> allTaskIds = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
         final Map<TaskId, Long> lags = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L));
         final ClientState clientState1 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 9,
             PID_1
@@ -542,9 +541,9 @@ public class HighAvailabilityTaskAssignorTest {
             rackAwareStrategy
         );
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1, TASK_0_2)),
-            mkEntry(new Subtopology(1, null), mkSet(TASK_1_0, TASK_1_1, TASK_1_2)),
-            mkEntry(new Subtopology(2, null), mkSet(TASK_2_0, TASK_2_1, TASK_2_2))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2)),
+            mkEntry(new Subtopology(2, null), Set.of(TASK_2_0, TASK_2_1, TASK_2_2))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -573,7 +572,7 @@ public class HighAvailabilityTaskAssignorTest {
     @MethodSource("parameter")
     public void shouldAssignWarmUpTasksIfStatefulActiveTasksBalancedOverStreamThreadsButNotOverClients(final String rackAwareStrategy,
                                                                                                        final boolean enableRackAwareTaskAssignor) {
-        final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_1_0, TASK_1_1);
+        final Set<TaskId> allTaskIds = Set.of(TASK_0_0, TASK_0_1, TASK_1_0, TASK_1_1);
         final Map<TaskId, Long> lagsForCaughtUpClient = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 0L));
         final Map<TaskId, Long> lagsForNotCaughtUpClient =
             allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> Long.MAX_VALUE));
@@ -600,8 +599,8 @@ public class HighAvailabilityTaskAssignorTest {
             rackAwareStrategy
         );
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1)),
-            mkEntry(new Subtopology(1, null), mkSet(TASK_1_0, TASK_1_1))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -626,14 +625,14 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldEvenlyAssignActiveStatefulTasksIfClientsAreWarmedUpToBalanceTaskOverClients(final String rackAwareStrategy,
                                                                                                   final boolean enableRackAwareTaskAssignor,
                                                                                                   final int maxSkew) {
-        final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_1_0, TASK_1_1);
+        final Set<TaskId> allTaskIds = Set.of(TASK_0_0, TASK_0_1, TASK_1_0, TASK_1_1);
 
         // If RackAwareTaskAssignor is enabled, TASK_1_1 is assigned ProcessId_2
         final TaskId warmupTaskId1 = enableRackAwareTaskAssignor ? TASK_1_1 : TASK_0_1;
         // If RackAwareTaskAssignor is enabled, TASK_0_1 is assigned ProcessId_3
         final TaskId warmupTaskId2 = enableRackAwareTaskAssignor ? TASK_0_1 : TASK_1_0;
-        final Set<TaskId> warmedUpTaskIds1 = mkSet(warmupTaskId1);
-        final Set<TaskId> warmedUpTaskIds2 = mkSet(warmupTaskId2);
+        final Set<TaskId> warmedUpTaskIds1 = Set.of(warmupTaskId1);
+        final Set<TaskId> warmedUpTaskIds2 = Set.of(warmupTaskId2);
         final Map<TaskId, Long> lagsForCaughtUpClient = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 0L));
         final Map<TaskId, Long> lagsForWarmedUpClient1 =
             allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> Long.MAX_VALUE));
@@ -665,8 +664,8 @@ public class HighAvailabilityTaskAssignorTest {
             rackAwareStrategy
         );
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1)),
-            mkEntry(new Subtopology(1, null), mkSet(TASK_1_0, TASK_1_1))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -691,7 +690,7 @@ public class HighAvailabilityTaskAssignorTest {
     @MethodSource("parameter")
     public void shouldAssignActiveStatefulTasksEvenlyOverStreamThreadsButBestEffortOverClients(final String rackAwareStrategy,
                                                                                                final boolean enableRackAwareTaskAssignor) {
-        final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
+        final Set<TaskId> allTaskIds = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
         final Map<TaskId, Long> lags = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L));
         final ClientState clientState1 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 6,
             PID_1
@@ -712,9 +711,9 @@ public class HighAvailabilityTaskAssignorTest {
             rackAwareStrategy
         );
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1, TASK_0_2)),
-            mkEntry(new Subtopology(1, null), mkSet(TASK_1_0, TASK_1_1, TASK_1_2)),
-            mkEntry(new Subtopology(2, null), mkSet(TASK_2_0, TASK_2_1, TASK_2_2))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2)),
+            mkEntry(new Subtopology(2, null), Set.of(TASK_2_0, TASK_2_1, TASK_2_2))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -741,7 +740,7 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldComputeNewAssignmentIfThereAreUnassignedActiveTasks(final String rackAwareStrategy,
                                                                           final boolean enableRackAwareTaskAssignor,
                                                                           final int maxSkew) {
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1);
+        final Set<TaskId> allTasks = Set.of(TASK_0_0, TASK_0_1);
         final ClientState client1 = new ClientState(singleton(TASK_0_0), emptySet(), singletonMap(TASK_0_0, 0L), EMPTY_CLIENT_TAGS, 1,
             PID_1
         );
@@ -749,7 +748,7 @@ public class HighAvailabilityTaskAssignorTest {
 
         final AssignmentConfigs configs = getConfigWithoutStandbys(rackAwareStrategy);
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -774,8 +773,8 @@ public class HighAvailabilityTaskAssignorTest {
     @ParameterizedTest
     @MethodSource("parameter")
     public void shouldComputeNewAssignmentIfThereAreUnassignedStandbyTasks(final String rackAwareStrategy, final boolean enableRackAwareTaskAssignor, final int maxSkew) {
-        final Set<TaskId> allTasks = mkSet(TASK_0_0);
-        final Set<TaskId> statefulTasks = mkSet(TASK_0_0);
+        final Set<TaskId> allTasks = Set.of(TASK_0_0);
+        final Set<TaskId> statefulTasks = Set.of(TASK_0_0);
         final ClientState client1 = new ClientState(singleton(TASK_0_0), emptySet(), singletonMap(TASK_0_0, 0L), EMPTY_CLIENT_TAGS, 1,
             PID_1
         );
@@ -786,7 +785,7 @@ public class HighAvailabilityTaskAssignorTest {
 
         final AssignmentConfigs configs = getConfigWithStandbys(rackAwareStrategy);
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -809,8 +808,8 @@ public class HighAvailabilityTaskAssignorTest {
     @ParameterizedTest
     @MethodSource("parameter")
     public void shouldComputeNewAssignmentIfActiveTasksWasNotOnCaughtUpClient(final String rackAwareStrategy, final boolean enableRackAwareTaskAssignor, final int maxSkew) {
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1);
-        final Set<TaskId> statefulTasks = mkSet(TASK_0_0);
+        final Set<TaskId> allTasks = Set.of(TASK_0_0, TASK_0_1);
+        final Set<TaskId> statefulTasks = Set.of(TASK_0_0);
         final ClientState client1 = new ClientState(singleton(TASK_0_0), emptySet(), singletonMap(TASK_0_0, 500L), EMPTY_CLIENT_TAGS, 1,
             PID_1
         );
@@ -824,7 +823,7 @@ public class HighAvailabilityTaskAssignorTest {
 
         final AssignmentConfigs configs = getConfigWithoutStandbys(rackAwareStrategy);
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -847,8 +846,8 @@ public class HighAvailabilityTaskAssignorTest {
     @ParameterizedTest
     @MethodSource("parameter")
     public void shouldAssignToMostCaughtUpIfActiveTasksWasNotOnCaughtUpClient(final String rackAwareStrategy, final boolean enableRackAwareTaskAssignor, final int maxSkew) {
-        final Set<TaskId> allTasks = mkSet(TASK_0_0);
-        final Set<TaskId> statefulTasks = mkSet(TASK_0_0);
+        final Set<TaskId> allTasks = Set.of(TASK_0_0);
+        final Set<TaskId> statefulTasks = Set.of(TASK_0_0);
         final ClientState client1 = new ClientState(emptySet(), emptySet(), singletonMap(TASK_0_0, Long.MAX_VALUE), EMPTY_CLIENT_TAGS, 1,
             PID_1
         );
@@ -866,7 +865,7 @@ public class HighAvailabilityTaskAssignorTest {
 
         final AssignmentConfigs configs = getConfigWithStandbys(rackAwareStrategy);
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -893,19 +892,19 @@ public class HighAvailabilityTaskAssignorTest {
     @ParameterizedTest
     @MethodSource("parameter")
     public void shouldAssignStandbysForStatefulTasks(final String rackAwareStrategy, final boolean enableRackAwareTaskAssignor) {
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1);
-        final Set<TaskId> statefulTasks = mkSet(TASK_0_0, TASK_0_1);
+        final Set<TaskId> allTasks = Set.of(TASK_0_0, TASK_0_1);
+        final Set<TaskId> statefulTasks = Set.of(TASK_0_0, TASK_0_1);
 
-        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0), statefulTasks,
+        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(Set.of(TASK_0_0), statefulTasks,
             PID_1
         );
-        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_1), statefulTasks,
+        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(Set.of(TASK_0_1), statefulTasks,
             PID_2
         );
 
         final AssignmentConfigs configs = getConfigWithStandbys(rackAwareStrategy);
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -914,10 +913,10 @@ public class HighAvailabilityTaskAssignorTest {
             new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, rackAwareTaskAssignor, configs);
 
 
-        assertThat(client1.activeTasks(), equalTo(mkSet(TASK_0_0)));
-        assertThat(client2.activeTasks(), equalTo(mkSet(TASK_0_1)));
-        assertThat(client1.standbyTasks(), equalTo(mkSet(TASK_0_1)));
-        assertThat(client2.standbyTasks(), equalTo(mkSet(TASK_0_0)));
+        assertThat(client1.activeTasks(), equalTo(Set.of(TASK_0_0)));
+        assertThat(client2.activeTasks(), equalTo(Set.of(TASK_0_1)));
+        assertThat(client1.standbyTasks(), equalTo(Set.of(TASK_0_1)));
+        assertThat(client2.standbyTasks(), equalTo(Set.of(TASK_0_0)));
         assertThat(probingRebalanceNeeded, is(false));
 
         verifyTaskPlacementWithRackAwareAssignor(rackAwareTaskAssignor, allTasks, clientStates, true, enableRackAwareTaskAssignor);
@@ -926,7 +925,7 @@ public class HighAvailabilityTaskAssignorTest {
     @ParameterizedTest
     @MethodSource("parameter")
     public void shouldNotAssignStandbysForStatelessTasks(final String rackAwareStrategy, final boolean enableRackAwareTaskAssignor) {
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1);
+        final Set<TaskId> allTasks = Set.of(TASK_0_0, TASK_0_1);
         final Set<TaskId> statefulTasks = EMPTY_TASKS;
 
         final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks,
@@ -940,7 +939,7 @@ public class HighAvailabilityTaskAssignorTest {
 
         final AssignmentConfigs configs = getConfigWithStandbys(rackAwareStrategy);
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -960,9 +959,9 @@ public class HighAvailabilityTaskAssignorTest {
     @MethodSource("parameter")
     public void shouldAssignWarmupReplicasEvenIfNoStandbyReplicasConfigured(final String rackAwareStrategy,
                                                                             final boolean enableRackAwareTaskAssignor) {
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1);
-        final Set<TaskId> statefulTasks = mkSet(TASK_0_0, TASK_0_1);
-        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_1), statefulTasks,
+        final Set<TaskId> allTasks = Set.of(TASK_0_0, TASK_0_1);
+        final Set<TaskId> statefulTasks = Set.of(TASK_0_0, TASK_0_1);
+        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(Set.of(TASK_0_0, TASK_0_1), statefulTasks,
             PID_1
         );
         final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks,
@@ -973,7 +972,7 @@ public class HighAvailabilityTaskAssignorTest {
 
         final AssignmentConfigs configs = getConfigWithoutStandbys(rackAwareStrategy);
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -981,7 +980,7 @@ public class HighAvailabilityTaskAssignorTest {
             new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, rackAwareTaskAssignor, configs);
 
 
-        assertThat(client1.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
+        assertThat(client1.activeTasks(), equalTo(Set.of(TASK_0_0, TASK_0_1)));
         assertThat(client2.standbyTaskCount(), equalTo(1));
         assertHasNoStandbyTasks(client1);
         assertHasNoActiveTasks(client2);
@@ -995,9 +994,9 @@ public class HighAvailabilityTaskAssignorTest {
     @MethodSource("parameter")
     public void shouldNotAssignMoreThanMaxWarmupReplicas(final String rackAwareStrategy,
                                                          final boolean enableRackAwareTaskAssignor) {
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
-        final Set<TaskId> statefulTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
-        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3), statefulTasks,
+        final Set<TaskId> allTasks = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
+        final Set<TaskId> statefulTasks = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
+        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3), statefulTasks,
             PID_1
         );
         final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks,
@@ -1017,7 +1016,7 @@ public class HighAvailabilityTaskAssignorTest {
             rackAwareStrategy
         );
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -1030,7 +1029,7 @@ public class HighAvailabilityTaskAssignorTest {
         );
 
 
-        assertThat(client1.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)));
+        assertThat(client1.activeTasks(), equalTo(Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)));
         assertThat(client2.standbyTaskCount(), equalTo(1));
         assertHasNoStandbyTasks(client1);
         assertHasNoActiveTasks(client2);
@@ -1043,9 +1042,9 @@ public class HighAvailabilityTaskAssignorTest {
     @MethodSource("parameter")
     public void shouldNotAssignWarmupAndStandbyToTheSameClient(final String rackAwareStrategy,
                                                                final boolean enableRackAwareTaskAssignor) {
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
-        final Set<TaskId> statefulTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
-        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3), statefulTasks,
+        final Set<TaskId> allTasks = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
+        final Set<TaskId> statefulTasks = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
+        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3), statefulTasks,
             PID_1
         );
         final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks,
@@ -1065,7 +1064,7 @@ public class HighAvailabilityTaskAssignorTest {
             rackAwareStrategy
         );
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -1077,8 +1076,8 @@ public class HighAvailabilityTaskAssignorTest {
             configs
         );
 
-        assertThat(client1.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)));
-        assertThat(client2.standbyTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)));
+        assertThat(client1.activeTasks(), equalTo(Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)));
+        assertThat(client2.standbyTasks(), equalTo(Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)));
         assertHasNoStandbyTasks(client1);
         assertHasNoActiveTasks(client2);
         assertThat(probingRebalanceNeeded, is(true));
@@ -1090,9 +1089,9 @@ public class HighAvailabilityTaskAssignorTest {
     @MethodSource("parameter")
     public void shouldNotAssignAnyStandbysWithInsufficientCapacity(final String rackAwareStrategy,
                                                                    final boolean enableRackAwareTaskAssignor) {
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1);
-        final Set<TaskId> statefulTasks = mkSet(TASK_0_0, TASK_0_1);
-        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_1), statefulTasks,
+        final Set<TaskId> allTasks = Set.of(TASK_0_0, TASK_0_1);
+        final Set<TaskId> statefulTasks = Set.of(TASK_0_0, TASK_0_1);
+        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(Set.of(TASK_0_0, TASK_0_1), statefulTasks,
             PID_1
         );
 
@@ -1100,14 +1099,14 @@ public class HighAvailabilityTaskAssignorTest {
 
         final AssignmentConfigs configs = getConfigWithStandbys(rackAwareStrategy);
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
         final boolean probingRebalanceNeeded =
             new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, rackAwareTaskAssignor, configs);
 
-        assertThat(client1.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
+        assertThat(client1.activeTasks(), equalTo(Set.of(TASK_0_0, TASK_0_1)));
         assertHasNoStandbyTasks(client1);
         assertThat(probingRebalanceNeeded, is(false));
 
@@ -1118,8 +1117,8 @@ public class HighAvailabilityTaskAssignorTest {
     @MethodSource("parameter")
     public void shouldAssignActiveTasksToNotCaughtUpClientIfNoneExist(final String rackAwareStrategy,
                                                                       final boolean enableRackAwareTaskAssignor) {
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1);
-        final Set<TaskId> statefulTasks = mkSet(TASK_0_0, TASK_0_1);
+        final Set<TaskId> allTasks = Set.of(TASK_0_0, TASK_0_1);
+        final Set<TaskId> statefulTasks = Set.of(TASK_0_0, TASK_0_1);
         final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks,
             PID_1
         );
@@ -1128,13 +1127,13 @@ public class HighAvailabilityTaskAssignorTest {
 
         final AssignmentConfigs configs = getConfigWithStandbys(rackAwareStrategy);
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
         final boolean probingRebalanceNeeded =
             new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, rackAwareTaskAssignor, configs);
-        assertThat(client1.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
+        assertThat(client1.activeTasks(), equalTo(Set.of(TASK_0_0, TASK_0_1)));
         assertHasNoStandbyTasks(client1);
         assertThat(probingRebalanceNeeded, is(false));
 
@@ -1145,8 +1144,8 @@ public class HighAvailabilityTaskAssignorTest {
     @MethodSource("parameter")
     public void shouldNotAssignMoreThanMaxWarmupReplicasWithStandbys(final String rackAwareStrategy,
                                                                      final boolean enableRackAwareTaskAssignor) {
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
-        final Set<TaskId> statefulTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
+        final Set<TaskId> allTasks = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
+        final Set<TaskId> statefulTasks = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
         final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(statefulTasks, statefulTasks,
             PID_1
         );
@@ -1161,7 +1160,7 @@ public class HighAvailabilityTaskAssignorTest {
 
         final AssignmentConfigs configs = getConfigWithStandbys(rackAwareStrategy);
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -1185,9 +1184,9 @@ public class HighAvailabilityTaskAssignorTest {
     @MethodSource("parameter")
     public void shouldDistributeStatelessTasksToBalanceTotalTaskLoad(final String rackAwareStrategy,
                                                                      final boolean enableRackAwareTaskAssignor) {
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2);
-        final Set<TaskId> statefulTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
-        final Set<TaskId> statelessTasks = mkSet(TASK_1_0, TASK_1_1, TASK_1_2);
+        final Set<TaskId> allTasks = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2);
+        final Set<TaskId> statefulTasks = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
+        final Set<TaskId> statelessTasks = Set.of(TASK_1_0, TASK_1_1, TASK_1_2);
 
         final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(statefulTasks, statefulTasks,
             PID_1
@@ -1200,8 +1199,8 @@ public class HighAvailabilityTaskAssignorTest {
 
         final AssignmentConfigs configs = getConfigWithStandbys(rackAwareStrategy);
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)),
-            mkEntry(new Subtopology(1, null), mkSet(TASK_1_0, TASK_1_1, TASK_1_2))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -1233,7 +1232,7 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldDistributeStatefulActiveTasksToAllClients(final String rackAwareStrategy,
                                                                 final boolean enableRackAwareTaskAssignor) {
         final Set<TaskId> allTasks =
-            mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2, TASK_1_3, TASK_2_0); // 9 total
+            Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2, TASK_1_3, TASK_2_0); // 9 total
         final Map<TaskId, Long> allTaskLags = allTasks.stream().collect(Collectors.toMap(t -> t, t -> 0L));
         final Set<TaskId> statefulTasks = new HashSet<>(allTasks);
         final ClientState client1 = new ClientState(emptySet(), emptySet(), allTaskLags, EMPTY_CLIENT_TAGS, 100);
@@ -1244,9 +1243,9 @@ public class HighAvailabilityTaskAssignorTest {
 
         final AssignmentConfigs configs = getConfigWithoutStandbys(rackAwareStrategy);
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)),
-            mkEntry(new Subtopology(1, null), mkSet(TASK_1_0, TASK_1_1, TASK_1_2, TASK_1_3)),
-            mkEntry(new Subtopology(2, null), mkSet(TASK_2_0))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2, TASK_1_3)),
+            mkEntry(new Subtopology(2, null), Set.of(TASK_2_0))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -1265,10 +1264,10 @@ public class HighAvailabilityTaskAssignorTest {
     @MethodSource("parameter")
     public void shouldReturnFalseIfPreviousAssignmentIsReused(final String rackAwareStrategy,
                                                               final boolean enableRackAwareTaskAssignor) {
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
+        final Set<TaskId> allTasks = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
         final Set<TaskId> statefulTasks = new HashSet<>(allTasks);
-        final Set<TaskId> caughtUpTasks1 = enableRackAwareTaskAssignor ? mkSet(TASK_0_0, TASK_0_3) : mkSet(TASK_0_0, TASK_0_2);
-        final Set<TaskId> caughtUpTasks2 = enableRackAwareTaskAssignor ? mkSet(TASK_0_1, TASK_0_2) : mkSet(TASK_0_1, TASK_0_3);
+        final Set<TaskId> caughtUpTasks1 = enableRackAwareTaskAssignor ? Set.of(TASK_0_0, TASK_0_3) : Set.of(TASK_0_0, TASK_0_2);
+        final Set<TaskId> caughtUpTasks2 = enableRackAwareTaskAssignor ? Set.of(TASK_0_1, TASK_0_2) : Set.of(TASK_0_1, TASK_0_3);
         final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(caughtUpTasks1, statefulTasks,
             PID_1
         );
@@ -1280,7 +1279,7 @@ public class HighAvailabilityTaskAssignorTest {
 
         final AssignmentConfigs configs = getConfigWithoutStandbys(rackAwareStrategy);
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -1298,7 +1297,7 @@ public class HighAvailabilityTaskAssignorTest {
     @MethodSource("parameter")
     public void shouldReturnFalseIfNoWarmupTasksAreAssigned(final String rackAwareStrategy,
                                                             final boolean enableRackAwareTaskAssignor) {
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
+        final Set<TaskId> allTasks = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
         final Set<TaskId> statefulTasks = EMPTY_TASKS;
         final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks,
             PID_1
@@ -1311,7 +1310,7 @@ public class HighAvailabilityTaskAssignorTest {
 
         final AssignmentConfigs configs = getConfigWithoutStandbys(rackAwareStrategy);
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -1326,8 +1325,8 @@ public class HighAvailabilityTaskAssignorTest {
     @ParameterizedTest
     @MethodSource("parameter")
     public void shouldReturnTrueIfWarmupTasksAreAssigned(final String rackAwareStrategy, final boolean enableRackAwareTaskAssignor) {
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1);
-        final Set<TaskId> statefulTasks = mkSet(TASK_0_0, TASK_0_1);
+        final Set<TaskId> allTasks = Set.of(TASK_0_0, TASK_0_1);
+        final Set<TaskId> statefulTasks = Set.of(TASK_0_0, TASK_0_1);
         final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(allTasks, statefulTasks,
             PID_1
         );
@@ -1337,7 +1336,7 @@ public class HighAvailabilityTaskAssignorTest {
 
         final AssignmentConfigs configs = getConfigWithoutStandbys(rackAwareStrategy);
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -1354,7 +1353,7 @@ public class HighAvailabilityTaskAssignorTest {
     @MethodSource("parameter")
     public void shouldDistributeStatelessTasksEvenlyOverClientsWithEqualStreamThreadsPerClientAsTasksAndNoStatefulTasks(final String rackAwareStrategy,
                                                                                                                         final boolean enableRackAwareTaskAssignor) {
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2);
+        final Set<TaskId> allTasks = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2);
         final Set<TaskId> statefulTasks = EMPTY_TASKS;
         final Set<TaskId> statelessTasks = new HashSet<>(allTasks);
 
@@ -1376,8 +1375,8 @@ public class HighAvailabilityTaskAssignorTest {
             rackAwareStrategy
         );
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)),
-            mkEntry(new Subtopology(1, null), mkSet(TASK_1_0, TASK_1_1, TASK_1_2))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -1406,7 +1405,7 @@ public class HighAvailabilityTaskAssignorTest {
     @MethodSource("parameter")
     public void shouldDistributeStatelessTasksEvenlyOverClientsWithLessStreamThreadsPerClientAsTasksAndNoStatefulTasks(final String rackAwareStrategy,
                                                                                                                        final boolean enableRackAwareTaskAssignor) {
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2);
+        final Set<TaskId> allTasks = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2);
         final Set<TaskId> statefulTasks = EMPTY_TASKS;
         final Set<TaskId> statelessTasks = new HashSet<>(allTasks);
 
@@ -1428,8 +1427,8 @@ public class HighAvailabilityTaskAssignorTest {
             rackAwareStrategy
         );
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)),
-            mkEntry(new Subtopology(1, null), mkSet(TASK_1_0, TASK_1_1, TASK_1_2))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -1458,7 +1457,7 @@ public class HighAvailabilityTaskAssignorTest {
     @MethodSource("parameter")
     public void shouldDistributeStatelessTasksEvenlyOverClientsWithUnevenlyDistributedStreamThreadsAndNoStatefulTasks(final String rackAwareStrategy,
                                                                                                                       final boolean enableRackAwareTaskAssignor) {
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2);
+        final Set<TaskId> allTasks = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2);
         final Set<TaskId> statefulTasks = EMPTY_TASKS;
         final Set<TaskId> statelessTasks = new HashSet<>(allTasks);
 
@@ -1480,8 +1479,8 @@ public class HighAvailabilityTaskAssignorTest {
             rackAwareStrategy
         );
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)),
-            mkEntry(new Subtopology(1, null), mkSet(TASK_1_0, TASK_1_1, TASK_1_2))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -1510,7 +1509,7 @@ public class HighAvailabilityTaskAssignorTest {
     @MethodSource("parameter")
     public void shouldDistributeStatelessTasksEvenlyWithPreviousAssignmentAndNoStatefulTasks(final String rackAwareStrategy,
                                                                                              final boolean enableRackAwareTaskAssignor) {
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2);
+        final Set<TaskId> allTasks = Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2);
         final Set<TaskId> statefulTasks = EMPTY_TASKS;
         final Set<TaskId> statelessTasks = new HashSet<>(allTasks);
 
@@ -1532,8 +1531,8 @@ public class HighAvailabilityTaskAssignorTest {
             rackAwareStrategy
         );
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)),
-            mkEntry(new Subtopology(1, null), mkSet(TASK_1_0, TASK_1_1, TASK_1_2))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 

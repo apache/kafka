@@ -55,6 +55,7 @@ import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
+import org.apache.kafka.clients.consumer.internals.events.ResetOffsetEvent;
 import org.apache.kafka.clients.consumer.internals.events.SeekUnvalidatedEvent;
 import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
@@ -836,27 +837,23 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public void seekToBeginning(Collection<TopicPartition> partitions) {
-        if (partitions == null)
-            throw new IllegalArgumentException("Partitions collection cannot be null");
-
-        acquireAndEnsureOpen();
-        try {
-            Collection<TopicPartition> parts = partitions.isEmpty() ? subscriptions.assignedPartitions() : partitions;
-            subscriptions.requestOffsetReset(parts, OffsetResetStrategy.EARLIEST);
-        } finally {
-            release();
-        }
+        seek(partitions, OffsetResetStrategy.EARLIEST);
     }
 
     @Override
     public void seekToEnd(Collection<TopicPartition> partitions) {
+        seek(partitions, OffsetResetStrategy.LATEST);
+    }
+
+    private void seek(Collection<TopicPartition> partitions, OffsetResetStrategy offsetResetStrategy) {
         if (partitions == null)
             throw new IllegalArgumentException("Partitions collection cannot be null");
 
         acquireAndEnsureOpen();
         try {
-            Collection<TopicPartition> parts = partitions.isEmpty() ? subscriptions.assignedPartitions() : partitions;
-            subscriptions.requestOffsetReset(parts, OffsetResetStrategy.LATEST);
+            Timer timer = time.timer(defaultApiTimeoutMs);
+            ResetOffsetEvent event = new ResetOffsetEvent(partitions, offsetResetStrategy, calculateDeadlineMs(timer));
+            applicationEventHandler.addAndGet(event);
         } finally {
             release();
         }
@@ -1228,7 +1225,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         wakeupTrigger.disableWakeups();
 
         final Timer closeTimer = time.timer(timeout);
-        clientTelemetryReporter.ifPresent(reporter -> reporter.initiateClose(timeout.toMillis()));
+        clientTelemetryReporter.ifPresent(ClientTelemetryReporter::initiateClose);
         closeTimer.update();
         // Prepare shutting down the network thread
         swallow(log, Level.ERROR, "Failed to release assignment before closing consumer",
