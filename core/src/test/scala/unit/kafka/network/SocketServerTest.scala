@@ -42,6 +42,7 @@ import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
 import org.apache.kafka.server.config.QuotaConfigs
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.network.ConnectionDisconnectListener
 import org.apache.kafka.server.quota.{ThrottleCallback, ThrottledChannel}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.log4j.Level
@@ -2050,6 +2051,25 @@ class SocketServerTest {
     }
   }
 
+  @Test
+  def testConnectionDisconnectListenerInvokedOnClose(): Unit = {
+    var listenerConnectionId: String = ""
+    val connectionDisconnectListener = new ConnectionDisconnectListener {
+      override def onDisconnect(connectionId: String): Unit = {
+        // validate same connection id as per request context.
+        listenerConnectionId = connectionId
+      }
+    }
+
+    withTestableServer (testWithServer = { testableServer =>
+      val (socket, connectionId) = connectAndProcessRequest(testableServer)
+      socket.close()
+      // Validate that the listener is invoked when the connection is closed.
+      TestUtils.waitUntilTrue(() => listenerConnectionId == connectionId, "Failed to call disconnect listener or invalid connection id invoked")
+      assertProcessorHealthy(testableServer)
+    }, connectionDisconnectListeners = Seq(connectionDisconnectListener))
+  }
+
   private def sslServerProps: Properties = {
     val trustStoreFile = TestUtils.tempFile("truststore", ".jks")
     val sslProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, interBrokerSecurityProtocol = Some(SecurityProtocol.SSL),
@@ -2061,9 +2081,10 @@ class SocketServerTest {
 
   private def withTestableServer(config : KafkaConfig = KafkaConfig.fromProps(props),
                                  testWithServer: TestableSocketServer => Unit,
-                                 startProcessingRequests: Boolean = true): Unit = {
+                                 startProcessingRequests: Boolean = true,
+                                 connectionDisconnectListeners: Seq[ConnectionDisconnectListener] = Seq.empty): Unit = {
     shutdownServerAndMetrics(server)
-    val testableServer = new TestableSocketServer(config)
+    val testableServer = new TestableSocketServer(config, connectionDisconnectListeners = connectionDisconnectListeners)
     if (startProcessingRequests) {
       testableServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
     }
@@ -2149,14 +2170,26 @@ class SocketServerTest {
                                                                              memoryPool,
                                                                              apiVersionManager) {
 
-    override def newProcessor(id: Int, listenerName: ListenerName, securityProtocol: SecurityProtocol): Processor = {
-      new TestableProcessor(id, time, requestChannel, listenerName, securityProtocol, cfg, connectionQuotas, connectionQueueSize, isPrivilegedListener)
+    override def newProcessor(id: Int,
+                              listenerName: ListenerName,
+                              securityProtocol: SecurityProtocol,
+                              connectionDisconnectListeners: scala.collection.Seq[ConnectionDisconnectListener] = Seq.empty): Processor = {
+      new TestableProcessor(id, time, requestChannel, listenerName, securityProtocol, cfg, connectionQuotas, connectionQueueSize, isPrivilegedListener, socketServer.connectionDisconnectListeners)
     }
 
     def isOpen: Boolean = serverChannel.isOpen
   }
 
-  class TestableProcessor(id: Int, time: Time, requestChannel: RequestChannel, listenerName: ListenerName, securityProtocol: SecurityProtocol, config: KafkaConfig, connectionQuotas: ConnectionQuotas, connectionQueueSize: Int, isPrivilegedListener: Boolean)
+  class TestableProcessor(id: Int,
+                          time: Time,
+                          requestChannel: RequestChannel,
+                          listenerName: ListenerName,
+                          securityProtocol: SecurityProtocol,
+                          config: KafkaConfig,
+                          connectionQuotas: ConnectionQuotas,
+                          connectionQueueSize: Int,
+                          isPrivilegedListener: Boolean,
+                          connectionDisconnectListeners: scala.collection.Seq[ConnectionDisconnectListener])
   extends Processor(id,
                     time,
                     10000,
@@ -2174,7 +2207,8 @@ class SocketServerTest {
                     connectionQueueSize,
                     isPrivilegedListener,
                     apiVersionManager,
-                    s"TestableProcessor$id") {
+                    s"TestableProcessor$id",
+                    connectionDisconnectListeners) {
     private var connectionId: Option[String] = None
     private var conn: Option[Socket] = None
 
@@ -2209,9 +2243,10 @@ class SocketServerTest {
   class TestableSocketServer(
     config : KafkaConfig = KafkaConfig.fromProps(props),
     connectionQueueSize: Int = 20,
-    time: Time = Time.SYSTEM
+    time: Time = Time.SYSTEM,
+    connectionDisconnectListeners: Seq[ConnectionDisconnectListener] = Seq.empty
   ) extends SocketServer(
-    config, new Metrics, time, credentialProvider, apiVersionManager,
+    config, new Metrics, time, credentialProvider, apiVersionManager, connectionDisconnectListeners
   ) {
 
     override def createDataPlaneAcceptor(endPoint: EndPoint, isPrivilegedListener: Boolean, requestChannel: RequestChannel) : DataPlaneAcceptor = {
