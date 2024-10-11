@@ -36,13 +36,17 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
 import joptsimple.OptionException;
 import joptsimple.OptionSpec;
@@ -135,8 +139,29 @@ public class ConsumerPerformance {
         long reportingIntervalMs = options.reportingIntervalMs();
         boolean showDetailedStats = options.showDetailedStats();
         SimpleDateFormat dateFormat = options.dateFormat();
-        consumer.subscribe(options.topic(),
-            new ConsumerPerfRebListener(joinTimeMs, joinStartMs, joinTimeMsInSingleRound));
+
+        Optional<PartitionAndOffsets> partitionAssignment = options.partitionAssignment();
+
+        if (partitionAssignment.isPresent()) {
+            PartitionAndOffsets assignment = partitionAssignment.get();
+
+            // TODO: Support multiple topics
+            String topic = options.topic().iterator().next();
+
+            List<TopicPartition> partitions = Arrays.stream(assignment.partitions)
+                    .mapToObj(partition -> new TopicPartition(topic, partition))
+                    .collect(Collectors.toList());
+
+            consumer.assign(partitions);
+            if (assignment.offsets != null) {
+                for (int i = 0; i < partitions.size(); i++) {
+                    consumer.seek(partitions.get(i), assignment.offsets[i]);
+                }
+            }
+        } else {
+            consumer.subscribe(options.topic(),
+                    new ConsumerPerfRebListener(joinTimeMs, joinStartMs, joinTimeMsInSingleRound));
+        }
 
         // now start the benchmark
         long currentTimeMs = System.currentTimeMillis();
@@ -259,6 +284,8 @@ public class ConsumerPerformance {
         private final OptionSpec<Long> reportingIntervalOpt;
         private final OptionSpec<String> dateFormatOpt;
         private final OptionSpec<Void> hideHeaderOpt;
+        private final OptionSpec<String> partitionsOpt;
+        private final OptionSpec<String> offsetsOpt;
 
         public ConsumerPerfOptions(String[] args) {
             super(args);
@@ -316,6 +343,19 @@ public class ConsumerPerformance {
                 .ofType(String.class)
                 .defaultsTo("yyyy-MM-dd HH:mm:ss:SSS");
             hideHeaderOpt = parser.accepts("hide-header", "If set, skips printing the header for the stats");
+            partitionsOpt = parser.accepts("partitions", "List of partitions to fetch data from. " +
+                    "Multiple partitions can be provided as a comma-separated list. e.g. --partitions 0,1,2")
+                .withRequiredArg()
+                .describedAs("partitions")
+                .ofType(String.class);
+            offsetsOpt = parser.accepts("offsets", "List of offsets to start reading from. " +
+                    "If specified, the list must have the same number of elements as the partitions list in the same sequence. " +
+                    "If not specified, starts reading from earliest unless --from-latest is specified. " +
+                    "Only works with --partitions option. ")
+                .withRequiredArg()
+                .describedAs("offsets")
+                .ofType(String.class);
+
             try {
                 options = parser.parse(args);
             } catch (OptionException e) {
@@ -383,6 +423,38 @@ public class ConsumerPerformance {
 
         public long recordFetchTimeoutMs() {
             return options.valueOf(recordFetchTimeoutOpt);
+        }
+
+        public Optional<PartitionAndOffsets> partitionAssignment() {
+            if (!options.has(partitionsOpt))
+                return Optional.empty();
+
+            int[] partitions = Arrays.stream(options.valueOf(partitionsOpt).split(","))
+                    .mapToInt(Integer::parseInt)
+                    .toArray();
+            long[] offsets = null;
+
+            if (options.has(offsetsOpt)) {
+                offsets = Arrays.stream(options.valueOf(offsetsOpt).split(","))
+                        .mapToLong(Long::parseLong)
+                        .toArray();
+
+                if (partitions.length != offsets.length) {
+                    throw new IllegalArgumentException("The number of partitions and offsets must be the same.");
+                }
+            }
+
+            return Optional.of(new PartitionAndOffsets(partitions, offsets));
+        }
+    }
+
+    protected static class PartitionAndOffsets {
+        int[] partitions;
+        long[] offsets;
+
+        public PartitionAndOffsets(int[] partitions, long[] offsets) {
+            this.partitions = partitions;
+            this.offsets = offsets;
         }
     }
 }

@@ -30,8 +30,11 @@ import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.SimpleDateFormat;
+import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ConsumerPerformanceTest {
@@ -124,6 +127,38 @@ public class ConsumerPerformanceTest {
         ConsumerPerformance.ConsumerPerfOptions config = new ConsumerPerformance.ConsumerPerfOptions(args);
 
         assertEquals("perf-consumer-client", config.props().getProperty(ConsumerConfig.CLIENT_ID_CONFIG));
+    }
+
+    @Test
+    public void testPartitionAssignment() {
+        String[] args = new String[]{
+            "--broker-list", "localhost:9092",
+            "--topic", "test",
+            "--messages", "10",
+            "--partitions", "0,1,2",
+            "--offsets", "2,1,0",
+        };
+
+        ConsumerPerformance.ConsumerPerfOptions config = new ConsumerPerformance.ConsumerPerfOptions(args);
+        Optional<ConsumerPerformance.PartitionAndOffsets> assignment = config.partitionAssignment();
+
+        assertTrue(assignment.isPresent());
+        assertArrayEquals(new int[]{0, 1, 2}, assignment.get().partitions);
+        assertArrayEquals(new long[]{2, 1, 0}, assignment.get().offsets);
+    }
+
+    @Test
+    public void testPartitionAssignmentThrowsExceptionIfPartitionsAndOffsetsAreNotEqual() {
+        String[] args = new String[]{
+            "--broker-list", "localhost:9092",
+            "--topic", "test",
+            "--messages", "10",
+            "--partitions", "0,1,2",
+            "--offsets", "2,1",
+        };
+
+        ConsumerPerformance.ConsumerPerfOptions config = new ConsumerPerformance.ConsumerPerfOptions(args);
+        assertThrows(IllegalArgumentException.class, config::partitionAssignment);
     }
 
     private void testHeaderMatchContent(boolean detailed, int expectedOutputLineCount, Runnable runnable) {
