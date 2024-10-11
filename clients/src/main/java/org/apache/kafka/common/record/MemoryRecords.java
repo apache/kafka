@@ -72,6 +72,11 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     @Override
+    public MemoryRecords duplicate() {
+        return new MemoryRecords(buffer.duplicate());
+    }
+
+    @Override
     public int writeTo(TransferableChannel channel, int position, int length) throws IOException {
         if (((long) position) + length > buffer.limit())
             throw new IllegalArgumentException("position+length should not be greater than buffer.limit(), position: "

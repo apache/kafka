@@ -19,6 +19,7 @@ package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.types.RawTaggedField;
+import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 
 import java.nio.ByteBuffer;
@@ -53,7 +54,7 @@ public interface Readable {
         return unknowns;
     }
 
-    default MemoryRecords readRecords(int length) {
+    default BaseRecords readRecords(int length) {
         if (length < 0) {
             // no records
             return null;
