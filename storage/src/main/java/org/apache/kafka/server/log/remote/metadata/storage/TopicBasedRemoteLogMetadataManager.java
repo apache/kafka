@@ -448,6 +448,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                     log.info("Initialized topic-based RLMM resources successfully");
                 } catch (Exception e) {
                     log.error("Encountered error while initializing producer/consumer", e);
+                    initializationFailed = true;
                     return;
                 } finally {
                     lock.writeLock().unlock();
@@ -475,7 +476,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
             }
             return description != null;
         } catch (ExecutionException | InterruptedException ex) {
-            log.info("Topic {} does not exist. Error: {}", topic, ex.getCause().getMessage());
+            log.info("Encountered error while describe topic {}. Error: {}", topic, ex.getCause().getMessage());
             return false;
         }
     }
