@@ -195,21 +195,40 @@ import java.util.concurrent.atomic.AtomicReference;
  * props.put("bootstrap.servers", "localhost:9092");
  * props.put("transactional.id", "my-transactional-id");
  * Producer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
- *
  * producer.initTransactions();
- *
+ * 
  * try {
- *     producer.beginTransaction();
- *     for (int i = 0; i < 100; i++)
- *         producer.send(new ProducerRecord<>("my-topic", Integer.toString(i), Integer.toString(i)));
- *     producer.commitTransaction();
- * } catch (ProducerFencedException | OutOfOrderSequenceException | AuthorizationException e) {
- *     // We can't recover from these exceptions, so our only option is to close the producer and exit.
+ *   producer.beginTransaction();
+ *   try {
+ *     for(int i = 0; i < 100; i++) {
+ *       producer.send(new ProducerRecord<>("my-topic", Integer.toString(i), Integer.toString(i)));
+ *     }
+ *   } catch(KafkaException e) {
+ *     try {
+ *       producer.abortTransaction();
+ *     } catch(KafkaException e2) {
+ *       e.addSuppressed(e2);
+ *     }
+ *     throw e;
+ *   }
+ *   producer.commitTransaction();
+ * } catch(TimeoutException e) {
+ *   try {
+ *     // closing with timeout after timeout starts endless loop
+ *     producer.close(Duration.ZERO);
+ *   } catch(KafkaException e2) {
+ *     e.addSuppressed(e2);
+ *   }
+ *   throw e;
+ * } catch(KafkaException e) {
+ *   try {
  *     producer.close();
- * } catch (KafkaException e) {
- *     // For all other exceptions, just abort the transaction and try again.
- *     producer.abortTransaction();
+ *   } catch(KafkaException e2) {
+ *     e.addSuppressed(e2);
+ *   }
+ *   throw e;
  * }
+ * 
  * producer.close();
  * } </pre>
  * </p>
