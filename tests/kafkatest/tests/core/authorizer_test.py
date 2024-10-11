@@ -76,7 +76,7 @@ class AuthorizerTest(Test):
         # alter client quotas
         node = self.kafka.nodes[0]
         alter_client_quotas_cmd = "%s --entity-name foo --entity-type clients --alter --add-config consumer_byte_rate=10000" % \
-               (self.kafka.kafka_configs_cmd_with_optional_security_settings(node, force_use_zk_connection=False))
+               (self.kafka.kafka_configs_cmd_with_optional_security_settings(node))
         alter_client_quotas_cmd_log_msg = "Running alter client quotas command with client/non-broker credentials...\n%s" % alter_client_quotas_cmd
 
         self.logger.info(alter_client_quotas_cmd_log_msg)
@@ -108,7 +108,7 @@ class AuthorizerTest(Test):
 
         # add ACLs
         self.logger.info("Adding ACLs with broker credentials so that alter client quotas command will succeed")
-        self.acls.add_cluster_acl(self.kafka, client_principal, force_use_zk_connection=False,
+        self.acls.add_cluster_acl(self.kafka, client_principal,
                                   additional_cluster_operations_to_grant=['AlterConfigs'], security_protocol=broker_security_protocol)
 
         # the alter client quotas command should now succeed again
