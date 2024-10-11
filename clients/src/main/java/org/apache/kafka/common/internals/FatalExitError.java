@@ -23,7 +23,7 @@ import org.apache.kafka.common.utils.Exit;
  * tools. Clients should never shutdown the JVM process.
  *
  * This exception is expected to be caught at the highest level of the thread so that no shared lock is held by
- * the thread when it calls {@link Exit#exit(int)}.
+ * the thread when it calls {@link Exit#exit(int)} or {@link Exit#exitOrThrow(int)}.
  */
 public class FatalExitError extends Error {
 
