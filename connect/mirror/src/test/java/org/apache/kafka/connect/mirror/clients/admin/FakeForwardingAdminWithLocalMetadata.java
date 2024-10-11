@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.mirror.clients.admin;
 
+import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigsOptions;
 import org.apache.kafka.clients.admin.AlterConfigsResult;
 import org.apache.kafka.clients.admin.Config;
@@ -38,6 +39,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /** Customised ForwardingAdmin for testing only.
  * The class create/alter topics, partitions and ACLs in Kafka then store metadata in {@link FakeLocalMetadataStore}.
@@ -77,6 +79,24 @@ public class FakeForwardingAdminWithLocalMetadata extends ForwardingAdmin {
             }
         }));
         return createPartitionsResult;
+    }
+
+    @Override
+    public AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs, AlterConfigsOptions options) {
+        AlterConfigsResult alterConfigsResult = super.incrementalAlterConfigs(configs, options);
+        configs.forEach((configResource, newConfigs) -> alterConfigsResult.values().get(configResource).whenComplete((ignored, error) -> {
+            if (error == null) {
+                if (configResource.type() == ConfigResource.Type.TOPIC) {
+                    FakeLocalMetadataStore.updateTopicConfig(
+                            configResource.name(),
+                            new Config(newConfigs.stream().map(AlterConfigOp::configEntry).collect(Collectors.toList()))
+                    );
+                }
+            } else {
+                log.error("Unable to intercept admin client operation", error);
+            }
+        }));
+        return alterConfigsResult;
     }
 
     @Deprecated

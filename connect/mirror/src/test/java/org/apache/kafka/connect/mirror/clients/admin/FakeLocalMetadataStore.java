@@ -24,8 +24,10 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Vector;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -35,7 +37,9 @@ import java.util.concurrent.ConcurrentHashMap;
 public class FakeLocalMetadataStore {
     private static final Logger log = LoggerFactory.getLogger(FakeLocalMetadataStore.class);
 
-    private static final ConcurrentHashMap<String, ConcurrentHashMap<String, String>> ALL_TOPICS = new ConcurrentHashMap<>();
+    private static final Set<String> ALL_TOPICS = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private static final ConcurrentHashMap<String, ConcurrentHashMap<String, String>> ALL_TOPIC_CONFIGS = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, String> ALL_PARTITIONS = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, Vector<AclBinding>> ALL_ACLS = new ConcurrentHashMap<>();
 
     /**
@@ -43,9 +47,7 @@ public class FakeLocalMetadataStore {
      * @param newTopic {@link NewTopic}
      */
     public static void addTopicToLocalMetadataStore(NewTopic newTopic) {
-        ConcurrentHashMap<String, String> configs = new ConcurrentHashMap<>(newTopic.configs());
-        configs.putIfAbsent("partitions", String.valueOf(newTopic.numPartitions()));
-        ALL_TOPICS.putIfAbsent(newTopic.name(), configs);
+        ALL_TOPICS.add(newTopic.name());
     }
 
     /**
@@ -54,9 +56,7 @@ public class FakeLocalMetadataStore {
      * @param newPartitionCount new partition count.
      */
     public static void updatePartitionCount(String topic, int newPartitionCount) {
-        ConcurrentHashMap<String, String> configs = FakeLocalMetadataStore.ALL_TOPICS.getOrDefault(topic, new ConcurrentHashMap<>());
-        configs.compute("partitions", (key, value) -> String.valueOf(newPartitionCount));
-        FakeLocalMetadataStore.ALL_TOPICS.putIfAbsent(topic, configs);
+        FakeLocalMetadataStore.ALL_PARTITIONS.compute(topic, (key, value) -> String.valueOf(newPartitionCount));
     }
 
     /**
@@ -65,7 +65,7 @@ public class FakeLocalMetadataStore {
      * @param newConfig topic config
      */
     public static void updateTopicConfig(String topic, Config newConfig) {
-        ConcurrentHashMap<String, String> topicConfigs = FakeLocalMetadataStore.ALL_TOPICS.getOrDefault(topic, new ConcurrentHashMap<>());
+        ConcurrentHashMap<String, String> topicConfigs = FakeLocalMetadataStore.ALL_TOPIC_CONFIGS.getOrDefault(topic, new ConcurrentHashMap<>());
         newConfig.entries().stream().forEach(configEntry -> {
             if (configEntry.name() != null) {
                 if (configEntry.value() != null) {
@@ -76,7 +76,7 @@ public class FakeLocalMetadataStore {
                 }
             }
         });
-        FakeLocalMetadataStore.ALL_TOPICS.putIfAbsent(topic, topicConfigs);
+        FakeLocalMetadataStore.ALL_TOPIC_CONFIGS.putIfAbsent(topic, topicConfigs);
     }
 
     /**
@@ -85,7 +85,7 @@ public class FakeLocalMetadataStore {
      * @return true if topic name is a key in allTopics
      */
     public static Boolean containsTopic(String topic) {
-        return ALL_TOPICS.containsKey(topic);
+        return ALL_TOPICS.contains(topic);
     }
 
     /**
@@ -94,7 +94,11 @@ public class FakeLocalMetadataStore {
      * @return topic configurations.
      */
     public static Map<String, String> topicConfig(String topic) {
-        return ALL_TOPICS.getOrDefault(topic, new ConcurrentHashMap<>());
+        return ALL_TOPIC_CONFIGS.getOrDefault(topic, new ConcurrentHashMap<>());
+    }
+
+    public static String partitions(String topic) {
+        return ALL_PARTITIONS.get(topic);
     }
 
     /**
@@ -122,6 +126,8 @@ public class FakeLocalMetadataStore {
      */
     public static void clear() {
         ALL_TOPICS.clear();
+        ALL_TOPIC_CONFIGS.clear();
+        ALL_PARTITIONS.clear();
         ALL_ACLS.clear();
     }
 }
