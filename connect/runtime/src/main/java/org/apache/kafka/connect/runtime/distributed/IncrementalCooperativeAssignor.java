@@ -657,13 +657,15 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 "connector",
                 configured.connectors().size(),
                 workers,
-                WorkerLoad::connectors
+                WorkerLoad::connectors,
+                Function.identity()
         );
         Map<String, Set<ConnectorTaskId>> taskRevocations = loadBalancingRevocations(
                 "task",
                 configured.tasks().size(),
                 workers,
-                WorkerLoad::tasks
+                WorkerLoad::tasks,
+                ConnectorTaskId::connector
         );
 
         connectorRevocations.forEach((worker, revoked) ->
@@ -680,7 +682,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             String allocatedResourceName,
             int totalToAllocate,
             Collection<WorkerLoad> workers,
-            Function<WorkerLoad, Collection<E>> workerAllocation
+            Function<WorkerLoad, Collection<E>> workerAllocation,
+            Function<E, String> allocationGrouper
     ) {
         int totalWorkers = workers.size();
         // The minimum instances of this resource that should be assigned to each worker
@@ -736,7 +739,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             Set<E> revokedFromWorker = new LinkedHashSet<>();
             result.put(worker.worker(), revokedFromWorker);
 
-            Iterator<E> currentWorkerAllocation = workerAllocation.apply(worker).iterator();
+            Iterator<E> currentWorkerAllocation = new BalancedIterator<E>(workerAllocation.apply(worker), allocationGrouper);
             // Revoke resources from the worker until it isn't allocated any more than it should be
             for (int numRevoked = 0; currentAllocationSizeForWorker - numRevoked > maxAllocationForWorker; numRevoked++) {
                 if (!currentWorkerAllocation.hasNext()) {
@@ -793,6 +796,46 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         }
     }
 
+    static class BalancedIterator<E> implements Iterator<E> {
+
+        private final Map<String, Iterator<E>> grouped;
+        private final List<String> keys;
+
+        private int k;
+
+        public BalancedIterator(Collection<E> collection, Function<E, String> allocationGrouper) {
+            this.k = 0;
+            this.grouped = collection.stream().collect(Collectors.groupingBy(
+                    allocationGrouper,
+                    Collectors.collectingAndThen(
+                            Collectors.toList(),
+                            List::iterator
+                    )
+            ));
+            this.keys = collection.stream()
+                .map(allocationGrouper)
+                .distinct()
+                .collect(Collectors.toList());
+        }
+
+        @Override
+        public boolean hasNext() {
+            return grouped.values().stream().anyMatch(Iterator::hasNext);
+        }
+
+        @Override
+        public E next() {
+            while (!this.keys.isEmpty() && k < k + this.keys.size()) { 
+                Iterator<E> iterator = grouped.get(this.keys.get(k % this.keys.size()));
+                k++;
+                if (iterator.hasNext()) {
+                    return iterator.next();
+                }
+            }
+            return null;
+        }
+    }
+
     /**
      * Perform a round-robin assignment of tasks to workers with existing worker load. This
      * assignment tries to balance the load between workers, by assigning tasks to workers that
@@ -805,7 +848,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         workerAssignment.sort(WorkerLoad.taskComparator());
         WorkerLoad first = workerAssignment.get(0);
 
-        Iterator<ConnectorTaskId> load = tasks.iterator();
+        Iterator<ConnectorTaskId> load = new BalancedIterator<>(tasks, ConnectorTaskId::connector);
         while (load.hasNext()) {
             int firstLoad = first.tasksSize();
             int upTo = IntStream.range(0, workerAssignment.size())
