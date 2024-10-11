@@ -32,7 +32,6 @@ import java.util.Optional
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{ThreadLocalRandom, TimeUnit}
 import scala.collection.mutable
-import scala.math.Ordered.orderingToOrdered
 
 object FetchSession {
   type REQ_MAP = util.Map[TopicIdPartition, FetchRequest.PartitionData]
@@ -573,12 +572,22 @@ class IncrementalFetchContext(private val time: Time,
 
 case class LastUsedKey(lastUsedMs: Long, id: Int) extends Comparable[LastUsedKey] {
   override def compareTo(other: LastUsedKey): Int =
-    (lastUsedMs, id) compare (other.lastUsedMs, other.id)
+    if (lastUsedMs != other.lastUsedMs) {
+      if (lastUsedMs < other.lastUsedMs) -1 else 1
+    } else {
+      if (id < other.id) -1 else if (id > other.id) 1 else 0
+    }
 }
 
 case class EvictableKey(privileged: Boolean, size: Int, id: Int) extends Comparable[EvictableKey] {
   override def compareTo(other: EvictableKey): Int =
-    (privileged, size, id) compare (other.privileged, other.size, other.id)
+    if (privileged != other.privileged) {
+      if (!privileged) -1 else 1
+    } else if (size != other.size) {
+      if (size < other.size) -1 else 1
+    } else {
+      if (id < other.id) -1 else if (id > other.id) 1 else 0
+    }
 }
 
 
