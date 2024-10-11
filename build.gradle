@@ -226,7 +226,7 @@ static def projectToJUnitXmlPath(project) {
       break;
     }
   }
-  return projectNames.join("-")
+  return projectNames.join("/")
 }
 
 

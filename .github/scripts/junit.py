@@ -117,6 +117,10 @@ class TestCatalogExporter:
 
         total_count = 0
         for module, module_tests in self.all_tests.items():
+            module_path = os.path.join(out_dir, module)
+            if not os.path.exists(module_path):
+                os.makedirs(module_path)
+
             sorted_tests = {}
             count = 0
             for test_class, methods in module_tests.items():
@@ -124,7 +128,7 @@ class TestCatalogExporter:
                 count += len(sorted_methods)
                 sorted_tests[test_class] = sorted_methods
 
-            out_path = os.path.join(out_dir, f"{module}.yaml")
+            out_path = os.path.join(module_path, f"tests.yaml")
             logger.debug(f"Writing {count} tests for {module} into {out_path}.")
             total_count += count
             with open(out_path, "w") as fp:
@@ -193,6 +197,20 @@ def pretty_time_duration(seconds: float) -> str:
     return time_fmt
 
 
+def module_path_from_report_path(base_path: str, report_path: str) -> str:
+    """
+    Parse a report XML and extract the module path. Test report paths look like:
+
+        build/junit-xml/module[/sub-module]/[suite]/TEST-class.method.xml
+
+    This method strips off a base path and assumes all path segments leading up to the suite name
+    are part of the module path.
+    """
+    rel_report_path = os.path.relpath(report_path, base_path)
+    path_segments = pathlib.Path(rel_report_path).parts
+    return os.path.join(*path_segments[0:-2])
+
+
 if __name__ == "__main__":
     """
     Parse JUnit XML reports and generate GitHub job summary in Markdown format.
@@ -205,8 +223,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Parse JUnit XML results.")
     parser.add_argument("--path",
                         required=False,
-                        default="build/junit-xml/**/*.xml",
-                        help="Path to XML files. Glob patterns are supported.")
+                        default="build/junit-xml",
+                        help="Base path of JUnit XML files. A glob of **/*.xml will be applied on top of this path.")
     parser.add_argument("--export-test-catalog",
                         required=False,
                         default="",
@@ -218,7 +236,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    reports = glob(pathname=args.path, recursive=True)
+    glob_path = os.path.join(args.path, "**/*.xml")
+    reports = glob(pathname=glob_path, recursive=True)
     logger.info(f"Found {len(reports)} JUnit results")
     workspace_path = get_env("GITHUB_WORKSPACE") # e.g., /home/runner/work/apache/kafka
 
@@ -240,12 +259,9 @@ if __name__ == "__main__":
 
     logger.debug(f"::group::Parsing {len(reports)} JUnit Report Files")
     for report in reports:
-        # Test report paths look like junit-xml/module/[test,quarantinedTest]/TEST-class.method.xml
-        report_path = pathlib.Path(report)
-        module_name = report_path.parent.parent.name
-        logger.debug(f"Module: {module_name}")
         with open(report, "r") as fp:
-            logger.debug(f"Parsing {report}")
+            module_path = module_path_from_report_path(args.path, report)
+            logger.debug(f"Parsing file: {report}, module: {module_path}")
             for suite in parse_report(workspace_path, report, fp):
                 total_skipped += suite.skipped
                 total_errors += suite.errors
@@ -283,7 +299,7 @@ if __name__ == "__main__":
                     skipped_table.append((simple_class_name, skipped_test.test_name))
 
                 if args.export_test_catalog:
-                    exporter.handle_suite(module_name, suite)
+                    exporter.handle_suite(module_path, suite)
 
     logger.debug("::endgroup::")
 
