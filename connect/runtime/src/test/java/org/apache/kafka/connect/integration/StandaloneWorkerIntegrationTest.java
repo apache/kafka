@@ -114,7 +114,6 @@ public class StandaloneWorkerIntegrationTest {
         final String namespace1 = "org.apache.kafka.connect";
         final String level1 = "DEBUG";
         connect.setLogLevel(namespace1, "ERROR", null);
-        // fixme
         Map<String, LoggerLevel> currentLevels = testSetLoggingLevel(namespace1, level1, null, initialLevels);
 
         // Tests with scope=worker

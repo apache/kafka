@@ -75,8 +75,8 @@ public class LoggersTest {
         Loggers loggers = new TestLoggers(root, a, b);
 
         Map<String, LoggerLevel> expectedLevels = Collections.singletonMap(
-            "b",
-            new LoggerLevel(Level.INFO.toString(), null)
+                "b",
+                new LoggerLevel(Level.INFO.toString(), null)
         );
         Map<String, LoggerLevel> actualLevels = loggers.allLevels();
         assertEquals(expectedLevels, actualLevels);

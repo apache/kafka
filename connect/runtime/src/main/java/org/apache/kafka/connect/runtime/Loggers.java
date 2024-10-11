@@ -107,7 +107,7 @@ public class Loggers {
                 .forEach(logger -> result.put(logger.getName(), loggerLevel(logger)));
 
         org.apache.logging.log4j.Logger root = rootLogger();
-        if (root.getLevel() != null && !root.getLevel().equals(Level.OFF)) {
+        if (!root.getLevel().equals(Level.OFF)) {
             result.put(ROOT_LOGGER_NAME, loggerLevel(root));
         }
 
@@ -211,7 +211,6 @@ public class Loggers {
 
         log.debug("Setting level of logger {} (excluding children) to {}", loggerName, level);
         Configurator.setLevel(loggerName, level);
-//        context.updateLoggers();
         lastModifiedTimes.put(loggerName, time.milliseconds());
     }
 

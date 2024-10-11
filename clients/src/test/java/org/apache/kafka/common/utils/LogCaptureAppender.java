@@ -158,10 +158,10 @@ public class LogCaptureAppender extends AbstractAppender implements AutoCloseabl
                     throwableString = Optional.empty();
                     throwableClassName = Optional.empty();
                 } else {
-                    StringWriter sw = new StringWriter();
-                    PrintWriter pw = new PrintWriter(sw);
-                    throwable.printStackTrace(pw);
-                    throwableString = Optional.of(sw.toString());
+                    StringWriter stringWriter = new StringWriter();
+                    PrintWriter printWriter = new PrintWriter(stringWriter);
+                    throwable.printStackTrace(printWriter);
+                    throwableString = Optional.of(stringWriter.toString());
                     throwableClassName = Optional.of(throwable.getClass().getName());
                 }
 
