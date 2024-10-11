@@ -24,15 +24,11 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer;
 import org.apache.kafka.image.MetadataImage;
-import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
-import org.apache.kafka.metadata.PartitionRegistration;
 
 import com.google.re2j.Pattern;
 
 import org.junit.jupiter.api.Test;
-
-import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.any;
@@ -54,9 +50,10 @@ public class GroupRegexManagerTest {
     private static final Uuid TOPIC_ID = Uuid.randomUuid();
 
     static {
-        PartitionRegistration partitionRegistration = mock(PartitionRegistration.class);
-        TOPICS_IMAGE = TopicsImage.EMPTY.including(new TopicImage(TOPIC_NAME, TOPIC_ID,
-            Collections.singletonMap(0, partitionRegistration)));
+        TOPICS_IMAGE = new MetadataImageBuilder()
+            .addTopic(TOPIC_ID, TOPIC_NAME, 3)
+            .build()
+            .topics();
     }
 
     @Test
