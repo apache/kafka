@@ -321,7 +321,7 @@ public class GroupRegexManager {
         RegexKey key,
         Resolution resolution
     ) {
-        Resolution oldResolution = this.resolvedRegexes.put(key, resolution);
+        this.resolvedRegexes.put(key, resolution);
         log.debug("Completed replaying resolved regex {} for group id {}.",
             key.pattern(), key.groupId());
     }
