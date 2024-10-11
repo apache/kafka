@@ -18,8 +18,6 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -33,7 +31,7 @@ public class ShareSubscriptionChangeEvent extends CompletableApplicationEvent<Vo
 
     public ShareSubscriptionChangeEvent(final Collection<String> topics) {
         super(Type.SHARE_SUBSCRIPTION_CHANGE, Long.MAX_VALUE);
-        this.topics = Collections.unmodifiableSet(new HashSet<>(topics));
+        this.topics = Set.copyOf(topics);
     }
 
     public Set<String> topics() {
