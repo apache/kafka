@@ -407,7 +407,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       controllers = raftCluster.controllers().values().asScala.toSeq
     )
     // Heartbeat request to join the group. Note that the member subscribes
-    // to an nonexistent topic.
+    // to a nonexistent topic.
     var shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
@@ -457,9 +457,9 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       true
     ).build()
 
-    TestUtils.waitForPartitionMetadata(cluster.brokers().values().asScala.toSeq, "foo", 1)
-    TestUtils.waitForPartitionMetadata(cluster.brokers().values().asScala.toSeq, "bar", 1)
-    
+    TestUtils.waitForAllPartitionsMetadata(cluster.brokers().values().asScala.toSeq, "foo", 2)
+    TestUtils.waitForAllPartitionsMetadata(cluster.brokers().values().asScala.toSeq, "bar", 3)
+
     TestUtils.waitUntilTrue(() => {
       shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
       shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
