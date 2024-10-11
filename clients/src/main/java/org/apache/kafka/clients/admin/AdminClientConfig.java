@@ -209,7 +209,7 @@ public class AdminClientConfig extends AbstractConfig {
                                         CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC)
                                 .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,
                                         Type.LONG,
-                                        5 * 60 * 1000,
+                                        9 * 60 * 1000,
                                         Importance.MEDIUM,
                                         CONNECTIONS_MAX_IDLE_MS_DOC)
                                 .define(RETRIES_CONFIG,
