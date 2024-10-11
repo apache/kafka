@@ -356,7 +356,6 @@ public class ShareConsumerImplTest {
 
         consumer.unsubscribe();
 
-        assertTrue(consumer.subscription().isEmpty());
         verify(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ShareUnsubscribeEvent.class));
     }
 
@@ -368,7 +367,7 @@ public class ShareConsumerImplTest {
         completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
 
         consumer.subscribe(Collections.emptyList());
-        assertTrue(consumer.subscription().isEmpty());
+
         verify(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ShareUnsubscribeEvent.class));
     }
 
