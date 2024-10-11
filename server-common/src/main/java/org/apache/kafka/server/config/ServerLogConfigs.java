@@ -40,29 +40,46 @@ public class ServerLogConfigs {
     public static final String LOG_DIRS_DOC = "A comma-separated list of the directories where the log data is stored. If not set, the value in " + LOG_DIR_CONFIG + " is used.";
 
     public static final String LOG_SEGMENT_BYTES_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_BYTES_CONFIG);
-    public static final String LOG_SEGMENT_BYTES_DOC = "The maximum size of a single log file";
+    public static final String LOG_SEGMENT_BYTES_DOC = "The maximum size of a single log file. " +
+            "This configuration operates independently of \"retention.ms\", \"retention.bytes\", " +
+            "\"log.retention.ms\", \"log.retention.minutes\", \"log.retention.hours\" and \"log.retention.bytes\" configurations.";
 
     public static final String LOG_ROLL_TIME_MILLIS_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_MS_CONFIG);
     public static final String LOG_ROLL_TIME_HOURS_CONFIG = LOG_PREFIX + "roll.hours";
-    public static final String LOG_ROLL_TIME_MILLIS_DOC = "The maximum time before a new log segment is rolled out (in milliseconds). If not set, the value in " + LOG_ROLL_TIME_HOURS_CONFIG + " is used";
-    public static final String LOG_ROLL_TIME_HOURS_DOC = "The maximum time before a new log segment is rolled out (in hours), secondary to " + LOG_ROLL_TIME_MILLIS_CONFIG + " property";
+    public static final String LOG_ROLL_TIME_MILLIS_DOC = "The maximum time before a new log segment is rolled out (in milliseconds). If not set, the value in " + LOG_ROLL_TIME_HOURS_CONFIG + " is used. " +
+            "Additionally, this configuration operates independently of \"retention.ms\", \"retention.bytes\", " +
+            "\"log.retention.ms\", \"log.retention.minutes\", \"log.retention.hours\" and \"log.retention.bytes\" configurations.";
+    public static final String LOG_ROLL_TIME_HOURS_DOC = "The maximum time before a new log segment is rolled out (in hours), secondary to " + LOG_ROLL_TIME_MILLIS_CONFIG + " property. " +
+            "Additionally, this configuration operates independently of \"retention.ms\", \"retention.bytes\", " +
+            "\"log.retention.ms\", \"log.retention.minutes\", \"log.retention.hours\" and \"log.retention.bytes\" configurations.";
 
     public static final String LOG_ROLL_TIME_JITTER_MILLIS_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_JITTER_MS_CONFIG);
     public static final String LOG_ROLL_TIME_JITTER_HOURS_CONFIG = LOG_PREFIX + "roll.jitter.hours";
     public static final String LOG_ROLL_TIME_JITTER_MILLIS_DOC = "The maximum jitter to subtract from logRollTimeMillis (in milliseconds). If not set, the value in " + LOG_ROLL_TIME_JITTER_HOURS_CONFIG + " is used";
     public static final String LOG_ROLL_TIME_JITTER_HOURS_DOC = "The maximum jitter to subtract from logRollTimeMillis (in hours), secondary to " + LOG_ROLL_TIME_JITTER_MILLIS_CONFIG + " property";
 
-
     public static final String LOG_RETENTION_TIME_MILLIS_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.RETENTION_MS_CONFIG);
     public static final String LOG_RETENTION_TIME_MINUTES_CONFIG = LOG_PREFIX + "retention.minutes";
     public static final String LOG_RETENTION_TIME_HOURS_CONFIG = LOG_PREFIX + "retention.hours";
-    public static final String LOG_RETENTION_TIME_MILLIS_DOC = "The number of milliseconds to keep a log file before deleting it (in milliseconds), If not set, the value in " + LOG_RETENTION_TIME_MINUTES_CONFIG + " is used. If set to -1, no time limit is applied.";
-    public static final String LOG_RETENTION_TIME_MINUTES_DOC = "The number of minutes to keep a log file before deleting it (in minutes), secondary to " + LOG_RETENTION_TIME_MILLIS_CONFIG + " property. If not set, the value in " + LOG_RETENTION_TIME_HOURS_CONFIG + " is used";
-    public static final String LOG_RETENTION_TIME_HOURS_DOC = "The number of hours to keep a log file before deleting it (in hours), tertiary to " + LOG_RETENTION_TIME_MILLIS_CONFIG + " property";
+    public static final String LOG_RETENTION_TIME_MILLIS_DOC = "The number of milliseconds to keep a log file before deleting it (in milliseconds), If not set, the value in " + LOG_RETENTION_TIME_MINUTES_CONFIG + " is used. If set to -1, no time limit is applied. " +
+            "Additionally, this configuration operates independently of \"segment.ms\", \"segment.bytes\", " +
+            "\"log.roll.ms\", \"log.roll.hours\" and \"log.segment.bytes\" configurations. " +
+            "Moreover, it triggers the rolling of new segment if the log.retention.ms condition is satisfied.";
+    public static final String LOG_RETENTION_TIME_MINUTES_DOC = "The number of minutes to keep a log file before deleting it (in minutes), secondary to " + LOG_RETENTION_TIME_MILLIS_CONFIG + " property. If not set, the value in " + LOG_RETENTION_TIME_HOURS_CONFIG + " is used. " +
+            "Additionally, this configuration operates independently of \"segment.ms\", \"segment.bytes\", " +
+            "\"log.roll.ms\", \"log.roll.hours\" and \"log.segment.bytes\" configurations. " +
+            "Moreover, it triggers the rolling of new segment if the log.retention.minutes condition is satisfied.";
+    public static final String LOG_RETENTION_TIME_HOURS_DOC = "The number of hours to keep a log file before deleting it (in hours), tertiary to " + LOG_RETENTION_TIME_MILLIS_CONFIG + " property. " +
+            "Additionally, this configuration operates independently of \"segment.ms\", \"segment.bytes\", " +
+            "\"log.roll.ms\", \"log.roll.hours\" and \"log.segment.bytes\" configurations. " +
+            "Moreover, it triggers the rolling of new segment if the log.retention.hours condition is satisfied.";
 
     public static final String LOG_RETENTION_BYTES_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.RETENTION_BYTES_CONFIG);
     public static final long LOG_RETENTION_BYTES_DEFAULT = -1L;
-    public static final String LOG_RETENTION_BYTES_DOC = "The maximum size of the log before deleting it";
+    public static final String LOG_RETENTION_BYTES_DOC = "The maximum size of the log before deleting it. " +
+            "This configuration operates independently of \"segment.ms\", \"segment.bytes\", " +
+            "\"log.roll.ms\", \"log.roll.hours\" and \"log.segment.bytes\" configurations. " +
+            "Moreover, it triggers the rolling of new segment if the log.retention.bytes is configured to zero.";
 
     public static final String LOG_CLEANUP_INTERVAL_MS_CONFIG = LOG_PREFIX + "retention.check.interval.ms";
     public static final long LOG_CLEANUP_INTERVAL_MS_DEFAULT = 5 * 60 * 1000L;
