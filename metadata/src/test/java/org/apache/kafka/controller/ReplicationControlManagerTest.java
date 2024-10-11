@@ -447,10 +447,6 @@ public class ReplicationControlManagerTest {
         }
 
         void unfenceBrokers(Integer... brokerIds) {
-            unfenceBrokers(Utils.mkSet(brokerIds));
-        }
-
-        void unfenceBrokers(Set<Integer> brokerIds) {
             for (int brokerId : brokerIds) {
                 ControllerResult<BrokerHeartbeatReply> result = replicationControl.
                     processBrokerHeartbeat(new BrokerHeartbeatRequestData().
@@ -464,10 +460,6 @@ public class ReplicationControlManagerTest {
         }
 
         void inControlledShutdownBrokers(Integer... brokerIds) {
-            inControlledShutdownBrokers(Utils.mkSet(brokerIds));
-        }
-
-        void inControlledShutdownBrokers(Set<Integer> brokerIds) {
             for (int brokerId : brokerIds) {
                 BrokerRegistrationChangeRecord record = new BrokerRegistrationChangeRecord()
                     .setBrokerId(brokerId)
@@ -2311,7 +2303,7 @@ public class ReplicationControlManagerTest {
         assertElectLeadersResponse(expectedResponse1, result1.response());
 
         // Now we bring 2 back online which should allow the unclean election of partition 0
-        ctx.unfenceBrokers(Utils.mkSet(2));
+        ctx.unfenceBrokers(2);
 
         // Bring 2 back into the ISR for partition 1. This allows us to verify that
         // preferred election does not occur as a result of the unclean election request.
@@ -2362,7 +2354,7 @@ public class ReplicationControlManagerTest {
 
         ctx.fenceBrokers(Utils.mkSet(2, 3));
         ctx.fenceBrokers(Utils.mkSet(1, 2, 3));
-        ctx.unfenceBrokers(Utils.mkSet(2));
+        ctx.unfenceBrokers(2);
 
         assertLeaderAndIsr(replication, partition, NO_LEADER, new int[]{1});
 
