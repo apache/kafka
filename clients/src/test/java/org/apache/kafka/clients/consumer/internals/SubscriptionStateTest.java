@@ -29,7 +29,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -123,15 +122,15 @@ public class SubscriptionStateTest {
         assertFalse(state.groupSubscribe(singleton(topic1)));
         assertEquals(singleton(topic1), state.metadataTopics());
 
-        assertTrue(state.groupSubscribe(Utils.mkSet(topic, topic1)));
-        assertEquals(Utils.mkSet(topic, topic1), state.metadataTopics());
+        assertTrue(state.groupSubscribe(Set.of(topic, topic1)));
+        assertEquals(Set.of(topic, topic1), state.metadataTopics());
 
         // `groupSubscribe` does not accumulate
         assertFalse(state.groupSubscribe(singleton(topic1)));
         assertEquals(singleton(topic1), state.metadataTopics());
 
         state.subscribe(singleton("anotherTopic"), Optional.of(rebalanceListener));
-        assertEquals(Utils.mkSet(topic1, "anotherTopic"), state.metadataTopics());
+        assertEquals(Set.of(topic1, "anotherTopic"), state.metadataTopics());
 
         assertFalse(state.groupSubscribe(singleton("anotherTopic")));
         assertEquals(singleton("anotherTopic"), state.metadataTopics());
@@ -192,7 +191,7 @@ public class SubscriptionStateTest {
     @Test
     public void verifyAssignmentId() {
         assertEquals(0, state.assignmentId());
-        Set<TopicPartition> userAssignment = Utils.mkSet(tp0, tp1);
+        Set<TopicPartition> userAssignment = Set.of(tp0, tp1);
         state.assignFromUser(userAssignment);
         assertEquals(1, state.assignmentId());
         assertEquals(userAssignment, state.assignedPartitions());
@@ -201,7 +200,7 @@ public class SubscriptionStateTest {
         assertEquals(2, state.assignmentId());
         assertEquals(Collections.emptySet(), state.assignedPartitions());
 
-        Set<TopicPartition> autoAssignment = Utils.mkSet(t1p0);
+        Set<TopicPartition> autoAssignment = Set.of(t1p0);
         state.subscribe(singleton(topic1), Optional.of(rebalanceListener));
         assertTrue(state.checkAssignmentMatchedSubscription(autoAssignment));
         state.assignFromSubscribed(autoAssignment);
@@ -316,7 +315,7 @@ public class SubscriptionStateTest {
 
         // New partition added to the assignment. Owned partitions should continue to be
         // fetchable, while the newly added should not be fetchable until callback completes.
-        state.assignFromSubscribedAwaitingCallback(Utils.mkSet(tp0, tp1), singleton(tp1));
+        state.assignFromSubscribedAwaitingCallback(Set.of(tp0, tp1), singleton(tp1));
         assertTrue(state.isFetchable(tp0));
         assertFalse(state.isFetchable(tp1));
         assertEquals(1, state.initializingPartitions().size());

@@ -53,7 +53,6 @@ import java.util.function.Supplier;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.CHANGELOG_TOPIC_PREFIX;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_RACK_AWARE_ASSIGNMENT_TAGS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.RACK_PREFIX;
@@ -123,7 +122,7 @@ public class TaskAssignorConvergenceTest {
                     partitionInfoSet.add(new PartitionInfo(TOPIC_PREFIX + "_" + subtopology, i, replica[0], replica, replica));
                     nodeIndex++;
 
-                    partitionsForTask.put(taskId, mkSet(new TopicPartition(TOPIC_PREFIX + "_" + subtopology, i)));
+                    partitionsForTask.put(taskId, Set.of(new TopicPartition(TOPIC_PREFIX + "_" + subtopology, i)));
                     tasksForTopicGroup.computeIfAbsent(new Subtopology(subtopology, null), k -> new HashSet<>()).add(taskId);
                 }
                 subtopology++;
@@ -146,8 +145,8 @@ public class TaskAssignorConvergenceTest {
                     partitionInfoSet.add(new PartitionInfo(TOPIC_PREFIX + "_" + subtopology, i, replica[0], replica, replica));
                     nodeIndex++;
 
-                    partitionsForTask.put(taskId, mkSet(new TopicPartition(TOPIC_PREFIX + "_" + subtopology, i)));
-                    changelogPartitionsForTask.put(taskId, mkSet(new TopicPartition(changelogTopicName, i)));
+                    partitionsForTask.put(taskId, Set.of(new TopicPartition(TOPIC_PREFIX + "_" + subtopology, i)));
+                    changelogPartitionsForTask.put(taskId, Set.of(new TopicPartition(changelogTopicName, i)));
                     tasksForTopicGroup.computeIfAbsent(new Subtopology(subtopology, null), k -> new HashSet<>()).add(taskId);
 
                     final int changelogNodeIndex = random.nextInt(nodes.size());

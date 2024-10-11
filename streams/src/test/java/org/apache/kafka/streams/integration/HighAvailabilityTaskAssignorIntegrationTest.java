@@ -71,7 +71,6 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
@@ -125,14 +124,14 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
         final String testId = safeUniqueTestName(testInfo).replaceAll("balance_subtopology", "balance");
         final String appId = "appId_" + System.currentTimeMillis() + "_" + testId;
         final String inputTopic = "input" + testId;
-        final Set<TopicPartition> inputTopicPartitions = mkSet(
+        final Set<TopicPartition> inputTopicPartitions = Set.of(
             new TopicPartition(inputTopic, 0),
             new TopicPartition(inputTopic, 1)
         );
 
         final String storeName = "store" + testId;
         final String storeChangelog = appId + "-store" + testId + "-changelog";
-        final Set<TopicPartition> changelogTopicPartitions = mkSet(
+        final Set<TopicPartition> changelogTopicPartitions = Set.of(
             new TopicPartition(storeChangelog, 0),
             new TopicPartition(storeChangelog, 1)
         );

@@ -30,7 +30,6 @@ import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
@@ -52,18 +51,18 @@ public class ThreadMetadataImplTest {
     public static final TopicPartition TP_1_1 = new TopicPartition("t", 3);
     public static final TaskMetadata TM_0 = new TaskMetadataImpl(
         TASK_ID_0,
-        mkSet(TP_0_0, TP_1_0),
+        Set.of(TP_0_0, TP_1_0),
         mkMap(mkEntry(TP_0_0, 1L), mkEntry(TP_1_0, 2L)),
         mkMap(mkEntry(TP_0_0, 1L), mkEntry(TP_1_0, 2L)),
         Optional.of(3L));
     public static final TaskMetadata TM_1 = new TaskMetadataImpl(
         TASK_ID_1,
-        mkSet(TP_0_1, TP_1_1),
+        Set.of(TP_0_1, TP_1_1),
         mkMap(mkEntry(TP_0_1, 1L), mkEntry(TP_1_1, 2L)),
         mkMap(mkEntry(TP_0_1, 1L), mkEntry(TP_1_1, 2L)),
         Optional.of(3L));
-    public static final Set<TaskMetadata> STANDBY_TASKS = mkSet(TM_0, TM_1);
-    public static final Set<TaskMetadata> ACTIVE_TASKS = mkSet(TM_1);
+    public static final Set<TaskMetadata> STANDBY_TASKS = Set.of(TM_0, TM_1);
+    public static final Set<TaskMetadata> ACTIVE_TASKS = Set.of(TM_1);
     public static final String ADMIN_CLIENT_ID = "admin ClientID";
 
     private ThreadMetadata threadMetadata;
@@ -210,7 +209,7 @@ public class ThreadMetadataImplTest {
             RESTORE_CONSUMER_CLIENT_ID,
             PRODUCER_CLIENT_IDS,
             ADMIN_CLIENT_ID,
-            mkSet(TM_0),
+            Set.of(TM_0),
             STANDBY_TASKS
         );
         assertThat(threadMetadata, not(equalTo(differActiveTasks)));
@@ -227,7 +226,7 @@ public class ThreadMetadataImplTest {
             PRODUCER_CLIENT_IDS,
             ADMIN_CLIENT_ID,
             ACTIVE_TASKS,
-            mkSet(TM_0)
+            Set.of(TM_0)
         );
         assertThat(threadMetadata, not(equalTo(differStandByTasks)));
         assertThat(threadMetadata.hashCode(), not(equalTo(differStandByTasks.hashCode())));

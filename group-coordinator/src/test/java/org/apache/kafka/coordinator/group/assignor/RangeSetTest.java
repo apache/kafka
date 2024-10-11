@@ -23,7 +23,6 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -95,8 +94,8 @@ public class RangeSetTest {
     @Test
     void testContainsAll() {
         RangeSet rangeSet = new RangeSet(5, 10);
-        assertTrue(rangeSet.containsAll(mkSet(5, 6, 7, 8, 9)));
-        assertFalse(rangeSet.containsAll(mkSet(5, 6, 10)));
+        assertTrue(rangeSet.containsAll(Set.of(5, 6, 7, 8, 9)));
+        assertFalse(rangeSet.containsAll(Set.of(5, 6, 10)));
     }
 
     @Test
@@ -110,8 +109,8 @@ public class RangeSetTest {
         RangeSet rangeSet1 = new RangeSet(5, 10);
         RangeSet rangeSet2 = new RangeSet(5, 10);
         RangeSet rangeSet3 = new RangeSet(6, 10);
-        Set<Integer> set = mkSet(5, 6, 7, 8, 9);
-        HashSet<Integer> hashSet = new HashSet<>(mkSet(6, 7, 8, 9));
+        Set<Integer> set = Set.of(5, 6, 7, 8, 9);
+        HashSet<Integer> hashSet = new HashSet<>(Set.of(6, 7, 8, 9));
 
         assertEquals(rangeSet1, rangeSet2);
         assertNotEquals(rangeSet1, rangeSet3);

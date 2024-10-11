@@ -45,7 +45,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 
 public interface ClusterInstance {
 
@@ -156,7 +155,7 @@ public interface ClusterInstance {
 
     default Set<GroupProtocol> supportedGroupProtocols() {
         if (isKRaftTest() && brokers().values().stream().allMatch(b -> b.dataPlaneRequestProcessor().isConsumerGroupProtocolEnabled())) {
-            return mkSet(CLASSIC, CONSUMER);
+            return Set.of(CLASSIC, CONSUMER);
         } else {
             return Collections.singleton(CLASSIC);
         }

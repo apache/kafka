@@ -17,7 +17,6 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.generated.QuorumStateData;
 
 import org.junit.jupiter.api.Test;
@@ -27,6 +26,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -69,20 +69,20 @@ final class ElectionStateTest {
     void testQuorumStateDataRoundTrip(short version) {
         ReplicaKey votedKey = ReplicaKey.of(1, Uuid.randomUuid());
         List<ElectionState> electionStates = Arrays.asList(
-            ElectionState.withUnknownLeader(5, Utils.mkSet(1, 2, 3)),
-            ElectionState.withElectedLeader(5, 1, Utils.mkSet(1, 2, 3)),
-            ElectionState.withVotedCandidate(5, votedKey, Utils.mkSet(1, 2, 3))
+            ElectionState.withUnknownLeader(5, Set.of(1, 2, 3)),
+            ElectionState.withElectedLeader(5, 1, Set.of(1, 2, 3)),
+            ElectionState.withVotedCandidate(5, votedKey, Set.of(1, 2, 3))
         );
 
         final List<ElectionState> expected;
         if (version == 0) {
             expected = Arrays.asList(
-                ElectionState.withUnknownLeader(5, Utils.mkSet(1, 2, 3)),
-                ElectionState.withElectedLeader(5, 1, Utils.mkSet(1, 2, 3)),
+                ElectionState.withUnknownLeader(5, Set.of(1, 2, 3)),
+                ElectionState.withElectedLeader(5, 1, Set.of(1, 2, 3)),
                 ElectionState.withVotedCandidate(
                     5,
                     ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID),
-                    Utils.mkSet(1, 2, 3)
+                    Set.of(1, 2, 3)
                 )
             );
         } else {

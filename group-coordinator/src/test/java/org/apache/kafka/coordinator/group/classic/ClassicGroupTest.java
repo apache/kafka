@@ -68,7 +68,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.COMPLETING_REBALANCE;
@@ -384,14 +383,14 @@ public class ClassicGroupTest {
         );
 
         // by default, the group supports everything
-        assertTrue(group.supportsProtocols(protocolType, mkSet("range", "roundrobin")));
+        assertTrue(group.supportsProtocols(protocolType, Set.of("range", "roundrobin")));
 
         group.add(member1);
         group.transitionTo(PREPARING_REBALANCE);
 
-        assertTrue(group.supportsProtocols(protocolType, mkSet("roundrobin", "foo")));
-        assertTrue(group.supportsProtocols(protocolType, mkSet("range", "bar")));
-        assertFalse(group.supportsProtocols(protocolType, mkSet("foo", "bar")));
+        assertTrue(group.supportsProtocols(protocolType, Set.of("roundrobin", "foo")));
+        assertTrue(group.supportsProtocols(protocolType, Set.of("range", "bar")));
+        assertFalse(group.supportsProtocols(protocolType, Set.of("foo", "bar")));
     }
 
     @Test

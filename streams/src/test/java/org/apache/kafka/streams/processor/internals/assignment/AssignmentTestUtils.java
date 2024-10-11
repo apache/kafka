@@ -69,7 +69,6 @@ import static org.apache.kafka.common.utils.Utils.entriesToMap;
 import static org.apache.kafka.common.utils.Utils.intersection;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasItems;
@@ -674,9 +673,9 @@ public final class AssignmentTestUtils {
         final String topicName = changelog ? CHANGELOG_TOPIC_PREFIX : TOPIC_PREFIX;
         for (int i = 0; i < tpSize; i++) {
             for (int j = 0; j < partitionSize; j++) {
-                taskTopicPartitionMap.put(new TaskId(i, j), mkSet(
+                taskTopicPartitionMap.put(new TaskId(i, j), new HashSet<>(List.of(
                     new TopicPartition(topicName + i, j),
-                    new TopicPartition(topicName + ((i + 1) % tpSize), j)
+                    new TopicPartition(topicName + ((i + 1) % tpSize), j))
                 ));
             }
         }
@@ -813,8 +812,8 @@ public final class AssignmentTestUtils {
     static Cluster getClusterForAllTopics() {
         return new Cluster(
             "cluster",
-            mkSet(NODE_0, NODE_1, NODE_2, NODE_3, NODE_4),
-            mkSet(
+            Set.of(NODE_0, NODE_1, NODE_2, NODE_3, NODE_4),
+            Set.of(
                 PI_0_0,
                 PI_0_1,
                 PI_0_2,
@@ -841,56 +840,56 @@ public final class AssignmentTestUtils {
 
     static Map<TaskId, Set<TopicPartition>> getTaskTopicPartitionMapForAllTasks() {
         return mkMap(
-            mkEntry(TASK_0_0, mkSet(TP_0_0)),
-            mkEntry(TASK_0_1, mkSet(TP_0_1)),
-            mkEntry(TASK_0_2, mkSet(TP_0_2)),
-            mkEntry(TASK_0_3, mkSet(TP_0_3)),
-            mkEntry(TASK_0_4, mkSet(TP_0_4)),
-            mkEntry(TASK_0_5, mkSet(TP_0_5)),
-            mkEntry(TASK_0_6, mkSet(TP_0_6)),
-            mkEntry(TASK_1_0, mkSet(TP_1_0)),
-            mkEntry(TASK_1_1, mkSet(TP_1_1)),
-            mkEntry(TASK_1_2, mkSet(TP_1_2)),
-            mkEntry(TASK_1_3, mkSet(TP_1_3)),
-            mkEntry(TASK_2_0, mkSet(TP_2_0)),
-            mkEntry(TASK_2_1, mkSet(TP_2_1)),
-            mkEntry(TASK_2_2, mkSet(TP_2_2)),
-            mkEntry(TASK_2_3, mkSet(TP_2_3)),
-            mkEntry(TASK_3_0, mkSet(TP_3_0)),
-            mkEntry(TASK_3_1, mkSet(TP_3_1)),
-            mkEntry(TASK_3_2, mkSet(TP_3_2))
+            mkEntry(TASK_0_0, Set.of(TP_0_0)),
+            mkEntry(TASK_0_1, Set.of(TP_0_1)),
+            mkEntry(TASK_0_2, Set.of(TP_0_2)),
+            mkEntry(TASK_0_3, Set.of(TP_0_3)),
+            mkEntry(TASK_0_4, Set.of(TP_0_4)),
+            mkEntry(TASK_0_5, Set.of(TP_0_5)),
+            mkEntry(TASK_0_6, Set.of(TP_0_6)),
+            mkEntry(TASK_1_0, Set.of(TP_1_0)),
+            mkEntry(TASK_1_1, Set.of(TP_1_1)),
+            mkEntry(TASK_1_2, Set.of(TP_1_2)),
+            mkEntry(TASK_1_3, Set.of(TP_1_3)),
+            mkEntry(TASK_2_0, Set.of(TP_2_0)),
+            mkEntry(TASK_2_1, Set.of(TP_2_1)),
+            mkEntry(TASK_2_2, Set.of(TP_2_2)),
+            mkEntry(TASK_2_3, Set.of(TP_2_3)),
+            mkEntry(TASK_3_0, Set.of(TP_3_0)),
+            mkEntry(TASK_3_1, Set.of(TP_3_1)),
+            mkEntry(TASK_3_2, Set.of(TP_3_2))
         );
     }
 
     static Map<Subtopology, Set<TaskId>> getTasksForTopicGroup() {
         return mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5, TASK_0_6)),
-            mkEntry(new Subtopology(1, null), mkSet(TASK_1_0, TASK_1_1, TASK_1_2, TASK_1_3)),
-            mkEntry(new Subtopology(2, null), mkSet(TASK_2_0, TASK_2_1, TASK_2_2, TASK_2_3)),
-            mkEntry(new Subtopology(3, null), mkSet(TASK_3_0, TASK_3_1, TASK_3_2))
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5, TASK_0_6)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2, TASK_1_3)),
+            mkEntry(new Subtopology(2, null), Set.of(TASK_2_0, TASK_2_1, TASK_2_2, TASK_2_3)),
+            mkEntry(new Subtopology(3, null), Set.of(TASK_3_0, TASK_3_1, TASK_3_2))
         );
     }
 
     static Map<TaskId, Set<TopicPartition>> getTaskChangelogMapForAllTasks() {
         return mkMap(
-            mkEntry(TASK_0_0, mkSet(CHANGELOG_TP_0_0)),
-            mkEntry(TASK_0_1, mkSet(CHANGELOG_TP_0_1)),
-            mkEntry(TASK_0_2, mkSet(CHANGELOG_TP_0_2)),
-            mkEntry(TASK_0_3, mkSet(CHANGELOG_TP_0_3)),
-            mkEntry(TASK_0_4, mkSet(CHANGELOG_TP_0_4)),
-            mkEntry(TASK_0_5, mkSet(CHANGELOG_TP_0_5)),
-            mkEntry(TASK_0_6, mkSet(CHANGELOG_TP_0_6)),
-            mkEntry(TASK_1_0, mkSet(CHANGELOG_TP_1_0)),
-            mkEntry(TASK_1_1, mkSet(CHANGELOG_TP_1_1)),
-            mkEntry(TASK_1_2, mkSet(CHANGELOG_TP_1_2)),
-            mkEntry(TASK_1_3, mkSet(CHANGELOG_TP_1_3)),
-            mkEntry(TASK_2_0, mkSet(CHANGELOG_TP_2_0)),
-            mkEntry(TASK_2_1, mkSet(CHANGELOG_TP_2_1)),
-            mkEntry(TASK_2_2, mkSet(CHANGELOG_TP_2_2)),
-            mkEntry(TASK_2_3, mkSet(CHANGELOG_TP_2_3)),
-            mkEntry(TASK_3_0, mkSet(CHANGELOG_TP_3_0)),
-            mkEntry(TASK_3_1, mkSet(CHANGELOG_TP_3_1)),
-            mkEntry(TASK_3_2, mkSet(CHANGELOG_TP_3_2))
+            mkEntry(TASK_0_0, Set.of(CHANGELOG_TP_0_0)),
+            mkEntry(TASK_0_1, Set.of(CHANGELOG_TP_0_1)),
+            mkEntry(TASK_0_2, Set.of(CHANGELOG_TP_0_2)),
+            mkEntry(TASK_0_3, Set.of(CHANGELOG_TP_0_3)),
+            mkEntry(TASK_0_4, Set.of(CHANGELOG_TP_0_4)),
+            mkEntry(TASK_0_5, Set.of(CHANGELOG_TP_0_5)),
+            mkEntry(TASK_0_6, Set.of(CHANGELOG_TP_0_6)),
+            mkEntry(TASK_1_0, Set.of(CHANGELOG_TP_1_0)),
+            mkEntry(TASK_1_1, Set.of(CHANGELOG_TP_1_1)),
+            mkEntry(TASK_1_2, Set.of(CHANGELOG_TP_1_2)),
+            mkEntry(TASK_1_3, Set.of(CHANGELOG_TP_1_3)),
+            mkEntry(TASK_2_0, Set.of(CHANGELOG_TP_2_0)),
+            mkEntry(TASK_2_1, Set.of(CHANGELOG_TP_2_1)),
+            mkEntry(TASK_2_2, Set.of(CHANGELOG_TP_2_2)),
+            mkEntry(TASK_2_3, Set.of(CHANGELOG_TP_2_3)),
+            mkEntry(TASK_3_0, Set.of(CHANGELOG_TP_3_0)),
+            mkEntry(TASK_3_1, Set.of(CHANGELOG_TP_3_1)),
+            mkEntry(TASK_3_2, Set.of(CHANGELOG_TP_3_2))
         );
     }
 

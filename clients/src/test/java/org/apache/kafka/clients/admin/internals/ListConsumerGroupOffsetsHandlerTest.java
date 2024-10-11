@@ -31,7 +31,6 @@ import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.Test;
 
@@ -100,10 +99,10 @@ public class ListConsumerGroupOffsetsHandlerTest {
 
         ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(requestMap, false, logContext);
         OffsetFetchRequest request1 = handler.buildBatchedRequest(coordinatorKeys(groupZero, groupOne, groupTwo)).build();
-        assertEquals(Utils.mkSet(groupZero, groupOne, groupTwo), requestGroups(request1));
+        assertEquals(Set.of(groupZero, groupOne, groupTwo), requestGroups(request1));
 
         OffsetFetchRequest request2 = handler.buildBatchedRequest(coordinatorKeys(groupThree)).build();
-        assertEquals(Utils.mkSet(groupThree), requestGroups(request2));
+        assertEquals(Set.of(groupThree), requestGroups(request2));
 
         Map<String, ListConsumerGroupOffsetsSpec> builtRequests = new HashMap<>();
         request1.groupIdsToPartitions().forEach((group, partitions) ->
@@ -137,7 +136,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
         ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(batchedRequestMap, false, logContext);
         Collection<RequestAndKeys<CoordinatorKey>> requests = handler.buildRequest(1, coordinatorKeys(groupZero, groupOne, groupTwo));
         assertEquals(1, requests.size());
-        assertEquals(Utils.mkSet(groupZero, groupOne, groupTwo), requestGroups((OffsetFetchRequest) requests.iterator().next().request.build()));
+        assertEquals(Set.of(groupZero, groupOne, groupTwo), requestGroups((OffsetFetchRequest) requests.iterator().next().request.build()));
     }
 
     @Test
@@ -148,7 +147,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
         Collection<RequestAndKeys<CoordinatorKey>> requests = handler.buildRequest(1, coordinatorKeys(groupZero, groupOne, groupTwo));
         assertEquals(3, requests.size());
         assertEquals(
-            Utils.mkSet(Utils.mkSet(groupZero), Utils.mkSet(groupOne), Utils.mkSet(groupTwo)),
+            Set.of(Set.of(groupZero), Set.of(groupOne), Set.of(groupTwo)),
             requests.stream().map(requestAndKey -> requestGroups((OffsetFetchRequest) requestAndKey.request.build())).collect(Collectors.toSet())
         );
     }

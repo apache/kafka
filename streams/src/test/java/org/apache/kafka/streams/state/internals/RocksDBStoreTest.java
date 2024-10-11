@@ -716,7 +716,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 keys.add(stringDeserializer.deserialize(null, iterator.next().key.get()));
             }
 
-            assertThat(keys, equalTo(Utils.mkSet("2", "3")));
+            assertThat(keys, equalTo(Set.of("2", "3")));
         }
     }
 
@@ -741,7 +741,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 keys.add(stringDeserializer.deserialize(null, iterator.next().key.get()));
             }
 
-            assertThat(keys, equalTo(Utils.mkSet("1", "2", "3")));
+            assertThat(keys, equalTo(Set.of("1", "2", "3")));
 
             assertEquals(
                 "restored",
@@ -800,7 +800,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
                 keys.add(stringDeserializer.deserialize(null, iterator.next().key.get()));
             }
 
-            assertThat(keys, equalTo(Utils.mkSet("2", "3")));
+            assertThat(keys, equalTo(Set.of("2", "3")));
         }
     }
 

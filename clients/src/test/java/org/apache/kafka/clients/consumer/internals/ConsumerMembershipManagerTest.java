@@ -69,7 +69,6 @@ import static org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer.inv
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -676,7 +675,7 @@ public class ConsumerMembershipManagerTest {
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         verifyReconciliationNotTriggered(membershipManager);
         assertEquals(Collections.singletonMap(topic1, mkSortedSet(0)), membershipManager.currentAssignment().partitions);
-        assertEquals(mkSet(topic2), membershipManager.topicsAwaitingReconciliation());
+        assertEquals(Set.of(topic2), membershipManager.topicsAwaitingReconciliation());
     }
 
     private Map<Uuid, SortedSet<Integer>> toTopicIdPartitionMap(final Assignment assignment) {
@@ -794,7 +793,7 @@ public class ConsumerMembershipManagerTest {
 
         verifyReconciliationNotTriggered(membershipManager);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
-        assertEquals(mkSet(topicId1, topicId2), membershipManager.topicsAwaitingReconciliation());
+        assertEquals(Set.of(topicId1, topicId2), membershipManager.topicsAwaitingReconciliation());
         clearInvocations(membershipManager, commitRequestManager);
 
         // First reconciliation completes. Should trigger follow-up reconciliation to complete the assignment,
@@ -803,7 +802,7 @@ public class ConsumerMembershipManagerTest {
         commitFuture.complete(null);
 
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
-        assertEquals(mkSet(topicId2), membershipManager.topicsAwaitingReconciliation());
+        assertEquals(Set.of(topicId2), membershipManager.topicsAwaitingReconciliation());
 
         // After acknowledging the assignment, we should be back to RECONCILING, because we have not
         // yet reached the target assignment.

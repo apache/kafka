@@ -61,12 +61,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -148,7 +148,7 @@ public class LagFetchIntegrationTest {
 
         IntegrationTestUtils.produceKeyValuesSynchronously(
             inputTopicName,
-            mkSet(new KeyValue<>("k1", 1L), new KeyValue<>("k2", 2L), new KeyValue<>("k3", 3L), new KeyValue<>("k4", 4L), new KeyValue<>("k5", 5L)),
+            Set.of(new KeyValue<>("k1", 1L), new KeyValue<>("k2", 2L), new KeyValue<>("k3", 3L), new KeyValue<>("k4", 4L), new KeyValue<>("k5", 5L)),
             TestUtils.producerConfig(
                 CLUSTER.bootstrapServers(),
                 StringSerializer.class,
@@ -211,7 +211,7 @@ public class LagFetchIntegrationTest {
             // Check the active reports proper lag values.
             Map<String, Map<Integer, LagInfo>> offsetLagInfoMap = getFirstNonEmptyLagMap(activeStreams);
             assertThat(offsetLagInfoMap.size(), equalTo(1));
-            assertThat(offsetLagInfoMap.keySet(), equalTo(mkSet(stateStoreName)));
+            assertThat(offsetLagInfoMap.keySet(), equalTo(Set.of(stateStoreName)));
             assertThat(offsetLagInfoMap.get(stateStoreName).size(), equalTo(1));
             LagInfo lagInfo = offsetLagInfoMap.get(stateStoreName).get(0);
             assertThat(lagInfo.currentOffsetPosition(), equalTo(5L));
@@ -223,7 +223,7 @@ public class LagFetchIntegrationTest {
             latchTillStandbyHasPartitionsAssigned.await(60, TimeUnit.SECONDS);
             offsetLagInfoMap = getFirstNonEmptyLagMap(standbyStreams);
             assertThat(offsetLagInfoMap.size(), equalTo(1));
-            assertThat(offsetLagInfoMap.keySet(), equalTo(mkSet(stateStoreName)));
+            assertThat(offsetLagInfoMap.keySet(), equalTo(Set.of(stateStoreName)));
             assertThat(offsetLagInfoMap.get(stateStoreName).size(), equalTo(1));
             lagInfo = offsetLagInfoMap.get(stateStoreName).get(0);
             assertThat(lagInfo.currentOffsetPosition(), equalTo(0L));
@@ -257,7 +257,7 @@ public class LagFetchIntegrationTest {
     public void shouldFetchLagsDuringRestoration() throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronously(
             inputTopicName,
-            mkSet(new KeyValue<>("k1", 1L), new KeyValue<>("k2", 2L), new KeyValue<>("k3", 3L), new KeyValue<>("k4", 4L), new KeyValue<>("k5", 5L)),
+            Set.of(new KeyValue<>("k1", 1L), new KeyValue<>("k2", 2L), new KeyValue<>("k3", 3L), new KeyValue<>("k4", 4L), new KeyValue<>("k5", 5L)),
             TestUtils.producerConfig(
                 CLUSTER.bootstrapServers(),
                 StringSerializer.class,
@@ -296,7 +296,7 @@ public class LagFetchIntegrationTest {
             TestUtils.waitForCondition(() -> {
                 final Map<String, Map<Integer, LagInfo>> offsetLagInfoMap = streams.allLocalStorePartitionLags();
                 assertThat(offsetLagInfoMap.size(), equalTo(1));
-                assertThat(offsetLagInfoMap.keySet(), equalTo(mkSet(stateStoreName)));
+                assertThat(offsetLagInfoMap.keySet(), equalTo(Set.of(stateStoreName)));
                 assertThat(offsetLagInfoMap.get(stateStoreName).size(), equalTo(1));
 
                 final LagInfo zeroLagInfo = offsetLagInfoMap.get(stateStoreName).get(0);
