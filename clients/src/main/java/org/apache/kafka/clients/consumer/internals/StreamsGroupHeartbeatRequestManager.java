@@ -114,8 +114,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
     @Override
     public NetworkClientDelegate.PollResult poll(long currentTimeMs) {
-        if (!coordinatorRequestManager.coordinator().isPresent() ||
-            membershipManager.shouldSkipHeartbeat()) {
+        if (!coordinatorRequestManager.coordinator().isPresent() || membershipManager.shouldSkipHeartbeat()) {
             membershipManager.onHeartbeatRequestSkipped();
             return NetworkClientDelegate.PollResult.EMPTY;
         }
@@ -221,6 +220,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
     private void onFailure(final Throwable exception, final long responseTimeMs) {
         this.heartbeatRequestState.onFailedAttempt(responseTimeMs);
         this.heartbeatState.reset();
+        membershipManager.onHeartbeatFailure(exception instanceof RetriableException);
         if (exception instanceof RetriableException) {
             String message = String.format("StreamsGroupHeartbeatRequest failed because of the retriable exception. " +
                     "Will retry in %s ms: %s",
