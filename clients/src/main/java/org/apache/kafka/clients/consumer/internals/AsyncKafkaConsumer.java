@@ -72,7 +72,6 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidTopicException;
@@ -113,7 +112,6 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -246,7 +244,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private boolean cachedSubscriptionHasAllFetchPositions;
     private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
     private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
-    private final AtomicBoolean asyncCommitFenced;
     // Last triggered async commit future. Used to wait until all previous async commits are completed.
     // We only need to keep track of the last one, since they are guaranteed to complete in order.
     private CompletableFuture<Void> lastPendingAsyncCommit = null;
@@ -334,7 +331,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null),
                     backgroundEventHandler);
             this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
-            this.asyncCommitFenced = new AtomicBoolean(false);
             this.groupMetadata.set(initializeGroupMetadata(config, groupRebalanceConfig));
             final Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(time,
                     logContext,
@@ -447,7 +443,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.clientTelemetryReporter = Optional.empty();
         this.autoCommitEnabled = autoCommitEnabled;
         this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
-        this.asyncCommitFenced = new AtomicBoolean(false);
     }
 
     AsyncKafkaConsumer(LogContext logContext,
@@ -511,7 +506,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             backgroundEventHandler
         );
         this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
-        this.asyncCommitFenced = new AtomicBoolean(false);
         Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(
             time,
             logContext,
@@ -757,10 +751,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     offsetCommitCallbackInvoker.enqueueInterceptorInvocation(offsets);
                 }
 
-                if (t instanceof FencedInstanceIdException) {
-                    asyncCommitFenced.set(true);
-                }
-
                 if (callback == null) {
                     if (t != null) {
                         log.error("Offset commit with offsets {} failed", offsets, t);
@@ -777,7 +767,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     private CompletableFuture<Void> commit(final CommitEvent commitEvent) {
         maybeThrowInvalidGroupIdException();
-        maybeThrowFencedInstanceException();
         offsetCommitCallbackInvoker.executeCallbacks();
 
         Map<TopicPartition, OffsetAndMetadata> offsets = commitEvent.offsets();
@@ -1609,7 +1598,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public boolean updateAssignmentMetadataIfNeeded(Timer timer) {
-        maybeThrowFencedInstanceException();
         offsetCommitCallbackInvoker.executeCallbacks();
         maybeUpdateSubscriptionMetadata();
         processBackgroundEvents();
@@ -1889,20 +1877,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     @Override
     public KafkaConsumerMetrics kafkaConsumerMetrics() {
         return kafkaConsumerMetrics;
-    }
-
-    private void maybeThrowFencedInstanceException() {
-        if (asyncCommitFenced.get()) {
-            String groupInstanceId = "unknown";
-            if (!groupMetadata.get().isPresent()) {
-                log.error("No group metadata found although a group ID was provided. This is a bug!");
-            } else if (!groupMetadata.get().get().groupInstanceId().isPresent()) {
-                log.error("No group instance ID found although the consumer is fenced. This is a bug!");
-            } else {
-                groupInstanceId = groupMetadata.get().get().groupInstanceId().get();
-            }
-            throw new FencedInstanceIdException("Get fenced exception for group.instance.id " + groupInstanceId);
-        }
     }
 
     // Visible for testing
