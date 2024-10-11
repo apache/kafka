@@ -20,7 +20,7 @@ package org.apache.kafka.common.errors;
 /**
  * Thrown if a request cannot be completed because a partition reassignment is in progress.
  */
-public class ReassignmentInProgressException extends ApiException {
+public class ReassignmentInProgressException extends RetriableException {
 
     public ReassignmentInProgressException(String msg) {
         super(msg);
