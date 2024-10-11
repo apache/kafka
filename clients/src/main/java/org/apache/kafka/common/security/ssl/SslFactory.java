@@ -190,7 +190,7 @@ public class SslFactory implements Reconfigurable, Closeable {
             }
             return newSslEngineFactory;
         } catch (Exception e) {
-            log.debug("Validation of dynamic config update of SSLFactory failed.", e);
+            log.error("Validation of dynamic config update of SSLFactory failed.", e);
             throw new ConfigException("Validation of dynamic config update of SSLFactory failed: " + e);
         }
     }
