@@ -160,7 +160,7 @@
     to accumulate no more than a fixed number of messages and to wait no longer than some fixed latency bound (say 64k or 10 ms). This allows the accumulation of more bytes to send, and few larger I/O operations on the
     servers. This buffering is configurable and gives a mechanism to trade off a small amount of additional latency for better throughput.
     <p>
-    Details on <a href="#producerconfigs">configuration</a> and the <a href="https://kafka.apache.org/082/javadoc/index.html?org/apache/kafka/clients/producer/KafkaProducer.html">api</a> for the producer can be found
+    Details on <a href="#producerconfigs">configuration</a> and the <a href="https://kafka.apache.org/{{version}}/javadoc/org/apache/kafka/clients/producer/KafkaProducer.html">api</a> for the producer can be found
     elsewhere in the documentation.
 
     <h3 class="anchor-heading"><a id="theconsumer" class="anchor-link"></a><a href="#theconsumer">4.5 The Consumer</a></h3>
@@ -292,9 +292,10 @@
     <p>
     So what about exactly-once semantics? When consuming from a Kafka topic and producing to another topic (as in a <a href="https://kafka.apache.org/documentation/streams">Kafka Streams</a> application), we can
     leverage the new transactional producer capabilities in 0.11.0.0 that were mentioned above. The consumer's position is stored as a message in an internal topic, so we can write the offset to Kafka in the
-    same transaction as the output topics receiving the processed data. If the transaction is aborted, the consumer's stored position will revert to its old value and the produced data on the output topics will not
-    be visible to other consumers, depending on their "isolation level." In the default "read_uncommitted" isolation level, all messages are visible to consumers even if they were part of an aborted transaction,
-    but in "read_committed" isolation level, the consumer will only return messages from transactions which were committed (and any messages which were not part of a transaction).
+    same transaction as the output topics receiving the processed data. If the transaction is aborted, the consumer's stored position will revert to its old value (although the consumer has to refetch the
+    committed offset because it does not automatically rewind) and the produced data on the output topics will not be visible to other consumers, depending on their "isolation level". In the default
+    "read_uncommitted" isolation level, all messages are visible to consumers even if they were part of an aborted transaction, but in "read_committed" isolation level, the consumer will only return messages
+    from transactions which were committed (and any messages which were not part of a transaction).
     <p>
     When writing to an external system, the limitation is in the need to coordinate the consumer's position with what is actually stored as output. The classic way of achieving this would be to introduce a two-phase
     commit between the storage of the consumer position and the storage of the consumers output. This can be handled more simply and generally by letting the consumer store its offset in the same place as
@@ -324,7 +325,8 @@
     <p>
     The consumer configuration must include <code>isolation.level=read_committed</code> and <code>enable.auto.commit=false</code>. The producer configuration must set <code>transactional.id</code>
     to the name of the transactional ID to be used, which configures the producer for transactional delivery and also makes sure that a restarted application causes any in-flight transaction from
-    the previous instance to abort. Only the producer has the <code>transactional.id</code> configuration.
+    the previous instance to abort. Only the producer has the <code>transactional.id</code> configuration. Strictly speaking, the consumer doesn't have to use read_committed isolation level, but if
+    it does not, it will see records from aborted transactions and also open transactions which have not yet completed, which seems undesirable if trying to achieve exactly-once.
     <p>
     Here's an example of a <a href="https://github.com/apache/kafka/blob/trunk/tools/src/main/java/org/apache/kafka/tools/TransactionalMessageCopier.java">transactional message copier</a>
     which uses these principles. It uses a <code>KafkaConsumer</code> to consume records from one topic and a <code>KafkaProducer</code> to produce records to another topic. It uses transactions to ensure
