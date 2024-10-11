@@ -398,7 +398,8 @@ public class PartitionRegistration {
         } else {
             for (Uuid directory : directories) {
                 if (!DirectoryId.MIGRATING.equals(directory)) {
-                    options.handleLoss("the directory assignment state of one or more replicas");
+                    options.handleLoss("the directory " + (directory == DirectoryId.UNASSIGNED ? "unassigned" : "lost")
+                        + " state of one or more replicas");
                     break;
                 }
             }
