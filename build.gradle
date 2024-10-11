@@ -1540,8 +1540,8 @@ project(':group-coordinator') {
              "-m", "MessageDataGenerator", "JsonConverterGenerator"
     ]
     inputs.dir("src/main/resources/common/message")
-          .withPropertyName("messages")
-          .withPathSensitivity(PathSensitivity.RELATIVE)
+        .withPropertyName("messages")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
     outputs.cacheIf { true }
     outputs.dir("${projectDir}/build/generated/main/java/org/apache/kafka/coordinator/group/generated")
   }
