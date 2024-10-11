@@ -271,7 +271,7 @@ class KRaftMetadataCache(
    *
    * @param topics                        The iterator of topics and their corresponding first partition id to fetch.
    * @param listenerName                  The listener name.
-   * @param firstTopicPartitionStartIndex The start partition index for the first topic
+   * @param topicPartitionStartIndex      The start partition index for the first topic
    * @param maximumNumberOfPartitions     The max number of partitions to return.
    * @param ignoreTopicsWithExceptions    Whether ignore the topics with exception.
    */
