@@ -330,3 +330,8 @@ jline-3.25.1, see: licenses/jline-BSD-3-clause
 jsr305-3.0.2, see: licenses/jsr305-BSD-3-clause
 paranamer-2.8, see: licenses/paranamer-BSD-3-clause
 protobuf-java-3.25.5, see: licenses/protobuf-java-BSD-3-clause
+
+---------------------------------------
+Go License
+
+re2j-1.7 see: licenses/re2j-GO

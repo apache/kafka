@@ -1491,6 +1491,7 @@ project(':group-coordinator') {
     implementation libs.slf4jApi
     implementation libs.metrics
     implementation libs.hdrHistogram
+    implementation libs.re2j
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
