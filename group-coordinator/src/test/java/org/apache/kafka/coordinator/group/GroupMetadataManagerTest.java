@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import com.google.re2j.Pattern;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.TopicPartition;

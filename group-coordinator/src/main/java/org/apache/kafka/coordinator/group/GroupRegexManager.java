@@ -17,8 +17,6 @@
 
 package org.apache.kafka.coordinator.group;
 
-import com.google.re2j.Pattern;
-import com.google.re2j.PatternSyntaxException;
 import org.apache.kafka.common.errors.InvalidRegularExpression;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
@@ -29,6 +27,10 @@ import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupRegex.Res
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
+
+import com.google.re2j.Pattern;
+import com.google.re2j.PatternSyntaxException;
+
 import org.slf4j.Logger;
 
 import java.util.Collections;

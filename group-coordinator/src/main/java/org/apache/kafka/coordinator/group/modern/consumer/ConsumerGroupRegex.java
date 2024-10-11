@@ -17,9 +17,10 @@
 
 package org.apache.kafka.coordinator.group.modern.consumer;
 
-import com.google.re2j.Pattern;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegexKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegexValue;
+
+import com.google.re2j.Pattern;
 
 import java.util.HashSet;
 import java.util.Objects;

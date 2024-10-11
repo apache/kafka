@@ -17,7 +17,6 @@
 
 package org.apache.kafka.coordinator.group;
 
-import com.google.re2j.Pattern;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -28,6 +27,9 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.metadata.PartitionRegistration;
+
+import com.google.re2j.Pattern;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
