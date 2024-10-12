@@ -72,8 +72,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.coordinator.common.runtime.TestUtil.requestContext;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorShard.CLASSIC_GROUP_SIZE_COUNTER_KEY;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorShard.DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS;
@@ -973,7 +973,7 @@ public class GroupCoordinatorShardTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<CoordinatorRecord>> recordsCapture = ArgumentCaptor.forClass(List.class);
 
-        when(groupMetadataManager.groupIds()).thenReturn(mkSet("group-id", "other-group-id"));
+        when(groupMetadataManager.groupIds()).thenReturn(Set.of("group-id", "other-group-id"));
         when(offsetMetadataManager.cleanupExpiredOffsets(eq("group-id"), recordsCapture.capture()))
             .thenAnswer(invocation -> {
                 List<CoordinatorRecord> records = recordsCapture.getValue();
