@@ -1202,11 +1202,24 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             metadata.maybeThrowExceptionForTopic(topic);
             remainingWaitMs = maxWaitMs - elapsed;
             partitionsCount = cluster.partitionCountForTopic(topic);
-        } while (partitionsCount == null || (partition != null && partition >= partitionsCount));
+
+            if (!topicPartitionMetadataFound(partitionsCount, partition)) {
+                String expectedMetadataNotFoundMessage = partitionsCount == null ?
+                    String.format("Topic %s not present in metadata after %d ms. Retrying until %d ms elapses",
+                        topic, elapsed, maxWaitMs) :
+                    String.format("Partition %d of topic %s with partition count %d is not present in metadata after %d ms. Retrying until %d ms elapses",
+                        partition, topic, partitionsCount, elapsed, maxWaitMs);
+                log.debug(expectedMetadataNotFoundMessage);
+            }
+        } while (!topicPartitionMetadataFound(partitionsCount, partition));
 
         producerMetrics.recordMetadataWait(time.nanoseconds() - nowNanos);
 
         return new ClusterAndWaitTime(cluster, elapsed);
+    }
+
+    private boolean topicPartitionMetadataFound(Integer partitionsCount, Integer expectedPartition) {
+        return partitionsCount != null && (expectedPartition == null || expectedPartition < partitionsCount);
     }
 
     /**
