@@ -21,6 +21,8 @@ on:
     types:
       - requested
 
+run-name: CI Requested for ${{ github.event.workflow_run.display_title}}
+
 jobs:
   check-pr-labels:
     # Even though job conditionals are difficult to debug, this will reduce the number of unnecessary runs
