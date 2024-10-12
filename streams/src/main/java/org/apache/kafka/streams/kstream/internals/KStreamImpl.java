@@ -45,6 +45,7 @@ import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.internals.graph.BaseRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.BaseRepartitionNode.BaseRepartitionNodeBuilder;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.PartitionPreservingNode;
 import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
@@ -131,6 +132,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     private static final String REPARTITION_NAME = "KSTREAM-REPARTITION-";
 
+    private static final String PARTITION_PRESERVE_NAME = "KSTREAM-PARTITION-PRESERVE";
+
     private final boolean repartitionRequired;
 
     private OptimizableRepartitionNode<K, V> repartitionNode;
@@ -214,7 +217,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                          final Named named) {
         Objects.requireNonNull(mapper, "mapper can't be null");
         Objects.requireNonNull(named, "named can't be null");
-
         final ProcessorGraphNode<K, V> selectKeyProcessorNode = internalSelectKey(mapper, new NamedInternal(named));
         selectKeyProcessorNode.keyChangingOperation(true);
 
@@ -324,7 +326,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                             final Named named) {
         Objects.requireNonNull(mapper, "mapper can't be null");
         Objects.requireNonNull(named, "named can't be null");
-
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, FLATMAP_NAME);
         final ProcessorParameters<? super K, ? super V, ?, ?> processorParameters =
             new ProcessorParameters<>(new KStreamFlatMap<>(mapper), name);
@@ -699,7 +700,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final GroupedInternal<KR, V> groupedInternal = new GroupedInternal<>(grouped);
         final ProcessorGraphNode<K, V> selectKeyMapNode = internalSelectKey(keySelector, new NamedInternal(groupedInternal.name()));
-        selectKeyMapNode.keyChangingOperation(true);
 
         builder.addGraphNode(graphNode, selectKeyMapNode);
 
@@ -1525,5 +1525,29 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             repartitionRequired,
             processNode,
             builder);
+    }
+
+    @Override
+    public KStream<K, V> markAsPartitioned(final Named named) {
+
+        final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, PARTITION_PRESERVE_NAME);
+
+        final ProcessorParameters<? super K, ? super V, ?, ?> processorParameters =
+                new ProcessorParameters<>(new PassThrough<>(), PARTITION_PRESERVE_NAME + name);
+
+        final PartitionPreservingNode<? super K, ? super V> partitionPreservingNode = new PartitionPreservingNode<>(
+                processorParameters,
+                PARTITION_PRESERVE_NAME + name);
+
+        builder.addGraphNode(graphNode, partitionPreservingNode);
+        return new KStreamImpl<>(
+                name,
+                keySerde,
+                valueSerde,
+                subTopologySourceNodes,
+                false,
+                partitionPreservingNode,
+                builder
+        );
     }
 }

@@ -435,6 +435,87 @@ public class KStreamRepartitionIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
+    public void shouldNotRepartitionWithMarkAsPartitionedFollowingSelectKey(final String topologyOptimization) throws Exception {
+        final long timestamp = System.currentTimeMillis();
+
+        sendEvents(
+                timestamp,
+                Arrays.asList(
+                        new KeyValue<>(1, "10"),
+                        new KeyValue<>(2, "20")
+                )
+        );
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
+                .selectKey((key, value) -> Integer.valueOf(value))
+                .markAsPartitioned(Named.as("partition-preserved"))
+                .groupByKey()
+                .count()
+                .toStream()
+                .to(outputTopic);
+
+
+        startStreams(builder, createStreamsConfig(topologyOptimization));
+
+        validateReceivedMessages(
+                new IntegerDeserializer(),
+                new LongDeserializer(),
+                Arrays.asList(
+                        new KeyValue<>(10, 1L),
+                        new KeyValue<>(20, 1L)
+                )
+        );
+
+        final String topology = builder.build().describe().toString();
+
+        assertEquals(0, countOccurrencesInTopology(topology, "Sink: .*-repartition.*"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
+    public void shouldNotRepartitionWithMarkAsPartitionedFollowingMap(final String topologyOptimization) throws Exception {
+        final String topicBMapperName = "topic-b-mapper";
+        final long timestamp = System.currentTimeMillis();
+
+        sendEvents(
+                timestamp,
+                Arrays.asList(
+                        new KeyValue<>(1, "10"),
+                        new KeyValue<>(2, "20")
+                )
+        );
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
+                .map(KeyValue::new, Named.as(topicBMapperName))
+                .markAsPartitioned(Named.as("partition-preserved"))
+                .groupByKey()
+                .count()
+                .toStream()
+                .to(outputTopic);
+
+
+        startStreams(builder, createStreamsConfig(topologyOptimization));
+
+        validateReceivedMessages(
+                new IntegerDeserializer(),
+                new LongDeserializer(),
+                Arrays.asList(
+                        new KeyValue<>(1, 1L),
+                        new KeyValue<>(2, 1L)
+                )
+        );
+
+        final String topology = builder.build().describe().toString();
+
+        assertEquals(0, countOccurrencesInTopology(topology, "Sink: .*-repartition.*"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
     public void shouldCreateRepartitionTopicIfKeyChangingOperationWasNotPerformed(final String topologyOptimization) throws Exception {
         final String repartitionName = "dummy";
         final long timestamp = System.currentTimeMillis();
