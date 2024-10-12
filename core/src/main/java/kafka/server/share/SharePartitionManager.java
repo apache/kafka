@@ -627,7 +627,7 @@ public class SharePartitionManager implements AutoCloseable {
                     // We add a key corresponding to each topic partition in the request so that when the HWM is updated
                     // for any topic partition, we have a way to perform checkAndComplete for all such requests which are
                     // delayed because of lack of data to acquire for the topic partition.
-                    delayedShareFetchWatchKeys.add(new DelayedShareFetchPartitionKey(topicIdPartition.topic(), topicIdPartition.partition()));
+                    delayedShareFetchWatchKeys.add(new DelayedShareFetchPartitionKey(topicIdPartition.topicId(), topicIdPartition.partition()));
                 });
 
             // Add the share fetch to the delayed share fetch purgatory to process the fetch request.

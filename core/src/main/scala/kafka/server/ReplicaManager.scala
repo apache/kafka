@@ -469,11 +469,13 @@ class ReplicaManager(val config: KafkaConfig,
     })
   }
 
-  private def completeDelayedFetchOrProduceRequests(topicPartition: TopicPartition): Unit = {
+  private def completeDelayedFetchOrProduceRequests(topicPartition: TopicPartition, topicId: Option[Uuid]): Unit = {
     val topicPartitionOperationKey = TopicPartitionOperationKey(topicPartition)
     delayedProducePurgatory.checkAndComplete(topicPartitionOperationKey)
     delayedFetchPurgatory.checkAndComplete(topicPartitionOperationKey)
     delayedRemoteFetchPurgatory.checkAndComplete(topicPartitionOperationKey)
+    if (topicId.isDefined) delayedShareFetchPurgatory.checkAndComplete(
+      new DelayedShareFetchPartitionKey(topicId.get, topicPartition.partition()))
   }
 
   /**
@@ -493,17 +495,6 @@ class ReplicaManager(val config: KafkaConfig,
    */
   private[server] def completeDelayedShareFetchRequest(delayedShareFetchKey: DelayedShareFetchKey): Unit = {
     delayedShareFetchPurgatory.checkAndComplete(delayedShareFetchKey)
-  }
-
-  /**
-   * Complete any delayed share fetch requests that have been unblocked since new data is available from the leader
-   * for one of the partitions. This could happen due to movement of HWM, replica becoming a follower or replica is
-   * deleted from a broker.
-   * @param topicPartition The topicPartition for which we can prepare a key corresponding to which the share fetch
-   *                       request has been stored in the purgatory
-   */
-  private[server] def completeDelayedShareFetchRequest(topicPartition: TopicPartition): Unit = {
-    delayedShareFetchPurgatory.checkAndComplete(new DelayedShareFetchPartitionKey(topicPartition.topic(), topicPartition.partition()))
   }
 
   /**
@@ -647,6 +638,7 @@ class ReplicaManager(val config: KafkaConfig,
     val partitionsToDelete = mutable.Set.empty[TopicPartition]
     partitionsToStop.foreach { stopPartition =>
       val topicPartition = stopPartition.topicPartition
+      var topicId: Option[Uuid] = None
       if (stopPartition.deleteLocalLog) {
         getPartition(topicPartition) match {
           case hostedPartition: HostedPartition.Online =>
@@ -655,6 +647,7 @@ class ReplicaManager(val config: KafkaConfig,
               // Logs are not deleted here. They are deleted in a single batch later on.
               // This is done to avoid having to checkpoint for every deletions.
               hostedPartition.partition.delete()
+              topicId = hostedPartition.partition.topicId
             }
 
           case _ =>
@@ -663,7 +656,7 @@ class ReplicaManager(val config: KafkaConfig,
       }
       // If we were the leader, we may have some operations still waiting for completion.
       // We force completion to prevent them from timing out.
-      completeDelayedFetchOrProduceRequests(topicPartition)
+      completeDelayedFetchOrProduceRequests(topicPartition, topicId)
     }
 
     // Third delete the logs and checkpoint.
@@ -988,7 +981,7 @@ class ReplicaManager(val config: KafkaConfig,
             delayedProducePurgatory.checkAndComplete(requestKey)
             delayedFetchPurgatory.checkAndComplete(requestKey)
             delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
-            delayedShareFetchPurgatory.checkAndComplete(new DelayedShareFetchPartitionKey(topicPartition.topic(), topicPartition.partition()))
+            // TODO: We should do a checkAndComplete on delayedShareFetchPurgatory once we start using topicId in ProduceRequest RPC.
           case LeaderHwChange.SAME =>
             // probably unblock some follower fetch requests since log end offset has been updated
             delayedFetchPurgatory.checkAndComplete(requestKey)
@@ -2490,7 +2483,7 @@ class ReplicaManager(val config: KafkaConfig,
         s"epoch $controllerEpoch with correlation id $correlationId for ${partitionsToMakeFollower.size} partitions")
 
       partitionsToMakeFollower.foreach { partition =>
-        completeDelayedFetchOrProduceRequests(partition.topicPartition)
+        completeDelayedFetchOrProduceRequests(partition.topicPartition, partition.topicId)
       }
 
       if (isShuttingDown.get()) {
@@ -3068,8 +3061,8 @@ class ReplicaManager(val config: KafkaConfig,
       replicaFetcherManager.addFetcherForPartitions(partitionAndOffsets)
       stateChangeLogger.info(s"Started fetchers as part of become-follower for ${partitionsToStartFetching.size} partitions")
 
-      partitionsToStartFetching.keySet.foreach(completeDelayedFetchOrProduceRequests)
-      partitionsToStartFetching.keySet.foreach(completeDelayedShareFetchRequest)
+      partitionsToStartFetching.foreach{ case (topicPartition, partition) =>
+        completeDelayedFetchOrProduceRequests(topicPartition, partition.topicId)}
 
       updateLeaderAndFollowerMetrics(followerTopicSet)
     }

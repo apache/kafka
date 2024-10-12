@@ -46,6 +46,7 @@ import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.{ConcurrentHashMap, CountDownLatch, Semaphore}
 import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
+import kafka.server.share.{DelayedShareFetch, DelayedShareFetchPartitionKey}
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
@@ -4110,7 +4111,11 @@ class PartitionTest extends AbstractPartitionTest {
     val deleteRecords = mock(classOf[DelayedOperationPurgatory[DelayedDeleteRecords]])
     when(deleteRecords.checkAndComplete(requestKey)).thenThrow(new RuntimeException("uh oh"))
 
-    val delayedOperations = new DelayedOperations(topicPartition, produce, fetch, deleteRecords)
+    val shareFetch = mock(classOf[DelayedOperationPurgatory[DelayedShareFetch]])
+    when(shareFetch.checkAndComplete(new DelayedShareFetchPartitionKey(topicId.get, topicPartition.partition())))
+      .thenThrow(new RuntimeException("uh oh"))
+
+    val delayedOperations = new DelayedOperations(topicId, topicPartition, produce, fetch, deleteRecords, shareFetch)
     val spyLogManager = spy(logManager)
     val partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
