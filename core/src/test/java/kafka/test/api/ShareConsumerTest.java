@@ -78,8 +78,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import scala.jdk.javaapi.CollectionConverters;
-
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -1636,7 +1634,7 @@ public class ShareConsumerTest {
     private void warmup() throws InterruptedException, ExecutionException, TimeoutException {
         createTopic(warmupTp.topic());
         TestUtils.waitForCondition(() ->
-                        !CollectionConverters.asJava(cluster.brokers().get(0).metadataCache().getAliveBrokerNodes(new ListenerName("EXTERNAL"))).isEmpty(),
+                        !cluster.brokers().get(0).metadataCache().getAliveBrokerNodes(new ListenerName("EXTERNAL")).isEmpty(),
                 DEFAULT_MAX_WAIT_MS, 100L, () -> "cache not up yet");
         ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(warmupTp.topic(), warmupTp.partition(), null, "key".getBytes(), "value".getBytes());
         KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
