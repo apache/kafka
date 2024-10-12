@@ -38,7 +38,7 @@ public class SslConfigs {
         + "the server does not support 'TLSv1.3'. If this config is set to 'TLSv1.2', clients will not use 'TLSv1.3' even "
         + "if it is one of the values in ssl.enabled.protocols and the server only supports 'TLSv1.3'.";
 
-    public static final String DEFAULT_SSL_PROTOCOL;
+    public static final String DEFAULT_SSL_PROTOCOL = "TLSv1.3";
 
     public static final String SSL_PROVIDER_CONFIG = "ssl.provider";
     public static final String SSL_PROVIDER_DOC = "The name of the security provider used for SSL connections. Default value is the default security provider of the JVM.";
@@ -53,12 +53,7 @@ public class SslConfigs {
         + "default value for Java 11, clients and servers will prefer TLSv1.3 if both support it and fallback "
         + "to TLSv1.2 otherwise (assuming both support at least TLSv1.2). This default should be fine for most "
         + "cases. Also see the config documentation for `ssl.protocol`.";
-    public static final String DEFAULT_SSL_ENABLED_PROTOCOLS;
-
-    static {
-        DEFAULT_SSL_PROTOCOL = "TLSv1.3";
-        DEFAULT_SSL_ENABLED_PROTOCOLS = "TLSv1.2,TLSv1.3";
-    }
+    public static final String DEFAULT_SSL_ENABLED_PROTOCOLS = "TLSv1.2,TLSv1.3";
 
     public static final String SSL_KEYSTORE_TYPE_CONFIG = "ssl.keystore.type";
     public static final String SSL_KEYSTORE_TYPE_DOC = "The file format of the key store file. "

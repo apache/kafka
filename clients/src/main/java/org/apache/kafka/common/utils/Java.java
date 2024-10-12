@@ -59,16 +59,5 @@ public final class Java {
             return "Version(majorVersion=" + majorVersion +
                     ", minorVersion=" + minorVersion + ")";
         }
-
-        // Package private for testing
-        boolean isJava9Compatible() {
-            return majorVersion >= 9;
-        }
-
-        boolean isJava11Compatible() {
-            return majorVersion >= 11;
-        }
-
     }
-
 }

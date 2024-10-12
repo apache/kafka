@@ -605,8 +605,6 @@ public class KafkaFutureTest {
         CompletableFuture<String> comfut = kfut.toCompletionStage().toCompletableFuture();
         assertThrows(UnsupportedOperationException.class, () -> comfut.complete(""));
         assertThrows(UnsupportedOperationException.class, () -> comfut.completeExceptionally(new RuntimeException()));
-        // Annoyingly CompletableFuture added some more methods in Java 9, but the tests need to run on Java 8
-        // so test reflectively
         Method completeOnTimeout = CompletableFuture.class.getDeclaredMethod("completeOnTimeout", Object.class, Long.TYPE, TimeUnit.class);
         assertThrows(UnsupportedOperationException.class, () -> invokeOrThrow(completeOnTimeout, comfut, "", 1L, TimeUnit.MILLISECONDS));
 

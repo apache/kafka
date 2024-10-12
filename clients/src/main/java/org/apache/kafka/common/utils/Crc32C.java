@@ -34,11 +34,7 @@ import java.util.zip.Checksum;
  */
 public final class Crc32C {
 
-    private static final ChecksumFactory CHECKSUM_FACTORY;
-
-    static {
-        CHECKSUM_FACTORY = new Java9ChecksumFactory();
-    }
+    private static final ChecksumFactory CHECKSUM_FACTORY = new Java9ChecksumFactory();
 
     private Crc32C() {}
 
@@ -99,13 +95,6 @@ public final class Crc32C {
                 // Should never happen
                 throw new RuntimeException(throwable);
             }
-        }
-    }
-
-    private static class PureJavaChecksumFactory implements ChecksumFactory {
-        @Override
-        public Checksum create() {
-            return new PureJavaCrc32C();
         }
     }
 }
