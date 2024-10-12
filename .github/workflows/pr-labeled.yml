@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: PR Labeled
+name: Pull Request Labeled
 
 on:
   pull_request_target:
@@ -22,6 +22,7 @@ on:
 
 jobs:
   approve-workflow-run:
+    name: Approve CI
     # Even though job conditionals are difficult to debug, this will reduce the number of unnecessary runs
     if:
       github.event_name == 'pull_request_target' &&
