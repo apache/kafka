@@ -972,6 +972,7 @@ project(':core') {
     implementation libs.scalaReflect
     implementation libs.scalaLogging
     implementation libs.slf4jApi
+    implementation libs.commonsIo // ZooKeeper dependency. Do not use, this is going away.
     implementation(libs.zookeeper) {
       // Dropwizard Metrics are required by ZooKeeper as of v3.6.0,
       // but the library should *not* be used in Kafka code
@@ -1430,6 +1431,7 @@ project(':clients') {
     implementation libs.snappy
     implementation libs.slf4jApi
     implementation libs.opentelemetryProto
+    implementation libs.protobuf
 
     // libraries which should be added as runtime dependencies in generated pom.xml should be defined here:
     shadowed libs.zstd
