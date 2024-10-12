@@ -53,9 +53,15 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.gh-token }}
+        REPO: ${{ inputs.repository }}
+        COMMIT_SHA: ${{ inputs.commit_sha }}
+        STATE: ${{ inputs.state }}
+        URL: ${{ inputs.url }}
+        DESCRIPTION: ${{ inputs.description }}
+        CONTEXT: ${{ inputs.context }}
       run: |
         gh api --method POST -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" \
-        /repos/${{ inputs.repository }}/statuses/${{ inputs.commit_sha }} \
-        -f "state=${{ inputs.state }}" -f "target_url=${{ inputs.url }}" \
-        -f "description=${{ inputs.description }}" \
-        -f "context=${{ inputs.context }}"
+        /repos/$REPO/statuses/$COMMIT_SHA \
+        -f "state=$STATE" -f "target_url=$URL" \
+        -f "description=$DESCRIPTION" \
+        -f "context=$CONTEXT"
