@@ -24,6 +24,8 @@
 
     <!-- common library dependencies -->
     <allow pkg="java" />
+    <allow pkg="org.junit" />
+    <allow pkg="org.mockito" />
     <!-- no one depends on the server -->
     <disallow pkg="kafka" />
 
