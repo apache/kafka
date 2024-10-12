@@ -464,7 +464,7 @@ public class ConsumerNetworkClient implements Closeable {
                 if (node == null)
                     break;
 
-                failUnsentRequests(node, DisconnectException.INSTANCE);
+                failUnsentRequests(node, new DisconnectException("On-demand disconnection with " + node.host()));
                 client.disconnect(node.idString());
             }
         } finally {
@@ -610,7 +610,7 @@ public class ConsumerNetworkClient implements Closeable {
             } else if (response.wasDisconnected()) {
                 log.debug("Cancelled request with header {} due to node {} being disconnected",
                         response.requestHeader(), response.destination());
-                future.raise(DisconnectException.INSTANCE);
+                future.raise(new DisconnectException("Disconnected from " + response.destination()));
             } else if (response.versionMismatch() != null) {
                 future.raise(response.versionMismatch());
             } else {
