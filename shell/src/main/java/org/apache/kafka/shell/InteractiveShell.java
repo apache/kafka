@@ -61,17 +61,22 @@ public final class InteractiveShell implements AutoCloseable {
             } else if (line.words().size() == 1) {
                 CommandUtils.completeCommand(line.words().get(0), candidates);
             } else {
+                //if there are multiple words create an iterator for the words
                 Iterator<String> iter = line.words().iterator();
                 String command = iter.next();
+                //Store the remaining words into nextWords list
                 List<String> nextWords = new ArrayList<>();
                 while (iter.hasNext()) {
                     nextWords.add(iter.next());
                 }
+                //Retrieve the command type
                 Commands.Type type = Commands.TYPES.get(command);
+                //If command not found return null
                 if (type == null) {
                     return;
                 }
                 try {
+                    //attempt to complete the next word
                     type.completeNext(state, nextWords, candidates);
                 } catch (Exception e) {
                     throw new RuntimeException(e);
@@ -133,6 +138,7 @@ public final class InteractiveShell implements AutoCloseable {
         if (numEntriesToShow > last + 1) {
             numEntriesToShow = last + 1;
         }
+        //calculate the first index to show
         int first = last - numEntriesToShow + 1;
         if (first < history.first()) {
             first = history.first();

@@ -109,14 +109,17 @@ public final class CommandUtils {
         List<Candidate> candidates
     ) {
         state.visit(data -> {
+            //Determine the absolute path
             String absolutePath = pathPrefix.startsWith("/") ?
                 pathPrefix : data.workingDirectory() + "/" + pathPrefix;
             List<String> pathComponents = stripDotPathComponents(splitPath(absolutePath));
+            //Start traversal from root
             MetadataNode directory = data.root();
             int numDirectories = pathPrefix.endsWith("/") ?
                 pathComponents.size() : pathComponents.size() - 1;
             for (int i = 0; i < numDirectories; i++) {
                 MetadataNode node = directory.child(pathComponents.get(i));
+                //Exit if non-existent or non-directory if observed
                 if (node == null || !node.isDirectory()) {
                     return;
                 }
@@ -126,8 +129,10 @@ public final class CommandUtils {
             if (numDirectories >= 0 && numDirectories < pathComponents.size()) {
                 lastComponent = pathComponents.get(numDirectories);
             }
+            //Get the sorted names of child in the current directory
             TreeSet<String> children = new TreeSet<>(directory.childNames());
             String candidate = children.ceiling(lastComponent);
+            //Determine the effective prefix for candidate path
             String effectivePrefix;
             int lastSlash = pathPrefix.lastIndexOf('/');
             if (lastSlash < 0) {
@@ -135,6 +140,7 @@ public final class CommandUtils {
             } else {
                 effectivePrefix = pathPrefix.substring(0, lastSlash + 1);
             }
+            //add matching candidates to the list
             while (candidate != null && candidate.startsWith(lastComponent)) {
                 StringBuilder candidateBuilder = new StringBuilder();
                 candidateBuilder.append(effectivePrefix).append(candidate);
@@ -144,6 +150,7 @@ public final class CommandUtils {
                     candidateBuilder.append("/");
                     complete = false;
                 }
+                // Add the candidate to the list of completion candidates
                 candidates.add(new Candidate(candidateBuilder.toString(),
                     candidateBuilder.toString(), null, null, null, null, complete));
                 candidate = children.higher(candidate);
