@@ -63,7 +63,7 @@ LABEL ducker.creator=$ducker_creator
 RUN apt update && apt install -y sudo git netcat iptables rsync unzip wget curl jq coreutils openssh-server net-tools vim python3-pip python3-dev libffi-dev libssl-dev cmake pkg-config libfuse-dev iperf traceroute iproute2 iputils-ping && apt-get -y clean
 RUN python3 -m pip install -U pip==21.1.1;
 # NOTE: ducktape 0.11.4 requires python3.9
-RUN pip3 install --upgrade cffi virtualenv pyasn1 boto3 pycrypto pywinrm ipaddress enum34 debugpy && pip3 install --upgrade "ducktape==0.11.4"
+RUN pip3 install --upgrade cffi virtualenv pyasn1 boto3 pycrypto pywinrm ipaddress enum34 debugpy psutil && pip3 install --upgrade "ducktape==0.11.4"
 
 COPY --from=build-native-image /build/kafka-binary/ /opt/kafka-binary/
 # Set up ssh
