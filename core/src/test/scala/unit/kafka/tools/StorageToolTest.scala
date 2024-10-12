@@ -37,6 +37,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.Mockito
 
+import scala.annotation.nowarn
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
@@ -372,6 +373,7 @@ Found problem:
   }
 
   @Test
+  @nowarn("cat=deprecation")
   def testDirUuidGeneration(): Unit = {
     val tempDir = TestUtils.tempDir()
     try {
