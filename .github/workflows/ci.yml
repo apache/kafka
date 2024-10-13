@@ -18,23 +18,23 @@ name: CI
 on:
   push:
     branches:
-      - 'trunk'
+      - 'KAFKA-17572'
 
   pull_request:
     types: [ opened, synchronize, reopened ]
     branches:
-      - 'trunk'
+      - 'KAFKA-17572'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/trunk' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/KAFKA-17572' }}
 
 jobs:
   build:
     uses: ./.github/workflows/build.yml
     with:
-      gradle-cache-read-only: ${{ github.ref != 'refs/heads/trunk' }}
-      gradle-cache-write-only: ${{ github.ref == 'refs/heads/trunk' }}
+      gradle-cache-read-only: ${{ github.ref != 'refs/heads/KAFKA-17572' }}
+      gradle-cache-write-only: ${{ github.ref == 'refs/heads/KAFKA-17572' }}
       is-public-fork: ${{ github.event.pull_request.head.repo.fork == 'true' }}
     secrets:
       inherit
