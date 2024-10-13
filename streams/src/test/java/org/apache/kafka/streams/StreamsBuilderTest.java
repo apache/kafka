@@ -20,7 +20,6 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.Topology.AutoOffsetReset;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Branched;
@@ -75,6 +74,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
@@ -263,7 +263,7 @@ public class StreamsBuilderTest {
             equalTo(2));
         assertThat(
             topology.processorConnectedStateStores("KSTREAM-JOIN-0000000010"),
-            equalTo(Utils.mkSet(topology.stateStores().get(0).name(), topology.stateStores().get(1).name())));
+            equalTo(Set.of(topology.stateStores().get(0).name(), topology.stateStores().get(1).name())));
         assertTrue(
             topology.processorConnectedStateStores("KTABLE-MERGE-0000000007").isEmpty());
     }

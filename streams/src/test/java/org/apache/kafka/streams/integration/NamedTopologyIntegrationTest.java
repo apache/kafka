@@ -82,7 +82,6 @@ import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.KeyQueryMetadata.NOT_AVAILABLE;
 import static org.apache.kafka.streams.KeyValue.pair;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.DEFAULT_TIMEOUT;
@@ -291,7 +290,7 @@ public class NamedTopologyIntegrationTest {
             .filter(t -> t.contains(TOPIC_PREFIX))
             .filter(t -> t.endsWith("-repartition") || t.endsWith("-changelog") || t.endsWith("-topic"))
             .collect(Collectors.toSet());
-        assertThat(internalTopics, is(mkSet(
+        assertThat(internalTopics, is(Set.of(
             countTopicPrefix + "-KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition",
             countTopicPrefix + "-KSTREAM-AGGREGATE-STATE-STORE-0000000002-changelog",
             fkjTopicPrefix + "-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-0000000006-topic",
@@ -385,7 +384,7 @@ public class NamedTopologyIntegrationTest {
             final Map<String, Map<Integer, LagInfo>> partitionLags2 = streams.allLocalStorePartitionLagsForTopology(TOPOLOGY_2);
 
             assertThat(partitionLags1.keySet(), equalTo(singleton(topology1Store)));
-            assertThat(partitionLags1.get(topology1Store).keySet(), equalTo(mkSet(0, 1)));
+            assertThat(partitionLags1.get(topology1Store).keySet(), equalTo(Set.of(0, 1)));
             assertThat(partitionLags2.keySet(), equalTo(singleton(topology2Store)));
             assertThat(partitionLags2.get(topology2Store).keySet(), equalTo(singleton(0))); // only one copy of the store in topology-2
 

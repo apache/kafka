@@ -40,5 +40,8 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USER }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
     - name: Copy RC Image to promoted image
+      env:
+        PROMOTED_DOCKER_IMAGE: ${{ github.event.inputs.promoted_docker_image }}
+        RC_DOCKER_IMAGE: ${{ github.event.inputs.rc_docker_image }}
       run: |
-        docker buildx imagetools create --tag ${{ github.event.inputs.promoted_docker_image }} ${{ github.event.inputs.rc_docker_image }}
+        docker buildx imagetools create --tag $PROMOTED_DOCKER_IMAGE $RC_DOCKER_IMAGE
