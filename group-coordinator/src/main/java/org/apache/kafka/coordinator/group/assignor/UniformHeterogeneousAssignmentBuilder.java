@@ -123,11 +123,6 @@ public class UniformHeterogeneousAssignmentBuilder {
     private final int[] memberTargetAssignmentSizes;
 
     /**
-     * The partitions that still need to be assigned.
-     */
-    private final Map<Uuid, List<Integer>> unassignedPartitions;
-
-    /**
      * Orders members by their number of assigned partitions, ascending.
      * <p/>
      * Ties are broken by member index, ascending.
@@ -189,7 +184,6 @@ public class UniformHeterogeneousAssignmentBuilder {
                 topicSubscribers.computeIfAbsent(topicId, k -> new ArrayList<>()).add(memberIndex);
             }
         }
-        this.unassignedPartitions = new HashMap<>();
 
         this.memberComparator = new Comparator<Integer>() {
             @Override
@@ -239,7 +233,7 @@ public class UniformHeterogeneousAssignmentBuilder {
 
         assignStickyPartitions();
 
-        computeUnassignedPartitions(unassignedPartitions);
+        Map<Uuid, List<Integer>> unassignedPartitions = computeUnassignedPartitions();
         unassignedPartitionsAssignment(unassignedPartitions);
 
         balance();
@@ -871,11 +865,9 @@ public class UniformHeterogeneousAssignmentBuilder {
 
     /**
      * Computes the set of unassigned partitions, based on targetAssignmentPartitionOwners.
-     *
-     * @param unassignedPartitions          The map in which to store the unassigned partitions.
      */
-    private void computeUnassignedPartitions(Map<Uuid, List<Integer>> unassignedPartitions) {
-        unassignedPartitions.clear();
+    private Map<Uuid, List<Integer>> computeUnassignedPartitions() {
+        Map<Uuid, List<Integer>> unassignedPartitions = new HashMap<>();
 
         for (Uuid topicId : subscribedTopicIds) {
             List<Integer> topicUnassignedPartitions = new ArrayList<>();
@@ -890,6 +882,8 @@ public class UniformHeterogeneousAssignmentBuilder {
                 unassignedPartitions.put(topicId, topicUnassignedPartitions);
             }
         }
+
+        return unassignedPartitions;
     }
 
     /**
