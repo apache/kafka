@@ -780,9 +780,7 @@ public class UniformHeterogeneousAssignmentBuilder {
         for (int i = 0; i < numPartitions; i++) {
             int partition = partitions.get(i);
             int ownerIndex = partitionOwners[partition];
-            if (startPartitionIndices.get(ownerIndex) == null) {
-                startPartitionIndices.put(ownerIndex, i);
-            }
+            startPartitionIndices.putIfAbsent(ownerIndex, i);
             endPartitionIndices.put(ownerIndex, i + 1); // endPartitionIndices is exclusive
         }
 
