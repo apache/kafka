@@ -55,6 +55,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -79,7 +80,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     private final Time time = Time.SYSTEM;
     private final boolean startConsumerThread;
 
-    private Thread initializationThread;
+    private AtomicReference<Thread> initializationThread;
     private volatile ProducerManager producerManager;
     private volatile ConsumerManager consumerManager;
 
@@ -378,8 +379,8 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
             // Scheduling the initialization producer/consumer managers in a separate thread. Required resources may
             // not yet be available now. This thread makes sure that it is retried at regular intervals until it is
             // successful.
-            initializationThread = KafkaThread.nonDaemon("RLMMInitializationThread", this::initializeResources);
-            initializationThread.start();
+            initializationThread = new AtomicReference<>(KafkaThread.nonDaemon("RLMMInitializationThread", this::initializeResources));
+            initializationThread.get().start();
         } finally {
             lock.writeLock().unlock();
         }
@@ -568,16 +569,16 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         // Close all the resources.
         log.info("Closing topic-based RLMM resources");
         if (closing.compareAndSet(false, true)) {
-            lock.writeLock().lock();
-            try {
-                if (initializationThread != null) {
-                    try {
-                        initializationThread.join();
-                    } catch (InterruptedException e) {
-                        log.error("Initialization thread was interrupted while waiting to join on close.", e);
-                    }
+            if (initializationThread != null) {
+                try {
+                    initializationThread.get().join();
+                } catch (InterruptedException e) {
+                    log.error("Initialization thread was interrupted while waiting to join on close.", e);
                 }
+            }
 
+            try {
+                lock.writeLock().lock();
                 Utils.closeQuietly(producerManager, "ProducerTask");
                 Utils.closeQuietly(consumerManager, "RLMMConsumerManager");
                 Utils.closeQuietly(remotePartitionMetadataStore, "RemotePartitionMetadataStore");
