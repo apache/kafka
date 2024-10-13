@@ -433,7 +433,6 @@ class BrokerServer(
         config.shareGroupConfig.shareGroupDeliveryCountLimit,
         config.shareGroupConfig.shareGroupPartitionMaxRecordLocks,
         persister,
-        defaultActionQueue,
         groupConfigManager,
         new Metrics()
       )

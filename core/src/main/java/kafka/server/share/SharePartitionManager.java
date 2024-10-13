@@ -16,7 +16,6 @@
  */
 package kafka.server.share;
 
-import kafka.server.ActionQueue;
 import kafka.server.ReplicaManager;
 
 import org.apache.kafka.clients.consumer.AcknowledgeType;
@@ -150,11 +149,6 @@ public class SharePartitionManager implements AutoCloseable {
      */
     private final ShareGroupMetrics shareGroupMetrics;
 
-    /**
-     * The delayed actions queue is used to complete any pending delayed share fetch actions.
-     */
-    private final ActionQueue delayedActionsQueue;
-
     public SharePartitionManager(
         ReplicaManager replicaManager,
         Time time,
@@ -163,7 +157,6 @@ public class SharePartitionManager implements AutoCloseable {
         int maxDeliveryCount,
         int maxInFlightMessages,
         Persister persister,
-        ActionQueue delayedActionsQueue,
         GroupConfigManager groupConfigManager,
         Metrics metrics
     ) {
@@ -175,7 +168,6 @@ public class SharePartitionManager implements AutoCloseable {
             maxDeliveryCount,
             maxInFlightMessages,
             persister,
-            delayedActionsQueue,
             groupConfigManager,
             metrics
         );
@@ -190,7 +182,6 @@ public class SharePartitionManager implements AutoCloseable {
         int maxDeliveryCount,
         int maxInFlightMessages,
         Persister persister,
-        ActionQueue delayedActionsQueue,
         GroupConfigManager groupConfigManager,
         Metrics metrics
     ) {
@@ -206,7 +197,6 @@ public class SharePartitionManager implements AutoCloseable {
         this.maxDeliveryCount = maxDeliveryCount;
         this.maxInFlightMessages = maxInFlightMessages;
         this.persister = persister;
-        this.delayedActionsQueue = delayedActionsQueue;
         this.groupConfigManager = groupConfigManager;
         this.shareGroupMetrics = new ShareGroupMetrics(Objects.requireNonNull(metrics), time);
     }
@@ -224,7 +214,6 @@ public class SharePartitionManager implements AutoCloseable {
             int maxDeliveryCount,
             int maxInFlightMessages,
             Persister persister,
-            ActionQueue delayedActionsQueue,
             GroupConfigManager groupConfigManager,
             Metrics metrics
     ) {
@@ -239,7 +228,6 @@ public class SharePartitionManager implements AutoCloseable {
         this.maxDeliveryCount = maxDeliveryCount;
         this.maxInFlightMessages = maxInFlightMessages;
         this.persister = persister;
-        this.delayedActionsQueue = delayedActionsQueue;
         this.groupConfigManager = groupConfigManager;
         this.shareGroupMetrics = new ShareGroupMetrics(Objects.requireNonNull(metrics), time);
     }
@@ -327,7 +315,7 @@ public class SharePartitionManager implements AutoCloseable {
     }
 
     void addPurgatoryCheckAndCompleteDelayedActionToActionQueue(Set<TopicIdPartition> topicIdPartitions, String groupId) {
-        delayedActionsQueue.add(() -> {
+        replicaManager.addToActionQueue(() -> {
             topicIdPartitions.forEach(topicIdPartition ->
                 replicaManager.completeDelayedShareFetchRequest(
                     new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId(), topicIdPartition.partition())));
