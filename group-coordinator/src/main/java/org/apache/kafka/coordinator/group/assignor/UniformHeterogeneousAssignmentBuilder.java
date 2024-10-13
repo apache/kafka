@@ -603,7 +603,6 @@ public class UniformHeterogeneousAssignmentBuilder {
 
             for (int partition : partitions.get(topicId)) {
                 int leastLoadedMemberIndex = memberAssignmentBalancer.nextLeastLoadedMember();
-
                 assignPartition(topicId, partition, leastLoadedMemberIndex);
             }
         }
