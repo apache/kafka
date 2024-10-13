@@ -17,6 +17,7 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.ClientUtils;
@@ -687,6 +688,11 @@ public class ReplicaVerificationTool {
                 channelBuilder,
                 logContext
             );
+            NetworkClient.BootstrapConfiguration bootstrapConfig = new NetworkClient.BootstrapConfiguration(
+                    consumerConfig.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
+                    ClientDnsLookup.forConfig(consumerConfig.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
+                    consumerConfig.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG),
+                    time);
             this.networkClient = new NetworkClient(
                 selector,
                 new ManualMetadataUpdater(),
@@ -699,6 +705,7 @@ public class ReplicaVerificationTool {
                 consumerConfig.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
                 consumerConfig.getLong(ConsumerConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
                 consumerConfig.getLong(ConsumerConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
+                Optional.of(bootstrapConfig),
                 time,
                 false,
                 new ApiVersions(),

@@ -60,6 +60,12 @@ public class CommonClientConfigs {
                                                        + "resolve each bootstrap address into a list of canonical names. After "
                                                        + "the bootstrap phase, this behaves the same as <code>use_all_dns_ips</code>.";
 
+    public static final String BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG = "bootstrap.resolve.timeout.ms";
+    public static final long DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS = 2 * 60 * 1000L;
+    public static final String BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC = "Maximum amount of time clients can spend trying to" +
+            " resolve for the bootstrap server address. If the resolution cannot be completed within this timeframe, a " +
+            "<code>BootstrapResolutionException</code> will be thrown.";
+
     public static final String METADATA_MAX_AGE_CONFIG = "metadata.max.age.ms";
     public static final String METADATA_MAX_AGE_DOC = "The period of time in milliseconds after which we force a refresh of metadata even if we haven't seen any partition leadership changes to proactively discover any new brokers or partitions.";
 

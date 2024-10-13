@@ -52,6 +52,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -178,6 +179,7 @@ public class ConnectionStressWorker implements TaskWorker {
                             1000,
                             10 * 1000,
                             127 * 1000,
+                            Optional.empty(),
                             Time.SYSTEM,
                             false,
                             new ApiVersions(),

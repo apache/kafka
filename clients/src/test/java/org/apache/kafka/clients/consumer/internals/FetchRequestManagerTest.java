@@ -153,6 +153,9 @@ import static org.mockito.Mockito.verify;
 public class FetchRequestManagerTest {
 
     private static final double EPSILON = 0.0001;
+    private static List<String> bootstrapAddresses = new ArrayList<>(Arrays.asList(
+            "127.0.0.1:8000",
+            "127.0.0.2:8000"));
 
     private final String topicName = "test";
     private final String groupId = "test-group";
@@ -1912,7 +1915,7 @@ public class FetchRequestManagerTest {
         Node node = cluster.nodes().get(0);
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 1000, 1000, 64 * 1024, 64 * 1024, 1000, 10 * 1000, 127 * 1000,
-                time, true, new ApiVersions(), metricsManager.throttleTimeSensor(), new LogContext(),
+                Optional.empty(), time, true, new ApiVersions(), metricsManager.throttleTimeSensor(), new LogContext(),
                 MetadataRecoveryStrategy.NONE);
 
         ApiVersionsResponse apiVersionsResponse = TestUtils.defaultApiVersionsResponse(

@@ -834,6 +834,7 @@ class KafkaServer(
           config.requestTimeoutMs,
           config.connectionSetupTimeoutMs,
           config.connectionSetupTimeoutMaxMs,
+          Optional.empty(),
           time,
           false,
           new ApiVersions,

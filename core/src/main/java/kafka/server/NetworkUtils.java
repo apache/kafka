@@ -32,6 +32,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
 import java.util.Collections;
+import java.util.Optional;
 
 public class NetworkUtils {
 
@@ -82,6 +83,7 @@ public class NetworkUtils {
             config.requestTimeoutMs(),
             config.connectionSetupTimeoutMs(),
             config.connectionSetupTimeoutMaxMs(),
+            Optional.empty(),
             time,
             true,
             new ApiVersions(),

@@ -39,6 +39,7 @@ import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.ShutdownableThread
 
 import java.net.SocketTimeoutException
+import java.util.Optional
 import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue, TimeUnit}
 import scala.collection.{Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
@@ -160,6 +161,7 @@ class ControllerChannelManager(controllerEpoch: () => Int,
         config.requestTimeoutMs,
         config.connectionSetupTimeoutMs,
         config.connectionSetupTimeoutMaxMs,
+        Optional.empty(),
         time,
         false,
         new ApiVersions,

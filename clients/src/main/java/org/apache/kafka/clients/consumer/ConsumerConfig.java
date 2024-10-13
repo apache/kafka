@@ -134,6 +134,11 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String CLIENT_DNS_LOOKUP_CONFIG = CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG;
 
     /**
+     * <code>bootstrap.resolve.timeout.ms</code>
+     */
+    public static final String BOOTSTRAP_RESOLVE_TIMEOUS_MS_CONFIG = CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG;
+
+    /**
      * <code>enable.auto.commit</code>
      */
     public static final String ENABLE_AUTO_COMMIT_CONFIG = "enable.auto.commit";
@@ -394,6 +399,11 @@ public class ConsumerConfig extends AbstractConfig {
                                            ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()),
                                         Importance.MEDIUM,
                                         CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC)
+                                .define(BOOTSTRAP_RESOLVE_TIMEOUS_MS_CONFIG,
+                                        Type.LONG,
+                                        CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
+                                        Importance.HIGH,
+                                        CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC)
                                 .define(GROUP_ID_CONFIG, Type.STRING, null, Importance.HIGH, GROUP_ID_DOC)
                                 .define(GROUP_INSTANCE_ID_CONFIG,
                                         Type.STRING,

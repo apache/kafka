@@ -22,6 +22,7 @@ import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -78,6 +79,16 @@ public class ManualMetadataUpdater implements MetadataUpdater {
 
     @Override
     public void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse response) {
+        // Do nothing
+    }
+
+    @Override
+    public boolean isBootstrapped() {
+        return false;
+    }
+
+    @Override
+    public void bootstrap(List<InetSocketAddress> addresses) {
         // Do nothing
     }
 

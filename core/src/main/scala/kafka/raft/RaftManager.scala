@@ -20,10 +20,8 @@ import java.io.File
 import java.net.InetSocketAddress
 import java.nio.file.Files
 import java.nio.file.Paths
-import java.util.OptionalInt
+import java.util.{Optional, OptionalInt, Collection => JCollection, Map => JMap}
 import java.util.concurrent.CompletableFuture
-import java.util.{Map => JMap}
-import java.util.{Collection => JCollection}
 import kafka.log.LogManager
 import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig
@@ -316,6 +314,7 @@ class KafkaRaftManager[T](
       config.quorumConfig.requestTimeoutMs,
       config.connectionSetupTimeoutMs,
       config.connectionSetupTimeoutMaxMs,
+      Optional.empty(),
       time,
       discoverBrokerVersions,
       apiVersions,

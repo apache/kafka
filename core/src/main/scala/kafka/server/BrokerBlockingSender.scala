@@ -17,7 +17,6 @@
 package kafka.server
 
 import java.net.SocketTimeoutException
-
 import kafka.cluster.BrokerEndPoint
 import org.apache.kafka.clients._
 import org.apache.kafka.common.metrics.Metrics
@@ -29,6 +28,7 @@ import org.apache.kafka.clients.{ApiVersions, ClientResponse, ManualMetadataUpda
 import org.apache.kafka.common.{Node, Reconfigurable}
 import org.apache.kafka.common.requests.AbstractRequest.Builder
 
+import java.util.Optional
 import scala.jdk.CollectionConverters._
 
 trait BlockingSend {
@@ -93,6 +93,7 @@ class BrokerBlockingSender(sourceBroker: BrokerEndPoint,
       brokerConfig.requestTimeoutMs,
       brokerConfig.connectionSetupTimeoutMs,
       brokerConfig.connectionSetupTimeoutMaxMs,
+      Optional.empty(),
       time,
       false,
       new ApiVersions,
