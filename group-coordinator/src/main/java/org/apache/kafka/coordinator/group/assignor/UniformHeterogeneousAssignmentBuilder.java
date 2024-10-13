@@ -446,7 +446,7 @@ public class UniformHeterogeneousAssignmentBuilder {
          * @return The difference in partition counts between the most and least loaded members.
          */
         public int initialize(List<Integer> members) {
-            if (members.size() < 1) {
+            if (members.isEmpty()) {
                 // nextLeastLoadedMember needs at least one member.
                 throw new IllegalArgumentException("Cannot balance an empty subscriber list.");
             }
