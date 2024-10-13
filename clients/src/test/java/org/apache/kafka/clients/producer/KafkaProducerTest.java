@@ -47,7 +47,9 @@ import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
 import org.apache.kafka.common.message.EndTxnResponseData;
@@ -1063,13 +1065,14 @@ public class KafkaProducerTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void testHeaders() {
+    public void testHeadersSuccess() {
         doTestHeaders(Serializer.class);
     }
 
     private <T extends Serializer<String>> void doTestHeaders(Class<T> serializerClassToMock) {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        configs.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, ProducerInterceptorForHeaders.class.getName());
         Serializer<String> keySerializer = mock(serializerClassToMock);
         Serializer<String> valueSerializer = mock(serializerClassToMock);
 
@@ -1098,7 +1101,9 @@ public class KafkaProducerTest {
         producer.send(record, null);
 
         //ensure headers are closed and cannot be mutated post send
-        assertThrows(IllegalStateException.class, () -> record.headers().add(new RecordHeader("test", "test".getBytes())));
+        RecordHeaders recordHeaders = (RecordHeaders) record.headers();
+        assertTrue(recordHeaders.isReadOnly());
+        assertThrows(IllegalStateException.class, () -> recordHeaders.add(new RecordHeader("test", "test".getBytes())));
 
         //ensure existing headers are not changed, and last header for key is still original value
         assertArrayEquals(record.headers().lastHeader("test").value(), "header2".getBytes());
@@ -1107,6 +1112,28 @@ public class KafkaProducerTest {
         verify(keySerializer).serialize(topic, record.headers(), key);
 
         producer.close(Duration.ofMillis(0));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testHeadersFailure() {
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, ProducerInterceptorForHeaders.class.getName());
+        Serializer<String> keySerializer = mock(Serializer.class);
+        Serializer<String> valueSerializer = mock(Serializer.class);
+
+        KafkaProducer<String, String> producer = new KafkaProducer<>(props, keySerializer, valueSerializer);
+        ProducerRecord<String, String> record = new ProducerRecord<>("topic", "key", "value");
+        Future<RecordMetadata> future = producer.send(record, (recordMetadata, exception) -> { });
+        try {
+            assertInstanceOf(TimeoutException.class, assertThrows(ExecutionException.class, future::get).getCause());
+            //ensure headers are writable if send failure
+            RecordHeaders recordHeaders = (RecordHeaders) record.headers();
+            assertFalse(recordHeaders.isReadOnly());
+        } finally {
+            producer.close(Duration.ofMillis(0));
+        }
     }
 
     @Test
@@ -2396,6 +2423,29 @@ public class KafkaProducerTest {
         @Override
         public void configure(Map<String, ?> configs) {
             CLIENT_IDS.add(configs.get(ProducerConfig.CLIENT_ID_CONFIG).toString());
+        }
+    }
+
+    public static class ProducerInterceptorForHeaders implements ProducerInterceptor<byte[], byte[]> {
+
+        @Override
+        public ProducerRecord<byte[], byte[]> onSend(ProducerRecord<byte[], byte[]> record) {
+            return record;
+        }
+
+        @Override
+        public void onAcknowledgement(RecordMetadata metadata, Exception exception, Headers headers) {
+            RecordHeaders recordHeaders = (RecordHeaders) headers;
+            // Ensure that the headers are read-only, no matter send success or send failure
+            assertTrue(recordHeaders.isReadOnly());
+        }
+
+        @Override
+        public void close() {
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
         }
     }
 
