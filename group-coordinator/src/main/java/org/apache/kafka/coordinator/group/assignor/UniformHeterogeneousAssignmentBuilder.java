@@ -123,6 +123,15 @@ public class UniformHeterogeneousAssignmentBuilder {
     private final int[] memberTargetAssignmentSizes;
 
     /**
+     * Orders topics by partitions per subscriber, descending.
+     * <p/>
+     * Ties are broken by subscriber count, ascending.
+     * <p/>
+     * Remaining ties are broken by topic id, ascending.
+     */
+    private final Comparator<Uuid> topicComparator;
+
+    /**
      * Orders members by their number of assigned partitions, ascending.
      * <p/>
      * Ties are broken by member index, ascending.
@@ -184,6 +193,34 @@ public class UniformHeterogeneousAssignmentBuilder {
                 topicSubscribers.computeIfAbsent(topicId, k -> new ArrayList<>()).add(memberIndex);
             }
         }
+
+        this.topicComparator = new Comparator<Uuid>() {
+            @Override
+            public int compare(final Uuid topic1Id, final Uuid topic2Id) {
+                int topic1PartitionCount = subscribedTopicDescriber.numPartitions(topic1Id);
+                int topic2PartitionCount = subscribedTopicDescriber.numPartitions(topic2Id);
+                int topic1SubscriberCount = topicSubscribers.get(topic1Id).size();
+                int topic2SubscriberCount = topicSubscribers.get(topic2Id).size();
+
+                // Order by partitions per subscriber, descending.
+                int order = Double.compare(
+                    (double) topic2PartitionCount / topic2SubscriberCount,
+                    (double) topic1PartitionCount / topic1SubscriberCount
+                );
+
+                // Then order by subscriber count, ascending.
+                if (order == 0) {
+                    order = Integer.compare(topic1SubscriberCount, topic2SubscriberCount);
+                }
+
+                // Then order by topic id, ascending.
+                if (order == 0) {
+                    order = topic1Id.compareTo(topic2Id);
+                }
+
+                return order;
+            }
+        };
 
         this.memberComparator = new Comparator<Integer>() {
             @Override
@@ -257,36 +294,8 @@ public class UniformHeterogeneousAssignmentBuilder {
      * @return A list of sorted topic ids.
      */
     private List<Uuid> sortTopicIds(Collection<Uuid> topicIds) {
-        Comparator<Uuid> comparator = new Comparator<Uuid>() {
-            @Override
-            public int compare(final Uuid topic1Id, final Uuid topic2Id) {
-                int topic1PartitionCount = subscribedTopicDescriber.numPartitions(topic1Id);
-                int topic2PartitionCount = subscribedTopicDescriber.numPartitions(topic2Id);
-                int topic1SubscriberCount = topicSubscribers.get(topic1Id).size();
-                int topic2SubscriberCount = topicSubscribers.get(topic2Id).size();
-
-                // Order by partitions per subscriber, descending.
-                int order = Double.compare(
-                    (double) topic2PartitionCount / topic2SubscriberCount,
-                    (double) topic1PartitionCount / topic1SubscriberCount
-                );
-
-                // Then order by subscriber count, ascending.
-                if (order == 0) {
-                    order = Integer.compare(topic1SubscriberCount, topic2SubscriberCount);
-                }
-
-                // Then order by topic id, ascending.
-                if (order == 0) {
-                    order = topic1Id.compareTo(topic2Id);
-                }
-
-                return order;
-            }
-        };
-
         List<Uuid> sortedTopicIds = new ArrayList<>(topicIds);
-        sortedTopicIds.sort(comparator);
+        sortedTopicIds.sort(topicComparator);
         return sortedTopicIds;
     }
 
