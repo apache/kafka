@@ -313,32 +313,7 @@ public class UniformHeterogeneousAssignmentBuilder {
                 if (groupSpec.memberSubscription(memberId).subscribedTopicIds().contains(topicId)) {
                     memberTargetAssignmentSizes[memberIndex] += partitions.size();
 
-                    int numPartitions = subscribedTopicDescriber.numPartitions(topicId);
                     for (int partition : partitions) {
-                        if (partition >= numPartitions) {
-                            LOG.warn(
-                                "Previous assignment for {} contains {}:{}, but topic only has {} partitions",
-                                memberId,
-                                topicId,
-                                partition,
-                                numPartitions
-                            );
-
-                            if (newAssignment == null) {
-                                // If the new assignment is null, we create a deep copy of the
-                                // original assignment so that we can alter it.
-                                newAssignment = deepCopy(oldAssignment);
-                            }
-                            Set<Integer> newPartitions = newAssignment.get(topicId);
-                            newPartitions.remove(partition);
-                            if (newPartitions.isEmpty()) {
-                                newAssignment.remove(topicId);
-                            }
-                            memberTargetAssignmentSizes[memberIndex]--;
-
-                            continue;
-                        }
-
                         previousAssignmentPartitionOwners.get(topicId)[partition] = memberIndex;
                         targetAssignmentPartitionOwners.get(topicId)[partition] = memberIndex;
                     }
