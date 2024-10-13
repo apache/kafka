@@ -722,14 +722,15 @@ public class SenderTest {
         Node node = metadata.fetch().nodes().get(0);
         client.delayReady(node, REQUEST_TIMEOUT + 20);
         prepareFindCoordinatorResponse(Errors.NONE, "testNodeNotReady");
-        sender.runOnce();
-        sender.runOnce();
+        for (int i = 0; i < 5; i++) {
+            sender.runOnce();
+        }
         assertNotNull(transactionManager.coordinator(CoordinatorType.TRANSACTION), "Coordinator not found");
 
         client.throttle(node, REQUEST_TIMEOUT + 20);
         prepareFindCoordinatorResponse(Errors.NONE, "Coordinator not found");
         prepareInitProducerResponse(Errors.NONE, producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
-        waitForProducerId(transactionManager, producerIdAndEpoch);
+        waitForProducerId(transactionManager, producerIdAndEpoch, 10000L);
     }
 
     @Test
@@ -3830,8 +3831,14 @@ public class SenderTest {
     }
 
     private void waitForProducerId(TransactionManager transactionManager, ProducerIdAndEpoch producerIdAndEpoch) {
-        for (int i = 0; i < 5 && !transactionManager.hasProducerId(); i++)
+        waitForProducerId(transactionManager, producerIdAndEpoch, 0L);
+    }
+
+    private void waitForProducerId(TransactionManager transactionManager, ProducerIdAndEpoch producerIdAndEpoch, long iterationSleepTime) {
+        for (int i = 0; i < 5 && !transactionManager.hasProducerId(); i++) {
             sender.runOnce();
+            time.sleep(iterationSleepTime);
+        }
 
         assertTrue(transactionManager.hasProducerId());
         assertEquals(producerIdAndEpoch, transactionManager.producerIdAndEpoch());

@@ -566,7 +566,8 @@ public class Sender implements Runnable {
     }
 
     private boolean awaitNodeReady(Node node, FindCoordinatorRequest.CoordinatorType coordinatorType) throws IOException {
-        if (NetworkClientUtils.awaitReady(client, node, time, requestTimeoutMs)) {
+        long waitTimeout = Math.min(requestTimeoutMs, client.connectionDelay(node, time.milliseconds()));
+        if (NetworkClientUtils.awaitReady(client, node, time, waitTimeout)) {
             if (coordinatorType == FindCoordinatorRequest.CoordinatorType.TRANSACTION) {
                 // Indicate to the transaction manager that the coordinator is ready, allowing it to check ApiVersions
                 // This allows us to bump transactional epochs even if the coordinator is temporarily unavailable at
