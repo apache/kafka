@@ -6366,7 +6366,7 @@ class ReplicaManagerTest {
       MetadataVersion.latestProduction(),
       ZkMigrationState.NONE)
     new MetadataImage(
-      new MetadataProvenance(100L, 10, 1000L),
+      new MetadataProvenance(100L, 10, 1000L, true),
       featuresImageLatest,
       ClusterImageTest.IMAGE1,
       topicsImage,

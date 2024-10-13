@@ -55,7 +55,7 @@ public class BrokerRegistrationTrackerTest {
         MetadataImage image = MetadataImage.EMPTY;
 
         void onMetadataUpdate(MetadataDelta delta) {
-            MetadataProvenance provenance = new MetadataProvenance(0, 0, 0);
+            MetadataProvenance provenance = new MetadataProvenance(0, 0, 0, true);
             image = delta.apply(provenance);
             LogDeltaManifest manifest = new LogDeltaManifest.Builder().
                 provenance(provenance).

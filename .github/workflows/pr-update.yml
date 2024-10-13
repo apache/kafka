@@ -13,13 +13,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: "Pull Request Labeler"
+name: Pull Request
 on:
+  # CAUTION! The pull_request_target is generally consider UNSAFE. This is because it will
+  # run untrusted code on the GHA infra with access to secrets and elevated permissions. We must
+  # not run any code from the pull request here. Instead, this workflow is for things like adding
+  # comments or labels to the pull request.
+  #
+  # Read:
+  # * https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#pull_request_target
+  # * https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/
   pull_request_target:
     types: [opened, reopened, synchronize]
 
 jobs:
   label_PRs:
+    name: Labeler
     permissions:
       contents: read
       pull-requests: write
