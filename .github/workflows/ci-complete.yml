@@ -56,16 +56,15 @@ jobs:
             false
       - name: Set status to pending for re-runs
         if: ${{ github.run_attempt > 1 }}
-        run: |
-              curl -X POST \
-                -H "Authorization: token $GITHUB_TOKEN" \
-                -H "Content-Type: application/json" \
-                -d '{
-                    "state": "pending",
-                    "context": "ci/build",
-                    "description": "Re-running all jobs",
-                    "target_url": "'${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'"
-                    }'
+        uses: ./.github/actions/gh-api-update-status
+        with:
+          gh-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          commit_sha: ${{ github.event.workflow_run.head_sha }}
+          url: '${{ github.event.repository.html_url }}/actions/runs/${{ github.run_id }}'
+          description: 'set status to pending for re-runs'
+          context: 'Gradle Build Scan / Java ${{ matrix.java }}'
+          state: 'pending'
       - name: Setup Gradle
         uses: ./.github/actions/setup-gradle
         with:
