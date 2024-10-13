@@ -501,7 +501,7 @@ class TransactionsTest extends IntegrationTestHarness {
 
   private def testTimeout(needInitAndSendMsg: Boolean,
                   timeoutProcess: KafkaProducer[Array[Byte], Array[Byte]] => Unit): Unit = {
-    val producer = createTransactionalProducer("transactionProducer", maxBlockMs = 3000)
+    val producer = createTransactionalProducer("transactionProducer", maxBlockMs = 10000)
     if (needInitAndSendMsg) {
       producer.initTransactions()
       producer.beginTransaction()
