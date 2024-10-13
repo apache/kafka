@@ -18,7 +18,6 @@
 package kafka.server
 
 import kafka.cluster.BrokerEndPoint
-import kafka.utils.Implicits._
 import kafka.utils.Logging
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.utils.Utils
@@ -66,11 +65,11 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   def resizeThreadPool(newSize: Int): Unit = {
     def migratePartitions(newSize: Int): Unit = {
       val allRemovedPartitionsMap = mutable.Map[TopicPartition, InitialFetchState]()
-      fetcherThreadMap.forKeyValue { (id, thread) =>
+      fetcherThreadMap.foreachEntry { (id, thread) =>
         val partitionStates = thread.removeAllPartitions()
         if (id.fetcherId >= newSize)
           thread.shutdown()
-        partitionStates.forKeyValue { (topicPartition, currentFetchState) =>
+        partitionStates.foreachEntry { (topicPartition, currentFetchState) =>
             val initialFetchState = InitialFetchState(currentFetchState.topicId, thread.leader.brokerEndPoint(),
               currentLeaderEpoch = currentFetchState.currentLeaderEpoch,
               initOffset = currentFetchState.fetchOffset)

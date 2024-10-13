@@ -1,0 +1,47 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Pull Request
+on:
+  # CAUTION! The pull_request_target is generally consider UNSAFE. This is because it will
+  # run untrusted code on the GHA infra with access to secrets and elevated permissions. We must
+  # not run any code from the pull request here. Instead, this workflow is for things like adding
+  # comments or labels to the pull request.
+  #
+  # Read:
+  # * https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#pull_request_target
+  # * https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+
+jobs:
+  label_PRs:
+    name: Labeler
+    permissions:
+      contents: read
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    - uses: actions/labeler@v5
+      with:
+        configuration-path: .github/configs/labeler.yml
+    - name: check small label
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PR_NUM: ${{github.event.number}}
+      run: |
+        ./.github/scripts/label_small.sh

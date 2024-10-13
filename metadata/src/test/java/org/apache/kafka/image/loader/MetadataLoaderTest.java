@@ -253,7 +253,7 @@ public class MetadataLoaderTest {
             loader.installPublishers(singletonList(publisher)).get();
             if (loadSnapshot) {
                 MockSnapshotReader snapshotReader = new MockSnapshotReader(
-                    new MetadataProvenance(200, 100, 4000),
+                    new MetadataProvenance(200, 100, 4000, true),
                     singletonList(
                         Batch.control(
                             200,
@@ -306,7 +306,7 @@ public class MetadataLoaderTest {
             loader.installPublishers(publishers.subList(0, 2)).get();
             loader.removeAndClosePublisher(publishers.get(1)).get();
             MockSnapshotReader snapshotReader = MockSnapshotReader.fromRecordLists(
-                new MetadataProvenance(100, 50, 2000),
+                new MetadataProvenance(100, 50, 2000, true),
                 singletonList(singletonList(new ApiMessageAndVersion(
                     new FeatureLevelRecord().
                         setName(MetadataVersion.FEATURE_NAME).
@@ -347,7 +347,7 @@ public class MetadataLoaderTest {
             assertEquals(200L, loader.lastAppliedOffset());
             loadEmptySnapshot(loader, 300);
             assertEquals(300L, loader.lastAppliedOffset());
-            assertEquals(new SnapshotManifest(new MetadataProvenance(300, 100, 4000), 3000000L),
+            assertEquals(new SnapshotManifest(new MetadataProvenance(300, 100, 4000, true), 3000000L),
                 publishers.get(0).latestSnapshotManifest);
             assertEquals(MetadataVersion.MINIMUM_KRAFT_VERSION,
                 loader.metrics().currentMetadataVersion());
@@ -364,7 +364,7 @@ public class MetadataLoaderTest {
         long offset
     ) throws Exception {
         MockSnapshotReader snapshotReader = new MockSnapshotReader(
-            new MetadataProvenance(offset, 100, 4000),
+            new MetadataProvenance(offset, 100, 4000, true),
             singletonList(
                 Batch.control(
                     200,
@@ -482,7 +482,7 @@ public class MetadataLoaderTest {
         assertTrue(publishers.get(0).closed);
         assertEquals(
             LogDeltaManifest.newBuilder()
-                .provenance(new MetadataProvenance(300, 100, 4000))
+                .provenance(new MetadataProvenance(300, 100, 4000, true))
                 .leaderAndEpoch(LeaderAndEpoch.UNKNOWN)
                 .numBatches(1)
                 .elapsedNs(0L)
@@ -508,7 +508,7 @@ public class MetadataLoaderTest {
                 build()) {
             loader.installPublishers(publishers).get();
             loader.handleLoadSnapshot(MockSnapshotReader.fromRecordLists(
-                new MetadataProvenance(200, 100, 4000), asList(
+                new MetadataProvenance(200, 100, 4000, true), asList(
                     singletonList(new ApiMessageAndVersion(new FeatureLevelRecord().
                         setName(MetadataVersion.FEATURE_NAME).
                         setFeatureLevel(IBP_3_3_IV1.featureLevel()), (short) 0)),
@@ -578,7 +578,7 @@ public class MetadataLoaderTest {
         long offset
     ) throws Exception {
         loader.handleLoadSnapshot(MockSnapshotReader.fromRecordLists(
-                new MetadataProvenance(offset, 100, 4000), asList(
+                new MetadataProvenance(offset, 100, 4000, true), asList(
                         singletonList(new ApiMessageAndVersion(new FeatureLevelRecord().
                                 setName(MetadataVersion.FEATURE_NAME).
                                 setFeatureLevel(IBP_3_3_IV1.featureLevel()), (short) 0)),
@@ -594,7 +594,7 @@ public class MetadataLoaderTest {
         long offset
     ) throws Exception {
         loader.handleLoadSnapshot(MockSnapshotReader.fromRecordLists(
-                new MetadataProvenance(offset, 100, 4000), asList(
+                new MetadataProvenance(offset, 100, 4000, true), asList(
                         singletonList(new ApiMessageAndVersion(new FeatureLevelRecord().
                                 setName(MetadataVersion.FEATURE_NAME).
                                 setFeatureLevel(IBP_3_3_IV2.featureLevel()), (short) 0)),
@@ -769,7 +769,7 @@ public class MetadataLoaderTest {
 
             // loading a snapshot discards any in-flight transaction
             loader.handleLoadSnapshot(MockSnapshotReader.fromRecordLists(
-                new MetadataProvenance(600, 101, 4000), singletonList(
+                new MetadataProvenance(600, 101, 4000, true), singletonList(
                     singletonList(new ApiMessageAndVersion(new TopicRecord().
                         setName("foo").
                         setTopicId(Uuid.fromString("Uum7sfhHQP-obSvfywmNUA")), (short) 0))

@@ -128,7 +128,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       }
 
       // Send a SyncGroup request.
-      syncGroupWithOldProtocol(
+      verifySyncGroupWithOldProtocol(
         groupId = "grp",
         memberId = leaderMemberId,
         generationId = 1,
@@ -231,7 +231,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       )
 
       // Sync the leader.
-      syncGroupWithOldProtocol(
+      verifySyncGroupWithOldProtocol(
         groupId = "grp",
         memberId = leaderMemberId,
         generationId = rejoinLeaderResponseData.generationId,
@@ -247,7 +247,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       )
 
       // Sync the follower.
-      syncGroupWithOldProtocol(
+      verifySyncGroupWithOldProtocol(
         groupId = "grp",
         memberId = followerMemberId,
         generationId = joinFollowerFutureResponseData.generationId,

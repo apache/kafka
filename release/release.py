@@ -70,9 +70,11 @@ import git
 import gpg
 import notes
 import preferences
-import sftp
+import svn
 import templates
 import textfiles
+
+from svn import SVN_DEV_URL
 
 
 def get_jdk(version):
@@ -243,7 +245,6 @@ def verify_prerequeisites():
         except Exception as e:
             fail(f"Pre-requisite not met: {name}. Error: {e}")
     prereq('Apache Maven CLI (mvn) in PATH', lambda: "Apache Maven" in execute("mvn -v"))
-    prereq('Apache sftp connection', lambda: sftp.test(apache_id))
     prereq("svn CLI in PATH", lambda: "svn" in execute("svn --version"))
     prereq("Verifying that you have no unstaged git changes", lambda: git.has_unstaged_changes())
     prereq("Verifying that you have no staged git changes", lambda: git.has_staged_changes())
@@ -298,7 +299,7 @@ git.commit(f"Bump version to {release_version}")
 git.create_tag(rc_tag)
 git.switch_branch(starting_branch)
 
-# Note that we don't use tempfile here because mkdtemp causes problems with sftp and being able to determine the absolute path to a file.
+# Note that we don't use tempfile here because mkdtemp causes problems with being able to determine the absolute path to a file.
 # Instead we rely on a fixed path
 work_dir = os.path.join(repo_dir, ".release_work_dir")
 clean_up_work_dir = lambda: cmd("Cleaning up work directory", f"rm -rf {work_dir}")
@@ -315,6 +316,7 @@ git.clone(repo_dir, 'kafka', cwd=work_dir)
 git.create_branch(release_version, rc_tag, cwd=kafka_dir)
 current_year = datetime.datetime.now().year
 cmd("Verifying the correct year in NOTICE", f"grep {current_year} NOTICE", cwd=kafka_dir)
+svn.checkout_svn_dev(work_dir)
 
 print("Generating release notes")
 try:
@@ -326,7 +328,7 @@ except Exception as e:
 
 
 git.targz(rc_tag, f"kafka-{release_version}-src/", f"{artifacts_dir}/kafka-{release_version}-src.tgz")
-cmd("Building artifacts", "./gradlew clean && ./gradlewAll releaseTarGz", cwd=kafka_dir, env=jdk8_env, shell=True)
+cmd("Building artifacts", "./gradlew clean && ./gradlew releaseTarGz -PscalaVersion=2.13", cwd=kafka_dir, env=jdk8_env, shell=True)
 cmd("Copying artifacts", f"cp {kafka_dir}/core/build/distributions/* {artifacts_dir}", shell=True)
 cmd("Building docs", "./gradlew clean aggregatedJavadoc", cwd=kafka_dir, env=jdk17_env)
 cmd("Copying docs", f"cp -R {kafka_dir}/build/docs/javadoc {artifacts_dir}")
@@ -348,10 +350,12 @@ for filename in os.listdir(artifacts_dir):
 
 cmd("Listing artifacts to be uploaded:", f"ls -R {artifacts_dir}")
 cmd("Zipping artifacts", f"tar -czf {artifact_name}.tar.gz {artifact_name}", cwd=work_dir)
-sftp.upload_artifacts(apache_id, artifacts_dir)
+
+confirm_or_fail(f"Going to check in artifacts to svn under {SVN_DEV_URL}/{rc_tag}. OK?")
+svn.commit_artifacts(rc_tag, artifacts_dir, work_dir)
 
 confirm_or_fail("Going to build and upload mvn artifacts based on these settings:\n" + textfiles.read(global_gradle_props) + '\nOK?')
-cmd("Building and uploading archives", "./gradlewAll publish", cwd=kafka_dir, env=jdk8_env, shell=True)
+cmd("Building and uploading archives", "./gradlew publish -PscalaVersion=2.13", cwd=kafka_dir, env=jdk8_env, shell=True)
 cmd("Building and uploading archives", "mvn deploy -Pgpg-signing", cwd=os.path.join(kafka_dir, "streams/quickstart"), env=jdk8_env, shell=True)
 
 # TODO: Many of these suggested validation steps could be automated
