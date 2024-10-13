@@ -722,14 +722,16 @@ public class SenderTest {
         Node node = metadata.fetch().nodes().get(0);
         client.delayReady(node, REQUEST_TIMEOUT + 20);
         prepareFindCoordinatorResponse(Errors.NONE, "testNodeNotReady");
-        sender.runOnce();
-        sender.runOnce();
+
+        for (int i = 0; i < 5; i++) {
+            sender.runOnce();
+        }
         assertNotNull(transactionManager.coordinator(CoordinatorType.TRANSACTION), "Coordinator not found");
 
         client.throttle(node, REQUEST_TIMEOUT + 20);
         prepareFindCoordinatorResponse(Errors.NONE, "Coordinator not found");
         prepareInitProducerResponse(Errors.NONE, producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
-        waitForProducerId(transactionManager, producerIdAndEpoch);
+        waitForProducerIdOverTime(transactionManager, producerIdAndEpoch, time);
     }
 
     @Test
@@ -1578,12 +1580,17 @@ public class SenderTest {
         sendIdempotentProducerResponse(0, tp0, Errors.NOT_LEADER_OR_FOLLOWER, -1);
         sender.runOnce();  // receive first response
 
+        prepareFindCoordinatorResponse(Errors.NONE, txnManager.transactionalId());
         Node node = metadata.fetch().nodes().get(0);
         time.sleep(1000L);
         client.disconnect(node.idString());
         client.backoff(node, 10);
 
-        sender.runOnce(); // now expire the first batch.
+        for (int i = 0; i < 10 && !request1.isDone(); i++) {
+            sender.runOnce(); // now expire the first batch.
+            time.sleep(1000L);
+        }
+
         assertFutureFailure(request1, TimeoutException.class);
         assertTrue(txnManager.hasUnresolvedSequence(tp0));
 
@@ -3836,7 +3843,17 @@ public class SenderTest {
         assertTrue(transactionManager.hasProducerId());
         assertEquals(producerIdAndEpoch, transactionManager.producerIdAndEpoch());
     }
-    
+
+    private void waitForProducerIdOverTime(TransactionManager transactionManager, ProducerIdAndEpoch producerIdAndEpoch, MockTime time) {
+        for (int i = 0; i < 25 && !transactionManager.hasProducerId(); i++) {
+            sender.runOnce();
+            time.sleep(1000L);
+        }
+
+        assertTrue(transactionManager.hasProducerId());
+        assertEquals(producerIdAndEpoch, transactionManager.producerIdAndEpoch());
+    }
+
     private AddPartitionsToTxnResponse buildAddPartitionsToTxnResponseData(int throttleMs, Map<TopicPartition, Errors> errors) {
         AddPartitionsToTxnResponseData.AddPartitionsToTxnResult result = AddPartitionsToTxnResponse.resultForTransaction(
                 AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID, errors);

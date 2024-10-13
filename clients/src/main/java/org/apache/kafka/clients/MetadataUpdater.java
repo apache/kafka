@@ -18,7 +18,6 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
@@ -33,7 +32,7 @@ import java.util.Optional;
  * <p>
  * This class is not thread-safe!
  */
-public interface MetadataUpdater extends Closeable {
+public interface MetadataUpdater extends Closeable, DisconnectListener {
 
     /**
      * Gets the current cluster info without blocking.
@@ -56,18 +55,6 @@ public interface MetadataUpdater extends Closeable {
      * factors like node availability, how long since the last metadata update, etc.
      */
     long maybeUpdate(long now);
-
-    /**
-     * Handle a server disconnect.
-     *
-     * This provides a mechanism for the `MetadataUpdater` implementation to use the NetworkClient instance for its own
-     * requests with special handling for disconnections of such requests.
-     *
-     * @param now Current time in milliseconds
-     * @param nodeId The id of the node that disconnected
-     * @param maybeAuthException Optional authentication error
-     */
-    void handleServerDisconnect(long now, String nodeId, Optional<AuthenticationException> maybeAuthException);
 
     /**
      * Handle a metadata request failure.

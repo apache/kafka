@@ -130,6 +130,8 @@ public class NetworkClient implements KafkaClient {
 
     private final List<ClientResponse> abortedSends = new LinkedList<>();
 
+    private final List<DisconnectListener> disconnectListeners = new LinkedList<>();
+
     private final Sensor throttleTimeSensor;
 
     private final AtomicReference<State> state;
@@ -279,6 +281,7 @@ public class NetworkClient implements KafkaClient {
         } else {
             this.metadataUpdater = metadataUpdater;
         }
+        this.registerDisconnectListener(this.metadataUpdater);
         this.selector = selector;
         this.clientId = clientId;
         this.inFlightRequests = new InFlightRequests(maxInFlightRequestsPerConnection);
@@ -299,6 +302,16 @@ public class NetworkClient implements KafkaClient {
         this.state = new AtomicReference<>(State.ACTIVE);
         this.telemetrySender = (clientTelemetrySender != null) ? new TelemetrySender(clientTelemetrySender) : null;
         this.metadataRecoveryStrategy = metadataRecoveryStrategy;
+    }
+
+    @Override
+    public void registerDisconnectListener(DisconnectListener listener) {
+        disconnectListeners.add(listener);
+    }
+
+    @Override
+    public void unregisterDisconnectListener(DisconnectListener listener) {
+        disconnectListeners.remove(listener);
     }
 
     /**
@@ -686,6 +699,7 @@ public class NetworkClient implements KafkaClient {
     public void close() {
         state.compareAndSet(State.ACTIVE, State.CLOSING);
         if (state.compareAndSet(State.CLOSING, State.CLOSED)) {
+            this.unregisterDisconnectListener(this.metadataUpdater);
             this.selector.close();
             this.metadataUpdater.close();
             if (telemetrySender != null)
@@ -853,7 +867,8 @@ public class NetworkClient implements KafkaClient {
         }
 
         cancelInFlightRequests(nodeId, now, responses, timedOut);
-        metadataUpdater.handleServerDisconnect(now, nodeId, Optional.ofNullable(disconnectState.exception()));
+        Optional<AuthenticationException> disconnectException = Optional.ofNullable(disconnectState.exception());
+        disconnectListeners.forEach(l -> l.handleServerDisconnect(now, nodeId, disconnectException));
     }
 
     /**
@@ -1084,8 +1099,8 @@ public class NetworkClient implements KafkaClient {
             log.warn("Error connecting to node {}", node, e);
             // Attempt failed, we'll try again after the backoff
             connectionStates.disconnected(nodeConnectionId, now);
-            // Notify metadata updater of the connection failure
-            metadataUpdater.handleServerDisconnect(now, nodeConnectionId, Optional.empty());
+            // Notify interested listeners of the connection failure
+            disconnectListeners.forEach(l -> l.handleServerDisconnect(now, nodeConnectionId, Optional.empty()));
         }
     }
 

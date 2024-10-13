@@ -159,6 +159,9 @@ public class Sender implements Runnable {
         this.apiVersions = apiVersions;
         this.transactionManager = transactionManager;
         this.inFlightBatches = new HashMap<>();
+        if (this.transactionManager != null) {
+            this.client.registerDisconnectListener(transactionManager);
+        }
     }
 
     public List<ProducerBatch> inFlightBatches(TopicPartition tp) {
@@ -549,6 +552,9 @@ public class Sender implements Runnable {
         // Ensure accumulator is closed first to guarantee that no more appends are accepted after
         // breaking from the sender loop. Otherwise, we may miss some callbacks when shutting down.
         this.accumulator.close();
+        if (transactionManager != null) {
+            client.unregisterDisconnectListener(transactionManager);
+        }
         this.running = false;
         this.wakeup();
     }

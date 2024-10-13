@@ -33,8 +33,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -87,6 +89,7 @@ public class MockClient implements KafkaClient {
     private volatile boolean active = true;
     private volatile CompletableFuture<String> disconnectFuture;
     private volatile Consumer<Node> readyCallback;
+    private final List<DisconnectListener> disconnectListeners = new LinkedList<>();
 
     public MockClient(Time time) {
         this(time, new NoOpMetadataUpdater());
@@ -210,6 +213,7 @@ public class MockClient implements KafkaClient {
             curDisconnectFuture.complete(node);
         }
         connectionState(node).disconnect();
+        notifyDisconnectListeners(now, node, Optional.empty());
     }
 
     @Override
@@ -575,6 +579,20 @@ public class MockClient implements KafkaClient {
     @Override
     public boolean active() {
         return active;
+    }
+
+    @Override
+    public void registerDisconnectListener(DisconnectListener listener) {
+        disconnectListeners.add(listener);
+    }
+
+    @Override
+    public void unregisterDisconnectListener(DisconnectListener listener) {
+        disconnectListeners.remove(listener);
+    }
+
+    public void notifyDisconnectListeners(long now, String nodeId, Optional<AuthenticationException> maybeAuthException) {
+        disconnectListeners.forEach(l -> l.handleServerDisconnect(now, nodeId, maybeAuthException));
     }
 
     @Override

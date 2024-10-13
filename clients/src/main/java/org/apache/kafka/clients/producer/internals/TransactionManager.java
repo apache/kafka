@@ -18,6 +18,7 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.DisconnectListener;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.CommitFailedException;
@@ -80,6 +81,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.PriorityQueue;
@@ -89,7 +91,7 @@ import java.util.function.Supplier;
 /**
  * A class which maintains state for transactions. Also keeps the state necessary to ensure idempotent production.
  */
-public class TransactionManager {
+public class TransactionManager implements DisconnectListener {
     private static final int NO_INFLIGHT_REQUEST_CORRELATION_ID = -1;
 
     private final Logger log;
@@ -186,6 +188,7 @@ public class TransactionManager {
     private int inFlightRequestCorrelationId = NO_INFLIGHT_REQUEST_CORRELATION_ID;
     private Node transactionCoordinator;
     private Node consumerGroupCoordinator;
+    private String consumerGroupCoordinatorKey = null;
     private boolean coordinatorSupportsBumpingEpoch;
 
     private volatile State currentState = State.UNINITIALIZED;
@@ -872,6 +875,22 @@ public class TransactionManager {
         inFlightRequestCorrelationId = correlationId;
     }
 
+    @Override
+    public void handleServerDisconnect(long now, String nodeId, Optional<AuthenticationException> maybeAuthException) {
+        if (transactionCoordinator != null && transactionCoordinator.idString().equals(nodeId)) {
+            log.debug("Rediscovering transaction coordinator due to broker {} disconnection", nodeId);
+            lookupCoordinator(CoordinatorType.TRANSACTION, transactionalId);
+        }
+        if (consumerGroupCoordinator != null &&
+                consumerGroupCoordinatorKey != null &&
+                consumerGroupCoordinator.idString().equals(nodeId)) {
+            log.debug("Rediscovering group coordinator for group {} due to broker {} disconnection",
+                      consumerGroupCoordinatorKey,
+                      nodeId);
+            lookupCoordinator(CoordinatorType.GROUP, consumerGroupCoordinatorKey);
+        }
+    }
+
     private void clearInFlightCorrelationId() {
         inFlightRequestCorrelationId = NO_INFLIGHT_REQUEST_CORRELATION_ID;
     }
@@ -1081,6 +1100,8 @@ public class TransactionManager {
         switch (type) {
             case GROUP:
                 consumerGroupCoordinator = null;
+                // Cache the consumer group key for rediscovery after disconnects
+                consumerGroupCoordinatorKey = coordinatorKey;
                 break;
             case TRANSACTION:
                 transactionCoordinator = null;
@@ -1243,8 +1264,7 @@ public class TransactionManager {
                 clearInFlightCorrelationId();
                 if (response.wasDisconnected()) {
                     log.debug("Disconnected from {}. Will retry.", response.destination());
-                    if (this.needsCoordinator())
-                        lookupCoordinator(this.coordinatorType(), this.coordinatorKey());
+                    // disconnects are proactively handled via notifications, no need for explicit lookup here
                     reenqueue();
                 } else if (response.versionMismatch() != null) {
                     fatalError(response.versionMismatch());
