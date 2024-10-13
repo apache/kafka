@@ -18,12 +18,12 @@ name: CI
 on:
   push:
     branches:
-      - 'KAFKA-17572'
+      - 'trunk'
 
   pull_request:
     types: [ opened, synchronize, reopened ]
     branches:
-      - 'KAFKA-17572'
+      - 'trunk'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
