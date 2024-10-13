@@ -57,17 +57,6 @@ import java.util.Set;
 public class UniformHeterogeneousAssignmentBuilder {
     private static final Logger LOG = LoggerFactory.getLogger(UniformHeterogeneousAssignmentBuilder.class);
 
-    private static final Class<?> UNMODIFIABLE_MAP_CLASS = Collections.unmodifiableMap(new HashMap<>()).getClass();
-    private static final Class<?> EMPTY_MAP_CLASS = Collections.emptyMap().getClass();
-
-    /**
-     * @return True if the provided map is an UnmodifiableMap or EmptyMap. Those classes are not
-     * public hence we cannot use the `instanceof` operator.
-     */
-    private static boolean isImmutableMap(Map<?, ?> map) {
-        return UNMODIFIABLE_MAP_CLASS.isInstance(map) || EMPTY_MAP_CLASS.isInstance(map);
-    }
-
     /**
      * The maximum number of iterations to perform in the final iterative balancing phase.
      * <p/>
@@ -326,7 +315,7 @@ public class UniformHeterogeneousAssignmentBuilder {
 
             // The assignor expects to receive the assignment as an immutable map. It leverages
             // this knowledge in order to avoid having to copy all assignments.
-            if (!isImmutableMap(oldAssignment)) {
+            if (!AssignorHelpers.isImmutableMap(oldAssignment)) {
                 throw new IllegalStateException("The assignor expect an immutable map.");
             }
 
@@ -345,7 +334,7 @@ public class UniformHeterogeneousAssignmentBuilder {
                     if (newAssignment == null) {
                         // If the new assignment is null, we create a deep copy of the
                         // original assignment so that we can alter it.
-                        newAssignment = deepCopy(oldAssignment);
+                        newAssignment = AssignorHelpers.deepCopyAssignment(oldAssignment);
                     }
                     // Remove the entire topic.
                     newAssignment.remove(topicId);
@@ -948,8 +937,8 @@ public class UniformHeterogeneousAssignmentBuilder {
     ) {
         String memberId = memberIds.get(memberIndex);
         Map<Uuid, Set<Integer>> assignment = targetAssignment.get(memberId).partitions();
-        if (isImmutableMap(assignment)) {
-            assignment = deepCopy(assignment);
+        if (AssignorHelpers.isImmutableMap(assignment)) {
+            assignment = AssignorHelpers.deepCopyAssignment(assignment);
             targetAssignment.put(memberId, new MemberAssignmentImpl(assignment));
         }
         assignment
@@ -980,8 +969,8 @@ public class UniformHeterogeneousAssignmentBuilder {
     ) {
         String memberId = memberIds.get(memberIndex);
         Map<Uuid, Set<Integer>> assignment = targetAssignment.get(memberId).partitions();
-        if (isImmutableMap(assignment)) {
-            assignment = deepCopy(assignment);
+        if (AssignorHelpers.isImmutableMap(assignment)) {
+            assignment = AssignorHelpers.deepCopyAssignment(assignment);
             targetAssignment.put(memberId, new MemberAssignmentImpl(assignment));
         }
         Set<Integer> partitionsSet = assignment.get(topicId);
@@ -997,13 +986,5 @@ public class UniformHeterogeneousAssignmentBuilder {
         targetAssignmentPartitionOwners.get(topicId)[partition] = -1;
 
         memberTargetAssignmentSizes[memberIndex]--;
-    }
-
-    private static Map<Uuid, Set<Integer>> deepCopy(Map<Uuid, Set<Integer>> map) {
-        Map<Uuid, Set<Integer>> copy = new HashMap<>(map.size());
-        for (Map.Entry<Uuid, Set<Integer>> entry : map.entrySet()) {
-            copy.put(entry.getKey(), new HashSet<>(entry.getValue()));
-        }
-        return copy;
     }
 }
