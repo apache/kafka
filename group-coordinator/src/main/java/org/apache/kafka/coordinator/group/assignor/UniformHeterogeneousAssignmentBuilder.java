@@ -234,7 +234,7 @@ public class UniformHeterogeneousAssignmentBuilder {
         assignStickyPartitions();
 
         Map<Uuid, List<Integer>> unassignedPartitions = computeUnassignedPartitions();
-        unassignedPartitionsAssignment(unassignedPartitions);
+        assignRemainingPartitions(unassignedPartitions);
 
         balance();
 
@@ -580,7 +580,7 @@ public class UniformHeterogeneousAssignmentBuilder {
      *
      * @param partitions        The partitions to be assigned.
      */
-    private void unassignedPartitionsAssignment(Map<Uuid, List<Integer>> partitions) {
+    private void assignRemainingPartitions(Map<Uuid, List<Integer>> partitions) {
         List<Uuid> sortedTopicIds = sortTopicIds(partitions.keySet());
 
         MemberAssignmentBalancer memberAssignmentBalancer = new MemberAssignmentBalancer();
@@ -739,7 +739,7 @@ public class UniformHeterogeneousAssignmentBuilder {
         );
 
         // Next, try to reassign partitions from the most loaded subscribers to the least loaded
-        // subscribers. We use a similar approach to unassignedPartitionsAssignment, except instead
+        // subscribers. We use a similar approach to assignRemainingPartitions, except instead
         // we are reassigning partitions from the most loaded subscribers to the least loaded
         // subscribers. Once the difference in partition counts between the ranges is one or less,
         // we are done, since reassigning partitions would not improve balance.
