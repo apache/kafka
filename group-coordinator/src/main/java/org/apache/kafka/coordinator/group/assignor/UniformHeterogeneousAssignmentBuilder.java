@@ -221,7 +221,8 @@ public class UniformHeterogeneousAssignmentBuilder {
     /**
      * Here's the step-by-step breakdown of the assignment process:
      * <ol>
-     *   <li>Retain partitions from the existing assignment, a.k.a sticky partitions.</li>
+     *   <li>Revoke partitions from the existing assignment that are no longer part of each member's
+     *     subscriptions.</li>
      *   <li>Allocate all the remaining unassigned partitions to the members in a balanced manner.</li>
      *   <li>Iterate through the assignment until it is balanced.</li>
      * </ol>
@@ -231,7 +232,7 @@ public class UniformHeterogeneousAssignmentBuilder {
             return new GroupAssignment(Collections.emptyMap());
         }
 
-        assignStickyPartitions();
+        maybeRevokePartitions();
 
         Map<Uuid, List<Integer>> unassignedPartitions = computeUnassignedPartitions();
         assignRemainingPartitions(unassignedPartitions);
@@ -290,19 +291,26 @@ public class UniformHeterogeneousAssignmentBuilder {
     }
 
     /**
-     * Imports the existing assignment into the target assignment, taking into account topic
-     * unsubscriptions.
+     * Revoke the partitions that are not part of each member's subscriptions.
+     *
+     * This method ensures that the original assignment is not copied if it is not altered.
      */
-    private void assignStickyPartitions() {
+    private void maybeRevokePartitions() {
         for (String memberId : groupSpec.memberIds()) {
             int memberIndex = memberIndices.get(memberId);
 
             Map<Uuid, Set<Integer>> oldAssignment = groupSpec.memberAssignment(memberId).partitions();
             Map<Uuid, Set<Integer>> newAssignment = null;
 
-            for (Map.Entry<Uuid, Set<Integer>> entry : oldAssignment.entrySet()) {
-                Uuid topicId = entry.getKey();
-                Set<Integer> partitions = entry.getValue();
+            // The assignor expects to receive the assignment as an immutable map. It leverages
+            // this knowledge in order to avoid having to copy all assignments.
+            if (!isImmutableMap(oldAssignment)) {
+                throw new IllegalStateException("The assignor expect an immutable map.");
+            }
+
+            for (Map.Entry<Uuid, Set<Integer>> topicPartitions : oldAssignment.entrySet()) {
+                Uuid topicId = topicPartitions.getKey();
+                Set<Integer> partitions = topicPartitions.getValue();
 
                 if (groupSpec.memberSubscription(memberId).subscribedTopicIds().contains(topicId)) {
                     memberTargetAssignmentSizes[memberIndex] += partitions.size();
@@ -312,10 +320,6 @@ public class UniformHeterogeneousAssignmentBuilder {
                         targetAssignmentPartitionOwners.get(topicId)[partition] = memberIndex;
                     }
                 } else {
-                    // The member is no longer subscribed to the topic. Remove it from the
-                    // assignment.
-                    LOG.debug("The topic " + topicId + " is no longer present in the subscribed topics list");
-
                     if (newAssignment == null) {
                         // If the new assignment is null, we create a deep copy of the
                         // original assignment so that we can alter it.
