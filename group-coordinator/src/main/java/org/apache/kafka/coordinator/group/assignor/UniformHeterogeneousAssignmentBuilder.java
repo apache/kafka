@@ -234,7 +234,6 @@ public class UniformHeterogeneousAssignmentBuilder {
      */
     public GroupAssignment build() {
         if (subscribedTopicIds.isEmpty()) {
-            LOG.info("The subscription list is empty, returning an empty assignment");
             return new GroupAssignment(Collections.emptyMap());
         }
 
