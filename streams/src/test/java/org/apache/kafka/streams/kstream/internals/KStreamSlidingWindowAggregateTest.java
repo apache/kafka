@@ -77,8 +77,6 @@ import java.util.stream.Stream;
 
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.hasItems;
@@ -1725,18 +1723,18 @@ public class KStreamSlidingWindowAggregateTest {
                 "dropped-records-total",
                 "stream-task-metrics",
                 "The total number of dropped records",
-                mkMap(
-                        mkEntry("thread-id", threadId),
-                        mkEntry("task-id", "0_0")
+               Map.ofEntries(
+                        Map.entry("thread-id", threadId),
+                        Map.entry("task-id", "0_0")
                 )
         );
         dropRateMetric = new MetricName(
                 "dropped-records-rate",
                 "stream-task-metrics",
                 "The average number of dropped records per second",
-                mkMap(
-                        mkEntry("thread-id", threadId),
-                        mkEntry("task-id", "0_0")
+               Map.ofEntries(
+                        Map.entry("thread-id", threadId),
+                        Map.entry("task-id", "0_0")
                 )
         );
         latenessMaxMetric = new MetricName(
@@ -1744,9 +1742,9 @@ public class KStreamSlidingWindowAggregateTest {
                 "stream-task-metrics",
                 "The observed maximum lateness of records in milliseconds, measured by comparing the record "
                         + "timestamp with the current stream time",
-                mkMap(
-                        mkEntry("thread-id", threadId),
-                        mkEntry("task-id", "0_0")
+               Map.ofEntries(
+                        Map.entry("thread-id", threadId),
+                        Map.entry("task-id", "0_0")
                 )
         );
         latenessAvgMetric = new MetricName(
@@ -1754,9 +1752,9 @@ public class KStreamSlidingWindowAggregateTest {
                 "stream-task-metrics",
                 "The observed average lateness of records in milliseconds, measured by comparing the record "
                         + "timestamp with the current stream time",
-                mkMap(
-                        mkEntry("thread-id", threadId),
-                        mkEntry("task-id", "0_0")
+               Map.ofEntries(
+                        Map.entry("thread-id", threadId),
+                        Map.entry("task-id", "0_0")
                 )
         );
         assertThat(driver.metrics().get(dropTotalMetric).metricValue(), dropTotal);

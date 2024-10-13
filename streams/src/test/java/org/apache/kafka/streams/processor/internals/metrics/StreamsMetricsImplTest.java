@@ -46,8 +46,6 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.AVG_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.CLIENT_ID_TAG;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.CLIENT_LEVEL_GROUP;
@@ -108,10 +106,10 @@ public class StreamsMetricsImplTest {
     private static final String STORE_ID_TAG = "-state-id";
     private static final String STORE_NAME1 = "store1";
     private static final String STORE_NAME2 = "store2";
-    private static final Map<String, String> STORE_LEVEL_TAG_MAP = mkMap(
-        mkEntry(THREAD_ID_TAG, Thread.currentThread().getName()),
-        mkEntry(TASK_ID_TAG, TASK_ID1),
-        mkEntry(SCOPE_NAME + STORE_ID_TAG, STORE_NAME1)
+    private static final Map<String, String> STORE_LEVEL_TAG_MAP = Map.ofEntries(
+        Map.entry(THREAD_ID_TAG, Thread.currentThread().getName()),
+        Map.entry(TASK_ID_TAG, TASK_ID1),
+        Map.entry(SCOPE_NAME + STORE_ID_TAG, STORE_NAME1)
     );
     private static final String RECORD_CACHE_ID_TAG = "record-cache-id";
     private static final String ENTITY_NAME = "test-entity";
@@ -130,8 +128,8 @@ public class StreamsMetricsImplTest {
     private final Sensor sensor = metrics.sensor("dummy");
     private final String metricNamePrefix = "metric";
     private final String group = "group";
-    private final Map<String, String> tags = mkMap(mkEntry("tag", "value"));
-    private final Map<String, String> clientLevelTags = mkMap(mkEntry(CLIENT_ID_TAG, CLIENT_ID));
+    private final Map<String, String> tags = Map.ofEntries(Map.entry("tag", "value"));
+    private final Map<String, String> clientLevelTags = Map.ofEntries(Map.entry(CLIENT_ID_TAG, CLIENT_ID));
     private final MetricName metricName1 =
         new MetricName(METRIC_NAME1, CLIENT_LEVEL_GROUP, DESCRIPTION1, clientLevelTags);
     private final MetricName metricName2 =
@@ -759,13 +757,13 @@ public class StreamsMetricsImplTest {
 
         final String taskName = "taskName";
         final String operation = "operation";
-        final Map<String, String> taskTags = mkMap(mkEntry("tkey", "value"));
+        final Map<String, String> taskTags = Map.ofEntries(Map.entry("tkey", "value"));
 
         final String processorNodeName = "processorNodeName";
-        final Map<String, String> nodeTags = mkMap(mkEntry("nkey", "value"));
+        final Map<String, String> nodeTags = Map.ofEntries(Map.entry("nkey", "value"));
 
         final String topicName = "topicName";
-        final Map<String, String> topicTags = mkMap(mkEntry("tkey", "value"));
+        final Map<String, String> topicTags = Map.ofEntries(Map.entry("tkey", "value"));
 
         final Sensor parent1 = metrics.taskLevelSensor(THREAD_ID1, taskName, operation, RecordingLevel.DEBUG);
         addAvgAndMaxLatencyToSensor(parent1, PROCESSOR_NODE_LEVEL_GROUP, taskTags, operation);
@@ -985,12 +983,12 @@ public class StreamsMetricsImplTest {
     }
 
     private Map<String, String> tags(final StreamsMetricsImpl streamsMetrics) {
-        return mkMap(
-            mkEntry(
+        return Map.ofEntries(
+            Map.entry(
                 streamsMetrics.version() == Version.LATEST ? THREAD_ID_TAG : CLIENT_ID_TAG,
                 Thread.currentThread().getName()
             ),
-            mkEntry(SCOPE_NAME + "-id", ENTITY_NAME)
+            Map.entry(SCOPE_NAME + "-id", ENTITY_NAME)
         );
     }
 

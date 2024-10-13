@@ -105,8 +105,6 @@ import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.metrics.Sensor.RecordingLevel.DEBUG;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
@@ -264,24 +262,24 @@ public class StreamTaskTest {
         } catch (final IOException e) {
             throw new RuntimeException(e);
         }
-        return new StreamsConfig(mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID),
-            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
-            mkEntry(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3"),
-            mkEntry(StreamsConfig.STATE_DIR_CONFIG, canonicalPath),
-            mkEntry(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, DEBUG.name),
-            mkEntry(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName()),
-            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig),
-            mkEntry(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, enforcedProcessingValue),
-            mkEntry(StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, deserializationExceptionHandler),
-            mkEntry(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, processingExceptionHandler)
+        return new StreamsConfig(mkProperties(Map.ofEntries(
+            Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID),
+            Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
+            Map.entry(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3"),
+            Map.entry(StreamsConfig.STATE_DIR_CONFIG, canonicalPath),
+            Map.entry(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, DEBUG.name),
+            Map.entry(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName()),
+            Map.entry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig),
+            Map.entry(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, enforcedProcessingValue),
+            Map.entry(StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, deserializationExceptionHandler),
+            Map.entry(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, processingExceptionHandler)
         )));
     }
 
     @BeforeEach
     public void setup() {
         consumer.assign(asList(partition1, partition2));
-        consumer.updateBeginningOffsets(mkMap(mkEntry(partition1, 0L), mkEntry(partition2, 0L)));
+        consumer.updateBeginningOffsets(Map.ofEntries(Map.entry(partition1, 0L), Map.entry(partition2, 0L)));
         stateDirectory = new StateDirectory(createConfig("100"), new MockTime(), true, false);
         // Unless we initialise a lock on the state directory we cannot unlock it successfully during teardown
         stateDirectory.initializeProcessId();
@@ -409,7 +407,7 @@ public class StreamTaskTest {
             }
         };
         consumer.assign(asList(partition1, partition2));
-        consumer.updateBeginningOffsets(mkMap(mkEntry(partition1, 0L), mkEntry(partition2, 0L)));
+        consumer.updateBeginningOffsets(Map.ofEntries(Map.entry(partition1, 0L), Map.entry(partition2, 0L)));
 
         consumer.seek(partition1, 5L);
         consumer.seek(partition2, 15L);
@@ -438,9 +436,9 @@ public class StreamTaskTest {
         stateDirectory.close();
         stateDirectory = mock(StateDirectory.class);
 
-        final ProcessorMetadata processorMetadata = new ProcessorMetadata(mkMap(
-            mkEntry("key1", 1L),
-            mkEntry("key2", 2L)
+        final ProcessorMetadata processorMetadata = new ProcessorMetadata(Map.ofEntries(
+            Map.entry("key1", 1L),
+            Map.entry("key2", 2L)
         ));
 
         consumer.commitSync(partitions.stream()
@@ -466,23 +464,23 @@ public class StreamTaskTest {
         stateDirectory.close();
         stateDirectory = mock(StateDirectory.class);
 
-        final ProcessorMetadata processorMetadata1 = new ProcessorMetadata(mkMap(
-            mkEntry("key1", 1L),
-            mkEntry("key2", 2L)
+        final ProcessorMetadata processorMetadata1 = new ProcessorMetadata(Map.ofEntries(
+            Map.entry("key1", 1L),
+            Map.entry("key2", 2L)
         ));
 
-        final Map<TopicPartition, OffsetAndMetadata> meta1 = mkMap(
-            mkEntry(partition1, new OffsetAndMetadata(0L, new TopicPartitionMetadata(10L, processorMetadata1).encode())
+        final Map<TopicPartition, OffsetAndMetadata> meta1 = Map.ofEntries(
+            Map.entry(partition1, new OffsetAndMetadata(0L, new TopicPartitionMetadata(10L, processorMetadata1).encode())
             )
         );
 
-        final ProcessorMetadata processorMetadata2 = new ProcessorMetadata(mkMap(
-            mkEntry("key1", 10L),
-            mkEntry("key3", 30L)
+        final ProcessorMetadata processorMetadata2 = new ProcessorMetadata(Map.ofEntries(
+            Map.entry("key1", 10L),
+            Map.entry("key3", 30L)
         ));
 
-        final Map<TopicPartition, OffsetAndMetadata> meta2 = mkMap(
-            mkEntry(partition2, new OffsetAndMetadata(0L, new TopicPartitionMetadata(20L, processorMetadata2).encode())
+        final Map<TopicPartition, OffsetAndMetadata> meta2 = Map.ofEntries(
+            Map.entry(partition2, new OffsetAndMetadata(0L, new TopicPartitionMetadata(20L, processorMetadata2).encode())
             )
         );
 
@@ -945,9 +943,9 @@ public class StreamTaskTest {
             String.format(nameFormat, operation),
             "stream-task-metrics",
             descriptionIsNotVerified,
-            mkMap(
-                mkEntry("task-id", taskId),
-                mkEntry(THREAD_ID_TAG, Thread.currentThread().getName())
+            Map.ofEntries(
+                Map.entry("task-id", taskId),
+                Map.entry(THREAD_ID_TAG, Thread.currentThread().getName())
             )
         ));
     }
@@ -961,10 +959,10 @@ public class StreamTaskTest {
             metrics.metrics(),
             String.format(nameFormat, operation),
             "stream-processor-node-metrics",
-            mkMap(
-                mkEntry("task-id", taskId),
-                mkEntry("processor-node-id", processorNodeId),
-                mkEntry(THREAD_ID_TAG, Thread.currentThread().getName()
+            Map.ofEntries(
+                Map.entry("task-id", taskId),
+                Map.entry("processor-node-id", processorNodeId),
+                Map.entry(THREAD_ID_TAG, Thread.currentThread().getName()
                 )
             )
         );
@@ -1266,14 +1264,14 @@ public class StreamTaskTest {
         final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = task.prepareCommit();
         final TopicPartitionMetadata expected = new TopicPartitionMetadata(3L,
             new ProcessorMetadata(
-                mkMap(
-                    mkEntry("key1", 100L),
-                    mkEntry("key2", 200L)
+                Map.ofEntries(
+                    Map.entry("key1", 100L),
+                    Map.entry("key2", 200L)
                 )
             )
         );
 
-        assertThat(offsetsAndMetadata, equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(5L, expected.encode())))));
+        assertThat(offsetsAndMetadata, equalTo(Map.ofEntries(Map.entry(partition1, new OffsetAndMetadata(5L, expected.encode())))));
     }
 
     @Test
@@ -1298,8 +1296,8 @@ public class StreamTaskTest {
 
         assertTrue(task.commitNeeded());
         assertThat(task.prepareCommit(), equalTo(
-            mkMap(
-                mkEntry(partition1,
+            Map.ofEntries(
+                Map.entry(partition1,
                     new OffsetAndMetadata(3L, metadata.encode())
                 )
             )
@@ -1316,9 +1314,9 @@ public class StreamTaskTest {
 
         assertTrue(task.commitNeeded());
         assertThat(task.prepareCommit(), equalTo(
-            mkMap(
-                mkEntry(partition1, new OffsetAndMetadata(3L, metadata.encode())),
-                mkEntry(partition2, new OffsetAndMetadata(1L, metadata.encode()))
+            Map.ofEntries(
+                Map.entry(partition1, new OffsetAndMetadata(3L, metadata.encode())),
+                Map.entry(partition2, new OffsetAndMetadata(1L, metadata.encode()))
             )
         ));
         task.postCommit(false);
@@ -1352,16 +1350,16 @@ public class StreamTaskTest {
 
         final TopicPartitionMetadata expectedMetadata1 = new TopicPartitionMetadata(0L,
             new ProcessorMetadata(
-                mkMap(
-                    mkEntry("key1", 100L)
+                Map.ofEntries(
+                    Map.entry("key1", 100L)
                 )
             )
         );
 
         final TopicPartitionMetadata expectedMetadata2 = new TopicPartitionMetadata(RecordQueue.UNKNOWN,
             new ProcessorMetadata(
-                mkMap(
-                    mkEntry("key1", 100L)
+                Map.ofEntries(
+                    Map.entry("key1", 100L)
                 )
             )
         );
@@ -1369,9 +1367,9 @@ public class StreamTaskTest {
         assertTrue(task.commitNeeded());
 
         assertThat(task.prepareCommit(), equalTo(
-            mkMap(
-                mkEntry(partition1, new OffsetAndMetadata(1L, expectedMetadata1.encode())),
-                mkEntry(partition2, new OffsetAndMetadata(2L, expectedMetadata2.encode()))
+            Map.ofEntries(
+                Map.entry(partition1, new OffsetAndMetadata(1L, expectedMetadata1.encode())),
+                Map.entry(partition2, new OffsetAndMetadata(2L, expectedMetadata2.encode()))
             )));
         task.postCommit(false);
 
@@ -1383,8 +1381,8 @@ public class StreamTaskTest {
 
         final TopicPartitionMetadata expectedMetadata3 = new TopicPartitionMetadata(1L,
             new ProcessorMetadata(
-                mkMap(
-                    mkEntry("key1", 100L)
+                Map.ofEntries(
+                    Map.entry("key1", 100L)
                 )
             )
         );
@@ -1392,7 +1390,7 @@ public class StreamTaskTest {
 
         // Processor metadata not updated, we just need to commit to partition1 again with new offset
         assertThat(task.prepareCommit(), equalTo(
-            mkMap(mkEntry(partition1, new OffsetAndMetadata(2L, expectedMetadata3.encode())))
+            Map.ofEntries(Map.entry(partition1, new OffsetAndMetadata(2L, expectedMetadata3.encode())))
         ));
         task.postCommit(false);
 
@@ -1842,11 +1840,11 @@ public class StreamTaskTest {
 
         final ProcessorTopology topology = withRepartitionTopics(
             asList(source1, source2),
-            mkMap(mkEntry(topic1, source1), mkEntry(repartition.topic(), source2)),
+            Map.ofEntries(Map.entry(topic1, source1), Map.entry(repartition.topic(), source2)),
             singleton(repartition.topic())
         );
         consumer.assign(asList(partition1, repartition));
-        consumer.updateBeginningOffsets(mkMap(mkEntry(repartition, 0L)));
+        consumer.updateBeginningOffsets(Map.ofEntries(Map.entry(repartition, 0L)));
 
         final StreamsConfig config = createConfig();
         final InternalProcessorContext context = new ProcessorContextImpl(
@@ -2343,9 +2341,9 @@ public class StreamTaskTest {
         final Set<TopicPartition> newPartitions = new HashSet<>(task.inputPartitions());
         newPartitions.add(new TopicPartition("newTopic", 0));
 
-        task.updateInputPartitions(newPartitions, mkMap(
-            mkEntry(source1.name(), asList(topic1, "newTopic")),
-            mkEntry(source2.name(), singletonList(topic2)))
+        task.updateInputPartitions(newPartitions, Map.ofEntries(
+            Map.entry(source1.name(), asList(topic1, "newTopic")),
+            Map.entry(source2.name(), singletonList(topic2)))
         );
 
         assertThat(task.inputPartitions(), equalTo(newPartitions));
@@ -2449,7 +2447,7 @@ public class StreamTaskTest {
         final StreamsMetricsImpl metrics = new StreamsMetricsImpl(this.metrics, "test", time);
 
         // The processor topology is missing the topics
-        final ProcessorTopology topology = withSources(emptyList(), mkMap());
+        final ProcessorTopology topology = withSources(emptyList(), Map.ofEntries());
 
         final TopologyException exception = assertThrows(
             TopologyException.class,
@@ -2532,7 +2530,7 @@ public class StreamTaskTest {
         assertTrue(task.commitNeeded());
         assertThat(
             task.prepareCommit(),
-            equalTo(mkMap(mkEntry(partition1,
+            equalTo(Map.ofEntries(Map.entry(partition1,
                 new OffsetAndMetadata(offset + 1,
                     new TopicPartitionMetadata(RecordQueue.UNKNOWN, new ProcessorMetadata()).encode()))))
         );
@@ -2566,7 +2564,7 @@ public class StreamTaskTest {
         assertTrue(task.commitNeeded());
         assertThat(
             task.prepareCommit(),
-            equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(offset + 1, new TopicPartitionMetadata(offset, new ProcessorMetadata()).encode()))))
+            equalTo(Map.ofEntries(Map.entry(partition1, new OffsetAndMetadata(offset + 1, new TopicPartitionMetadata(offset, new ProcessorMetadata()).encode()))))
         );
     }
 
@@ -2597,14 +2595,14 @@ public class StreamTaskTest {
         assertTrue(task.commitNeeded());
         assertThat(
             task.prepareCommit(),
-            equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(1, new TopicPartitionMetadata(0, new ProcessorMetadata()).encode()))))
+            equalTo(Map.ofEntries(Map.entry(partition1, new OffsetAndMetadata(1, new TopicPartitionMetadata(0, new ProcessorMetadata()).encode()))))
         );
 
         assertTrue(task.process(offset));
         assertTrue(task.commitNeeded());
         assertThat(
             task.prepareCommit(),
-            equalTo(mkMap(mkEntry(partition1, new OffsetAndMetadata(2, new TopicPartitionMetadata(0, new ProcessorMetadata()).encode()))))
+            equalTo(Map.ofEntries(Map.entry(partition1, new OffsetAndMetadata(2, new TopicPartitionMetadata(0, new ProcessorMetadata()).encode()))))
         );
     }
 
@@ -2830,7 +2828,7 @@ public class StreamTaskTest {
 
         final ProcessorTopology topology = ProcessorTopologyFactories.with(
             singletonList(source1),
-            mkMap(mkEntry(topic1, source1)),
+            Map.ofEntries(Map.entry(topic1, source1)),
             singletonList(stateStore),
             Collections.singletonMap(storeName, topic1));
 
@@ -2865,7 +2863,7 @@ public class StreamTaskTest {
 
         final ProcessorTopology topology = ProcessorTopologyFactories.with(
             asList(source1, source2),
-            mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2)),
+            Map.ofEntries(Map.entry(topic1, source1), Map.entry(topic2, source2)),
             singletonList(stateStore),
             emptyMap());
 
@@ -2905,7 +2903,7 @@ public class StreamTaskTest {
     private StreamTask createFaultyStatefulTask(final StreamsConfig config) {
         final ProcessorTopology topology = ProcessorTopologyFactories.with(
             asList(source1, source3),
-            mkMap(mkEntry(topic1, source1), mkEntry(topic2, source3)),
+            Map.ofEntries(Map.entry(topic1, source1), Map.entry(topic2, source3)),
             singletonList(stateStore),
             emptyMap()
         );
@@ -2945,7 +2943,7 @@ public class StreamTaskTest {
 
         final ProcessorTopology topology = ProcessorTopologyFactories.with(
             asList(source1, source2),
-            mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2)),
+            Map.ofEntries(Map.entry(topic1, source1), Map.entry(topic2, source2)),
             singletonList(stateStore),
             logged ? Collections.singletonMap(storeName, storeName + "-changelog") : Collections.emptyMap());
 
@@ -2978,7 +2976,7 @@ public class StreamTaskTest {
     private StreamTask createSingleSourceStateless(final StreamsConfig config) {
         final ProcessorTopology topology = withSources(
             asList(source1, processorStreamTime, processorSystemTime),
-            mkMap(mkEntry(topic1, source1))
+            Map.ofEntries(Map.entry(topic1, source1))
         );
 
         source1.addChild(processorStreamTime);
@@ -3013,7 +3011,7 @@ public class StreamTaskTest {
     private StreamTask createStatelessTask(final StreamsConfig config) {
         final ProcessorTopology topology = withSources(
             asList(source1, source2, processorStreamTime, processorSystemTime),
-            mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2))
+            Map.ofEntries(Map.entry(topic1, source1), Map.entry(topic2, source2))
         );
 
         source1.addChild(processorStreamTime);
@@ -3086,7 +3084,7 @@ public class StreamTaskTest {
     private void createTimeoutTask(final String eosConfig) {
         final ProcessorTopology topology = withSources(
             singletonList(timeoutSource),
-            mkMap(mkEntry(topic1, timeoutSource))
+            Map.ofEntries(Map.entry(topic1, timeoutSource))
         );
 
         final StreamsConfig config = createConfig(eosConfig, "0");

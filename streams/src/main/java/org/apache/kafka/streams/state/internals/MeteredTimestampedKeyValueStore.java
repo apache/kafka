@@ -41,8 +41,6 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import java.util.Map;
 import java.util.function.Function;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 /**
@@ -67,20 +65,20 @@ public class MeteredTimestampedKeyValueStore<K, V>
 
     @SuppressWarnings("rawtypes")
     private final Map<Class, StoreQueryUtils.QueryHandler> queryHandlers =
-            mkMap(
-                    mkEntry(
+            Map.ofEntries(
+                    Map.entry(
                             RangeQuery.class,
                             (query, positionBound, config, store) -> runRangeQuery(query, positionBound, config)
                     ),
-                    mkEntry(
+                    Map.entry(
                             TimestampedRangeQuery.class,
                             (query, positionBound, config, store) -> runTimestampedRangeQuery(query, positionBound, config)
                     ),
-                    mkEntry(
+                    Map.entry(
                             KeyQuery.class,
                             (query, positionBound, config, store) -> runKeyQuery(query, positionBound, config)
                     ),
-                    mkEntry(
+                    Map.entry(
                             TimestampedKeyQuery.class,
                             (query, positionBound, config, store) -> runTimestampedKeyQuery(query, positionBound, config)
                     )

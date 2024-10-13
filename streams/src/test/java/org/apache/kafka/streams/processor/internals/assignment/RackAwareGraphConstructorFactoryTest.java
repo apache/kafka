@@ -21,7 +21,8 @@ import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 
 import org.junit.jupiter.api.Test;
 
-import static org.apache.kafka.common.utils.Utils.mkMap;
+import java.util.Map;
+
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.configProps;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
@@ -32,7 +33,7 @@ public class RackAwareGraphConstructorFactoryTest {
     public void shouldReturnMinCostConstructor() {
         final AssignmentConfigs config = new AssignorConfiguration(
             new StreamsConfig(configProps(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC)).originals()).assignmentConfigs();
-        final RackAwareGraphConstructor constructor = RackAwareGraphConstructorFactory.create(config, mkMap());
+        final RackAwareGraphConstructor constructor = RackAwareGraphConstructorFactory.create(config, Map.ofEntries());
         assertThat(constructor, instanceOf(MinTrafficGraphConstructor.class));
     }
 
@@ -40,7 +41,7 @@ public class RackAwareGraphConstructorFactoryTest {
     public void shouldReturnBalanceSubtopologyConstructor() {
         final AssignmentConfigs config = new AssignorConfiguration(
             new StreamsConfig(configProps(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY)).originals()).assignmentConfigs();
-        final RackAwareGraphConstructor constructor = RackAwareGraphConstructorFactory.create(config, mkMap());
+        final RackAwareGraphConstructor constructor = RackAwareGraphConstructorFactory.create(config, Map.ofEntries());
         assertThat(constructor, instanceOf(BalanceSubtopologyGraphConstructor.class));
     }
 }

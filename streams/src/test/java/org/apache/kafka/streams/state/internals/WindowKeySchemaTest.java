@@ -43,8 +43,6 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -53,34 +51,34 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class WindowKeySchemaTest {
 
-    private static final Map<SchemaType, KeySchema> SCHEMA_TYPE_MAP = mkMap(
-        mkEntry(SchemaType.WindowKeySchema, new WindowKeySchema()),
-        mkEntry(SchemaType.PrefixedKeyFirstSchema, new KeyFirstWindowKeySchema()),
-        mkEntry(SchemaType.PrefixedTimeFirstSchema, new TimeFirstWindowKeySchema())
+    private static final Map<SchemaType, KeySchema> SCHEMA_TYPE_MAP = Map.ofEntries(
+        Map.entry(SchemaType.WindowKeySchema, new WindowKeySchema()),
+        Map.entry(SchemaType.PrefixedKeyFirstSchema, new KeyFirstWindowKeySchema()),
+        Map.entry(SchemaType.PrefixedTimeFirstSchema, new TimeFirstWindowKeySchema())
     );
 
-    private static final Map<SchemaType, Function<byte[], byte[]>> EXTRACT_STORE_KEY_MAP = mkMap(
-        mkEntry(SchemaType.WindowKeySchema, WindowKeySchema::extractStoreKeyBytes),
-        mkEntry(SchemaType.PrefixedKeyFirstSchema, KeyFirstWindowKeySchema::extractStoreKeyBytes),
-        mkEntry(SchemaType.PrefixedTimeFirstSchema, TimeFirstWindowKeySchema::extractStoreKeyBytes)
+    private static final Map<SchemaType, Function<byte[], byte[]>> EXTRACT_STORE_KEY_MAP = Map.ofEntries(
+        Map.entry(SchemaType.WindowKeySchema, WindowKeySchema::extractStoreKeyBytes),
+        Map.entry(SchemaType.PrefixedKeyFirstSchema, KeyFirstWindowKeySchema::extractStoreKeyBytes),
+        Map.entry(SchemaType.PrefixedTimeFirstSchema, TimeFirstWindowKeySchema::extractStoreKeyBytes)
     );
 
-    private static final Map<SchemaType, BiFunction<byte[], Long, Windowed<Bytes>>> FROM_STORAGE_BYTES_KEY = mkMap(
-        mkEntry(SchemaType.WindowKeySchema, WindowKeySchema::fromStoreBytesKey),
-        mkEntry(SchemaType.PrefixedKeyFirstSchema, KeyFirstWindowKeySchema::fromStoreBytesKey),
-        mkEntry(SchemaType.PrefixedTimeFirstSchema, TimeFirstWindowKeySchema::fromStoreBytesKey)
+    private static final Map<SchemaType, BiFunction<byte[], Long, Windowed<Bytes>>> FROM_STORAGE_BYTES_KEY = Map.ofEntries(
+        Map.entry(SchemaType.WindowKeySchema, WindowKeySchema::fromStoreBytesKey),
+        Map.entry(SchemaType.PrefixedKeyFirstSchema, KeyFirstWindowKeySchema::fromStoreBytesKey),
+        Map.entry(SchemaType.PrefixedTimeFirstSchema, TimeFirstWindowKeySchema::fromStoreBytesKey)
     );
 
-    private static final Map<SchemaType, BiFunction<Windowed<Bytes>, Integer, Bytes>> WINDOW_TO_STORE_BINARY_MAP = mkMap(
-        mkEntry(SchemaType.WindowKeySchema, WindowKeySchema::toStoreKeyBinary),
-        mkEntry(SchemaType.PrefixedKeyFirstSchema, KeyFirstWindowKeySchema::toStoreKeyBinary),
-        mkEntry(SchemaType.PrefixedTimeFirstSchema, TimeFirstWindowKeySchema::toStoreKeyBinary)
+    private static final Map<SchemaType, BiFunction<Windowed<Bytes>, Integer, Bytes>> WINDOW_TO_STORE_BINARY_MAP = Map.ofEntries(
+        Map.entry(SchemaType.WindowKeySchema, WindowKeySchema::toStoreKeyBinary),
+        Map.entry(SchemaType.PrefixedKeyFirstSchema, KeyFirstWindowKeySchema::toStoreKeyBinary),
+        Map.entry(SchemaType.PrefixedTimeFirstSchema, TimeFirstWindowKeySchema::toStoreKeyBinary)
     );
 
-    private static final Map<SchemaType, BiFunction<byte[], Long, Window>> EXTRACT_STORE_WINDOW_MAP = mkMap(
-        mkEntry(SchemaType.WindowKeySchema, WindowKeySchema::extractStoreWindow),
-        mkEntry(SchemaType.PrefixedKeyFirstSchema, KeyFirstWindowKeySchema::extractStoreWindow),
-        mkEntry(SchemaType.PrefixedTimeFirstSchema, TimeFirstWindowKeySchema::extractStoreWindow)
+    private static final Map<SchemaType, BiFunction<byte[], Long, Window>> EXTRACT_STORE_WINDOW_MAP = Map.ofEntries(
+        Map.entry(SchemaType.WindowKeySchema, WindowKeySchema::extractStoreWindow),
+        Map.entry(SchemaType.PrefixedKeyFirstSchema, KeyFirstWindowKeySchema::extractStoreWindow),
+        Map.entry(SchemaType.PrefixedTimeFirstSchema, TimeFirstWindowKeySchema::extractStoreWindow)
     );
 
     @FunctionalInterface
@@ -88,33 +86,33 @@ public class WindowKeySchemaTest {
         R apply(A a, B b, C c);
     }
 
-    private static final Map<SchemaType, TriFunction<byte[], Long, Integer, Bytes>> BYTES_TO_STORE_BINARY_MAP = mkMap(
-        mkEntry(SchemaType.WindowKeySchema, WindowKeySchema::toStoreKeyBinary),
-        mkEntry(SchemaType.PrefixedKeyFirstSchema, KeyFirstWindowKeySchema::toStoreKeyBinary),
-        mkEntry(SchemaType.PrefixedTimeFirstSchema, TimeFirstWindowKeySchema::toStoreKeyBinary)
+    private static final Map<SchemaType, TriFunction<byte[], Long, Integer, Bytes>> BYTES_TO_STORE_BINARY_MAP = Map.ofEntries(
+        Map.entry(SchemaType.WindowKeySchema, WindowKeySchema::toStoreKeyBinary),
+        Map.entry(SchemaType.PrefixedKeyFirstSchema, KeyFirstWindowKeySchema::toStoreKeyBinary),
+        Map.entry(SchemaType.PrefixedTimeFirstSchema, TimeFirstWindowKeySchema::toStoreKeyBinary)
     );
 
-    private static final Map<SchemaType, TriFunction<Windowed<String>, Integer, StateSerdes<String, byte[]>, Bytes>> SERDE_TO_STORE_BINARY_MAP = mkMap(
-        mkEntry(SchemaType.WindowKeySchema, WindowKeySchema::toStoreKeyBinary),
-        mkEntry(SchemaType.PrefixedKeyFirstSchema, KeyFirstWindowKeySchema::toStoreKeyBinary),
-        mkEntry(SchemaType.PrefixedTimeFirstSchema, TimeFirstWindowKeySchema::toStoreKeyBinary)
+    private static final Map<SchemaType, TriFunction<Windowed<String>, Integer, StateSerdes<String, byte[]>, Bytes>> SERDE_TO_STORE_BINARY_MAP = Map.ofEntries(
+        Map.entry(SchemaType.WindowKeySchema, WindowKeySchema::toStoreKeyBinary),
+        Map.entry(SchemaType.PrefixedKeyFirstSchema, KeyFirstWindowKeySchema::toStoreKeyBinary),
+        Map.entry(SchemaType.PrefixedTimeFirstSchema, TimeFirstWindowKeySchema::toStoreKeyBinary)
     );
 
-    private static final Map<SchemaType, Function<byte[], Long>> EXTRACT_TS_MAP = mkMap(
-        mkEntry(SchemaType.WindowKeySchema, WindowKeySchema::extractStoreTimestamp),
-        mkEntry(SchemaType.PrefixedKeyFirstSchema, KeyFirstWindowKeySchema::extractStoreTimestamp),
-        mkEntry(SchemaType.PrefixedTimeFirstSchema, TimeFirstWindowKeySchema::extractStoreTimestamp)
+    private static final Map<SchemaType, Function<byte[], Long>> EXTRACT_TS_MAP = Map.ofEntries(
+        Map.entry(SchemaType.WindowKeySchema, WindowKeySchema::extractStoreTimestamp),
+        Map.entry(SchemaType.PrefixedKeyFirstSchema, KeyFirstWindowKeySchema::extractStoreTimestamp),
+        Map.entry(SchemaType.PrefixedTimeFirstSchema, TimeFirstWindowKeySchema::extractStoreTimestamp)
     );
 
-    private static final Map<SchemaType, Function<byte[], Integer>> EXTRACT_SEQ_MAP = mkMap(
-        mkEntry(SchemaType.WindowKeySchema, WindowKeySchema::extractStoreSequence),
-        mkEntry(SchemaType.PrefixedKeyFirstSchema, KeyFirstWindowKeySchema::extractStoreSequence),
-        mkEntry(SchemaType.PrefixedTimeFirstSchema, TimeFirstWindowKeySchema::extractStoreSequence)
+    private static final Map<SchemaType, Function<byte[], Integer>> EXTRACT_SEQ_MAP = Map.ofEntries(
+        Map.entry(SchemaType.WindowKeySchema, WindowKeySchema::extractStoreSequence),
+        Map.entry(SchemaType.PrefixedKeyFirstSchema, KeyFirstWindowKeySchema::extractStoreSequence),
+        Map.entry(SchemaType.PrefixedTimeFirstSchema, TimeFirstWindowKeySchema::extractStoreSequence)
     );
 
-    private static final Map<SchemaType, Function<byte[], byte[]>> FROM_WINDOW_KEY_MAP = mkMap(
-        mkEntry(SchemaType.PrefixedKeyFirstSchema, KeyFirstWindowKeySchema::fromNonPrefixWindowKey),
-        mkEntry(SchemaType.PrefixedTimeFirstSchema, TimeFirstWindowKeySchema::fromNonPrefixWindowKey)
+    private static final Map<SchemaType, Function<byte[], byte[]>> FROM_WINDOW_KEY_MAP = Map.ofEntries(
+        Map.entry(SchemaType.PrefixedKeyFirstSchema, KeyFirstWindowKeySchema::fromNonPrefixWindowKey),
+        Map.entry(SchemaType.PrefixedTimeFirstSchema, TimeFirstWindowKeySchema::fromNonPrefixWindowKey)
     );
 
     private final String key = "key";

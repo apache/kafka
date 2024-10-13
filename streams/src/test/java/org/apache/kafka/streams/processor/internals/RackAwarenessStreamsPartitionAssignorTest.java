@@ -53,8 +53,6 @@ import java.util.stream.Collectors;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonList;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_TASKS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_2;
@@ -280,33 +278,33 @@ public class RackAwarenessStreamsPartitionAssignorTest {
             true);
         configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2));
 
-        final Map<String, String> clientTags1 = mkMap(
-            mkEntry(ALL_TAG_KEYS.get(0), "value-0-1"),
-            mkEntry(ALL_TAG_KEYS.get(1), "value-1-1"));
-        final Map<String, String> clientTags2 = mkMap(
-            mkEntry(ALL_TAG_KEYS.get(0), "value-0-1"),
-            mkEntry(ALL_TAG_KEYS.get(1), "value-1-2"));
-        final Map<String, String> clientTags3 = mkMap(
-            mkEntry(ALL_TAG_KEYS.get(0), "value-0-1"),
-            mkEntry(ALL_TAG_KEYS.get(1), "value-1-3"));
-        final Map<String, String> clientTags4 = mkMap(
-            mkEntry(ALL_TAG_KEYS.get(0), "value-0-2"),
-            mkEntry(ALL_TAG_KEYS.get(1), "value-1-1"));
-        final Map<String, String> clientTags5 = mkMap(
-            mkEntry(ALL_TAG_KEYS.get(0), "value-0-2"),
-            mkEntry(ALL_TAG_KEYS.get(1), "value-1-2"));
-        final Map<String, String> clientTags6 = mkMap(
-            mkEntry(ALL_TAG_KEYS.get(0), "value-0-2"),
-            mkEntry(ALL_TAG_KEYS.get(1), "value-1-3"));
-        final Map<String, String> clientTags7 = mkMap(
-            mkEntry(ALL_TAG_KEYS.get(0), "value-0-3"),
-            mkEntry(ALL_TAG_KEYS.get(1), "value-1-1"));
-        final Map<String, String> clientTags8 = mkMap(
-            mkEntry(ALL_TAG_KEYS.get(0), "value-0-3"),
-            mkEntry(ALL_TAG_KEYS.get(1), "value-1-2"));
-        final Map<String, String> clientTags9 = mkMap(
-            mkEntry(ALL_TAG_KEYS.get(0), "value-0-3"),
-            mkEntry(ALL_TAG_KEYS.get(1), "value-1-3"));
+        final Map<String, String> clientTags1 = Map.ofEntries(
+            Map.entry(ALL_TAG_KEYS.get(0), "value-0-1"),
+            Map.entry(ALL_TAG_KEYS.get(1), "value-1-1"));
+        final Map<String, String> clientTags2 = Map.ofEntries(
+            Map.entry(ALL_TAG_KEYS.get(0), "value-0-1"),
+            Map.entry(ALL_TAG_KEYS.get(1), "value-1-2"));
+        final Map<String, String> clientTags3 = Map.ofEntries(
+            Map.entry(ALL_TAG_KEYS.get(0), "value-0-1"),
+            Map.entry(ALL_TAG_KEYS.get(1), "value-1-3"));
+        final Map<String, String> clientTags4 = Map.ofEntries(
+            Map.entry(ALL_TAG_KEYS.get(0), "value-0-2"),
+            Map.entry(ALL_TAG_KEYS.get(1), "value-1-1"));
+        final Map<String, String> clientTags5 = Map.ofEntries(
+            Map.entry(ALL_TAG_KEYS.get(0), "value-0-2"),
+            Map.entry(ALL_TAG_KEYS.get(1), "value-1-2"));
+        final Map<String, String> clientTags6 = Map.ofEntries(
+            Map.entry(ALL_TAG_KEYS.get(0), "value-0-2"),
+            Map.entry(ALL_TAG_KEYS.get(1), "value-1-3"));
+        final Map<String, String> clientTags7 = Map.ofEntries(
+            Map.entry(ALL_TAG_KEYS.get(0), "value-0-3"),
+            Map.entry(ALL_TAG_KEYS.get(1), "value-1-1"));
+        final Map<String, String> clientTags8 = Map.ofEntries(
+            Map.entry(ALL_TAG_KEYS.get(0), "value-0-3"),
+            Map.entry(ALL_TAG_KEYS.get(1), "value-1-2"));
+        final Map<String, String> clientTags9 = Map.ofEntries(
+            Map.entry(ALL_TAG_KEYS.get(0), "value-0-3"),
+            Map.entry(ALL_TAG_KEYS.get(1), "value-1-3"));
 
         final Map<String, Map<String, String>> hostTags = new HashMap<>();
         subscriptions.put(consumer1, getSubscription(PID_1, EMPTY_TASKS, clientTags1));
@@ -346,24 +344,24 @@ public class RackAwarenessStreamsPartitionAssignorTest {
             true);
         configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2));
 
-        final Map<String, String> clientTags1 = mkMap(
-            mkEntry(ALL_TAG_KEYS.get(0), "value-0-1"),
-            mkEntry(ALL_TAG_KEYS.get(1), "value-1-1"));
-        final Map<String, String> clientTags2 = mkMap(
-            mkEntry(ALL_TAG_KEYS.get(0), "value-0-1"),
-            mkEntry(ALL_TAG_KEYS.get(1), "value-1-2"));
-        final Map<String, String> clientTags3 = mkMap(
-            mkEntry(ALL_TAG_KEYS.get(0), "value-0-1"),
-            mkEntry(ALL_TAG_KEYS.get(1), "value-1-3"));
-        final Map<String, String> clientTags4 = mkMap(
-            mkEntry(ALL_TAG_KEYS.get(0), "value-0-2"),
-            mkEntry(ALL_TAG_KEYS.get(1), "value-1-1"));
-        final Map<String, String> clientTags5 = mkMap(
-            mkEntry(ALL_TAG_KEYS.get(0), "value-0-2"),
-            mkEntry(ALL_TAG_KEYS.get(1), "value-1-2"));
-        final Map<String, String> clientTags6 = mkMap(
-            mkEntry(ALL_TAG_KEYS.get(0), "value-0-2"),
-            mkEntry(ALL_TAG_KEYS.get(1), "value-1-3"));
+        final Map<String, String> clientTags1 = Map.ofEntries(
+            Map.entry(ALL_TAG_KEYS.get(0), "value-0-1"),
+            Map.entry(ALL_TAG_KEYS.get(1), "value-1-1"));
+        final Map<String, String> clientTags2 = Map.ofEntries(
+            Map.entry(ALL_TAG_KEYS.get(0), "value-0-1"),
+            Map.entry(ALL_TAG_KEYS.get(1), "value-1-2"));
+        final Map<String, String> clientTags3 = Map.ofEntries(
+            Map.entry(ALL_TAG_KEYS.get(0), "value-0-1"),
+            Map.entry(ALL_TAG_KEYS.get(1), "value-1-3"));
+        final Map<String, String> clientTags4 = Map.ofEntries(
+            Map.entry(ALL_TAG_KEYS.get(0), "value-0-2"),
+            Map.entry(ALL_TAG_KEYS.get(1), "value-1-1"));
+        final Map<String, String> clientTags5 = Map.ofEntries(
+            Map.entry(ALL_TAG_KEYS.get(0), "value-0-2"),
+            Map.entry(ALL_TAG_KEYS.get(1), "value-1-2"));
+        final Map<String, String> clientTags6 = Map.ofEntries(
+            Map.entry(ALL_TAG_KEYS.get(0), "value-0-2"),
+            Map.entry(ALL_TAG_KEYS.get(1), "value-1-3"));
 
         final Map<String, Map<String, String>> hostTags = new HashMap<>();
         subscriptions.put(consumer1, getSubscription(PID_1, EMPTY_TASKS, clientTags1));

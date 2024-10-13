@@ -53,8 +53,6 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.LongAdder;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 public class MeteredWindowStore<K, V>
@@ -81,8 +79,8 @@ public class MeteredWindowStore<K, V>
 
     @SuppressWarnings("rawtypes")
     private final Map<Class, QueryHandler> queryHandlers =
-        mkMap(
-            mkEntry(
+        Map.ofEntries(
+            Map.entry(
                 WindowRangeQuery.class,
                 (query, positionBound, config, store) -> runRangeQuery(
                     query,
@@ -90,7 +88,7 @@ public class MeteredWindowStore<K, V>
                     config
                 )
             ),
-            mkEntry(
+            Map.entry(
                 WindowKeyQuery.class,
                 (query, positionBound, config, store) -> runKeyQuery(
                     query,

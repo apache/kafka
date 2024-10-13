@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.feature;
 
-import org.apache.kafka.common.utils.Utils;
 
 import java.util.Map;
 import java.util.Objects;
@@ -95,7 +94,7 @@ class BaseVersionRange {
     }
 
     public Map<String, Short> toMap() {
-        return Utils.mkMap(Utils.mkEntry(minKeyLabel, min()), Utils.mkEntry(maxKeyLabel, max()));
+        return Map.ofEntries(Map.entry(minKeyLabel, min()), Map.entry(maxKeyLabel, max()));
     }
 
     private static String mapToString(final Map<String, Short> map) {

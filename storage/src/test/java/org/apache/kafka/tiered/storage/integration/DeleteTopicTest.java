@@ -25,8 +25,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.DELETE_SEGMENT;
 
 public final class DeleteTopicTest extends TieredStorageTestHarness {
@@ -47,9 +45,9 @@ public final class DeleteTopicTest extends TieredStorageTestHarness {
         final Integer replicationFactor = 2;
         final Integer maxBatchCountPerSegment = 1;
         final boolean enableRemoteLogStorage = true;
-        final Map<Integer, List<Integer>> assignment = mkMap(
-                mkEntry(p0, Arrays.asList(broker0, broker1)),
-                mkEntry(p1, Arrays.asList(broker1, broker0))
+        final Map<Integer, List<Integer>> assignment = Map.ofEntries(
+                Map.entry(p0, Arrays.asList(broker0, broker1)),
+                Map.entry(p1, Arrays.asList(broker1, broker0))
         );
 
         builder

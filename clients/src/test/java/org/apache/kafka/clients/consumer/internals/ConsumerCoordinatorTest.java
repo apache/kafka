@@ -124,8 +124,6 @@ import static org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Rebala
 import static org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol.EAGER;
 import static org.apache.kafka.clients.consumer.CooperativeStickyAssignor.COOPERATIVE_STICKY_ASSIGNOR_NAME;
 import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.TestUtils.toSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -190,9 +188,9 @@ public abstract class ConsumerCoordinatorTest {
             new IllegalStateException("Illegal state for assignment!"),
             "throw-fatal-error-on-assignment-assignor");
         this.assignors = Arrays.asList(partitionAssignor, throwOnAssignmentAssignor, throwFatalErrorOnAssignmentAssignor);
-        this.assignorMap = mkMap(mkEntry(partitionAssignor.name(), partitionAssignor),
-            mkEntry(throwOnAssignmentAssignor.name(), throwOnAssignmentAssignor),
-            mkEntry(throwFatalErrorOnAssignmentAssignor.name(), throwFatalErrorOnAssignmentAssignor));
+        this.assignorMap = Map.ofEntries(Map.entry(partitionAssignor.name(), partitionAssignor),
+            Map.entry(throwOnAssignmentAssignor.name(), throwOnAssignmentAssignor),
+            Map.entry(throwFatalErrorOnAssignmentAssignor.name(), throwFatalErrorOnAssignmentAssignor));
     }
 
     @BeforeEach
@@ -1485,7 +1483,7 @@ public abstract class ConsumerCoordinatorTest {
     @Test
     public void testRebalanceWithMetadataChange() {
         MetadataResponse metadataResponse1 = RequestTestUtils.metadataUpdateWith(1,
-                Utils.mkMap(Utils.mkEntry(topic1, 1), Utils.mkEntry(topic2, 1)));
+                Map.ofEntries(Map.entry(topic1, 1), Map.entry(topic2, 1)));
         MetadataResponse metadataResponse2 = RequestTestUtils.metadataUpdateWith(1, singletonMap(topic1, 1));
         verifyRebalanceWithMetadataChange(Optional.empty(), partitionAssignor, metadataResponse1, metadataResponse2, true);
     }
@@ -2012,9 +2010,9 @@ public abstract class ConsumerCoordinatorTest {
         // the leader is responsible for picking up metadata changes and forcing a group rebalance.
         // note that `MockPartitionAssignor.prepare` is not called therefore calling `MockPartitionAssignor.assign`
         // will throw a IllegalStateException. this indirectly verifies that `assign` is correctly skipped.
-        Map<String, List<String>> memberSubscriptions = mkMap(
-            mkEntry(consumerId, singletonList(topic1)),
-            mkEntry(consumerId2, singletonList(topic2))
+        Map<String, List<String>> memberSubscriptions = Map.ofEntries(
+            Map.entry(consumerId, singletonList(topic1)),
+            Map.entry(consumerId2, singletonList(topic2))
         );
         client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, true, Errors.NONE, Optional.empty()));
         client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));

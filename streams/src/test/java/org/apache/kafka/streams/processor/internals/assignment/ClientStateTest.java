@@ -29,8 +29,6 @@ import java.util.Map;
 import java.util.Set;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_CLIENT_TAGS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_T0_0_0;
@@ -71,7 +69,7 @@ public class ClientStateTest {
         final ClientState clientState = new ClientState(
             Set.of(TASK_0_0, TASK_0_1),
             Set.of(TASK_0_2, TASK_0_3),
-            mkMap(mkEntry(TASK_0_0, 5L), mkEntry(TASK_0_2, -1L)),
+            Map.ofEntries(Map.entry(TASK_0_0, 5L), Map.entry(TASK_0_2, -1L)),
             EMPTY_CLIENT_TAGS,
             4
         );
@@ -347,9 +345,9 @@ public class ClientStateTest {
 
     @Test
     public void shouldReturnPreviousStatefulTasksForConsumer() {
-        client.addPreviousTasksAndOffsetSums("c1", mkMap(
-                mkEntry(TASK_0_0, 100L),
-                mkEntry(TASK_0_1, Task.LATEST_OFFSET)
+        client.addPreviousTasksAndOffsetSums("c1", Map.ofEntries(
+                Map.entry(TASK_0_0, 100L),
+                Map.entry(TASK_0_1, Task.LATEST_OFFSET)
         ));
         client.addPreviousTasksAndOffsetSums("c2", Collections.singletonMap(TASK_0_2, 0L));
         client.addPreviousTasksAndOffsetSums("c3", Collections.emptyMap());
@@ -366,33 +364,33 @@ public class ClientStateTest {
         client.addOwnedPartitions(Set.of(TP_0_1, TP_1_1), "c1");
         client.addOwnedPartitions(Set.of(TP_0_2, TP_1_2), "c2");
         client.initializePrevTasks(
-            mkMap(
-                mkEntry(TP_0_0, TASK_0_0),
-                mkEntry(TP_0_1, TASK_0_1),
-                mkEntry(TP_0_2, TASK_0_2),
-                mkEntry(TP_1_0, TASK_0_0),
-                mkEntry(TP_1_1, TASK_0_1),
-                mkEntry(TP_1_2, TASK_0_2)),
+            Map.ofEntries(
+                Map.entry(TP_0_0, TASK_0_0),
+                Map.entry(TP_0_1, TASK_0_1),
+                Map.entry(TP_0_2, TASK_0_2),
+                Map.entry(TP_1_0, TASK_0_0),
+                Map.entry(TP_1_1, TASK_0_1),
+                Map.entry(TP_1_2, TASK_0_2)),
             false
         );
 
-        client.addPreviousTasksAndOffsetSums("c1", mkMap(
-                mkEntry(TASK_0_1, Task.LATEST_OFFSET),
-                mkEntry(TASK_0_0, 10L)));
+        client.addPreviousTasksAndOffsetSums("c1", Map.ofEntries(
+                Map.entry(TASK_0_1, Task.LATEST_OFFSET),
+                Map.entry(TASK_0_0, 10L)));
         client.addPreviousTasksAndOffsetSums("c2", Collections.singletonMap(TASK_0_2, 0L));
 
         assertThat(client.prevOwnedStatefulTasksByConsumer("c1"), equalTo(Set.of(TASK_0_1, TASK_0_0)));
         assertThat(client.prevOwnedStatefulTasksByConsumer("c2"), equalTo(Set.of(TASK_0_2)));
         assertThat(client.prevOwnedActiveTasksByConsumer(), equalTo(
-                mkMap(
-                        mkEntry("c1", Collections.singleton(TASK_0_1)),
-                        mkEntry("c2", Collections.singleton(TASK_0_2))
+                Map.ofEntries(
+                        Map.entry("c1", Collections.singleton(TASK_0_1)),
+                        Map.entry("c2", Collections.singleton(TASK_0_2))
                 ))
         );
         assertThat(client.prevOwnedStandbyByConsumer(), equalTo(
-                mkMap(
-                        mkEntry("c1", Collections.singleton(TASK_0_0)),
-                        mkEntry("c2", Collections.emptySet())
+                Map.ofEntries(
+                        Map.entry("c1", Collections.singleton(TASK_0_0)),
+                        Map.entry("c2", Collections.emptySet())
                 ))
         );
     }
@@ -417,22 +415,22 @@ public class ClientStateTest {
         // calling it multiple tasks should be idempotent
         client.revokeActiveFromConsumer(TASK_0_1, "c1");
 
-        assertThat(client.assignedActiveTasksByConsumer(), equalTo(mkMap(
-                mkEntry("c1", Set.of(TASK_0_0, TASK_0_1)),
-                mkEntry("c2", Set.of(TASK_0_2))
+        assertThat(client.assignedActiveTasksByConsumer(), equalTo(Map.ofEntries(
+                Map.entry("c1", Set.of(TASK_0_0, TASK_0_1)),
+                Map.entry("c2", Set.of(TASK_0_2))
         )));
-        assertThat(client.assignedStandbyTasksByConsumer(), equalTo(mkMap(
-                mkEntry("c1", Set.of(TASK_0_2)),
-                mkEntry("c2", Set.of(TASK_0_0))
+        assertThat(client.assignedStandbyTasksByConsumer(), equalTo(Map.ofEntries(
+                Map.entry("c1", Set.of(TASK_0_2)),
+                Map.entry("c2", Set.of(TASK_0_0))
         )));
         assertThat(client.revokingActiveTasksByConsumer(), equalTo(Collections.singletonMap("c1", Set.of(TASK_0_1))));
     }
 
     @Test
     public void shouldAddTasksInOffsetSumsMapToPrevStandbyTasks() {
-        final Map<TaskId, Long> taskOffsetSums = mkMap(
-            mkEntry(TASK_0_1, 0L),
-            mkEntry(TASK_0_2, 100L)
+        final Map<TaskId, Long> taskOffsetSums = Map.ofEntries(
+            Map.entry(TASK_0_1, 0L),
+            Map.entry(TASK_0_2, 100L)
         );
         client.addPreviousTasksAndOffsetSums("c1", taskOffsetSums);
         client.initializePrevTasks(Collections.emptyMap(), false);
@@ -443,13 +441,13 @@ public class ClientStateTest {
 
     @Test
     public void shouldComputeTaskLags() {
-        final Map<TaskId, Long> taskOffsetSums = mkMap(
-            mkEntry(TASK_0_1, 0L),
-            mkEntry(TASK_0_2, 100L)
+        final Map<TaskId, Long> taskOffsetSums = Map.ofEntries(
+            Map.entry(TASK_0_1, 0L),
+            Map.entry(TASK_0_2, 100L)
         );
-        final Map<TaskId, Long> allTaskEndOffsetSums = mkMap(
-            mkEntry(TASK_0_1, 500L),
-            mkEntry(TASK_0_2, 100L)
+        final Map<TaskId, Long> allTaskEndOffsetSums = Map.ofEntries(
+            Map.entry(TASK_0_1, 500L),
+            Map.entry(TASK_0_2, 100L)
         );
         client.addPreviousTasksAndOffsetSums("c1", taskOffsetSums);
         client.computeTaskLags(null, allTaskEndOffsetSums);
@@ -460,9 +458,9 @@ public class ClientStateTest {
 
     @Test
     public void shouldNotTryToLookupTasksThatWerePreviouslyAssignedButNoLongerExist() {
-        final Map<TaskId, Long> clientReportedTaskEndOffsetSums = mkMap(
-            mkEntry(NAMED_TASK_T0_0_0, 500L),
-            mkEntry(NAMED_TASK_T1_0_0, 500L)
+        final Map<TaskId, Long> clientReportedTaskEndOffsetSums = Map.ofEntries(
+            Map.entry(NAMED_TASK_T0_0_0, 500L),
+            Map.entry(NAMED_TASK_T1_0_0, 500L)
             );
         final Map<TaskId, Long> allTaskEndOffsetSumsComputedByAssignor = Collections.singletonMap(NAMED_TASK_T0_0_0, 500L);
         client.addPreviousTasksAndOffsetSums("c1", clientReportedTaskEndOffsetSums);
@@ -540,7 +538,7 @@ public class ClientStateTest {
 
     @Test
     public void shouldReturnClientTags() {
-        final Map<String, String> clientTags = mkMap(mkEntry("k1", "v1"));
+        final Map<String, String> clientTags = Map.ofEntries(Map.entry("k1", "v1"));
         assertEquals(clientTags, new ClientState(null, 0, clientTags).clientTags());
     }
 
@@ -552,8 +550,8 @@ public class ClientStateTest {
     @Test
     public void shouldSetProcessId() {
         assertEquals(PID_1, new ClientState(PID_1, 1).processId());
-        assertEquals(PID_2, new ClientState(PID_2, mkMap()).processId());
-        assertEquals(PID_3, new ClientState(PID_3, 1, mkMap()).processId());
+        assertEquals(PID_2, new ClientState(PID_2, Map.ofEntries()).processId());
+        assertEquals(PID_3, new ClientState(PID_3, 1, Map.ofEntries()).processId());
         assertNull(new ClientState().processId());
     }
 

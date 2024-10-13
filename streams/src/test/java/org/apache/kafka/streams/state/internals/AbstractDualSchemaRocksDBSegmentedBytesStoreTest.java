@@ -77,8 +77,6 @@ import java.util.Set;
 import java.util.SimpleTimeZone;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.timeWindowForSize;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
@@ -1401,7 +1399,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         context.setRecordContext(new ProcessorRecordContext(0, 4, 0, "", new RecordHeaders()));
         bytesStore.put(serializeKey(new Windowed<>(keyC, windows[3])), serializeValue(200));
 
-        final Position expected = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 4L)))));
+        final Position expected = Position.fromMap(Map.ofEntries(Map.entry("", Map.ofEntries(Map.entry(0, 4L)))));
         final Position actual = bytesStore.getPosition();
         assertEquals(expected, actual);
     }
@@ -1673,9 +1671,9 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
             "dropped-records-total",
             "stream-task-metrics",
             "",
-            mkMap(
-                mkEntry("thread-id", threadId),
-                mkEntry("task-id", "0_0")
+            Map.ofEntries(
+                Map.entry("thread-id", threadId),
+                Map.entry("task-id", "0_0")
             )
         ));
 
@@ -1683,9 +1681,9 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
             "dropped-records-rate",
             "stream-task-metrics",
             "",
-            mkMap(
-                mkEntry("thread-id", threadId),
-                mkEntry("task-id", "0_0")
+            Map.ofEntries(
+                Map.entry("thread-id", threadId),
+                Map.entry("task-id", "0_0")
             )
         ));
         assertEquals(1.0, dropTotal.metricValue());

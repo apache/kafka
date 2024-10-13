@@ -58,8 +58,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static java.time.Instant.ofEpochMilli;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -128,10 +126,10 @@ public class MeteredWindowStoreTest {
             new ThreadCache(new LogContext("testCache "), 0, streamsMetrics),
             Time.SYSTEM
         );
-        tags = mkMap(
-            mkEntry(THREAD_ID_TAG_KEY, threadId),
-            mkEntry("task-id", context.taskId().toString()),
-            mkEntry(STORE_TYPE + "-state-id", STORE_NAME)
+        tags = Map.ofEntries(
+            Map.entry(THREAD_ID_TAG_KEY, threadId),
+            Map.entry("task-id", context.taskId().toString()),
+            Map.entry(STORE_TYPE + "-state-id", STORE_NAME)
         );
     }
 

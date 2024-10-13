@@ -58,7 +58,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.Collections.emptyMap;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 
 public class SmokeTestDriver extends SmokeTestUtil {
     private static final String[] NUMERIC_VALUE_TOPICS = {
@@ -436,7 +435,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
             events.get("echo")
                   .entrySet()
                   .stream()
-                  .map(entry -> mkEntry(
+                  .map(entry -> Map.entry(
                       entry.getKey(),
                       entry.getValue().stream().map(ConsumerRecord::value).collect(Collectors.toSet()))
                   )

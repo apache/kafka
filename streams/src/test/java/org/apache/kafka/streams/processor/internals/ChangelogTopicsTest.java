@@ -31,8 +31,6 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_0;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -54,28 +52,28 @@ public class ChangelogTopicsTest {
         new UnwindowedUnversionedChangelogTopicConfig(CHANGELOG_TOPIC_NAME1, TOPIC_CONFIG);
 
     private static final TopicsInfo TOPICS_INFO1 = new TopicsInfo(
-        Set.of(SINK_TOPIC_NAME),
-        Set.of(SOURCE_TOPIC_NAME),
-        mkMap(mkEntry(REPARTITION_TOPIC_NAME, REPARTITION_TOPIC_CONFIG)),
-        mkMap(mkEntry(CHANGELOG_TOPIC_NAME1, CHANGELOG_TOPIC_CONFIG))
+            Set.of(SINK_TOPIC_NAME),
+            Set.of(SOURCE_TOPIC_NAME),
+            Map.ofEntries(Map.entry(REPARTITION_TOPIC_NAME, REPARTITION_TOPIC_CONFIG)),
+            Map.ofEntries(Map.entry(CHANGELOG_TOPIC_NAME1, CHANGELOG_TOPIC_CONFIG))
     );
     private static final TopicsInfo TOPICS_INFO2 = new TopicsInfo(
-        Set.of(SINK_TOPIC_NAME),
-        Set.of(SOURCE_TOPIC_NAME),
-        mkMap(mkEntry(REPARTITION_TOPIC_NAME, REPARTITION_TOPIC_CONFIG)),
-        mkMap()
+            Set.of(SINK_TOPIC_NAME),
+            Set.of(SOURCE_TOPIC_NAME),
+            Map.ofEntries(Map.entry(REPARTITION_TOPIC_NAME, REPARTITION_TOPIC_CONFIG)),
+            Map.ofEntries()
     );
     private static final TopicsInfo TOPICS_INFO3 = new TopicsInfo(
-        Set.of(SINK_TOPIC_NAME),
-        Set.of(SOURCE_TOPIC_NAME),
-        mkMap(mkEntry(REPARTITION_TOPIC_NAME, REPARTITION_TOPIC_CONFIG)),
-        mkMap(mkEntry(SOURCE_TOPIC_NAME, CHANGELOG_TOPIC_CONFIG))
+            Set.of(SINK_TOPIC_NAME),
+            Set.of(SOURCE_TOPIC_NAME),
+            Map.ofEntries(Map.entry(REPARTITION_TOPIC_NAME, REPARTITION_TOPIC_CONFIG)),
+            Map.ofEntries(Map.entry(SOURCE_TOPIC_NAME, CHANGELOG_TOPIC_CONFIG))
     );
     private static final TopicsInfo TOPICS_INFO4 = new TopicsInfo(
-        Set.of(SINK_TOPIC_NAME),
-        Set.of(SOURCE_TOPIC_NAME),
-        mkMap(mkEntry(REPARTITION_TOPIC_NAME, REPARTITION_TOPIC_CONFIG)),
-        mkMap(mkEntry(SOURCE_TOPIC_NAME, null), mkEntry(CHANGELOG_TOPIC_NAME1, CHANGELOG_TOPIC_CONFIG))
+            Set.of(SINK_TOPIC_NAME),
+            Set.of(SOURCE_TOPIC_NAME),
+            Map.ofEntries(Map.entry(REPARTITION_TOPIC_NAME, REPARTITION_TOPIC_CONFIG)),
+            Map.ofEntries(Map.entry(SOURCE_TOPIC_NAME, null), Map.entry(CHANGELOG_TOPIC_NAME1, CHANGELOG_TOPIC_CONFIG))
     );
     private static final TaskId TASK_0_0 = new TaskId(0, 0);
     private static final TaskId TASK_0_1 = new TaskId(0, 1);
@@ -86,8 +84,8 @@ public class ChangelogTopicsTest {
     @Test
     public void shouldNotContainChangelogsForStatelessTasks() {
         when(internalTopicManager.makeReady(Collections.emptyMap())).thenReturn(Collections.emptySet());
-        final Map<Subtopology, TopicsInfo> topicGroups = mkMap(mkEntry(SUBTOPOLOGY_0, TOPICS_INFO2));
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(mkEntry(SUBTOPOLOGY_0, Set.of(TASK_0_0, TASK_0_1, TASK_0_2)));
+        final Map<Subtopology, TopicsInfo> topicGroups = Map.ofEntries(Map.entry(SUBTOPOLOGY_0, TOPICS_INFO2));
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(Map.entry(SUBTOPOLOGY_0, Set.of(TASK_0_0, TASK_0_1, TASK_0_2)));
 
         final ChangelogTopics changelogTopics =
                 new ChangelogTopics(internalTopicManager, topicGroups, tasksForTopicGroup, "[test] ");
@@ -102,11 +100,11 @@ public class ChangelogTopicsTest {
 
     @Test
     public void shouldNotContainAnyPreExistingChangelogsIfChangelogIsNewlyCreated() {
-        when(internalTopicManager.makeReady(mkMap(mkEntry(CHANGELOG_TOPIC_NAME1, CHANGELOG_TOPIC_CONFIG))))
+        when(internalTopicManager.makeReady(Map.ofEntries(Map.entry(CHANGELOG_TOPIC_NAME1, CHANGELOG_TOPIC_CONFIG))))
             .thenReturn(Set.of(CHANGELOG_TOPIC_NAME1));
-        final Map<Subtopology, TopicsInfo> topicGroups = mkMap(mkEntry(SUBTOPOLOGY_0, TOPICS_INFO1));
+        final Map<Subtopology, TopicsInfo> topicGroups = Map.ofEntries(Map.entry(SUBTOPOLOGY_0, TOPICS_INFO1));
         final Set<TaskId> tasks = Set.of(TASK_0_0, TASK_0_1, TASK_0_2);
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(mkEntry(SUBTOPOLOGY_0, tasks));
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(Map.entry(SUBTOPOLOGY_0, tasks));
 
         final ChangelogTopics changelogTopics =
                 new ChangelogTopics(internalTopicManager, topicGroups, tasksForTopicGroup, "[test] ");
@@ -122,11 +120,11 @@ public class ChangelogTopicsTest {
 
     @Test
     public void shouldOnlyContainPreExistingNonSourceBasedChangelogs() {
-        when(internalTopicManager.makeReady(mkMap(mkEntry(CHANGELOG_TOPIC_NAME1, CHANGELOG_TOPIC_CONFIG))))
+        when(internalTopicManager.makeReady(Map.ofEntries(Map.entry(CHANGELOG_TOPIC_NAME1, CHANGELOG_TOPIC_CONFIG))))
             .thenReturn(Collections.emptySet());
-        final Map<Subtopology, TopicsInfo> topicGroups = mkMap(mkEntry(SUBTOPOLOGY_0, TOPICS_INFO1));
+        final Map<Subtopology, TopicsInfo> topicGroups = Map.ofEntries(Map.entry(SUBTOPOLOGY_0, TOPICS_INFO1));
         final Set<TaskId> tasks = Set.of(TASK_0_0, TASK_0_1, TASK_0_2);
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(mkEntry(SUBTOPOLOGY_0, tasks));
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(Map.entry(SUBTOPOLOGY_0, tasks));
 
         final ChangelogTopics changelogTopics =
                 new ChangelogTopics(internalTopicManager, topicGroups, tasksForTopicGroup, "[test] ");
@@ -149,9 +147,9 @@ public class ChangelogTopicsTest {
     @Test
     public void shouldOnlyContainPreExistingSourceBasedChangelogs() {
         when(internalTopicManager.makeReady(Collections.emptyMap())).thenReturn(Collections.emptySet());
-        final Map<Subtopology, TopicsInfo> topicGroups = mkMap(mkEntry(SUBTOPOLOGY_0, TOPICS_INFO3));
+        final Map<Subtopology, TopicsInfo> topicGroups = Map.ofEntries(Map.entry(SUBTOPOLOGY_0, TOPICS_INFO3));
         final Set<TaskId> tasks = Set.of(TASK_0_0, TASK_0_1, TASK_0_2);
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(mkEntry(SUBTOPOLOGY_0, tasks));
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(Map.entry(SUBTOPOLOGY_0, tasks));
 
         final ChangelogTopics changelogTopics =
                 new ChangelogTopics(internalTopicManager, topicGroups, tasksForTopicGroup, "[test] ");
@@ -172,11 +170,11 @@ public class ChangelogTopicsTest {
 
     @Test
     public void shouldContainBothTypesOfPreExistingChangelogs() {
-        when(internalTopicManager.makeReady(mkMap(mkEntry(CHANGELOG_TOPIC_NAME1, CHANGELOG_TOPIC_CONFIG))))
+        when(internalTopicManager.makeReady(Map.ofEntries(Map.entry(CHANGELOG_TOPIC_NAME1, CHANGELOG_TOPIC_CONFIG))))
             .thenReturn(Collections.emptySet());
-        final Map<Subtopology, TopicsInfo> topicGroups = mkMap(mkEntry(SUBTOPOLOGY_0, TOPICS_INFO4));
+        final Map<Subtopology, TopicsInfo> topicGroups = Map.ofEntries(Map.entry(SUBTOPOLOGY_0, TOPICS_INFO4));
         final Set<TaskId> tasks = Set.of(TASK_0_0, TASK_0_1, TASK_0_2);
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(mkEntry(SUBTOPOLOGY_0, tasks));
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(Map.entry(SUBTOPOLOGY_0, tasks));
 
         final ChangelogTopics changelogTopics =
                 new ChangelogTopics(internalTopicManager, topicGroups, tasksForTopicGroup, "[test] ");

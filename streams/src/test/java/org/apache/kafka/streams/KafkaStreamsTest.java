@@ -99,8 +99,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.Collections.singletonList;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
@@ -1769,8 +1767,8 @@ public class KafkaStreamsTest {
                 return super.get(timeout, timeUnit);
             }
         };
-        taskProducersFuture.complete(mkMap(
-            mkEntry("task1", new KafkaFutureImpl<Uuid>() {
+        taskProducersFuture.complete(Map.ofEntries(
+            Map.entry("task1", new KafkaFutureImpl<Uuid>() {
                 @Override
                 public Uuid get(final long timeout, final TimeUnit timeUnit) {
                     didAssertTask1.set(true);
@@ -1779,7 +1777,7 @@ public class KafkaStreamsTest {
                     return null;
                 }
             }),
-            mkEntry("task2", new KafkaFutureImpl<Uuid>() {
+            Map.entry("task2", new KafkaFutureImpl<Uuid>() {
                 @Override
                 public Uuid get(final long timeout, final TimeUnit timeUnit) {
                     didAssertTask2.set(true);

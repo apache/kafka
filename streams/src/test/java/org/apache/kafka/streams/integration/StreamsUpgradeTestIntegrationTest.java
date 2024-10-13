@@ -30,12 +30,11 @@ import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
@@ -62,18 +61,18 @@ public class StreamsUpgradeTestIntegrationTest {
     @Test
     public void testVersionProbingUpgrade() throws InterruptedException {
         final KafkaStreams kafkaStreams1 = StreamsUpgradeTest.buildStreams(mkProperties(
-            mkMap(
-                mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
+            Map.ofEntries(
+                Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
             )
         ));
         final KafkaStreams kafkaStreams2 = StreamsUpgradeTest.buildStreams(mkProperties(
-            mkMap(
-                mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
+            Map.ofEntries(
+                Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
             )
         ));
         final KafkaStreams kafkaStreams3 = StreamsUpgradeTest.buildStreams(mkProperties(
-            mkMap(
-                mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
+            Map.ofEntries(
+                Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
             )
         ));
         startSync(kafkaStreams1, kafkaStreams2, kafkaStreams3);

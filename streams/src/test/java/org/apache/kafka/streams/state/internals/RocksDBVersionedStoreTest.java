@@ -47,8 +47,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_NOT_PUT;
 import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_VALID_TO_UNDEFINED;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -84,9 +82,9 @@ public class RocksDBVersionedStoreTest {
         );
         context.setTime(BASE_TIMESTAMP);
 
-        expectedMetricsTags = mkMap(
-            mkEntry("thread-id", Thread.currentThread().getName()),
-            mkEntry("task-id", context.taskId().toString())
+        expectedMetricsTags = Map.ofEntries(
+            Map.entry("thread-id", Thread.currentThread().getName()),
+            Map.entry("task-id", context.taskId().toString())
         );
 
         store = new RocksDBVersionedStore(STORE_NAME, METRICS_SCOPE, HISTORY_RETENTION, SEGMENT_INTERVAL);

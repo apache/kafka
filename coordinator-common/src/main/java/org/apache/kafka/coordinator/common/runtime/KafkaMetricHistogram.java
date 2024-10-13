@@ -20,7 +20,6 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.CompoundStat;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.stats.Percentiles;
-import org.apache.kafka.common.utils.Utils;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -55,11 +54,11 @@ public final class KafkaMetricHistogram implements CompoundStat {
      * Set list of percentiles we will provide metrics for.
      */
     private static final Map<Double, String> PERCENTILE_NAMES =
-        Utils.mkMap(
-            Utils.mkEntry(50.0, "p50"),
-            Utils.mkEntry(95.0, "p95"),
-            Utils.mkEntry(99.0, "p99"),
-            Utils.mkEntry(99.9, "p999")
+        Map.ofEntries(
+            Map.entry(50.0, "p50"),
+            Map.entry(95.0, "p95"),
+            Map.entry(99.0, "p99"),
+            Map.entry(99.9, "p999")
         );
 
     /**

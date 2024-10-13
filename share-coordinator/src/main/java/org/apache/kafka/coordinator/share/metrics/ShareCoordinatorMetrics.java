@@ -23,7 +23,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Meter;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetrics;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetricsShard;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -31,7 +30,6 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import com.yammer.metrics.core.MetricsRegistry;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -80,10 +78,10 @@ public class ShareCoordinatorMetrics extends CoordinatorMetrics implements AutoC
                 "The maximum time taken for a share-group state write call, including the time to write to the share-group state topic."),
             new Max());
 
-        this.globalSensors = Collections.unmodifiableMap(Utils.mkMap(
-            Utils.mkEntry(SHARE_COORDINATOR_WRITE_SENSOR_NAME, shareCoordinatorWriteSensor),
-            Utils.mkEntry(SHARE_COORDINATOR_WRITE_LATENCY_SENSOR_NAME, shareCoordinatorWriteLatencySensor)
-        ));
+        this.globalSensors = Map.ofEntries(
+            Map.entry(SHARE_COORDINATOR_WRITE_SENSOR_NAME, shareCoordinatorWriteSensor),
+            Map.entry(SHARE_COORDINATOR_WRITE_LATENCY_SENSOR_NAME, shareCoordinatorWriteLatencySensor)
+        );
     }
 
     @Override

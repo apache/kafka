@@ -76,7 +76,6 @@ import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.controller.BrokerHeartbeatManager.BrokerHeartbeatState;
 import org.apache.kafka.controller.ReplicationControlManager.KRaftClusterDescriber;
@@ -2286,16 +2285,16 @@ public class ReplicationControlManagerTest {
         ControllerResult<ElectLeadersResponseData> result1 = replication.electLeaders(request);
         assertEquals(Collections.emptyList(), result1.records());
 
-        ElectLeadersResponseData expectedResponse1 = buildElectLeadersResponse(NONE, electAllPartitions, Utils.mkMap(
-            Utils.mkEntry(
+        ElectLeadersResponseData expectedResponse1 = buildElectLeadersResponse(NONE, electAllPartitions, Map.ofEntries(
+            Map.entry(
                 new TopicPartition("foo", 0),
                 new ApiError(ELIGIBLE_LEADERS_NOT_AVAILABLE)
             ),
-            Utils.mkEntry(
+            Map.entry(
                 new TopicPartition("foo", 1),
                 new ApiError(ELECTION_NOT_NEEDED)
             ),
-            Utils.mkEntry(
+            Map.entry(
                 new TopicPartition("foo", 2),
                 new ApiError(ELECTION_NOT_NEEDED)
             )
@@ -2325,16 +2324,16 @@ public class ReplicationControlManagerTest {
         assertLeaderAndIsr(replication, partition1, 4, new int[]{2, 4});
         assertLeaderAndIsr(replication, partition2, 0, new int[]{0});
 
-        ElectLeadersResponseData expectedResponse = buildElectLeadersResponse(NONE, electAllPartitions, Utils.mkMap(
-            Utils.mkEntry(
+        ElectLeadersResponseData expectedResponse = buildElectLeadersResponse(NONE, electAllPartitions, Map.ofEntries(
+            Map.entry(
                 new TopicPartition("foo", 0),
                 ApiError.NONE
             ),
-            Utils.mkEntry(
+            Map.entry(
                 new TopicPartition("foo", 1),
                 new ApiError(ELECTION_NOT_NEEDED)
             ),
-            Utils.mkEntry(
+            Map.entry(
                 new TopicPartition("foo", 2),
                 new ApiError(ELECTION_NOT_NEEDED)
             )
@@ -2443,24 +2442,24 @@ public class ReplicationControlManagerTest {
                     setPartitions(asList(0, 1))).iterator()));
         ControllerResult<ElectLeadersResponseData> election1Result =
             replication.electLeaders(request1);
-        ElectLeadersResponseData expectedResponse1 = buildElectLeadersResponse(NONE, false, Utils.mkMap(
-            Utils.mkEntry(
+        ElectLeadersResponseData expectedResponse1 = buildElectLeadersResponse(NONE, false, Map.ofEntries(
+            Map.entry(
                 new TopicPartition("foo", 0),
                 new ApiError(PREFERRED_LEADER_NOT_AVAILABLE)
             ),
-            Utils.mkEntry(
+            Map.entry(
                 new TopicPartition("foo", 1),
                 new ApiError(ELECTION_NOT_NEEDED)
             ),
-            Utils.mkEntry(
+            Map.entry(
                 new TopicPartition("foo", 2),
                 new ApiError(PREFERRED_LEADER_NOT_AVAILABLE)
             ),
-            Utils.mkEntry(
+            Map.entry(
                 new TopicPartition("bar", 0),
                 new ApiError(UNKNOWN_TOPIC_OR_PARTITION, "No such topic as bar")
             ),
-            Utils.mkEntry(
+            Map.entry(
                 new TopicPartition("bar", 1),
                 new ApiError(UNKNOWN_TOPIC_OR_PARTITION, "No such topic as bar")
             )
@@ -2501,24 +2500,24 @@ public class ReplicationControlManagerTest {
                     setErrorCode(NONE.code()))))),
             alterPartitionResult.response());
 
-        ElectLeadersResponseData expectedResponse2 = buildElectLeadersResponse(NONE, false, Utils.mkMap(
-            Utils.mkEntry(
+        ElectLeadersResponseData expectedResponse2 = buildElectLeadersResponse(NONE, false, Map.ofEntries(
+            Map.entry(
                 new TopicPartition("foo", 0),
                 ApiError.NONE
             ),
-            Utils.mkEntry(
+            Map.entry(
                 new TopicPartition("foo", 1),
                 new ApiError(ELECTION_NOT_NEEDED)
             ),
-            Utils.mkEntry(
+            Map.entry(
                 new TopicPartition("foo", 2),
                 ApiError.NONE
             ),
-            Utils.mkEntry(
+            Map.entry(
                 new TopicPartition("bar", 0),
                 new ApiError(UNKNOWN_TOPIC_OR_PARTITION, "No such topic as bar")
             ),
-            Utils.mkEntry(
+            Map.entry(
                 new TopicPartition("bar", 1),
                 new ApiError(UNKNOWN_TOPIC_OR_PARTITION, "No such topic as bar")
             )

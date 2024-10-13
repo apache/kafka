@@ -22,7 +22,6 @@ import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Meter;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetrics;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.Group;
@@ -248,13 +247,13 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
                 "The total number of share group rebalances",
                 SHARE_GROUP_PROTOCOL_TAG, Group.GroupType.SHARE.toString())));
 
-        globalSensors = Collections.unmodifiableMap(Utils.mkMap(
-            Utils.mkEntry(OFFSET_COMMITS_SENSOR_NAME, offsetCommitsSensor),
-            Utils.mkEntry(OFFSET_EXPIRED_SENSOR_NAME, offsetExpiredSensor),
-            Utils.mkEntry(OFFSET_DELETIONS_SENSOR_NAME, offsetDeletionsSensor),
-            Utils.mkEntry(CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME, classicGroupCompletedRebalancesSensor),
-            Utils.mkEntry(CONSUMER_GROUP_REBALANCES_SENSOR_NAME, consumerGroupRebalanceSensor),
-            Utils.mkEntry(SHARE_GROUP_REBALANCES_SENSOR_NAME, shareGroupRebalanceSensor)
+        globalSensors = Collections.unmodifiableMap(Map.ofEntries(
+            Map.entry(OFFSET_COMMITS_SENSOR_NAME, offsetCommitsSensor),
+            Map.entry(OFFSET_EXPIRED_SENSOR_NAME, offsetExpiredSensor),
+            Map.entry(OFFSET_DELETIONS_SENSOR_NAME, offsetDeletionsSensor),
+            Map.entry(CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME, classicGroupCompletedRebalancesSensor),
+            Map.entry(CONSUMER_GROUP_REBALANCES_SENSOR_NAME, consumerGroupRebalanceSensor),
+            Map.entry(SHARE_GROUP_REBALANCES_SENSOR_NAME, shareGroupRebalanceSensor)
         ));
     }
 

@@ -22,13 +22,12 @@ import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_T0_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_T0_0_1;
@@ -43,17 +42,17 @@ public class KafkaStreamsStateTest {
         final KafkaStreamsState state = new DefaultKafkaStreamsState(
             ProcessId.randomProcessId(),
             10,
-            mkMap(),
+            Map.ofEntries(),
             mkSortedSet(NAMED_TASK_T0_0_0, NAMED_TASK_T0_0_1),
             mkSortedSet(),
-            new TreeMap<>(mkMap(
-                mkEntry("c1", Set.of(NAMED_TASK_T0_0_0, NAMED_TASK_T0_0_1))
+            new TreeMap<>(Map.ofEntries(
+                Map.entry("c1", Set.of(NAMED_TASK_T0_0_0, NAMED_TASK_T0_0_1))
             )),
             Optional.empty(),
             Optional.of(
-                mkMap(
-                    mkEntry(NAMED_TASK_T0_0_0, 2000L),
-                    mkEntry(NAMED_TASK_T0_0_1, 1000L)
+                Map.ofEntries(
+                    Map.entry(NAMED_TASK_T0_0_0, 2000L),
+                    Map.entry(NAMED_TASK_T0_0_1, 1000L)
                 )
             ),
             Optional.empty()
@@ -74,11 +73,11 @@ public class KafkaStreamsStateTest {
         final KafkaStreamsState state = new DefaultKafkaStreamsState(
             ProcessId.randomProcessId(),
             10,
-            mkMap(),
+            Map.ofEntries(),
             mkSortedSet(NAMED_TASK_T0_0_0, NAMED_TASK_T0_0_1),
             mkSortedSet(),
-            new TreeMap<>(mkMap(
-                mkEntry("c1", Set.of(NAMED_TASK_T0_0_0, NAMED_TASK_T0_0_1))
+            new TreeMap<>(Map.ofEntries(
+                Map.entry("c1", Set.of(NAMED_TASK_T0_0_0, NAMED_TASK_T0_0_1))
             )),
             Optional.empty(),
             Optional.empty(),

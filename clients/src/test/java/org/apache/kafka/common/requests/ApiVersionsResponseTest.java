@@ -28,7 +28,6 @@ import org.apache.kafka.common.message.ApiVersionsResponseData.SupportedFeatureK
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.RecordVersion;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -90,12 +89,12 @@ public class ApiVersionsResponseTest {
         final ApiKeys nonForwardableAPIKey = ApiKeys.JOIN_GROUP;
         final short minVersion = 0;
         final short maxVersion = 1;
-        Map<ApiKeys, ApiVersion> activeControllerApiVersions = Utils.mkMap(
-            Utils.mkEntry(forwardableAPIKey, new ApiVersion()
+        Map<ApiKeys, ApiVersion> activeControllerApiVersions = Map.ofEntries(
+            Map.entry(forwardableAPIKey, new ApiVersion()
                 .setApiKey(forwardableAPIKey.id)
                 .setMinVersion(minVersion)
                 .setMaxVersion(maxVersion)),
-            Utils.mkEntry(nonForwardableAPIKey, new ApiVersion()
+            Map.entry(nonForwardableAPIKey, new ApiVersion()
                 .setApiKey(nonForwardableAPIKey.id)
                 .setMinVersion(minVersion)
                 .setMaxVersion(maxVersion))
@@ -145,8 +144,8 @@ public class ApiVersionsResponseTest {
                 true,
                 true)).
             setSupportedFeatures(Features.supportedFeatures(
-                Utils.mkMap(Utils.mkEntry("feature", new SupportedVersionRange((short) 1, (short) 4))))).
-            setFinalizedFeatures(Utils.mkMap(Utils.mkEntry("feature", (short) 3))).
+                Map.ofEntries(Map.entry("feature", new SupportedVersionRange((short) 1, (short) 4))))).
+            setFinalizedFeatures(Map.ofEntries(Map.entry("feature", (short) 3))).
             setFinalizedFeaturesEpoch(10L).
             build();
 

@@ -59,8 +59,6 @@ import java.util.stream.Stream;
 import static org.apache.kafka.clients.consumer.internals.AbstractMembershipManager.TOPIC_PARTITION_COMPARATOR;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_SHARE_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.common.requests.ShareGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -465,9 +463,9 @@ public class ShareMembershipManagerTest {
         // No reconciliation triggered, because new topic in assignment is waiting for metadata.
 
         Map<Uuid, SortedSet<Integer>> newAssignment =
-                mkMap(
-                        mkEntry(topicId1, mkSortedSet(0)),
-                        mkEntry(topicId2, mkSortedSet(0))
+                Map.ofEntries(
+                        Map.entry(topicId1, mkSortedSet(0)),
+                        Map.entry(topicId2, mkSortedSet(0))
                 );
 
         receiveAssignment(newAssignment, membershipManager);
@@ -488,9 +486,9 @@ public class ShareMembershipManagerTest {
         // Metadata discovered for topic2. Should trigger reconciliation to complete the assignment,
         // with membership manager entering ACKNOWLEDGING state.
 
-        Map<Uuid, String> fullTopicMetadata = mkMap(
-                mkEntry(topicId1, topic1),
-                mkEntry(topicId2, topic2)
+        Map<Uuid, String> fullTopicMetadata = Map.ofEntries(
+                Map.entry(topicId1, topic1),
+                Map.entry(topicId2, topic2)
         );
         when(metadata.topicNames()).thenReturn(fullTopicMetadata);
 
@@ -1461,7 +1459,7 @@ public class ShareMembershipManagerTest {
     private void mockOwnedPartition(ShareMembershipManager membershipManager, Uuid topicId, String topic) {
         int partition = 0;
         TopicPartition previouslyOwned = new TopicPartition(topic, partition);
-        membershipManager.updateAssignment(mkMap(mkEntry(topicId, new TreeSet<>(Collections.singletonList(partition)))));
+        membershipManager.updateAssignment(Map.ofEntries(Map.entry(topicId, new TreeSet<>(Collections.singletonList(partition)))));
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(previouslyOwned));
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
     }

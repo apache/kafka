@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
@@ -148,9 +147,9 @@ public class KStreamRepartitionTest {
                 .join(topicBStream, (value1, value2) -> value2, JoinWindows.of(Duration.ofSeconds(10)))
                 .to(outputTopic);
 
-        final Map<String, Integer> repartitionTopicsWithNumOfPartitions = Utils.mkMap(
-                Utils.mkEntry(toRepartitionTopicName(topicBRepartitionedName), topicBNumberOfPartitions),
-                Utils.mkEntry(toRepartitionTopicName(inputTopicRepartitionedName), inputTopicNumberOfPartitions)
+        final Map<String, Integer> repartitionTopicsWithNumOfPartitions = Map.ofEntries(
+                Map.entry(toRepartitionTopicName(topicBRepartitionedName), topicBNumberOfPartitions),
+                Map.entry(toRepartitionTopicName(inputTopicRepartitionedName), inputTopicNumberOfPartitions)
         );
 
         final TopologyException expected = assertThrows(

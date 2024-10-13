@@ -67,8 +67,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
@@ -79,10 +77,10 @@ import static org.hamcrest.Matchers.is;
 @Tag("integration")
 public class HighAvailabilityTaskAssignorIntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3,
-        new Properties(), mkMap(
-            mkEntry(0, mkMap(mkEntry(ServerConfigs.BROKER_RACK_CONFIG, AssignmentTestUtils.RACK_0))),
-            mkEntry(1, mkMap(mkEntry(ServerConfigs.BROKER_RACK_CONFIG, AssignmentTestUtils.RACK_1))),
-            mkEntry(2, mkMap(mkEntry(ServerConfigs.BROKER_RACK_CONFIG, AssignmentTestUtils.RACK_2)))
+        new Properties(), Map.ofEntries(
+            Map.entry(0, Map.ofEntries(Map.entry(ServerConfigs.BROKER_RACK_CONFIG, AssignmentTestUtils.RACK_0))),
+            Map.entry(1, Map.ofEntries(Map.entry(ServerConfigs.BROKER_RACK_CONFIG, AssignmentTestUtils.RACK_1))),
+            Map.entry(2, Map.ofEntries(Map.entry(ServerConfigs.BROKER_RACK_CONFIG, AssignmentTestUtils.RACK_2)))
     ));
 
     @BeforeAll
@@ -259,11 +257,11 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
         final String kilo = getKiloByteValue();
 
         final Properties producerProperties = mkProperties(
-            mkMap(
-                mkEntry(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
-                mkEntry(ProducerConfig.ACKS_CONFIG, "all"),
-                mkEntry(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()),
-                mkEntry(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName())
+            Map.ofEntries(
+                Map.entry(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+                Map.entry(ProducerConfig.ACKS_CONFIG, "all"),
+                Map.entry(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()),
+                Map.entry(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName())
             )
         );
 
@@ -276,10 +274,10 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
 
     private static Properties getConsumerProperties() {
         return mkProperties(
-                mkMap(
-                    mkEntry(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
-                    mkEntry(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()),
-                    mkEntry(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName())
+                Map.ofEntries(
+                    Map.entry(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+                    Map.entry(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()),
+                    Map.entry(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName())
                 )
             );
     }
@@ -307,23 +305,23 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
                                                 final String rackAwareStrategy,
                                                 final String rack) {
         return mkObjectProperties(
-            mkMap(
-                mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
-                mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
-                mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-                mkEntry(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, "0"),
-                mkEntry(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, "0"), // make the warmup catch up completely
-                mkEntry(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, "2"),
-                mkEntry(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, "60000"),
-                mkEntry(StreamsConfig.InternalConfig.ASSIGNMENT_LISTENER, configuredAssignmentListener),
-                mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L),
-                mkEntry(StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, HighAvailabilityTaskAssignor.class.getName()),
+            Map.ofEntries(
+                Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+                Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
+                Map.entry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
+                Map.entry(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, "0"),
+                Map.entry(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, "0"), // make the warmup catch up completely
+                Map.entry(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, "2"),
+                Map.entry(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, "60000"),
+                Map.entry(StreamsConfig.InternalConfig.ASSIGNMENT_LISTENER, configuredAssignmentListener),
+                Map.entry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L),
+                Map.entry(StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, HighAvailabilityTaskAssignor.class.getName()),
                 // Increasing the number of threads to ensure that a rebalance happens each time a consumer sends a rejoin (KAFKA-10455)
-                mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 40),
-                mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName()),
-                mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName()),
-                mkEntry(CommonClientConfigs.CLIENT_RACK_CONFIG, rack),
-                mkEntry(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, rackAwareStrategy)
+                Map.entry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 40),
+                Map.entry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName()),
+                Map.entry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName()),
+                Map.entry(CommonClientConfigs.CLIENT_RACK_CONFIG, rack),
+                Map.entry(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, rackAwareStrategy)
             )
         );
     }

@@ -63,8 +63,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
 
 import static java.util.stream.Collectors.toList;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 
 /**
@@ -638,13 +636,13 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                                            final String stateDir) {
             final Properties properties =
                 mkProperties(
-                    mkMap(
-                        mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, broker),
-                        mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, application),
-                        mkEntry(StreamsConfig.CLIENT_ID_CONFIG, id),
-                        mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuarantee),
-                        mkEntry(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest"),
-                        mkEntry(StreamsConfig.STATE_DIR_CONFIG, stateDir)
+                   Map.ofEntries(
+                        Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, broker),
+                        Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, application),
+                        Map.entry(StreamsConfig.CLIENT_ID_CONFIG, id),
+                        Map.entry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuarantee),
+                        Map.entry(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest"),
+                        Map.entry(StreamsConfig.STATE_DIR_CONFIG, stateDir)
                     )
                 );
             properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);

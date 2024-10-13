@@ -51,8 +51,6 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.function.Supplier;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.CHANGELOG_TOPIC_PREFIX;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_RACK_AWARE_ASSIGNMENT_TAGS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.RACK_PREFIX;
@@ -183,7 +181,7 @@ public class TaskAssignorConvergenceTest {
                 final ProcessId uuid = processIdForInt(i);
                 clientStates.put(uuid, emptyInstance(uuid, statefulTaskEndOffsetSums));
                 final String rack = RACK_PREFIX + random.nextInt(nodes.size());
-                racksForProcessConsumer.put(uuid, mkMap(mkEntry("consumer", Optional.of(rack))));
+                racksForProcessConsumer.put(uuid, Map.ofEntries(Map.entry("consumer", Optional.of(rack))));
             }
 
             return new Harness(statelessTasks, statefulTaskEndOffsetSums, clientStates, cluster, partitionsForTask, changelogPartitionsForTask, tasksForTopicGroup, racksForProcessConsumer, spyTopicManager);

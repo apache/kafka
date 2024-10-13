@@ -94,8 +94,6 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.internals.RocksDBStore.DB_FILE_DIR;
 import static org.hamcrest.CoreMatchers.either;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -456,7 +454,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         context.setRecordContext(new ProcessorRecordContext(0, 3, 0, "", new RecordHeaders()));
         rocksDBStore.put(new Bytes(stringSerializer.serialize(null, "three")), stringSerializer.serialize(null, "C"));
 
-        final Position expected = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 3L)))));
+        final Position expected = Position.fromMap(Map.ofEntries(Map.entry("", Map.ofEntries(Map.entry(0, 3L)))));
         final Position actual = rocksDBStore.getPosition();
         assertEquals(expected, actual);
     }
