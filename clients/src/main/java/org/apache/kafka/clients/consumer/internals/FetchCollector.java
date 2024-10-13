@@ -24,6 +24,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.message.FetchResponseData;
+import org.apache.kafka.common.message.FetchResponseData.LeaderIdAndEpoch;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.FetchResponse;
@@ -327,22 +328,35 @@ public class FetchCollector<K, V> {
         final TopicPartition tp = completedFetch.partition;
         final long fetchOffset = completedFetch.nextFetchOffset();
 
-        if (error == Errors.NOT_LEADER_OR_FOLLOWER ||
-                error == Errors.REPLICA_NOT_AVAILABLE ||
-                error == Errors.KAFKA_STORAGE_ERROR ||
-                error == Errors.FENCED_LEADER_EPOCH ||
+        if (error == Errors.REPLICA_NOT_AVAILABLE) {
+            log.debug("Received replica not available error in fetch for partition {}", tp);
+            requestMetadataUpdate(metadata, subscriptions, tp);
+        } else if (error == Errors.NOT_LEADER_OR_FOLLOWER ||
+                error == Errors.FENCED_LEADER_EPOCH) {
+            log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
+            requestMetadataUpdate(metadata, subscriptions, tp);
+
+            LeaderIdAndEpoch currentLeader = completedFetch.partitionData.currentLeader();
+            if (currentLeader.leaderId() == -1 || currentLeader.leaderEpoch() == -1) {
+                subscriptions.awaitUpdate(tp);
+            }
+        } else if (error == Errors.KAFKA_STORAGE_ERROR ||
                 error == Errors.OFFSET_NOT_AVAILABLE) {
             log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
             requestMetadataUpdate(metadata, subscriptions, tp);
+            subscriptions.awaitUpdate(tp);
         } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
             log.warn("Received unknown topic or partition error in fetch for partition {}", tp);
             requestMetadataUpdate(metadata, subscriptions, tp);
+            subscriptions.awaitUpdate(tp);
         } else if (error == Errors.UNKNOWN_TOPIC_ID) {
             log.warn("Received unknown topic ID error in fetch for partition {}", tp);
             requestMetadataUpdate(metadata, subscriptions, tp);
+            subscriptions.awaitUpdate(tp);
         } else if (error == Errors.INCONSISTENT_TOPIC_ID) {
             log.warn("Received inconsistent topic ID error in fetch for partition {}", tp);
             requestMetadataUpdate(metadata, subscriptions, tp);
+            subscriptions.awaitUpdate(tp);
         } else if (error == Errors.OFFSET_OUT_OF_RANGE) {
             Optional<Integer> clearedReplicaId = subscriptions.clearPreferredReadReplica(tp);
 
