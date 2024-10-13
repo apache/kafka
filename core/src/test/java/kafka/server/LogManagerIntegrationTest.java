@@ -31,10 +31,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.test.RaftClusterInstance;
 import org.apache.kafka.common.test.api.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestExtensions;
-import org.apache.kafka.common.test.api.RaftClusterInvocationContext;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.storage.internals.checkpoint.PartitionMetadataFile;
 import org.apache.kafka.test.TestUtils;
@@ -67,8 +67,7 @@ public class LogManagerIntegrationTest {
 
     @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 3)
     public void testRestartBrokerNoErrorIfMissingPartitionMetadata() throws IOException, ExecutionException, InterruptedException {
-        RaftClusterInvocationContext.RaftClusterInstance raftInstance =
-                (RaftClusterInvocationContext.RaftClusterInstance) cluster;
+        RaftClusterInstance raftInstance = (RaftClusterInstance) cluster;
 
         try (Admin admin = cluster.createAdminClient()) {
             admin.createTopics(Collections.singletonList(new NewTopic("foo", 1, (short) 3))).all().get();

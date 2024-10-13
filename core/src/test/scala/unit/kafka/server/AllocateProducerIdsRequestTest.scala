@@ -21,7 +21,7 @@ import kafka.server.{BrokerServer, ControllerServer, IntegrationTestUtils}
 import org.apache.kafka.common.test.api.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.common.test.api.ClusterTestExtensions
-import org.apache.kafka.common.test.api.RaftClusterInvocationContext.RaftClusterInstance
+import org.apache.kafka.common.test.RaftClusterInstance
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._

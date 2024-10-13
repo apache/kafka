@@ -40,7 +40,7 @@ import static org.junit.platform.commons.util.AnnotationUtils.isAnnotated;
 public class ClusterInstanceParameterResolver implements ParameterResolver {
     private final ClusterInstance clusterInstance;
 
-    ClusterInstanceParameterResolver(ClusterInstance clusterInstance) {
+    public ClusterInstanceParameterResolver(ClusterInstance clusterInstance) {
         this.clusterInstance = clusterInstance;
     }
 
