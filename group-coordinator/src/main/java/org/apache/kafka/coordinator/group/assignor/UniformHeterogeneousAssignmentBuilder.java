@@ -69,6 +69,19 @@ public class UniformHeterogeneousAssignmentBuilder {
     }
 
     /**
+     * The maximum number of iterations to perform in the final iterative balancing phase.
+     * <p/>
+     * When all subscribers to a topic have the same subscriptions, the final balancing phase
+     * converges in a single iteration and takes another iteration to detect that no further
+     * balancing is possible. This describes most subscription patterns.
+     * <p/>
+     * When subscribers have overlapping, non-identical subscriptions, the final balancing phase can
+     * take a lot longer to converge. We assume that each iteration roughly halves the imbalance and
+     * choose a limit that allows for a reasonable balance to be achieved without taking too long.
+     */
+    private static final int MAX_ITERATION_COUNT = 16;
+
+    /**
      * The group metadata specification.
      */
     private final GroupSpec groupSpec;
@@ -680,7 +693,7 @@ public class UniformHeterogeneousAssignmentBuilder {
 
         // Repeat reassignment until no partition can be moved to improve the balance or we hit an
         // iteration limit.
-        for (int i = 0; i < 16; i++) {
+        for (int i = 0; i < MAX_ITERATION_COUNT; i++) {
             for (int topicIndex = 0; topicIndex < sortedTopicIds.size(); topicIndex++) {
                 if (topicIndex == lastRebalanceTopicIndex) {
                     // The last rebalanced topic was this one, which means we've gone through all
