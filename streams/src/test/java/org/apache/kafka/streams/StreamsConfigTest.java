@@ -1313,30 +1313,77 @@ public class StreamsConfigTest {
 
         assertThat(
                 exception.getMessage(),
-                containsString("KafkaStreams has metrics push enabled" +
-                        " but the main consumer metrics push is disabled. Enable " +
-                        " metrics push for the main consumer")
+                containsString("Kafka Streams metrics push enabled, but main.consumer metrics push is false, the setting needs to be consistent between the two")
         );
     }
 
     @Test
     public void shouldThrowConfigExceptionConsumerMetricsDisabledStreamsMetricsPushEnabled() {
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), false);
+
+        final Exception exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+
+        assertThat(
+                exception.getMessage(),
+                containsString("Kafka Streams metrics push enabled but consumer.enable.metrics is false, the setting needs to be consistent between the two")
+        );
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionConsumerMetricsEnabledButMainConsumerAndAdminMetricsDisabled() {
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), true);
+        props.put(StreamsConfig.mainConsumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), false);
+        props.put(StreamsConfig.adminClientPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), false);
+
+        final Exception exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+
+        assertThat(
+                exception.getMessage(),
+                containsString("Kafka Streams metrics push and consumer.enable.metrics are true, but main.consumer and admin.client metrics push are disabled, the setting needs to be consistent between the two")
+        );
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionConsumerMetricsEnabledButMainConsumerMetricsDisabled() {
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), true);
         props.put(StreamsConfig.mainConsumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), false);
 
         final Exception exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
 
         assertThat(
                 exception.getMessage(),
-                containsString("KafkaStreams has metrics push enabled" +
-                        " but the consumer clients metrics push is disabled. Enable " +
-                        " metrics push for the main consumer")
+                containsString("Kafka Streams metrics push and consumer.enable.metrics are true, but main.consumer metrics disabled, the setting needs to be consistent between the two")
+        );
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionConsumerMetricsEnabledButAdminClientMetricsDisabled() {
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), true);
+        props.put(StreamsConfig.adminClientPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), false);
+
+        final Exception exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+
+        assertThat(
+                exception.getMessage(),
+                containsString("Kafka Streams metrics push and consumer.enable.metrics are true, but admin.client metrics push are disabled, the setting needs to be consistent between the two")
         );
     }
 
     @Test
     public void shouldEnableMetricsForMainConsumerWhenConsumerPrefixDisabledMetricsPushEnabled() {
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), false);
+        props.put(StreamsConfig.mainConsumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), true);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+        assertTrue(
+                (Boolean) streamsConfig.getMainConsumerConfigs("groupId", "clientId", 0)
+                        .get(StreamsConfig.mainConsumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG))
+        );
+    }
+
+    @Test
+    public void shouldEnableMetricsForMainConsumerWhenStreamMetricsPushDisabledButMainConsumerEnabled() {
+        props.put(StreamsConfig.ENABLE_METRICS_PUSH_CONFIG, false);
         props.put(StreamsConfig.mainConsumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), true);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
 
@@ -1354,9 +1401,7 @@ public class StreamsConfigTest {
 
         assertThat(
                 exception.getMessage(),
-                containsString("KafkaStreams has metrics push enabled" +
-                        " but the admin client metrics push is disabled. Enable " +
-                        " metrics push for the admin client")
+                containsString("Kafka Streams metrics push enabled, but admin.client metrics push is false, the setting needs to be consistent between the two")
         );
     }
 
@@ -1369,9 +1414,7 @@ public class StreamsConfigTest {
 
         assertThat(
                 exception.getMessage(),
-                containsString("KafkaStreams has metrics push enabled" +
-                        " but the main consumer and admin client metrics push is disabled. Enable " +
-                        " metrics push for the main consumer and the admin client")
+                containsString("Kafka Streams metrics push enabled, but main.consumer and admin.client metrics push is false, these settings need to updated")
         );
     }
 
