@@ -27,8 +27,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -72,18 +70,18 @@ public class SinkUtilsTest {
 
         // missing partition key
         ConnectException e = assertThrows(ConnectException.class, () -> SinkUtils.parseSinkConnectorOffsets(partitionOffsets));
-        assertThat(e.getMessage(), containsString("The partition for a sink connector offset must contain the keys 'kafka_topic' and 'kafka_partition'"));
+        assertTrue(e.getMessage().contains("The partition for a sink connector offset must contain the keys 'kafka_topic' and 'kafka_partition'"));
 
         partition.put(SinkUtils.KAFKA_PARTITION_KEY, "not a number");
         // bad partition key
         e = assertThrows(ConnectException.class, () -> SinkUtils.parseSinkConnectorOffsets(partitionOffsets));
-        assertThat(e.getMessage(), containsString("Failed to parse the following Kafka partition value in the provided offsets: 'not a number'"));
+        assertTrue(e.getMessage().contains("Failed to parse the following Kafka partition value in the provided offsets: 'not a number'"));
 
         partition.remove(SinkUtils.KAFKA_TOPIC_KEY);
         partition.put(SinkUtils.KAFKA_PARTITION_KEY, "5");
         // missing topic key
         e = assertThrows(ConnectException.class, () -> SinkUtils.parseSinkConnectorOffsets(partitionOffsets));
-        assertThat(e.getMessage(), containsString("The partition for a sink connector offset must contain the keys 'kafka_topic' and 'kafka_partition'"));
+        assertTrue(e.getMessage().contains("The partition for a sink connector offset must contain the keys 'kafka_topic' and 'kafka_partition'"));
     }
 
     @Test
@@ -97,12 +95,12 @@ public class SinkUtilsTest {
 
         // missing offset key
         ConnectException e = assertThrows(ConnectException.class, () -> SinkUtils.parseSinkConnectorOffsets(partitionOffsets));
-        assertThat(e.getMessage(), containsString("The offset for a sink connector should either be null or contain the key 'kafka_offset'"));
+        assertTrue(e.getMessage().contains("The offset for a sink connector should either be null or contain the key 'kafka_offset'"));
 
         // bad offset key
         offset.put(SinkUtils.KAFKA_OFFSET_KEY, "not a number");
         e = assertThrows(ConnectException.class, () -> SinkUtils.parseSinkConnectorOffsets(partitionOffsets));
-        assertThat(e.getMessage(), containsString("Failed to parse the following Kafka offset value in the provided offsets: 'not a number'"));
+        assertTrue(e.getMessage().contains("Failed to parse the following Kafka offset value in the provided offsets: 'not a number'"));
     }
 
     @Test
@@ -160,7 +158,7 @@ public class SinkUtilsTest {
         Map<Map<String, ?>, Map<String, ?>> partitionOffsets = new HashMap<>();
         partitionOffsets.put(null, offset);
         ConnectException e = assertThrows(ConnectException.class, () -> SinkUtils.parseSinkConnectorOffsets(partitionOffsets));
-        assertThat(e.getMessage(), containsString("The partition for a sink connector offset cannot be null or missing"));
+        assertTrue(e.getMessage().contains("The partition for a sink connector offset cannot be null or missing"));
 
         Map<String, Object> partitionMap = new HashMap<>();
         partitionMap.put(SinkUtils.KAFKA_TOPIC_KEY, "topic");
@@ -169,14 +167,14 @@ public class SinkUtilsTest {
         partitionOffsets.put(partitionMap, offset);
 
         e = assertThrows(ConnectException.class, () -> SinkUtils.parseSinkConnectorOffsets(partitionOffsets));
-        assertThat(e.getMessage(), containsString("Kafka partitions must be valid numbers and may not be null"));
+        assertTrue(e.getMessage().contains("Kafka partitions must be valid numbers and may not be null"));
     }
 
     @Test
     public void testNullTopic() {
         Map<Map<String, ?>, Map<String, ?>> partitionOffsets = createPartitionOffsetMap(null, "10", 100);
         ConnectException e = assertThrows(ConnectException.class, () -> SinkUtils.parseSinkConnectorOffsets(partitionOffsets));
-        assertThat(e.getMessage(), containsString("Kafka topic names must be valid strings and may not be null"));
+        assertTrue(e.getMessage().contains("Kafka topic names must be valid strings and may not be null"));
     }
 
     private Map<Map<String, ?>, Map<String, ?>> createPartitionOffsetMap(String topic, Object partition, Object offset) {

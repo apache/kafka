@@ -48,6 +48,7 @@ import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -426,6 +427,17 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         subscribeInternal(topics, Optional.of(listener));
     }
 
+
+    @Override
+    public void registerMetricForSubscription(KafkaMetric metric) {
+        throw new UnsupportedOperationException("not implemented");
+    }
+
+    @Override
+    public void unregisterMetricFromSubscription(KafkaMetric metric) {
+        throw new UnsupportedOperationException("not implemented");
+    }
+
     @Override
     public void subscribe(Collection<String> topics) {
         subscribeInternal(topics, Optional.empty());
@@ -585,21 +597,15 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
     }
 
-    @Deprecated
-    @Override
-    public ConsumerRecords<K, V> poll(final long timeoutMs) {
-        return poll(time.timer(timeoutMs), false);
-    }
-
     @Override
     public ConsumerRecords<K, V> poll(final Duration timeout) {
-        return poll(time.timer(timeout), true);
+        return poll(time.timer(timeout));
     }
 
     /**
      * @throws KafkaException if the rebalance callback throws exception
      */
-    private ConsumerRecords<K, V> poll(final Timer timer, final boolean includeMetadataInTimeout) {
+    private ConsumerRecords<K, V> poll(final Timer timer) {
         acquireAndEnsureOpen();
         try {
             this.kafkaConsumerMetrics.recordPollStart(timer.currentTimeMs());
@@ -611,14 +617,8 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             do {
                 client.maybeTriggerWakeup();
 
-                if (includeMetadataInTimeout) {
-                    // try to update assignment metadata BUT do not need to block on the timer for join group
-                    updateAssignmentMetadataIfNeeded(timer, false);
-                } else {
-                    while (!updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE), true)) {
-                        log.warn("Still waiting for metadata");
-                    }
-                }
+                // try to update assignment metadata BUT do not need to block on the timer for join group
+                updateAssignmentMetadataIfNeeded(timer, false);
 
                 final Fetch<K, V> fetch = pollForFetches(timer);
                 if (!fetch.isEmpty()) {
@@ -854,18 +854,6 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         } finally {
             release();
         }
-    }
-
-    @Deprecated
-    @Override
-    public OffsetAndMetadata committed(TopicPartition partition) {
-        return committed(partition, Duration.ofMillis(defaultApiTimeoutMs));
-    }
-
-    @Deprecated
-    @Override
-    public OffsetAndMetadata committed(TopicPartition partition, final Duration timeout) {
-        return committed(Collections.singleton(partition), timeout).get(partition);
     }
 
     @Override
@@ -1130,7 +1118,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         AtomicReference<Throwable> firstException = new AtomicReference<>();
 
         final Timer closeTimer = createTimerForRequest(timeout);
-        clientTelemetryReporter.ifPresent(reporter -> reporter.initiateClose(timeout.toMillis()));
+        clientTelemetryReporter.ifPresent(ClientTelemetryReporter::initiateClose);
         closeTimer.update();
         // Close objects with a timeout. The timeout is required because the coordinator & the fetcher send requests to
         // the server in the process of closing which may not respect the overall timeout defined for closing the

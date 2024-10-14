@@ -159,7 +159,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
               throw new InvalidRequestException("Group name must not be empty")
             } else {
               val groupProps = configRepository.groupConfig(group)
-              val groupConfig = GroupConfig.fromProps(config.groupCoordinatorConfig.extractGroupConfigMap, groupProps)
+              val groupConfig = GroupConfig.fromProps(config.groupCoordinatorConfig.extractGroupConfigMap(config.shareGroupConfig), groupProps)
               createResponseConfig(allConfigs(groupConfig), createGroupConfigEntry(groupConfig, groupProps, includeSynonyms, includeDocumentation))
             }
 
@@ -194,7 +194,8 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
     val allSynonyms = {
       val list = configSynonyms(name, allNames, isSensitive)
       if (!groupProps.containsKey(name))
-        list
+        new DescribeConfigsResponseData.DescribeConfigsSynonym().setName(name).setValue(valueAsString)
+          .setSource(ConfigSource.DEFAULT_CONFIG.id) +: list
       else
         new DescribeConfigsResponseData.DescribeConfigsSynonym().setName(name).setValue(valueAsString)
           .setSource(ConfigSource.GROUP_CONFIG.id) +: list

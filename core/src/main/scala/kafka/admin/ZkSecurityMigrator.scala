@@ -19,7 +19,6 @@ package kafka.admin
 
 import joptsimple.{OptionSet, OptionSpec, OptionSpecBuilder}
 import kafka.server.KafkaConfig
-import kafka.utils.Implicits._
 import kafka.utils.{Logging, ToolsUtils}
 import kafka.zk.{ControllerZNode, KafkaZkClient, ZkData, ZkSecurityMigratorUtils}
 import org.apache.kafka.common.security.JaasUtils
@@ -130,7 +129,7 @@ object ZkSecurityMigrator extends Logging {
     // Now override any set system properties with explicitly-provided values from the config file
     // Emit INFO logs due to camel-case property names encouraging mistakes -- help people see mistakes they make
     info(s"Found ${zkTlsConfigFileProps.size()} ZooKeeper client configuration properties in file $filename")
-    zkTlsConfigFileProps.asScala.forKeyValue { (key, value) =>
+    zkTlsConfigFileProps.asScala.foreachEntry { (key, value) =>
       info(s"Setting $key")
       KafkaConfig.setZooKeeperClientProperty(zkClientConfig, key, value)
     }

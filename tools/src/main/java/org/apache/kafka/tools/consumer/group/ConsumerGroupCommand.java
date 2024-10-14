@@ -48,7 +48,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
-import org.apache.kafka.tools.ToolsUtils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectReader;
@@ -435,7 +434,7 @@ public class ConsumerGroupCommand {
                     String format = "\n%" + -coordinatorColLen + "s %-25s %-20s %-15s %s";
 
                     System.out.printf(format, "GROUP", "COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS");
-                    System.out.printf(format, state.group, coordinator, state.assignmentStrategy, state.state.toString(), state.numMembers);
+                    System.out.printf(format, state.group, coordinator, state.assignmentStrategy, state.state, state.numMembers);
                     System.out.println();
                 }
             });
@@ -1002,8 +1001,7 @@ public class ConsumerGroupCommand {
                     LogOffsetResult logOffsetResult = logStartOffsets.get(topicPartition);
 
                     if (!(logOffsetResult instanceof LogOffset)) {
-                        ToolsUtils.printUsageAndExit(opts.parser, "Error getting starting offset of topic partition: " + topicPartition);
-                        return null;
+                        CommandLineUtils.printUsageAndExit(opts.parser, "Error getting starting offset of topic partition: " + topicPartition);
                     }
 
                     return new OffsetAndMetadata(((LogOffset) logOffsetResult).value);
@@ -1014,8 +1012,7 @@ public class ConsumerGroupCommand {
                     LogOffsetResult logOffsetResult = logEndOffsets.get(topicPartition);
 
                     if (!(logOffsetResult instanceof LogOffset)) {
-                        ToolsUtils.printUsageAndExit(opts.parser, "Error getting ending offset of topic partition: " + topicPartition);
-                        return null;
+                        CommandLineUtils.printUsageAndExit(opts.parser, "Error getting ending offset of topic partition: " + topicPartition);
                     }
 
                     return new OffsetAndMetadata(((LogOffset) logOffsetResult).value);
@@ -1042,8 +1039,7 @@ public class ConsumerGroupCommand {
                         LogOffsetResult logTimestampOffset = logTimestampOffsets.get(topicPartition);
 
                         if (!(logTimestampOffset instanceof LogOffset)) {
-                            ToolsUtils.printUsageAndExit(opts.parser, "Error getting offset by timestamp of topic partition: " + topicPartition);
-                            return null;
+                            CommandLineUtils.printUsageAndExit(opts.parser, "Error getting offset by timestamp of topic partition: " + topicPartition);
                         }
 
                         return new OffsetAndMetadata(((LogOffset) logTimestampOffset).value);
@@ -1062,8 +1058,7 @@ public class ConsumerGroupCommand {
                     LogOffsetResult logTimestampOffset = logTimestampOffsets.get(topicPartition);
 
                     if (!(logTimestampOffset instanceof LogOffset)) {
-                        ToolsUtils.printUsageAndExit(opts.parser, "Error getting offset by timestamp of topic partition: " + topicPartition);
-                        return null;
+                        CommandLineUtils.printUsageAndExit(opts.parser, "Error getting offset by timestamp of topic partition: " + topicPartition);
                     }
 
                     return new OffsetAndMetadata(((LogOffset) logTimestampOffset).value);
@@ -1110,8 +1105,7 @@ public class ConsumerGroupCommand {
                 Map<TopicPartition, OffsetAndMetadata> preparedOffsetsForPartitionsWithoutCommittedOffset = getLogEndOffsets(partitionsToResetWithoutCommittedOffset)
                     .entrySet().stream().collect(Collectors.toMap(Entry::getKey, e -> {
                         if (!(e.getValue() instanceof LogOffset)) {
-                            ToolsUtils.printUsageAndExit(opts.parser, "Error getting ending offset of topic partition: " + e.getKey());
-                            return null;
+                            CommandLineUtils.printUsageAndExit(opts.parser, "Error getting ending offset of topic partition: " + e.getKey());
                         }
 
                         return new OffsetAndMetadata(((LogOffset) e.getValue()).value);
@@ -1122,7 +1116,7 @@ public class ConsumerGroupCommand {
                 return preparedOffsetsForPartitionsWithCommittedOffset;
             }
 
-            ToolsUtils.printUsageAndExit(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts));
+            CommandLineUtils.printUsageAndExit(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts));
             return null;
         }
 

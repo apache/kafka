@@ -24,7 +24,7 @@ import org.slf4j.LoggerFactory;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-public class BrokerTopicStats {
+public class BrokerTopicStats implements AutoCloseable {
 
     private static final Logger LOG = LoggerFactory.getLogger(BrokerTopicStats.class);
 
@@ -253,6 +253,7 @@ public class BrokerTopicStats {
         allTopicsStats.remoteLogSizeBytesAggrMetric().removeKey(topic);
     }
 
+    @Override
     public void close() {
         allTopicsStats.close();
         stats.values().forEach(BrokerTopicMetrics::close);

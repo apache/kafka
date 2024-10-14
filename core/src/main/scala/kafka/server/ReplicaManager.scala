@@ -25,7 +25,6 @@ import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.ReplicaManager.{AtMinIsrPartitionCountMetricName, FailedIsrUpdatesPerSecMetricName, IsrExpandsPerSecMetricName, IsrShrinksPerSecMetricName, LeaderCountMetricName, OfflineReplicaCountMetricName, PartitionCountMetricName, PartitionsWithLateTransactionsCountMetricName, ProducerIdCountMetricName, ReassigningPartitionsMetricName, UnderMinIsrPartitionCountMetricName, UnderReplicatedPartitionsMetricName, createLogReadResult, isListOffsetsTimestampUnsupported}
 import kafka.server.metadata.ZkMetadataCache
-import kafka.utils.Implicits._
 import kafka.utils._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.errors._
@@ -290,7 +289,8 @@ class ReplicaManager(val config: KafkaConfig,
                      threadNamePrefix: Option[String] = None,
                      val brokerEpochSupplier: () => Long = () => -1,
                      addPartitionsToTxnManager: Option[AddPartitionsToTxnManager] = None,
-                     val directoryEventHandler: DirectoryEventHandler = DirectoryEventHandler.NOOP
+                     val directoryEventHandler: DirectoryEventHandler = DirectoryEventHandler.NOOP,
+                     val defaultActionQueue: ActionQueue = new DelayedActionQueue
                      ) extends Logging {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
@@ -435,7 +435,7 @@ class ReplicaManager(val config: KafkaConfig,
 
     // First, stop the partitions. This will shutdown the fetchers and other managers
     val partitionsToStop = strayPartitions.map(tp => StopPartition(tp, deleteLocalLog = false)).toSet
-    stopPartitions(partitionsToStop).forKeyValue { (topicPartition, exception) =>
+    stopPartitions(partitionsToStop).foreachEntry { (topicPartition, exception) =>
       error(s"Unable to stop stray partition $topicPartition", exception)
     }
 
@@ -511,7 +511,7 @@ class ReplicaManager(val config: KafkaConfig,
       stateChangeLogger.info(s"Handling StopReplica request correlationId $correlationId from controller " +
         s"$controllerId for ${partitionStates.size} partitions")
       if (stateChangeLogger.isTraceEnabled)
-        partitionStates.forKeyValue { (topicPartition, partitionState) =>
+        partitionStates.foreachEntry { (topicPartition, partitionState) =>
           stateChangeLogger.trace(s"Received StopReplica request $partitionState " +
             s"correlation id $correlationId from controller $controllerId " +
             s"epoch $controllerEpoch for partition $topicPartition")
@@ -528,7 +528,7 @@ class ReplicaManager(val config: KafkaConfig,
         this.controllerEpoch = controllerEpoch
 
         val stoppedPartitions = mutable.Buffer.empty[StopPartition]
-        partitionStates.forKeyValue { (topicPartition, partitionState) =>
+        partitionStates.foreachEntry { (topicPartition, partitionState) =>
           val deletePartition = partitionState.deletePartition()
 
           getPartition(topicPartition) match {
@@ -746,11 +746,6 @@ class ReplicaManager(val config: KafkaConfig,
     localLog(topicPartition).map(_.parentDir)
   }
 
-  /**
-   * TODO: move this action queue to handle thread so we can simplify concurrency handling
-   */
-  private val defaultActionQueue = new DelayedActionQueue
-
   def tryCompleteActions(): Unit = defaultActionQueue.tryCompleteActions()
 
   /**
@@ -846,7 +841,7 @@ class ReplicaManager(val config: KafkaConfig,
     val transactionalProducerInfo = mutable.HashSet[(Long, Short)]()
     val topicPartitionBatchInfo = mutable.Map[TopicPartition, Int]()
     val topicIds = entriesPerPartition.keys.map(tp => tp.topic() -> tp.topicId()).toMap
-    entriesPerPartition.forKeyValue { (topicIdPartition, records) =>
+    entriesPerPartition.foreachEntry { (topicIdPartition, records) =>
       // Produce requests (only requests that require verification) should only have one batch per partition in "batches" but check all just to be safe.
       val transactionalBatches = records.batches.asScala.filter(batch => batch.hasProducerId && batch.isTransactional)
       transactionalBatches.foreach(batch => transactionalProducerInfo.add(batch.producerId, batch.producerEpoch))
@@ -2213,14 +2208,14 @@ class ReplicaManager(val config: KafkaConfig,
 
           val data = new LeaderAndIsrResponseData().setErrorCode(Errors.NONE.code)
           if (leaderAndIsrRequest.version < 5) {
-            responseMap.forKeyValue { (tp, error) =>
+            responseMap.foreachEntry { (tp, error) =>
               data.partitionErrors.add(new LeaderAndIsrPartitionError()
                 .setTopicName(tp.topic)
                 .setPartitionIndex(tp.partition)
                 .setErrorCode(error.code))
             }
           } else {
-            responseMap.forKeyValue { (tp, error) =>
+            responseMap.foreachEntry { (tp, error) =>
               val topicId = topicIds.get(tp.topic)
               var topic = data.topics.find(topicId)
               if (topic == null) {
@@ -2345,7 +2340,7 @@ class ReplicaManager(val config: KafkaConfig,
         s"controller $controllerId epoch $controllerEpoch as part of the become-leader transition for " +
         s"${partitionStates.size} partitions")
       // Update the partition information to be the leader
-      partitionStates.forKeyValue { (partition, partitionState) =>
+      partitionStates.foreachEntry { (partition, partitionState) =>
         try {
           if (partition.makeLeader(partitionState, highWatermarkCheckpoints, topicIds(partitionState.topicName))) {
             partitionsToMakeLeaders += partition
@@ -2410,7 +2405,7 @@ class ReplicaManager(val config: KafkaConfig,
                             highWatermarkCheckpoints: OffsetCheckpoints,
                             topicIds: String => Option[Uuid]) : Set[Partition] = {
     val traceLoggingEnabled = stateChangeLogger.isTraceEnabled
-    partitionStates.forKeyValue { (partition, partitionState) =>
+    partitionStates.foreachEntry { (partition, partitionState) =>
       if (traceLoggingEnabled)
         stateChangeLogger.trace(s"Handling LeaderAndIsr request correlationId $correlationId from controller $controllerId " +
           s"epoch $controllerEpoch starting the become-follower transition for partition ${partition.topicPartition} with leader " +
@@ -2420,7 +2415,7 @@ class ReplicaManager(val config: KafkaConfig,
 
     val partitionsToMakeFollower: mutable.Set[Partition] = mutable.Set()
     try {
-      partitionStates.forKeyValue { (partition, partitionState) =>
+      partitionStates.foreachEntry { (partition, partitionState) =>
         val newLeaderBrokerId = partitionState.leader
         try {
           if (metadataCache.hasAliveBroker(newLeaderBrokerId)) {
@@ -2878,7 +2873,7 @@ class ReplicaManager(val config: KafkaConfig,
           }
           .toSet
         stateChangeLogger.info(s"Deleting ${deletes.size} partition(s).")
-        stopPartitions(deletes).forKeyValue { (topicPartition, e) =>
+        stopPartitions(deletes).foreachEntry { (topicPartition, e) =>
           if (e.isInstanceOf[KafkaStorageException]) {
             stateChangeLogger.error(s"Unable to delete replica $topicPartition because " +
               "the local replica for the partition is in an offline log directory")
@@ -2928,7 +2923,7 @@ class ReplicaManager(val config: KafkaConfig,
     stateChangeLogger.info(s"Transitioning ${localLeaders.size} partition(s) to " +
       "local leaders.")
     replicaFetcherManager.removeFetcherForPartitions(localLeaders.keySet)
-    localLeaders.forKeyValue { (tp, info) =>
+    localLeaders.foreachEntry { (tp, info) =>
       getOrCreatePartition(tp, delta, info.topicId).foreach { case (partition, isNew) =>
         try {
           val state = info.partition.toLeaderAndIsrPartitionState(tp, isNew)
@@ -2963,7 +2958,7 @@ class ReplicaManager(val config: KafkaConfig,
     val partitionsToStartFetching = new mutable.HashMap[TopicPartition, Partition]
     val partitionsToStopFetching = new mutable.HashMap[TopicPartition, Boolean]
     val followerTopicSet = new mutable.HashSet[String]
-    localFollowers.forKeyValue { (tp, info) =>
+    localFollowers.foreachEntry { (tp, info) =>
       getOrCreatePartition(tp, delta, info.topicId).foreach { case (partition, isNew) =>
         try {
           followerTopicSet.add(tp.topic)
@@ -3016,7 +3011,7 @@ class ReplicaManager(val config: KafkaConfig,
       val listenerName = config.interBrokerListenerName.value
       val partitionAndOffsets = new mutable.HashMap[TopicPartition, InitialFetchState]
 
-      partitionsToStartFetching.forKeyValue { (topicPartition, partition) =>
+      partitionsToStartFetching.foreachEntry { (topicPartition, partition) =>
         val nodeOpt = partition.leaderReplicaIdOpt
           .flatMap(leaderId => Option(newImage.cluster.broker(leaderId)))
           .flatMap(_.node(listenerName).asScala)
