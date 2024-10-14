@@ -80,7 +80,7 @@ final class KafkaMetadataLog private (
       fetchInfo.records,
 
       new LogOffsetMetadata(
-        fetchInfo.fetchOffsetMetadata.segmentBaseOffset + fetchInfo.fetchOffsetMetadata.relativePositionInSegment,
+        fetchInfo.fetchOffsetMetadata.messageOffset,
         Optional.of(SegmentPosition(
           fetchInfo.fetchOffsetMetadata.segmentBaseOffset,
           fetchInfo.fetchOffsetMetadata.relativePositionInSegment))
