@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.coordinator.group.assignor;
 
+import org.apache.kafka.common.Uuid;
+
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-
-import org.apache.kafka.common.Uuid;
 
 /**
  * Provides helper methods for assignors.
