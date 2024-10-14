@@ -16,10 +16,8 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ListOffsetsRequestData;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsTopic;
