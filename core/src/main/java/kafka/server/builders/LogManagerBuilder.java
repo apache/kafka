@@ -168,8 +168,8 @@ public class LogManagerBuilder {
         if (scheduler == null) throw new RuntimeException("you must set scheduler");
         if (brokerTopicStats == null) throw new RuntimeException("you must set brokerTopicStats");
         if (logDirFailureChannel == null) throw new RuntimeException("you must set logDirFailureChannel");
-        return new LogManager(CollectionConverters.asScala(logDirs.iterator()).toSeq(),
-                              CollectionConverters.asScala(initialOfflineDirs.iterator()).toSeq(),
+        return new LogManager(CollectionConverters.asScala(logDirs).toSeq(),
+                              CollectionConverters.asScala(initialOfflineDirs).toSeq(),
                               configRepository,
                               initialDefaultConfig,
                               cleanerConfig,

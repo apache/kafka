@@ -478,6 +478,6 @@ public class ReplicationQuotasTestRig {
     }
 
     private static <T> Seq<T> seq(Collection<T> seq) {
-        return CollectionConverters.asScala(seq.iterator()).toSeq();
+        return CollectionConverters.asScala(seq).toSeq();
     }
 }
