@@ -20,19 +20,21 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.PrimitiveRef;
 import org.apache.kafka.common.utils.Utils;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Optional;
-import java.util.OptionalLong;
 import java.util.function.Supplier;
 
 /**
@@ -48,6 +50,8 @@ import java.util.function.Supplier;
  */
 public class TransactionIndex implements Closeable {
 
+    private static final Logger log = LoggerFactory.getLogger(TransactionIndex.class);
+
     private static class AbortedTxnWithPosition {
         final AbortedTxn txn;
         final int position;
@@ -59,60 +63,45 @@ public class TransactionIndex implements Closeable {
 
     private final long startOffset;
 
-    private volatile File file;
+    final TransactionIndexFile txnFile;
 
-    // note that the file is not created until we need it
-    private Optional<FileChannel> maybeChannel = Optional.empty();
-    private OptionalLong lastOffset = OptionalLong.empty();
+    private Long lastOffset = null;
 
     public TransactionIndex(long startOffset, File file) throws IOException {
         this.startOffset = startOffset;
-        this.file = file;
+        this.txnFile = new TransactionIndexFile(file.toPath());
+    }
 
-        if (file.exists())
-            openChannel();
+    public Path path() {
+        return txnFile.path();
     }
 
     public File file() {
-        return file;
+        return txnFile.path().toFile();
     }
 
     public void updateParentDir(File parentDir) {
-        this.file = new File(parentDir, file.getName());
+        txnFile.updateParentDir(parentDir.toPath());
     }
 
-    public void append(AbortedTxn abortedTxn) throws IOException {
-        lastOffset.ifPresent(offset -> {
-            if (offset >= abortedTxn.lastOffset())
-                throw new IllegalArgumentException("The last offset of appended transactions must increase sequentially, but "
-                    + abortedTxn.lastOffset() + " is not greater than current last offset " + offset + " of index "
-                    + file.getAbsolutePath());
-        });
-        lastOffset = OptionalLong.of(abortedTxn.lastOffset());
-        Utils.writeFully(channel(), abortedTxn.buffer.duplicate());
+    public void renameTo(File f) throws IOException {
+        txnFile.renameTo(f.toPath());
     }
 
     public void flush() throws IOException {
-        FileChannel channel = channelOrNull();
-        if (channel != null)
-            channel.force(true);
+        txnFile.flush();
     }
 
     /**
      * Remove all the entries from the index. Unlike `AbstractIndex`, this index is not resized ahead of time.
      */
     public void reset() throws IOException {
-        FileChannel channel = channelOrNull();
-        if (channel != null)
-            channel.truncate(0);
-        lastOffset = OptionalLong.empty();
+        txnFile.truncate(0);
+        lastOffset = null;
     }
 
     public void close() throws IOException {
-        FileChannel channel = channelOrNull();
-        if (channel != null)
-            channel.close();
-        maybeChannel = Optional.empty();
+        txnFile.closeChannel();
     }
 
     /**
@@ -123,31 +112,32 @@ public class TransactionIndex implements Closeable {
      *         not exist
      */
     public boolean deleteIfExists() throws IOException {
-        close();
-        return Files.deleteIfExists(file.toPath());
+        return txnFile.deleteIfExists();
     }
 
-    public void renameTo(File f) throws IOException {
-        try {
-            if (file.exists())
-                Utils.atomicMoveWithFallback(file.toPath(), f.toPath(), false);
-        } finally {
-            this.file = f;
+    public void append(AbortedTxn abortedTxn) throws IOException {
+        if (lastOffset != null) {
+            if (lastOffset >= abortedTxn.lastOffset())
+                throw new IllegalArgumentException("The last offset of appended transactions must increase sequentially, but "
+                    + abortedTxn.lastOffset() + " is not greater than current last offset " + lastOffset + " of index "
+                    + txnFile.path().toAbsolutePath());
         }
+        lastOffset = abortedTxn.lastOffset();
+        txnFile.write(abortedTxn.buffer.duplicate());
     }
 
     public void truncateTo(long offset) throws IOException {
         ByteBuffer buffer = ByteBuffer.allocate(AbortedTxn.TOTAL_SIZE);
-        OptionalLong newLastOffset = OptionalLong.empty();
+        Long newLastOffset = null;
         for (AbortedTxnWithPosition txnWithPosition : iterable(() -> buffer)) {
             AbortedTxn abortedTxn = txnWithPosition.txn;
             long position = txnWithPosition.position;
             if (abortedTxn.lastOffset() >= offset) {
-                channel().truncate(position);
+                txnFile.truncate(position);
                 lastOffset = newLastOffset;
                 return;
             }
-            newLastOffset = OptionalLong.of(abortedTxn.lastOffset());
+            newLastOffset = abortedTxn.lastOffset();
         }
     }
 
@@ -190,28 +180,8 @@ public class TransactionIndex implements Closeable {
             AbortedTxn abortedTxn = txnWithPosition.txn;
             if (abortedTxn.lastOffset() < startOffset)
                 throw new CorruptIndexException("Last offset of aborted transaction " + abortedTxn + " in index "
-                    + file.getAbsolutePath() + " is less than start offset " + startOffset);
+                    + txnFile.path().toAbsolutePath() + " is less than start offset " + startOffset);
         }
-    }
-
-    private FileChannel openChannel() throws IOException {
-        FileChannel channel = FileChannel.open(file.toPath(), StandardOpenOption.CREATE,
-                StandardOpenOption.READ, StandardOpenOption.WRITE);
-        maybeChannel = Optional.of(channel);
-        channel.position(channel.size());
-        return channel;
-    }
-
-    private FileChannel channel() throws IOException {
-        FileChannel channel = channelOrNull();
-        if (channel == null)
-            return openChannel();
-        else
-            return channel;
-    }
-
-    private FileChannel channelOrNull() {
-        return maybeChannel.orElse(null);
     }
 
     private Iterable<AbortedTxnWithPosition> iterable() {
@@ -219,8 +189,7 @@ public class TransactionIndex implements Closeable {
     }
 
     private Iterable<AbortedTxnWithPosition> iterable(Supplier<ByteBuffer> allocate) {
-        FileChannel channel = channelOrNull();
-        if (channel == null)
+        if (!txnFile.exists())
             return Collections.emptyList();
 
         PrimitiveRef.IntRef position = PrimitiveRef.ofInt(0);
@@ -230,9 +199,9 @@ public class TransactionIndex implements Closeable {
             @Override
             public boolean hasNext() {
                 try {
-                    return channel.position() - position.value >= AbortedTxn.TOTAL_SIZE;
+                    return txnFile.currentPosition() - position.value >= AbortedTxn.TOTAL_SIZE;
                 } catch (IOException e) {
-                    throw new KafkaException("Failed read position from the transaction index " + file.getAbsolutePath(), e);
+                    throw new KafkaException("Failed read position from the transaction index " + txnFile.path().toAbsolutePath(), e);
                 }
             }
 
@@ -240,13 +209,13 @@ public class TransactionIndex implements Closeable {
             public AbortedTxnWithPosition next() {
                 try {
                     ByteBuffer buffer = allocate.get();
-                    Utils.readFully(channel, buffer, position.value);
+                    txnFile.read(buffer, position.value);
                     buffer.flip();
 
                     AbortedTxn abortedTxn = new AbortedTxn(buffer);
                     if (abortedTxn.version() > AbortedTxn.CURRENT_VERSION)
                         throw new KafkaException("Unexpected aborted transaction version " + abortedTxn.version()
-                            + " in transaction index " + file.getAbsolutePath() + ", current version is "
+                            + " in transaction index " + txnFile.path().toAbsolutePath() + ", current version is "
                             + AbortedTxn.CURRENT_VERSION);
                     AbortedTxnWithPosition nextEntry = new AbortedTxnWithPosition(abortedTxn, position.value);
                     position.value += AbortedTxn.TOTAL_SIZE;
@@ -254,11 +223,113 @@ public class TransactionIndex implements Closeable {
                 } catch (IOException e) {
                     // We received an unexpected error reading from the index file. We propagate this as an
                     // UNKNOWN error to the consumer, which will cause it to retry the fetch.
-                    throw new KafkaException("Failed to read from the transaction index " + file.getAbsolutePath(), e);
+                    throw new KafkaException("Failed to read from the transaction index " + txnFile.path().toAbsolutePath(), e);
                 }
             }
 
         };
     }
 
+    // Visible for testing
+    static class TransactionIndexFile {
+        // note that the file is not created until we need it
+        private volatile Path path;
+        // channel is reopened as long as there are reads and writes
+        private FileChannel channel;
+
+        TransactionIndexFile(Path path) throws IOException {
+            this.path = path;
+
+            if (Files.exists(path))
+                openChannel();
+        }
+
+        private void openChannel() throws IOException {
+            channel = FileChannel.open(
+                path,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.READ,
+                StandardOpenOption.WRITE
+            );
+            channel.position(channel.size());
+        }
+
+        synchronized void updateParentDir(Path parentDir) {
+            this.path = parentDir.resolve(path.getFileName());
+        }
+
+        synchronized void renameTo(Path other) throws IOException {
+            try {
+                if (Files.exists(path))
+                    Utils.atomicMoveWithFallback(path, other, false);
+            } finally {
+                this.path = other;
+            }
+        }
+
+        synchronized void flush() throws IOException {
+            if (channel != null)
+                channel.force(true);
+        }
+
+        synchronized void closeChannel() throws IOException {
+            if (channel != null)
+                channel.close();
+        }
+        
+        synchronized boolean isChannelOpen() {
+            return channel != null && channel.isOpen();
+        }
+
+        Path path() {
+            return path;
+        }
+
+        synchronized void truncate(long position) throws IOException {
+            if (channel != null)
+                channel.truncate(position);
+        }
+
+        boolean exists() {
+            return Files.exists(path);
+        }
+
+        boolean deleteIfExists() throws IOException {
+            closeChannel();
+            return Files.deleteIfExists(path());
+        }
+
+        void write(ByteBuffer buffer) throws IOException {
+            Utils.writeFully(channel(), buffer);
+        }
+
+        void read(ByteBuffer buffer, int position) throws IOException {
+            Utils.readFully(channel(), buffer, position);
+        }
+
+        long currentPosition() throws IOException {
+            return channel().position();
+        }
+
+        /**
+         * Use to read or write values to the index.
+         * The file is the source of truth and if available values should be read from or written to.
+         *
+         * @return an open file channel with the position at the end of the file
+         * @throws IOException if any I/O error happens, but not if existing channel is closed.
+         *                     In that case, it is reopened.
+         */
+        private synchronized FileChannel channel() throws IOException {
+            if (channel == null) {
+                openChannel();
+            } else {
+                // as channel is exposed, it could be closed without setting it to null
+                if (!isChannelOpen())  {
+                    log.debug("Transaction index channel was closed directly and is going to be reopened");
+                    openChannel();
+                }
+            }
+            return channel;
+        }
+    }
 }
