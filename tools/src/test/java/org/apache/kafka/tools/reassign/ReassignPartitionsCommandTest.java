@@ -18,6 +18,7 @@ package org.apache.kafka.tools.reassign;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
@@ -92,6 +93,7 @@ import static org.apache.kafka.tools.ToolsTestUtils.throttleAllBrokersReplicatio
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_LEVEL_THROTTLES;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.cancelAssignment;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.executeAssignment;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.generateAssignment;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.verifyAssignment;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -187,6 +189,24 @@ public class ReassignPartitionsCommandTest {
                 ListOffsetsResultInfo result = admin.listOffsets(Collections.singletonMap(foo0, new OffsetSpec.LatestSpec())).partitionResult(foo0).get();
                 return result.offset() == 100;
             }, "Timeout for waiting offset");
+        }
+    }
+    
+    @ClusterTest
+    public void testGenerateAssignmentWithBootstrapServer() throws Exception {
+        createTopics();
+        TopicPartition foo0 = new TopicPartition("foo", 0);
+        produceMessages(foo0.topic(), foo0.partition(), 100);
+
+        try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
+            String assignment = "{\"version\":1,\"partitions\":" +
+                    "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[3,1,2],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
+                    "]}";
+            generateAssignment(admin, assignment, "1,2,3", false);
+            Map<TopicPartition, PartitionReassignmentState> finalAssignment = singletonMap(foo0,
+                    new PartitionReassignmentState(asList(0, 1, 2), asList(3, 1, 2), true));
+            waitForVerifyAssignment(admin, assignment, false,
+                    new VerifyAssignmentResult(finalAssignment));
         }
     }
 
@@ -326,47 +346,13 @@ public class ReassignPartitionsCommandTest {
      * Test running a reassignment and then cancelling it.
      */
     @ClusterTest
-    public void testCancellation() throws Exception {
-        createTopics();
-        TopicPartition foo0 = new TopicPartition("foo", 0);
-        TopicPartition baz1 = new TopicPartition("baz", 1);
+    public void testCancellationWithBootstrapServer() throws Exception {
+        testCancellationAction(true);
+    }
 
-        produceMessages(foo0.topic(), foo0.partition(), 200);
-        produceMessages(baz1.topic(), baz1.partition(), 200);
-        String assignment = "{\"version\":1,\"partitions\":" +
-                "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[0,1,3],\"log_dirs\":[\"any\",\"any\",\"any\"]}," +
-                "{\"topic\":\"baz\",\"partition\":1,\"replicas\":[0,2,3],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
-                "]}";
-        try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            assertEquals(unthrottledBrokerConfigs,
-                    describeBrokerLevelThrottles(admin, unthrottledBrokerConfigs.keySet()));
-            long interBrokerThrottle = 1L;
-            runExecuteAssignment(false, assignment, interBrokerThrottle, -1L);
-            waitForInterBrokerThrottle(admin, asList(0, 1, 2, 3), interBrokerThrottle);
-
-            Map<TopicPartition, PartitionReassignmentState> partStates = new HashMap<>();
-
-            partStates.put(foo0, new PartitionReassignmentState(asList(0, 1, 3, 2), asList(0, 1, 3), false));
-            partStates.put(baz1, new PartitionReassignmentState(asList(0, 2, 3, 1), asList(0, 2, 3), false));
-
-            // Verify that the reassignment is running.  The very low throttle should keep it
-            // from completing before this runs.
-            waitForVerifyAssignment(admin, assignment, true,
-                    new VerifyAssignmentResult(partStates, true, Collections.emptyMap(), false));
-            // Cancel the reassignment.
-            assertEquals(new AbstractMap.SimpleImmutableEntry<>(new HashSet<>(asList(foo0, baz1)), Collections.emptySet()), runCancelAssignment(assignment, true));
-            // Broker throttles are still active because we passed --preserve-throttles
-            waitForInterBrokerThrottle(admin, asList(0, 1, 2, 3), interBrokerThrottle);
-            // Cancelling the reassignment again should reveal nothing to cancel.
-            assertEquals(new AbstractMap.SimpleImmutableEntry<>(Collections.emptySet(), Collections.emptySet()), runCancelAssignment(assignment, false));
-            // This time, the broker throttles were removed.
-            waitForBrokerLevelThrottles(admin, unthrottledBrokerConfigs);
-            // Verify that there are no ongoing reassignments.
-            assertFalse(runVerifyAssignment(admin, assignment, false).partsOngoing);
-        }
-        // Verify that the partition is removed from cancelled replicas
-        verifyReplicaDeleted(new TopicPartitionReplica(foo0.topic(), foo0.partition(), 3));
-        verifyReplicaDeleted(new TopicPartitionReplica(baz1.topic(), baz1.partition(), 3));
+    @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT})
+    public void testCancellationWithBootstrapController() throws Exception {
+        testCancellationAction(false);
     }
 
     @ClusterTest
@@ -400,7 +386,7 @@ public class ReassignPartitionsCommandTest {
         }
 
         // Now cancel the assignment and verify that the partition is removed from cancelled replicas
-        assertEquals(new AbstractMap.SimpleImmutableEntry<>(singleton(foo0), Collections.emptySet()), runCancelAssignment(assignment, true));
+        assertEquals(new AbstractMap.SimpleImmutableEntry<>(singleton(foo0), Collections.emptySet()), runCancelAssignment(assignment, true, true));
         verifyReplicaDeleted(new TopicPartitionReplica(foo0.topic(), foo0.partition(), 3));
         verifyReplicaDeleted(new TopicPartitionReplica(foo0.topic(), foo0.partition(), 4));
     }
@@ -717,9 +703,16 @@ public class ReassignPartitionsCommandTest {
 
     private Map.Entry<Set<TopicPartition>, Set<TopicPartitionReplica>> runCancelAssignment(
             String jsonString,
-            Boolean preserveThrottles
+            Boolean preserveThrottles,
+            Boolean useBootstrapServer
     ) {
-        try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
+        Map<String, Object> config;
+        if (useBootstrapServer) {
+            config = Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
+        } else {
+            config = Collections.singletonMap(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, clusterInstance.bootstrapControllers());
+        }
+        try (Admin admin = Admin.create(config)) {
             return cancelAssignment(admin, jsonString, preserveThrottles, 10000L, Time.SYSTEM);
         } catch (ExecutionException | InterruptedException | JsonProcessingException | TerseException e) {
             throw new RuntimeException(e);
@@ -749,6 +742,49 @@ public class ReassignPartitionsCommandTest {
                 });
             });
         }
+    }
+
+    private void testCancellationAction(boolean useBootstrapServer) throws InterruptedException {
+        createTopics();
+        TopicPartition foo0 = new TopicPartition("foo", 0);
+        TopicPartition baz1 = new TopicPartition("baz", 1);
+
+        produceMessages(foo0.topic(), foo0.partition(), 200);
+        produceMessages(baz1.topic(), baz1.partition(), 200);
+        String assignment = "{\"version\":1,\"partitions\":" +
+                "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[0,1,3],\"log_dirs\":[\"any\",\"any\",\"any\"]}," +
+                "{\"topic\":\"baz\",\"partition\":1,\"replicas\":[0,2,3],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
+                "]}";
+        try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
+            assertEquals(unthrottledBrokerConfigs,
+                    describeBrokerLevelThrottles(admin, unthrottledBrokerConfigs.keySet()));
+            long interBrokerThrottle = 1L;
+            runExecuteAssignment(false, assignment, interBrokerThrottle, -1L);
+            waitForInterBrokerThrottle(admin, asList(0, 1, 2, 3), interBrokerThrottle);
+
+            Map<TopicPartition, PartitionReassignmentState> partStates = new HashMap<>();
+
+            partStates.put(foo0, new PartitionReassignmentState(asList(0, 1, 3, 2), asList(0, 1, 3), false));
+            partStates.put(baz1, new PartitionReassignmentState(asList(0, 2, 3, 1), asList(0, 2, 3), false));
+
+            // Verify that the reassignment is running.  The very low throttle should keep it
+            // from completing before this runs.
+            waitForVerifyAssignment(admin, assignment, true,
+                    new VerifyAssignmentResult(partStates, true, Collections.emptyMap(), false));
+            // Cancel the reassignment.
+            assertEquals(new AbstractMap.SimpleImmutableEntry<>(new HashSet<>(asList(foo0, baz1)), Collections.emptySet()), runCancelAssignment(assignment, true, useBootstrapServer));
+            // Broker throttles are still active because we passed --preserve-throttles
+            waitForInterBrokerThrottle(admin, asList(0, 1, 2, 3), interBrokerThrottle);
+            // Cancelling the reassignment again should reveal nothing to cancel.
+            assertEquals(new AbstractMap.SimpleImmutableEntry<>(Collections.emptySet(), Collections.emptySet()), runCancelAssignment(assignment, false, useBootstrapServer));
+            // This time, the broker throttles were removed.
+            waitForBrokerLevelThrottles(admin, unthrottledBrokerConfigs);
+            // Verify that there are no ongoing reassignments.
+            assertFalse(runVerifyAssignment(admin, assignment, false).partsOngoing);
+        }
+        // Verify that the partition is removed from cancelled replicas
+        verifyReplicaDeleted(new TopicPartitionReplica(foo0.topic(), foo0.partition(), 3));
+        verifyReplicaDeleted(new TopicPartitionReplica(baz1.topic(), baz1.partition(), 3));
     }
 
     /**
