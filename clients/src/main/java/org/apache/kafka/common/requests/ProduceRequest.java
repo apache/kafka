@@ -22,7 +22,6 @@ import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.CompressionType;
@@ -39,7 +38,13 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.requests.ProduceResponse.INVALID_OFFSET;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class ProduceRequest extends AbstractRequest {
+    public static final Logger log = LoggerFactory.getLogger(ProduceRequest.class);
+
+    private static ProduceRequestParser produceRequestParser = ProduceRequestParserFactory.getProduceRequestParser();
 
     public static Builder forMagic(byte magic, ProduceRequestData data) {
         // Message format upgrades correspond with a bump in the produce request version. Older
@@ -252,7 +257,7 @@ public class ProduceRequest extends AbstractRequest {
     }
 
     public static ProduceRequest parse(ByteBuffer buffer, short version) {
-        return new ProduceRequest(new ProduceRequestData(new ByteBufferAccessor(buffer), version), version);
+        return produceRequestParser.parse(buffer, version);
     }
 
     public static byte requiredMagicForVersion(short produceRequestVersion) {

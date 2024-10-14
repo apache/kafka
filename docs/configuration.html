@@ -302,6 +302,21 @@
       <tr><th>Default Value:</th><td>com.sun.security.auth.module.JndiLoginModule</td></tr>
       </tbody></table>
     </li>
+    <li>
+      <h4><a id="org.apache.kafka.common.requests.ProduceRequestParser"></a><a id="systemproperties_org.apache.kafka.common.requests.ProduceRequestParser" href="#systemproperties_org.apache.kafka.common.requests.ProduceRequestParser">org.apache.kafka.common.requests.ProduceRequestParser</a></h4>
+      <p>Can be configured via server.properties, a system property, or an environment variable, and is used to specify a custom ProduceRequest parser. By default <b>org.apache.kafka.common.requests.DefaultProduceRequestParser</b> is used.
+      <p>In server.properties:
+      <p><pre><code class="language-bash">org.apache.kafka.common.requests.ProduceRequestParser=org.example.kafka.requests.CustomProduceRequestParser</code></pre>
+      <p>In system properties:
+      <p><pre><code class="language-bash">-Dorg.apache.kafka.common.requests.ProduceRequestParser=org.example.kafka.requests.CustomProduceRequestParser</code></pre>
+      <p>In environment:
+      <p><pre><code class="language-bash">export KAFKA_PRODUCE_REQUEST_PARSER=org.example.kafka.requests.CustomProduceRequestParser</code></pre>
+      <p>Where <b>org.example.kafka.requests.CustomProduceRequestParser</b> implements <b>org.apache.kafka.common.requests.ProduceRequestParser</b> interface.
+      <table><tbody>
+      <tr><th>Since:</th><td>4.0.0</td></tr>
+      <tr><th>Default Value:</th><td>org.apache.kafka.common.requests.DefaultProduceRequestParser</td></tr>
+      </tbody></table>
+    </li>
   </ul>
 
   <h3 class="anchor-heading"><a id="tieredstorageconfigs" class="anchor-link"></a><a href="#tieredstorageconfigs">3.10 Tiered Storage Configs</a></h3>
