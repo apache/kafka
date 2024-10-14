@@ -18,17 +18,14 @@
 package kafka.server
 
 import kafka.network.SocketServer
-import kafka.security.JaasTestUtils
-import org.apache.kafka.common.network.{ConnectionMode, ListenerName}
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, RequestHeader, ResponseHeader}
-import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 
 import java.io.{DataInputStream, DataOutputStream}
 import java.net.Socket
 import java.nio.ByteBuffer
-import java.util.{Optional, Properties}
 import scala.reflect.ClassTag
 
 object IntegrationTestUtils {
@@ -100,16 +97,10 @@ object IntegrationTestUtils {
     finally socket.close()
   }
 
-  protected def securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
   private var correlationId = 0
 
   def connect(socketServer: SocketServer,
               listenerName: ListenerName): Socket = {
     new Socket("localhost", socketServer.boundPort(listenerName))
-  }
-
-  def clientSecurityProps(certAlias: String): Properties = {
-    JaasTestUtils.securityConfigs(ConnectionMode.CLIENT, securityProtocol, Optional.empty(), certAlias,
-      JaasTestUtils.SSL_CERTIFICATE_CN, Optional.empty()) // TODO use real trust store and client SASL properties
   }
 }
