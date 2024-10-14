@@ -191,7 +191,7 @@ public class Protocol {
                     schemaToBnfHtml(requests[i], b, 2);
                     b.append("</pre>");
 
-                    if (!key.isVersionEnabled((short)i, false)) {
+                    if (!key.isVersionEnabled((short) i, false)) {
                         b.append("<p>This version of the request is unstable.</p>");
                     }
 
