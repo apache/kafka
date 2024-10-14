@@ -126,7 +126,6 @@ import static org.apache.kafka.clients.consumer.CooperativeStickyAssignor.COOPER
 import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.test.TestUtils.toSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -1004,7 +1003,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.poll(time.timer(Long.MAX_VALUE));
 
         assertFalse(coordinator.rejoinNeededOrPending());
-        assertEquals(toSet(assigned), subscriptions.assignedPartitions());
+        assertEquals(Set.copyOf(assigned), subscriptions.assignedPartitions());
         assertEquals(subscription, subscriptions.metadataTopics());
         assertEquals(0, rebalanceListener.revokedCount);
         assertNull(rebalanceListener.revoked);
@@ -1021,7 +1020,7 @@ public abstract class ConsumerCoordinatorTest {
         final List<String> newSubscription = singletonList(topic1);
         final List<TopicPartition> newAssignment = singletonList(t1p);
 
-        subscriptions.subscribe(toSet(oldSubscription), Optional.of(rebalanceListener));
+        subscriptions.subscribe(Set.copyOf(oldSubscription), Optional.of(rebalanceListener));
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
@@ -1055,7 +1054,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.poll(time.timer(0));
 
         // Before the sync group response gets completed change the subscription
-        subscriptions.subscribe(toSet(newSubscription), Optional.of(rebalanceListener));
+        subscriptions.subscribe(Set.copyOf(newSubscription), Optional.of(rebalanceListener));
         coordinator.poll(time.timer(0));
 
         coordinator.poll(time.timer(Long.MAX_VALUE));
@@ -1063,8 +1062,8 @@ public abstract class ConsumerCoordinatorTest {
         final Collection<TopicPartition> assigned = getAdded(owned, newAssignment);
 
         assertFalse(coordinator.rejoinNeededOrPending());
-        assertEquals(toSet(newAssignment), subscriptions.assignedPartitions());
-        assertEquals(toSet(newSubscription), subscriptions.metadataTopics());
+        assertEquals(Set.copyOf(newAssignment), subscriptions.assignedPartitions());
+        assertEquals(Set.copyOf(newSubscription), subscriptions.metadataTopics());
         assertEquals(protocol == EAGER ? 1 : 0, rebalanceListener.revokedCount);
         assertEquals(1, rebalanceListener.assignedCount);
         assertEquals(assigned, rebalanceListener.assigned);
@@ -1078,8 +1077,8 @@ public abstract class ConsumerCoordinatorTest {
         final List<String> newSubscription = singletonList(topic2);
         final List<TopicPartition> newAssignment = Collections.singletonList(t2p);
 
-        subscriptions.subscribe(toSet(oldSubscription), Optional.of(rebalanceListener));
-        assertEquals(toSet(oldSubscription), subscriptions.metadataTopics());
+        subscriptions.subscribe(Set.copyOf(oldSubscription), Optional.of(rebalanceListener));
+        assertEquals(Set.copyOf(oldSubscription), subscriptions.metadataTopics());
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
@@ -1087,16 +1086,16 @@ public abstract class ConsumerCoordinatorTest {
         prepareJoinAndSyncResponse(consumerId, 1, oldSubscription, oldAssignment);
 
         coordinator.poll(time.timer(0));
-        assertEquals(toSet(oldSubscription), subscriptions.metadataTopics());
+        assertEquals(Set.copyOf(oldSubscription), subscriptions.metadataTopics());
 
-        subscriptions.subscribe(toSet(newSubscription), Optional.of(rebalanceListener));
+        subscriptions.subscribe(Set.copyOf(newSubscription), Optional.of(rebalanceListener));
         assertEquals(Set.of(topic1, topic2), subscriptions.metadataTopics());
 
         prepareJoinAndSyncResponse(consumerId, 2, newSubscription, newAssignment);
         coordinator.poll(time.timer(Long.MAX_VALUE));
         assertFalse(coordinator.rejoinNeededOrPending());
-        assertEquals(toSet(newAssignment), subscriptions.assignedPartitions());
-        assertEquals(toSet(newSubscription), subscriptions.metadataTopics());
+        assertEquals(Set.copyOf(newAssignment), subscriptions.assignedPartitions());
+        assertEquals(Set.copyOf(newSubscription), subscriptions.metadataTopics());
     }
 
     @Test
@@ -1174,7 +1173,7 @@ public abstract class ConsumerCoordinatorTest {
         // rejoin will only be set in the next poll call
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(singleton(topic1), subscriptions.subscription());
-        assertEquals(toSet(oldAssigned), subscriptions.assignedPartitions());
+        assertEquals(Set.copyOf(oldAssigned), subscriptions.assignedPartitions());
         // nothing to be revoked and hence no callback triggered
         assertEquals(0, rebalanceListener.revokedCount);
         assertNull(rebalanceListener.revoked);
@@ -1211,8 +1210,8 @@ public abstract class ConsumerCoordinatorTest {
         int revokedCount = revoked.isEmpty() ? 0 : 1;
 
         assertFalse(coordinator.rejoinNeededOrPending());
-        assertEquals(toSet(updatedSubscription), subscriptions.subscription());
-        assertEquals(toSet(newAssigned), subscriptions.assignedPartitions());
+        assertEquals(Set.copyOf(updatedSubscription), subscriptions.subscription());
+        assertEquals(Set.copyOf(newAssigned), subscriptions.assignedPartitions());
         assertEquals(revokedCount, rebalanceListener.revokedCount);
         assertEquals(revoked.isEmpty() ? null : revoked, rebalanceListener.revoked);
         assertEquals(2, rebalanceListener.assignedCount);
@@ -1244,7 +1243,7 @@ public abstract class ConsumerCoordinatorTest {
 
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(singleton(topic1), subscriptions.subscription());
-        assertEquals(toSet(oldAssigned), subscriptions.assignedPartitions());
+        assertEquals(Set.copyOf(oldAssigned), subscriptions.assignedPartitions());
         assertEquals(revokedCount, rebalanceListener.revokedCount);
         assertEquals(revoked.isEmpty() ? null : revoked, rebalanceListener.revoked);
         assertEquals(3, rebalanceListener.assignedCount);
@@ -1582,7 +1581,7 @@ public abstract class ConsumerCoordinatorTest {
         final List<TopicPartition> partitions = metadataResponse1.topicMetadata().stream()
                 .flatMap(t -> t.partitionMetadata().stream().map(p -> new TopicPartition(t.topic(), p.partition())))
                 .collect(Collectors.toList());
-        subscriptions.subscribe(toSet(topics), Optional.of(rebalanceListener));
+        subscriptions.subscribe(Set.copyOf(topics), Optional.of(rebalanceListener));
         client.updateMetadata(metadataResponse1);
         coordinator.maybeUpdateSubscriptionMetadata();
 
@@ -1598,8 +1597,8 @@ public abstract class ConsumerCoordinatorTest {
 
         // rejoin will only be set in the next poll call
         assertFalse(coordinator.rejoinNeededOrPending());
-        assertEquals(toSet(topics), subscriptions.subscription());
-        assertEquals(toSet(partitions), subscriptions.assignedPartitions());
+        assertEquals(Set.copyOf(topics), subscriptions.subscription());
+        assertEquals(Set.copyOf(partitions), subscriptions.assignedPartitions());
         assertEquals(0, rebalanceListener.revokedCount);
         assertNull(rebalanceListener.revoked);
         assertEquals(1, rebalanceListener.assignedCount);
@@ -1644,8 +1643,8 @@ public abstract class ConsumerCoordinatorTest {
 
         Collection<TopicPartition> added = getAdded(partitions, partitions);
         assertEquals(2, rebalanceListener.assignedCount);
-        assertEquals(added.isEmpty() ? Collections.emptySet() : toSet(partitions), rebalanceListener.assigned);
-        assertEquals(toSet(partitions), subscriptions.assignedPartitions());
+        assertEquals(added.isEmpty() ? Collections.emptySet() : Set.copyOf(partitions), rebalanceListener.assigned);
+        assertEquals(Set.copyOf(partitions), subscriptions.assignedPartitions());
     }
 
     @Test
@@ -1680,7 +1679,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.poll(time.timer(Long.MAX_VALUE));
 
         assertFalse(coordinator.rejoinNeededOrPending());
-        assertEquals(toSet(assigned), subscriptions.assignedPartitions());
+        assertEquals(Set.copyOf(assigned), subscriptions.assignedPartitions());
         assertEquals(0, rebalanceListener.revokedCount);
         assertNull(rebalanceListener.revoked);
         assertEquals(1, rebalanceListener.assignedCount);
@@ -1710,7 +1709,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
 
         assertFalse(coordinator.rejoinNeededOrPending());
-        assertEquals(toSet(assigned), subscriptions.assignedPartitions());
+        assertEquals(Set.copyOf(assigned), subscriptions.assignedPartitions());
         assertEquals(subscription, subscriptions.metadataTopics());
         assertEquals(0, rebalanceListener.revokedCount);
         assertNull(rebalanceListener.revoked);
@@ -2300,7 +2299,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
 
         assertFalse(coordinator.rejoinNeededOrPending());
-        assertEquals(toSet(assigned), subscriptions.assignedPartitions());
+        assertEquals(Set.copyOf(assigned), subscriptions.assignedPartitions());
         // nothing to be revoked hence callback not triggered
         assertEquals(0, rebalanceListener.revokedCount);
         assertNull(rebalanceListener.revoked);
@@ -3867,11 +3866,11 @@ public abstract class ConsumerCoordinatorTest {
                                                   final List<TopicPartition> assigned) {
         switch (protocol) {
             case EAGER:
-                return toSet(owned);
+                return Set.copyOf(owned);
             case COOPERATIVE:
                 final List<TopicPartition> revoked = new ArrayList<>(owned);
                 revoked.removeAll(assigned);
-                return toSet(revoked);
+                return Set.copyOf(revoked);
             default:
                 throw new IllegalStateException("This should not happen");
         }
@@ -3882,7 +3881,7 @@ public abstract class ConsumerCoordinatorTest {
             case EAGER:
                 return emptySet();
             case COOPERATIVE:
-                return toSet(owned);
+                return Set.copyOf(owned);
             default:
                 throw new IllegalStateException("This should not happen");
         }
@@ -3892,11 +3891,11 @@ public abstract class ConsumerCoordinatorTest {
                                                 final List<TopicPartition> assigned) {
         switch (protocol) {
             case EAGER:
-                return toSet(assigned);
+                return Set.copyOf(assigned);
             case COOPERATIVE:
                 final List<TopicPartition> added = new ArrayList<>(assigned);
                 added.removeAll(owned);
-                return toSet(added);
+                return Set.copyOf(added);
             default:
                 throw new IllegalStateException("This should not happen");
         }
