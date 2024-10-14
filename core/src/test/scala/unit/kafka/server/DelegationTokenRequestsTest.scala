@@ -30,9 +30,9 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 import java.util
-import scala.compat.java8.OptionConverters
 import scala.concurrent.ExecutionException
 import scala.jdk.CollectionConverters._
+import scala.jdk.javaapi.OptionConverters
 
 class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup {
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
