@@ -177,8 +177,9 @@ Found problem:
   defaultDynamicQuorumProperties.setProperty("process.roles", "controller")
   defaultDynamicQuorumProperties.setProperty("node.id", "0")
   defaultDynamicQuorumProperties.setProperty("controller.listener.names", "CONTROLLER")
-  defaultDynamicQuorumProperties.setProperty("controller.quorum.voters", "0@localhost:9093")
-  defaultDynamicQuorumProperties.setProperty("listeners", "CONTROLLER://127.0.0.1:9093")
+  defaultDynamicQuorumProperties.setProperty("controller.quorum.bootstrap.servers", "localhost:9093")
+  defaultDynamicQuorumProperties.setProperty("listeners", "CONTROLLER://:9093")
+  defaultDynamicQuorumProperties.setProperty("advertised.listeners", "CONTROLLER://127.0.0.1:9093")
   defaultDynamicQuorumProperties.setProperty(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true")
   defaultDynamicQuorumProperties.setProperty(ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG , "true")
 
@@ -378,7 +379,7 @@ Found problem:
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream = new ByteArrayOutputStream()
     val arguments = ListBuffer[String]("--release-version", "3.9-IV0", "--standalone")
-    assertEquals("You cannot use --standalone on a broker node.",
+    assertEquals("--standalone can only be used with controllers.",
       assertThrows(classOf[TerseFailure],
         () => runFormatCommand(stream, properties, arguments.toSeq)).getMessage)
   }
@@ -434,6 +435,41 @@ Found problem:
     assertEquals(0, runFormatCommand(stream, properties, arguments.toSeq))
     assertTrue(stream.toString().
       contains("Formatting dynamic metadata voter directory %s".format(availableDirs.head)),
+      "Failed to find content in output: " + stream.toString())
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("controller", "broker,controller"))
+  def testFormatWithoutStaticQuorumFailsWithoutInitialControllersOnController(processRoles: String): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultDynamicQuorumProperties)
+    if (processRoles.contains("broker")) {
+      properties.setProperty("listeners", "PLAINTEXT://:9092,CONTROLLER://:9093")
+      properties.setProperty("advertised.listeners", "PLAINTEXT://127.0.0.1:9092,CONTROLLER://127.0.0.1:9093")
+    }
+    properties.setProperty("process.roles", processRoles)
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    assertEquals("Because controller.quorum.voters is not set, you must use the --standalone or " +
+      "--initial-controllers flag to set the initial controllers on each controller.",
+        assertThrows(classOf[TerseFailure],
+          () => runFormatCommand(new ByteArrayOutputStream(), properties,
+            Seq("--release-version", "3.9-IV0"))).getMessage)
+  }
+
+  @Test
+  def testFormatWithoutStaticQuorumSucceedsWithoutInitialControllersOnBroker(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultDynamicQuorumProperties)
+    properties.setProperty("listeners", "PLAINTEXT://:9092")
+    properties.setProperty("advertised.listeners", "PLAINTEXT://127.0.0.1:9092")
+    properties.setProperty("process.roles", "broker")
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    assertEquals(0, runFormatCommand(stream, properties, Seq("--release-version", "3.9-IV0")))
+    assertTrue(stream.toString().
+      contains("Formatting metadata directory %s".format(availableDirs.head)),
       "Failed to find content in output: " + stream.toString())
   }
 
@@ -620,7 +656,7 @@ Found problem:
   def testBootstrapScramRecords(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
-    properties.putAll(defaultDynamicQuorumProperties)
+    properties.putAll(defaultStaticQuorumProperties)
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream = new ByteArrayOutputStream()
     val arguments = ListBuffer[String](
@@ -647,7 +683,7 @@ Found problem:
   def testScramRecordsOldReleaseVersion(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
-    properties.putAll(defaultDynamicQuorumProperties)
+    properties.putAll(defaultStaticQuorumProperties)
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream = new ByteArrayOutputStream()
     val arguments = ListBuffer[String](
