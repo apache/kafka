@@ -103,10 +103,10 @@ public class Fetch<K, V> {
     }
 
     /**
-     * @return the next offsets and metadata (last epochs is included)
+     * @return the next offsets and metadata that the consumer will consume (last epoch is included)
      */
-    public Map<TopicPartition, OffsetAndMetadata> nextOffsetAndMetadata() {
-        return Collections.unmodifiableMap(nextOffsetAndMetadata);
+    public Map<TopicPartition, OffsetAndMetadata> nextOffsets() {
+        return Map.copyOf(nextOffsetAndMetadata);
     }
 
     /**

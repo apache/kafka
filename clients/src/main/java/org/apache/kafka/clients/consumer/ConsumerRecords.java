@@ -44,7 +44,7 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
 
     public ConsumerRecords(Map<TopicPartition, List<ConsumerRecord<K, V>>> records, final Map<TopicPartition, OffsetAndMetadata> nextOffsets) {
         this.records = records;
-        this.nextOffsets = Collections.unmodifiableMap(nextOffsets);
+        this.nextOffsets = Map.copyOf(nextOffsets);
     }
 
     /**
@@ -61,11 +61,11 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
     }
 
     /**
-     * Get the next offsets and metadata corresponding to all partitions fetched from the last batch.
+     * Get the next offsets and metadata corresponding to all topic partitions for which the position have been advanced in this poll call
      * @return the next offsets that the consumer will consume
      */
     public Map<TopicPartition, OffsetAndMetadata> nextOffsets() {
-        return Collections.unmodifiableMap(nextOffsets);
+        return nextOffsets;
     }
 
     /**

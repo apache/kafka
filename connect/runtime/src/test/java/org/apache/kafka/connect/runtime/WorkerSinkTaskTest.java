@@ -1835,10 +1835,9 @@ public class WorkerSinkTaskTest {
             recordsReturnedTp1 += numMessages;
             final TopicPartition tp = new TopicPartition(TOPIC, PARTITION);
             if (numMessages > 0) {
-                return new ConsumerRecords<>(Collections.singletonMap(tp, records),
-                    Collections.singletonMap(tp, new OffsetAndMetadata(offset + 1, Optional.empty(), "")));
+                return new ConsumerRecords<>(Map.of(tp, records), Map.of(tp, new OffsetAndMetadata(offset + 1, Optional.empty(), "")));
             }
-            return new ConsumerRecords<>(Collections.emptyMap(), Collections.emptyMap());
+            return new ConsumerRecords<>(Map.of(), Map.of());
         };
     }
 
