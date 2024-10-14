@@ -1,3 +1,4 @@
+#!/bin/bash
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -12,4 +13,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-junit.jupiter.params.displayname.default = "{displayName}.{argumentsWithNames}"
+
+LABEL_NAME=small
+MAX_SIZE=100
+
+pr_diff=$(gh pr view $PR_NUM -R $GITHUB_REPOSITORY --json additions,deletions)
+
+additions=$(echo "$pr_diff" | jq -r '.additions')
+deletions=$(echo "$pr_diff" | jq -r '.deletions')
+
+total_changes=$((additions + deletions))
+if [ "$total_changes" -lt "$MAX_SIZE" ]; then
+    gh issue edit $PR_NUM --add-label $LABEL_NAME -R $GITHUB_REPOSITORY
+else
+    gh issue edit $PR_NUM --remove-label $LABEL_NAME -R $GITHUB_REPOSITORY
+fi

@@ -1121,7 +1121,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     ).asJava, new AlterConfigsOptions().validateOnly(true))
 
     assertFutureExceptionTypeEquals(alterResult.values.get(groupResource), classOf[InvalidConfigurationException],
-      Some("consumer.session.timeout.ms must be greater than or equals to group.consumer.min.session.timeout.ms"))
+      Some("consumer.session.timeout.ms must be greater than or equal to group.consumer.min.session.timeout.ms"))
   }
 
   @ParameterizedTest

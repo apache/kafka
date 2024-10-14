@@ -17,7 +17,6 @@ name: "Pull Request Labeler"
 on:
   pull_request_target:
     types: [opened, reopened, synchronize]
-  
 
 jobs:
   label_PRs:
@@ -26,6 +25,14 @@ jobs:
       pull-requests: write
     runs-on: ubuntu-latest
     steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
     - uses: actions/labeler@v5
       with:
         configuration-path: .github/configs/labeler.yml
+    - name: check small label
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PR_NUM: ${{github.event.number}}
+      run: |
+        ./.github/scripts/label_small.sh
