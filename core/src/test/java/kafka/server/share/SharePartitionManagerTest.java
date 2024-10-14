@@ -2295,7 +2295,7 @@ public class SharePartitionManagerTest {
                                                     DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory) {
         doAnswer(invocationOnMock -> {
             Object[] args = invocationOnMock.getArguments();
-            delayedShareFetchPurgatory.checkAndComplete((DelayedShareFetchKey) args[0]);
+            delayedShareFetchPurgatory.checkAndComplete(args[0]);
             return null;
         }).when(replicaManager).completeDelayedShareFetchRequest(any(DelayedShareFetchKey.class));
 
@@ -2316,7 +2316,7 @@ public class SharePartitionManagerTest {
         private Metrics metrics = new Metrics();
         private ConcurrentLinkedQueue<ShareFetchData> fetchQueue = new ConcurrentLinkedQueue<>();
 
-        SharePartitionManagerBuilder withReplicaManager(ReplicaManager replicaManager) {
+        private SharePartitionManagerBuilder withReplicaManager(ReplicaManager replicaManager) {
             this.replicaManager = replicaManager;
             return this;
         }

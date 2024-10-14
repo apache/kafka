@@ -364,7 +364,6 @@ public class DelayedShareFetchTest {
         partitionCacheMap.put(new SharePartitionKey(groupId, tp2), sp2);
         SharePartitionManager sharePartitionManager2 = SharePartitionManagerTest.SharePartitionManagerBuilder
             .builder()
-            .withReplicaManager(replicaManager)
             .withPartitionCacheMap(partitionCacheMap)
             .build();
 

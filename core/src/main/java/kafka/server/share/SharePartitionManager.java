@@ -73,7 +73,6 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import scala.jdk.javaapi.CollectionConverters;
-import scala.runtime.BoxedUnit;
 
 /**
  * The SharePartitionManager is responsible for managing the SharePartitions and ShareSessions.
@@ -311,15 +310,6 @@ public class SharePartitionManager implements AutoCloseable {
                 .setPartitionIndex(topicIdPartition.partition())
                 .setErrorCode(future.join().code())));
             return result;
-        });
-    }
-
-    void addPurgatoryCheckAndCompleteDelayedActionToActionQueue(Set<TopicIdPartition> topicIdPartitions, String groupId) {
-        replicaManager.addToActionQueue(() -> {
-            topicIdPartitions.forEach(topicIdPartition ->
-                replicaManager.completeDelayedShareFetchRequest(
-                    new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId(), topicIdPartition.partition())));
-            return BoxedUnit.UNIT;
         });
     }
 
