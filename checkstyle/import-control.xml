@@ -327,7 +327,8 @@
         <allow pkg="org.apache.kafka.server.config" />
         <allow pkg="scala"/>
         <subpackage name="share">
-          <allow pkg="org.apache.kafka.coordinator.share.generated" />
+          <allow pkg="org.apache.kafka.server.share" />
+          <allow pkg="org.apache.kafka.coordinator.share" />
         </subpackage>
       </subpackage>
     </subpackage>
