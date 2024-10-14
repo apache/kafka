@@ -153,7 +153,7 @@ public class ConsumerProtocolTest {
         Subscription subscription = new Subscription(Arrays.asList("foo", "bar"), null);
         ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription, (short) 0);
         Subscription parsedSubscription = ConsumerProtocol.deserializeSubscription(buffer);
-        assertEquals(toSet(parsedSubscription.topics()), toSet(parsedSubscription.topics()));
+        assertEquals(toSet(subscription.topics()), toSet(parsedSubscription.topics()));
         assertNull(parsedSubscription.userData());
         assertTrue(parsedSubscription.ownedPartitions().isEmpty());
         assertFalse(parsedSubscription.generationId().isPresent());
