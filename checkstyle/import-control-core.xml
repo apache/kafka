@@ -142,4 +142,9 @@
     <allow pkg="org.apache.directory" />
     <allow pkg="org.apache.mina.core.service" />
   </subpackage>
+
+  <subpackage name="clients">
+    <allow pkg="org.apache.kafka.clients" />
+    <allow pkg="org.apache.log4j" />
+  </subpackage>
 </import-control>
