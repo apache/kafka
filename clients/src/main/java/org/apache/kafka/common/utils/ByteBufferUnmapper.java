@@ -82,21 +82,16 @@ public final class ByteBufferUnmapper {
     private static MethodHandle lookupUnmapMethodHandle() {
         final MethodHandles.Lookup lookup = lookup();
         try {
-            return unmapJava9(lookup);
+            Class<?> unsafeClass = Class.forName("sun.misc.Unsafe");
+            MethodHandle unmapper = lookup.findVirtual(unsafeClass, "invokeCleaner",
+                    methodType(void.class, ByteBuffer.class));
+            Field f = unsafeClass.getDeclaredField("theUnsafe");
+            f.setAccessible(true);
+            Object theUnsafe = f.get(null);
+            return unmapper.bindTo(theUnsafe);
         } catch (ReflectiveOperationException | RuntimeException e1) {
             throw new UnsupportedOperationException("Unmapping is not supported on this platform, because internal " +
                 "Java APIs are not compatible with this Kafka version", e1);
         }
     }
-
-    private static MethodHandle unmapJava9(MethodHandles.Lookup lookup) throws ReflectiveOperationException {
-        Class<?> unsafeClass = Class.forName("sun.misc.Unsafe");
-        MethodHandle unmapper = lookup.findVirtual(unsafeClass, "invokeCleaner",
-                methodType(void.class, ByteBuffer.class));
-        Field f = unsafeClass.getDeclaredField("theUnsafe");
-        f.setAccessible(true);
-        Object theUnsafe = f.get(null);
-        return unmapper.bindTo(theUnsafe);
-    }
-
 }
