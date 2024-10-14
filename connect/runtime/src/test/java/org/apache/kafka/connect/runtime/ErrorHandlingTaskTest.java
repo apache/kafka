@@ -484,7 +484,7 @@ public class ErrorHandlingTaskTest {
 
     private ConsumerRecords<byte[], byte[]> records(ConsumerRecord<byte[], byte[]> record) {
         final TopicPartition tp = new TopicPartition(record.topic(), record.partition());
-        return new ConsumerRecords<>(Collections.singletonMap(tp, singletonList(record)), Collections.singletonMap(tp, new OffsetAndMetadata(record.offset() + 1, record.leaderEpoch(), "")));
+        return new ConsumerRecords<>(Map.of(tp, List.of(record)), Map.of(tp, new OffsetAndMetadata(record.offset() + 1, record.leaderEpoch(), "")));
     }
 
     private abstract static class TestSinkTask extends SinkTask {
