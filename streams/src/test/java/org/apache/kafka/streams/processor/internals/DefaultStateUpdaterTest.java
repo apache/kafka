@@ -332,7 +332,7 @@ class DefaultStateUpdaterTest {
                 allChangelogCompleted.set(true);
                 return Set.of(TOPIC_PARTITION_A_0, TOPIC_PARTITION_B_0);
             });
-        when(changelogReader.allChangelogsCompleted()).thenReturn(allChangelogCompleted.get());
+        when(changelogReader.allChangelogsCompleted()).thenAnswer(invocation -> allChangelogCompleted.get());
         stateUpdater.start();
 
         stateUpdater.add(task);
@@ -363,7 +363,7 @@ class DefaultStateUpdaterTest {
                 allChangelogCompleted.set(true);
                 return Set.of(TOPIC_PARTITION_C_0, TOPIC_PARTITION_A_0, TOPIC_PARTITION_B_0);
             });
-        when(changelogReader.allChangelogsCompleted()).thenReturn(allChangelogCompleted.get());
+        when(changelogReader.allChangelogsCompleted()).thenAnswer(invocation -> allChangelogCompleted.get());
         stateUpdater.start();
 
         stateUpdater.add(task1);
