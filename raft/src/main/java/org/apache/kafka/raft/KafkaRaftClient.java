@@ -95,6 +95,7 @@ import org.slf4j.Logger;
 import java.net.InetSocketAddress;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -190,6 +191,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     private final Map<Listener<T>, ListenerContext> listenerContexts = new IdentityHashMap<>();
     private final ConcurrentLinkedQueue<Registration<T>> pendingRegistrations = new ConcurrentLinkedQueue<>();
+    private final Set<Long> batchAlignedOffsets;
 
     // These components need to be initialized by the method initialize() because they depend on
     // the voter set
@@ -258,7 +260,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             localSupportedKRaftVersion,
             logContext,
             new Random(),
-            quorumConfig
+            quorumConfig,
+            new HashSet<>()
         );
     }
 
@@ -280,7 +283,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         SupportedVersionRange localSupportedKRaftVersion,
         LogContext logContext,
         Random random,
-        QuorumConfig quorumConfig
+        QuorumConfig quorumConfig,
+        Set<Long> batchAlignedOffsets
     ) {
         if (nodeDirectoryId.equals(Uuid.ZERO_UUID)) {
             throw new IllegalArgumentException("The node directory id must be set and not be the zero uuid");
@@ -306,6 +310,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         this.random = random;
         this.quorumConfig = quorumConfig;
         this.snapshotCleaner = new RaftMetadataLogCleanerManager(logger, time, 60000, log::maybeClean);
+        this.batchAlignedOffsets = batchAlignedOffsets;
 
         if (!bootstrapServers.isEmpty()) {
             // generate Node objects from network addresses by using decreasing negative ids
@@ -1706,6 +1711,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         partitionState.updateState();
 
         OffsetAndEpoch endOffset = endOffset();
+        batchAlignedOffsets.add(endOffset.offset());
         kafkaRaftMetrics.updateFetchedRecords(info.lastOffset - info.firstOffset + 1);
         kafkaRaftMetrics.updateLogEnd(endOffset);
         logger.trace("Follower end offset updated to {} after append", endOffset);
@@ -1719,6 +1725,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         partitionState.updateState();
 
         OffsetAndEpoch endOffset = endOffset();
+        batchAlignedOffsets.add(endOffset.offset());
         kafkaRaftMetrics.updateAppendRecords(info.lastOffset - info.firstOffset + 1);
         kafkaRaftMetrics.updateLogEnd(endOffset);
         logger.trace("Leader appended records at base offset {}, new end offset is {}", info.firstOffset, endOffset);
@@ -2039,6 +2046,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             // Finished fetching the snapshot.
             snapshot.freeze();
             state.setFetchingSnapshot(Optional.empty());
+            batchAlignedOffsets.removeIf(offset -> offset <= snapshotId.offset());
 
             if (log.truncateToLatestSnapshot()) {
                 logger.info(
@@ -3425,6 +3433,10 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         if (!isInitialized()) {
             throw new IllegalStateException("Cannot create snapshot before the replica has been initialized");
         }
+        if (!batchAlignedOffsets.contains(snapshotId.offset())) {
+            logger.error("Cannot create snapshot at offset {} because it is not batch aligned", snapshotId.offset());
+            return Optional.empty();
+        }
 
         return log.createNewSnapshot(snapshotId).map(writer -> {
             long lastContainedLogOffset = snapshotId.offset() - 1;
@@ -3432,6 +3444,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             RawSnapshotWriter wrappedWriter = new NotifyingRawSnapshotWriter(writer, offsetAndEpoch -> {
                 // Trim the state in the internal listener up to the new snapshot
                 partitionState.truncateOldEntries(offsetAndEpoch.offset());
+                batchAlignedOffsets.removeIf(offset -> offset <= snapshotId.offset());
             });
 
             return new RecordsSnapshotWriter.Builder()
