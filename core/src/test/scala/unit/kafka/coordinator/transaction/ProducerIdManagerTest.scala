@@ -182,10 +182,11 @@ class ProducerIdManagerTest {
   def testUnrecoverableErrors(error: Errors): Unit = {
     val time = new MockTime()
     val manager = new MockProducerIdManager(0, 0, 1, errorQueue = queue(Errors.NONE, error), time = time)
-
+    // two block requests are sent in this case:
+    // 1. the first generateProducerId(), there is no Producer ID available.
+    // 2. the second generateProducerId(), the second block request will fail.
     verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 0, 1), 0)
-
-    verifyFailure(manager)
+    verifyFailureWithoutGenerateProducerId(manager)
 
     time.sleep(RetryBackoffMs)
     verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 1, 1), 1)
@@ -225,6 +226,10 @@ class ProducerIdManagerTest {
 
   private def verifyFailure(manager: MockProducerIdManager): Unit = {
     assertCoordinatorLoadInProgressExceptionFailure(manager.generateProducerId())
+    verifyFailureWithoutGenerateProducerId(manager)
+  }  
+  
+  private def verifyFailureWithoutGenerateProducerId(manager: MockProducerIdManager): Unit = {
     TestUtils.waitUntilTrue(() => {
       manager synchronized {
         manager.capturedFailure.get

@@ -217,7 +217,7 @@ class RPCProducerIdManager(brokerId: Int,
       // Send a request only if we reached the retry deadline, or if no deadline was set.
 
       if (nextProducerIdBlock.get == null &&
-        requestInFlight.compareAndSet(false, true) ) {
+        requestInFlight.compareAndSet(false, true)) {
 
         sendRequest()
         // Reset backoff after a successful send.
