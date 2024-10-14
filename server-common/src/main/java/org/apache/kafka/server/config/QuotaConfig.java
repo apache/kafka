@@ -148,14 +148,14 @@ public class QuotaConfig {
     private final int controllerQuotaWindowSizeSeconds;
 
     public QuotaConfig(AbstractConfig config) {
-      this.numQuotaSamples = config.getInt(QuotaConfig.NUM_QUOTA_SAMPLES_CONFIG);
-      this.quotaWindowSizeSeconds = config.getInt(QuotaConfig.QUOTA_WINDOW_SIZE_SECONDS_CONFIG);
-      this.numReplicationQuotaSamples = config.getInt(QuotaConfig.NUM_REPLICATION_QUOTA_SAMPLES_CONFIG);
-      this.replicationQuotaWindowSizeSeconds = config.getInt(QuotaConfig.REPLICATION_QUOTA_WINDOW_SIZE_SECONDS_CONFIG);
-      this.numAlterLogDirsReplicationQuotaSamples = config.getInt(QuotaConfig.NUM_ALTER_LOG_DIRS_REPLICATION_QUOTA_SAMPLES_CONFIG);
-      this.alterLogDirsReplicationQuotaWindowSizeSeconds = config.getInt(QuotaConfig.ALTER_LOG_DIRS_REPLICATION_QUOTA_WINDOW_SIZE_SECONDS_CONFIG);
-      this.numControllerQuotaSamples = config.getInt(QuotaConfig.NUM_CONTROLLER_QUOTA_SAMPLES_CONFIG);
-      this.controllerQuotaWindowSizeSeconds = config.getInt(QuotaConfig.CONTROLLER_QUOTA_WINDOW_SIZE_SECONDS_CONFIG);
+        this.numQuotaSamples = config.getInt(QuotaConfig.NUM_QUOTA_SAMPLES_CONFIG);
+        this.quotaWindowSizeSeconds = config.getInt(QuotaConfig.QUOTA_WINDOW_SIZE_SECONDS_CONFIG);
+        this.numReplicationQuotaSamples = config.getInt(QuotaConfig.NUM_REPLICATION_QUOTA_SAMPLES_CONFIG);
+        this.replicationQuotaWindowSizeSeconds = config.getInt(QuotaConfig.REPLICATION_QUOTA_WINDOW_SIZE_SECONDS_CONFIG);
+        this.numAlterLogDirsReplicationQuotaSamples = config.getInt(QuotaConfig.NUM_ALTER_LOG_DIRS_REPLICATION_QUOTA_SAMPLES_CONFIG);
+        this.alterLogDirsReplicationQuotaWindowSizeSeconds = config.getInt(QuotaConfig.ALTER_LOG_DIRS_REPLICATION_QUOTA_WINDOW_SIZE_SECONDS_CONFIG);
+        this.numControllerQuotaSamples = config.getInt(QuotaConfig.NUM_CONTROLLER_QUOTA_SAMPLES_CONFIG);
+        this.controllerQuotaWindowSizeSeconds = config.getInt(QuotaConfig.CONTROLLER_QUOTA_WINDOW_SIZE_SECONDS_CONFIG);
     }
 
    /**

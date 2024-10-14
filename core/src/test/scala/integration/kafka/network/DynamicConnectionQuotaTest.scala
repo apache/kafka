@@ -337,7 +337,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     val produceResponse = sendAndReceive[ProduceResponse](produceRequest, socket)
     assertEquals(1, produceResponse.data.responses.size)
     val topicProduceResponse = produceResponse.data.responses.asScala.head
-    assertEquals(1, topicProduceResponse.partitionResponses.size)
+    assertEquals(1, topicProduceResponse.partitionResponses.size)    
     val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head
     assertEquals(Errors.NONE, Errors.forCode(partitionProduceResponse.errorCode))
   }
