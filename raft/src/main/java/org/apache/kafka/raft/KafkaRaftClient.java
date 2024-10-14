@@ -1711,6 +1711,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         partitionState.updateState();
 
         OffsetAndEpoch endOffset = endOffset();
+        records.batches().forEach(batch -> batchAlignedOffsets.add(batch.baseOffset()));
         batchAlignedOffsets.add(endOffset.offset());
         kafkaRaftMetrics.updateFetchedRecords(info.lastOffset - info.firstOffset + 1);
         kafkaRaftMetrics.updateLogEnd(endOffset);
@@ -1725,6 +1726,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         partitionState.updateState();
 
         OffsetAndEpoch endOffset = endOffset();
+        records.batches().forEach(batch -> batchAlignedOffsets.add(batch.baseOffset()));
         batchAlignedOffsets.add(endOffset.offset());
         kafkaRaftMetrics.updateAppendRecords(info.lastOffset - info.firstOffset + 1);
         kafkaRaftMetrics.updateLogEnd(endOffset);
