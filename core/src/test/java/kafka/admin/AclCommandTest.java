@@ -64,7 +64,7 @@ import java.util.stream.Collectors;
 import javax.management.InstanceAlreadyExistsException;
 
 import scala.Console;
-import scala.collection.JavaConverters;
+import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.common.acl.AccessControlEntryFilter.ANY;
 import static org.apache.kafka.common.acl.AclOperation.ALTER;
@@ -605,14 +605,12 @@ public class AclCommandTest {
         return new SimpleImmutableEntry<>(outBuf.toString(), errBuf.toString());
     }
 
-    @SuppressWarnings("deprecation")
     private static <T> scala.collection.immutable.Set<T> asScalaSet(Set<T> javaSet) {
-        return JavaConverters.asScalaSet(javaSet).toSet();
+        return CollectionConverters.asScala(javaSet).toSet();
     }
 
-    @SuppressWarnings("deprecation")
     private static <T> Set<T> asJavaSet(scala.collection.immutable.Set<T> scalaSet) {
-        return JavaConverters.setAsJavaSet(scalaSet);
+        return CollectionConverters.asJava(scalaSet);
     }
 
     private void assertInitializeInvalidOptionsExitCodeAndMsg(List<String> args, String expectedMsg) {

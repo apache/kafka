@@ -74,8 +74,8 @@ import java.util.stream.IntStream;
 import javax.imageio.ImageIO;
 
 import scala.Option;
-import scala.collection.JavaConverters;
 import scala.collection.Seq;
+import scala.jdk.javaapi.CollectionConverters;
 
 import static java.nio.file.StandardOpenOption.APPEND;
 import static java.nio.file.StandardOpenOption.CREATE;
@@ -187,7 +187,7 @@ public class ReplicationQuotasTestRig {
             super.tearDown();
         }
 
-        @SuppressWarnings({"unchecked", "deprecation"})
+        @SuppressWarnings("unchecked")
         public void run(ExperimentDef config, Journal journal, boolean displayChartsOnScreen) throws Exception {
             experimentName = config.name;
             List<Integer> brokers = IntStream.rangeClosed(100, 100 + config.brokers).boxed().collect(Collectors.toList());
@@ -208,7 +208,7 @@ public class ReplicationQuotasTestRig {
             ));
 
             startBrokers(brokers);
-            TestUtils.createTopic(zkClient(), TOPIC_NAME, (scala.collection.Map) JavaConverters.mapAsScalaMap(replicas), seq(servers));
+            TestUtils.createTopic(zkClient(), TOPIC_NAME, (scala.collection.Map) CollectionConverters.asScala(replicas), seq(servers));
 
             System.out.println("Writing Data");
             KafkaProducer<byte[], byte[]> producer = createProducer(TestUtils.plaintextBootstrapServers(seq(servers)));
@@ -477,8 +477,7 @@ public class ReplicationQuotasTestRig {
         }
     }
 
-    @SuppressWarnings({"deprecation"})
     private static <T> Seq<T> seq(Collection<T> seq) {
-        return JavaConverters.asScalaIteratorConverter(seq.iterator()).asScala().toSeq();
+        return CollectionConverters.asScala(seq).toSeq();
     }
 }

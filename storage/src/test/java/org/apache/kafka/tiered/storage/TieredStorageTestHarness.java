@@ -45,8 +45,8 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
-import scala.collection.JavaConverters;
 import scala.collection.Seq;
+import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.STORAGE_WAIT_TIMEOUT_SEC;
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.createPropsForRemoteStorage;
@@ -62,18 +62,16 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
     private String testClassName = "";
     private String storageDirPath = "";
 
-    @SuppressWarnings("deprecation")
     @Override
     public void modifyConfigs(Seq<Properties> props) {
-        for (Properties p : JavaConverters.seqAsJavaList(props)) {
+        for (Properties p : CollectionConverters.asJava(props)) {
             p.putAll(overridingProps());
         }
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     public Seq<Properties> kraftControllerConfigs(TestInfo testInfo) {
-        return JavaConverters.asScalaBuffer(Collections.singletonList(overridingProps())).toSeq();
+        return CollectionConverters.asScala(Collections.singletonList(overridingProps())).toSeq();
     }
 
     protected int numRemoteLogMetadataPartitions() {
@@ -130,10 +128,9 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
         }
     }
 
-    @SuppressWarnings("deprecation")
     public static List<LocalTieredStorage> remoteStorageManagers(Seq<KafkaBroker> brokers) {
         List<LocalTieredStorage> storages = new ArrayList<>();
-        JavaConverters.seqAsJavaList(brokers).forEach(broker -> {
+        CollectionConverters.asJava(brokers).forEach(broker -> {
             if (broker.remoteLogManagerOpt().isDefined()) {
                 RemoteLogManager remoteLogManager = broker.remoteLogManagerOpt().get();
                 RemoteStorageManager storageManager = remoteLogManager.storageManager();
@@ -154,10 +151,9 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
         return storages;
     }
 
-    @SuppressWarnings("deprecation")
     public static List<BrokerLocalStorage> localStorages(Seq<KafkaBroker> brokers) {
-        return JavaConverters.seqAsJavaList(brokers).stream()
-                .map(b -> new BrokerLocalStorage(b.config().brokerId(), JavaConverters.setAsJavaSet(b.config().logDirs().toSet()),
+        return CollectionConverters.asJava(brokers).stream()
+                .map(b -> new BrokerLocalStorage(b.config().brokerId(), CollectionConverters.asJava(b.config().logDirs().toSet()),
                         STORAGE_WAIT_TIMEOUT_SEC))
                 .collect(Collectors.toList());
     }

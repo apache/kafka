@@ -68,7 +68,7 @@ import java.util.stream.Collectors;
 import scala.Function0;
 import scala.Function1;
 import scala.Option;
-import scala.collection.JavaConverters;
+import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.clients.producer.ProducerConfig.LINGER_MS_CONFIG;
 
@@ -93,7 +93,6 @@ public final class TieredStorageTestContext implements AutoCloseable {
         initContext();
     }
 
-    @SuppressWarnings("deprecation")
     private void initClients() {
         // rediscover the new bootstrap-server port incase of broker restarts
         ListenerName listenerName = harness.listenerName();
@@ -108,7 +107,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
 
         producer = harness.createProducer(ser, ser, producerOverrideProps);
         consumer = harness.createConsumer(de, de, commonOverrideProps,
-                JavaConverters.asScalaBuffer(Collections.<String>emptyList()).toList());
+                CollectionConverters.asScala(Collections.<String>emptyList()).toList());
         admin = harness.createAdminClient(listenerName, commonOverrideProps);
     }
 
