@@ -77,7 +77,6 @@ import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_LIS
 import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIRS_CONFIG;
 
 
-@SuppressWarnings("deprecation") // Needed for Scala 2.12 compatibility
 public class KafkaClusterTestKit implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(KafkaClusterTestKit.class);
 
@@ -560,7 +559,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
     public Controller waitForActiveController() throws InterruptedException {
         AtomicReference<Controller> active = new AtomicReference<>(null);
-        TestUtils.retryOnExceptionWithTimeout(60_000, () -> {
+        TestUtils.retryOnExceptionWithTimeout(() -> {
             for (ControllerServer controllerServer : controllers.values()) {
                 if (controllerServer.controller().isActive()) {
                     active.set(controllerServer.controller());
