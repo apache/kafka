@@ -1947,7 +1947,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         // 4 snapshotId offset must be at a batch boundary
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
-        OffsetAndEpoch invalidSnapshotId5 = new OffsetAndEpoch(context.client.highWatermark().getAsLong() + 2, currentEpoch);
+        OffsetAndEpoch invalidSnapshotId5 = new OffsetAndEpoch(context.client.highWatermark().getAsLong() - 1, currentEpoch);
         assertEquals(Optional.empty(), context.client.createSnapshot(invalidSnapshotId5, 0));
     }
 

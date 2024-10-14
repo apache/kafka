@@ -178,8 +178,6 @@ public final class RaftClientTestContext {
         private Endpoints localListeners = Endpoints.empty();
         private boolean isStartingVotersStatic = false;
 
-        private Set<Long> batchAlignedOffsets = new HashSet<>();
-
         public Builder(int localId, Set<Integer> staticVoters) {
             this(OptionalInt.of(localId), staticVoters);
         }
@@ -254,7 +252,6 @@ public final class RaftClientTestContext {
             // Reset the value of this method since "flush" before the replica start should not
             // count when checking for flushes by the KRaft client.
             log.flushedSinceLastChecked();
-            batchAlignedOffsets.add(log.endOffset().offset());
             return this;
         }
 
@@ -426,8 +423,7 @@ public final class RaftClientTestContext {
                 Features.KRAFT_VERSION.supportedVersionRange(),
                 logContext,
                 random,
-                quorumConfig,
-                batchAlignedOffsets
+                quorumConfig
             );
 
             client.register(listener);
