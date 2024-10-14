@@ -103,14 +103,47 @@ public class Protocol {
         b.append("<th>Description</th>\n");
         b.append("</tr>");
         for (BoundField field : fields) {
-            b.append("<tr>\n");
-            b.append("<td>");
-            b.append(field.def.name);
-            b.append("</td>");
-            b.append("<td>");
-            b.append(field.def.docString);
-            b.append("</td>");
-            b.append("</tr>\n");
+            if (!(field.def.type instanceof TaggedFields)) {
+                b.append("<tr>\n");
+                b.append("<td>");
+                b.append(field.def.name);
+                b.append("</td>");
+                b.append("<td>");
+                b.append(field.def.docString);
+                b.append("</td>");
+                b.append("</tr>\n");
+            } else {
+                TaggedFields taggedFields = (TaggedFields) field.def.type;
+                if (taggedFields.numFields() > 0) {
+                    b.append("<tr>\n");
+                    b.append("<td>");
+                    b.append(field.def.name);
+                    b.append("</td>");
+                    b.append("<td>");
+                    b.append("<table class=\"data-table\"><tbody>\n");
+                    b.append("<tr>");
+                    b.append("<th>Tag</th>\n");
+                    b.append("<th>Tagged field</th>\n");
+                    b.append("<th>Description</th>\n");
+                    b.append("</tr>");
+                    taggedFields.fields().forEach((tag, taggedField) -> {
+                        b.append("<tr>\n");
+                        b.append("<td>");
+                        b.append(tag);
+                        b.append("</td>");
+                        b.append("<td>");
+                        b.append(taggedField.name);
+                        b.append("</td>");
+                        b.append("<td>");
+                        b.append(taggedField.docString);
+                        b.append("</td>");
+                        b.append("</tr>\n");
+                    });
+                    b.append("</tbody></table>\n");
+                    b.append("</td>");
+                    b.append("</tr>\n");
+                }
+            }
         }
         b.append("</tbody></table>\n");
     }
@@ -157,6 +190,10 @@ public class Protocol {
                     b.append(") => ");
                     schemaToBnfHtml(requests[i], b, 2);
                     b.append("</pre>");
+
+                    if (!key.isVersionEnabled((short)i, false)) {
+                        b.append("<p>This version of the request is unstable.</p>");
+                    }
 
                     b.append("<p><b>Request header version:</b> ");
                     b.append(key.requestHeaderVersion((short) i));
