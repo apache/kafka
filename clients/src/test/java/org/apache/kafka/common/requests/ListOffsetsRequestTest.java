@@ -43,8 +43,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ListOffsetsRequestTest {
 
-    private final NodeApiVersions versionInfo = new NodeApiVersions(new ApiVersionsResponseData.ApiVersionCollection(), Collections.emptyList(), false);
-
     @Test
     public void testDuplicatePartitions() {
         List<ListOffsetsTopic> topics = Collections.singletonList(
