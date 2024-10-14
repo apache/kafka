@@ -207,6 +207,10 @@ public class Formatter {
         return this;
     }
 
+    public Optional<DynamicVoters> initialVoters() {
+        return initialControllers;
+    }
+
     boolean hasDynamicQuorum() {
         if (initialControllers.isPresent()) {
             return true;

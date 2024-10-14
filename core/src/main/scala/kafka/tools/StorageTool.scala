@@ -30,7 +30,7 @@ import org.apache.kafka.common.utils.{Exit, Utils}
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.metadata.storage.{Formatter, FormatterException}
-import org.apache.kafka.raft.DynamicVoters
+import org.apache.kafka.raft.{DynamicVoters, QuorumConfig}
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.config.ReplicationConfigs
 
@@ -138,6 +138,12 @@ object StorageTool extends Logging {
       foreach(v => formatter.setInitialVoters(DynamicVoters.parse(v)))
     if (namespace.getBoolean("standalone")) {
       formatter.setInitialVoters(createStandaloneDynamicVoters(config))
+    }
+    if (config.quorumConfig.voters().isEmpty) {
+      if (formatter.initialVoters().isEmpty()) {
+        throw new TerseFailure("Because " + QuorumConfig.QUORUM_VOTERS_CONFIG + " is not set, you " +
+          "must use the --standalone or --initial-controllers flag to set the initial controllers.");
+      }
     }
     Option(namespace.getList("add_scram")).
       foreach(scramArgs => formatter.setScramArguments(scramArgs.asInstanceOf[util.List[String]]))
