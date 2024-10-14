@@ -29,7 +29,6 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -89,7 +88,7 @@ public class MockConsumerInterceptor implements ClusterResourceListener, Consume
                 nextOffset = record.offset() + 1;
             }
             if (lst.isEmpty()) {
-                recordMap.put(tp, Collections.emptyList());
+                recordMap.put(tp, List.of());
             } else {
                 recordMap.put(tp, lst);
                 nextOffsets.put(tp, new OffsetAndMetadata(nextOffset, Optional.empty(), ""));

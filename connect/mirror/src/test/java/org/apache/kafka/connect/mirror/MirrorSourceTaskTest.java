@@ -37,7 +37,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -179,7 +178,7 @@ public class MirrorSourceTaskTest {
                 TimestampType.CREATE_TIME, key2.length, value2.length, key2, value2, headers, Optional.empty()));
         final TopicPartition tp = new TopicPartition(topicName, 0);
         ConsumerRecords<byte[], byte[]> consumerRecords =
-                new ConsumerRecords<>(Collections.singletonMap(tp, consumerRecordsList), Collections.singletonMap(tp, new OffsetAndMetadata(2, Optional.empty(), "")));
+                new ConsumerRecords<>(Map.of(tp, consumerRecordsList), Map.of(tp, new OffsetAndMetadata(2, Optional.empty(), "")));
 
         @SuppressWarnings("unchecked")
         KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);

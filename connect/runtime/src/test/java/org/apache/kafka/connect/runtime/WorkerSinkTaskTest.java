@@ -488,8 +488,8 @@ public class WorkerSinkTaskTest {
 
                     rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT);
                     rebalanceListener.getValue().onPartitionsAssigned(Collections.emptyList());
-                    return new ConsumerRecords<>(Collections.singletonMap(TOPIC_PARTITION3, Collections.singletonList(newRecord)),
-                        Collections.singletonMap(TOPIC_PARTITION3, new OffsetAndMetadata(FIRST_OFFSET + 1, Optional.empty(), "")));
+                    return new ConsumerRecords<>(Map.of(TOPIC_PARTITION3, List.of(newRecord)),
+                        Map.of(TOPIC_PARTITION3, new OffsetAndMetadata(FIRST_OFFSET + 1, Optional.empty(), "")));
                 });
         expectConversionAndTransformation(null, new RecordHeaders());
 
@@ -832,7 +832,7 @@ public class WorkerSinkTaskTest {
                 .thenAnswer(invocation -> {
                     // stop the task during its second iteration
                     workerTask.stop();
-                    return new ConsumerRecords<>(Collections.emptyMap(), Collections.emptyMap());
+                    return new ConsumerRecords<>(Map.of(), Map.of());
                 });
         expectConversionAndTransformation(null, new RecordHeaders());
 
@@ -1329,7 +1329,7 @@ public class WorkerSinkTaskTest {
             recordsReturnedTp3 += 1;
             final TopicPartition tp = new TopicPartition(TOPIC, PARTITION);
             final OffsetAndMetadata nextOffsetAndMetadata = new OffsetAndMetadata(FIRST_OFFSET + recordsReturnedTp1 + 2, Optional.empty(), "");
-            return new ConsumerRecords<>(Collections.singletonMap(tp, records), Collections.singletonMap(tp, nextOffsetAndMetadata));
+            return new ConsumerRecords<>(Map.of(tp, records), Map.of(tp, nextOffsetAndMetadata));
         };
 
         // onPartitionsRevoked
@@ -1701,7 +1701,7 @@ public class WorkerSinkTaskTest {
                     );
                     final OffsetAndMetadata nextOffsetAndMetadata = new OffsetAndMetadata(FIRST_OFFSET + recordsReturnedTp1 + 3, Optional.empty(), "");
                     final TopicPartition tp = new TopicPartition(TOPIC, PARTITION);
-                    return new ConsumerRecords<>(Collections.singletonMap(tp, records), Collections.singletonMap(tp, nextOffsetAndMetadata));
+                    return new ConsumerRecords<>(Map.of(tp, records), Map.of(tp, nextOffsetAndMetadata));
                 });
 
         expectTransformation(null);

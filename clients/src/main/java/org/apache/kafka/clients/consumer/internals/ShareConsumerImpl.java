@@ -584,7 +584,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 final ShareFetch<K, V> fetch = pollForFetches(timer);
                 if (!fetch.isEmpty()) {
                     currentFetch = fetch;
-                    return new ConsumerRecords<>(fetch.records(), Collections.emptyMap());
+                    return new ConsumerRecords<>(fetch.records(), Map.of());
                 }
 
                 metadata.maybeThrowAnyException();
