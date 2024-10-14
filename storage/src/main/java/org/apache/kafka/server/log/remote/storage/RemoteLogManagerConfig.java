@@ -93,7 +93,7 @@ public final class RemoteLogManagerConfig {
     public static final long DEFAULT_REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES = 1024 * 1024 * 1024L;
 
     public static final String REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_PROP = "remote.log.manager.thread.pool.size";
-    public static final String REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_DOC = "Size of the thread pool used in scheduling tasks to copy " +
+    public static final String REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_DOC = "Deprecated. Size of the thread pool used in scheduling tasks to copy " +
             "segments, fetch remote log indexes and clean up remote log segments.";
     public static final int DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE = 10;
 
@@ -257,13 +257,13 @@ public final class RemoteLogManagerConfig {
                         atLeast(1),
                         MEDIUM,
                         REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_DOC)
-                .defineInternal(REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP,
+                .define(REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP,
                         INT,
                         DEFAULT_REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE,
                         atLeast(1),
                         MEDIUM,
                         REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_DOC)
-                .defineInternal(REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP,
+                .define(REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP,
                         INT,
                         DEFAULT_REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE,
                         atLeast(1),
