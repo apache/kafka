@@ -30,9 +30,7 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestExtensions;
-import org.apache.kafka.common.utils.LogCaptureAppender;
 
-import org.apache.log4j.Level;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.time.Duration;
@@ -52,29 +50,9 @@ public class AsyncKafkaConsumerIntegrationTest {
             @ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
             @ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic")
     })
-    public void testRebalanceProtocolWithoutConsumer(ClusterInstance clusterInstance) throws Exception {
+    public void testAsyncConsumerWithoutConsumerRebalanceProtocol(ClusterInstance clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
-        String topic = "test-topic";
-        createTopic(topic);
-        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
-            appender.setClassLogger(KafkaConsumer.class, Level.ERROR);
-            KafkaConsumer<String, String> consumer = createAsyncKafkaConsumer("test-group");
-            consumer.subscribe(Collections.singletonList(topic));
-            TestUtils.waitForCondition(() -> {
-                try {
-                    consumer.poll(Duration.ofMillis(1000));
-                    return false;
-                } catch (UnsupportedVersionException e) {
-                    return true;
-                }
-            }, "Should get UnsupportedVersionException cause of Unsupported API");
-            TestUtils.waitForCondition(() -> appender.getEvents().stream()
-                            .filter(e -> e.getLevel().equals(Level.ERROR.toString()))
-                            .anyMatch(e -> e.getMessage().contains("The cluster doesn't yet support the new consumer group protocol. " +
-                                    "Set group.protocol=classic to revert to the classic protocol until the cluster is upgraded.")),
-                    "Error message should contain how to revert to classic protocol");
-            consumer.close();
-        }
+        checkUnsupportedConsumerGroupHeartbeat();
     }
 
     @ClusterTest(serverProperties = {
@@ -82,29 +60,9 @@ public class AsyncKafkaConsumerIntegrationTest {
             @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
             @ClusterConfigProperty(key = "group.coordinator.new.enable", value = "false")
     })
-    public void testDisableNewGroupCoordiantor(ClusterInstance clusterInstance) throws Exception {
+    public void testAsyncConsumerWithOldGroupCoordinator(ClusterInstance clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
-        String topic = "test-topic";
-        createTopic(topic);
-        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
-            appender.setClassLogger(KafkaConsumer.class, Level.ERROR);
-            KafkaConsumer<String, String> consumer = createAsyncKafkaConsumer("test-group");
-            consumer.subscribe(Collections.singletonList(topic));
-            TestUtils.waitForCondition(() -> {
-                try {
-                    consumer.poll(Duration.ofMillis(1000));
-                    return false;
-                } catch (UnsupportedVersionException e) {
-                    return true;
-                }
-            }, "Should get UnsupportedVersionException cause of Unsupported API");
-            TestUtils.waitForCondition(() -> appender.getEvents().stream()
-                            .filter(e -> e.getLevel().equals(Level.ERROR.toString()))
-                            .anyMatch(e -> e.getMessage().contains("The cluster doesn't yet support the new consumer group protocol. " +
-                                    "Set group.protocol=classic to revert to the classic protocol until the cluster is upgraded.")),
-                    "Error message should contain how to revert to classic protocol");
-            consumer.close();
-        }
+        checkUnsupportedConsumerGroupHeartbeat();
     }
 
     private void createTopic(String topic) {
@@ -125,4 +83,22 @@ public class AsyncKafkaConsumerIntegrationTest {
         configs.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RangeAssignor.class.getName());
         return new KafkaConsumer<>(configs);
     }
+
+    private void checkUnsupportedConsumerGroupHeartbeat() throws Exception {
+        String topic = "test-topic";
+        createTopic(topic);
+        try (KafkaConsumer<String, String> consumer = createAsyncKafkaConsumer("test-group")) {
+            consumer.subscribe(Collections.singletonList(topic));
+            TestUtils.waitForCondition(() -> {
+                try {
+                    consumer.poll(Duration.ofMillis(1000));
+                    return false;
+                } catch (UnsupportedVersionException e) {
+                    return e.getMessage().contains("The cluster doesn't yet support the new consumer group protocol. " +
+                            "Set group.protocol=classic to revert to the classic protocol until the cluster is upgraded.");
+                }
+            }, "Should get UnsupportedVersionException and how to revert to classic protocol");
+        }
+    }
+
 }
