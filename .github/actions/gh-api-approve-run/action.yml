@@ -43,9 +43,13 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.gh-token }}
+        REPO: ${{ inputs.repository }}
+        RUN_ID: ${{ inputs.run_id }}
+        PR_NUMBER: ${{ inputs.pr_number }}
+        COMMIT_SHA: ${{ inputs.commit_sha }}
       run: |
-        echo "Approving workflow run ${{ inputs.run_id }} for PR ${{ inputs.pr_number }} at SHA ${{ inputs.commit_sha }}";
+        echo "Approving workflow run $RUN_ID for PR $PR_NUMBER at SHA $COMMIT_SHA";
         gh api --method POST \
               -H 'Accept: application/vnd.github+json' \
               -H 'X-GitHub-Api-Version: 2022-11-28' \
-              /repos/${{ inputs.repository }}/actions/runs/${{ inputs.run_id }}/approve
+              /repos/$REPO/actions/runs/$RUN_ID/approve

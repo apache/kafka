@@ -15,6 +15,9 @@
 
 name: Check and Test
 
+# This workflow should only be called from ci.yml which is triggered on
+# the "pull_request" event type. We should never dispatch this workflow from
+# a "pull_request_target" event.
 on:
   workflow_call:
     inputs:
@@ -63,15 +66,15 @@ jobs:
           gradle-cache-write-only: ${{ inputs.gradle-cache-write-only }}
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
       - name: Compile and validate
+        env:
+          SCAN_ARG: ${{ inputs.is-public-fork && '--no-scan' || '--scan' }}
         # Gradle flags
         # --build-cache:  Let Gradle restore the build cache
         # --info:         For now, we'll generate lots of logs while setting up the GH Actions
         # --scan:         Publish the build scan. This will only work on PRs from apache/kafka and trunk
         # --no-scan:      For public fork PRs, we won't attempt to publish the scan
         run: |
-          ./gradlew --build-cache --info  \
-          ${{ inputs.is-public-fork && '--no-scan' || '--scan' }} \
-          check -x test
+          ./gradlew --build-cache --info $SCAN_ARG check -x test
       - name: Archive check reports
         if: always()
         uses: actions/upload-artifact@v4
