@@ -41,16 +41,6 @@ public class ShareFetchData {
         String groupId,
         String memberId,
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future,
-        Map<TopicIdPartition, Integer> partitionMaxBytes
-    ) {
-        this(fetchParams, groupId, memberId, future, partitionMaxBytes, Integer.MAX_VALUE);
-    }
-
-    public ShareFetchData(
-        FetchParams fetchParams,
-        String groupId,
-        String memberId,
-        CompletableFuture<Map<TopicIdPartition, PartitionData>> future,
         Map<TopicIdPartition, Integer> partitionMaxBytes,
         int maxFetchRecords
     ) {

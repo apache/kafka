@@ -1654,9 +1654,9 @@ public class SharePartitionManagerTest {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
 
         ShareFetchData shareFetchData1 = new ShareFetchData(
-                fetchParams, groupId, memberId, new CompletableFuture<>(), Collections.emptyMap());
+                fetchParams, groupId, memberId, new CompletableFuture<>(), Collections.emptyMap(), 100);
         ShareFetchData shareFetchData2 = new ShareFetchData(
-            fetchParams, groupId, memberId, new CompletableFuture<>(), partitionMaxBytes);
+            fetchParams, groupId, memberId, new CompletableFuture<>(), partitionMaxBytes, 100);
 
         ConcurrentLinkedQueue<ShareFetchData> fetchQueue = new ConcurrentLinkedQueue<>();
         // First request added to fetch queue is empty i.e. no topic partitions to fetch.
@@ -1718,7 +1718,8 @@ public class SharePartitionManagerTest {
                 groupId,
                 Uuid.randomUuid().toString(),
                 new CompletableFuture<>(),
-                partitionMaxBytes);
+                partitionMaxBytes,
+                100);
         ReplicaManager replicaManager = mock(ReplicaManager.class);
 
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
@@ -1814,7 +1815,8 @@ public class SharePartitionManagerTest {
                 groupId,
                 Uuid.randomUuid().toString(),
                 new CompletableFuture<>(),
-                partitionMaxBytes);
+                partitionMaxBytes,
+                100);
         ReplicaManager replicaManager = mock(ReplicaManager.class);
 
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
@@ -1907,7 +1909,8 @@ public class SharePartitionManagerTest {
                 groupId,
                 Uuid.randomUuid().toString(),
                 new CompletableFuture<>(),
-                partitionMaxBytes);
+                partitionMaxBytes,
+                100);
         ReplicaManager replicaManager = mock(ReplicaManager.class);
 
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
@@ -2007,7 +2010,8 @@ public class SharePartitionManagerTest {
                 groupId,
                 Uuid.randomUuid().toString(),
                 new CompletableFuture<>(),
-                partitionMaxBytes);
+                partitionMaxBytes,
+                100);
         ReplicaManager replicaManager = mock(ReplicaManager.class);
 
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(

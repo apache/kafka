@@ -40,6 +40,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
+import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
 import org.apache.kafka.server.share.persister.NoOpShareStatePersister;
 import org.apache.kafka.server.share.persister.PartitionFactory;
 import org.apache.kafka.server.share.persister.Persister;
@@ -541,10 +542,12 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
         MemoryRecords records = memoryRecords(1);
 
-        List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 3, 0, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            1);
 
         assertArrayEquals(expectedAcquiredRecords(records, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(1, sharePartition.nextFetchOffset());
@@ -562,10 +565,12 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
         MemoryRecords records = memoryRecords(5, 10);
 
-        List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 3, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            5);
 
         assertArrayEquals(expectedAcquiredRecords(records, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(15, sharePartition.nextFetchOffset());
@@ -579,24 +584,106 @@ public class SharePartitionTest {
     }
 
     @Test
+    public void testAcquireWithMaxFetchRecords() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        // Less-number of records than max fetch records.
+        MemoryRecords records = memoryRecords(5);
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
+            MEMBER_ID,
+            10,
+            new FetchPartitionData(Errors.NONE, 20, 0, records,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            5);
+
+        assertArrayEquals(expectedAcquiredRecord(0, 4, 1).toArray(), acquiredRecordsList.toArray());
+        assertEquals(5, sharePartition.nextFetchOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        assertEquals(0, sharePartition.cachedState().get(0L).firstOffset());
+        assertEquals(4, sharePartition.cachedState().get(0L).lastOffset());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(0L).batchState());
+        assertEquals(MEMBER_ID, sharePartition.cachedState().get(0L).batchMemberId());
+        assertEquals(1, sharePartition.cachedState().get(0L).batchDeliveryCount());
+        assertNull(sharePartition.cachedState().get(0L).offsetState());
+
+        // More-number of records than max fetch records, but from 0 offset hence previous 10 records
+        // should be ignored and new full batch till end should be acquired.
+        records = memoryRecords(25);
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
+            MEMBER_ID,
+            10,
+            new FetchPartitionData(Errors.NONE, 20, 0, records,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            20);
+
+        assertArrayEquals(expectedAcquiredRecord(5, 24, 1).toArray(), acquiredRecordsList.toArray());
+        assertEquals(25, sharePartition.nextFetchOffset());
+        assertEquals(2, sharePartition.cachedState().size());
+        assertEquals(0, sharePartition.cachedState().get(0L).firstOffset());
+        assertEquals(5, sharePartition.cachedState().get(5L).firstOffset());
+        assertEquals(24, sharePartition.cachedState().get(5L).lastOffset());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).batchState());
+        assertEquals(MEMBER_ID, sharePartition.cachedState().get(5L).batchMemberId());
+        assertEquals(1, sharePartition.cachedState().get(5L).batchDeliveryCount());
+        assertNull(sharePartition.cachedState().get(5L).offsetState());
+    }
+
+    @Test
+    public void testAcquireWithMultipleBatchesAndMaxFetchRecords() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+
+        // Create 3 batches of records.
+        ByteBuffer buffer = ByteBuffer.allocate(4096);
+        memoryRecordsBuilder(buffer, 5, 10).close();
+        memoryRecordsBuilder(buffer, 15, 15).close();
+        memoryRecordsBuilder(buffer, 15, 30).close();
+
+        buffer.flip();
+
+        MemoryRecords records = MemoryRecords.readableRecords(buffer);
+        // Acquire 10 records.
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
+            MEMBER_ID,
+            10,
+            new FetchPartitionData(Errors.NONE, 20, 10, records,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            20);
+
+        // Validate 2 batches are fetched one with 5 records and other till end of batch, third batch
+        // should be skipped.
+        assertArrayEquals(expectedAcquiredRecord(10, 29, 1).toArray(), acquiredRecordsList.toArray());
+        assertEquals(30, sharePartition.nextFetchOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        assertEquals(10, sharePartition.cachedState().get(10L).firstOffset());
+        assertEquals(29, sharePartition.cachedState().get(10L).lastOffset());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(10L).batchState());
+        assertEquals(MEMBER_ID, sharePartition.cachedState().get(10L).batchMemberId());
+        assertEquals(1, sharePartition.cachedState().get(10L).batchDeliveryCount());
+        assertNull(sharePartition.cachedState().get(10L).offsetState());
+    }
+
+    @Test
     public void testAcquireMultipleRecordsWithOverlapAndNewBatch() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
         MemoryRecords records = memoryRecords(5, 0);
 
-        List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 3, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            5);
 
         assertArrayEquals(expectedAcquiredRecords(records, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(5, sharePartition.nextFetchOffset());
 
         // Add records from 0-9 offsets, 5-9 should be acquired and 0-4 should be ignored.
         records = memoryRecords(10, 0);
-        acquiredRecordsList = sharePartition.acquire(
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 3, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            5);
 
         assertArrayEquals(expectedAcquiredRecords(memoryRecords(5, 5), 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(10, sharePartition.nextFetchOffset());
@@ -608,18 +695,22 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
         MemoryRecords records = memoryRecords(5, 10);
 
-        List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 3, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            5);
 
         assertArrayEquals(expectedAcquiredRecords(records, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(15, sharePartition.nextFetchOffset());
 
-        acquiredRecordsList = sharePartition.acquire(
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 3, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            0);
 
         // No records should be returned as the batch is already acquired.
         assertEquals(0, acquiredRecordsList.size());
@@ -627,10 +718,12 @@ public class SharePartitionTest {
 
         // Send subset of the same batch again, no records should be returned.
         MemoryRecords subsetRecords = memoryRecords(2, 10);
-        acquiredRecordsList = sharePartition.acquire(
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 3, subsetRecords,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            0);
 
         // No records should be returned as the batch is already acquired.
         assertEquals(0, acquiredRecordsList.size());
@@ -642,10 +735,12 @@ public class SharePartitionTest {
     @Test
     public void testAcquireWithEmptyFetchRecords() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
-        List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 3, MemoryRecords.EMPTY,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            0);
 
         assertEquals(0, acquiredRecordsList.size());
         assertEquals(0, sharePartition.nextFetchOffset());
@@ -662,6 +757,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
         sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
         assertEquals(5, sharePartition.nextFetchOffset());
@@ -683,6 +779,7 @@ public class SharePartitionTest {
         assertTrue(sharePartition.findNextFetchOffset());
         sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
         assertEquals(5, sharePartition.nextFetchOffset());
@@ -700,6 +797,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(6).build();
         sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
         // Limit not reached as only 6 in-flight messages is the limit.
@@ -711,6 +809,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(1).build();
         sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
         // Limit reached as only one in-flight message is the limit.
@@ -738,17 +837,21 @@ public class SharePartitionTest {
         MemoryRecords records2 = memoryRecords(1, 1);
 
         // Another batch is acquired because if there is only 1 batch, and it is acknowledged, the batch will be removed from cachedState
-        List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 10, 0, records1,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            1);
 
         assertEquals(1, acquiredRecordsList.size());
 
-        acquiredRecordsList = sharePartition.acquire(
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 10, 0, records2,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            1);
 
         assertEquals(1, acquiredRecordsList.size());
 
@@ -770,10 +873,12 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
         MemoryRecords records = memoryRecords(10, 5);
 
-        List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 0, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            10);
 
         assertEquals(1, acquiredRecordsList.size());
 
@@ -797,18 +902,22 @@ public class SharePartitionTest {
         recordsBuilder.appendWithOffset(18, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
         MemoryRecords records2 = recordsBuilder.build();
 
-        List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 30, 0, records1,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            2);
 
         assertArrayEquals(expectedAcquiredRecords(records1, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(7, sharePartition.nextFetchOffset());
 
-        acquiredRecordsList = sharePartition.acquire(
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 30, 0, records2,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            9);
 
         assertArrayEquals(expectedAcquiredRecords(records2, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(19, sharePartition.nextFetchOffset());
@@ -860,18 +969,22 @@ public class SharePartitionTest {
         recordsBuilder.appendWithOffset(20, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
         MemoryRecords records2 = recordsBuilder.build();
 
-        List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 30, 0, records1,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            2);
 
         assertArrayEquals(expectedAcquiredRecords(records1, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(7, sharePartition.nextFetchOffset());
 
-        acquiredRecordsList = sharePartition.acquire(
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 30, 0, records2,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            11);
 
         assertArrayEquals(expectedAcquiredRecords(records2, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(21, sharePartition.nextFetchOffset());
@@ -925,10 +1038,12 @@ public class SharePartitionTest {
         assertFutureThrows(ackResult, InvalidRecordStateException.class);
 
         MemoryRecords records = memoryRecords(5, 5);
-        List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 0, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            5);
 
         assertEquals(1, acquiredRecordsList.size());
         // Cached data with offset 5-9 should exist.
@@ -948,19 +1063,23 @@ public class SharePartitionTest {
 
         // Create data for the batch with offsets 0-4.
         MemoryRecords records = memoryRecords(5, 0);
-        List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 0, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            5);
 
         assertEquals(1, acquiredRecordsList.size());
 
         // Create data for the batch with offsets 20-24.
         records = memoryRecords(5, 20);
-        acquiredRecordsList = sharePartition.acquire(
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 0, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            5);
 
         assertEquals(1, acquiredRecordsList.size());
 
@@ -975,10 +1094,12 @@ public class SharePartitionTest {
 
         // Create data for the batch with offsets 5-10.
         records = memoryRecords(6, 5);
-        acquiredRecordsList = sharePartition.acquire(
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 0, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            6);
 
         assertEquals(1, acquiredRecordsList.size());
 
@@ -993,10 +1114,12 @@ public class SharePartitionTest {
     public void testAcknowledgeWithAnotherMember() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
         MemoryRecords records = memoryRecords(5, 5);
-        List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 0, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            5);
 
         assertEquals(1, acquiredRecordsList.size());
         // Cached data with offset 5-9 should exist.
@@ -1014,10 +1137,12 @@ public class SharePartitionTest {
     public void testAcknowledgeWhenOffsetNotAcquired() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
         MemoryRecords records = memoryRecords(5, 5);
-        List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 0, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            5);
 
         assertEquals(1, acquiredRecordsList.size());
         // Cached data with offset 5-9 should exist.
@@ -1038,10 +1163,12 @@ public class SharePartitionTest {
         assertFutureThrows(ackResult, InvalidRecordStateException.class);
 
         // Re-acquire the same batch and then acknowledge subset with ACCEPT type.
-        acquiredRecordsList = sharePartition.acquire(
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 0, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            5);
 
         assertEquals(1, acquiredRecordsList.size());
 
@@ -1065,24 +1192,30 @@ public class SharePartitionTest {
         MemoryRecords records1 = memoryRecords(5, 5);
         MemoryRecords records2 = memoryRecords(5, 10);
         MemoryRecords records3 = memoryRecords(5, 15);
-        List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 0, records1,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            5);
 
         assertEquals(1, acquiredRecordsList.size());
 
-        acquiredRecordsList = sharePartition.acquire(
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 0, records2,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            5);
 
         assertEquals(1, acquiredRecordsList.size());
 
-        acquiredRecordsList = sharePartition.acquire(
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 0, records3,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            5);
 
         assertEquals(1, acquiredRecordsList.size());
         // Cached data with offset 5-19 should exist.
@@ -1112,24 +1245,30 @@ public class SharePartitionTest {
         MemoryRecords records1 = memoryRecords(5, 5);
         MemoryRecords records2 = memoryRecords(5, 10);
         MemoryRecords records3 = memoryRecords(5, 15);
-        List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 0, records1,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            5);
 
         assertEquals(1, acquiredRecordsList.size());
 
-        acquiredRecordsList = sharePartition.acquire(
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 0, records2,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            5);
 
         assertEquals(1, acquiredRecordsList.size());
 
-        acquiredRecordsList = sharePartition.acquire(
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 0, records3,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            5);
 
         assertEquals(1, acquiredRecordsList.size());
         // Cached data with offset 5-19 should exist.
@@ -1160,10 +1299,12 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
         MemoryRecords records = memoryRecords(5, 10);
 
-        List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 3, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            5);
 
         assertArrayEquals(expectedAcquiredRecords(records, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(15, sharePartition.nextFetchOffset());
@@ -1187,10 +1328,12 @@ public class SharePartitionTest {
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
 
         // Send the same fetch request batch again but only 2 offsets should come as acquired.
-        acquiredRecordsList = sharePartition.acquire(
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 3, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            2);
 
         assertArrayEquals(expectedAcquiredRecords(12, 13, 2).toArray(), acquiredRecordsList.toArray());
         assertEquals(15, sharePartition.nextFetchOffset());
@@ -1208,34 +1351,42 @@ public class SharePartitionTest {
         // Fourth fetch request with 5 records starting from offset 28.
         MemoryRecords records4 = memoryRecords(5, 28);
 
-        List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 40, 3, records1,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            5);
 
         assertArrayEquals(expectedAcquiredRecords(records1, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(15, sharePartition.nextFetchOffset());
 
-        acquiredRecordsList = sharePartition.acquire(
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 30, 3, records2,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            5);
 
         assertArrayEquals(expectedAcquiredRecords(records2, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(20, sharePartition.nextFetchOffset());
 
-        acquiredRecordsList = sharePartition.acquire(
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 30, 3, records3,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            5);
 
         assertArrayEquals(expectedAcquiredRecords(records3, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(28, sharePartition.nextFetchOffset());
 
-        acquiredRecordsList = sharePartition.acquire(
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 30, 3, records4,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            5);
 
         assertArrayEquals(expectedAcquiredRecords(records4, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(33, sharePartition.nextFetchOffset());
@@ -1285,30 +1436,36 @@ public class SharePartitionTest {
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(28L).offsetState());
 
         // Send next batch from offset 12, only 3 records should be acquired.
-        acquiredRecordsList = sharePartition.acquire(
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 40, 3, records1,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            3);
 
         assertArrayEquals(expectedAcquiredRecords(12, 14, 2).toArray(), acquiredRecordsList.toArray());
         assertEquals(15, sharePartition.nextFetchOffset());
 
         // Though record2 batch exists to acquire but send batch record3, it should be acquired but
         // next fetch offset should not move.
-        acquiredRecordsList = sharePartition.acquire(
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 40, 3, records3,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            5);
 
         assertArrayEquals(expectedAcquiredRecords(records3, 2).toArray(), acquiredRecordsList.toArray());
         assertEquals(15, sharePartition.nextFetchOffset());
 
         // Acquire partial records from batch 2.
         MemoryRecords subsetRecords = memoryRecords(2, 17);
-        acquiredRecordsList = sharePartition.acquire(
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 3, subsetRecords,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            2);
 
         assertArrayEquals(expectedAcquiredRecords(17, 18, 2).toArray(), acquiredRecordsList.toArray());
         // Next fetch offset should not move.
@@ -1317,10 +1474,12 @@ public class SharePartitionTest {
         // Acquire partial records from record 4 to further test if the next fetch offset move
         // accordingly once complete record 2 is also acquired.
         subsetRecords = memoryRecords(1, 28);
-        acquiredRecordsList = sharePartition.acquire(
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 3, subsetRecords,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            1);
 
         assertArrayEquals(expectedAcquiredRecords(28, 28, 2).toArray(), acquiredRecordsList.toArray());
         // Next fetch offset should not move.
@@ -1328,10 +1487,12 @@ public class SharePartitionTest {
 
         // Try to acquire complete record 2 though it's already partially acquired, the next fetch
         // offset should move.
-        acquiredRecordsList = sharePartition.acquire(
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            Integer.MAX_VALUE,
             new FetchPartitionData(Errors.NONE, 20, 3, records2,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            3);
 
         // Offset 15,16 and 19 should be acquired.
         List<AcquiredRecords> expectedAcquiredRecords = expectedAcquiredRecords(15, 16, 2);
@@ -1344,7 +1505,7 @@ public class SharePartitionTest {
     @Test
     public void testAcquisitionLockForAcquiringSingleRecord() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(1),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(1),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -1365,7 +1526,7 @@ public class SharePartitionTest {
     @Test
     public void testAcquisitionLockForAcquiringMultipleRecords() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5, 10),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5, 10),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -1387,7 +1548,7 @@ public class SharePartitionTest {
     public void testAcquisitionLockForAcquiringMultipleRecordsWithOverlapAndNewBatch() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5, 0),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5, 0),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -1395,7 +1556,7 @@ public class SharePartitionTest {
         assertEquals(1, sharePartition.timer().size());
 
         // Add records from 0-9 offsets, 5-9 should be acquired and 0-4 should be ignored.
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(10, 0),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(10, 0),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -1419,7 +1580,7 @@ public class SharePartitionTest {
     public void testAcquisitionLockForAcquiringSameBatchAgain() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5, 10),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5, 10),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -1435,7 +1596,7 @@ public class SharePartitionTest {
                 () -> "Acquisition lock never got released.");
 
         // Acquire the same batch again.
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5, 10),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5, 10),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -1448,7 +1609,7 @@ public class SharePartitionTest {
     public void testAcquisitionLockOnAcknowledgingSingleRecordBatch() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 10, 0, memoryRecords(1, 0),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 10, 0, memoryRecords(1, 0),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -1482,7 +1643,7 @@ public class SharePartitionTest {
     public void testAcquisitionLockOnAcknowledgingMultipleRecordBatch() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -1520,19 +1681,19 @@ public class SharePartitionTest {
         MemoryRecords records2 = recordsBuilder.build();
         MemoryRecords records3 = memoryRecords(2, 1);
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records3,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 30, 0, records3,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
         assertNotNull(sharePartition.cachedState().get(1L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records1,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 30, 0, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
         assertNotNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
         assertEquals(2, sharePartition.timer().size());
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records2,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 30, 0, records2,
                         Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
         assertNotNull(sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask());
@@ -1567,7 +1728,7 @@ public class SharePartitionTest {
     public void testAcquisitionLockForAcquiringSubsetBatchAgain() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(8, 10),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(8, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -1585,7 +1746,7 @@ public class SharePartitionTest {
                 () -> "Acquisition lock never got released.");
 
         // Acquire subset of records again.
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(3, 12),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(3, 12),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -1643,14 +1804,14 @@ public class SharePartitionTest {
         recordsBuilder.appendWithOffset(20, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
         MemoryRecords records2 = recordsBuilder.build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records1,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 30, 0, records1,
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
         assertNotNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records2,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 30, 0, records2,
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -1735,11 +1896,11 @@ public class SharePartitionTest {
 
         // Adding memoryRecords(10, 0) in the sharePartition to make sure that SPSO doesn't move forward when delivery count of records2
         // exceed the max delivery count.
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(10, 0),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(10, 0),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(10, 10),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(10, 10),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -1757,7 +1918,7 @@ public class SharePartitionTest {
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
                 () -> "Acquisition lock never got released.");
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(10, 10),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(10, 10),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -1785,7 +1946,7 @@ public class SharePartitionTest {
                 .withMaxDeliveryCount(2) // Only 2 delivery attempts will be made before archiving the records
                 .build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(10, 0),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(10, 0),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -1802,7 +1963,7 @@ public class SharePartitionTest {
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
                 () -> "Acquisition lock never got released.");
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(5, 0),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(5, 0),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -1861,7 +2022,7 @@ public class SharePartitionTest {
                 .withMaxDeliveryCount(2) // Only 2 delivery attempts will be made before archiving the records
                 .build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(10, 0),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(10, 0),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -1877,7 +2038,7 @@ public class SharePartitionTest {
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
                 () -> "Acquisition lock never got released.");
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(10, 0),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(10, 0),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -1899,7 +2060,7 @@ public class SharePartitionTest {
     public void testAcknowledgeAfterAcquisitionLockTimeout() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -1936,7 +2097,7 @@ public class SharePartitionTest {
     public void testAcquisitionLockAfterDifferentAcknowledges() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -2002,7 +2163,7 @@ public class SharePartitionTest {
                         PartitionFactory.newPartitionErrorData(0, Errors.GROUP_ID_NOT_FOUND.code(), Errors.GROUP_ID_NOT_FOUND.message())))));
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
         assertEquals(1, sharePartition.timer().size());
@@ -2034,7 +2195,7 @@ public class SharePartitionTest {
                         PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(6, 5),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(6, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
         assertEquals(1, sharePartition.timer().size());
@@ -2076,7 +2237,7 @@ public class SharePartitionTest {
     public void testReleaseSingleRecordBatch() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 10, 0, memoryRecords(1, 0),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 10, 0, memoryRecords(1, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -2095,7 +2256,7 @@ public class SharePartitionTest {
     public void testReleaseMultipleRecordBatch() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -2118,15 +2279,15 @@ public class SharePartitionTest {
         // Untracked gap of 3 offsets from 7-9.
         MemoryRecords records2 = memoryRecords(9, 10);
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records0,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 30, 0, records0,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records1,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 30, 0, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records2,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 30, 0, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -2158,11 +2319,11 @@ public class SharePartitionTest {
         recordsBuilder.appendWithOffset(20, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
         MemoryRecords records2 = recordsBuilder.build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records1,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 30, 0, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records2,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 30, 0, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -2214,10 +2375,10 @@ public class SharePartitionTest {
         recordsBuilder.appendWithOffset(20, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
         MemoryRecords records2 = recordsBuilder.build();
 
-        sharePartition.acquire("member-2", new FetchPartitionData(Errors.NONE, 30, 0, records1,
+        sharePartition.acquire("member-2", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 30, 0, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records2,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 30, 0, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
         // Acknowledging over subset of second batch with subset of gap offsets.
@@ -2287,10 +2448,10 @@ public class SharePartitionTest {
         recordsBuilder.appendWithOffset(20, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
         MemoryRecords records2 = recordsBuilder.build();
 
-        sharePartition.acquire("member-2", new FetchPartitionData(Errors.NONE, 30, 0, records1,
+        sharePartition.acquire("member-2", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 30, 0, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records2,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 30, 0, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
         // Acknowledging over subset of second batch with subset of gap offsets.
@@ -2366,7 +2527,7 @@ public class SharePartitionTest {
     @Test
     public void testReleaseAcquiredRecordsAfterDifferentAcknowledges() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
         sharePartition.acknowledge(MEMBER_ID,
@@ -2393,19 +2554,19 @@ public class SharePartitionTest {
     public void testMaxDeliveryCountLimitExceededForRecordsSubsetAfterReleaseAcquiredRecords() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withMaxDeliveryCount(2).build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, memoryRecords(10, 0),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 40, 3, memoryRecords(10, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
         MemoryRecords records2 = memoryRecords(5, 10);
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records2,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 40, 3, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
         sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(
                 new ShareAcknowledgementBatch(10, 14, Collections.singletonList((byte) 2))));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records2,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 40, 3, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -2429,15 +2590,15 @@ public class SharePartitionTest {
         // third fetch request with 5 records starting from offset20.
         MemoryRecords records3 = memoryRecords(5, 20);
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records1,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 40, 3, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 3, records2,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 30, 3, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 50, 3, records3,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 50, 3, records3,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -2448,16 +2609,16 @@ public class SharePartitionTest {
         )));
 
         // Send next batch from offset 13, only 2 records should be acquired.
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records1,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 40, 3, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
         // Send next batch from offset 15, only 2 records should be acquired.
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records2,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 40, 3, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records3,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 40, 3, records3,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -2502,15 +2663,15 @@ public class SharePartitionTest {
         // Third fetch request with 5 records starting from offset 20.
         MemoryRecords records3 = memoryRecords(5, 20);
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records1,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 40, 3, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 3, records2,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 30, 3, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 50, 3, records3,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 50, 3, records3,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -2522,16 +2683,16 @@ public class SharePartitionTest {
         )));
 
         // Send next batch from offset 13, only 2 records should be acquired.
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records1,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 40, 3, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
         // Send next batch from offset 15, only 2 records should be acquired.
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records2,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 40, 3, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records3,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 40, 3, records3,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -2547,7 +2708,7 @@ public class SharePartitionTest {
     public void testReleaseAcquiredRecordsSubsetWithAnotherMember() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire("member-1",
+        sharePartition.acquire("member-1", Integer.MAX_VALUE,
                 new FetchPartitionData(Errors.NONE, 30, 0, memoryRecords(7, 5),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
                         OptionalInt.empty(), false));
@@ -2584,7 +2745,7 @@ public class SharePartitionTest {
                         PartitionFactory.newPartitionErrorData(0, Errors.GROUP_ID_NOT_FOUND.code(), Errors.GROUP_ID_NOT_FOUND.message())))));
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -2611,7 +2772,7 @@ public class SharePartitionTest {
                         PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(6, 5),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(6, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -2649,7 +2810,7 @@ public class SharePartitionTest {
     public void testAcquisitionLockOnReleasingMultipleRecordBatch() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -2681,11 +2842,11 @@ public class SharePartitionTest {
         recordsBuilder.appendWithOffset(20, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
         MemoryRecords records2 = recordsBuilder.build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records1,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 30, 0, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records2,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 30, 0, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -2762,25 +2923,25 @@ public class SharePartitionTest {
     public void testLsoMovementForArchivingBatches() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7),
                 Optional.empty(),
                         OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE,
                 new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 12), Optional.empty(),
                         OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE,
                 new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 17), Optional.empty(),
                         OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE,
                 new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 22), Optional.empty(),
                         OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE,
                 new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 27), Optional.empty(),
                         OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE,
                 new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 32), Optional.empty(),
                         OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
@@ -2830,10 +2991,10 @@ public class SharePartitionTest {
     public void testLsoMovementForArchivingOffsets() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -2882,10 +3043,10 @@ public class SharePartitionTest {
     public void testLsoMovementForArchivingOffsetsWithStartAndEndBatchesNotFullMatches() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -2922,10 +3083,10 @@ public class SharePartitionTest {
     public void testLsoMovementForArchivingOffsetsWithStartOffsetNotFullMatches() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -2962,10 +3123,10 @@ public class SharePartitionTest {
     public void testLsoMovementForArchivingOffsetsWithStartOffsetNotFullMatchesPostAcceptAcknowledgement() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -3012,9 +3173,9 @@ public class SharePartitionTest {
     public void testLsoMovementForArchivingOffsetsWithStartOffsetNotFullMatchesPostReleaseAcknowledgement() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2), Optional.empty(),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2), Optional.empty(),
                 OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7), Optional.empty(),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7), Optional.empty(),
                 OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
         // LSO is at 4.
@@ -3060,9 +3221,9 @@ public class SharePartitionTest {
     public void testLsoMovementToEndOffset() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2), Optional.empty(),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2), Optional.empty(),
                 OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7), Optional.empty(),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7), Optional.empty(),
                 OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
         // Acknowledge with RELEASE action.
@@ -3094,9 +3255,9 @@ public class SharePartitionTest {
     public void testLsoMovementToEndOffsetWhereEndOffsetIsAvailable() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2), Optional.empty(),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2), Optional.empty(),
                 OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7), Optional.empty(),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7), Optional.empty(),
                 OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
         // Acknowledge with RELEASE action.
@@ -3129,9 +3290,9 @@ public class SharePartitionTest {
     public void testLsoMovementAheadOfEndOffsetPostAcknowledgment() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2), Optional.empty(),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2), Optional.empty(),
                 OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7), Optional.empty(),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7), Optional.empty(),
                 OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
         // Acknowledge with RELEASE action.
@@ -3163,9 +3324,9 @@ public class SharePartitionTest {
     public void testLsoMovementAheadOfEndOffset() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2), Optional.empty(),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2), Optional.empty(),
                 OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7), Optional.empty(),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7), Optional.empty(),
                 OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
         // LSO is at 14.
@@ -3193,11 +3354,11 @@ public class SharePartitionTest {
         // Gap of 15-19.
         MemoryRecords records3 = memoryRecords(5, 20);
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, records1, Optional.empty(),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, records1, Optional.empty(),
                 OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, records2, Optional.empty(),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, records2, Optional.empty(),
                 OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, records3, Optional.empty(),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, records3, Optional.empty(),
                 OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
         // LSO is at 18.
@@ -3226,9 +3387,9 @@ public class SharePartitionTest {
         // Gap of 7-9.
         MemoryRecords records2 = memoryRecords(5, 10);
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, records1, Optional.empty(),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, records1, Optional.empty(),
                 OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, records2, Optional.empty(),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, records2, Optional.empty(),
                 OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
         // Acknowledge with RELEASE action.
@@ -3261,10 +3422,10 @@ public class SharePartitionTest {
         recordsBuilder.appendWithOffset(18, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
         MemoryRecords records2 = recordsBuilder.build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records1, Optional.empty(),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 30, 0, records1, Optional.empty(),
                 OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records2, Optional.empty(),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 30, 0, records2, Optional.empty(),
                 OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
         sharePartition.acknowledge(MEMBER_ID, Arrays.asList(
@@ -3302,25 +3463,25 @@ public class SharePartitionTest {
     public void testReleaseAcquiredRecordsBatchesPostStartOffsetMovement() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
-        sharePartition.acquire("member-2", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 15),
+        sharePartition.acquire("member-2", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 15),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 20),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 20),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 25),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 25),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 30),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 30),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 35),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 35),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -3389,10 +3550,10 @@ public class SharePartitionTest {
     public void testReleaseAcquiredRecordsBatchesPostStartOffsetMovementToStartOfBatch() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -3420,10 +3581,10 @@ public class SharePartitionTest {
     public void testReleaseAcquiredRecordsBatchesPostStartOffsetMovementToMiddleOfBatch() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -3458,25 +3619,25 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder()
                 .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
-        sharePartition.acquire("member-2", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 15),
+        sharePartition.acquire("member-2", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 15),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 20),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 20),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 25),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 25),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 30),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 30),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 35),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 35),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -3541,10 +3702,10 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder()
                 .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -3571,10 +3732,10 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder()
                 .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -3655,10 +3816,10 @@ public class SharePartitionTest {
     public void testAcknowledgeBatchAndOffsetPostLsoMovement() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -3714,13 +3875,13 @@ public class SharePartitionTest {
     public void testAcknowledgeBatchPostLsoMovement() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 20),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 20),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -3774,7 +3935,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder()
                 .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -3797,7 +3958,7 @@ public class SharePartitionTest {
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
                 () -> "Acquisition lock never got released.");
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -3824,7 +3985,7 @@ public class SharePartitionTest {
     public void testLsoMovementThenAcquisitionLockTimeoutThenAcknowledgeBatchLastOffsetAheadOfStartOffsetBatch() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(2, 1),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(2, 1),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -3847,11 +4008,11 @@ public class SharePartitionTest {
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
                 () -> "Acquisition lock never got released.");
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(2, 3),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(2, 3),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(3, 5),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(3, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -4096,7 +4257,7 @@ public class SharePartitionTest {
     public void testMaybeUpdateCachedStateWhenAcknowledgementTypeAccept() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0,  memoryRecords(250, 0),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0,  memoryRecords(250, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -4118,7 +4279,7 @@ public class SharePartitionTest {
     public void testMaybeUpdateCachedStateWhenAcknowledgementTypeReject() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(250, 0),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(250, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -4140,7 +4301,7 @@ public class SharePartitionTest {
     public void testMaybeUpdateCachedStateWhenAcknowledgementTypeRelease() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(250, 0),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(250, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
         assertFalse(sharePartition.canAcquireRecords());
@@ -4163,12 +4324,12 @@ public class SharePartitionTest {
     public void testMaybeUpdateCachedStateWhenAcknowledgementsFromBeginningForBatchSubset() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(20).build();
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 0),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
         assertTrue(sharePartition.canAcquireRecords());
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 15),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 15),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
         assertFalse(sharePartition.canAcquireRecords());
@@ -4189,12 +4350,12 @@ public class SharePartitionTest {
     @Test
     public void testMaybeUpdateCachedStateWhenAcknowledgementsFromBeginningForEntireBatch() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(20).build();
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 0),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
         assertTrue(sharePartition.canAcquireRecords());
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 15),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 15),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
         assertFalse(sharePartition.canAcquireRecords());
@@ -4216,12 +4377,12 @@ public class SharePartitionTest {
     public void testMaybeUpdateCachedStateWhenAcknowledgementsInBetween() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(20).build();
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 0),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
         assertTrue(sharePartition.canAcquireRecords());
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 15),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 15),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
         assertFalse(sharePartition.canAcquireRecords());
@@ -4246,12 +4407,12 @@ public class SharePartitionTest {
     public void testMaybeUpdateCachedStateWhenAllRecordsInCachedStateAreAcknowledged() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(20).build();
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 0),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
         assertTrue(sharePartition.canAcquireRecords());
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 15),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 15),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
         assertFalse(sharePartition.canAcquireRecords());
@@ -4269,17 +4430,17 @@ public class SharePartitionTest {
     public void testMaybeUpdateCachedStateMultipleAcquisitionsAndAcknowledgements() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(100).build();
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(20, 0),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(20, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
         assertTrue(sharePartition.canAcquireRecords());
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(20, 20),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(20, 20),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
         assertTrue(sharePartition.canAcquireRecords());
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(20, 40),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(20, 40),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
         assertTrue(sharePartition.canAcquireRecords());
@@ -4293,7 +4454,7 @@ public class SharePartitionTest {
         assertEquals(59, sharePartition.endOffset());
         assertEquals(60, sharePartition.nextFetchOffset());
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(20, 60),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(20, 60),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
         assertTrue(sharePartition.canAcquireRecords());
@@ -4309,7 +4470,7 @@ public class SharePartitionTest {
         assertEquals(79, sharePartition.endOffset());
         assertEquals(80, sharePartition.nextFetchOffset());
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(100, 80),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(100, 80),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
         assertFalse(sharePartition.canAcquireRecords());
@@ -4324,7 +4485,7 @@ public class SharePartitionTest {
         assertEquals(180, sharePartition.endOffset());
         assertEquals(180, sharePartition.nextFetchOffset());
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(20, 180),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(20, 180),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -4343,7 +4504,7 @@ public class SharePartitionTest {
         assertEquals(0, sharePartition.startOffset());
         assertEquals(0, sharePartition.endOffset());
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(150, 0),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(150, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -4359,13 +4520,13 @@ public class SharePartitionTest {
         assertEquals(0, sharePartition.startOffset());
         assertEquals(0, sharePartition.endOffset());
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(150, 0),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(150, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
         assertTrue(sharePartition.canAcquireRecords());
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(100, 150),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(100, 150),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -4385,7 +4546,7 @@ public class SharePartitionTest {
     public void testCanAcquireRecordsAfterReleaseAcknowledgement() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(150, 0),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(150, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -4393,7 +4554,7 @@ public class SharePartitionTest {
         assertEquals(0, sharePartition.startOffset());
         assertEquals(149, sharePartition.endOffset());
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(100, 150),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(100, 150),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -4415,7 +4576,7 @@ public class SharePartitionTest {
     public void testCanAcquireRecordsAfterArchiveAcknowledgement() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(150, 0),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(150, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -4423,7 +4584,7 @@ public class SharePartitionTest {
         assertEquals(0, sharePartition.startOffset());
         assertEquals(149, sharePartition.endOffset());
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(100, 150),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(100, 150),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -4444,7 +4605,7 @@ public class SharePartitionTest {
     public void testCanAcquireRecordsAfterAcceptAcknowledgement() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(150, 0),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(150, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -4452,7 +4613,7 @@ public class SharePartitionTest {
         assertEquals(0, sharePartition.startOffset());
         assertEquals(149, sharePartition.endOffset());
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(100, 150),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(100, 150),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
         assertFalse(sharePartition.canAcquireRecords());
@@ -4481,7 +4642,7 @@ public class SharePartitionTest {
                         PartitionFactory.newPartitionErrorData(0, Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), Errors.UNKNOWN_TOPIC_OR_PARTITION.message())))));
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -4509,7 +4670,7 @@ public class SharePartitionTest {
                         PartitionFactory.newPartitionErrorData(0, Errors.GROUP_ID_NOT_FOUND.code(), Errors.GROUP_ID_NOT_FOUND.message())))));
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(6, 5),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(6, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -4539,7 +4700,7 @@ public class SharePartitionTest {
     public void testAcknowledgeSubsetWithAnotherMember() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 30, 0, memoryRecords(7, 5),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 30, 0, memoryRecords(7, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -4557,15 +4718,15 @@ public class SharePartitionTest {
     public void testAcknowledgeWithAnotherMemberRollbackBatchError() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
-        sharePartition.acquire("member-2", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
+        sharePartition.acquire("member-2", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 15),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 15),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -4594,15 +4755,15 @@ public class SharePartitionTest {
     public void testAcknowledgeWithAnotherMemberRollbackSubsetError() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
-        sharePartition.acquire("member-2", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 15),
+        sharePartition.acquire("member-2", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 15),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -4632,14 +4793,14 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().withMaxDeliveryCount(2).build();
         MemoryRecords records = memoryRecords(10, 5);
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, records,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, records,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
         sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(
                 new ShareAcknowledgementBatch(5, 14, Collections.singletonList((byte) 2))));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, records,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, records,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -4661,11 +4822,11 @@ public class SharePartitionTest {
         // Second fetch request with 5 records starting from offset 15.
         MemoryRecords records2 = memoryRecords(5, 15);
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records1,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 40, 3, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 3, records2,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 30, 3, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -4675,12 +4836,12 @@ public class SharePartitionTest {
                 new ShareAcknowledgementBatch(17, 19, Collections.singletonList((byte) 1)))));
 
         // Send next batch from offset 13, only 2 records should be acquired.
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records1,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 40, 3, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
         // Send next batch from offset 15, only 2 records should be acquired.
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records2,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 40, 3, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -4700,7 +4861,7 @@ public class SharePartitionTest {
         // First fetch request with 5 records starting from offset 0.
         MemoryRecords records1 = memoryRecords(5, 0);
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records1,
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 40, 3, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -4708,7 +4869,7 @@ public class SharePartitionTest {
                 new ShareAcknowledgementBatch(0, 1, Collections.singletonList((byte) 2)))));
 
         // Send next batch from offset 0, only 2 records should be acquired.
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, memoryRecords(2, 0),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 40, 3, memoryRecords(2, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -4734,14 +4895,14 @@ public class SharePartitionTest {
         String memberId1 = "memberId-1";
         String memberId2 = "memberId-2";
 
-        sharePartition.acquire(memberId1, new FetchPartitionData(Errors.NONE, 20, 0, records1,
+        sharePartition.acquire(memberId1, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
         assertFalse(sharePartition.findNextFetchOffset());
         assertEquals(10, sharePartition.nextFetchOffset());
 
-        sharePartition.acquire(memberId2, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 10),
+        sharePartition.acquire(memberId2, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -4754,7 +4915,7 @@ public class SharePartitionTest {
         assertTrue(sharePartition.findNextFetchOffset());
         assertEquals(5, sharePartition.nextFetchOffset());
 
-        sharePartition.acquire(memberId1, new FetchPartitionData(Errors.NONE, 20, 0, records1,
+        sharePartition.acquire(memberId1, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -4770,7 +4931,7 @@ public class SharePartitionTest {
         String memberId1 = "member-1";
         String memberId2 = "member-2";
 
-        sharePartition.acquire(memberId1, new FetchPartitionData(Errors.NONE, 20, 0, records1,
+        sharePartition.acquire(memberId1, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
         assertEquals(3, sharePartition.nextFetchOffset());
@@ -4779,12 +4940,12 @@ public class SharePartitionTest {
                 new ShareAcknowledgementBatch(0, 2, Collections.singletonList((byte) 2))));
         assertEquals(0, sharePartition.nextFetchOffset());
 
-        sharePartition.acquire(memberId2, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(2, 3),
+        sharePartition.acquire(memberId2, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(2, 3),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
         assertEquals(0, sharePartition.nextFetchOffset());
 
-        sharePartition.acquire(memberId1, new FetchPartitionData(Errors.NONE, 20, 0, records1,
+        sharePartition.acquire(memberId1, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 20, 0, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
         assertEquals(5, sharePartition.nextFetchOffset());
@@ -4798,7 +4959,7 @@ public class SharePartitionTest {
     public void testNumberOfWriteCallsOnUpdates() {
         SharePartition sharePartition = Mockito.spy(SharePartitionBuilder.builder().build());
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 10, 0, memoryRecords(5, 2),
+        sharePartition.acquire(MEMBER_ID, Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 10, 0, memoryRecords(5, 2),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -4818,11 +4979,11 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
         MemoryRecords records1 = memoryRecords(5, 5);
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 30, 0, records1,
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 30, 0, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
-        sharePartition.acquire("member-1", new FetchPartitionData(Errors.NONE, 30, 0, memoryRecords(12, 10),
+        sharePartition.acquire("member-1", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 30, 0, memoryRecords(12, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
 
@@ -4833,13 +4994,13 @@ public class SharePartitionTest {
                 new ShareAcknowledgementBatch(17, 20, Collections.singletonList((byte) 2))));
 
         // Reacquire with another member.
-        sharePartition.acquire("member-2", new FetchPartitionData(Errors.NONE, 30, 0, records1,
+        sharePartition.acquire("member-2", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 30, 0, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
         assertEquals(10, sharePartition.nextFetchOffset());
 
         // Reacquire with another member.
-        sharePartition.acquire("member-2", new FetchPartitionData(Errors.NONE, 30, 0, memoryRecords(7, 10),
+        sharePartition.acquire("member-2", Integer.MAX_VALUE, new FetchPartitionData(Errors.NONE, 30, 0, memoryRecords(7, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
         assertEquals(17, sharePartition.nextFetchOffset());
@@ -4896,6 +5057,12 @@ public class SharePartitionTest {
         assertEquals(734, sharePartition.endOffset());
     }
 
+    private List<AcquiredRecords> fetchAcquiredRecords(ShareAcquiredRecords shareAcquiredRecords, int expectedOffsetCount) {
+        assertNotNull(shareAcquiredRecords);
+        assertEquals(expectedOffsetCount, shareAcquiredRecords.count());
+        return shareAcquiredRecords.records();
+    }
+
     private MemoryRecords memoryRecords(int numOfRecords) {
         return memoryRecords(numOfRecords, 0);
     }
@@ -4905,12 +5072,23 @@ public class SharePartitionTest {
     }
 
     private MemoryRecordsBuilder memoryRecordsBuilder(int numOfRecords, long startOffset) {
-        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024),
-            Compression.NONE, TimestampType.CREATE_TIME, startOffset);
+        return memoryRecordsBuilder(ByteBuffer.allocate(1024), numOfRecords, startOffset);
+    }
+
+    private MemoryRecordsBuilder memoryRecordsBuilder(ByteBuffer buffer, int numOfRecords, long startOffset) {
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Compression.NONE,
+            TimestampType.CREATE_TIME, startOffset, 2);
         for (int i = 0; i < numOfRecords; i++) {
             builder.appendWithOffset(startOffset + i, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
         }
         return builder;
+    }
+
+    private List<AcquiredRecords> expectedAcquiredRecord(long baseOffset, long lastOffset, int deliveryCount) {
+        return Collections.singletonList(new AcquiredRecords()
+            .setFirstOffset(baseOffset)
+            .setLastOffset(lastOffset)
+            .setDeliveryCount((short) deliveryCount));
     }
 
     private List<AcquiredRecords> expectedAcquiredRecords(MemoryRecords memoryRecords, int deliveryCount) {
