@@ -117,7 +117,7 @@ public final class TransactionLogConfig {
     }
 
     // This is a broker dynamic config used for DynamicProducerStateManagerConfig
-    public Boolean transactionPartitionVerificationEnable() {
+    public boolean transactionPartitionVerificationEnable() {
         return config.getBoolean(TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG);
     }
 

@@ -48,9 +48,9 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers
 import org.mockito.Mockito.{mock, when}
 
-import scala.compat.java8.OptionConverters._
 import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOption
 
 /**
  * Verifies that slow appends to log don't block request threads processing replica fetch requests.
@@ -324,7 +324,7 @@ class PartitionLockTest extends Logging {
           segments,
           0L,
           0L,
-          leaderEpochCache.asJava,
+          leaderEpochCache.toJava,
           producerStateManager,
           new ConcurrentHashMap[String, Integer],
           false

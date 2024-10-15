@@ -91,8 +91,8 @@ import java.util.concurrent.{Callable, ConcurrentHashMap, CountDownLatch, TimeUn
 import java.util.stream.IntStream
 import java.util.{Collections, Optional, OptionalLong, Properties}
 import scala.collection.{Map, Seq, mutable}
-import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOption
 
 object ReplicaManagerTest {
   @AfterAll
@@ -2939,7 +2939,7 @@ class ReplicaManagerTest {
       segments,
       0L,
       0L,
-      leaderEpochCache.asJava,
+      leaderEpochCache.toJava,
       producerStateManager,
       new ConcurrentHashMap[String, Integer],
       false
@@ -3322,7 +3322,7 @@ class ReplicaManagerTest {
       minBytes,
       maxBytes,
       isolation,
-      clientMetadata.asJava
+      clientMetadata.toJava
     )
 
     replicaManager.fetchMessages(

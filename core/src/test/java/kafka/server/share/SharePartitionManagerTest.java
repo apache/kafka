@@ -2371,7 +2371,7 @@ public class SharePartitionManagerTest {
                     MAX_DELIVERY_COUNT,
                     MAX_IN_FLIGHT_MESSAGES,
                     persister,
-                    new GroupConfigManager(new HashMap<>()),
+                    mock(GroupConfigManager.class),
                     metrics);
         }
     }

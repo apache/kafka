@@ -27,7 +27,7 @@ import java.util.stream.IntStream
 import kafka.log.{LogTestUtils, UnifiedLog}
 import kafka.raft.{KafkaMetadataLog, MetadataLogConfig}
 import kafka.server.KafkaRaftServer
-import kafka.tools.DumpLogSegments.{OffsetsMessageParser, TimeIndexDumpErrors}
+import kafka.tools.DumpLogSegments.{OffsetsMessageParser, ShareGroupStateMessageParser, TimeIndexDumpErrors}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.{Assignment, Subscription}
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
@@ -41,6 +41,8 @@ import org.apache.kafka.common.utils.{Exit, Utils}
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde
 import org.apache.kafka.coordinator.group.generated.{ConsumerGroupMemberMetadataValue, ConsumerGroupMetadataKey, ConsumerGroupMetadataValue, GroupMetadataKey, GroupMetadataValue}
+import org.apache.kafka.coordinator.share.generated.{ShareSnapshotKey, ShareSnapshotValue, ShareUpdateKey, ShareUpdateValue}
+import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorRecordSerde}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.raft.{KafkaRaftClient, OffsetAndEpoch, VoterSetTest}
@@ -961,5 +963,149 @@ class DumpLogSegmentsTest {
         assertEquals(None, parsedRecord.get("compresscodec"))
       }
     }
+  }
+
+  @Test
+  def testShareGroupStateMessageParser(): Unit = {
+    val serde = new ShareCoordinatorRecordSerde()
+    val parser = new ShareGroupStateMessageParser()
+
+    def serializedRecord(key: ApiMessageAndVersion, value: ApiMessageAndVersion): Record = {
+      val record = new CoordinatorRecord(key, value)
+      TestUtils.singletonRecords(
+        key = serde.serializeKey(record),
+        value = serde.serializeValue(record)
+      ).records.iterator.next
+    }
+
+    // The key is mandatory.
+    assertEquals(
+      "Failed to decode message at offset 0 using share group state topic decoder (message had a missing key)",
+      assertThrows(
+        classOf[RuntimeException],
+        () => parser.parse(TestUtils.singletonRecords(key = null, value = null).records.iterator.next)
+      ).getMessage
+    )
+
+    // A valid key and value should work (ShareSnapshot).
+    assertEquals(
+      (
+        Some("{\"type\":\"0\",\"data\":{\"groupId\":\"gs1\",\"topicId\":\"Uj5wn_FqTXirEASvVZRY1w\",\"partition\":0}}"),
+        Some("{\"type\":\"0\",\"data\":{\"snapshotEpoch\":0,\"stateEpoch\":0,\"leaderEpoch\":0,\"startOffset\":0,\"stateBatches\":[{\"firstOffset\":0,\"lastOffset\":4,\"deliveryState\":2,\"deliveryCount\":1}]}}")
+      ),
+      parser.parse(serializedRecord(
+        new ApiMessageAndVersion(new ShareSnapshotKey()
+          .setGroupId("gs1")
+          .setTopicId(Uuid.fromString("Uj5wn_FqTXirEASvVZRY1w"))
+          .setPartition(0),
+          ShareCoordinator.SHARE_SNAPSHOT_RECORD_KEY_VERSION),
+        new ApiMessageAndVersion(new ShareSnapshotValue()
+          .setSnapshotEpoch(0)
+          .setStateEpoch(0)
+          .setLeaderEpoch(0)
+          .setStartOffset(0)
+          .setStateBatches(List[ShareSnapshotValue.StateBatch](
+            new ShareSnapshotValue.StateBatch()
+              .setFirstOffset(0)
+              .setLastOffset(4)
+              .setDeliveryState(2)
+              .setDeliveryCount(1)
+          ).asJava),
+          ShareCoordinator.SHARE_SNAPSHOT_RECORD_VALUE_VERSION)
+      ))
+    )
+
+    // A valid key and value should work (ShareUpdate).
+    assertEquals(
+      (
+        Some("{\"type\":\"1\",\"data\":{\"groupId\":\"gs1\",\"topicId\":\"Uj5wn_FqTXirEASvVZRY1w\",\"partition\":0}}"),
+        Some("{\"type\":\"0\",\"data\":{\"snapshotEpoch\":0,\"leaderEpoch\":0,\"startOffset\":0,\"stateBatches\":[{\"firstOffset\":0,\"lastOffset\":4,\"deliveryState\":2,\"deliveryCount\":1}]}}")
+      ),
+      parser.parse(serializedRecord(
+        new ApiMessageAndVersion(new ShareUpdateKey()
+          .setGroupId("gs1")
+          .setTopicId(Uuid.fromString("Uj5wn_FqTXirEASvVZRY1w"))
+          .setPartition(0),
+          ShareCoordinator.SHARE_UPDATE_RECORD_KEY_VERSION),
+        new ApiMessageAndVersion(new ShareUpdateValue()
+          .setSnapshotEpoch(0)
+          .setLeaderEpoch(0)
+          .setStartOffset(0)
+          .setStateBatches(List[ShareUpdateValue.StateBatch](
+            new ShareUpdateValue.StateBatch()
+              .setFirstOffset(0)
+              .setLastOffset(4)
+              .setDeliveryState(2)
+              .setDeliveryCount(1)
+          ).asJava),
+          0.toShort)
+      ))
+    )
+
+    // A valid key with a tombstone should work.
+    assertEquals(
+      (
+        Some("{\"type\":\"0\",\"data\":{\"groupId\":\"gs1\",\"topicId\":\"Uj5wn_FqTXirEASvVZRY1w\",\"partition\":0}}"),
+        Some("<DELETE>")
+      ),
+      parser.parse(serializedRecord(
+        new ApiMessageAndVersion(
+          new ShareSnapshotKey()
+            .setGroupId("gs1")
+            .setTopicId(Uuid.fromString("Uj5wn_FqTXirEASvVZRY1w"))
+            .setPartition(0),
+          0.toShort
+        ),
+        null
+      ))
+    )
+
+    // An unknown record type should be handled and reported as such.
+    assertEquals(
+      (
+        Some(
+          "Unknown record type 32767 at offset 0, skipping."
+        ),
+        None
+      ),
+      parser.parse(serializedRecord(
+        new ApiMessageAndVersion(
+          new ShareSnapshotKey()
+            .setGroupId("group")
+            .setTopicId(Uuid.fromString("Uj5wn_FqTXirEASvVZRY1w"))
+            .setPartition(0),
+          Short.MaxValue // Invalid record id.
+        ),
+        new ApiMessageAndVersion(
+          new ShareSnapshotValue()
+            .setSnapshotEpoch(0),
+          0.toShort
+        )
+      ))
+    )
+
+    // Any parsing error is swallowed and reported.
+    assertEquals(
+      (
+        Some(
+          "Error at offset 0, skipping. Could not read record with version 0 from value's buffer due to: " +
+          "non-nullable field stateBatches was serialized as null."
+        ),
+        None
+      ),
+      parser.parse(serializedRecord(
+        new ApiMessageAndVersion(
+          new ShareUpdateKey()
+            .setGroupId("group")
+            .setTopicId(Uuid.fromString("Uj5wn_FqTXirEASvVZRY1w"))
+            .setPartition(0),
+          1.toShort
+        ),
+        new ApiMessageAndVersion(
+          new ShareSnapshotValue(), // incorrect class to deserialize the snapshot update value
+          0.toShort
+        )
+      ))
+    )
   }
 }
