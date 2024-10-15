@@ -17,31 +17,17 @@
 package kafka.server
 
 import com.yammer.metrics.core.Meter
-import kafka.log.AsyncOffsetReadFutureHolder
 import kafka.utils.Pool
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ApiException
 import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsPartitionResponse, ListOffsetsTopicResponse}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.requests.ListOffsetsResponse
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
 import java.util.concurrent.TimeUnit
 import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
-
-case class ListOffsetsPartitionStatus(@volatile var responseOpt: Option[ListOffsetsPartitionResponse],
-                                      futureHolderOpt: Option[AsyncOffsetReadFutureHolder[Either[Exception, Option[TimestampAndOffset]]]] = None,
-                                      lastFetchableOffset: Option[Long] = None,
-                                      maybeOffsetsError: Option[ApiException] = None) {
-  @volatile var completed = false
-
-  override def toString: String = {
-    s"[responseOpt: $responseOpt, lastFetchableOffset: $lastFetchableOffset, " +
-      s"maybeOffsetsError: $maybeOffsetsError, completed: $completed]"
-  }
-}
 
 class DelayedRemoteListOffsets(delayMs: Long,
                                version: Int,

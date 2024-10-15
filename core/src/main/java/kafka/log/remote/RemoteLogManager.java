@@ -206,7 +206,7 @@ public class RemoteLogManager implements Closeable {
 
     private volatile boolean remoteLogManagerConfigured = false;
     private final Timer remoteReadTimer;
-    private DelayedOperationPurgatory<DelayedRemoteListOffsets> delayedRemoteListOffsetsPurgatory;
+    private volatile DelayedOperationPurgatory<DelayedRemoteListOffsets> delayedRemoteListOffsetsPurgatory;
 
     /**
      * Creates RemoteLogManager instance with the given arguments.
