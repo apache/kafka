@@ -121,7 +121,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val clientMetricsManager: Option[ClientMetricsManager]
 ) extends ApiRequestHandler with Logging {
 
-  type FetchResponseStats = Map[TopicPartition, RecordValidationStats]
+  type FetchResponseStats = Map[TopicIdPartition, RecordValidationStats]
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
   val configHelper = new ConfigHelper(metadataCache, config, configRepository)
   val authHelper = new AuthHelper(authorizer)
@@ -746,8 +746,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     def processingStatsCallback(processingStats: FetchResponseStats): Unit = {
-      processingStats.foreachEntry { (tp, info) =>
-        updateRecordConversionStats(request, tp, info)
+      processingStats.foreachEntry { (topicIdPartition, info) =>
+        updateRecordConversionStats(request, topicIdPartition.topicPartition(), info)
       }
     }
 
@@ -764,9 +764,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         transactionalId = produceRequest.transactionalId,
         entriesPerPartition = authorizedRequestInfo,
         responseCallback = sendResponseCallback,
-        recordValidationStatsCallback = result => processingStatsCallback(result.map {
-          case (partition, response) => (partition.topicPartition(), response)
-        }),
+        recordValidationStatsCallback = processingStatsCallback,
         requestLocal = requestLocal,
         transactionSupportedOperation = transactionSupportedOperation)
 
@@ -930,12 +928,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       val partitions = new util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
       val reassigningPartitions = mutable.Set[TopicIdPartition]()
       val nodeEndpoints = new mutable.HashMap[Int, Node]
-      responsePartitionData.foreach { case (tp, data) =>
+      responsePartitionData.foreach { case (topicIdPartition, data) =>
         val abortedTransactions = data.abortedTransactions.orElse(null)
         val lastStableOffset: Long = data.lastStableOffset.orElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
-        if (data.isReassignmentFetch) reassigningPartitions.add(tp)
+        if (data.isReassignmentFetch) reassigningPartitions.add(topicIdPartition)
         val partitionData = new FetchResponseData.PartitionData()
-          .setPartitionIndex(tp.partition)
+          .setPartitionIndex(topicIdPartition.partition)
           .setErrorCode(maybeDownConvertStorageError(data.error).code)
           .setHighWatermark(data.highWatermark)
           .setLastStableOffset(lastStableOffset)
@@ -947,7 +945,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (versionId >= 16) {
           data.error match {
             case Errors.NOT_LEADER_OR_FOLLOWER | Errors.FENCED_LEADER_EPOCH =>
-              val leaderNode = getCurrentLeader(tp.topicPartition(), request.context.listenerName)
+              val leaderNode = getCurrentLeader(topicIdPartition.topicPartition(), request.context.listenerName)
               leaderNode.node.foreach { node =>
                 nodeEndpoints.put(node.id(), node)
               }
@@ -959,7 +957,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
 
         data.divergingEpoch.ifPresent(partitionData.setDivergingEpoch(_))
-        partitions.put(tp, partitionData)
+        partitions.put(topicIdPartition, partitionData)
       }
       erroneous.foreach { case (tp, data) => partitions.put(tp, data) }
 
