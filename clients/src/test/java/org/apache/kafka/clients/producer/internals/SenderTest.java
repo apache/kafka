@@ -158,9 +158,9 @@ public class SenderTest {
     private static final String TOPIC_NAME = "test";
     private static final Uuid TOPIC_ID = Uuid.fromString("MKXx1fIkQy2J9jXHhK8m1w");
     private static final Map<String, Uuid> TOPIC_IDS = Collections.singletonMap(TOPIC_NAME, TOPIC_ID);
-    private TopicPartition tp0 = new TopicPartition(TOPIC_NAME, 0);
-    private TopicPartition tp1 = new TopicPartition(TOPIC_NAME, 1);
-    private TopicPartition tp2 = new TopicPartition(TOPIC_NAME, 2);
+    private final TopicPartition tp0 = new TopicPartition(TOPIC_NAME, 0);
+    private final TopicPartition tp1 = new TopicPartition(TOPIC_NAME, 1);
+    private final TopicPartition tp2 = new TopicPartition(TOPIC_NAME, 2);
     private MockTime time = new MockTime();
     private final int batchSize = 16 * 1024;
     private final ProducerMetadata metadata = new ProducerMetadata(0, 0, Long.MAX_VALUE, TOPIC_IDLE_MS,
@@ -3659,11 +3659,9 @@ public class SenderTest {
             TopicPartition topicPartition = entry.getKey();
             ProduceResponseData.TopicProduceResponse topicData = data.responses().find(topicPartition.topic(), TOPIC_ID);
             if (topicData == null) {
-                if (apiVersions.maxSupportedProduceVersion() >= 12) {
-                    topicData = new ProduceResponseData.TopicProduceResponse().setTopicId(TOPIC_ID);
-                } else {
-                    topicData = new ProduceResponseData.TopicProduceResponse().setName(topicPartition.topic());
-                }
+                topicData = new ProduceResponseData.TopicProduceResponse()
+                        .setTopicId(TOPIC_ID)
+                        .setName(topicPartition.topic());
                 data.responses().add(topicData);
             }
 
