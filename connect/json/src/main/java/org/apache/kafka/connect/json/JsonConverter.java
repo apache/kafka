@@ -697,6 +697,7 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
 
     private static Object convertToConnect(Schema schema, JsonNode jsonValue, JsonConverterConfig config) {
         final Schema.Type schemaType;
+        jsonValue = jsonValue == null ? JSON_NODE_FACTORY.nullNode() : jsonValue;
         if (schema != null) {
             schemaType = schema.type();
             if (jsonValue == null || jsonValue.isNull()) {
