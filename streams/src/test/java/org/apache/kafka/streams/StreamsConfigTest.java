@@ -1313,7 +1313,7 @@ public class StreamsConfigTest {
 
         assertThat(
                 exception.getMessage(),
-                containsString("Kafka Streams metrics push enabled, but main.consumer metrics push is false, the setting needs to be consistent between the two")
+                containsString("main.consumer metrics push is disabled")
         );
     }
 
@@ -1339,7 +1339,7 @@ public class StreamsConfigTest {
 
         assertThat(
                 exception.getMessage(),
-                containsString("Kafka Streams metrics push and consumer.enable.metrics are true, but main.consumer and admin.client metrics push are disabled, the setting needs to be consistent between the two")
+                containsString("Kafka Streams metrics push and consumer.enable.metrics are enabled, but main.consumer and admin.client metrics push are disabled")
         );
     }
 
@@ -1352,7 +1352,7 @@ public class StreamsConfigTest {
 
         assertThat(
                 exception.getMessage(),
-                containsString("Kafka Streams metrics push and consumer.enable.metrics are true, but main.consumer metrics disabled, the setting needs to be consistent between the two")
+                containsString("main.consumer metrics push is disabled")
         );
     }
 
@@ -1365,7 +1365,7 @@ public class StreamsConfigTest {
 
         assertThat(
                 exception.getMessage(),
-                containsString("Kafka Streams metrics push and consumer.enable.metrics are true, but admin.client metrics push are disabled, the setting needs to be consistent between the two")
+                containsString("admin.client metrics push is disabled")
         );
     }
 
@@ -1401,7 +1401,7 @@ public class StreamsConfigTest {
 
         assertThat(
                 exception.getMessage(),
-                containsString("Kafka Streams metrics push enabled, but admin.client metrics push is false, the setting needs to be consistent between the two")
+                containsString("admin.client metrics push is disabled")
         );
     }
 
@@ -1414,7 +1414,7 @@ public class StreamsConfigTest {
 
         assertThat(
                 exception.getMessage(),
-                containsString("Kafka Streams metrics push enabled, but main.consumer and admin.client metrics push is false, these settings need to updated")
+                containsString("main.consumer and admin.client metrics push are disabled")
         );
     }
 

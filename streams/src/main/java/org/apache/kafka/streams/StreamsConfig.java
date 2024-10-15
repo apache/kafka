@@ -51,6 +51,7 @@ import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor;
 import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -1473,58 +1474,43 @@ public class StreamsConfig extends AbstractConfig {
         final Boolean adminMetricsConfig = maybeMetricsPushEnabled(ADMIN_CLIENT_PREFIX);
 
         if (streamTelemetryEnabled) {
-            checkConsumerMetricsConfig(adminMetricsConfig, consumerMetricsConfig, mainConsumerMetricsConfig);
-            checkMainConsumerAndAdminMetricsConfig(adminMetricsConfig, consumerMetricsConfig, mainConsumerMetricsConfig);
-            checkMainConsumerMetricsConfig(mainConsumerMetricsConfig);
-            checkAdminMetricsConfig(adminMetricsConfig);
+            checkConsumerAndMainConsumerAndAdminMetricsConfig(adminMetricsConfig, consumerMetricsConfig, mainConsumerMetricsConfig);
+            checkMainConsumerAndAdminMetricsConfig(adminMetricsConfig, mainConsumerMetricsConfig, "enabled");
         }
     }
 
-    private void checkConsumerMetricsConfig(final Boolean adminMetricsConfig,
-                                            final Boolean consumerMetricsConfig,
-                                            final Boolean mainConsumerMetricsConfig) {
-        if (consumerMetricsConfig != null && !consumerMetricsConfig
-                && mainConsumerMetricsConfig == null
-                && adminMetricsConfig == null) {
-            throw new ConfigException("Kafka Streams metrics push enabled but consumer.enable.metrics is false, the setting needs to be consistent between the two");
+
+    private void checkConsumerAndMainConsumerAndAdminMetricsConfig(final Boolean adminMetricsConfig,
+                                                                   final Boolean consumerMetricsConfig,
+                                                                   final Boolean mainConsumerMetricsConfig) {
+        if (consumerMetricsConfig != null) {
+            if (!consumerMetricsConfig
+                    && mainConsumerMetricsConfig == null
+                    && adminMetricsConfig == null) {
+                throw new ConfigException("Kafka Streams metrics push enabled but consumer.enable.metrics is false, the setting needs to be consistent between the two");
+            } else if (consumerMetricsConfig) {
+                checkMainConsumerAndAdminMetricsConfig(adminMetricsConfig, mainConsumerMetricsConfig, "and consumer.enable.metrics are enabled,");
+            }
         }
     }
 
-    private void checkMainConsumerAndAdminMetricsConfig(final Boolean adminMetricsConfig,
-                                                        final Boolean consumerMetricsConfig,
-                                                        final Boolean mainConsumerMetricsConfig) {
-        if (consumerMetricsConfig != null && consumerMetricsConfig
-                && mainConsumerMetricsConfig != null && !mainConsumerMetricsConfig
+    private void checkMainConsumerAndAdminMetricsConfig(final Boolean adminMetricsConfig, final Boolean mainConsumerMetricsConfig, final String message) {
+        if (mainConsumerMetricsConfig != null && !mainConsumerMetricsConfig
                 && adminMetricsConfig != null && !adminMetricsConfig) {
-            throw new ConfigException("Kafka Streams metrics push and consumer.enable.metrics are true, but main.consumer and admin.client metrics push are disabled, the setting needs to be consistent between the two");
-        } else if (consumerMetricsConfig != null && consumerMetricsConfig
-                && mainConsumerMetricsConfig != null && !mainConsumerMetricsConfig) {
-            throw new ConfigException("Kafka Streams metrics push and consumer.enable.metrics are true, but main.consumer metrics disabled, the setting needs to be consistent between the two");
-        } else if (consumerMetricsConfig != null && consumerMetricsConfig
-                && adminMetricsConfig != null && !adminMetricsConfig) {
-            throw new ConfigException("Kafka Streams metrics push and consumer.enable.metrics are true, but admin.client metrics push are disabled, the setting needs to be consistent between the two");
-        } else if (mainConsumerMetricsConfig != null && !mainConsumerMetricsConfig
-                && adminMetricsConfig != null && !adminMetricsConfig) {
-            throw new ConfigException("Kafka Streams metrics push enabled, but main.consumer and admin.client metrics push is false, these settings need to updated");
+            throw new ConfigException("Kafka Streams metrics push " + message + " but main.consumer and admin.client metrics push are disabled, the setting needs to be consistent between the two");
+        } else if (mainConsumerMetricsConfig != null && !mainConsumerMetricsConfig) {
+            throw new ConfigException("Kafka Streams metrics push " + message + " but main.consumer metrics push is disabled, the setting needs to be consistent between the two");
+        } else if (adminMetricsConfig != null && !adminMetricsConfig) {
+            throw new ConfigException("Kafka Streams metrics push " + message + " but admin.client metrics push is disabled, the setting needs to be consistent between the two");
         }
     }
-
-    private void checkMainConsumerMetricsConfig(final Boolean mainConsumerMetricsConfig) {
-        if (mainConsumerMetricsConfig != null && !mainConsumerMetricsConfig) {
-            throw new ConfigException("Kafka Streams metrics push enabled, but main.consumer metrics push is false, the setting needs to be consistent between the two");
-        }
-    }
-
-    private void checkAdminMetricsConfig(final Boolean adminMetricsConfig) {
-        if (adminMetricsConfig != null && !adminMetricsConfig) {
-            throw new ConfigException("Kafka Streams metrics push enabled, but admin.client metrics push is false, the setting needs to be consistent between the two");
-        }
-    }
-
 
     private Boolean maybeMetricsPushEnabled(final String prefix) {
-        return originalsWithPrefix(prefix).containsKey(ENABLE_METRICS_PUSH_CONFIG) ?
-                (boolean) originalsWithPrefix(prefix).get(ENABLE_METRICS_PUSH_CONFIG) : null;
+        Boolean configSetValue = null;
+        if (originalsWithPrefix(prefix).containsKey(ENABLE_METRICS_PUSH_CONFIG)) {
+            configSetValue =  (Boolean) originalsWithPrefix(prefix).get(ENABLE_METRICS_PUSH_CONFIG);
+        }
+        return configSetValue;
     }
 
     @Override
