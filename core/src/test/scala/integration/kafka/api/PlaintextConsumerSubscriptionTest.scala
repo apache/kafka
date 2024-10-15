@@ -232,6 +232,11 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
     val consumer = createConsumer()
 
     setupSubscribeInvalidTopic(consumer)
+    if(groupProtocol == "consumer") {
+      // Must ensure memberId is not empty before sending leave group heartbeat. This is a temporary solution before KIP-1082.
+      TestUtils.waitUntilTrue(() => consumer.groupMetadata().memberId().nonEmpty,
+        waitTimeMs = 30000, msg = "Timeout waiting for first consumer group heartbeat response")
+    }
     assertDoesNotThrow(new Executable {
       override def execute(): Unit = consumer.unsubscribe()
     })
