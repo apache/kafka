@@ -50,7 +50,7 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
    * succeed as long as the partition is included in the metadata.
    */
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testSendWithTopicDeletionMidWay(quorum: String): Unit = {
     val numRecords = 10
     val topic = "topic"
@@ -91,13 +91,13 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
    * succeed as long as the metadata has been updated with new topic id.
    */
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testSendWithRecreatedTopic(quorum: String): Unit = {
     val numRecords = 10
     val topic = "topic"
     createTopic(topic)
     val admin = createAdminClient()
-    val topicId = getTopicMetadata(admin, topic).topicId()
+    val topicId = topicMetadata(admin, topic).topicId()
     val producer = createProducer()
 
     (1 to numRecords).foreach { i =>
@@ -110,7 +110,7 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
     // Verify that the topic is deleted when no metadata request comes in
     TestUtils.verifyTopicDeletion(zkClientOrNull, topic, 2, brokers)
     createTopic(topic)
-    assertNotEquals(topicId, getTopicMetadata(admin, topic).topicId())
+    assertNotEquals(topicId, topicMetadata(admin, topic).topicId())
 
     // Producer should be able to send messages even after topic gets recreated
     val recordMetadata: RecordMetadata = producer.send(new ProducerRecord(topic, null, "value".getBytes(StandardCharsets.UTF_8))).get
@@ -125,7 +125,7 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
    * succeed as long as the metadata on the leader has been updated with new topic id.
    */
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testSendWithTopicReassignmentIsMidWay(quorum: String): Unit = {
     val numRecords = 10
     val topic = "topic"
@@ -137,7 +137,7 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
     createTopicWithAssignment(topic, Map(0 -> Seq(0, 1), 1 -> Seq(0, 1)))
     TestUtils.assertLeader(admin, partition1, 0)
 
-    val topicDetails = getTopicMetadata(admin, topic)
+    val topicDetails = topicMetadata(admin, topic)
     assertEquals(0, topicDetails.partitions().get(0).leader().id())
     val producer = createProducer()
 
@@ -159,18 +159,18 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
       s"Expected preferred leader to become 2, but is ${partitionLeader(admin, partition0)} and ${partitionLeader(admin, partition1)}",
       10000)
     TestUtils.assertLeader(admin, partition1, 2)
-    assertEquals(topicDetails.topicId(), getTopicMetadata(admin, topic).topicId())
+    assertEquals(topicDetails.topicId(), topicMetadata(admin, topic).topicId())
 
     // Producer should be able to send messages even after topic gets reassigned
     assertEquals(topic, producer.send(new ProducerRecord(topic, null, "value".getBytes(StandardCharsets.UTF_8))).get.topic())
   }
 
-  def getTopicMetadata(admin: Admin, topic: String): TopicDescription = {
+  def topicMetadata(admin: Admin, topic: String): TopicDescription = {
     admin.describeTopics(util.Collections.singletonList(topic)).allTopicNames().get().get(topic)
   }
 
-  def partitionLeader(admin: Admin, topicPartition: TopicPartition): Int = {
-    val partitionMetadata = getTopicMetadata(admin, topicPartition.topic).partitions.get(topicPartition.partition)
+  private def partitionLeader(admin: Admin, topicPartition: TopicPartition): Int = {
+    val partitionMetadata = topicMetadata(admin, topicPartition.topic).partitions.get(topicPartition.partition)
     val preferredLeaderMetadata = partitionMetadata.leader()
     preferredLeaderMetadata.id
   }

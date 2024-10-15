@@ -3352,7 +3352,7 @@ class KafkaApisTest extends Logging {
 
     allPartitions.foreach { tp =>
       when(replicaManager.getMagic(tp)).thenReturn(Some(RecordBatch.MAGIC_VALUE_V2))
-      when(replicaManager.getTopicIdPartition(tp)).thenReturn(new TopicIdPartition(topicIds.get(tp.topic()).getOrElse(Uuid.ZERO_UUID), tp))
+      when(replicaManager.topicIdPartition(tp)).thenReturn(new TopicIdPartition(topicIds.get(tp.topic()).getOrElse(Uuid.ZERO_UUID), tp))
     }
 
     when(groupCoordinator.completeTransaction(

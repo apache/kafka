@@ -88,7 +88,7 @@ class CoordinatorPartitionWriterTest {
     val tp = new TopicPartition("foo", 0)
     val topicId = Uuid.fromString("TbEp6-A4s3VPT1TwiI5COw")
     val replicaManager = mock(classOf[ReplicaManager])
-    when(replicaManager.getTopicIdPartition(tp)).thenReturn(new TopicIdPartition(topicId, tp))
+    when(replicaManager.topicIdPartition(tp)).thenReturn(new TopicIdPartition(topicId, tp))
 
     val partitionRecordWriter = new CoordinatorPartitionWriter(
         replicaManager
@@ -198,7 +198,7 @@ class CoordinatorPartitionWriterTest {
     val tp = new TopicPartition("foo", 0)
     val topicId = Uuid.fromString("TbEp6-A4s3VPT1TwiI5COw")
     val replicaManager = mock(classOf[ReplicaManager])
-    when(replicaManager.getTopicIdPartition(tp)).thenReturn(new TopicIdPartition(topicId, tp))
+    when(replicaManager.topicIdPartition(tp)).thenReturn(new TopicIdPartition(topicId, tp))
 
     val partitionRecordWriter = new CoordinatorPartitionWriter(
       replicaManager

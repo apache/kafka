@@ -3164,7 +3164,7 @@ class ReplicaManagerTest {
       requiredAcks = requiredAcks,
       internalTopicsAllowed = false,
       transactionalId = transactionalId,
-      entriesPerPartition = entriesToAppend.map(e => replicaManager.getTopicIdPartition(e._1) -> e._2),
+      entriesPerPartition = entriesToAppend.map(e => replicaManager.topicIdPartition(e._1) -> e._2),
       responseCallback = appendCallback,
       transactionSupportedOperation = transactionSupportedOperation
     )
@@ -3193,7 +3193,7 @@ class ReplicaManagerTest {
       requiredAcks = requiredAcks,
       internalTopicsAllowed = false,
       transactionalId = transactionalId,
-      entriesPerPartition = entriesPerPartition.map(e => replicaManager.getTopicIdPartition(e._1) -> e._2),
+      entriesPerPartition = entriesPerPartition.map(e => replicaManager.topicIdPartition(e._1) -> e._2),
       responseCallback = appendCallback,
       transactionSupportedOperation = transactionSupportedOperation
     )

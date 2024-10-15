@@ -882,7 +882,7 @@ public class Sender implements Runnable {
             if (batch.magic() < minUsedMagic)
                 minUsedMagic = batch.magic();
         }
-        Map<String, Uuid> topicIds = getTopicIdsForBatches(batches);
+        Map<String, Uuid> topicIds = topicIdsForBatches(batches);
         ProduceRequestData.TopicProduceDataCollection tpd = new ProduceRequestData.TopicProduceDataCollection();
         for (ProducerBatch batch : batches) {
             TopicPartition tp = batch.topicPartition;
@@ -932,7 +932,7 @@ public class Sender implements Runnable {
         log.trace("Sent produce request to {}: {}", nodeId, requestBuilder);
     }
 
-    private Map<String, Uuid> getTopicIdsForBatches(List<ProducerBatch> batches) {
+    private Map<String, Uuid> topicIdsForBatches(List<ProducerBatch> batches) {
         return batches.stream()
                 .collect(Collectors.toMap(
                         b -> b.topicPartition.topic(),

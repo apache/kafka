@@ -290,7 +290,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
       }
 
       val future = new CompletableFuture[ProduceResponse.PartitionResponse]()
-      val topicIdPartition = replicaManager.getTopicIdPartition(topicPartition)
+      val topicIdPartition = replicaManager.topicIdPartition(topicPartition)
 
       def produceCallback(results: collection.Map[TopicIdPartition, ProduceResponse.PartitionResponse]): Unit = {
         try {

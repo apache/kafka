@@ -257,7 +257,7 @@ class GroupMetadataManager(brokerId: Int,
         }
 
         val groupMetadataPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partitionFor(group.groupId))
-        val groupMetadataTopicIdPartition = replicaManager.getTopicIdPartition(groupMetadataPartition)
+        val groupMetadataTopicIdPartition = replicaManager.topicIdPartition(groupMetadataPartition)
         val groupMetadataRecords = Map(groupMetadataTopicIdPartition -> records)
         val generationId = group.generationId
 
@@ -376,7 +376,7 @@ class GroupMetadataManager(brokerId: Int,
                                      producerId: Long,
                                      records: Map[TopicPartition, MemoryRecords]): Map[TopicIdPartition, PartitionResponse] => Unit = {
     val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partitionFor(group.groupId))
-    val offsetTopicIdPartition = replicaManager.getTopicIdPartition(offsetTopicPartition)
+    val offsetTopicIdPartition = replicaManager.topicIdPartition(offsetTopicPartition)
     // set the callback function to insert offsets into cache after log append completed
     def putCacheCallback(responseStatus: Map[TopicIdPartition, PartitionResponse]): Unit = {
       // the append response should only contain the topics partition
@@ -488,7 +488,7 @@ class GroupMetadataManager(brokerId: Int,
       group.prepareOffsetCommit(filteredOffsetMetadata)
     }
 
-    val topicIdPartitionsToRecords = Utils.convertKeys(records.asJava, replicaManager.getTopicIdPartition).asScala
+    val topicIdPartitionsToRecords = Utils.convertKeys(records.asJava, replicaManager.topicIdPartition).asScala
     appendForGroup(group, topicIdPartitionsToRecords, requestLocal, putCacheCallback, verificationGuards)
   }
 

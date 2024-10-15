@@ -283,7 +283,7 @@ class TransactionStateManager(brokerId: Int,
         requiredAcks = TransactionLog.EnforcedRequiredAcks,
         internalTopicsAllowed = true,
         origin = AppendOrigin.COORDINATOR,
-        entriesPerPartition = Map(replicaManager.getTopicIdPartition(transactionPartition) -> tombstoneRecords),
+        entriesPerPartition = Map(replicaManager.topicIdPartition(transactionPartition) -> tombstoneRecords),
         responseCallback = removeFromCacheCallback,
         requestLocal = RequestLocal.noCaching)
     }
@@ -631,7 +631,7 @@ class TransactionStateManager(brokerId: Int,
 
     val records = MemoryRecords.withRecords(TransactionLog.EnforcedCompression, new SimpleRecord(timestamp, keyBytes, valueBytes))
     val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionFor(transactionalId))
-    val transactionStateTopicIdPartition = replicaManager.getTopicIdPartition(topicPartition)
+    val transactionStateTopicIdPartition = replicaManager.topicIdPartition(topicPartition)
     val recordsPerPartition = Map(transactionStateTopicIdPartition -> records)
 
     // set the callback function to update transaction status in cache after log append completed

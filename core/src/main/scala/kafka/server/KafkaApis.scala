@@ -2483,7 +2483,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           } else {
             // Otherwise, the regular appendRecords path is used for all the non __consumer_offsets
             // partitions or for all partitions when the new group coordinator is disabled.
-            controlRecords += replicaManager.getTopicIdPartition(partition) -> MemoryRecords.withEndTransactionMarker(
+            controlRecords += replicaManager.topicIdPartition(partition) -> MemoryRecords.withEndTransactionMarker(
               producerId,
               marker.producerEpoch,
               new EndTransactionMarker(controlRecordType, marker.coordinatorEpoch)

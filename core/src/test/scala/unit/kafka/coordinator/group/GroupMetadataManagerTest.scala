@@ -95,7 +95,6 @@ class GroupMetadataManagerTest {
       config.groupCoordinatorConfig.offsetCommitTimeoutMs)
   }
 
-
   @BeforeEach
   def setUp(): Unit = {
     defaultOffsetRetentionMs = offsetConfig.offsetsRetentionMs
@@ -1117,7 +1116,7 @@ class GroupMetadataManagerTest {
     }
 
     val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataManager.partitionFor(group.groupId))
-    when(replicaManager.getTopicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
+    when(replicaManager.topicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
 
     groupMetadataManager.storeGroup(group, Map.empty, callback)
     assertEquals(Some(Errors.NONE), maybeError)
@@ -1144,7 +1143,7 @@ class GroupMetadataManagerTest {
     }
 
     val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataManager.partitionFor(group.groupId))
-    when(replicaManager.getTopicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
+    when(replicaManager.topicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
 
     groupMetadataManager.storeGroup(group, Map.empty, callback)
     assertEquals(Some(Errors.NONE), maybeError)
@@ -1178,7 +1177,7 @@ class GroupMetadataManagerTest {
     groupMetadataManager.addGroup(group)
 
     val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataManager.partitionFor(group.groupId))
-    when(replicaManager.getTopicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
+    when(replicaManager.topicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
 
     expectAppendMessage(appendError)
     var maybeError: Option[Errors] = None
@@ -1224,7 +1223,7 @@ class GroupMetadataManagerTest {
       maybeError = Some(error)
     }
     val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataManager.partitionFor(group.groupId))
-    when(replicaManager.getTopicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
+    when(replicaManager.topicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
 
     groupMetadataManager.storeGroup(group, Map(memberId -> Array[Byte]()), callback)
     assertEquals(Some(Errors.NONE), maybeError)
@@ -1281,7 +1280,7 @@ class GroupMetadataManagerTest {
     groupMetadataManager.addGroup(group)
 
     val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataManager.partitionFor(group.groupId))
-    when(replicaManager.getTopicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
+    when(replicaManager.topicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
 
     val offsets = immutable.Map(topicIdPartition -> OffsetAndMetadata(offset, "", time.milliseconds()))
 
@@ -1346,7 +1345,7 @@ class GroupMetadataManagerTest {
     def callback(errors: immutable.Map[TopicIdPartition, Errors]): Unit = {
       commitErrors = Some(errors)
     }
-    when(replicaManager.getTopicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
+    when(replicaManager.topicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
 
     val verificationGuard = new VerificationGuard()
 
@@ -1393,7 +1392,7 @@ class GroupMetadataManagerTest {
 
     val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataManager.partitionFor(group.groupId))
     val offsets = immutable.Map(topicIdPartition -> OffsetAndMetadata(offset, "", time.milliseconds()))
-    when(replicaManager.getTopicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
+    when(replicaManager.topicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
     when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
 
     var commitErrors: Option[immutable.Map[TopicIdPartition, Errors]] = None
@@ -1446,7 +1445,7 @@ class GroupMetadataManagerTest {
     val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataManager.partitionFor(group.groupId))
     val offsets = immutable.Map(topicIdPartition -> OffsetAndMetadata(offset, "", time.milliseconds()))
 
-    when(replicaManager.getTopicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
+    when(replicaManager.topicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
     when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
 
     var commitErrors: Option[immutable.Map[TopicIdPartition, Errors]] = None
@@ -1538,7 +1537,7 @@ class GroupMetadataManagerTest {
     val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataManager.partitionFor(group.groupId))
     val offsets = immutable.Map(topicIdPartition -> OffsetAndMetadata(offset, "", time.milliseconds()))
 
-    when(replicaManager.getTopicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
+    when(replicaManager.topicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
     when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
 
     var commitErrors: Option[immutable.Map[TopicIdPartition, Errors]] = None
@@ -1586,7 +1585,7 @@ class GroupMetadataManagerTest {
     groupMetadataManager.addGroup(group)
 
     val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataManager.partitionFor(group.groupId))
-    when(replicaManager.getTopicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
+    when(replicaManager.topicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
 
     val offsets = immutable.Map(
       topicIdPartition -> OffsetAndMetadata(offset, "", time.milliseconds()),
@@ -1702,7 +1701,7 @@ class GroupMetadataManagerTest {
       validTopicIdPartition -> OffsetAndMetadata(offset, "", time.milliseconds())
     )
 
-    when(replicaManager.getTopicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
+    when(replicaManager.topicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
 
     expectAppendMessage(Errors.NONE)
 
@@ -1764,7 +1763,7 @@ class GroupMetadataManagerTest {
     val capturedResponseCallback: ArgumentCaptor[Map[TopicIdPartition, PartitionResponse] => Unit] =
       ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, PartitionResponse] => Unit])
     when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
-    when(replicaManager.getTopicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
+    when(replicaManager.topicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
 
     var commitErrors: Option[immutable.Map[TopicIdPartition, Errors]] = None
 
@@ -1829,7 +1828,7 @@ class GroupMetadataManagerTest {
     groupMetadataManager.addGroup(group)
 
     val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataManager.partitionFor(group.groupId))
-    when(replicaManager.getTopicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
+    when(replicaManager.topicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
     // expire the offset after 1 millisecond
     val startMs = time.milliseconds
     val offsets = immutable.Map(
@@ -1986,7 +1985,7 @@ class GroupMetadataManagerTest {
     groupMetadataManager.addGroup(group)
 
     val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataManager.partitionFor(group.groupId))
-    when(replicaManager.getTopicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
+    when(replicaManager.topicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
     // expire the offset after 1 millisecond
     val startMs = time.milliseconds
     val offsets = immutable.Map(
@@ -2071,7 +2070,7 @@ class GroupMetadataManagerTest {
     group.initNextGeneration()
 
     val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataManager.partitionFor(group.groupId))
-    when(replicaManager.getTopicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
+    when(replicaManager.topicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
     val startMs = time.milliseconds
     // old clients, expiry timestamp is explicitly set
     val tp1OffsetAndMetadata = OffsetAndMetadata(offset, "", startMs, startMs + 1)
@@ -2251,7 +2250,7 @@ class GroupMetadataManagerTest {
     groupMetadataManager.addGroup(group)
 
     val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataManager.partitionFor(group.groupId))
-    when(replicaManager.getTopicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
+    when(replicaManager.topicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
     // expire the offset after 1 and 3 milliseconds (old clients) and after default retention (new clients)
     val startMs = time.milliseconds
     // old clients, expiry timestamp is explicitly set
@@ -2361,7 +2360,7 @@ class GroupMetadataManagerTest {
     group.transitionTo(Stable)
 
     val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataManager.partitionFor(group.groupId))
-    when(replicaManager.getTopicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
+    when(replicaManager.topicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
 
     val startMs = time.milliseconds
 

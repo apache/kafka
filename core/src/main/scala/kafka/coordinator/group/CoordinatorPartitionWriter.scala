@@ -144,7 +144,7 @@ class CoordinatorPartitionWriter(
       requiredAcks = 1,
       internalTopicsAllowed = true,
       origin = AppendOrigin.COORDINATOR,
-      entriesPerPartition = Map(replicaManager.getTopicIdPartition(tp) -> records),
+      entriesPerPartition = Map(replicaManager.topicIdPartition(tp) -> records),
       responseCallback = results => appendResults = results,
       requestLocal = RequestLocal.noCaching,
       verificationGuards = Map(tp -> verificationGuard),
@@ -154,7 +154,7 @@ class CoordinatorPartitionWriter(
       actionQueue = directActionQueue
     )
 
-    val partitionResult = appendResults.getOrElse(replicaManager.getTopicIdPartition(tp),
+    val partitionResult = appendResults.getOrElse(replicaManager.topicIdPartition(tp),
       throw new IllegalStateException(s"Append status $appendResults should have partition $tp."))
 
     if (partitionResult.error != Errors.NONE) {

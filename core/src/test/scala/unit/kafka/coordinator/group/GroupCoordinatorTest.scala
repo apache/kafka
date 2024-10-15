@@ -129,7 +129,7 @@ class GroupCoordinatorTest {
     // add the partition into the owned partition list
     groupPartitionId = groupCoordinator.partitionFor(groupId)
     val groupPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
-    when(replicaManager.getTopicIdPartition(groupPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, groupPartition))
+    when(replicaManager.topicIdPartition(groupPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, groupPartition))
     groupCoordinator.groupManager.addOwnedPartition(groupPartitionId)
   }
 
@@ -2786,8 +2786,8 @@ class GroupCoordinatorTest {
     val groupMetadataPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupCoordinator.partitionFor(groupId))
     val offsetTopicPartitions = List(groupMetadataPartition, otherGroupMetadataPartition)
 
-    when(replicaManager.getTopicIdPartition(groupMetadataPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, groupMetadataPartition))
-    when(replicaManager.getTopicIdPartition(otherGroupMetadataPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, otherGroupMetadataPartition))
+    when(replicaManager.topicIdPartition(groupMetadataPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, groupMetadataPartition))
+    when(replicaManager.topicIdPartition(otherGroupMetadataPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, otherGroupMetadataPartition))
 
     groupCoordinator.groupManager.addOwnedPartition(offsetTopicPartitions(1).partition)
     val errors = mutable.ArrayBuffer[Errors]()

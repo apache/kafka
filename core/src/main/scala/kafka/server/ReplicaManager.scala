@@ -647,7 +647,7 @@ class ReplicaManager(val config: KafkaConfig,
     errorMap
   }
 
-  def getTopicIdPartition(topicPartition: TopicPartition): TopicIdPartition = {
+  def topicIdPartition(topicPartition: TopicPartition): TopicIdPartition = {
     val topicId = metadataCache.getTopicId(topicPartition.topic())
     new TopicIdPartition(topicId, topicPartition)
   }
