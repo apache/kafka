@@ -28,7 +28,8 @@ import java.net.{InetAddress, UnknownHostException}
 import org.apache.kafka.image.{ClientQuotaDelta, ClientQuotasDelta}
 import org.apache.kafka.server.config.{QuotaConfigs, ZooKeeperInternals}
 
-import scala.compat.java8.OptionConverters._
+import scala.jdk.OptionConverters.RichOptionalDouble
+
 
 
 // A strict hierarchy of entities that we support
@@ -97,7 +98,7 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
         }
       }
       quotaDelta.changes().forEach { (key, value) =>
-        handleUserClientQuotaChange(userClientEntity, key, value.asScala)
+        handleUserClientQuotaChange(userClientEntity, key, value.toScala)
       }
     } else {
       warn(s"Ignoring unsupported quota entity $entity.")
@@ -124,7 +125,7 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
         warn(s"Ignoring unexpected quota key $quotaName for entity $ipEntity")
       } else {
         try {
-          connectionQuotas.updateIpConnectionRateQuota(inetAddress, quotaValue.asScala.map(_.toInt))
+          connectionQuotas.updateIpConnectionRateQuota(inetAddress, quotaValue.toScala.map(_.toInt))
         } catch {
           case t: Throwable => error(s"Failed to update IP quota $ipEntity", t)
         }

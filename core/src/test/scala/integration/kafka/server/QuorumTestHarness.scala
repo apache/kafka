@@ -46,8 +46,8 @@ import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeAll, BeforeEach, Tag, T
 
 import java.nio.file.{Files, Paths}
 import scala.collection.Seq
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOptional
 
 trait QuorumImplementation {
   def createBroker(
@@ -279,7 +279,7 @@ abstract class QuorumTestHarness extends Logging {
         tearDown()
       }
     })
-    val name = testInfo.getTestMethod.asScala
+    val name = testInfo.getTestMethod.toScala
       .map(_.toString)
       .getOrElse("[unspecified]")
     if (TestInfoUtils.isKRaft(testInfo)) {

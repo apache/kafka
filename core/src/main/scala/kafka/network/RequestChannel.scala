@@ -38,7 +38,7 @@ import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.network.RequestConvertToJson
 
 import scala.jdk.CollectionConverters._
-import scala.compat.java8.OptionConverters._
+import scala.jdk.OptionConverters.RichOption
 import scala.reflect.ClassTag
 
 object RequestChannel extends Logging {
@@ -250,7 +250,7 @@ object RequestChannel extends Logging {
       recordNetworkThreadTimeCallback.foreach(record => record(networkThreadTimeNanos))
 
       if (isRequestLoggingEnabled) {
-        val desc = RequestConvertToJson.requestDescMetrics(header, requestLog.asJava, response.responseLog.asJava,
+        val desc = RequestConvertToJson.requestDescMetrics(header, requestLog.toJava, response.responseLog.toJava,
           context, session, isForwarded,
           totalTimeMs, requestQueueTimeMs, apiLocalTimeMs,
           apiRemoteTimeMs, apiThrottleTimeMs, responseQueueTimeMs,

@@ -54,9 +54,9 @@ import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.annotation.nowarn
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
+import scala.jdk.OptionConverters.RichOptional
 
 object KafkaConfig {
 
@@ -149,8 +149,8 @@ object KafkaConfig {
   def loggableValue(resourceType: ConfigResource.Type, name: String, value: String): String = {
     val maybeSensitive = resourceType match {
       case ConfigResource.Type.BROKER => KafkaConfig.maybeSensitive(KafkaConfig.configType(name))
-      case ConfigResource.Type.TOPIC => KafkaConfig.maybeSensitive(LogConfig.configType(name).asScala)
-      case ConfigResource.Type.GROUP => KafkaConfig.maybeSensitive(GroupConfig.configType(name).asScala)
+      case ConfigResource.Type.TOPIC => KafkaConfig.maybeSensitive(LogConfig.configType(name).toScala)
+      case ConfigResource.Type.GROUP => KafkaConfig.maybeSensitive(GroupConfig.configType(name).toScala)
       case ConfigResource.Type.BROKER_LOGGER => false
       case ConfigResource.Type.CLIENT_METRICS => false
       case _ => true

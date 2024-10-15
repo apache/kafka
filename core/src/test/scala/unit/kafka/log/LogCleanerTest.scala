@@ -45,8 +45,8 @@ import java.nio.file.Paths
 import java.util.Properties
 import java.util.concurrent.{ConcurrentHashMap, CountDownLatch, TimeUnit}
 import scala.collection._
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOption
 
 /**
  * Unit tests for the log cleaning logic
@@ -204,7 +204,7 @@ class LogCleanerTest extends Logging {
       logSegments,
       0L,
       0L,
-      leaderEpochCache.asJava,
+      leaderEpochCache.toJava,
       producerStateManager,
       new ConcurrentHashMap[String, Integer],
       false

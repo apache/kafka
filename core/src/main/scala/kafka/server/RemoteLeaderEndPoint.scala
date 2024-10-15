@@ -30,12 +30,12 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetFo
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, ListOffsetsRequest, ListOffsetsResponse, OffsetsForLeaderEpochRequest, OffsetsForLeaderEpochResponse}
-import org.apache.kafka.server.common.{OffsetAndEpoch, MetadataVersion}
+import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.common.MetadataVersion.IBP_0_10_1_IV2
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, mutable}
-import scala.compat.java8.OptionConverters.RichOptionForJava8
+import scala.jdk.OptionConverters.RichOption
 
 /**
  * Facilitates fetches from a remote replica leader.
@@ -187,7 +187,7 @@ class RemoteLeaderEndPoint(logPrefix: String,
         try {
           val logStartOffset = replicaManager.localLogOrException(topicPartition).logStartOffset
           val lastFetchedEpoch = if (isTruncationOnFetchSupported)
-            fetchState.lastFetchedEpoch.map(_.asInstanceOf[Integer]).asJava
+            fetchState.lastFetchedEpoch.map(_.asInstanceOf[Integer]).toJava
           else
             Optional.empty[Integer]
           builder.add(topicPartition, new FetchRequest.PartitionData(

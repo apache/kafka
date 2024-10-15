@@ -39,7 +39,7 @@ import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Seq, mutable}
-import scala.compat.java8.OptionConverters
+import scala.jdk.javaapi.OptionConverters
 
 object SslAdminIntegrationTest {
   @volatile var semaphore: Option[Semaphore] = None

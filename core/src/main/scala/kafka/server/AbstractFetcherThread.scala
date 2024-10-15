@@ -44,8 +44,8 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.locks.ReentrantLock
 import scala.collection.{Map, Set, mutable}
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.{RichOption, RichOptionalInt}
 import scala.math._
 
 /**
@@ -266,7 +266,7 @@ abstract class AbstractFetcherThread(name: String,
 
           case Errors.FENCED_LEADER_EPOCH =>
             val currentLeaderEpoch = latestEpochsForPartitions.get(tp)
-              .map(epochEndOffset => Int.box(epochEndOffset.currentLeaderEpoch)).asJava
+              .map(epochEndOffset => Int.box(epochEndOffset.currentLeaderEpoch)).toJava
             if (onPartitionFenced(tp, currentLeaderEpoch))
               partitionsWithError += tp
 
@@ -365,7 +365,7 @@ abstract class AbstractFetcherThread(name: String,
                         // ReplicaDirAlterThread may have removed topicPartition from the partitionStates after processing the partition data
                         if ((validBytes > 0 || currentFetchState.lag.isEmpty) && partitionStates.contains(topicPartition)) {
                           val lastFetchedEpoch =
-                            if (logAppendInfo.lastLeaderEpoch.isPresent) logAppendInfo.lastLeaderEpoch.asScala else currentFetchState.lastFetchedEpoch
+                            if (logAppendInfo.lastLeaderEpoch.isPresent) logAppendInfo.lastLeaderEpoch.toScala else currentFetchState.lastFetchedEpoch
                           // Update partitionStates only if there is no exception during processPartitionData
                           val newFetchState = PartitionFetchState(currentFetchState.topicId, nextOffset, Some(lag),
                             currentFetchState.currentLeaderEpoch, state = Fetching, lastFetchedEpoch)

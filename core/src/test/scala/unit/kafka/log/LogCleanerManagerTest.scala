@@ -37,7 +37,7 @@ import java.lang.{Long => JLong}
 import java.util
 import java.util.concurrent.ConcurrentHashMap
 import scala.collection.mutable
-import scala.compat.java8.OptionConverters._
+import scala.jdk.OptionConverters.RichOption
 
 /**
   * Unit tests for the log cleaning logic
@@ -124,7 +124,7 @@ class LogCleanerManagerTest extends Logging {
       segments,
       0L,
       0L,
-      leaderEpochCache.asJava,
+      leaderEpochCache.toJava,
       producerStateManager,
       new ConcurrentHashMap[String, Integer],
       false

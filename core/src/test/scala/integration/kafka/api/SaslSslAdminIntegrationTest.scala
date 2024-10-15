@@ -41,9 +41,9 @@ import org.junit.jupiter.params.provider.ValueSource
 import java.util
 import java.util.Collections
 import scala.collection.Seq
-import scala.compat.java8.OptionConverters._
 import scala.concurrent.ExecutionException
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOption
 import scala.util.{Failure, Success, Try}
 
 @Timeout(120)
@@ -583,7 +583,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     val configsOverride = Map(TopicConfig.SEGMENT_BYTES_CONFIG -> "100000").asJava
     val newTopics = Seq(
       new NewTopic(topic1, 2, 3.toShort).configs(configsOverride),
-      new NewTopic(topic2, Option.empty[Integer].asJava, Option.empty[java.lang.Short].asJava).configs(configsOverride))
+      new NewTopic(topic2, Option.empty[Integer].toJava, Option.empty[java.lang.Short].toJava).configs(configsOverride))
     val validateResult = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true))
     validateResult.all.get()
     waitForTopics(client, List(), topics)

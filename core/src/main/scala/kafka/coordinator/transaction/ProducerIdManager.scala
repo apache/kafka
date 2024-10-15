@@ -29,7 +29,7 @@ import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToContro
 import org.apache.kafka.server.common.ProducerIdsBlock
 
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong, AtomicReference}
-import scala.compat.java8.OptionConverters.RichOptionalGeneric
+import scala.jdk.OptionConverters.RichOptional
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -180,7 +180,7 @@ class RPCProducerIdManager(brokerId: Int,
     var result: Try[Long] = null
     var iteration = 0
     while (result == null) {
-      currentProducerIdBlock.get.claimNextId().asScala match {
+      currentProducerIdBlock.get.claimNextId().toScala match {
         case None =>
           // Check the next block if current block is full
           val block = nextProducerIdBlock.getAndSet(null)

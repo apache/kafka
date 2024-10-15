@@ -41,9 +41,9 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 import scala.collection.mutable
-import scala.compat.java8.OptionConverters
 import scala.concurrent.ExecutionException
 import scala.jdk.CollectionConverters._
+import scala.jdk.javaapi.OptionConverters
 
 abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 

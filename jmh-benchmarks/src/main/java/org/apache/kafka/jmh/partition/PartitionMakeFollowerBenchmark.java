@@ -70,7 +70,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import scala.Option;
-import scala.compat.java8.OptionConverters;
+import scala.jdk.javaapi.OptionConverters;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
