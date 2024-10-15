@@ -155,8 +155,8 @@ public class ShareFetchUtilsTest {
         when(sp0.nextFetchOffset()).thenReturn((long) 3);
         when(sp1.nextFetchOffset()).thenReturn((long) 3);
 
-        when(sp0.acquire(anyString(), anyInt(), any(FetchPartitionData.class))).thenReturn(ShareAcquiredRecords.emptyShareAcquiredRecords());
-        when(sp1.acquire(anyString(), anyInt(), any(FetchPartitionData.class))).thenReturn(ShareAcquiredRecords.emptyShareAcquiredRecords());
+        when(sp0.acquire(anyString(), anyInt(), any(FetchPartitionData.class))).thenReturn(ShareAcquiredRecords.empty());
+        when(sp1.acquire(anyString(), anyInt(), any(FetchPartitionData.class))).thenReturn(ShareAcquiredRecords.empty());
 
         doNothing().when(sp1).updateCacheAndOffsets(any(Long.class));
         doNothing().when(sp0).updateCacheAndOffsets(any(Long.class));
@@ -223,13 +223,13 @@ public class ShareFetchUtilsTest {
         when(sp0.nextFetchOffset()).thenReturn((long) 0, (long) 5);
         when(sp1.nextFetchOffset()).thenReturn((long) 4, (long) 4);
         when(sp0.acquire(anyString(), anyInt(), any(FetchPartitionData.class))).thenReturn(
-            ShareAcquiredRecords.emptyShareAcquiredRecords(),
+            ShareAcquiredRecords.empty(),
             ShareAcquiredRecords.fromAcquiredRecords(new ShareFetchResponseData.AcquiredRecords()
                 .setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)));
         when(sp1.acquire(anyString(), anyInt(), any(FetchPartitionData.class))).thenReturn(
             ShareAcquiredRecords.fromAcquiredRecords(new ShareFetchResponseData.AcquiredRecords()
                 .setFirstOffset(100).setLastOffset(103).setDeliveryCount((short) 1)),
-            ShareAcquiredRecords.emptyShareAcquiredRecords());
+            ShareAcquiredRecords.empty());
 
         doNothing().when(sp1).updateCacheAndOffsets(any(Long.class));
         doNothing().when(sp0).updateCacheAndOffsets(any(Long.class));
@@ -314,7 +314,7 @@ public class ShareFetchUtilsTest {
         // Mock the replicaManager.fetchOffsetForTimestamp method to return a timestamp and offset for the topic partition.
         FileRecords.TimestampAndOffset timestampAndOffset = new FileRecords.TimestampAndOffset(100L, 1L, Optional.empty());
         doReturn(new OffsetResultHolder(Option.apply(timestampAndOffset), Option.empty())).when(replicaManager).fetchOffsetForTimestamp(any(TopicPartition.class), anyLong(), any(), any(), anyBoolean());
-        when(sp0.acquire(anyString(), anyInt(), any(FetchPartitionData.class))).thenReturn(ShareAcquiredRecords.emptyShareAcquiredRecords());
+        when(sp0.acquire(anyString(), anyInt(), any(FetchPartitionData.class))).thenReturn(ShareAcquiredRecords.empty());
         doNothing().when(sp0).updateCacheAndOffsets(any(Long.class));
 
         MemoryRecords records = MemoryRecords.withRecords(Compression.NONE,

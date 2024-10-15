@@ -60,14 +60,13 @@ public class ShareAcquiredRecords {
         return count;
     }
 
-    public static ShareAcquiredRecords emptyShareAcquiredRecords() {
+    public static ShareAcquiredRecords empty() {
         return EMPTY_SHARE_ACQUIRED_RECORDS;
     }
 
     public static ShareAcquiredRecords fromAcquiredRecords(AcquiredRecords acquiredRecords) {
         return new ShareAcquiredRecords(
-            Collections.singletonList(acquiredRecords),
-            (int) (acquiredRecords.lastOffset() - acquiredRecords.firstOffset() + 1)
+            List.of(acquiredRecords), (int) (acquiredRecords.lastOffset() - acquiredRecords.firstOffset() + 1)
         );
     }
 }

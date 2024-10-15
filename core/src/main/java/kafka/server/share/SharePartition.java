@@ -527,13 +527,13 @@ public class SharePartition {
         log.trace("Received acquire request for share partition: {}-{} memberId: {}", groupId, topicIdPartition, memberId);
         if (maxFetchRecords <= 0) {
             // Nothing to acquire.
-            return ShareAcquiredRecords.emptyShareAcquiredRecords();
+            return ShareAcquiredRecords.empty();
         }
 
         RecordBatch lastBatch = fetchPartitionData.records.lastBatch().orElse(null);
         if (lastBatch == null) {
             // Nothing to acquire.
-            return ShareAcquiredRecords.emptyShareAcquiredRecords();
+            return ShareAcquiredRecords.empty();
         }
 
         // We require the first batch of records to get the base offset. Stop parsing further
@@ -1087,7 +1087,7 @@ public class SharePartition {
         Iterable<? extends RecordBatch> batches,
         long firstOffset,
         long lastOffset,
-        int maxMessages
+        int maxFetchRecords
     ) {
         lock.writeLock().lock();
         try {
@@ -1102,12 +1102,12 @@ public class SharePartition {
 
             // Check how many messages can be acquired from the batch.
             long lastAcquiredOffset = lastOffset;
-            if (maxMessages < (lastAcquiredOffset - firstAcquiredOffset + 1)) {
+            if (maxFetchRecords < lastAcquiredOffset - firstAcquiredOffset + 1) {
                 // The max messages to acquire is less than the complete available batches hence
                 // limit the acquired records. The last offset shall be the batches last offset
                 // which falls under the max messages limit. As the max fetch records is the soft
                 // limit, the last offset can be higher than the max messages.
-                lastAcquiredOffset = findLastOffsetFromBatchWithRequestOffset(batches, firstAcquiredOffset + maxMessages - 1);
+                lastAcquiredOffset = findLastOffsetFromBatchWithRequestOffset(batches, firstAcquiredOffset + maxFetchRecords - 1);
             }
 
             // Schedule acquisition lock timeout for the batch.
