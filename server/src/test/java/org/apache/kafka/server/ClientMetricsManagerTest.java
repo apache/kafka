@@ -23,6 +23,7 @@ import org.apache.kafka.common.message.GetTelemetrySubscriptionsRequestData;
 import org.apache.kafka.common.message.PushTelemetryRequestData;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.requests.GetTelemetrySubscriptionsRequest;
@@ -30,6 +31,7 @@ import org.apache.kafka.common.requests.GetTelemetrySubscriptionsResponse;
 import org.apache.kafka.common.requests.PushTelemetryRequest;
 import org.apache.kafka.common.requests.PushTelemetryRequest.Builder;
 import org.apache.kafka.common.requests.PushTelemetryResponse;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.server.metrics.ClientMetricsConfigs;
 import org.apache.kafka.server.metrics.ClientMetricsInstance;
@@ -1142,6 +1144,7 @@ public class ClientMetricsManagerTest {
         assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.INSTANCE_COUNT).metricValue());
 
         assertNotNull(clientMetricsManager.clientInstance(response.data().clientInstanceId()));
+        assertEquals(1, clientMetricsManager.clientConnectionIdMap().size());
         assertEquals(1, clientMetricsManager.expirationTimer().size());
         // Cache expiry should occur after 100 * 3 = 300 ms, wait for the eviction to happen.
         // Force clocks to advance by 300 ms.
@@ -1186,6 +1189,7 @@ public class ClientMetricsManagerTest {
 
         assertNotNull(clientMetricsManager.clientInstance(response1.data().clientInstanceId()));
         assertNotNull(clientMetricsManager.clientInstance(response2.data().clientInstanceId()));
+        assertEquals(2, clientMetricsManager.clientConnectionIdMap().size());
         assertEquals(2, clientMetricsManager.expirationTimer().size());
         // Cache expiry should occur after 100 * 3 = 300 ms, wait for the eviction to happen.
         // Force clocks to advance by 300 ms.
@@ -1264,12 +1268,14 @@ public class ClientMetricsManagerTest {
         ClientMetricsInstance instance = clientMetricsManager.clientInstance(clientInstanceId);
         assertNotNull(instance);
         assertEquals(1, clientMetricsManager.clientConnectionIdMap().size());
-        assertEquals(clientInstanceId, clientMetricsManager.clientConnectionIdMap().get("conn-1"));
+        assertEquals(clientInstanceId, clientMetricsManager.clientConnectionIdMap().get("PLAINTEXT-PLAINTEXT-conn-1"));
         assertEquals(12, kafkaMetrics.metrics().size());
         assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.INSTANCE_COUNT).metricValue());
 
-        clientMetricsManager.connectionDisconnectListener().onDisconnect("conn-1");
+        clientMetricsManager.connectionDisconnectListener().onDisconnect("conn-1",
+            ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), SecurityProtocol.PLAINTEXT);
         assertNull(clientMetricsManager.clientInstance(clientInstanceId));
+        assertTrue(clientMetricsManager.clientConnectionIdMap().isEmpty());
         // Instance metrics should get removed.
         assertEquals(4, kafkaMetrics.metrics().size());
         assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.INSTANCE_COUNT).metricValue());
@@ -1289,11 +1295,12 @@ public class ClientMetricsManagerTest {
         ClientMetricsInstance instance = clientMetricsManager.clientInstance(clientInstanceId);
         assertNotNull(instance);
         assertEquals(1, clientMetricsManager.clientConnectionIdMap().size());
-        assertEquals(clientInstanceId, clientMetricsManager.clientConnectionIdMap().get("conn-1"));
+        assertEquals(clientInstanceId, clientMetricsManager.clientConnectionIdMap().get("PLAINTEXT-PLAINTEXT-conn-1"));
         assertEquals(12, kafkaMetrics.metrics().size());
         assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.INSTANCE_COUNT).metricValue());
 
-      clientMetricsManager.connectionDisconnectListener().onDisconnect("conn-2");
+        clientMetricsManager.connectionDisconnectListener().onDisconnect("conn-2",
+            ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), SecurityProtocol.PLAINTEXT);
         assertNotNull(clientMetricsManager.clientInstance(clientInstanceId));
         assertEquals(1, clientMetricsManager.clientConnectionIdMap().size());
         // Metrics size should remain same.
