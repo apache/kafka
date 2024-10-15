@@ -42,11 +42,19 @@ public class GroupConfig extends AbstractConfig {
 
     public static final String CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG = "consumer.heartbeat.interval.ms";
 
+    public static final String SHARE_SESSION_TIMEOUT_MS_CONFIG = "share.session.timeout.ms";
+
+    public static final String SHARE_HEARTBEAT_INTERVAL_MS_CONFIG = "share.heartbeat.interval.ms";
+
     public static final String SHARE_RECORD_LOCK_DURATION_MS_CONFIG = "share.record.lock.duration.ms";
 
     public final int consumerSessionTimeoutMs;
 
     public final int consumerHeartbeatIntervalMs;
+
+    public final int shareSessionTimeoutMs;
+
+    public final int shareHeartbeatIntervalMs;
 
     public final int shareRecordLockDurationMs;
 
@@ -63,6 +71,18 @@ public class GroupConfig extends AbstractConfig {
             atLeast(1),
             MEDIUM,
             GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DOC)
+        .define(SHARE_SESSION_TIMEOUT_MS_CONFIG,
+            INT,
+            GroupCoordinatorConfig.SHARE_GROUP_SESSION_TIMEOUT_MS_DEFAULT,
+            atLeast(1),
+            MEDIUM,
+            GroupCoordinatorConfig.SHARE_GROUP_SESSION_TIMEOUT_MS_DOC)
+        .define(SHARE_HEARTBEAT_INTERVAL_MS_CONFIG,
+            INT,
+            GroupCoordinatorConfig.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT,
+            atLeast(1),
+            MEDIUM,
+            GroupCoordinatorConfig.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_DOC)
         .define(SHARE_RECORD_LOCK_DURATION_MS_CONFIG,
             INT,
             ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_DEFAULT,
@@ -75,6 +95,8 @@ public class GroupConfig extends AbstractConfig {
         super(CONFIG, props, false);
         this.consumerSessionTimeoutMs = getInt(CONSUMER_SESSION_TIMEOUT_MS_CONFIG);
         this.consumerHeartbeatIntervalMs = getInt(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
+        this.shareSessionTimeoutMs = getInt(SHARE_SESSION_TIMEOUT_MS_CONFIG);
+        this.shareHeartbeatIntervalMs = getInt(SHARE_HEARTBEAT_INTERVAL_MS_CONFIG);
         this.shareRecordLockDurationMs = getInt(SHARE_RECORD_LOCK_DURATION_MS_CONFIG);
     }
 
@@ -105,9 +127,12 @@ public class GroupConfig extends AbstractConfig {
     /**
      * Validates the values of the given properties.
      */
+    @SuppressWarnings("NPathComplexity")
     private static void validateValues(Map<?, ?> valueMaps, GroupCoordinatorConfig groupCoordinatorConfig, ShareGroupConfig shareGroupConfig) {
         int consumerHeartbeatInterval = (Integer) valueMaps.get(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
         int consumerSessionTimeout = (Integer) valueMaps.get(CONSUMER_SESSION_TIMEOUT_MS_CONFIG);
+        int shareHeartbeatInterval = (Integer) valueMaps.get(SHARE_HEARTBEAT_INTERVAL_MS_CONFIG);
+        int shareSessionTimeout = (Integer) valueMaps.get(SHARE_SESSION_TIMEOUT_MS_CONFIG);
         int shareRecordLockDurationMs = (Integer) valueMaps.get(SHARE_RECORD_LOCK_DURATION_MS_CONFIG);
         if (consumerHeartbeatInterval < groupCoordinatorConfig.consumerGroupMinHeartbeatIntervalMs()) {
             throw new InvalidConfigurationException(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG + " must be greater than or equal to " +
@@ -125,6 +150,22 @@ public class GroupConfig extends AbstractConfig {
             throw new InvalidConfigurationException(CONSUMER_SESSION_TIMEOUT_MS_CONFIG + " must be less than or equal to " +
                 GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG);
         }
+        if (shareHeartbeatInterval < groupCoordinatorConfig.shareGroupMinHeartbeatIntervalMs()) {
+            throw new InvalidConfigurationException(SHARE_HEARTBEAT_INTERVAL_MS_CONFIG + " must be greater than or equal to " +
+                GroupCoordinatorConfig.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG);
+        }
+        if (shareHeartbeatInterval > groupCoordinatorConfig.shareGroupMaxHeartbeatIntervalMs()) {
+            throw new InvalidConfigurationException(SHARE_HEARTBEAT_INTERVAL_MS_CONFIG + " must be less than or equal to " +
+                GroupCoordinatorConfig.SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG);
+        }
+        if (shareSessionTimeout < groupCoordinatorConfig.shareGroupMinSessionTimeoutMs()) {
+            throw new InvalidConfigurationException(SHARE_SESSION_TIMEOUT_MS_CONFIG + " must be greater than or equal to " +
+                GroupCoordinatorConfig.SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG);
+        }
+        if (shareSessionTimeout > groupCoordinatorConfig.shareGroupMaxSessionTimeoutMs()) {
+            throw new InvalidConfigurationException(SHARE_SESSION_TIMEOUT_MS_CONFIG + " must be less than or equal to " +
+                GroupCoordinatorConfig.SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG);
+        }
         if (shareRecordLockDurationMs < shareGroupConfig.shareGroupMinRecordLockDurationMs()) {
             throw new InvalidConfigurationException(SHARE_RECORD_LOCK_DURATION_MS_CONFIG + " must be greater than or equal to " +
                 ShareGroupConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG);
@@ -136,6 +177,10 @@ public class GroupConfig extends AbstractConfig {
         if (consumerSessionTimeout <= consumerHeartbeatInterval) {
             throw new InvalidConfigurationException(CONSUMER_SESSION_TIMEOUT_MS_CONFIG + " must be greater than " +
                 CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
+        }
+        if (shareSessionTimeout <= shareHeartbeatInterval) {
+            throw new InvalidConfigurationException(SHARE_SESSION_TIMEOUT_MS_CONFIG + " must be greater than " +
+                SHARE_HEARTBEAT_INTERVAL_MS_CONFIG);
         }
     }
 
@@ -171,6 +216,20 @@ public class GroupConfig extends AbstractConfig {
      */
     public int consumerHeartbeatIntervalMs() {
         return consumerHeartbeatIntervalMs;
+    }
+
+    /**
+     * The share group session timeout in milliseconds.
+     */
+    public int shareSessionTimeoutMs() {
+        return shareSessionTimeoutMs;
+    }
+
+    /**
+     * The share group heartbeat interval in milliseconds.
+     */
+    public int shareHeartbeatIntervalMs() {
+        return shareHeartbeatIntervalMs;
     }
 
     /**
