@@ -50,8 +50,8 @@ import org.apache.kafka.server.common.AdminCommandFailedException;
 import org.apache.kafka.server.common.AdminOperationException;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
-import org.apache.kafka.server.util.TopicFilter.IncludeList;
 import org.apache.kafka.storage.internals.log.LogConfig;
+import org.apache.kafka.tools.filter.TopicFilter.IncludeList;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

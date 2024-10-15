@@ -76,7 +76,8 @@ public final class BrokerServerMetricsTest {
             brokerMetrics.updateLastAppliedImageProvenance(new MetadataProvenance(
                     expectedValue,
                     brokerMetrics.lastAppliedImageProvenance().get().lastContainedEpoch(),
-                    brokerMetrics.lastAppliedTimestamp()));
+                    brokerMetrics.lastAppliedTimestamp(),
+                    true));
             assertEquals((double) expectedValue, offsetMetric.metricValue());
         }
     }
@@ -99,7 +100,8 @@ public final class BrokerServerMetricsTest {
             brokerMetrics.updateLastAppliedImageProvenance(new MetadataProvenance(
                     brokerMetrics.lastAppliedOffset(),
                     brokerMetrics.lastAppliedImageProvenance().get().lastContainedEpoch(),
-                    timestamp));
+                    timestamp,
+                    true));
             assertEquals((double) timestamp, timestampMetric.metricValue());
             assertEquals((double) time.milliseconds() - timestamp, lagMetric.metricValue());
         }
