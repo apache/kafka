@@ -758,8 +758,17 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   }
 
   def effectiveAdvertisedBrokerListeners: Seq[EndPoint] = {
-    // Only expose broker listeners
-    advertisedListeners.filterNot(l => controllerListenerNames.contains(l.listenerName.value()))
+    advertisedListeners.filter(l => {
+      if (!controllerListenerNames.contains(l.listenerName.value())) {
+        true
+      } else if (migrationEnabled && Some(l.listenerName.value()).equals(controlPlaneListener.map(_.listenerName.value()))) {
+        // KAFKA-17788: during ZK migration, always include control.plane.listener.name
+        // in advertisedBrokerListeners.
+        true
+      } else {
+        false
+      }
+    })
   }
 
   // Use advertised listeners if defined, fallback to listeners otherwise

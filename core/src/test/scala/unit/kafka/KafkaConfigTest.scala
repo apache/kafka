@@ -32,6 +32,8 @@ import org.apache.kafka.server.config.{KRaftConfigs, ZkConfigs}
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 
@@ -419,5 +421,33 @@ class KafkaConfigTest {
       }
       file.getAbsolutePath
     } finally writer.close()
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(false, true))
+  def testIncludeControlPlaneListenerNameInAdvertisedBrokerListeners(migration: Boolean): Unit = {
+    val properties = new Properties()
+    if (migration) {
+      properties.setProperty(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
+    } else {
+      properties.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
+    }
+    properties.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
+    properties.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9092")
+    properties.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://:9093,INTERNAL://:9092")
+    properties.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    properties.setProperty(SocketServerConfigs.CONTROL_PLANE_LISTENER_NAME_CONFIG, "CONTROLLER")
+    properties.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "CONTROLLER://localhost:9093,INTERNAL://localhost:9092")
+    properties.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:SSL,INTERNAL:PLAINTEXT")
+    properties.setProperty(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG, "INTERNAL")
+    properties.setProperty("zookeeper.connect", "localhost:2181")
+    if (migration) {
+      val config = KafkaConfig.fromProps(properties)
+      assertEquals(Seq("CONTROLLER", "INTERNAL"), config.effectiveAdvertisedBrokerListeners.map(_.listenerName.value()))
+      assertEquals(Seq("CONTROLLER"), config.effectiveAdvertisedControllerListeners.map(_.listenerName.value()))
+    } else {
+      assertEquals("requirement failed: control.plane.listener.name is not supported in KRaft mode.",
+        assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(properties)).getMessage)
+    }
   }
 }
