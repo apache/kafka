@@ -28,7 +28,7 @@ import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuild
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
 import java.util.Optional
-import scala.compat.java8.OptionConverters
+import scala.jdk.javaapi.OptionConverters
 
 object SslEndToEndAuthorizationTest {
   val superuserCn = "super-user"
