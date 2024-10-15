@@ -1855,7 +1855,7 @@ public class ShareConsumeRequestManagerTest {
                                             SubscriptionState subscriptionState,
                                             LogContext logContext) {
         buildDependencies(metricConfig, subscriptionState, logContext);
-        Deserializers<K, V> deserializers = new Deserializers<>(keyDeserializer, valueDeserializer);
+        Deserializers<K, V> deserializers = new Deserializers<>(keyDeserializer, valueDeserializer, metrics);
         int maxWaitMs = 0;
         int maxBytes = Integer.MAX_VALUE;
         int fetchSize = 1000;
