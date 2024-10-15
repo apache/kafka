@@ -38,12 +38,13 @@ Usage:
 from datetime import date
 import argparse
 
-from common import execute, build_docker_image_runner
+from common import execute, build_docker_image_runner, get_gpg_key, get_kafka_version_from_url
 
 def build_push(image, kafka_url, image_type):
     try:
         create_builder()
-        build_docker_image_runner(f"docker buildx build -f $DOCKER_FILE --build-arg kafka_url={kafka_url} --build-arg build_date={date.today()} --push \
+        kafka_version = get_kafka_version_from_url(kafka_url)
+        build_docker_image_runner(f"docker buildx build -f $DOCKER_FILE --build-arg kafka_url={kafka_url} --build-arg build_date={date.today()} --build-arg GPG_KEY={get_gpg_key(kafka_version)} --push \
               --platform linux/amd64,linux/arm64 --tag {image} $DOCKER_DIR", image_type)
     except:
         raise SystemError("Docker image push failed")

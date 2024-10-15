@@ -37,13 +37,16 @@ import argparse
 from distutils.dir_util import copy_tree
 import shutil
 from test.docker_sanity_test import run_tests
-from common import execute, build_docker_image_runner
+from common import execute, build_docker_image_runner, get_gpg_key, get_kafka_version_from_url
 import tempfile
 import os
+import re
+import sys
 
 def build_docker_image(image, tag, kafka_url, image_type):
     image = f'{image}:{tag}'
-    build_docker_image_runner(f"docker build -f $DOCKER_FILE -t {image} --build-arg kafka_url={kafka_url} --build-arg build_date={date.today()} $DOCKER_DIR", image_type)
+    kafka_version = get_kafka_version_from_url(kafka_url)
+    build_docker_image_runner(f"docker build -f $DOCKER_FILE -t {image} --build-arg kafka_url={kafka_url} --build-arg build_date={date.today()} --build-arg GPG_KEY={get_gpg_key(kafka_version)} $DOCKER_DIR", image_type)
 
 def run_docker_tests(image, tag, kafka_url, image_type):
     temp_dir_path = tempfile.mkdtemp()

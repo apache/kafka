@@ -41,10 +41,10 @@ class DockerSanityTest(unittest.TestCase):
     def start_compose(self, filename) -> None:
         self.update_file(filename, "image: {$IMAGE}", f"image: {self.IMAGE}")
         self.update_file(f"{self.FIXTURES_DIR}/{constants.SSL_CLIENT_CONFIG}", "{$DIR}", self.FIXTURES_DIR)
-        subprocess.run(["docker-compose", "-f", filename, "up", "-d"])
+        subprocess.run(["docker", "compose", "-f", filename, "up", "-d"])
     
     def destroy_compose(self, filename) -> None:
-        subprocess.run(["docker-compose", "-f", filename, "down"])
+        subprocess.run(["docker", "compose", "-f", filename, "down"])
         self.update_file(filename, f"image: {self.IMAGE}", "image: {$IMAGE}")
         self.update_file(f"{self.FIXTURES_DIR}/{constants.SSL_CLIENT_CONFIG}", self.FIXTURES_DIR, "{$DIR}")
 
