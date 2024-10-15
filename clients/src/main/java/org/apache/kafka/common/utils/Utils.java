@@ -39,6 +39,7 @@ import java.lang.reflect.Modifier;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
@@ -991,6 +992,25 @@ public final class Utils {
             fileChannel.force(true);
         } catch (NoSuchFileException e) {
             log.warn("Failed to flush file {}", path, e);
+        }
+    }
+
+    @FunctionalInterface
+    public interface FlushSegmentAction {
+        void run() throws IOException;
+    }
+
+    /**
+     * Executes the callback to flush segments and swallows {@link NoSuchFileException} and
+     * {@link ClosedChannelException}.
+     *
+     * @throws IOException on any other IO Error
+     */
+    public static void flushSegmentsIfExists(FlushSegmentAction flushSegmentAction) throws IOException {
+        try {
+            flushSegmentAction.run();
+        } catch (NoSuchFileException | ClosedChannelException e) {
+            log.warn("Failed to flush file", e);
         }
     }
 

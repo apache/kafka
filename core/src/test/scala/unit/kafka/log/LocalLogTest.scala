@@ -673,6 +673,17 @@ class LocalLogTest {
   }
 
   @Test
+  def testFlushingClosedSegment(): Unit = {
+    appendRecords(List(KeyValue("k1", "v1").toRecord()))
+    val newSegment = log.roll()
+
+    // simulate the log segment being closed concurrently
+    log.close()
+
+    assertDoesNotThrow((() => log.flush(newSegment.baseOffset)): Executable)
+  }
+
+  @Test
   def testFlushingNonExistentDir(): Unit = {
     val spyLog = spy(log)
 

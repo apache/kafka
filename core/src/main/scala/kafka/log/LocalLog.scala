@@ -164,7 +164,9 @@ class LocalLog(@volatile private var _dir: File,
     val currentRecoveryPoint = recoveryPoint
     if (currentRecoveryPoint <= offset) {
       val segmentsToFlush = segments.values(currentRecoveryPoint, offset)
-      segmentsToFlush.forEach(_.flush())
+      // The segments may have been closed due to a deletion or reassignment. Since they're not needed anymore
+      // we swallow the exception and continue.
+      Utils.flushSegmentsIfExists(() => segmentsToFlush.forEach(_.flush()))
       // If there are any new segments, we need to flush the parent directory for crash consistency.
       if (segmentsToFlush.stream().anyMatch(_.baseOffset >= currentRecoveryPoint)) {
         // The directory might be renamed concurrently for topic deletion, which may cause NoSuchFileException here.
