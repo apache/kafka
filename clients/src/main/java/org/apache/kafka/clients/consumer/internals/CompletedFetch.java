@@ -319,13 +319,13 @@ public class CompletedFetch {
         K key;
         V value;
         try {
-            key = keyBytes == null ? null : deserializers.keyDeserializer.deserialize(partition.topic(), headers, keyBytes);
+            key = keyBytes == null ? null : deserializers.keyDeserializer().deserialize(partition.topic(), headers, keyBytes);
         } catch (RuntimeException e) {
             log.error("Key Deserializers with error: {}", deserializers);
             throw newRecordDeserializationException(DeserializationExceptionOrigin.KEY, partition, timestampType, record, e, headers);
         }
         try {
-            value = valueBytes == null ? null : deserializers.valueDeserializer.deserialize(partition.topic(), headers, valueBytes);
+            value = valueBytes == null ? null : deserializers.valueDeserializer().deserialize(partition.topic(), headers, valueBytes);
         } catch (RuntimeException e) {
             log.error("Value Deserializers with error: {}", deserializers);
             throw newRecordDeserializationException(DeserializationExceptionOrigin.VALUE, partition, timestampType, record, e, headers);
