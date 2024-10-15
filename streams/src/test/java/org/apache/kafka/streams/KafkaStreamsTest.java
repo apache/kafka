@@ -385,7 +385,7 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void shouldClosePendingTasksAfterFirstRebalance() throws Exception {
+    public void shouldCloseStartupTasksAfterFirstRebalance() throws Exception {
         prepareStreams();
         final AtomicReference<StreamThread.State> state1 = prepareStreamThread(streamThreadOne, 1);
         final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
@@ -399,7 +399,7 @@ public class KafkaStreamsTest {
                 streams.setStateListener(streamsStateListener);
                 streams.start();
                 waitForCondition(() -> streams.state() == State.RUNNING, "Streams never started.");
-                verify(stateDirectory, times(1)).closePendingTasks();
+                verify(stateDirectory, times(1)).closeStartupTasks();
             }
         }
     }

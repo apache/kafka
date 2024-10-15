@@ -828,26 +828,26 @@ public class StateDirectoryTest {
     public void shouldNotInitializeStandbyTasksWhenNoLocalState() {
         final TaskId taskId = new TaskId(0, 0);
         initializeTasksForLocalState(new TaskId(0, 0), false);
-        assertFalse(directory.hasPendingTasks());
-        assertNull(directory.removePendingTask(taskId));
-        assertFalse(directory.hasPendingTasks());
+        assertFalse(directory.hasStartupTasks());
+        assertNull(directory.removeStartupTask(taskId));
+        assertFalse(directory.hasStartupTasks());
     }
 
     @Test
     public void shouldInitializeStandbyTasksForLocalState() {
         final TaskId taskId = new TaskId(0, 0);
         initializeTasksForLocalState(new TaskId(0, 0), true);
-        assertTrue(directory.hasPendingTasks());
-        assertNotNull(directory.removePendingTask(taskId));
-        assertFalse(directory.hasPendingTasks());
-        assertNull(directory.removePendingTask(taskId));
+        assertTrue(directory.hasStartupTasks());
+        assertNotNull(directory.removeStartupTask(taskId));
+        assertFalse(directory.hasStartupTasks());
+        assertNull(directory.removeStartupTask(taskId));
     }
 
     @Test
-    public void shouldNotAssignPendingTasksWeDontHave() {
+    public void shouldNotAssignStartupTasksWeDontHave() {
         final TaskId taskId = new TaskId(0, 0);
         initializeTasksForLocalState(taskId, false);
-        final Task task = directory.removePendingTask(taskId);
+        final Task task = directory.removeStartupTask(taskId);
         assertNull(task);
     }
 
@@ -862,12 +862,12 @@ public class StateDirectoryTest {
 
         @Override
         public void run() {
-            result.set(directory.removePendingTask(taskId));
+            result.set(directory.removeStartupTask(taskId));
         }
     }
 
     @Test
-    public void shouldAssignPendingTaskToStreamThread() throws InterruptedException {
+    public void shouldAssignStartupTaskToStreamThread() throws InterruptedException {
         final TaskId taskId = new TaskId(0, 0);
 
         initializeTasksForLocalState(taskId, true);
@@ -890,44 +890,44 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldUnlockPendingTasksOnClose() {
+    public void shouldUnlockStartupTasksOnClose() {
         final TaskId taskId = new TaskId(0, 0);
         initializeTasksForLocalState(taskId, true);
 
         assertEquals(Thread.currentThread(), directory.lockOwner(taskId));
-        directory.closePendingTasks();
+        directory.closeStartupTasks();
         assertNull(directory.lockOwner(taskId));
     }
 
     @Test
-    public void shouldClosePendingTasksOnDirectoryClose() {
+    public void shouldCloseStartupTasksOnDirectoryClose() {
         final StateStore store = initializeTasksForLocalState(new TaskId(0, 0), true);
 
-        assertTrue(directory.hasPendingTasks());
+        assertTrue(directory.hasStartupTasks());
         assertTrue(store.isOpen());
 
         directory.close();
 
-        assertFalse(directory.hasPendingTasks());
+        assertFalse(directory.hasStartupTasks());
         assertFalse(store.isOpen());
     }
 
     @Test
-    public void shouldNotClosePendingTasksOnAutoCleanUp() {
+    public void shouldNotCloseStartupTasksOnAutoCleanUp() {
         // we need to set this because the auto-cleanup uses the last-modified time from the filesystem,
         // which can't be mocked
         time.setCurrentTimeMs(System.currentTimeMillis());
 
         final StateStore store = initializeTasksForLocalState(new TaskId(0, 0), true);
 
-        assertTrue(directory.hasPendingTasks());
+        assertTrue(directory.hasStartupTasks());
         assertTrue(store.isOpen());
 
         time.sleep(10000);
 
         directory.cleanRemovedTasks(1000);
 
-        assertTrue(directory.hasPendingTasks());
+        assertTrue(directory.hasStartupTasks());
         assertTrue(store.isOpen());
     }
 

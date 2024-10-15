@@ -259,11 +259,11 @@ public class StateDirectory implements AutoCloseable {
         }
     }
 
-    public boolean hasPendingTasks() {
+    public boolean hasStartupTasks() {
         return !tasksForLocalState.isEmpty();
     }
 
-    public Task removePendingTask(final TaskId taskId) {
+    public Task removeStartupTask(final TaskId taskId) {
         final Task task = tasksForLocalState.remove(taskId);
         if (task != null) {
             lockedTasksToOwner.replace(taskId, Thread.currentThread());
@@ -271,11 +271,11 @@ public class StateDirectory implements AutoCloseable {
         return task;
     }
 
-    public void closePendingTasks() {
-        closePendingTasks(t -> true);
+    public void closeStartupTasks() {
+        closeStartupTasks(t -> true);
     }
 
-    private void closePendingTasks(final Predicate<Task> predicate) {
+    private void closeStartupTasks(final Predicate<Task> predicate) {
         if (!tasksForLocalState.isEmpty()) {
             // "drain" Tasks first to ensure that we don't try to close Tasks that another thread is attempting to close
             final Set<Task> drainedTasks = new HashSet<>(tasksForLocalState.size());
@@ -502,7 +502,7 @@ public class StateDirectory implements AutoCloseable {
     @Override
     public void close() {
         if (hasPersistentStores) {
-            closePendingTasks();
+            closeStartupTasks();
             try {
                 stateDirLock.release();
                 stateDirLockChannel.close();
@@ -620,7 +620,7 @@ public class StateDirectory implements AutoCloseable {
         );
         if (namedTopologyDirs != null) {
             for (final File namedTopologyDir : namedTopologyDirs) {
-                closePendingTasks(task -> task.id().topologyName().equals(parseNamedTopologyFromDirectory(namedTopologyDir.getName())));
+                closeStartupTasks(task -> task.id().topologyName().equals(parseNamedTopologyFromDirectory(namedTopologyDir.getName())));
                 final File[] contents = namedTopologyDir.listFiles();
                 if (contents != null && contents.length == 0) {
                     try {
@@ -658,7 +658,7 @@ public class StateDirectory implements AutoCloseable {
             log.debug("Tried to clear out the local state for NamedTopology {} but none was found", topologyName);
         }
         try {
-            closePendingTasks(task -> task.id().topologyName().equals(topologyName));
+            closeStartupTasks(task -> task.id().topologyName().equals(topologyName));
             Utils.delete(namedTopologyDir);
         } catch (final IOException e) {
             log.error("Hit an unexpected error while clearing local state for topology " + topologyName, e);

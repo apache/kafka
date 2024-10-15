@@ -224,7 +224,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     /**
-     * Special constructor used by {@link StateDirectory} to partially initialize "pending" tasks for local state, before
+     * Special constructor used by {@link StateDirectory} to partially initialize startup tasks for local state, before
      * they're assigned to a thread. When the task is assigned to a thread, the initialization of this StateManager is
      * completed in {@link #assignToStreamThread(LogContext, ChangelogRegister, Collection)}.
      */

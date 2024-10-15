@@ -324,15 +324,15 @@ public class TaskManager {
         }
     }
 
-    private Map<Task, Set<TopicPartition>> assignPendingTasks(final Map<TaskId, Set<TopicPartition>> tasksToAssign,
+    private Map<Task, Set<TopicPartition>> assignStartupTasks(final Map<TaskId, Set<TopicPartition>> tasksToAssign,
                                                               final String threadLogPrefix,
                                                               final TopologyMetadata topologyMetadata,
                                                               final ChangelogRegister changelogReader) {
-        if (stateDirectory.hasPendingTasks()) {
+        if (stateDirectory.hasStartupTasks()) {
             final Map<Task, Set<TopicPartition>> assignedTasks = new HashMap<>(tasksToAssign.size());
             for (final Map.Entry<TaskId, Set<TopicPartition>> entry : tasksToAssign.entrySet()) {
                 final TaskId taskId = entry.getKey();
-                final Task task = stateDirectory.removePendingTask(taskId);
+                final Task task = stateDirectory.removeStartupTask(taskId);
                 if (task != null) {
                     // replace our dummy values with the real ones, now we know our thread and assignment
                     final Set<TopicPartition> inputPartitions = entry.getValue();
@@ -478,14 +478,14 @@ public class TaskManager {
                                                 final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
                                                 final Map<Task, Set<TopicPartition>> tasksToRecycle,
                                                 final Set<Task> tasksToCloseClean) {
-        final Map<Task, Set<TopicPartition>> pendingStandbyTasksToRecycle = assignPendingTasks(activeTasksToCreate, logPrefix, topologyMetadata, changelogReader);
-        final Map<Task, Set<TopicPartition>> pendingStandbyTasksToUse = assignPendingTasks(standbyTasksToCreate, logPrefix, topologyMetadata, changelogReader);
+        final Map<Task, Set<TopicPartition>> startupStandbyTasksToRecycle = assignStartupTasks(activeTasksToCreate, logPrefix, topologyMetadata, changelogReader);
+        final Map<Task, Set<TopicPartition>> startupStandbyTasksToUse = assignStartupTasks(standbyTasksToCreate, logPrefix, topologyMetadata, changelogReader);
 
-        // recycle the pending standbys to active
-        tasks.addStandbyTasks(pendingStandbyTasksToRecycle.keySet());
+        // recycle the startup standbys to active
+        tasks.addStandbyTasks(startupStandbyTasksToRecycle.keySet());
 
-        // use pending Standbys as real Standby tasks
-        tasks.addStandbyTasks(pendingStandbyTasksToUse.keySet());
+        // use startup Standbys as real Standby tasks
+        tasks.addStandbyTasks(startupStandbyTasksToUse.keySet());
 
         for (final Task task : tasks.allTasks()) {
             final TaskId taskId = task.id();
@@ -541,7 +541,7 @@ public class TaskManager {
                                              final Set<Task> tasksToCloseClean,
                                              final Map<TaskId, RuntimeException> failedTasks) {
         handleTasksPendingInitialization();
-        handlePendingTaskReuse(activeTasksToCreate, standbyTasksToCreate, failedTasks);
+        handleStartupTaskReuse(activeTasksToCreate, standbyTasksToCreate, failedTasks);
         handleRestoringAndUpdatingTasks(activeTasksToCreate, standbyTasksToCreate, failedTasks);
         handleRunningAndSuspendedTasks(activeTasksToCreate, standbyTasksToCreate, tasksToRecycle, tasksToCloseClean);
     }
@@ -553,16 +553,16 @@ public class TaskManager {
         }
     }
 
-    private void handlePendingTaskReuse(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
+    private void handleStartupTaskReuse(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
                                         final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
                                         final Map<TaskId, RuntimeException> failedTasks) {
-        final Map<Task, Set<TopicPartition>> pendingStandbyTasksToRecycle = assignPendingTasks(activeTasksToCreate, logPrefix, topologyMetadata, changelogReader);
-        final Map<Task, Set<TopicPartition>> pendingStandbyTasksToUse = assignPendingTasks(standbyTasksToCreate, logPrefix, topologyMetadata, changelogReader);
+        final Map<Task, Set<TopicPartition>> startupStandbyTasksToRecycle = assignStartupTasks(activeTasksToCreate, logPrefix, topologyMetadata, changelogReader);
+        final Map<Task, Set<TopicPartition>> startupStandbyTasksToUse = assignStartupTasks(standbyTasksToCreate, logPrefix, topologyMetadata, changelogReader);
 
-        // recycle the pending standbys to active, and remove them from the set of actives that need to be created
-        if (!pendingStandbyTasksToRecycle.isEmpty()) {
+        // recycle the startup standbys to active, and remove them from the set of actives that need to be created
+        if (!startupStandbyTasksToRecycle.isEmpty()) {
             final Set<Task> tasksToCloseDirty = new HashSet<>();
-            for (final Map.Entry<Task, Set<TopicPartition>> entry : pendingStandbyTasksToRecycle.entrySet()) {
+            for (final Map.Entry<Task, Set<TopicPartition>> entry : startupStandbyTasksToRecycle.entrySet()) {
                 final Task task = entry.getKey();
                 recycleTaskFromStateUpdater(task, entry.getValue(), tasksToCloseDirty, failedTasks);
                 activeTasksToCreate.remove(task.id());
@@ -574,10 +574,10 @@ public class TaskManager {
             );
         }
 
-        // use pending Standbys as real Standby tasks
-        if (!pendingStandbyTasksToUse.isEmpty()) {
-            tasks.addPendingTasksToInit(pendingStandbyTasksToUse.keySet());
-            pendingStandbyTasksToUse.keySet().forEach(task -> standbyTasksToCreate.remove(task.id()));
+        // use startup Standbys as real Standby tasks
+        if (!startupStandbyTasksToUse.isEmpty()) {
+            tasks.addPendingTasksToInit(startupStandbyTasksToUse.keySet());
+            startupStandbyTasksToUse.keySet().forEach(task -> standbyTasksToCreate.remove(task.id()));
         }
     }
 
