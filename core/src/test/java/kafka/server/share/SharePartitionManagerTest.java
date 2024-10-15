@@ -2372,7 +2372,7 @@ public class SharePartitionManagerTest {
                     persister,
                     delayedShareFetchPurgatory,
                     delayedActionsQueue,
-                    new GroupConfigManager(new HashMap<>()),
+                    mock(GroupConfigManager.class),
                     metrics);
         }
     }
