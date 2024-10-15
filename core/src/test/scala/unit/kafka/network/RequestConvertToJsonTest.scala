@@ -33,7 +33,7 @@ import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
 
 import java.util.Collections
-import scala.compat.java8.OptionConverters._
+import scala.jdk.OptionConverters.RichOption
 
 class RequestConvertToJsonTest {
 
@@ -76,7 +76,7 @@ class RequestConvertToJsonTest {
     expectedNode.set("requestHeader", RequestConvertToJson.requestHeaderNode(req.header))
     expectedNode.set("request", req.requestLog.getOrElse(new TextNode("")))
 
-    val actualNode = RequestConvertToJson.requestDesc(req.header, req.requestLog.asJava, req.isForwarded)
+    val actualNode = RequestConvertToJson.requestDesc(req.header, req.requestLog.toJava, req.isForwarded)
 
     assertEquals(expectedNode, actualNode)
   }
@@ -99,7 +99,7 @@ class RequestConvertToJsonTest {
     val temporaryMemoryBytes = 8
     val messageConversionsTimeMs = 9
 
-    val expectedNode = RequestConvertToJson.requestDesc(req.header, req.requestLog.asJava, req.isForwarded).asInstanceOf[ObjectNode]
+    val expectedNode = RequestConvertToJson.requestDesc(req.header, req.requestLog.toJava, req.isForwarded).asInstanceOf[ObjectNode]
     expectedNode.set("response", res.responseLog.getOrElse(new TextNode("")))
     expectedNode.set("connection", new TextNode(req.context.connectionId))
     expectedNode.set("totalTimeMs", new DoubleNode(totalTimeMs))
@@ -116,7 +116,7 @@ class RequestConvertToJsonTest {
     expectedNode.set("temporaryMemoryBytes", new LongNode(temporaryMemoryBytes))
     expectedNode.set("messageConversionsTime", new DoubleNode(messageConversionsTimeMs))
 
-    val actualNode = RequestConvertToJson.requestDescMetrics(req.header, req.requestLog.asJava, res.responseLog.asJava, req.context, req.session, req.isForwarded,
+    val actualNode = RequestConvertToJson.requestDescMetrics(req.header, req.requestLog.toJava, res.responseLog.toJava, req.context, req.session, req.isForwarded,
       totalTimeMs, requestQueueTimeMs, apiLocalTimeMs, apiRemoteTimeMs, apiThrottleTimeMs, responseQueueTimeMs,
       responseSendTimeMs, temporaryMemoryBytes, messageConversionsTimeMs).asInstanceOf[ObjectNode]
 

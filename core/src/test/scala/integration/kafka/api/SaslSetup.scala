@@ -39,9 +39,9 @@ import java.util
 import java.util.Properties
 import javax.security.auth.login.Configuration
 import scala.collection.Seq
-import scala.compat.java8.OptionConverters
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters._
+import scala.jdk.javaapi.OptionConverters
 import scala.util.Using
 
 /*
