@@ -103,17 +103,9 @@ public class Protocol {
         b.append("<th>Description</th>\n");
         b.append("</tr>");
         for (BoundField field : fields) {
-            if (!(field.def.type instanceof TaggedFields)) {
-                b.append("<tr>\n");
-                b.append("<td>");
-                b.append(field.def.name);
-                b.append("</td>");
-                b.append("<td>");
-                b.append(field.def.docString);
-                b.append("</td>");
-                b.append("</tr>\n");
-            } else {
+            if (field.def.type instanceof TaggedFields) {
                 TaggedFields taggedFields = (TaggedFields) field.def.type;
+                // Only include the field in the table if there are actually tags defined
                 if (taggedFields.numFields() > 0) {
                     b.append("<tr>\n");
                     b.append("<td>");
@@ -143,6 +135,15 @@ public class Protocol {
                     b.append("</td>");
                     b.append("</tr>\n");
                 }
+            } else {
+                b.append("<tr>\n");
+                b.append("<td>");
+                b.append(field.def.name);
+                b.append("</td>");
+                b.append("<td>");
+                b.append(field.def.docString);
+                b.append("</td>");
+                b.append("</tr>\n");
             }
         }
         b.append("</tbody></table>\n");
