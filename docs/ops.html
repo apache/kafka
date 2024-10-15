@@ -3981,7 +3981,8 @@ controller.listener.names=CONTROLLER</pre>
     To migrate the brokers to KRaft, they simply need to be reconfigured as KRaft brokers and restarted. Using the above
     broker configuration as an example, we would replace the <code>broker.id</code> with <code>node.id</code> and add
     <code>process.roles=broker</code>. It is important that the broker maintain the same Broker/Node ID when it is restarted.
-    The zookeeper configurations should be removed at this point.
+    The zookeeper configurations should be removed at this point. Finally, if you have set
+    <code>control.plane.listener.name</code>. please remove it before restarting in KRaft mode.
   </p>
 
   <p>
