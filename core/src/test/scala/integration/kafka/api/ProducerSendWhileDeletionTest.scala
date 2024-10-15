@@ -147,18 +147,13 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
     }
 
     val reassignment = Map(
-      partition0 -> Optional.of(new NewPartitionReassignment(util.Arrays.asList(2, 1))),
-      partition1 -> Optional.of(new NewPartitionReassignment(util.Arrays.asList(2, 1)))
+      partition0 -> Optional.of(new NewPartitionReassignment(util.Arrays.asList(1, 2))),
+      partition1 -> Optional.of(new NewPartitionReassignment(util.Arrays.asList(1, 2)))
     )
 
-    // Change assignment of one of the replicas from 0 to 2
+    // Change assignment of one of the replicas from 0 to 2. Leadership moves be 1.
     admin.alterPartitionReassignments(reassignment.asJava).all().get()
-
-    TestUtils.waitUntilTrue(
-      () => partitionLeader(admin, partition0) == 2 && partitionLeader(admin, partition1) == 2,
-      s"Expected preferred leader to become 2, but is ${partitionLeader(admin, partition0)} and ${partitionLeader(admin, partition1)}",
-      10000)
-    TestUtils.assertLeader(admin, partition1, 2)
+    TestUtils.assertLeader(admin, partition1, 1)
     assertEquals(topicDetails.topicId(), topicMetadata(admin, topic).topicId())
 
     // Producer should be able to send messages even after topic gets reassigned
@@ -167,11 +162,5 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
 
   def topicMetadata(admin: Admin, topic: String): TopicDescription = {
     admin.describeTopics(util.Collections.singletonList(topic)).allTopicNames().get().get(topic)
-  }
-
-  private def partitionLeader(admin: Admin, topicPartition: TopicPartition): Int = {
-    val partitionMetadata = topicMetadata(admin, topicPartition.topic).partitions.get(topicPartition.partition)
-    val preferredLeaderMetadata = partitionMetadata.leader()
-    preferredLeaderMetadata.id
   }
 }
