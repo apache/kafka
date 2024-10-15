@@ -1228,7 +1228,8 @@ private[kafka] class Processor(
         // the channel has been closed by the selector but the quotas still need to be updated
         connectionQuotas.dec(listenerName, InetAddress.getByName(remoteHost))
         // Call listeners to notify for closed connection.
-        connectionDisconnectListeners.foreach(listener => CoreUtils.swallow(() -> listener.onDisconnect(connectionId), this, Level.ERROR))
+        connectionDisconnectListeners.foreach(listener => CoreUtils.swallow(() -> listener.onDisconnect(
+          connectionId, listenerName, securityProtocol), this, Level.ERROR))
       } catch {
         case e: Throwable => processException(s"Exception while processing disconnection of $connectionId", e)
       }
@@ -1258,7 +1259,8 @@ private[kafka] class Processor(
         connectionQuotas.dec(listenerName, address)
       selector.close(connectionId)
       // Call listeners to notify for closed connection.
-      connectionDisconnectListeners.foreach(listener => CoreUtils.swallow(() -> listener.onDisconnect(connectionId), this, Level.ERROR))
+      connectionDisconnectListeners.foreach(listener => CoreUtils.swallow(() -> listener.onDisconnect(
+        connectionId, listenerName, securityProtocol), this, Level.ERROR))
 
       inflightResponses.remove(connectionId).foreach(response => updateRequestMetrics(response))
     }
