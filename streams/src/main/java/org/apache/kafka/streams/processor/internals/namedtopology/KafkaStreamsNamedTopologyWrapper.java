@@ -412,7 +412,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      */
     public Collection<StreamsMetadata> allStreamsClientsMetadataForTopology(final String topologyName) {
         validateIsRunningOrRebalancing();
-        return streamsMetadataState.getAllMetadataForTopology(topologyName);
+        return streamsMetadataState.allMetadataForTopology(topologyName);
     }
 
     /**

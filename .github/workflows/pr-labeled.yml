@@ -1,0 +1,67 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Pull Request Labeled
+
+on:
+  pull_request_target:
+    types:
+      - labeled
+
+jobs:
+  approve-workflow-run:
+    name: Approve CI
+    # Even though job conditionals are difficult to debug, this will reduce the number of unnecessary runs
+    if:
+      github.event_name == 'pull_request_target' &&
+      github.event.action == 'labeled' &&
+      github.event.label.name == 'ci-approved'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Env
+        run: printenv
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials:
+            false
+      - name: Find Workflow Run ID
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set +e
+          echo "Found 'ci-approved' label on PR #$PR_NUMBER."
+          RUN_ID=$(gh run list -L 1 -c $SHA -s action_required --json databaseId --jq '.[].databaseId')
+          if [ -z "$RUN_ID" ]; then
+            echo "No workflow run found for SHA $SHA";
+            exit 0;
+          else
+            echo "Auto-approving workflow run $RUN_ID.";
+          fi;
+          echo "PR_NUMBER=$PR_NUMBER" >> "$GITHUB_ENV"
+          echo "RUN_ID=$RUN_ID" >> "$GITHUB_ENV"
+      - name: Approve Workflow Run
+        if: env.RUN_ID != ''
+        uses: ./.github/actions/gh-api-approve-run
+        with:
+          gh-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run_id: ${{ env.RUN_ID }}
+          pr_number: ${{ env.PR_NUMBER }}
+          commit_sha: ${{ github.event.workflow_run.head_sha }}

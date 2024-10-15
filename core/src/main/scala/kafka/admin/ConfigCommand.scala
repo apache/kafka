@@ -438,11 +438,13 @@ object ConfigCommand extends Logging {
             throw new IllegalStateException(s"Altering user SCRAM credentials should never occur for more zero or multiple users: $entityNames")
           alterUserScramCredentialConfigs(adminClient, entityNames.head, scramConfigsToAddMap, scramConfigsToDelete)
         }
+
       case ConfigType.IP =>
         val unknownConfigs = (configsToBeAdded.keys ++ configsToBeDeleted).filterNot(key => DynamicConfig.Ip.names.contains(key))
         if (unknownConfigs.nonEmpty)
           throw new IllegalArgumentException(s"Only connection quota configs can be added for '${ConfigType.IP}' using --bootstrap-server. Unexpected config names: ${unknownConfigs.mkString(",")}")
         alterQuotaConfigs(adminClient, entityTypes, entityNames, configsToBeAddedMap, configsToBeDeleted)
+
       case ConfigType.CLIENT_METRICS =>
         alterResourceConfig(adminClient, entityTypeHead, entityNameHead, configsToBeDeleted, configsToBeAdded, ConfigResource.Type.CLIENT_METRICS)
 
@@ -626,7 +628,7 @@ object ConfigCommand extends Logging {
 
   private def describeQuotaConfigs(adminClient: Admin, entityTypes: List[String], entityNames: List[String]): Unit = {
     val quotaConfigs = getAllClientQuotasConfigs(adminClient, entityTypes, entityNames)
-    quotaConfigs.forKeyValue { (entity, entries) =>
+    quotaConfigs.foreachEntry { (entity, entries) =>
       val entityEntries = entity.entries.asScala
 
       def entitySubstr(entityType: String): Option[String] =
@@ -819,7 +821,7 @@ object ConfigCommand extends Logging {
       .ofType(classOf[String])
     val alterOpt: OptionSpecBuilder = parser.accepts("alter", "Alter the configuration for the entity.")
     val describeOpt: OptionSpecBuilder = parser.accepts("describe", "List configs for the given entity.")
-    val allOpt: OptionSpecBuilder = parser.accepts("all", "List all configs for the given topic, broker, or broker-logger entity (includes static configuration when the entity type is brokers)")
+    val allOpt: OptionSpecBuilder = parser.accepts("all", "List all configs for the given entity, including static configs if available.")
 
     val entityType: OptionSpec[String] = parser.accepts("entity-type", "Type of entity (topics/clients/users/brokers/broker-loggers/ips/client-metrics/groups)")
       .withRequiredArg
@@ -827,7 +829,7 @@ object ConfigCommand extends Logging {
     val entityName: OptionSpec[String] = parser.accepts("entity-name", "Name of entity (topic name/client id/user principal name/broker id/ip/client metrics/group id)")
       .withRequiredArg
       .ofType(classOf[String])
-    private val entityDefault: OptionSpecBuilder = parser.accepts("entity-default", "Default entity name for clients/users/brokers/ips (applies to corresponding entity type in command line)")
+    private val entityDefault: OptionSpecBuilder = parser.accepts("entity-default", "Default entity name for clients/users/brokers/ips (applies to corresponding entity type)")
 
     val nl: String = System.lineSeparator()
     val addConfig: OptionSpec[String] = parser.accepts("add-config", "Key Value pairs of configs to add. Square brackets can be used to group values which contain commas: 'k1=v1,k2=[v1,v2,v2],k3=v3'. The following is a list of valid configurations: " +
@@ -874,6 +876,9 @@ object ConfigCommand extends Logging {
     val group: OptionSpec[String] = parser.accepts("group", "The group's ID.")
       .withRequiredArg
       .ofType(classOf[String])
+    val clientMetrics: OptionSpec[String] = parser.accepts("client-metrics", "The client metrics config resource name.")
+      .withRequiredArg
+      .ofType(classOf[String])
     val zkTlsConfigFile: OptionSpec[String] = parser.accepts("zk-tls-config-file",
       "Identifies the file where ZooKeeper client TLS connectivity properties are defined.  Any properties other than " +
         ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.toList.sorted.mkString(", ") + " are ignored.")
@@ -886,6 +891,7 @@ object ConfigCommand extends Logging {
       (broker, ConfigType.BROKER),
       (brokerLogger, BrokerLoggerConfigType),
       (ip, ConfigType.IP),
+      (clientMetrics, ConfigType.CLIENT_METRICS),
       (group, ConfigType.GROUP))
 
     private val entityDefaultsFlags = List((clientDefaults, ConfigType.CLIENT),
@@ -975,8 +981,17 @@ object ConfigCommand extends Logging {
         }
       }
 
-      if (options.has(describeOpt) && entityTypeVals.contains(BrokerLoggerConfigType) && !hasEntityName)
-        throw new IllegalArgumentException(s"an entity name must be specified with --describe of ${entityTypeVals.mkString(",")}")
+      if (options.has(describeOpt)) {
+        if (!(entityTypeVals.contains(ConfigType.USER) ||
+          entityTypeVals.contains(ConfigType.CLIENT) ||
+          entityTypeVals.contains(ConfigType.BROKER) ||
+          entityTypeVals.contains(ConfigType.IP)) && options.has(entityDefault)) {
+          throw new IllegalArgumentException(s"--entity-default must not be specified with --describe of ${entityTypeVals.mkString(",")}")
+        }
+
+        if (entityTypeVals.contains(BrokerLoggerConfigType) && !hasEntityName)
+          throw new IllegalArgumentException(s"An entity name must be specified with --describe of ${entityTypeVals.mkString(",")}")
+      }
 
       if (options.has(alterOpt)) {
         if (entityTypeVals.contains(ConfigType.USER) ||
@@ -984,9 +999,9 @@ object ConfigCommand extends Logging {
             entityTypeVals.contains(ConfigType.BROKER) ||
             entityTypeVals.contains(ConfigType.IP)) {
           if (!hasEntityName && !hasEntityDefault)
-            throw new IllegalArgumentException("an entity-name or default entity must be specified with --alter of users, clients, brokers or ips")
+            throw new IllegalArgumentException("An entity-name or default entity must be specified with --alter of users, clients, brokers or ips")
         } else if (!hasEntityName)
-          throw new IllegalArgumentException(s"an entity name must be specified with --alter of ${entityTypeVals.mkString(",")}")
+          throw new IllegalArgumentException(s"An entity name must be specified with --alter of ${entityTypeVals.mkString(",")}")
 
         val isAddConfigPresent = options.has(addConfig)
         val isAddConfigFilePresent = options.has(addConfigFile)

@@ -44,6 +44,7 @@ import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData;
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResult;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
@@ -84,6 +85,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -148,6 +150,7 @@ public class TransactionManagerTest {
     private Sender sender = null;
     private TransactionManager transactionManager = null;
     private Node brokerNode = null;
+    private long finalizedFeaturesEpoch = 0;
 
     @BeforeEach
     public void setup() {
@@ -155,21 +158,32 @@ public class TransactionManagerTest {
         this.client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, singletonMap("test", 2)));
         this.brokerNode = new Node(0, "localhost", 2211);
 
-        initializeTransactionManager(Optional.of(transactionalId));
+        initializeTransactionManager(Optional.of(transactionalId), false);
     }
 
-    private void initializeTransactionManager(Optional<String> transactionalId) {
+    private void initializeTransactionManager(Optional<String> transactionalId, boolean transactionV2Enabled) {
         Metrics metrics = new Metrics(time);
 
-        apiVersions.update("0", NodeApiVersions.create(Arrays.asList(
-                new ApiVersion()
-                    .setApiKey(ApiKeys.INIT_PRODUCER_ID.id)
-                    .setMinVersion((short) 0)
-                    .setMaxVersion((short) 3),
-                new ApiVersion()
-                    .setApiKey(ApiKeys.PRODUCE.id)
-                    .setMinVersion((short) 0)
-                    .setMaxVersion((short) 7))));
+        apiVersions.update("0", new NodeApiVersions(Arrays.asList(
+            new ApiVersion()
+                .setApiKey(ApiKeys.INIT_PRODUCER_ID.id)
+                .setMinVersion((short) 0)
+                .setMaxVersion((short) 3),
+            new ApiVersion()
+                .setApiKey(ApiKeys.PRODUCE.id)
+                .setMinVersion((short) 0)
+                .setMaxVersion((short) 7)),
+            Arrays.asList(new ApiVersionsResponseData.SupportedFeatureKey()
+                .setName("transaction.version")
+                .setMaxVersion(transactionV2Enabled ? (short) 2 : (short) 1)
+                .setMinVersion((short) 0)),
+            false,
+            Arrays.asList(new ApiVersionsResponseData.FinalizedFeatureKey()
+                .setName("transaction.version")
+                .setMaxVersionLevel(transactionV2Enabled ? (short) 2 : (short) 1)
+                .setMinVersionLevel(transactionV2Enabled ? (short) 2 : (short) 1)),
+            finalizedFeaturesEpoch));
+        finalizedFeaturesEpoch += 1;
         this.transactionManager = new TransactionManager(logContext, transactionalId.orElse(null),
                 transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions);
 
@@ -228,15 +242,17 @@ public class TransactionManagerTest {
         assertThrows(IllegalStateException.class, () -> transactionManager.maybeAddPartition(tp0));
     }
 
-    @Test
-    public void testFailIfNotReadyForSendIdempotentProducer() {
-        initializeTransactionManager(Optional.empty());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testFailIfNotReadyForSendIdempotentProducer(boolean transactionV2Enabled) {
+        initializeTransactionManager(Optional.empty(), transactionV2Enabled);
         transactionManager.maybeAddPartition(tp0);
     }
 
-    @Test
-    public void testFailIfNotReadyForSendIdempotentProducerFatalError() {
-        initializeTransactionManager(Optional.empty());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testFailIfNotReadyForSendIdempotentProducerFatalError(boolean transactionV2Enabled) {
+        initializeTransactionManager(Optional.empty(), transactionV2Enabled);
         transactionManager.transitionToFatalError(new KafkaException());
         assertThrows(KafkaException.class, () -> transactionManager.maybeAddPartition(tp0));
     }
@@ -562,17 +578,19 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.isSendToPartitionAllowed(tp0));
     }
 
-    @Test
-    public void testDefaultSequenceNumber() {
-        initializeTransactionManager(Optional.empty());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testDefaultSequenceNumber(boolean transactionV2Enabled) {
+        initializeTransactionManager(Optional.empty(), transactionV2Enabled);
         assertEquals(transactionManager.sequenceNumber(tp0), 0);
         transactionManager.incrementSequenceNumber(tp0, 3);
         assertEquals(transactionManager.sequenceNumber(tp0), 3);
     }
 
-    @Test
-    public void testBumpEpochAndResetSequenceNumbersAfterUnknownProducerId() {
-        initializeTransactionManager(Optional.empty());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testBumpEpochAndResetSequenceNumbersAfterUnknownProducerId(boolean transactionV2Enabled) {
+        initializeTransactionManager(Optional.empty(), transactionV2Enabled);
         initializeIdempotentProducerId(producerId, epoch);
 
         ProducerBatch b1 = writeIdempotentBatchWithValue(transactionManager, tp0, "1");
@@ -603,13 +621,14 @@ public class TransactionManagerTest {
         assertEquals(3, b5.baseSequence());
     }
 
-    @Test
-    public void testBatchFailureAfterProducerReset() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testBatchFailureAfterProducerReset(boolean transactionV2Enabled) {
         // This tests a scenario where the producerId is reset while pending requests are still inflight.
         // The partition(s) that triggered the reset will have their sequence number reset, while any others will not
         final short epoch = Short.MAX_VALUE;
 
-        initializeTransactionManager(Optional.empty());
+        initializeTransactionManager(Optional.empty(), transactionV2Enabled);
         initializeIdempotentProducerId(producerId, epoch);
 
         ProducerBatch tp0b1 = writeIdempotentBatchWithValue(transactionManager, tp0, "1");
@@ -644,11 +663,12 @@ public class TransactionManagerTest {
         assertEquals(tp1b2, transactionManager.nextBatchBySequence(tp1));
     }
 
-    @Test
-    public void testBatchCompletedAfterProducerReset() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testBatchCompletedAfterProducerReset(boolean transactionV2Enabled) {
         final short epoch = Short.MAX_VALUE;
 
-        initializeTransactionManager(Optional.empty());
+        initializeTransactionManager(Optional.empty(), transactionV2Enabled);
         initializeIdempotentProducerId(producerId, epoch);
 
         ProducerBatch b1 = writeIdempotentBatchWithValue(transactionManager, tp0, "1");
@@ -682,9 +702,10 @@ public class TransactionManagerTest {
         assertNull(transactionManager.nextBatchBySequence(tp0));
     }
 
-    @Test
-    public void testDuplicateSequenceAfterProducerReset() throws Exception {
-        initializeTransactionManager(Optional.empty());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testDuplicateSequenceAfterProducerReset(boolean transactionV2Enabled) throws Exception {
+        initializeTransactionManager(Optional.empty(), transactionV2Enabled);
         initializeIdempotentProducerId(producerId, epoch);
 
         Metrics metrics = new Metrics(time);
@@ -768,9 +789,10 @@ public class TransactionManagerTest {
         return batch;
     }
 
-    @Test
-    public void testSequenceNumberOverflow() {
-        initializeTransactionManager(Optional.empty());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testSequenceNumberOverflow(boolean transactionV2Enabled) {
+        initializeTransactionManager(Optional.empty(), transactionV2Enabled);
         assertEquals(transactionManager.sequenceNumber(tp0), 0);
         transactionManager.incrementSequenceNumber(tp0, Integer.MAX_VALUE);
         assertEquals(transactionManager.sequenceNumber(tp0), Integer.MAX_VALUE);
@@ -780,9 +802,10 @@ public class TransactionManagerTest {
         assertEquals(transactionManager.sequenceNumber(tp0), 98);
     }
 
-    @Test
-    public void testProducerIdReset() {
-        initializeTransactionManager(Optional.empty());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testProducerIdReset(boolean transactionV2Enabled) {
+        initializeTransactionManager(Optional.empty(), transactionV2Enabled);
         initializeIdempotentProducerId(15L, Short.MAX_VALUE);
         assertEquals(transactionManager.sequenceNumber(tp0), 0);
         assertEquals(transactionManager.sequenceNumber(tp1), 0);
@@ -848,6 +871,55 @@ public class TransactionManagerTest {
         runUntil(() -> !transactionManager.hasOngoingTransaction());
         assertFalse(transactionManager.isCompleting());
         assertFalse(transactionManager.transactionContainsPartition(tp0));
+    }
+
+    @Test
+    public void testTransactionManagerEnablesV2() {
+        initializeTransactionManager(Optional.of(transactionalId), false);
+        doInitTransactions();
+        transactionManager.beginTransaction();
+        assertFalse(transactionManager.hasFatalError());
+        assertFalse(transactionManager.isTransactionV2Enabled());
+
+        apiVersions.update("0", new NodeApiVersions(Arrays.asList(
+            new ApiVersion()
+                .setApiKey(ApiKeys.INIT_PRODUCER_ID.id)
+                .setMinVersion((short) 0)
+                .setMaxVersion((short) 3)),
+            Arrays.asList(new ApiVersionsResponseData.SupportedFeatureKey()
+                .setName("transaction.version")
+                .setMaxVersion((short) 2)
+                .setMinVersion((short) 0)),
+            false,
+            Arrays.asList(new ApiVersionsResponseData.FinalizedFeatureKey()
+                .setName("transaction.version")
+                .setMaxVersionLevel((short) 2)
+                .setMinVersionLevel((short) 2)),
+            2));
+
+        // The manager stays in transaction V2 disabled.
+        assertFalse(transactionManager.isTransactionV2Enabled());
+
+        transactionManager.maybeAddPartition(tp1);
+        assertTrue(transactionManager.hasOngoingTransaction());
+
+        prepareAddPartitionsToTxn(tp1, Errors.NONE);
+        runUntil(() -> transactionManager.isPartitionAdded(tp1));
+
+        TransactionalRequestResult retryResult = transactionManager.beginCommit();
+        assertTrue(transactionManager.hasOngoingTransaction());
+        assertFalse(transactionManager.isTransactionV2Enabled());
+
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, producerId, epoch);
+        runUntil(() -> !transactionManager.hasOngoingTransaction());
+        runUntil(retryResult::isCompleted);
+        retryResult.await();
+        runUntil(retryResult::isAcked);
+        assertFalse(transactionManager.hasOngoingTransaction());
+
+        // After restart the transaction, the V2 is enabled.
+        transactionManager.beginTransaction();
+        assertTrue(transactionManager.isTransactionV2Enabled());
     }
 
     @Test
@@ -2789,9 +2861,10 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.hasOngoingTransaction());
     }
 
-    @Test
-    public void testBumpEpochAfterTimeoutWithoutPendingInflightRequests() {
-        initializeTransactionManager(Optional.empty());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testBumpEpochAfterTimeoutWithoutPendingInflightRequests(boolean transactionV2Enabled) {
+        initializeTransactionManager(Optional.empty(), transactionV2Enabled);
         long producerId = 15L;
         short epoch = 5;
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
@@ -2832,9 +2905,10 @@ public class TransactionManagerTest {
         runUntil(() -> transactionManager.producerIdAndEpoch().epoch == 6);
     }
 
-    @Test
-    public void testNoProducerIdResetAfterLastInFlightBatchSucceeds() {
-        initializeTransactionManager(Optional.empty());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testNoProducerIdResetAfterLastInFlightBatchSucceeds(boolean transactionV2Enabled) {
+        initializeTransactionManager(Optional.empty(), transactionV2Enabled);
         long producerId = 15L;
         short epoch = 5;
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
@@ -2872,9 +2946,10 @@ public class TransactionManagerTest {
         assertEquals(3, transactionManager.sequenceNumber(tp0));
     }
 
-    @Test
-    public void testEpochBumpAfterLastInflightBatchFails() {
-        initializeTransactionManager(Optional.empty());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testEpochBumpAfterLastInflightBatchFails(boolean transactionV2Enabled) {
+        initializeTransactionManager(Optional.empty(), transactionV2Enabled);
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
         initializeIdempotentProducerId(producerId, epoch);
 
@@ -2905,9 +2980,10 @@ public class TransactionManagerTest {
         assertEquals(0, transactionManager.sequenceNumber(tp0));
     }
 
-    @Test
-    public void testNoFailedBatchHandlingWhenTxnManagerIsInFatalError() {
-        initializeTransactionManager(Optional.empty());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testNoFailedBatchHandlingWhenTxnManagerIsInFatalError(boolean transactionV2Enabled) {
+        initializeTransactionManager(Optional.empty(), transactionV2Enabled);
         long producerId = 15L;
         short epoch = 5;
         initializeIdempotentProducerId(producerId, epoch);
@@ -3244,10 +3320,11 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
     }
 
-    @Test
-    public void testHealthyPartitionRetriesDuringEpochBump() throws InterruptedException {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testHealthyPartitionRetriesDuringEpochBump(boolean transactionV2Enabled) throws InterruptedException {
         // Use a custom Sender to allow multiple inflight requests
-        initializeTransactionManager(Optional.empty());
+        initializeTransactionManager(Optional.empty(), transactionV2Enabled);
         Sender sender = new Sender(logContext, this.client, this.metadata, this.accumulator, false,
                 MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(new Metrics(time)), this.time,
                 REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
@@ -3368,10 +3445,11 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.canBumpEpoch());
     }
 
-    @Test
-    public void testFailedInflightBatchAfterEpochBump() throws InterruptedException {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testFailedInflightBatchAfterEpochBump(boolean transactionV2Enabled) throws InterruptedException {
         // Use a custom Sender to allow multiple inflight requests
-        initializeTransactionManager(Optional.empty());
+        initializeTransactionManager(Optional.empty(), transactionV2Enabled);
         Sender sender = new Sender(logContext, this.client, this.metadata, this.accumulator, false,
                 MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(new Metrics(time)), this.time,
                 REQUEST_TIMEOUT, 50, transactionManager, apiVersions);

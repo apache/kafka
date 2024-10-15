@@ -29,7 +29,6 @@ class KafkaConfig(dict):
         config_property.METADATA_LOG_BYTES_BETWEEN_SNAPSHOTS: str(10*1024*1024), # 10 MB
         config_property.METADATA_LOG_RETENTION_BYTES: str(10*1024*1024), # 10 MB
         config_property.METADATA_LOG_SEGMENT_MS: str(1*60*1000), # one minute
-        config_property.NEW_GROUP_COORDINATOR_ENABLE: False
     }
 
     def __init__(self, **kwargs):

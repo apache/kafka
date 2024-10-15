@@ -173,7 +173,7 @@ public class StreamsMetadataState {
         return results;
     }
 
-    public synchronized Collection<StreamsMetadata> getAllMetadataForTopology(final String topologyName) {
+    public synchronized Collection<StreamsMetadata> allMetadataForTopology(final String topologyName) {
         Objects.requireNonNull(topologyName, "topologyName cannot be null");
 
         if (!isInitialized()) {

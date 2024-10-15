@@ -221,6 +221,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      * Note that if the node ID is empty, then the client will behave as a
      * non-participating observer.
      *
+     * @param nodeDirectoryId the node directory id, cannot be the zero uuid
      * @param followersAlwaysFlush instruct followers to always fsync when appending to the log
      */
     public KafkaRaftClient(
@@ -281,6 +282,10 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         Random random,
         QuorumConfig quorumConfig
     ) {
+        if (nodeDirectoryId.equals(Uuid.ZERO_UUID)) {
+            throw new IllegalArgumentException("The node directory id must be set and not be the zero uuid");
+        }
+
         this.nodeId = nodeId;
         this.nodeDirectoryId = nodeDirectoryId;
         this.logContext = logContext;
@@ -2906,7 +2911,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             if (quorum.isVoter()) {
                 transitionToCandidate(currentTimeMs);
             } else {
-                // It is posible that the old leader is not a voter in the new voter set.
+                // It is possible that the old leader is not a voter in the new voter set.
                 // In that case increase the epoch and transition to unattached. The epoch needs
                 // to be increased to avoid FETCH responses with the leader being this replica.
                 transitionToUnattached(quorum.epoch() + 1);
@@ -3031,11 +3036,13 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             logger.info("Become candidate due to fetch timeout");
             transitionToCandidate(currentTimeMs);
             backoffMs = 0;
-        } else if (state.hasUpdateVoterPeriodExpired(currentTimeMs) &&
-            partitionState.lastKraftVersion().isReconfigSupported() &&
-            partitionState.lastVoterSet().voterNodeNeedsUpdate(quorum.localVoterNodeOrThrow())
-        ) {
-            backoffMs = maybeSendUpdateVoterRequest(state, currentTimeMs);
+        } else if (state.hasUpdateVoterPeriodExpired(currentTimeMs)) {
+            if (partitionState.lastKraftVersion().isReconfigSupported() &&
+                partitionState.lastVoterSet().voterNodeNeedsUpdate(quorum.localVoterNodeOrThrow())) {
+                backoffMs = maybeSendUpdateVoterRequest(state, currentTimeMs);
+            } else {
+                backoffMs = maybeSendFetchOrFetchSnapshot(state, currentTimeMs);
+            }
             state.resetUpdateVoterPeriod(currentTimeMs);
         } else {
             backoffMs = maybeSendFetchOrFetchSnapshot(state, currentTimeMs);
@@ -3178,11 +3185,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         if (leaderState.isPresent()) {
             maybeFireLeaderChange(leaderState.get());
         } else if (!quorum.isResigned()) {
-            /* Should not fire leader change while in the resigned state for two reasons.
+            /* Should not fire leader change while in the resigned state for two reasons:
              * 1. The epoch start offset is not tracked but the leader is the local replica.
-             *    Listener cannot be notify of leadership until they have caught to the latest
-             *    epoch.
-             * 2. It is not pratical to notify of local leadership since any write operation
+             *    Listener cannot be notified of leadership until they have caught to the latest
+             *    epoch and LEO.
+             * 2. It is not practical to notify of local leadership since any write operation
              *    (prepareAppend and schedulePreparedAppend) will fail with NotLeaderException
              */
             maybeFireLeaderChange();

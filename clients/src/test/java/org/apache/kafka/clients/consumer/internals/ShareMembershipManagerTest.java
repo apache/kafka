@@ -61,7 +61,6 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER
 import static org.apache.kafka.common.requests.ShareGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -428,7 +427,7 @@ public class ShareMembershipManagerTest {
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         verifyReconciliationNotTriggered(membershipManager);
         assertEquals(Collections.singletonMap(topic1, mkSortedSet(0)), membershipManager.currentAssignment().partitions);
-        assertEquals(mkSet(topic2), membershipManager.topicsAwaitingReconciliation());
+        assertEquals(Set.of(topic2), membershipManager.topicsAwaitingReconciliation());
     }
 
     private Map<Uuid, SortedSet<Integer>> toTopicIdPartitionMap(final ShareGroupHeartbeatResponseData.Assignment assignment) {
@@ -1137,10 +1136,25 @@ public class ShareMembershipManagerTest {
     }
 
     @Test
-    public void testOnSubscriptionUpdatedTransitionsToJoiningOnlyIfNotInGroup() {
+    public void testOnSubscriptionUpdatedDoesNotTransitionToJoiningIfInGroup() {
         ShareMembershipManager membershipManager = createMemberInStableState();
         membershipManager.onSubscriptionUpdated();
+        assertTrue(membershipManager.subscriptionUpdated());
+        membershipManager.onConsumerPoll();
         verify(membershipManager, never()).transitionToJoining();
+        assertFalse(membershipManager.subscriptionUpdated());
+    }
+
+    @Test
+    public void testOnSubscriptionUpdatedTransitionsToJoiningOnPollIfNotInGroup() {
+        ShareMembershipManager membershipManager = createMembershipManager();
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+        membershipManager.onSubscriptionUpdated();
+        verify(membershipManager, never()).transitionToJoining();
+        assertTrue(membershipManager.subscriptionUpdated());
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+        membershipManager.onConsumerPoll();
+        verify(membershipManager).transitionToJoining();
     }
 
     private void assertLeaveGroupDueToExpiredPollAndTransitionToStale(ShareMembershipManager membershipManager) {

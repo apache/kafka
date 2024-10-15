@@ -21,7 +21,6 @@ import java.util.AbstractMap.SimpleImmutableEntry
 import java.util.{Collections, Properties}
 import java.util.Map.Entry
 import kafka.server.KafkaConfig.fromProps
-import kafka.server.QuotaType._
 import kafka.utils.TestUtils._
 import kafka.utils.CoreUtils._
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET
@@ -35,8 +34,9 @@ import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, 
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol.PLAINTEXT
 import org.apache.kafka.controller.ControllerRequestContextUtil
-import org.apache.kafka.server.common.{Features, KRaftVersion, MetadataVersion, TransactionVersion}
+import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.apache.kafka.server.config.QuotaConfigs
+import org.apache.kafka.server.quota.QuotaType
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.params.ParameterizedTest
@@ -198,7 +198,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
     // In a short test the brokers can be read unfairly, so assert against the average
     val rateUpperBound = throttle * 1.1
     val rateLowerBound = throttle * 0.5
-    val rate = if (leaderThrottle) avRate(LeaderReplication, 100 to 105) else avRate(FollowerReplication, 106 to 107)
+    val rate = if (leaderThrottle) avRate(QuotaType.LEADER_REPLICATION, 100 to 105) else avRate(QuotaType.FOLLOWER_REPLICATION, 106 to 107)
     assertTrue(rate < rateUpperBound, s"Expected $rate < $rateUpperBound")
     assertTrue(rate > rateLowerBound, s"Expected $rate > $rateLowerBound")
   }
@@ -292,17 +292,15 @@ class ReplicationQuotasTest extends QuorumTestHarness {
     listeners.add(new Listener().setName(PLAINTEXT.name).setHost("localhost").setPort(9092 + id))
     val features = new BrokerRegistrationRequestData.FeatureCollection()
     features.add(new BrokerRegistrationRequestData.Feature()
-      .setName(KRaftVersion.FEATURE_NAME)
-      .setMinSupportedVersion(KRaftVersion.KRAFT_VERSION_0.featureLevel())
-      .setMaxSupportedVersion(Features.KRAFT_VERSION.latestTesting()))
-    features.add(new BrokerRegistrationRequestData.Feature()
       .setName(MetadataVersion.FEATURE_NAME)
-      .setMinSupportedVersion(MetadataVersion.IBP_3_9_IV0.featureLevel())
+      .setMinSupportedVersion(MetadataVersion.latestProduction().featureLevel())
       .setMaxSupportedVersion(MetadataVersion.latestTesting().featureLevel()))
-    features.add(new BrokerRegistrationRequestData.Feature()
-      .setName(TransactionVersion.FEATURE_NAME)
-      .setMinSupportedVersion(TransactionVersion.TV_0.featureLevel())
-      .setMaxSupportedVersion(Features.TRANSACTION_VERSION.latestTesting()))
+    Features.PRODUCTION_FEATURES.forEach { feature =>
+      features.add(new BrokerRegistrationRequestData.Feature()
+        .setName(feature.featureName())
+        .setMinSupportedVersion(feature.minimumProduction())
+        .setMaxSupportedVersion(feature.latestTesting()))
+    }
     controllerServer.controller.registerBroker(
       ControllerRequestContextUtil.ANONYMOUS_CONTEXT,
       new BrokerRegistrationRequestData()

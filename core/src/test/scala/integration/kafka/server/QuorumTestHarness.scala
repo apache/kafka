@@ -29,7 +29,7 @@ import org.apache.kafka.clients.consumer.GroupProtocol
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.utils.{Exit, Time}
+import org.apache.kafka.common.utils.{Exit, Time, Utils}
 import org.apache.kafka.common.{DirectoryId, Uuid}
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag.{REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion}
@@ -46,8 +46,8 @@ import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeAll, BeforeEach, Tag, T
 
 import java.nio.file.{Files, Paths}
 import scala.collection.Seq
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOptional
 
 trait QuorumImplementation {
   def createBroker(
@@ -79,7 +79,7 @@ class ZooKeeperQuorumImplementation(
   }
 
   override def shutdown(): Unit = {
-    CoreUtils.swallow(zkClient.close(), log)
+    Utils.closeQuietly(zkClient, "zk client")
     CoreUtils.swallow(zookeeper.shutdown(), log)
   }
 }
@@ -174,7 +174,7 @@ abstract class QuorumTestHarness extends Logging {
    */
   protected val controllerListenerSecurityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
 
-  protected def kraftControllerConfigs(): Seq[Properties] = {
+  protected def kraftControllerConfigs(testInfo: TestInfo): Seq[Properties] = {
     Seq(new Properties())
   }
 
@@ -189,10 +189,6 @@ abstract class QuorumTestHarness extends Logging {
 
   def isZkMigrationTest(): Boolean = {
     TestInfoUtils.isZkMigrationTest(testInfo)
-  }
-
-  def isNewGroupCoordinatorEnabled(): Boolean = {
-    TestInfoUtils.isNewGroupCoordinatorEnabled(testInfo)
   }
 
   def isShareGroupTest(): Boolean = {
@@ -283,7 +279,7 @@ abstract class QuorumTestHarness extends Logging {
         tearDown()
       }
     })
-    val name = testInfo.getTestMethod.asScala
+    val name = testInfo.getTestMethod.toScala
       .map(_.toString)
       .getOrElse("[unspecified]")
     if (TestInfoUtils.isKRaft(testInfo)) {
@@ -318,8 +314,12 @@ abstract class QuorumTestHarness extends Logging {
     newKRaftQuorum(new Properties())
   }
 
+  protected def extraControllerSecurityProtocols(): Seq[SecurityProtocol] = {
+    Seq.empty
+  }
+
   protected def newKRaftQuorum(overridingProps: Properties): KRaftQuorumImplementation = {
-    val propsList = kraftControllerConfigs()
+    val propsList = kraftControllerConfigs(testInfo)
     if (propsList.size != 1) {
       throw new RuntimeException("Only one KRaft controller is supported for now.")
     }
@@ -335,9 +335,12 @@ abstract class QuorumTestHarness extends Logging {
     val metadataDir = TestUtils.tempDir()
     props.setProperty(KRaftConfigs.METADATA_LOG_DIR_CONFIG, metadataDir.getAbsolutePath)
     val proto = controllerListenerSecurityProtocol.toString
-    props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, s"CONTROLLER:$proto")
-    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, s"CONTROLLER://localhost:0")
-    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    val securityProtocolMaps = extraControllerSecurityProtocols().map(sc => sc + ":" + sc).mkString(",")
+    val listeners = extraControllerSecurityProtocols().map(sc => sc + "://localhost:0").mkString(",")
+    val listenerNames = extraControllerSecurityProtocols().mkString(",")
+    props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, s"CONTROLLER:$proto,$securityProtocolMaps")
+    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, s"CONTROLLER://localhost:0,$listeners")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, s"CONTROLLER,$listenerNames")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:0")
     // Setting the configuration to the same value set on the brokers via TestUtils to keep KRaft based and Zk based controller configs are consistent.
     props.setProperty(ServerLogConfigs.LOG_DELETE_DELAY_MS_CONFIG, "1000")
@@ -426,7 +429,7 @@ abstract class QuorumTestHarness extends Logging {
     } catch {
       case t: Throwable =>
         CoreUtils.swallow(zookeeper.shutdown(), this)
-        if (zkClient != null) CoreUtils.swallow(zkClient.close(), this)
+        Utils.closeQuietly(zkClient, "zk client")
         throw t
     }
     new ZooKeeperQuorumImplementation(

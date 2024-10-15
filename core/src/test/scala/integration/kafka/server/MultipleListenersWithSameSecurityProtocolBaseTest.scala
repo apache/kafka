@@ -18,7 +18,7 @@
 
 package kafka.server
 
-import java.util.{Collections, Objects, Properties}
+import java.util.{Collections, Objects, Optional, Properties}
 import java.util.concurrent.TimeUnit
 import kafka.api.SaslSetup
 import kafka.security.JaasTestUtils
@@ -92,7 +92,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
       props.put(SaslConfigs.SASL_KERBEROS_SERVICE_NAME, "kafka")
       props ++= dynamicJaasSections
 
-      props ++= TestUtils.sslConfigs(ConnectionMode.SERVER, clientCert = false, Some(trustStoreFile), s"server$brokerId")
+      props ++= JaasTestUtils.sslConfigs(ConnectionMode.SERVER, false, Optional.of(trustStoreFile), s"server$brokerId")
 
       // set listener-specific configs and set an invalid path for the global config to verify that the overrides work
       Seq(SecureInternal, SecureExternal).foreach { listenerName =>
@@ -120,7 +120,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
       val listenerName = endPoint.listenerName
 
       val trustStoreFile =
-        if (TestUtils.usesSslTransportLayer(endPoint.securityProtocol)) Some(this.trustStoreFile)
+        if (JaasTestUtils.usesSslTransportLayer(endPoint.securityProtocol)) Some(this.trustStoreFile)
         else None
 
       val bootstrapServers = TestUtils.bootstrapServers(servers, listenerName)
@@ -138,7 +138,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
           securityProtocol = endPoint.securityProtocol, trustStoreFile = trustStoreFile, saslProperties = saslProps)
       }
 
-      if (TestUtils.usesSaslAuthentication(endPoint.securityProtocol)) {
+      if (JaasTestUtils.usesSaslAuthentication(endPoint.securityProtocol)) {
         kafkaServerSaslMechanisms(endPoint.listenerName.value).foreach { mechanism =>
           addProducerConsumer(listenerName, mechanism, Some(kafkaClientSaslProperties(mechanism, dynamicJaasConfig = true)))
         }

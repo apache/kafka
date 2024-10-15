@@ -17,18 +17,9 @@
 package kafka.admin;
 
 import kafka.admin.AclCommand.AclCommandOptions;
-import kafka.security.authorizer.AclAuthorizer;
-import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterConfigProperty;
-import kafka.test.annotation.ClusterTest;
-import kafka.test.annotation.ClusterTestDefaults;
-import kafka.test.annotation.ClusterTests;
-import kafka.test.annotation.Type;
-import kafka.test.junit.ClusterTestExtensions;
-import kafka.test.junit.ZkClusterInvocationContext;
-import kafka.utils.TestUtils;
 
 import org.apache.kafka.common.acl.AccessControlEntry;
+import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.resource.PatternType;
@@ -36,12 +27,18 @@ import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
+import org.apache.kafka.common.test.api.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.ClusterTestExtensions;
+import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
-import org.apache.kafka.server.authorizer.Authorizer;
+import org.apache.kafka.test.TestUtils;
 
 import org.apache.log4j.Level;
 import org.junit.jupiter.api.Test;
@@ -49,6 +46,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.IOException;
 import java.io.PrintStream;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
@@ -61,13 +59,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import javax.management.InstanceAlreadyExistsException;
 
 import scala.Console;
-import scala.collection.JavaConverters;
+import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.common.acl.AccessControlEntryFilter.ANY;
 import static org.apache.kafka.common.acl.AclOperation.ALTER;
@@ -98,19 +95,20 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@ClusterTestDefaults(serverProperties = {
-        @ClusterConfigProperty(key = StandardAuthorizer.SUPER_USERS_CONFIG, value = "User:ANONYMOUS"),
-        @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = AclCommandTest.ACL_AUTHORIZER)
-})
+@ClusterTestDefaults(
+        types = {Type.KRAFT},
+        serverProperties = {
+            @ClusterConfigProperty(key = StandardAuthorizer.SUPER_USERS_CONFIG, value = "User:ANONYMOUS"),
+            @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = AclCommandTest.STANDARD_AUTHORIZER)}
+
+)
 @ExtendWith(ClusterTestExtensions.class)
 public class AclCommandTest {
-    public static final String ACL_AUTHORIZER = "kafka.security.authorizer.AclAuthorizer";
-    private static final String STANDARD_AUTHORIZER = "org.apache.kafka.metadata.authorizer.StandardAuthorizer";
+    public static final String STANDARD_AUTHORIZER = "org.apache.kafka.metadata.authorizer.StandardAuthorizer";
     private static final String LOCALHOST = "localhost:9092";
-    private static final String AUTHORIZER = "--authorizer";
-    private static final String AUTHORIZER_PROPERTIES = AUTHORIZER + "-properties";
     private static final String ADD = "--add";
     private static final String BOOTSTRAP_SERVER = "--bootstrap-server";
+    private static final String BOOTSTRAP_CONTROLLER = "--bootstrap-controller";
     private static final String COMMAND_CONFIG = "--command-config";
     private static final String CONSUMER = "--consumer";
     private static final String IDEMPOTENT = "--idempotent";
@@ -121,7 +119,6 @@ public class AclCommandTest {
     private static final String OPERATION = "--operation";
     private static final String TOPIC = "--topic";
     private static final String RESOURCE_PATTERN_TYPE = "--resource-pattern-type";
-    private static final String ZOOKEEPER_CONNECT = "zookeeper.connect=localhost:2181";
     private static final KafkaPrincipal PRINCIPAL = SecurityUtils.parseKafkaPrincipal("User:test2");
     private static final Set<KafkaPrincipal> USERS = new HashSet<>(Arrays.asList(
             SecurityUtils.parseKafkaPrincipal("User:CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown"),
@@ -220,125 +217,94 @@ public class AclCommandTest {
                         }).collect(Collectors.toMap(Entry::getKey, Entry::getValue)));
             }};
 
-    @ClusterTest(types = {Type.ZK})
-    public void testAclCliWithAuthorizer(ClusterInstance cluster) {
-        testAclCli(cluster, zkArgs(cluster));
-    }
-
-    @ClusterTests({
-            @ClusterTest(types = {Type.ZK}),
-            @ClusterTest(types = {Type.KRAFT}, serverProperties = {
-                    @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = STANDARD_AUTHORIZER)
-            })
-    })
-    public void testAclCliWithAdminAPI(ClusterInstance cluster) {
+    @ClusterTest
+    public void testAclCliWithAdminAPI(ClusterInstance cluster) throws InterruptedException {
         testAclCli(cluster, adminArgs(cluster.bootstrapServers(), Optional.empty()));
     }
 
-    @ClusterTest(types = {Type.ZK})
-    public void testProducerConsumerCliWithAuthorizer(ClusterInstance cluster) {
-        testProducerConsumerCli(cluster, zkArgs(cluster));
+
+    @ClusterTest
+    public void testAclCliWithAdminAPIAndBootstrapController(ClusterInstance cluster) throws InterruptedException {
+        testAclCli(cluster, adminArgsWithBootstrapController(cluster.bootstrapControllers(), Optional.empty()));
     }
 
-    @ClusterTests({
-            @ClusterTest(types = {Type.ZK}),
-            @ClusterTest(types = {Type.KRAFT}, serverProperties = {
-                    @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = STANDARD_AUTHORIZER)
-            })
-    })
-    public void testProducerConsumerCliWithAdminAPI(ClusterInstance cluster) {
+    @ClusterTest
+    public void testAclCliWithMisusingBootstrapServerToController(ClusterInstance cluster) {
+        assertThrows(RuntimeException.class, () -> testAclCli(cluster, adminArgsWithBootstrapController(cluster.bootstrapServers(), Optional.empty())));
+    }
+
+    @ClusterTest
+    public void testAclCliWithMisusingBootstrapControllerToServer(ClusterInstance cluster) {
+        assertThrows(RuntimeException.class, () -> testAclCli(cluster, adminArgs(cluster.bootstrapControllers(), Optional.empty())));
+    }
+
+    @ClusterTest
+    public void testProducerConsumerCliWithAdminAPI(ClusterInstance cluster) throws InterruptedException {
         testProducerConsumerCli(cluster, adminArgs(cluster.bootstrapServers(), Optional.empty()));
     }
 
-    @ClusterTests({
-            @ClusterTest(types = {Type.ZK}),
-            @ClusterTest(types = {Type.KRAFT}, serverProperties = {
-                    @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = STANDARD_AUTHORIZER)
-            })
-    })
-    public void testAclCliWithClientId(ClusterInstance cluster) {
-        LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        appender.setClassLogger(AppInfoParser.class, Level.WARN);
-        try {
+    @ClusterTest
+    public void testProducerConsumerCliWithAdminAPIAndBootstrapController(ClusterInstance cluster) throws InterruptedException {
+        testProducerConsumerCli(cluster, adminArgsWithBootstrapController(cluster.bootstrapControllers(), Optional.empty()));
+    }
+
+    @ClusterTest
+    public void testAclCliWithClientId(ClusterInstance cluster) throws IOException, InterruptedException {
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+            appender.setClassLogger(AppInfoParser.class, Level.WARN);
             testAclCli(cluster, adminArgs(cluster.bootstrapServers(), Optional.of(TestUtils.tempFile("client.id=my-client"))));
-        } finally {
-            appender.close();
+            assertEquals(0, appender.getEvents().stream()
+                    .filter(e -> e.getLevel().equals(Level.WARN.toString()))
+                    .filter(e -> e.getThrowableClassName().filter(name -> name.equals(InstanceAlreadyExistsException.class.getName())).isPresent())
+                    .count(), "There should be no warnings about multiple registration of mbeans");
         }
-        assertEquals(0, appender.getEvents().stream()
-                .filter(e -> e.getLevel().equals(Level.WARN.toString()))
-                .filter(e -> e.getThrowableClassName().filter(name -> name.equals(InstanceAlreadyExistsException.class.getName())).isPresent())
-                .count(), "There should be no warnings about multiple registration of mbeans");
     }
 
-    @ClusterTest(types = {Type.ZK})
-    public void testAclsOnPrefixedResourcesWithAuthorizer(ClusterInstance cluster) {
-        testAclsOnPrefixedResources(cluster, zkArgs(cluster));
+    @ClusterTest
+    public void testAclCliWithClientIdAndBootstrapController(ClusterInstance cluster) throws IOException, InterruptedException {
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+            appender.setClassLogger(AppInfoParser.class, Level.WARN);
+            testAclCli(cluster, adminArgsWithBootstrapController(cluster.bootstrapControllers(), Optional.of(TestUtils.tempFile("client.id=my-client"))));
+            assertEquals(0, appender.getEvents().stream()
+                    .filter(e -> e.getLevel().equals(Level.WARN.toString()))
+                    .filter(e -> e.getThrowableClassName().filter(name -> name.equals(InstanceAlreadyExistsException.class.getName())).isPresent())
+                    .count(), "There should be no warnings about multiple registration of mbeans");
+        }
     }
 
-    @ClusterTests({
-            @ClusterTest(types = {Type.ZK}),
-            @ClusterTest(types = {Type.KRAFT}, serverProperties = {
-                    @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = STANDARD_AUTHORIZER)
-            })
-    })
-    public void testAclsOnPrefixedResourcesWithAdminAPI(ClusterInstance cluster) {
+    @ClusterTest
+    public void testAclsOnPrefixedResourcesWithAdminAPI(ClusterInstance cluster) throws InterruptedException {
         testAclsOnPrefixedResources(cluster, adminArgs(cluster.bootstrapServers(), Optional.empty()));
     }
 
-    @ClusterTest(types = {Type.ZK})
-    public void testInvalidAuthorizerProperty(ClusterInstance cluster) {
-        AclCommand.AuthorizerService aclCommandService = new AclCommand.AuthorizerService(
-                AclAuthorizer.class.getName(),
-                new AclCommandOptions(new String[]{AUTHORIZER_PROPERTIES, "zookeeper.connect " + zkConnect(cluster)})
-        );
-        assertThrows(IllegalArgumentException.class, aclCommandService::listAcls);
+    @ClusterTest
+    public void testAclsOnPrefixedResourcesWithAdminAPIAndBootstrapController(ClusterInstance cluster) throws InterruptedException {
+        testAclsOnPrefixedResources(cluster, adminArgsWithBootstrapController(cluster.bootstrapControllers(), Optional.empty()));
     }
 
-    @ClusterTest(types = {Type.ZK})
-    public void testPatternTypesWithAuthorizer(ClusterInstance cluster) {
-        testPatternTypes(zkArgs(cluster));
-    }
-
-    @ClusterTests({
-            @ClusterTest(types = {Type.ZK}),
-            @ClusterTest(types = {Type.KRAFT}, serverProperties = {
-                    @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = STANDARD_AUTHORIZER)
-            })
-    })
+    @ClusterTest
     public void testPatternTypesWithAdminAPI(ClusterInstance cluster) {
         testPatternTypes(adminArgs(cluster.bootstrapServers(), Optional.empty()));
     }
 
+    @ClusterTest
+    public void testPatternTypesWithAdminAPIAndBootstrapController(ClusterInstance cluster) {
+        testPatternTypes(adminArgsWithBootstrapController(cluster.bootstrapControllers(), Optional.empty()));
+    }
+
     @Test
-    public void testUseBootstrapServerOptWithAuthorizerOpt() {
+    public void testUseBootstrapServerOptWithBootstrapControllerOpt() {
         assertInitializeInvalidOptionsExitCodeAndMsg(
-                Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, AUTHORIZER, ACL_AUTHORIZER),
-                "Only one of --bootstrap-server or --authorizer must be specified"
+                Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, BOOTSTRAP_CONTROLLER, LOCALHOST),
+                "Only one of --bootstrap-server or --bootstrap-controller must be specified"
         );
     }
 
     @Test
-    public void testRequiredArgsForAuthorizerOpt() {
+    public void testUseWithoutBootstrapServerOptAndBootstrapControllerOpt() {
         assertInitializeInvalidOptionsExitCodeAndMsg(
-                Arrays.asList(AUTHORIZER, ACL_AUTHORIZER),
-                "Missing required argument \"[authorizer-properties]\""
-        );
-        checkNotThrow(Arrays.asList(AUTHORIZER, ACL_AUTHORIZER, AUTHORIZER_PROPERTIES, ZOOKEEPER_CONNECT, LIST));
-    }
-
-    @Test
-    public void testUseCommandConfigOptWithoutBootstrapServerOpt() {
-        assertInitializeInvalidOptionsExitCodeAndMsg(
-                Arrays.asList(COMMAND_CONFIG, "cfg.properties", AUTHORIZER, ACL_AUTHORIZER, AUTHORIZER_PROPERTIES, ZOOKEEPER_CONNECT),
-                "The --command-config option can only be used with --bootstrap-server option"
-        );
-    }
-
-    @Test
-    public void testUseAuthorizerPropertiesOptWithBootstrapServerOpt() {
-        assertInitializeInvalidOptionsExitCodeAndMsg(
-                Arrays.asList(BOOTSTRAP_SERVER, LOCALHOST, AUTHORIZER_PROPERTIES, ZOOKEEPER_CONNECT),
-                "The --authorizer-properties option can only be used with --authorizer option"
+                Collections.emptyList(),
+                "One of --bootstrap-server or --bootstrap-controller must be specified"
         );
     }
 
@@ -398,7 +364,7 @@ public class AclCommandTest {
         );
     }
 
-    private void testProducerConsumerCli(ClusterInstance cluster, List<String> cmdArgs) {
+    private void testProducerConsumerCli(ClusterInstance cluster, List<String> cmdArgs) throws InterruptedException {
         for (Map.Entry<List<String>, Map<Set<ResourcePattern>, Set<AccessControlEntry>>> entry : CMD_TO_RESOURCES_TO_ACL.entrySet()) {
             List<String> cmd = entry.getKey();
             Map<Set<ResourcePattern>, Set<AccessControlEntry>> resourcesToAcls = entry.getValue();
@@ -418,8 +384,7 @@ public class AclCommandTest {
 
             for (Map.Entry<Set<ResourcePattern>, Set<AccessControlEntry>> resourcesToAclsEntry : resourcesToAcls.entrySet()) {
                 for (ResourcePattern resource : resourcesToAclsEntry.getKey()) {
-                    withAuthorizer(cluster, authorizer ->
-                            TestUtils.waitAndVerifyAcls(asScalaSet(resourcesToAclsEntry.getValue()), authorizer, resource, ANY));
+                    cluster.waitAcls(new AclBindingFilter(resource.toFilter(), ANY), resourcesToAclsEntry.getValue());
                 }
             }
             List<String> resourceCmd = new ArrayList<>(resourceCommand);
@@ -428,7 +393,7 @@ public class AclCommandTest {
         }
     }
 
-    private void testAclsOnPrefixedResources(ClusterInstance cluster, List<String> cmdArgs) {
+    private void testAclsOnPrefixedResources(ClusterInstance cluster, List<String> cmdArgs) throws InterruptedException {
         List<String> cmd = Arrays.asList("--allow-principal", PRINCIPAL.toString(), PRODUCER, TOPIC, "Test-",
                 RESOURCE_PATTERN_TYPE, "Prefixed");
 
@@ -437,17 +402,11 @@ public class AclCommandTest {
         args.add(ADD);
         callMain(args);
 
-        withAuthorizer(cluster, authorizer -> {
-            AccessControlEntry writeAcl = new AccessControlEntry(PRINCIPAL.toString(), WILDCARD_HOST, WRITE, ALLOW);
-            AccessControlEntry describeAcl = new AccessControlEntry(PRINCIPAL.toString(), WILDCARD_HOST, DESCRIBE, ALLOW);
-            AccessControlEntry createAcl = new AccessControlEntry(PRINCIPAL.toString(), WILDCARD_HOST, CREATE, ALLOW);
-            TestUtils.waitAndVerifyAcls(
-                    asScalaSet(new HashSet<>(Arrays.asList(writeAcl, describeAcl, createAcl))),
-                    authorizer,
-                    new ResourcePattern(ResourceType.TOPIC, "Test-", PREFIXED),
-                    ANY
-            );
-        });
+        AccessControlEntry writeAcl = new AccessControlEntry(PRINCIPAL.toString(), WILDCARD_HOST, WRITE, ALLOW);
+        AccessControlEntry describeAcl = new AccessControlEntry(PRINCIPAL.toString(), WILDCARD_HOST, DESCRIBE, ALLOW);
+        AccessControlEntry createAcl = new AccessControlEntry(PRINCIPAL.toString(), WILDCARD_HOST, CREATE, ALLOW);
+        cluster.waitAcls(new AclBindingFilter(new ResourcePattern(ResourceType.TOPIC, "Test-", PREFIXED).toFilter(), ANY),
+                Arrays.asList(writeAcl, describeAcl, createAcl));
 
         args = new ArrayList<>(cmdArgs);
         args.addAll(cmd);
@@ -455,20 +414,10 @@ public class AclCommandTest {
         args.add("--force");
         callMain(args);
 
-        withAuthorizer(cluster, authorizer -> {
-            TestUtils.waitAndVerifyAcls(
-                    asScalaSet(Collections.emptySet()),
-                    authorizer,
-                    new ResourcePattern(CLUSTER, "kafka-cluster", LITERAL),
-                    ANY
-            );
-            TestUtils.waitAndVerifyAcls(
-                    asScalaSet(Collections.emptySet()),
-                    authorizer,
-                    new ResourcePattern(ResourceType.TOPIC, "Test-", PREFIXED),
-                    ANY
-            );
-        });
+        cluster.waitAcls(new AclBindingFilter(new ResourcePattern(ResourceType.CLUSTER, "kafka-cluster", PREFIXED).toFilter(), ANY),
+                Collections.emptySet());
+        cluster.waitAcls(new AclBindingFilter(new ResourcePattern(ResourceType.TOPIC, "Test-", PREFIXED).toFilter(), ANY),
+                Collections.emptySet());
     }
 
     private static Map<Set<ResourcePattern>, Set<AccessControlEntry>> producerResourceToAcls(boolean enableIdempotence) {
@@ -490,11 +439,17 @@ public class AclCommandTest {
         return adminArgs;
     }
 
+    private List<String> adminArgsWithBootstrapController(String bootstrapController, Optional<File> commandConfig) {
+        List<String> adminArgs = new ArrayList<>(Arrays.asList(BOOTSTRAP_CONTROLLER, bootstrapController));
+        commandConfig.ifPresent(file -> adminArgs.addAll(Arrays.asList(COMMAND_CONFIG, file.getAbsolutePath())));
+        return adminArgs;
+    }
+
     private Map.Entry<String, String> callMain(List<String> args) {
         return grabConsoleOutputAndError(() -> AclCommand.main(args.toArray(new String[0])));
     }
 
-    private void testAclCli(ClusterInstance cluster, List<String> cmdArgs) {
+    private void testAclCli(ClusterInstance cluster, List<String> cmdArgs) throws InterruptedException {
         for (Map.Entry<Set<ResourcePattern>, List<String>> entry : RESOURCE_TO_COMMAND.entrySet()) {
             Set<ResourcePattern> resources = entry.getKey();
             List<String> resourceCmd = entry.getValue();
@@ -514,8 +469,7 @@ public class AclCommandTest {
                 assertEquals("", out.getValue());
 
                 for (ResourcePattern resource : resources) {
-                    withAuthorizer(cluster, authorizer ->
-                            TestUtils.waitAndVerifyAcls(asScalaSet(aclToCommand.getKey()), authorizer, resource, ANY));
+                    cluster.waitAcls(new AclBindingFilter(resource.toFilter(), ANY), aclToCommand.getKey());
                 }
 
                 resultArgs = new ArrayList<>(cmdArgs);
@@ -592,7 +546,7 @@ public class AclCommandTest {
             List<String> cmdArgs,
             Set<ResourcePattern> resources,
             List<String> resourceCmd
-    ) {
+    ) throws InterruptedException {
         List<String> args = new ArrayList<>(cmdArgs);
         args.addAll(resourceCmd);
         args.add(REMOVE);
@@ -600,8 +554,7 @@ public class AclCommandTest {
         Map.Entry<String, String> out = callMain(args);
         assertEquals("", out.getValue());
         for (ResourcePattern resource : resources) {
-            withAuthorizer(cluster, authorizer ->
-                    TestUtils.waitAndVerifyAcls(asScalaSet(Collections.emptySet()), authorizer, resource, ANY));
+            cluster.waitAcls(new AclBindingFilter(resource.toFilter(), ANY), Collections.emptySet());
         }
     }
 
@@ -628,23 +581,6 @@ public class AclCommandTest {
         return fullCmd;
     }
 
-    private void withAuthorizer(ClusterInstance cluster, Consumer<Authorizer> consumer) {
-        if (cluster.isKRaftTest()) {
-            List<Authorizer> allAuthorizers = new ArrayList<>();
-            allAuthorizers.addAll(cluster.brokers().values().stream()
-                    .map(server -> server.authorizer().get()).collect(Collectors.toList()));
-            allAuthorizers.addAll(cluster.controllers().values().stream()
-                    .map(server -> server.authorizer().get()).collect(Collectors.toList()));
-            allAuthorizers.forEach(consumer);
-        } else {
-            consumer.accept(cluster.brokers().values().stream()
-                    .findFirst()
-                    .orElseThrow(() -> new RuntimeException("No broker found"))
-                    .authorizer().get()
-            );
-        }
-    }
-
     /**
      * Capture both the console output and console error during the execution of the provided function.
      */
@@ -669,22 +605,12 @@ public class AclCommandTest {
         return new SimpleImmutableEntry<>(outBuf.toString(), errBuf.toString());
     }
 
-    @SuppressWarnings("deprecation")
     private static <T> scala.collection.immutable.Set<T> asScalaSet(Set<T> javaSet) {
-        return JavaConverters.asScalaSet(javaSet).toSet();
+        return CollectionConverters.asScala(javaSet).toSet();
     }
 
-    @SuppressWarnings("deprecation")
     private static <T> Set<T> asJavaSet(scala.collection.immutable.Set<T> scalaSet) {
-        return JavaConverters.setAsJavaSet(scalaSet);
-    }
-
-    private String zkConnect(ClusterInstance cluster) {
-        return ((ZkClusterInvocationContext.ZkClusterInstance) cluster).getUnderlying().zkConnect();
-    }
-
-    private List<String> zkArgs(ClusterInstance cluster) {
-        return Arrays.asList("--authorizer-properties", "zookeeper.connect=" + zkConnect(cluster));
+        return CollectionConverters.asJava(scalaSet);
     }
 
     private void assertInitializeInvalidOptionsExitCodeAndMsg(List<String> args, String expectedMsg) {
