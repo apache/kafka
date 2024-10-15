@@ -16,9 +16,6 @@
  */
 package kafka.clients.consumer;
 
-import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -29,59 +26,38 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestExtensions;
+import org.apache.kafka.common.test.api.ClusterTests;
 
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.time.Duration;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
-
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 @ExtendWith(ClusterTestExtensions.class)
 public class AsyncKafkaConsumerIntegrationTest {
 
-    @ClusterTest(serverProperties = {
-        @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-        @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-        @ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic")
-    })
-    public void testAsyncConsumerWithoutConsumerRebalanceProtocol(ClusterInstance clusterInstance) throws Exception {
-        checkUnsupportedConsumerGroupHeartbeat(clusterInstance);
-    }
-
-    @ClusterTest(serverProperties = {
-        @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-        @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-        @ClusterConfigProperty(key = "group.coordinator.new.enable", value = "false")
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+            @ClusterConfigProperty(key = "group.coordinator.new.enable", value = "false")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+            @ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic")
+        })
     })
     public void testAsyncConsumerWithOldGroupCoordinator(ClusterInstance clusterInstance) throws Exception {
-        checkUnsupportedConsumerGroupHeartbeat(clusterInstance);
-    }
-
-    private void createTopic(ClusterInstance clusterInstance, String topic) {
-        try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            assertDoesNotThrow(() -> admin.createTopics(Collections.singletonList(new NewTopic(topic, 1, (short) 1))).topicId(topic).get());
-        }
-
-        assertDoesNotThrow(() -> clusterInstance.waitForTopic(topic, 1));
-    }
-
-    private KafkaConsumer<String, String> createAsyncKafkaConsumer(ClusterInstance clusterInstance, String groupId) {
-        Map<String, Object> configs = new HashMap<>();
-        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
-        configs.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name());
-        return new KafkaConsumer<>(configs);
-    }
-
-    private void checkUnsupportedConsumerGroupHeartbeat(ClusterInstance clusterInstance) throws Exception {
         String topic = "test-topic";
-        createTopic(clusterInstance, topic);
-        try (KafkaConsumer<String, String> consumer = createAsyncKafkaConsumer(clusterInstance, "test-group")) {
+        clusterInstance.createTopic(topic, 1, (short) 1);
+        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(Map.of(
+            ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers(),
+            ConsumerConfig.GROUP_ID_CONFIG, "test-group",
+            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+            ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name()))) {
             consumer.subscribe(Collections.singletonList(topic));
             TestUtils.waitForCondition(() -> {
                 try {
@@ -89,10 +65,9 @@ public class AsyncKafkaConsumerIntegrationTest {
                     return false;
                 } catch (UnsupportedVersionException e) {
                     return e.getMessage().contains("The cluster doesn't yet support the new consumer group protocol. " +
-                            "Set group.protocol=classic to revert to the classic protocol until the cluster is upgraded.");
+                        "Set group.protocol=classic to revert to the classic protocol until the cluster is upgraded.");
                 }
             }, "Should get UnsupportedVersionException and how to revert to classic protocol");
         }
     }
-
 }
