@@ -86,7 +86,7 @@ public class UniformHeterogeneousAssignmentBuilder {
     private final Set<Uuid> subscribedTopicIds;
 
     /**
-     * The list of members in the consumer group, sorted by member id.
+     * The list of members in the consumer group.
      */
     private final List<String> memberIds;
 
