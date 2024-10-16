@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import kafka.cluster.BrokerEndPoint
 import kafka.log.UnifiedLog
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.epoch.util.MockBlockingSender
@@ -30,6 +29,7 @@ import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
+import org.apache.kafka.common.network.BrokerEndPoint
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.util.MockTime
@@ -58,7 +58,7 @@ class RemoteLeaderEndPointTest {
     def setUp(): Unit = {
         val time = new MockTime
         val logPrefix = "remote-leader-endpoint"
-        val sourceBroker: BrokerEndPoint = BrokerEndPoint(0, "localhost", 9092)
+        val sourceBroker: BrokerEndPoint = new BrokerEndPoint(0, "localhost", 9092)
         val props = TestUtils.createBrokerConfig(sourceBroker.id, TestUtils.MockZkConnect, port = sourceBroker.port)
         val fetchSessionHandler = new FetchSessionHandler(new LogContext(logPrefix), sourceBroker.id)
         val config = KafkaConfig.fromProps(props)

@@ -17,11 +17,11 @@
 package kafka.server
 
 import com.yammer.metrics.core.Gauge
-import kafka.cluster.BrokerEndPoint
 import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.message.FetchResponseData.PartitionData
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
+import org.apache.kafka.common.network.BrokerEndPoint
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Uuid}

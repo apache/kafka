@@ -1,0 +1,98 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.common.network;
+
+import java.util.Objects;
+import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * BrokerEndPoint is used to connect to specific host:port pair.
+ * It is typically used by clients (or brokers when connecting to other brokers)
+ * and contains no information about the security protocol used on the connection.
+ * Clients should know which security protocol to use from configuration.
+ * This allows us to keep the wire protocol with the clients unchanged where the protocol is not needed.
+ */
+public class BrokerEndPoint {
+
+    private static final Pattern URI_PARSE_EXP = Pattern.compile("\\[?([0-9a-zA-Z\\-%._:]*)]?:([0-9]+)");
+
+    private final int id;
+    private final String host;
+    private final int port;
+
+    public BrokerEndPoint(int id, String host, int port) {
+        this.id = id;
+        this.host = host;
+        this.port = port;
+    }
+
+    /**
+     * This constructor is only used by the static parseHostPort method, which acts as a factory method
+     *  to create a BrokerEndPoint from a host:port string.
+     */
+    private BrokerEndPoint(String host, int port) {
+        this(0, host, port);
+    }
+
+    public int id() {
+        return id;
+    }
+
+    public String host() {
+        return host;
+    }
+
+    public int port() {
+        return port;
+    }
+
+    /**
+     * BrokerEndPoint URI is host:port or [ipv6_host]:port
+     * Note that unlike EndPoint (or listener) this URI has no security information.
+     */
+    public static Optional<BrokerEndPoint> parseHostPort(String connectionString) {
+        Matcher matcher = URI_PARSE_EXP.matcher(connectionString);
+        if (matcher.matches()) {
+            try {
+                return Optional.of(new BrokerEndPoint(matcher.group(1), Integer.parseInt(matcher.group(2))));
+            } catch (NumberFormatException e) {
+                // Ignore
+            }
+        }
+        return Optional.empty();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        BrokerEndPoint that = (BrokerEndPoint) o;
+        return id != that.id && host.equals(that.host) && port != that.port;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, host, port);
+    }
+
+    public String toString() {
+        return String.format("BrokerEndPoint(id=%s, host=%s:%s)", id, host, port);
+    }
+}

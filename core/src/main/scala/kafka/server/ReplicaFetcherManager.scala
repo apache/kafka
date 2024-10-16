@@ -17,9 +17,9 @@
 
 package kafka.server
 
-import kafka.cluster.BrokerEndPoint
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.network.BrokerEndPoint
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.server.common.MetadataVersion
 

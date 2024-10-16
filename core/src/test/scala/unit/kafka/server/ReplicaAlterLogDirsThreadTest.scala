@@ -16,7 +16,7 @@
   */
 package kafka.server
 
-import kafka.cluster.{BrokerEndPoint, Partition}
+import kafka.cluster.Partition
 import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.QuotaFactory.UnboundedQuota
@@ -27,6 +27,7 @@ import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.message.UpdateMetadataRequestData
+import org.apache.kafka.common.network.BrokerEndPoint
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{FetchRequest, UpdateMetadataRequest}

@@ -17,11 +17,11 @@
 
 package kafka.server
 
-import kafka.cluster.BrokerEndPoint
 import kafka.server.AbstractFetcherThread.ReplicaFetch
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
+import org.apache.kafka.common.network.BrokerEndPoint
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
@@ -36,7 +36,7 @@ import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.{RichOption, RichOptional}
 import scala.util.Random
 
-class MockLeaderEndPoint(sourceBroker: BrokerEndPoint = new BrokerEndPoint(1, host = "localhost", port = Random.nextInt()),
+class MockLeaderEndPoint(sourceBroker: BrokerEndPoint = new BrokerEndPoint(1, "localhost", Random.nextInt()),
                          truncateOnFetch: Boolean = true,
                          version: Short = ApiKeys.FETCH.latestVersion())
   extends LeaderEndPoint {
