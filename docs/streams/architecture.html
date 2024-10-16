@@ -149,6 +149,7 @@
         In addition, Kafka Streams makes sure that the local state stores are robust to failures, too. For each state store, it maintains a replicated changelog Kafka topic in which it tracks any state updates.
         These changelog topics are partitioned as well so that each local state store instance, and hence the task accessing the store, has its own dedicated changelog topic partition.
         <a href="/{{version}}/documentation/#compaction">Log compaction</a> is enabled on the changelog topics so that old data can be purged safely to prevent the topics from growing indefinitely.
+        Keep in mind that this behavior is different from a "delete" clean-up policy in that the most recent event associated with a key is always preserved.
         If tasks run on a machine that fails and are restarted on another machine, Kafka Streams guarantees to restore their associated state stores to the content before the failure by
         replaying the corresponding changelog topics prior to resuming the processing on the newly started tasks. As a result, failure handling is completely transparent to the end user.
     </p>
