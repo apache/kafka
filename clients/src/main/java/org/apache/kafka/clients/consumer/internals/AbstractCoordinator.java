@@ -485,19 +485,14 @@ public abstract class AbstractCoordinator implements Closeable {
             }
 
             if (future.succeeded()) {
-                Generation generationSnapshot;
-                MemberState stateSnapshot;
-
                 // Generation data maybe concurrently cleared by Heartbeat thread.
                 // Can't use synchronized for {@code onJoinComplete}, because it can be long enough
                 // and shouldn't block heartbeat thread.
                 // See {@link PlaintextConsumerTest#testMaxPollIntervalMsDelayInAssignment}
-                synchronized (AbstractCoordinator.this) {
-                    generationSnapshot = this.generation;
-                    stateSnapshot = this.state;
-                }
+                Generation generationSnapshot;
+                MemberState stateSnapshot = null;
 
-                if (!hasGenerationReset(generationSnapshot) && stateSnapshot == MemberState.STABLE) {
+                if (!hasGenerationReset(generationSnapshot = this.generation) && (stateSnapshot = this.state) == MemberState.STABLE) {
                     // Duplicate the buffer in case `onJoinComplete` does not complete and needs to be retried.
                     ByteBuffer memberAssignment = future.value().duplicate();
 
@@ -512,7 +507,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 } else {
                     final String reason = String.format("rebalance failed since the generation/state was " +
                             "modified by heartbeat thread to %s/%s before the rebalance callback triggered",
-                            generationSnapshot, stateSnapshot);
+                            generationSnapshot, stateSnapshot == null ? this.state : stateSnapshot);
 
                     resetStateAndRejoin(reason, true);
                     resetJoinGroupFuture();
