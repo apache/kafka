@@ -39,10 +39,7 @@ plugins {
   id 'org.nosphere.apache.rat' version "0.8.1"
   id "io.swagger.core.v3.swagger-gradle-plugin" version "${swaggerVersion}"
 
-  // When updating the spotbugs gradle plugin, check if it already
-  // includes spotbugs version 4.7.4, in which case CVE-2022-42920 can
-  // be dropped from gradle/resources/dependencycheck-suppressions.xml
-  id "com.github.spotbugs" version '5.1.3' apply false
+  id "com.github.spotbugs" version '6.0.25' apply false
   id 'org.scoverage' version '8.0.3' apply false
   id 'io.github.goooler.shadow' version '8.1.3' apply false
   id 'com.diffplug.spotless' version "6.25.0"
@@ -1054,7 +1051,6 @@ project(':core') {
     implementation libs.joptSimple
     implementation libs.jose4j
     implementation libs.metrics
-    implementation libs.scalaJava8Compat
     // only needed transitively, but set it explicitly to ensure it has the same version as scala-library
     implementation libs.scalaReflect
     implementation libs.scalaLogging
@@ -1549,7 +1545,6 @@ project(':test-common') {
   }
 
   dependencies {
-    implementation libs.scalaJava8Compat
     implementation project(':core')
     implementation project(':metadata')
     implementation project(':server')
@@ -1592,7 +1587,6 @@ project(':test-common:test-common-api') {
 
 
   dependencies {
-    implementation libs.scalaJava8Compat
     implementation project(':clients')
     implementation project(':core')
     implementation project(':group-coordinator')
@@ -2445,6 +2439,8 @@ project(':tools') {
     implementation project(':transaction-coordinator')
     implementation project(':group-coordinator')
     implementation project(':coordinator-common')
+    implementation project(':share-coordinator')
+    implementation project(':share')
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonDataformatCsv
@@ -3300,7 +3296,6 @@ project(':jmh-benchmarks') {
     implementation libs.mockitoCore
     implementation libs.slf4jReload4j
     implementation libs.scalaLibrary
-    implementation libs.scalaJava8Compat
   }
 
   tasks.withType(JavaCompile) {
