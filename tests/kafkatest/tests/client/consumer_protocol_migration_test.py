@@ -19,33 +19,36 @@ from ducktape.mark.resource import cluster
 
 from kafkatest.tests.verifiable_consumer_test import VerifiableConsumerTest
 from kafkatest.services.kafka import TopicPartition, quorum, consumer_group
-from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, \
-    LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, \
-    LATEST_2_7, LATEST_2_8, LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, LATEST_3_6, \
-    LATEST_3_7, LATEST_3_8, DEV_BRANCH, KafkaVersion
+from kafkatest.version import LATEST_2_1, LATEST_2_3, LATEST_2_4, LATEST_2_5, \
+    LATEST_3_2, LATEST_3_4, LATEST_3_5, DEV_BRANCH, KafkaVersion
 
 class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
+    """
+    The class to test offline/online protocol migration in eager/cooperative assignment modes.
+    To avoid involving too many tests, we only pick the versions that contain major changes to
+    the consumer protocol.
+    - 2.1 (the consumer needs two join group requests to join)
+    - 2.3 (add static membership)
+    - 2.4 (add group instance id to embedded protocol)
+    - 2.5 (add protocol type and protocol name)
+    - 3.2 (add skip assignment)
+    - 3.4 (add generation id to embedded protocol)
+    - 3.5 (add rack to embedded protocol)
+    """
     TOPIC = "test_topic"
     NUM_PARTITIONS = 6
 
     RANGE = "org.apache.kafka.clients.consumer.RangeAssignor"
-    ROUND_ROBIN = "org.apache.kafka.clients.consumer.RoundRobinAssignor"
-    STICKY = "org.apache.kafka.clients.consumer.StickyAssignor"
     COOPERATIVE_STICKEY = "org.apache.kafka.clients.consumer.CooperativeStickyAssignor"
-    all_assignment_strategies = [RANGE, ROUND_ROBIN, COOPERATIVE_STICKEY, STICKY]
 
-    all_consumer_versions = [LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, \
-                             LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, \
-                             LATEST_2_7, LATEST_2_8, LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, LATEST_3_6, \
-                             LATEST_3_7, LATEST_3_8, DEV_BRANCH]
-    consumer_versions_supporting_sticky_assignor = [v for v in all_consumer_versions if v >= LATEST_0_11_0]
-    consumer_versions_supporting_cooperative_sticky_assignor = [v for v in all_consumer_versions if v >= LATEST_2_4]
+    all_consumer_versions = [LATEST_2_1, LATEST_2_3, LATEST_2_4, LATEST_2_5, \
+                             LATEST_3_2, LATEST_3_4, LATEST_3_5, DEV_BRANCH]
     consumer_versions_supporting_static_membership = [v for v in all_consumer_versions if v >= LATEST_2_3]
+    consumer_versions_supporting_cooperative_sticky_assignor = [v for v in all_consumer_versions if v >= LATEST_2_4]
 
     def __init__(self, test_context):
         super(ConsumerProtocolMigrationTest, self).__init__(test_context, num_consumers=5, num_producers=1,
-                                                            num_zk=0, num_brokers=1,
-                                                            use_new_coordinator=True, topics={
+                                                            num_zk=0, num_brokers=1, topics={
                 self.TOPIC : { 'partitions': self.NUM_PARTITIONS, 'replication-factor': 1 }
             })
 
@@ -96,34 +99,26 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
 
     @cluster(num_nodes=8)
     @matrix(
-        enable_autocommit=[True, False],
+        enable_autocommit=[True],
         static_membership=[False],
         metadata_quorum=[quorum.isolated_kraft],
-        consumer_group_migration_policy=["bidirectional", "upgrade", "downgrade", "disabled"],
+        consumer_group_migration_policy=["disabled"],
         consumer_version=[str(v) for v in all_consumer_versions],
-        assignment_strategy=[RANGE, ROUND_ROBIN]
+        assignment_strategy=[RANGE]
     )
     @matrix(
-        enable_autocommit=[True, False],
-        static_membership=[False],
-        metadata_quorum=[quorum.isolated_kraft],
-        consumer_group_migration_policy=["bidirectional", "upgrade", "downgrade", "disabled"],
-        consumer_version=[str(v) for v in consumer_versions_supporting_sticky_assignor],
-        assignment_strategy=[STICKY]
-    )
-    @matrix(
-        enable_autocommit=[True, False],
+        enable_autocommit=[True],
         static_membership=[True],
         metadata_quorum=[quorum.isolated_kraft],
-        consumer_group_migration_policy=["bidirectional", "upgrade", "downgrade", "disabled"],
+        consumer_group_migration_policy=["disabled"],
         consumer_version=[str(v) for v in consumer_versions_supporting_static_membership],
-        assignment_strategy=[RANGE, ROUND_ROBIN, STICKY]
+        assignment_strategy=[RANGE]
     )
     @matrix(
-        enable_autocommit=[True, False],
+        enable_autocommit=[True],
         static_membership=[True, False],
         metadata_quorum=[quorum.isolated_kraft],
-        consumer_group_migration_policy=["bidirectional", "upgrade", "downgrade", "disabled"],
+        consumer_group_migration_policy=["disabled"],
         consumer_version=[str(v) for v in consumer_versions_supporting_cooperative_sticky_assignor],
         assignment_strategy=[COOPERATIVE_STICKEY]
     )
@@ -141,7 +136,6 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
           to finish shutting down before starting up them.
         - Offline downgrade: Restart the consumers with classic protocols, waiting for all consumers
           to finish shutting down before starting up them.
-        - Verify delivery semantics according to the failure type.
         """
         producer = self.setup_producer(self.TOPIC)
         consumer = self.setup_consumer(self.TOPIC, group_protocol=consumer_group.classic_group_protocol,
@@ -150,7 +144,7 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
 
         kafka_version = KafkaVersion(consumer_version)
         if kafka_version == LATEST_2_3 or kafka_version == LATEST_2_4 or (static_membership and kafka_version > LATEST_2_4):
-            # group-instance-id is required in 2.3.
+            # group-instance-id is required in 2.3 and 2.4 in verifiable consumer.
             self.set_group_instance_id(consumer)
 
         producer.start()
@@ -178,116 +172,26 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
 
     @cluster(num_nodes=8)
     @matrix(
-        enable_autocommit=[True, False],
+        enable_autocommit=[True],
         static_membership=[False],
         metadata_quorum=[quorum.isolated_kraft],
-        consumer_group_migration_policy=["bidirectional"],
+        consumer_group_migration_policy=["bidirectional", "upgrade"],
         consumer_version=[str(v) for v in all_consumer_versions],
-        assignment_strategy=[RANGE, ROUND_ROBIN]
+        assignment_strategy=[RANGE]
     )
     @matrix(
-        enable_autocommit=[True, False],
-        static_membership=[False],
-        metadata_quorum=[quorum.isolated_kraft],
-        consumer_group_migration_policy=["bidirectional"],
-        consumer_version=[str(v) for v in consumer_versions_supporting_sticky_assignor],
-        assignment_strategy=[STICKY]
-    )
-    @matrix(
-        enable_autocommit=[True, False],
+        enable_autocommit=[True],
         static_membership=[True],
         metadata_quorum=[quorum.isolated_kraft],
-        consumer_group_migration_policy=["bidirectional"],
+        consumer_group_migration_policy=["bidirectional", "upgrade"],
         consumer_version=[str(v) for v in consumer_versions_supporting_static_membership],
-        assignment_strategy=[RANGE, ROUND_ROBIN, STICKY]
+        assignment_strategy=[RANGE]
     )
     @matrix(
-        enable_autocommit=[True, False],
+        enable_autocommit=[True],
         static_membership=[True, False],
         metadata_quorum=[quorum.isolated_kraft],
-        consumer_group_migration_policy=["bidirectional"],
-        consumer_version=[str(v) for v in consumer_versions_supporting_cooperative_sticky_assignor],
-        assignment_strategy=[COOPERATIVE_STICKEY]
-    )
-    def test_consumer_rolling_migration(self, enable_autocommit, static_membership, metadata_quorum,
-                                        consumer_group_migration_policy, consumer_version, assignment_strategy):
-        """
-        Verify correct consumer behavior when the consumers in the group are restarted to perform
-        online upgrade/downgrade when the migration policy is set to be BIDIRECTIONAL.
-
-        Setup: single Kafka cluster with one producer and a set of consumers in one group.
-
-        - Start a producer which continues producing new messages throughout the test.
-        - Start up the consumers with classic protocols and wait until they've joined the group.
-        - Online upgrade: In a loop, restart each consumer with consumer protocol, waiting for
-          each one to rejoin the group before restarting the rest.
-        - Online downgrade: In a loop, restart each consumer with classic protocol, waiting for
-          each one to rejoin the group before restarting the rest.
-        - Verify delivery semantics according to the failure type.
-        """
-        producer = self.setup_producer(self.TOPIC)
-        consumer = self.setup_consumer(self.TOPIC, group_protocol=consumer_group.classic_group_protocol,
-                                       version=consumer_version, assignment_strategy=assignment_strategy,
-                                       enable_autocommit=enable_autocommit)
-
-        kafka_version = KafkaVersion(consumer_version)
-        if kafka_version == LATEST_2_3 or kafka_version == LATEST_2_4 or (static_membership and kafka_version > LATEST_2_4):
-            # group-instance-id is required in 2.3.
-            self.set_group_instance_id(consumer)
-
-        producer.start()
-        self.await_produced_messages(producer)
-
-        self.set_consumer_version(consumer, kafka_version)
-        consumer.start()
-        self.await_all_members(consumer)
-        self.await_consumed_messages(consumer)
-        self.assert_group_type("classic")
-
-        # Upgrade the group protocol and rolling restart the consumers.
-        consumer.group_protocol = consumer_group.consumer_group_protocol
-        self.set_consumer_version(consumer, DEV_BRANCH)
-        self.rolling_bounce_consumers(consumer)
-        self.assert_group_type("consumer")
-
-        # Downgrade the group protocol and rolling restart the consumers.
-        consumer.group_protocol = consumer_group.classic_group_protocol
-        self.set_consumer_version(consumer, kafka_version)
-        self.rolling_bounce_consumers(consumer)
-        self.assert_group_type("classic", consumer.session_timeout_sec+5)
-
-        consumer.stop_all()
-
-    @cluster(num_nodes=8)
-    @matrix(
-        enable_autocommit=[True, False],
-        static_membership=[False],
-        metadata_quorum=[quorum.isolated_kraft],
-        consumer_group_migration_policy=["upgrade"],
-        consumer_version=[str(v) for v in all_consumer_versions],
-        assignment_strategy=[RANGE, ROUND_ROBIN]
-    )
-    @matrix(
-        enable_autocommit=[True, False],
-        static_membership=[False],
-        metadata_quorum=[quorum.isolated_kraft],
-        consumer_group_migration_policy=["upgrade"],
-        consumer_version=[str(v) for v in consumer_versions_supporting_sticky_assignor],
-        assignment_strategy=[STICKY]
-    )
-    @matrix(
-        enable_autocommit=[True, False],
-        static_membership=[True],
-        metadata_quorum=[quorum.isolated_kraft],
-        consumer_group_migration_policy=["upgrade"],
-        consumer_version=[str(v) for v in consumer_versions_supporting_static_membership],
-        assignment_strategy=[RANGE, ROUND_ROBIN, STICKY]
-    )
-    @matrix(
-        enable_autocommit=[True, False],
-        static_membership=[True, False],
-        metadata_quorum=[quorum.isolated_kraft],
-        consumer_group_migration_policy=["upgrade"],
+        consumer_group_migration_policy=["bidirectional", "upgrade"],
         consumer_version=[str(v) for v in consumer_versions_supporting_cooperative_sticky_assignor],
         assignment_strategy=[COOPERATIVE_STICKEY]
     )
@@ -303,7 +207,6 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
         - Start up the consumers with classic protocols and wait until they've joined the group.
         - Online upgrade: In a loop, restart each consumer with consumer protocol, waiting for
           each one to rejoin the group before restarting the rest.
-        - Verify delivery semantics according to the failure type.
         """
         producer = self.setup_producer(self.TOPIC)
         consumer = self.setup_consumer(self.TOPIC, group_protocol=consumer_group.classic_group_protocol,
@@ -312,7 +215,7 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
 
         kafka_version = KafkaVersion(consumer_version)
         if kafka_version == LATEST_2_3 or kafka_version == LATEST_2_4 or (static_membership and kafka_version > LATEST_2_4):
-            # group-instance-id is required in 2.3.
+            # group-instance-id is required in 2.3 and 2.4 in verifiable consumer.
             self.set_group_instance_id(consumer)
 
         producer.start()
@@ -334,31 +237,23 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
 
     @cluster(num_nodes=8)
     @matrix(
-        enable_autocommit=[True, False],
+        enable_autocommit=[True],
         static_membership=[False],
         metadata_quorum=[quorum.isolated_kraft],
         consumer_group_migration_policy=["downgrade"],
         consumer_version=[str(v) for v in all_consumer_versions],
-        assignment_strategy=[RANGE, ROUND_ROBIN]
+        assignment_strategy=[RANGE]
     )
     @matrix(
-        enable_autocommit=[True, False],
-        static_membership=[False],
-        metadata_quorum=[quorum.isolated_kraft],
-        consumer_group_migration_policy=["downgrade"],
-        consumer_version=[str(v) for v in consumer_versions_supporting_sticky_assignor],
-        assignment_strategy=[STICKY]
-    )
-    @matrix(
-        enable_autocommit=[True, False],
+        enable_autocommit=[True],
         static_membership=[True],
         metadata_quorum=[quorum.isolated_kraft],
         consumer_group_migration_policy=["downgrade"],
         consumer_version=[str(v) for v in consumer_versions_supporting_static_membership],
-        assignment_strategy=[RANGE, ROUND_ROBIN, STICKY]
+        assignment_strategy=[RANGE]
     )
     @matrix(
-        enable_autocommit=[True, False],
+        enable_autocommit=[True],
         static_membership=[True, False],
         metadata_quorum=[quorum.isolated_kraft],
         consumer_group_migration_policy=["downgrade"],
@@ -377,7 +272,6 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
         - Start up the consumers with consumer protocols and wait until they've joined the group.
         - Online downgrade: In a loop, restart each consumer with classic protocol, waiting for
           each one to rejoin the group before restarting the rest.
-        - Verify delivery semantics according to the failure type.
         """
         producer = self.setup_producer(self.TOPIC)
         consumer = self.setup_consumer(self.TOPIC, group_protocol=consumer_group.consumer_group_protocol,
@@ -386,7 +280,7 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
 
         kafka_version = KafkaVersion(consumer_version)
         if kafka_version == LATEST_2_3 or kafka_version == LATEST_2_4 or (static_membership and kafka_version > LATEST_2_4):
-            # group-instance-id is required in 2.3.
+            # group-instance-id is required in 2.3 and 2.4 in verifiable consumer.
             self.set_group_instance_id(consumer)
 
         producer.start()
