@@ -588,7 +588,7 @@ class SocketServerTest {
     val idleTimeMs = 60000
     props.put(SocketServerConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG, idleTimeMs.toString)
     props ++= sslServerProps
-    val overrideConnectionId = "127.0.0.1:1-127.0.0.1:2-0"
+    val overrideConnectionId = "127.0.0.1:1-127.0.0.1:2-0-0"
     val overrideServer = new TestableSocketServer(KafkaConfig.fromProps(props))
 
     def openChannel: Option[KafkaChannel] = overrideServer.dataPlaneAcceptor(listener).get.processors(0).channel(overrideConnectionId)
