@@ -20,13 +20,13 @@ from ducktape.mark.resource import cluster
 from kafkatest.tests.verifiable_consumer_test import VerifiableConsumerTest
 from kafkatest.services.kafka import TopicPartition, quorum, consumer_group
 from kafkatest.version import LATEST_2_1, LATEST_2_3, LATEST_2_4, LATEST_2_5, \
-    LATEST_3_2, LATEST_3_4, LATEST_3_5, DEV_BRANCH, KafkaVersion
+    LATEST_3_2, LATEST_3_4, LATEST_3_5, LATEST_3_6, LATEST_3_7, LATEST_3_8, DEV_BRANCH, KafkaVersion
 
 class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
     """
     The class to test offline/online protocol migration in eager/cooperative assignment modes.
     To avoid involving too many tests, we only pick the versions that contain major changes to
-    the consumer protocol.
+    the consumer protocol and the recent versions.
     - 2.1 (the consumer needs two join group requests to join)
     - 2.3 (add static membership)
     - 2.4 (add group instance id to embedded protocol)
@@ -42,7 +42,7 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
     COOPERATIVE_STICKEY = "org.apache.kafka.clients.consumer.CooperativeStickyAssignor"
 
     all_consumer_versions = [LATEST_2_1, LATEST_2_3, LATEST_2_4, LATEST_2_5, \
-                             LATEST_3_2, LATEST_3_4, LATEST_3_5, DEV_BRANCH]
+                             LATEST_3_2, LATEST_3_4, LATEST_3_5, LATEST_3_6, LATEST_3_7, LATEST_3_8, DEV_BRANCH]
     consumer_versions_supporting_static_membership = [v for v in all_consumer_versions if v >= LATEST_2_3]
     consumer_versions_supporting_cooperative_sticky_assignor = [v for v in all_consumer_versions if v >= LATEST_2_4]
 
