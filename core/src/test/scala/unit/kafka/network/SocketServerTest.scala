@@ -520,8 +520,10 @@ class SocketServerTest {
       receiveRequest(server.dataPlaneRequestChannel)
     }
     requests.zipWithIndex.foreach { case (request, i) =>
-      val index = request.context.connectionId.split("-").last
-      assertEquals(i.toString, index)
+      val connectionArray = request.context.connectionId.split("-")
+      // Processor id should be 0 for all connections
+      assertEquals("0", connectionArray(2))
+      assertEquals(i.toString, connectionArray(3))
     }
 
     sockets.foreach(_.close)

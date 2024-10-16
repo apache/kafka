@@ -936,17 +936,17 @@ private[kafka] class Processor(
 
   private object ConnectionId {
     def fromString(s: String): Option[ConnectionId] = s.split("-") match {
-      case Array(local, remote, index) => BrokerEndPoint.parseHostPort(local).flatMap { case (localHost, localPort) =>
+      case Array(local, remote, processorId, index) => BrokerEndPoint.parseHostPort(local).flatMap { case (localHost, localPort) =>
         BrokerEndPoint.parseHostPort(remote).map { case (remoteHost, remotePort) =>
-          ConnectionId(localHost, localPort, remoteHost, remotePort, Integer.parseInt(index))
+          ConnectionId(localHost, localPort, remoteHost, remotePort, Integer.parseInt(processorId), Integer.parseInt(index))
         }
       }
       case _ => None
     }
   }
 
-  private[network] case class ConnectionId(localHost: String, localPort: Int, remoteHost: String, remotePort: Int, index: Int) {
-    override def toString: String = s"$localHost:$localPort-$remoteHost:$remotePort-$index"
+  private[network] case class ConnectionId(localHost: String, localPort: Int, remoteHost: String, remotePort: Int, processorId: Int, index: Int) {
+    override def toString: String = s"$localHost:$localPort-$remoteHost:$remotePort-$processorId-$index"
   }
 
   private val newConnections = new ArrayBlockingQueue[SocketChannel](connectionQueueSize)
@@ -1326,7 +1326,7 @@ private[kafka] class Processor(
 
   // 'protected` to allow override for testing
   protected[network] def connectionId(socket: Socket): String = {
-    val connId = KSelector.generateConnectionId(socket, nextConnectionIndex)
+    val connId = KSelector.generateConnectionId(socket, id, nextConnectionIndex)
     nextConnectionIndex = if (nextConnectionIndex == Int.MaxValue) 0 else nextConnectionIndex + 1
     connId
   }
