@@ -35,10 +35,17 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
     public static final ConsumerRecords<Object, Object> EMPTY = new ConsumerRecords<>(Collections.emptyMap());
 
     private final Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
+    private Map<TopicPartition, OffsetAndMetadata> nextOffsets;
 
     public ConsumerRecords(Map<TopicPartition, List<ConsumerRecord<K, V>>> records) {
         this.records = records;
     }
+
+    public ConsumerRecords(Map<TopicPartition, List<ConsumerRecord<K, V>>> records, Map<TopicPartition, OffsetAndMetadata> nextOffsets) {
+        this.records = records;
+        this.nextOffsets = nextOffsets;
+    }
+
 
     /**
      * Get just the records for the given partition
@@ -73,6 +80,10 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
      */
     public Set<TopicPartition> partitions() {
         return Collections.unmodifiableSet(records.keySet());
+    }
+
+    public Map<TopicPartition, OffsetAndMetadata> nextOffsets() {
+        return nextOffsets;
     }
 
     @Override
