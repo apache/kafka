@@ -56,7 +56,7 @@ class StreamsOptimizedTest(Test):
                                            acks=1)
 
     @cluster(num_nodes=9)
-    @matrix(metadata_quorum=[quorum.combined_kraft])
+    @matrix(metadata_quorum=[quorum.isolated_kraft])
     def test_upgrade_optimized_topology(self, metadata_quorum):
         self.kafka.start()
 
