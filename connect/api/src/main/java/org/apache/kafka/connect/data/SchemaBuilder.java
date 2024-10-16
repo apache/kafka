@@ -432,6 +432,16 @@ public class SchemaBuilder implements Schema {
         return build();
     }
 
+    @Override
+    public boolean equals(Object o) {
+        return this == o || build().equals(o);
+    }
+
+    @Override
+    public int hashCode() {
+        return build().hashCode();
+    }
+
     private static void checkCanSet(String fieldName, Object fieldVal, Object val) {
         if (fieldVal != null && fieldVal != val)
             throw new SchemaBuilderException("Invalid SchemaBuilder call: " + fieldName + " has already been set.");
