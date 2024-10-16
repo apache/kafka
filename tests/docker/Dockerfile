@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG jdk_version=openjdk:11
+ARG jdk_version=openjdk:17
 FROM $jdk_version AS build-native-image
 
 WORKDIR /build
