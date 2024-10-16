@@ -141,20 +141,6 @@ public class UniformHeterogeneousAssignmentBuilder {
     private final Comparator<Integer> memberComparator;
 
     /**
-     * Tracks the owner of each partition in the previous assignment.
-     * <p/>
-     * Only assignments which would continue to be valid for the current set of members and
-     * subscriptions are present.
-     * <p/>
-     * Owners are represented as indices into the memberIds array.
-     * -1 indicates an unassigned partition, a previous owner that is no longer subscribed to the
-     * topic or a previous owner that is no longer part of the consumer group.
-     * <p/>
-     * Used for maximizing stickiness.
-     */
-    private final Map<Uuid, int[]> previousAssignmentPartitionOwners;
-
-    /**
      * Tracks the owner of each partition in the target assignment.
      * <p/>
      * Owners are represented as indices into the memberIds array.
@@ -243,16 +229,12 @@ public class UniformHeterogeneousAssignmentBuilder {
             }
         };
 
-        // Initialize partition owners for the previous and target assignments.
-        this.previousAssignmentPartitionOwners = new HashMap<>((int) ((this.subscribedTopicIds.size() / 0.75f) + 1));
+        // Initialize partition owners for the target assignments.
         this.targetAssignmentPartitionOwners = new HashMap<>((int) ((this.subscribedTopicIds.size() / 0.75f) + 1));
         for (Uuid topicId : this.subscribedTopicIds) {
             int numPartitions = subscribedTopicDescriber.numPartitions(topicId);
-            int[] previousPartitionOwners = new int[numPartitions];
             int[] partitionOwners = new int[numPartitions];
-            Arrays.fill(previousPartitionOwners, -1);
             Arrays.fill(partitionOwners, -1);
-            this.previousAssignmentPartitionOwners.put(topicId, previousPartitionOwners);
             this.targetAssignmentPartitionOwners.put(topicId, partitionOwners);
         }
     }
@@ -327,7 +309,6 @@ public class UniformHeterogeneousAssignmentBuilder {
                     memberTargetAssignmentSizes[memberIndex] += partitions.size();
 
                     for (int partition : partitions) {
-                        previousAssignmentPartitionOwners.get(topicId)[partition] = memberIndex;
                         targetAssignmentPartitionOwners.get(topicId)[partition] = memberIndex;
                     }
                 } else {
@@ -741,16 +722,7 @@ public class UniformHeterogeneousAssignmentBuilder {
 
         int numPartitions = subscribedTopicDescriber.numPartitions(topicId);
 
-        int[] previousPartitionOwners = previousAssignmentPartitionOwners.get(topicId);
         int[] partitionOwners = targetAssignmentPartitionOwners.get(topicId);
-
-        // Try to return partitions to their previous owners if it improves balance.
-        reassignedPartitionCount += balanceTopicRestoringStickiness(
-            topicId,
-            numPartitions,
-            previousPartitionOwners,
-            partitionOwners
-        );
 
         // Next, try to reassign partitions from the most loaded subscribers to the least loaded
         // subscribers. We use a similar approach to assignRemainingPartitions, except instead
@@ -836,40 +808,6 @@ public class UniformHeterogeneousAssignmentBuilder {
             // Reassign the partition.
             assignPartition(topicId, partition, leastLoadedMemberIndex);
             reassignedPartitionCount++;
-        }
-
-        return reassignedPartitionCount;
-    }
-
-    /**
-     * Restores topic partitions to their previous owners if it improves balance.
-     *
-     * @param topicId                  The topic to rebalance.
-     * @param numPartitions            The number of partitions in the topic.
-     * @param previousPartitionOwners  The previous owners of the partitions.
-     * @param partitionOwners          The current owners of the partitions.
-     * @return the number of partitions reassigned.
-     */
-    private int balanceTopicRestoringStickiness(
-        Uuid topicId,
-        int numPartitions,
-        int[] previousPartitionOwners,
-        int[] partitionOwners
-    ) {
-        int reassignedPartitionCount = 0;
-
-        // Try to return partitions to their previous owners if it improves balance.
-        // Note that this is a best effort approach towards restoring stickiness and will not
-        // produce optimally sticky assignments.
-        for (int partition = 0; partition < numPartitions; partition++) {
-            int ownerIndex = partitionOwners[partition];
-            int previousOwnerIndex = previousPartitionOwners[partition];
-            if (previousOwnerIndex != -1 &&
-                previousOwnerIndex != ownerIndex &&
-                targetAssignmentSize(ownerIndex) > targetAssignmentSize(previousOwnerIndex)) {
-                assignPartition(topicId, partition, previousOwnerIndex);
-                reassignedPartitionCount++;
-            }
         }
 
         return reassignedPartitionCount;
