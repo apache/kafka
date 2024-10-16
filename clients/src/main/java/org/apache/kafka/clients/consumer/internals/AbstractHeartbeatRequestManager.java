@@ -378,9 +378,15 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
             case INVALID_REQUEST:
             case GROUP_MAX_SIZE_REACHED:
             case UNSUPPORTED_ASSIGNOR:
-            case UNSUPPORTED_VERSION:
                 logger.error("{} failed due to {}: {}", heartbeatRequestName(), error, errorMessage);
                 handleFatalFailure(error.exception(errorMessage));
+                break;
+
+            case UNSUPPORTED_VERSION:
+                message = "The cluster doesn't yet support the new consumer group protocol." +
+                        " Set group.protocol=classic to revert to the classic protocol until the cluster is upgraded.";
+                logger.error("{} failed due to {}: {}", heartbeatRequestName(), error, errorMessage);
+                handleFatalFailure(error.exception(message));
                 break;
 
             case FENCED_MEMBER_EPOCH:
