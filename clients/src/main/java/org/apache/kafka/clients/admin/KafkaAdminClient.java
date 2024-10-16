@@ -561,11 +561,9 @@ public class KafkaAdminClient extends AdminClient {
                 apiVersions,
                 time,
                 1,
-                (int) TimeUnit.HOURS.toMillis(1),
-            null,
+                (int) TimeUnit.HOURS.toMillis(1), null,
                 metadataManager.updater(),
-                (hostResolver == null) ? new DefaultHostResolver() : hostResolver,
-     null,
+                (hostResolver == null) ? new DefaultHostResolver() : hostResolver, null,
                 clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null));
             return new KafkaAdminClient(config, clientId, time, metadataManager, metrics, networkClient,
                 timeoutProcessorFactory, logContext, clientTelemetryReporter);
@@ -677,6 +675,7 @@ public class KafkaAdminClient extends AdminClient {
         long newHardShutdownTimeMs = now + waitTimeMs;
         long prev = INVALID_SHUTDOWN_TIME;
         clientTelemetryReporter.ifPresent(ClientTelemetryReporter::initiateClose);
+        metrics.close();
         while (true) {
             if (hardShutdownTimeMs.compareAndSet(prev, newHardShutdownTimeMs)) {
                 if (prev == INVALID_SHUTDOWN_TIME) {
@@ -705,7 +704,6 @@ public class KafkaAdminClient extends AdminClient {
                 // Wait for the thread to be joined.
                 thread.join(waitTimeMs);
             }
-            metrics.close();
             log.debug("Kafka admin client closed.");
         } catch (InterruptedException e) {
             log.debug("Interrupted while joining I/O thread", e);
