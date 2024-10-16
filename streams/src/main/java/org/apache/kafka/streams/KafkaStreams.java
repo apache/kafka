@@ -1007,9 +1007,7 @@ public class KafkaStreams implements AutoCloseable {
 
         // use client id instead of thread client id since this admin client may be shared among threads
         this.clientSupplier = clientSupplier;
-        final Map<String, Object> adminConfigs = applicationConfigs.getAdminConfigs(ClientUtils.adminClientId(clientId));
-        adminConfigs.put(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, true);
-        adminClient = clientSupplier.getAdmin(adminConfigs);
+        adminClient = clientSupplier.getAdmin(applicationConfigs.getAdminConfigs(ClientUtils.adminClientId(clientId)));
 
         log.info("Kafka Streams version: {}", ClientMetrics.version());
         log.info("Kafka Streams commit ID: {}", ClientMetrics.commitId());
