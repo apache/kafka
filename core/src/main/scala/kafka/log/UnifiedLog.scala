@@ -1261,8 +1261,14 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    *
    * @param targetTimestamp The given timestamp for offset fetching.
    * @param remoteLogManager Optional RemoteLogManager instance if it exists.
-   * @return The offset of the first message whose timestamp is greater than or equals to the given timestamp.
-   *         None if no such message is found.
+   * @return the offset-result holder
+   *         <ul>
+   *           <li>When the partition is not enabled with remote storage, then it contains offset of the first message
+   *           whose timestamp is greater than or equals to the given timestamp; None if no such message is found.
+   *           <li>When the partition is enabled with remote storage, then it contains the job/task future and gets
+   *           completed in the async fashion.
+   *           <li>All special timestamp offset results are returned immediately irrespective of the remote storage.
+   *         </ul>
    */
   @nowarn("cat=deprecation")
   def fetchOffsetByTimestamp(targetTimestamp: Long, remoteLogManager: Option[RemoteLogManager] = None): OffsetResultHolder = {

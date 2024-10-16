@@ -17,13 +17,11 @@
 package kafka.server
 
 import com.yammer.metrics.core.Meter
-import kafka.log.AsyncOffsetReadFutureHolder
 import kafka.utils.Pool
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ApiException
 import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsPartitionResponse, ListOffsetsTopicResponse}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.requests.ListOffsetsResponse
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
@@ -31,33 +29,14 @@ import java.util.concurrent.TimeUnit
 import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
 
-case class ListOffsetsPartitionStatus(var responseOpt: Option[ListOffsetsPartitionResponse] = None,
-                                      futureHolderOpt: Option[AsyncOffsetReadFutureHolder[Either[Exception, Option[TimestampAndOffset]]]] = None,
-                                      lastFetchableOffset: Option[Long] = None,
-                                      maybeOffsetsError: Option[ApiException] = None) {
-  @volatile var completed = false
-
-  override def toString: String = {
-    s"[responseOpt: $responseOpt, lastFetchableOffset: $lastFetchableOffset, " +
-      s"maybeOffsetsError: $maybeOffsetsError, completed: $completed]"
-  }
-}
-
-case class ListOffsetsMetadata(statusByPartition: mutable.Map[TopicPartition, ListOffsetsPartitionStatus]) {
-
-  override def toString: String = {
-    s"ListOffsetsMetadata(statusByPartition=$statusByPartition)"
-  }
-}
-
 class DelayedRemoteListOffsets(delayMs: Long,
                                version: Int,
-                               metadata: ListOffsetsMetadata,
+                               statusByPartition: mutable.Map[TopicPartition, ListOffsetsPartitionStatus],
+                               replicaManager: ReplicaManager,
                                responseCallback: List[ListOffsetsTopicResponse] => Unit) extends DelayedOperation(delayMs) {
-
   // Mark the status as completed, if there is no async task to track.
   // If there is a task to track, then build the response as REQUEST_TIMED_OUT by default.
-  metadata.statusByPartition.foreachEntry { (topicPartition, status) =>
+  statusByPartition.foreachEntry { (topicPartition, status) =>
     status.completed = status.futureHolderOpt.isEmpty
     if (status.futureHolderOpt.isDefined) {
       status.responseOpt = Some(buildErrorResponse(Errors.REQUEST_TIMED_OUT, topicPartition.partition()))
@@ -69,7 +48,7 @@ class DelayedRemoteListOffsets(delayMs: Long,
    * Call-back to execute when a delayed operation gets expired and hence forced to complete.
    */
   override def onExpiration(): Unit = {
-    metadata.statusByPartition.foreachEntry { (topicPartition, status) =>
+    statusByPartition.foreachEntry { (topicPartition, status) =>
       if (!status.completed) {
         debug(s"Expiring list offset request for partition $topicPartition with status $status")
         status.futureHolderOpt.foreach(futureHolder => futureHolder.jobFuture.cancel(true))
@@ -83,7 +62,7 @@ class DelayedRemoteListOffsets(delayMs: Long,
    * in subclasses and will be called exactly once in forceComplete()
    */
   override def onComplete(): Unit = {
-    val responseTopics = metadata.statusByPartition.groupBy(e => e._1.topic()).map {
+    val responseTopics = statusByPartition.groupBy(e => e._1.topic()).map {
       case (topic, status) =>
         new ListOffsetsTopicResponse().setName(topic).setPartitions(status.values.flatMap(s => s.responseOpt).toList.asJava)
     }.toList
@@ -99,8 +78,18 @@ class DelayedRemoteListOffsets(delayMs: Long,
    */
   override def tryComplete(): Boolean = {
     var completable = true
-    metadata.statusByPartition.foreachEntry { (partition, status) =>
+    statusByPartition.foreachEntry { (partition, status) =>
       if (!status.completed) {
+        try {
+          replicaManager.getPartitionOrException(partition)
+        } catch {
+          case e: ApiException =>
+            status.futureHolderOpt.foreach { futureHolder =>
+              futureHolder.jobFuture.cancel(false)
+              futureHolder.taskFuture.complete(Left(e))
+            }
+        }
+
         status.futureHolderOpt.foreach { futureHolder =>
           if (futureHolder.taskFuture.isDone) {
             val response = futureHolder.taskFuture.get() match {
