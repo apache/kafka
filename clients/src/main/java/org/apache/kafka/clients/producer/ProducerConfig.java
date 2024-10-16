@@ -195,11 +195,20 @@ public class ProducerConfig extends AbstractConfig {
     private static final String MAX_BLOCK_MS_DOC = "The configuration controls how long the <code>KafkaProducer</code>'s <code>send()</code>, <code>partitionsFor()</code>, "
                                                     + "<code>initTransactions()</code>, <code>sendOffsetsToTransaction()</code>, <code>commitTransaction()</code> "
                                                     + "and <code>abortTransaction()</code> methods will block. "
-                                                    + "For <code>send()</code> this timeout bounds the total time waiting for both metadata fetch and buffer allocation "
+                                                    + "For <code>send()</code> this timeout bounds the total time waiting for both metadata fetch if <code>max.block.ms.include.metadata</code> not false and buffer allocation "
                                                     + "(blocking in the user-supplied serializers or partitioner is not counted against this timeout). "
                                                     + "For <code>partitionsFor()</code> this timeout bounds the time spent waiting for metadata if it is unavailable. "
                                                     + "The transaction-related methods always block, but may timeout if "
                                                     + "the transaction coordinator could not be discovered or did not respond within the timeout.";
+    /** <code>max.block.metadata.ms</code> */
+    public static final String MAX_WAIT_TIME_MS_ON_METADATA_CONFIG = "max.block.metadata.ms";
+    private static final String MAX_WAIT_TIME_MS_ON_METADATA_DOC = "The configuration controls how long the <code>KafkaProducer</code>'s <code>send()</code>"
+                                                    + " waiting for metadata fetch ";
+
+    /** <code>max.block.ms.include.metadata</code> */
+    public static final String INCLUDE_WAIT_TIME_ON_METADATA_IN_MAX_BLOCK_TIME_CONFIG = "max.block.ms.include.metadata";
+    private static final String INCLUDE_WAIT_TIME_ON_METADATA_IN_MAX_BLOCK_TIME_DOC = "The configuration controls if the <code>KafkaProducer</code>'s <code>send()</code>"
+                                                    + " take time of waiting for metadata fetch as part of <code>max.block.ms</code>";
 
     /** <code>buffer.memory</code> */
     public static final String BUFFER_MEMORY_CONFIG = "buffer.memory";
@@ -418,6 +427,17 @@ public class ProducerConfig extends AbstractConfig {
                                         atLeast(0),
                                         Importance.MEDIUM,
                                         MAX_BLOCK_MS_DOC)
+                                .define(INCLUDE_WAIT_TIME_ON_METADATA_IN_MAX_BLOCK_TIME_CONFIG,
+                                        Type.BOOLEAN,
+                                        true,
+                                        Importance.LOW,
+                                        INCLUDE_WAIT_TIME_ON_METADATA_IN_MAX_BLOCK_TIME_DOC)
+                                .define(MAX_WAIT_TIME_MS_ON_METADATA_CONFIG,
+                                        Type.LONG,
+                                        60 * 1000,
+                                        atLeast(0),
+                                        Importance.LOW,
+                                        MAX_WAIT_TIME_MS_ON_METADATA_DOC)
                                 .define(REQUEST_TIMEOUT_MS_CONFIG,
                                         Type.INT,
                                         30 * 1000,
