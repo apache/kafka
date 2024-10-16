@@ -1310,9 +1310,10 @@ sasl.mechanism.inter.broker.protocol=GSSAPI (or one of the other enabled mechani
     By default, the SSL user name will be of the form "CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown". One can change that by setting <code>ssl.principal.mapping.rules</code> to a customized rule in server.properties.
     This config allows a list of rules for mapping X.500 distinguished name to short name. The rules are evaluated in order and the first rule that matches a distinguished name is used to map it to a short name. Any later rules in the list are ignored.
 
-    <br>The format of <code>ssl.principal.mapping.rules</code> is a list where each rule starts with "RULE:" and contains an expression as the following formats. Default rule will return
+    <br>The format of <code>ssl.principal.mapping.rules</code> is a list of regular expressions where each rule starts with "RULE:" and contains an expression as the following formats. Default rule will return
     string representation of the X.500 certificate distinguished name. If the distinguished name matches the pattern, then the replacement command will be run over the name.
-    This also supports lowercase/uppercase options, to force the translated result to be all lower/uppercase case. This is done by adding a "/L" or "/U' to the end of the rule.
+
+    <br>Rules support the constructs of java.util.regex.Pattern but it's necessary to double all backslashes e.g. "\s" should be written "\\s". Rules also support lowercase/uppercase options, to force the translated result to be all lower/uppercase case. This is done by adding a "/L" or "/U' to the end of the rule.
 
     <pre><code class="language-text">RULE:pattern/replacement/
 RULE:pattern/replacement/[LU]</code></pre>
