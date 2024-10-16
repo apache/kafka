@@ -47,23 +47,14 @@ if ( !versions.scala.contains('-') ) {
 }
 
 // mockito >= 5.5 is required for Java 21 and mockito 5.x requires at least Java 11
-// mockito 4.11 is used with Java 8 and Scala 2.13
-String mockitoVersion
-if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_11))
-  mockitoVersion = "5.10.0"
-else
-  mockitoVersion = "4.11.0"
+String mockitoVersion = "5.14.1"
 
 // mockito 4.x has two mocking strategies: subclass (mockito-core) and inline (mockito-inline).
 // mockito 5.x has two mocking strategies: inline (mockito-core) and subclass (mockito-subclass).
 // The default strategy (i.e. what `mockito-core` uses) changed to `inline` in 5.x because it works better with newer
 // Java versions.
 // We always use the `inline` strategy.
-String mockitoArtifactName
-if (mockitoVersion.startsWith("4."))
-  mockitoArtifactName = "mockito-inline"
-else
-  mockitoArtifactName = "mockito-core"
+String mockitoArtifactName = "mockito-core"
 
 // When adding, removing or updating dependencies, please also update the LICENSE-binary file accordingly.
 // See https://issues.apache.org/jira/browse/KAFKA-12622 for steps to verify the LICENSE-binary file is correct.
