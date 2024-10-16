@@ -1799,6 +1799,7 @@ public class KafkaStreams implements AutoCloseable {
      *  Note that pause() can be called before start() in order to start a KafkaStreams instance
      *  in a manner where the processing is paused as described, but the consumers are started up.
      */
+    @SuppressWarnings("deprecation")
     public void pause() {
         if (topologyMetadata.hasNamedTopologies()) {
             for (final NamedTopology namedTopology : topologyMetadata.allNamedTopologies()) {
@@ -1812,6 +1813,7 @@ public class KafkaStreams implements AutoCloseable {
     /**
      * @return true when the KafkaStreams instance has its processing paused.
      */
+    @SuppressWarnings("deprecation")
     public boolean isPaused() {
         if (topologyMetadata.hasNamedTopologies()) {
             return topologyMetadata.allNamedTopologies().stream()
@@ -1825,6 +1827,7 @@ public class KafkaStreams implements AutoCloseable {
     /**
      * This method resumes processing for the KafkaStreams instance.
      */
+    @SuppressWarnings("deprecation")
     public void resume() {
         if (topologyMetadata.hasNamedTopologies()) {
             for (final NamedTopology namedTopology : topologyMetadata.allNamedTopologies()) {

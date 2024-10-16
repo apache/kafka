@@ -614,6 +614,7 @@ public class TopologyMetadata {
         }
     }
 
+    @SuppressWarnings("deprecation")
     public Collection<NamedTopology> allNamedTopologies() {
         return builders.values()
             .stream()

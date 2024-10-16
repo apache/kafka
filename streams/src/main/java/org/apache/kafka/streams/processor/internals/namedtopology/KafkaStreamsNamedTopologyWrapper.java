@@ -18,7 +18,6 @@ package org.apache.kafka.streams.processor.internals.namedtopology;
 
 import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsResult;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.annotation.InterfaceStability.Unstable;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
@@ -62,13 +61,14 @@ import java.util.stream.Collectors;
  * This is currently an internal and experimental feature for enabling certain kinds of topology upgrades. Use at
  * your own risk.
  *
- * Status: additive upgrades possible, removal of NamedTopologies not yet supported
+ * Status: deprecated and planned for removal. PLEASE REACH OUT IF YOU ARE USING THIS FEATURE. Any concerns about
+ *         the deprecation can be raised by filing a ticket at https://issues.apache.org/jira/projects/KAFKA/issues
  *
  * Note: some standard features of Kafka Streams are not yet supported with NamedTopologies. These include:
  *       - global state stores
  *       - TopologyTestDriver (TTD)
  */
-@Unstable
+@Deprecated
 public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
 
     private final Logger log;
