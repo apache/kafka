@@ -99,13 +99,13 @@ public final class RemoteLogManagerConfig {
 
     public static final String REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP = "remote.log.manager.copier.thread.pool.size";
     public static final String REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_DOC = "Size of the thread pool used in " +
-            "scheduling tasks to copy segments.";
-    public static final int DEFAULT_REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE = 10;
+            "scheduling tasks to copy segments. If no value is set, it falls back to remote.log.manager.thread.pool.size.";
+    public static final int DEFAULT_REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE = 0;
 
     public static final String REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP = "remote.log.manager.expiration.thread.pool.size";
     public static final String REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_DOC = "Size of the thread pool used in" +
-            " scheduling tasks to clean up remote log segments.";
-    public static final int DEFAULT_REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE = 10;
+            " scheduling tasks to clean up remote log segments. If no value is set, it falls back to remote.log.manager.thread.pool.size.";
+    public static final int DEFAULT_REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE = 0;
 
     public static final String REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP = "remote.log.manager.task.interval.ms";
     public static final String REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_DOC = "Interval at which remote log manager runs the scheduled tasks like copy " +
@@ -260,13 +260,11 @@ public final class RemoteLogManagerConfig {
                 .define(REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP,
                         INT,
                         DEFAULT_REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE,
-                        atLeast(1),
                         MEDIUM,
                         REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_DOC)
                 .define(REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP,
                         INT,
                         DEFAULT_REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE,
-                        atLeast(1),
                         MEDIUM,
                         REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_DOC)
                 .define(REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP,
@@ -395,11 +393,13 @@ public final class RemoteLogManagerConfig {
     }
 
     public int remoteLogManagerCopierThreadPoolSize() {
-        return config.getInt(REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP);
+        int size = config.getInt(REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP);
+        return size <= 0 ? remoteLogManagerThreadPoolSize() : size;
     }
 
     public int remoteLogManagerExpirationThreadPoolSize() {
-        return config.getInt(REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP);
+        int size = config.getInt(REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP);
+        return size <= 0 ? remoteLogManagerThreadPoolSize() : size;
     }
 
     public long remoteLogManagerTaskIntervalMs() {
