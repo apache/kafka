@@ -70,7 +70,7 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
                 @Override
                 public void apply(final String key, final String value) {
                     if (recordCounter++ % reportInterval == 0) {
-                        System.out.println(String.format("%sProcessed %d records so far", upgradePhase, recordCounter));
+                        System.out.printf("%sProcessed %d records so far%n", upgradePhase, recordCounter);
                         System.out.flush();
                     }
                 }
@@ -81,7 +81,7 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
 
         streams.setStateListener((newState, oldState) -> {
             if (newState == State.RUNNING && oldState == State.REBALANCING) {
-                System.out.println(String.format("%sSTREAMS in a RUNNING State", upgradePhase));
+                System.out.printf("%sSTREAMS in a RUNNING State%n", upgradePhase);
                 final Set<ThreadMetadata> allThreadMetadata = streams.metadataForLocalThreads();
                 final StringBuilder taskReportBuilder = new StringBuilder();
                 final List<String> activeTasks = new ArrayList<>();
@@ -101,7 +101,7 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
             }
 
             if (newState == State.REBALANCING) {
-                System.out.println(String.format("%sStarting a REBALANCE", upgradePhase));
+                System.out.printf("%sStarting a REBALANCE%n", upgradePhase);
             }
         });
 

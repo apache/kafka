@@ -36,6 +36,7 @@ import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
 import java.util.function.Consumer;
@@ -71,8 +72,8 @@ public class KStreamSplitTest {
             final TestOutputTopic<Integer, String> x3 = driver.createOutputTopic("x3", new IntegerDeserializer(), new StringDeserializer());
             final TestOutputTopic<Integer, String> x5 = driver.createOutputTopic("x5", new IntegerDeserializer(), new StringDeserializer());
             assertEquals(Arrays.asList("V0", "V2", "V4", "V6"), x2.readValuesToList());
-            assertEquals(Arrays.asList("V3"), x3.readValuesToList());
-            assertEquals(Arrays.asList("V5"), x5.readValuesToList());
+            assertEquals(Collections.singletonList("V3"), x3.readValuesToList());
+            assertEquals(Collections.singletonList("V5"), x5.readValuesToList());
         });
     }
 
@@ -128,9 +129,9 @@ public class KStreamSplitTest {
             final TestOutputTopic<Integer, String> x7 = driver.createOutputTopic("foo-5", new IntegerDeserializer(), new StringDeserializer());
             final TestOutputTopic<Integer, String> defaultBranch = driver.createOutputTopic("foo-0", new IntegerDeserializer(), new StringDeserializer());
             assertEquals(Arrays.asList("V0", "V2", "V4", "V6"), even.readValuesToList());
-            assertEquals(Arrays.asList("V-1"), negative.readValuesToList());
-            assertEquals(Arrays.asList("V7"), x7.readValuesToList());
-            assertEquals(Arrays.asList("V1"), defaultBranch.readValuesToList());
+            assertEquals(Collections.singletonList("V-1"), negative.readValuesToList());
+            assertEquals(Collections.singletonList("V7"), x7.readValuesToList());
+            assertEquals(Collections.singletonList("V1"), defaultBranch.readValuesToList());
         });
     }
 

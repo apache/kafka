@@ -50,6 +50,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -178,7 +179,7 @@ public class JoinGracePeriodDurabilityIntegrationTest {
             // flush those recovered buffered events out.
             produceSynchronouslyToPartitionZero(
                 streamInput,
-                asList(
+                Collections.singletonList(
                     new KeyValueTimestamp<>("k6", "v6", scaledTime(20L))
                 )
             );

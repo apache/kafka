@@ -70,7 +70,7 @@ public class PrintedTest {
         try (final InputStream stream = Files.newInputStream(file.toPath())) {
             final byte[] data = new byte[stream.available()];
             stream.read(data);
-            assertThat(new String(data, StandardCharsets.UTF_8.name()), equalTo("[processor]: hi, 1\n"));
+            assertThat(new String(data, StandardCharsets.UTF_8), equalTo("[processor]: hi, 1\n"));
         }
     }
 
