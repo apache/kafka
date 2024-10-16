@@ -125,6 +125,10 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
     @Override
     protected void recordDropped(SourceRecord record) {
         commitTaskRecord(record, null);
+        // We explicitly submit the record for committing offsets and ack it so that
+        // the offsets for it get committed.
+        SubmittedRecords.SubmittedRecord submittedRecord = submittedRecords.submit(record);
+        submittedRecord.ack();
     }
 
     @Override

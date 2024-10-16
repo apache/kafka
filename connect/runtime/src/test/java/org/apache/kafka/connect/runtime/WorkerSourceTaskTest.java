@@ -703,6 +703,46 @@ public class WorkerSourceTaskTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
+    public void testFilteredRecordOffsetsShouldGetCommitted(boolean enableTopicCreation) throws Exception {
+        setup(enableTopicCreation);
+        createWorkerTaskWithErrorToleration();
+        expectTopicCreation(TOPIC);
+
+        //Using different partitions and offsets for each record, so we can verify all were committed
+        Map<String, Object> otherOffset = Collections.singletonMap("other_key", 13);
+        Map<String, Object> otherPartition = Collections.singletonMap("other_key", "other_partition".getBytes());
+
+        // Send 2 records. The first one gets filtered while the second one goes through.
+        SourceRecord record1 = new SourceRecord(otherPartition, otherOffset, TOPIC, 1, KEY_SCHEMA, KEY + 1, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+        expectOffsetFlush();
+
+        expectConvertHeadersAndKeyValue(TOPIC, emptyHeaders());
+        // First record gets filtered while the second one goes through
+        when(transformationChain.apply(any(), any())).thenReturn(null).thenReturn(record2);
+
+        // Second record gets sent successfully.
+        when(producer.send(any(ProducerRecord.class), any(Callback.class)))
+                .thenAnswer(producerSendAnswer(true));
+
+        //Send records and then commit offsets and verify both were committed
+        workerTask.toSend = Arrays.asList(record1, record2);
+        workerTask.sendRecords();
+        workerTask.updateCommittableOffsets();
+        workerTask.commitOffsets();
+
+        //All offsets should be committed, even for filtered records.
+        verify(offsetWriter).offset(otherPartition, otherOffset);
+        verify(offsetWriter).offset(PARTITION, OFFSET);
+        verify(sourceTask).commitRecord(any(SourceRecord.class), isNull());
+
+        //Double check to make sure all submitted records were cleared
+        assertEquals(0, workerTask.submittedRecords.records.size());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
     public void testSlowTaskStart(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         final CountDownLatch startupLatch = new CountDownLatch(1);
