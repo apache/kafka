@@ -36,6 +36,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.test.TestKitNodes.DEFAULT_BROKER_LISTENER_NAME;
+import static org.apache.kafka.common.test.TestKitNodes.DEFAULT_BROKER_SECURITY_PROTOCOL;
 
 public class ClusterConfigTest {
 
@@ -113,7 +114,7 @@ public class ClusterConfigTest {
         Assertions.assertTrue(expectedDisplayTags.contains("tag 2"));
         Assertions.assertTrue(expectedDisplayTags.contains("tag 3"));
         Assertions.assertTrue(expectedDisplayTags.contains("MetadataVersion=" + MetadataVersion.latestTesting()));
-        Assertions.assertTrue(expectedDisplayTags.contains("BrokerSecurityProtocol=" + SecurityProtocol.PLAINTEXT));
+        Assertions.assertTrue(expectedDisplayTags.contains("BrokerSecurityProtocol=" + DEFAULT_BROKER_SECURITY_PROTOCOL));
         Assertions.assertTrue(expectedDisplayTags.contains("BrokerListenerName=" + ListenerName.normalised(DEFAULT_BROKER_LISTENER_NAME)));
     }
 }

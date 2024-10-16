@@ -37,6 +37,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.common.test.TestKitNodes.DEFAULT_BROKER_LISTENER_NAME;
+import static org.apache.kafka.common.test.TestKitNodes.DEFAULT_BROKER_SECURITY_PROTOCOL;
 
 /**
  * Represents an immutable requested configuration of a Kafka cluster for integration testing.
@@ -139,11 +140,11 @@ public class ClusterConfig {
         return saslClientProperties;
     }
 
-    public SecurityProtocol securityProtocol() {
+    public SecurityProtocol brokerSecurityProtocol() {
         return brokerSecurityProtocol;
     }
 
-    public ListenerName listenerName() {
+    public ListenerName brokerListenerName() {
         return brokerListenerName;
     }
 
@@ -182,7 +183,7 @@ public class ClusterConfig {
                 .setControllers(1)
                 .setDisksPerBroker(1)
                 .setAutoStart(true)
-                .setBrokerSecurityProtocol(SecurityProtocol.PLAINTEXT)
+                .setBrokerSecurityProtocol(DEFAULT_BROKER_SECURITY_PROTOCOL)
                 .setBrokerListenerName(ListenerName.normalised(DEFAULT_BROKER_LISTENER_NAME))
                 .setMetadataVersion(MetadataVersion.latestTesting());
     }

@@ -45,6 +45,7 @@ public class TestKitNodes {
 
     public static final int CONTROLLER_ID_OFFSET = 3000;
     public static final int BROKER_ID_OFFSET = 0;
+    public static final SecurityProtocol DEFAULT_BROKER_SECURITY_PROTOCOL = SecurityProtocol.PLAINTEXT;
     public static final String DEFAULT_BROKER_LISTENER_NAME = "EXTERNAL";
 
     public static class Builder {
@@ -59,7 +60,7 @@ public class TestKitNodes {
         // The brokerListenerName and brokerSecurityProtocol configurations must
         // be kept in sync with the default values in ClusterTest.
         private ListenerName brokerListenerName = ListenerName.normalised(DEFAULT_BROKER_LISTENER_NAME);
-        private SecurityProtocol brokerSecurityProtocol = SecurityProtocol.PLAINTEXT;
+        private SecurityProtocol brokerSecurityProtocol = DEFAULT_BROKER_SECURITY_PROTOCOL;
 
         public Builder setClusterId(String clusterId) {
             this.clusterId = clusterId;
