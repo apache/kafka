@@ -676,8 +676,7 @@ public class KafkaAdminClient extends AdminClient {
         long now = time.milliseconds();
         long newHardShutdownTimeMs = now + waitTimeMs;
         long prev = INVALID_SHUTDOWN_TIME;
-        final long reporterTimeoutMs = waitTimeMs;
-        clientTelemetryReporter.ifPresent(reporter -> reporter.initiateClose(reporterTimeoutMs));
+        clientTelemetryReporter.ifPresent(ClientTelemetryReporter::initiateClose);
         while (true) {
             if (hardShutdownTimeMs.compareAndSet(prev, newHardShutdownTimeMs)) {
                 if (prev == INVALID_SHUTDOWN_TIME) {
