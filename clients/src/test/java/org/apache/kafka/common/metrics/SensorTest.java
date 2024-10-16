@@ -31,6 +31,7 @@ import org.mockito.Mockito;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.ConcurrentModificationException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -42,6 +43,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -364,5 +366,61 @@ public class SensorTest {
         Mockito.verify(stat).measure(newConfig, 4);
 
         metrics.close();
+    }
+
+    @Test
+    public void testConcurrentReadWriteAccessForMetrics() throws ExecutionException, InterruptedException {
+        final Metrics metrics = new Metrics(new MetricConfig().quota(Quota.upperBound(Double.MAX_VALUE))
+            .timeWindow(1, TimeUnit.MILLISECONDS)
+            .samples(100));
+        final Sensor sensor = metrics.sensor("sensor");
+
+        final int metricCount = 10000;
+        // Add a large number of metrics to increase the execution time of checkQuotas
+        for (int i = 0; i < metricCount; i++) {
+            sensor.add(metrics.metricName("test-metric" + i, "test-group" + i), new Rate());
+        }
+        sensor.record(10, 1, false);
+        CountDownLatch latch = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+
+        // Use non-thread-safe methods for concurrent read and write of metrics.
+        Future<Throwable> worker = executor.submit(() -> {
+            try {
+                sensor.checkQuotasNonThreadSafe(3);
+                return null;
+            } catch (Throwable e) {
+                return e;
+            }
+        });
+        executor.submit(() -> {
+            sensor.add(metrics.metricName("test-metric-non-thread-safe", "test-group-non-thread-safe"), new Rate());
+            latch.countDown();
+        });
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS), "If this failure happen frequently, we can try to increase the wait time");
+        assertTrue(worker.isDone());
+        assertNotNull(worker.get());
+        assertEquals(ConcurrentModificationException.class, worker.get().getClass());
+        sensor.record(10, 1, false);
+
+        // Use thread-safe methods for concurrent read and write of metrics.
+        worker = executor.submit(() -> {
+            try {
+                sensor.checkQuotas(3);
+                return null;
+            } catch (Throwable e) {
+                return e;
+            }
+        });
+        executor.submit(() -> {
+            sensor.add(metrics.metricName("test-metric-thread-safe", "test-group-thread-safe"), new Rate());
+        });
+
+        executor.shutdown();
+        assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS));
+        assertTrue(worker.isDone(), "If this failure happen frequently, we can try to increase the wait time");
+        assertNull(worker.get(), "Sensor#checkQuotas SHOULD be thread-safe!");
+        executor.shutdownNow();
     }
 }
