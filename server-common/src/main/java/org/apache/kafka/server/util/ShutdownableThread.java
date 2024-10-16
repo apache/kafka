@@ -105,8 +105,17 @@ public abstract class ShutdownableThread extends Thread {
         if (!isShutdownInitiated())
             throw new IllegalStateException("initiateShutdown() was not called before awaitShutdown()");
         else {
-            if (isStarted)
-                shutdownComplete.await();
+            if (isStarted) {
+                try {
+                    shutdownComplete.await();
+                } catch (InterruptedException e) {
+                    if (isInterruptible)
+                        //ignore
+                        log.debug("interrupted", e);
+                    else
+                        throw e;
+                }
+            }
             log.info("Shutdown completed");
         }
     }
