@@ -473,6 +473,7 @@ subprojects {
       displayGranularity = 0
     }
     logTestStdout.rehydrate(delegate, owner, this)()
+    reports.junitXml.setOutputPerTestCase true
 
     exclude testsToExclude
 
