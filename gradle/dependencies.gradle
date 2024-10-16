@@ -144,7 +144,7 @@ versions += [
   scoverage: "2.0.11",
   slf4j: "1.7.36",
   snappy: "1.1.10.5",
-  spotbugs: "4.8.0",
+  spotbugs: "4.8.6",
   zinc: "1.9.2",
   zookeeper: "3.8.4",
   // When updating the zstd version, please do as well in docker/native/native-image-configs/resource-config.json
