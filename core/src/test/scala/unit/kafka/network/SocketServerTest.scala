@@ -2055,9 +2055,9 @@ class SocketServerTest {
   def testConnectionDisconnectListenerInvokedOnClose(): Unit = {
     var listenerConnectionId: String = ""
     val connectionDisconnectListener = new ConnectionDisconnectListener {
-      override def onDisconnect(connectionId: String, listenerName: ListenerName, securityProtocol: SecurityProtocol): Unit = {
+      override def onDisconnect(connectionId: String): Unit = {
         // validate same connection id as per request context.
-        listenerConnectionId = listenerName.value() + "-" + securityProtocol + "-" + connectionId
+        listenerConnectionId = connectionId
       }
     }
 
@@ -2065,8 +2065,7 @@ class SocketServerTest {
       val (socket, connectionId) = connectAndProcessRequest(testableServer)
       socket.close()
       // Validate that the listener is invoked when the connection is closed.
-      val expectedConnectionId = "PLAINTEXT-PLAINTEXT-" + connectionId
-      TestUtils.waitUntilTrue(() => listenerConnectionId == expectedConnectionId, "Failed to call disconnect listener or invalid connection id invoked")
+      TestUtils.waitUntilTrue(() => listenerConnectionId == connectionId, "Failed to call disconnect listener or invalid connection id invoked")
       assertProcessorHealthy(testableServer)
     }, connectionDisconnectListeners = Seq(connectionDisconnectListener))
   }

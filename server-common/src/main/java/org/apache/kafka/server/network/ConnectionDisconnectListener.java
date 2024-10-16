@@ -17,9 +17,6 @@
 
 package org.apache.kafka.server.network;
 
-import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.security.auth.SecurityProtocol;
-
 /**
  * Listener that is invoked when a connection is disconnected. This is useful for cases where the server
  * needs to perform cleanup tasks when a connection is disconnected.
@@ -32,10 +29,8 @@ public interface ConnectionDisconnectListener {
      * <em>Note</em>: The method is invoked when the connection to the client is closed hence the
      * implementation of this method should not perform any blocking operations.
      *
-     * @param connectionId      The connection id as defined in {@link org.apache.kafka.common.requests.RequestContext}.
-     *                          The connection id is unique per endpoint which is constructed using listener and security protocol.
-     * @param listenerName      The listener name of the connection.
-     * @param securityProtocol  The security protocol of the connection.
+     * @param connectionId The connection id as defined in {@link org.apache.kafka.common.requests.RequestContext}.
+     *                     This id is unique for each connection.
      */
-    void onDisconnect(String connectionId, ListenerName listenerName, SecurityProtocol securityProtocol);
+    void onDisconnect(String connectionId);
 }
