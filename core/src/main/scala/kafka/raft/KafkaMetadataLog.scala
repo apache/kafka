@@ -109,7 +109,7 @@ final class KafkaMetadataLog private (
   }
 
   private def handleAndConvertLogAppendInfo(appendInfo: internals.log.LogAppendInfo): LogAppendInfo = {
-    if (appendInfo.firstOffset != UnifiedLog.UnknownOffset)
+    if (appendInfo.numMessages() > 0)
       new LogAppendInfo(appendInfo.firstOffset, appendInfo.lastOffset)
     else
       throw new KafkaException(s"Append failed unexpectedly")

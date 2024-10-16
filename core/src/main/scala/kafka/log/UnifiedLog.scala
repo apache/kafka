@@ -773,8 +773,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
     val appendInfo = analyzeAndValidateRecords(records, origin, ignoreRecordSize, !validateAndAssignOffsets, leaderEpoch)
 
-    // return if we have no valid messages or if this is a duplicate of the last appended entry
-    if (appendInfo.validBytes <= 0) appendInfo
+    // return if we have no valid messages
+    if (!appendInfo.hasValidBytes) appendInfo
     else {
 
       // trim any invalid bytes or partial messages before appending it to the on-disk log
