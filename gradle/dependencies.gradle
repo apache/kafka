@@ -141,11 +141,10 @@ versions += [
   // has the version field as mandatory in its configuration, see
   // https://github.com/scalameta/scalafmt/releases/tag/v3.1.0.
   scalafmt: "3.7.14",
-  scalaJava8Compat : "1.0.2",
   scoverage: "2.0.11",
   slf4j: "1.7.36",
   snappy: "1.1.10.5",
-  spotbugs: "4.8.0",
+  spotbugs: "4.8.6",
   zinc: "1.9.2",
   zookeeper: "3.8.4",
   // When updating the zstd version, please do as well in docker/native/native-image-configs/resource-config.json
@@ -238,7 +237,6 @@ libs += [
   protobuf: "com.google.protobuf:protobuf-java:$versions.protobuf",
   reload4j: "ch.qos.reload4j:reload4j:$versions.reload4j",
   rocksDBJni: "org.rocksdb:rocksdbjni:$versions.rocksDB",
-  scalaJava8Compat: "org.scala-lang.modules:scala-java8-compat_$versions.baseScala:$versions.scalaJava8Compat",
   scalaLibrary: "org.scala-lang:scala-library:$versions.scala",
   scalaLogging: "com.typesafe.scala-logging:scala-logging_$versions.baseScala:$versions.scalaLogging",
   scalaReflect: "org.scala-lang:scala-reflect:$versions.scala",
