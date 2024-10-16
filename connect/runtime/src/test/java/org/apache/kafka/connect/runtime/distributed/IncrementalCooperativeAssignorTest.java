@@ -150,6 +150,7 @@ public class IncrementalCooperativeAssignorTest {
         // We should revoke.
         addNewEmptyWorkers("worker2");
         performStandardRebalance();
+        assertEquals(0, assignor.delay); // First revoking rebalance
         assertWorkers("worker1", "worker2");
         assertConnectorAllocations(0, 2);
         assertTaskAllocations(0, 6);
@@ -159,7 +160,7 @@ public class IncrementalCooperativeAssignorTest {
         // in this round
         addNewEmptyWorkers("worker3");
         performStandardRebalance();
-        assertTrue(assignor.delay > 0);
+        assertEquals(40, assignor.delay); // First successive revoking rebalance.
         assertWorkers("worker1", "worker2", "worker3");
         assertConnectorAllocations(0, 1, 2);
         assertTaskAllocations(3, 3, 6);
@@ -169,30 +170,38 @@ public class IncrementalCooperativeAssignorTest {
         time.sleep(assignor.delay);
         addNewEmptyWorkers("worker4");
         performStandardRebalance();
+        assertEquals(0, assignor.delay); // First revoking rebalance after delay
         assertWorkers("worker1", "worker2", "worker3", "worker4");
         assertConnectorAllocations(0, 0, 1, 1);
         assertTaskAllocations(0, 3, 3, 3);
 
         // Fifth assignment and a fifth worker joining after a revoking rebalance.
-        // We shouldn't revoke and set a delay > initial interval
+        // We shouldn't revoke and set a delay equal to initial interval
         addNewEmptyWorkers("worker5");
         performStandardRebalance();
-        assertTrue(assignor.delay > 40);
+        assertEquals(40, assignor.delay); // First successive revoking rebalance after delay
         assertWorkers("worker1", "worker2", "worker3", "worker4", "worker5");
         assertConnectorAllocations(0, 0, 1, 1, 1);
         assertTaskAllocations(1, 2, 3, 3, 3);
 
-        // Sixth assignment with sixth worker joining after the expiry.
-        // Should revoke
-        time.sleep(assignor.delay);
+        // Sixth assignment with sixth worker joining within rebalance interval
+        // There should not be any revocations and delay should be extended further.
         addNewEmptyWorkers("worker6");
         performStandardRebalance();
-        assertDelay(0);
+        assertTrue(assignor.delay > 40); // Second successive revoking rebalance after delay
+        assertWorkers("worker1", "worker2", "worker3", "worker4", "worker5", "worker6");
+        assertConnectorAllocations(0, 0, 0, 1, 1, 1);
+        assertTaskAllocations(0, 1, 2, 3, 3, 3);
+
+        // Follow up rebalance after delay expires.
+        time.sleep(assignor.delay);
+        performStandardRebalance();
+        assertEquals(0, assignor.delay); // Delay reset
         assertWorkers("worker1", "worker2", "worker3", "worker4", "worker5", "worker6");
         assertConnectorAllocations(0, 0, 0, 1, 1, 1);
         assertTaskAllocations(0, 1, 2, 2, 2, 2);
 
-        // Follow up rebalance since there were revocations
+        // Final rebalance because of revocations in the previous round
         performStandardRebalance();
         assertWorkers("worker1", "worker2", "worker3", "worker4", "worker5", "worker6");
         assertConnectorAllocations(0, 0, 0, 1, 1, 1);
