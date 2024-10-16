@@ -37,7 +37,6 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.SampledStat;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
-import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.requests.GetTelemetrySubscriptionsRequest;
@@ -45,7 +44,6 @@ import org.apache.kafka.common.requests.GetTelemetrySubscriptionsResponse;
 import org.apache.kafka.common.requests.PushTelemetryRequest;
 import org.apache.kafka.common.requests.PushTelemetryResponse;
 import org.apache.kafka.common.requests.RequestContext;
-import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Crc32C;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.metrics.ClientMetricsConfigs;
@@ -285,7 +283,7 @@ public class ClientMetricsManager implements AutoCloseable {
 
                 ClientMetricsInstanceMetadata instanceMetadata = new ClientMetricsInstanceMetadata(
                     clientInstanceId, requestContext);
-                clientInstance = createClientInstanceAndUpdateCache(clientInstanceId, instanceMetadata, requestContext);
+                clientInstance = createClientInstanceAndUpdateCache(clientInstanceId, instanceMetadata, requestContext.connectionId());
             }
         } else if (clientInstance.subscriptionVersion() < subscriptionUpdateVersion.get()) {
             /*
@@ -304,13 +302,13 @@ public class ClientMetricsManager implements AutoCloseable {
                 }
                 // Cancel the existing expiration timer task for the old client instance.
                 clientInstance.cancelExpirationTimerTask();
-                clientInstance = createClientInstanceAndUpdateCache(clientInstanceId, clientInstance.instanceMetadata(), requestContext);
+                clientInstance = createClientInstanceAndUpdateCache(clientInstanceId, clientInstance.instanceMetadata(), requestContext.connectionId());
             }
         }
 
         // Update the expiration timer task for the client instance.
         long expirationTimeMs = Math.max(cacheExpiryMs, clientInstance.pushIntervalMs() * 3);
-        TimerTask timerTask = new ExpirationTimerTask(clientInstanceId, connectionId(requestContext), expirationTimeMs);
+        TimerTask timerTask = new ExpirationTimerTask(clientInstanceId, requestContext.connectionId(), expirationTimeMs);
         clientInstance.updateExpirationTimerTask(timerTask);
         expirationTimer.add(timerTask);
 
@@ -318,14 +316,14 @@ public class ClientMetricsManager implements AutoCloseable {
     }
 
     private ClientMetricsInstance createClientInstanceAndUpdateCache(Uuid clientInstanceId,
-        ClientMetricsInstanceMetadata instanceMetadata, RequestContext requestContext) {
+        ClientMetricsInstanceMetadata instanceMetadata, String connectionId) {
 
         ClientMetricsInstance clientInstance = createClientInstance(clientInstanceId, instanceMetadata);
         // Maybe add client metrics, if metrics not already added. Metrics might be already added
         // if the client instance was evicted from the cache because of size limit.
         clientMetricsStats.maybeAddClientInstanceMetrics(clientInstanceId);
         clientInstanceCache.put(clientInstanceId, clientInstance);
-        clientConnectionIdMap.put(connectionId(requestContext), clientInstanceId);
+        clientConnectionIdMap.put(connectionId, clientInstanceId);
         return clientInstance;
     }
 
@@ -446,14 +444,6 @@ public class ClientMetricsManager implements AutoCloseable {
         }
     }
 
-    private String connectionId(RequestContext requestContext) {
-        return connectionId(requestContext.connectionId(), requestContext.listenerName(), requestContext.securityProtocol());
-    }
-
-    private String connectionId(String connectionId, String listenerName, SecurityProtocol securityProtocol) {
-        return String.format("%s-%s-%s", listenerName, securityProtocol, connectionId);
-    }
-
     // Visible for testing
     SubscriptionInfo subscriptionInfo(String subscriptionName) {
         return subscriptionMap.get(subscriptionName);
@@ -487,13 +477,12 @@ public class ClientMetricsManager implements AutoCloseable {
     private final class ClientConnectionDisconnectListener implements ConnectionDisconnectListener {
 
         @Override
-        public void onDisconnect(String connectionId, ListenerName listenerName, SecurityProtocol securityProtocol) {
-            String connectionIdStr = connectionId(connectionId, listenerName.value(), securityProtocol);
-            log.trace("Removing client connection id [{}] from the client instance cache", connectionIdStr);
+        public void onDisconnect(String connectionId) {
+            log.trace("Removing client connection id [{}] from the client instance cache", connectionId);
 
-            Uuid clientInstanceId = clientConnectionIdMap.remove(connectionIdStr);
+            Uuid clientInstanceId = clientConnectionIdMap.remove(connectionId);
             if (clientInstanceId == null) {
-                log.trace("Client connection id [{}] is not found in the client instance cache", connectionIdStr);
+                log.trace("Client connection id [{}] is not found in the client instance cache", connectionId);
                 return;
             }
 
