@@ -187,6 +187,7 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, 50000);
         configs.put(GroupCoordinatorConfig.SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, 50000);
         assertEquals("group.share.heartbeat.interval.ms must be less than group.share.session.timeout.ms",
+                assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
         
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG, 0);
         assertEquals("Invalid value 0 for configuration group.streams.session.timeout.ms: Value must be at least 1",

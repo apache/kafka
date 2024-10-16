@@ -54,12 +54,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -251,7 +251,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
                 Collections.singleton("sink0"),
                 Collections.singletonMap("repartition0", emptyTopicInfo),
                 Collections.singletonMap("changelog0", emptyTopicInfo),
-                Collections.singletonList(mkSet("source0", "repartition0"))
+                Collections.singletonList(Set.of("source0", "repartition0"))
             ));
         streamsAssignmentInterface.subtopologyMap().put("1",
             new Subtopology(
@@ -259,7 +259,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
                 Collections.singleton("sink1"),
                 Collections.singletonMap("repartition1", emptyTopicInfo),
                 Collections.singletonMap("changelog1", emptyTopicInfo),
-                Collections.singletonList(mkSet("source1", "repartition1"))
+                Collections.singletonList(Set.of("source1", "repartition1"))
             ));
         streamsAssignmentInterface.subtopologyMap().put("2",
             new Subtopology(
@@ -267,7 +267,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
                 Collections.singleton("sink2"),
                 Collections.singletonMap("repartition2", emptyTopicInfo),
                 Collections.singletonMap("changelog2", emptyTopicInfo),
-                Collections.singletonList(mkSet("source2", "repartition2"))
+                Collections.singletonList(Set.of("source2", "repartition2"))
             ));
 
         StreamsGroupHeartbeatResponseData data = new StreamsGroupHeartbeatResponseData()
@@ -296,7 +296,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         assertEquals(1000, response.heartbeatIntervalMs());
         final List<TopicPartitions> tps = response.assignment().topicPartitions();
         assertEquals(2, tps.size());
-        assertEquals(mkSet(uuid0, uuid1), tps.stream().map(TopicPartitions::topicId).collect(Collectors.toSet()));
+        assertEquals(Set.of(uuid0, uuid1), tps.stream().map(TopicPartitions::topicId).collect(Collectors.toSet()));
         assertEquals(Collections.singletonList(0), tps.get(0).partitions());
         assertEquals(Collections.singletonList(0), tps.get(1).partitions());
 

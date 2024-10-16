@@ -36,7 +36,6 @@ import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -71,8 +70,8 @@ class StreamsGroupInitializeRequestManagerTest {
         final CoordinatorRequestManager coordinatorRequestManager = mock(CoordinatorRequestManager.class);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(node));
         final StreamsAssignmentInterface streamsAssignmentInterface = mock(StreamsAssignmentInterface.class);
-        final Set<String> sourceTopics = mkSet("sourceTopic1", "sourceTopic2");
-        final Set<String> sinkTopics = mkSet("sinkTopic1", "sinkTopic2", "sinkTopic3");
+        final Set<String> sourceTopics = Set.of("sourceTopic1", "sourceTopic2");
+        final Set<String> sinkTopics = Set.of("sinkTopic1", "sinkTopic2", "sinkTopic3");
         final Map<String, StreamsAssignmentInterface.TopicInfo> repartitionTopics = mkMap(
             mkEntry("repartitionTopic1", new StreamsAssignmentInterface.TopicInfo(Optional.of(2), Optional.of((short) 1), Collections.emptyMap())),
             mkEntry("repartitionTopic2", new StreamsAssignmentInterface.TopicInfo(Optional.of(3), Optional.of((short) 3), Collections.emptyMap()))
@@ -82,9 +81,9 @@ class StreamsGroupInitializeRequestManagerTest {
             mkEntry("changelogTopic2", new StreamsAssignmentInterface.TopicInfo(Optional.empty(), Optional.of((short) 2), Collections.emptyMap())),
             mkEntry("changelogTopic3", new StreamsAssignmentInterface.TopicInfo(Optional.empty(), Optional.of((short) 3), Collections.emptyMap()))
         );
-        final Collection<Set<String>> copartitionGroup = mkSet(
-            mkSet("sourceTopic1", "repartitionTopic2"),
-            mkSet("sourceTopic2", "repartitionTopic1")
+        final Collection<Set<String>> copartitionGroup = Set.of(
+            Set.of("sourceTopic1", "repartitionTopic2"),
+            Set.of("sourceTopic2", "repartitionTopic1")
         );
         final StreamsAssignmentInterface.Subtopology subtopology1 = new StreamsAssignmentInterface.Subtopology(
             sourceTopics,
@@ -139,11 +138,15 @@ class StreamsGroupInitializeRequestManagerTest {
         });
 
         assertEquals(2, subtopology.copartitionGroups().size());
-        final StreamsGroupInitializeRequestData.CopartitionGroup copartitionGroupData1 = subtopology.copartitionGroups().get(0);
-        assertEquals(Collections.singletonList((short) 0), copartitionGroupData1.sourceTopics());
-        assertEquals(Collections.singletonList((short) 1), copartitionGroupData1.repartitionSourceTopics());
-        final StreamsGroupInitializeRequestData.CopartitionGroup copartitionGroupData2 = subtopology.copartitionGroups().get(1);
-        assertEquals(Collections.singletonList((short) 1), copartitionGroupData2.sourceTopics());
-        assertEquals(Collections.singletonList((short) 0), copartitionGroupData2.repartitionSourceTopics());
+        final StreamsGroupInitializeRequestData.CopartitionGroup expectedCopartitionGroupData1 =
+            new StreamsGroupInitializeRequestData.CopartitionGroup()
+                .setRepartitionSourceTopics(Collections.singletonList((short) 0))
+                .setSourceTopics(Collections.singletonList((short) 1));
+        final StreamsGroupInitializeRequestData.CopartitionGroup expectedCopartitionGroupData2 =
+            new StreamsGroupInitializeRequestData.CopartitionGroup()
+                .setRepartitionSourceTopics(Collections.singletonList((short) 1))
+                .setSourceTopics(Collections.singletonList((short) 0));
+        assertTrue(subtopology.copartitionGroups().contains(expectedCopartitionGroupData1));
+        assertTrue(subtopology.copartitionGroups().contains(expectedCopartitionGroupData2));
     }
 }

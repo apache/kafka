@@ -57,6 +57,8 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
     private final Logger logger;
 
+    private final int maxPollIntervalMs;
+
     private final CoordinatorRequestManager coordinatorRequestManager;
 
     private final StreamsGroupHeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState;
@@ -96,7 +98,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         this.membershipManager = membershipManager;
         this.streamsGroupInitializeRequestManager = streamsGroupInitializeRequestManager;
         this.backgroundEventHandler = backgroundEventHandler;
-        int maxPollIntervalMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
+        this.maxPollIntervalMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
         this.heartbeatState = new StreamsGroupHeartbeatRequestManager.HeartbeatState(streamsAssignmentInterface, membershipManager,
@@ -144,6 +146,10 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(request));
     }
 
+    public ConsumerMembershipManager membershipManager() {
+        return membershipManager;
+    }
+
     @Override
     public long maximumTimeToWait(long currentTimeMs) {
         pollTimer.update(currentTimeMs);
@@ -154,6 +160,17 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             return 0L;
         }
         return Math.min(pollTimer.remainingMs() / 2, heartbeatRequestState.nextHeartbeatMs(currentTimeMs));
+    }
+
+    public void resetPollTimer(final long pollMs) {
+        pollTimer.update(pollMs);
+        if (pollTimer.isExpired()) {
+            logger.warn("Time between subsequent calls to poll() was longer than the configured " +
+                    "max.poll.interval.ms, exceeded approximately by {} ms. Member {} will rejoin the group now.",
+                pollTimer.isExpiredBy(), membershipManager().memberId());
+            membershipManager().maybeRejoinStaleMember();
+        }
+        pollTimer.reset(maxPollIntervalMs);
     }
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final long currentTimeMs,

@@ -19,10 +19,10 @@ package org.apache.kafka.coordinator.group.streams;
 import org.apache.kafka.coordinator.group.taskassignor.AssignmentMemberSpec;
 
 import java.util.AbstractMap;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -73,7 +73,7 @@ public class TaskAssignmentTestUtil {
     ) {
         return new AbstractMap.SimpleEntry<>(
             subtopologyId,
-            new HashSet<>(Arrays.asList(tasks))
+            new HashSet<>(List.of(tasks))
         );
     }
 

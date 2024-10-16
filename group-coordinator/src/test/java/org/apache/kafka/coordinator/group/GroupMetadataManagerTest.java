@@ -109,6 +109,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -533,14 +534,15 @@ public class GroupMetadataManagerTest {
         assertEquals(5, coordinatorRecords.size());
         assertTrue(coordinatorRecords.contains(CoordinatorStreamsRecordHelpers.newStreamsGroupEpochRecord(groupId, 2)));
         assertTrue(coordinatorRecords.contains(CoordinatorStreamsRecordHelpers.newStreamsGroupTopologyRecord(groupId, subtopologies)));
+
         org.apache.kafka.coordinator.group.streams.TopicMetadata topicMetadata = new org.apache.kafka.coordinator.group.streams.TopicMetadata(
             inputTopicId,
             inputTopicName,
             3,
             mkMap(
-                mkEntry(0, mkSet("rack0", "rack1")),
-                mkEntry(1, mkSet("rack1", "rack2")),
-                mkEntry(2, mkSet("rack2", "rack3"))
+                mkEntry(0, new HashSet<>(List.of("rack1", "rack0"))),
+                mkEntry(1, new HashSet<>(List.of("rack2", "rack1"))),
+                mkEntry(2, new HashSet<>(List.of("rack2", "rack3")))
             )
         );
         assertTrue(coordinatorRecords.contains(
@@ -794,7 +796,7 @@ public class GroupMetadataManagerTest {
                         mkMap(
                             mkEntry(
                                 subtopologyId,
-                                mkSet(0, 1, 2)
+                                new HashSet<>(List.of(0, 1, 2))
                             )
                         ),
                         Collections.emptyMap(),

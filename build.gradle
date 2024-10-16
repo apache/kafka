@@ -2626,6 +2626,7 @@ project(':streams') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':server')
     testImplementation project(':core')
+    testImplementation project(':core').sourceSets.test.output
     testImplementation project(':tools')
     testImplementation project(':test-common')
     testImplementation project(':storage')
