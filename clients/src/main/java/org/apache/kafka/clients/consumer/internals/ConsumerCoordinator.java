@@ -419,17 +419,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (autoCommitEnabled)
             this.nextAutoCommitTimer.updateAndReset(autoCommitIntervalMs);
 
-        subscriptions.assignFromSubscribed(assignedPartitions);
-
         // Add partitions that were not previously owned but are now assigned
         firstException.compareAndSet(null, rebalanceListenerInvoker.invokePartitionsAssigned(addedPartitions));
 
-        if (firstException.get() != null) {
-            if (firstException.get() instanceof KafkaException) {
-                throw (KafkaException) firstException.get();
-            } else {
-                throw new KafkaException("User rebalance callback throws an error", firstException.get());
-            }
+        if (firstException.get() == null) {
+            subscriptions.assignFromSubscribed(assignedPartitions);
+        } else if (firstException.get() instanceof KafkaException) {
+            throw (KafkaException) firstException.get();
+        } else {
+            throw new KafkaException("User rebalance callback throws an error", firstException.get());
         }
     }
 
