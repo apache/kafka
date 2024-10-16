@@ -227,7 +227,9 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
 
       val recordFutures = consumers.zipWithIndex.map { case (consumer, i) =>
         executor.submit(() => {
-          TestUtils.pollUntilAtLeastNumRecords(consumer, assignments(i).size, waitTimeMs = 30000)
+          val records = TestUtils.pollUntilAtLeastNumRecords(consumer, assignments(i).size, waitTimeMs = 30000)
+          consumer.commitSync()
+          records
         })
       }
       recordFutures.zipWithIndex.foreach { case (future, i) =>
