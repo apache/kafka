@@ -2829,7 +2829,7 @@ class ReplicaManager(val config: KafkaConfig,
         Some(partition, false)
 
       case HostedPartition.None =>
-        if (delta.image().topicsById().containsKey(topicId)) {
+        if (delta.image().topicsById().containsKey(topicId) && !delta.changedTopics().containsKey(topicId)) {
           stateChangeLogger.error(s"Expected partition $tp with topic id " +
             s"$topicId to exist, but it was missing. Creating...")
         } else {
