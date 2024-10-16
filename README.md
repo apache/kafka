@@ -192,7 +192,7 @@ The checkstyle warnings will be found in `reports/checkstyle/reports/main.html` 
 subproject build directories. They are also printed to the console. The build will fail if Checkstyle fails.
 
 #### Spotless ####
-The import order is a part of static check. please call `spotlessApply` (require JDK 11+) to optimize the imports of Java codes before filing pull request.
+The import order is a part of static check. please call `spotlessApply` to optimize the imports of Java codes before filing pull request.
 
     ./gradlew spotlessApply
 
