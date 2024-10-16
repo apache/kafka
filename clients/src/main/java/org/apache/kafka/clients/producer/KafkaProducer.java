@@ -1459,7 +1459,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         if (record.partition() != null)
             return record.partition();
 
-        if (partitioner != null) {
+        if (partitioner != null && partitioner.partitionsTopic(record.topic())) {
             int customPartition = partitioner.partition(
                 record.topic(), record.key(), serializedKey, record.value(), serializedValue, cluster);
             if (customPartition < 0) {

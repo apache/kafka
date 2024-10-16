@@ -27,6 +27,15 @@ import java.io.Closeable;
 public interface Partitioner extends Configurable, Closeable {
 
     /**
+     * Indicate if the given topic is handled.  Returning {@code false} will cause the Producer to fallback to default partitioning.
+     *
+     * @param topic The topic name
+     */
+    default boolean partitionsTopic(String topic) {
+        return true;
+    }
+
+    /**
      * Compute the partition for the given record.
      *
      * @param topic The topic name
