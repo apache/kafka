@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin.internals;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
@@ -36,6 +37,25 @@ public interface AdminApiFuture<K, V> {
      * @return non-empty set of initial lookup keys
      */
     Set<K> lookupKeys();
+
+    /**
+     * The set of request keys that do not have cached key-broker id mappings. If there
+     * is no cached key mapping, this will be the same as the lookup keys.
+     * Can be empty, but only if the cached key mapping is not empty.
+     */
+    default Set<K> uncachedLookupKeys() {
+        return lookupKeys();
+    }
+
+    /**
+     * The cached key-broker id mapping. For lookup strategies that do not make use of a
+     * cache of metadata, this will be empty.
+     *
+     * @return mapping of keys to broker ids
+     */
+    default Map<K, Integer> cachedKeyBrokerIdMapping() {
+        return Collections.emptyMap();
+    }
 
     /**
      * Complete the futures associated with the given keys.
