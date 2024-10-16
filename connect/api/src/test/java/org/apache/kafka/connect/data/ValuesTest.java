@@ -16,14 +16,6 @@
  */
 package org.apache.kafka.connect.data;
 
-import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.connect.data.Schema.Type;
-import org.apache.kafka.connect.data.Values.Parser;
-import org.apache.kafka.connect.errors.DataException;
-
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
-
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
@@ -37,6 +29,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.data.Schema.Type;
+import org.apache.kafka.connect.data.Values.Parser;
+import org.apache.kafka.connect.errors.DataException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -45,6 +41,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 public class ValuesTest {
 
@@ -1154,7 +1152,14 @@ public class ValuesTest {
         assertEquals(new SchemaAndValue(Schema.INT32_SCHEMA, 66000), Values.parseString("66000.0"));
         assertEquals(new SchemaAndValue(Schema.FLOAT32_SCHEMA, 66000.0008f), Values.parseString("66000.0008"));
     }
+    @Test
+    public void avoidCpuAndMemoryIssuesConvertingExtremeBigDecimals() {
+        String veryBig = "1e+100000000"; // new BigDecimal().setScale(0, RoundingMode.FLOOR) takes around two minutes and uses 3GB;
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, veryBig), Values.parseString(veryBig));
 
+        String verySmall = "1e-100000000";
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, verySmall), Values.parseString(verySmall));
+    }
     protected void assertParsed(String input) {
         assertParsed(input, input);
     }
