@@ -30,7 +30,7 @@ import org.apache.kafka.common.utils.{Exit, Utils}
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.metadata.storage.{Formatter, FormatterException}
-import org.apache.kafka.raft.DynamicVoters
+import org.apache.kafka.raft.{DynamicVoters, QuorumConfig}
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.config.ReplicationConfigs
 
@@ -137,7 +137,20 @@ object StorageTool extends Logging {
     Option(namespace.getString("initial_controllers")).
       foreach(v => formatter.setInitialVoters(DynamicVoters.parse(v)))
     if (namespace.getBoolean("standalone")) {
-      formatter.setInitialVoters(createStandaloneDynamicVoters(config))
+      if (config.processRoles.contains(ProcessRole.ControllerRole)) {
+        formatter.setInitialVoters(createStandaloneDynamicVoters(config))
+      } else {
+        throw new TerseFailure("--standalone can only be used with controllers.")
+      }
+    }
+    if (config.processRoles.contains(ProcessRole.ControllerRole)) {
+      if (config.quorumConfig.voters().isEmpty) {
+        if (formatter.initialVoters().isEmpty()) {
+          throw new TerseFailure("Because " + QuorumConfig.QUORUM_VOTERS_CONFIG + " is not set, you " +
+            "must use the --standalone or --initial-controllers flag to set the initial controllers " +
+            "on each controller.");
+        }
+      }
     }
     Option(namespace.getList("add_scram")).
       foreach(scramArgs => formatter.setScramArguments(scramArgs.asInstanceOf[util.List[String]]))
@@ -238,7 +251,7 @@ object StorageTool extends Logging {
     config: KafkaConfig
   ): DynamicVoters = {
     if (!config.processRoles.contains(ProcessRole.ControllerRole)) {
-      throw new TerseFailure("You cannot use --standalone on a broker node.")
+      throw new TerseFailure("You can only use --standalone on a controller.")
     }
     if (config.effectiveAdvertisedControllerListeners.isEmpty) {
       throw new RuntimeException("No controller listeners found.")
