@@ -50,6 +50,7 @@ import org.apache.kafka.clients.consumer.internals.events.SeekUnvalidatedEvent;
 import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeEvent;
+import org.apache.kafka.clients.consumer.internals.metrics.KafkaConsumerMetrics;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -196,7 +197,7 @@ public class AsyncKafkaConsumerTest {
             new StringDeserializer(),
             new StringDeserializer(),
             time,
-            (a, b, c, d, e, f, g) -> applicationEventHandler,
+            (a, b, c, d, e, f, g, h) -> applicationEventHandler,
             a -> backgroundEventReaper,
             (a, b, c, d, e, f, g) -> fetchCollector,
             (a, b, c, d) -> metadata,
@@ -1939,6 +1940,30 @@ public class AsyncKafkaConsumerTest {
         ResetOffsetEvent resetOffsetEvent = assertInstanceOf(ResetOffsetEvent.class, event);
         assertEquals(topics, new HashSet<>(resetOffsetEvent.topicPartitions()));
         assertEquals(OffsetResetStrategy.LATEST, resetOffsetEvent.offsetResetStrategy());
+    }
+
+    @Test
+    public void testRecordBackgroundEventQueueSizeAndBackgroundEventQueueTime() {
+        consumer = newConsumer(
+                mock(FetchBuffer.class),
+                mock(ConsumerInterceptors.class),
+                mock(ConsumerRebalanceListenerInvoker.class),
+                mock(SubscriptionState.class),
+                "group-id",
+                "client-id");
+        Metrics metrics = consumer.metricsRegistry();
+        KafkaConsumerMetrics kafkaConsumerMetrics = consumer.kafkaConsumerMetrics();
+
+        ConsumerRebalanceListenerCallbackNeededEvent event = new ConsumerRebalanceListenerCallbackNeededEvent(ON_PARTITIONS_REVOKED, Collections.emptySortedSet());
+        event.setEnqueuedMs(time.milliseconds());
+        backgroundEventQueue.add(event);
+        kafkaConsumerMetrics.recordBackgroundEventQueueSize(1);
+
+        time.sleep(10);
+        consumer.processBackgroundEvents();
+        assertEquals(0, (double) metrics.metric(metrics.metricName("background-event-queue-size", "consumer-metrics")).metricValue());
+        assertTrue((double) metrics.metric(metrics.metricName("background-event-queue-time-avg", "consumer-metrics")).metricValue() > 0);
+        assertTrue((double) metrics.metric(metrics.metricName("background-event-queue-time-max", "consumer-metrics")).metricValue() > 0);
     }
 
     private void verifyUnsubscribeEvent(SubscriptionState subscriptions) {

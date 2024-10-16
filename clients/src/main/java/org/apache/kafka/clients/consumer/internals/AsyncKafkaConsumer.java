@@ -300,6 +300,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
             this.clientTelemetryReporter.ifPresent(reporters::add);
             this.metrics = createMetrics(config, time, reporters);
+            this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, CONSUMER_METRIC_GROUP_PREFIX, GroupProtocol.CONSUMER);
             this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
 
             List<ConsumerInterceptor<K, V>> interceptorList = configuredConsumerInterceptors(config);
@@ -320,7 +321,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             ApiVersions apiVersions = new ApiVersions();
             final BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
-            final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
+            final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, Optional.of(kafkaConsumerMetrics));
 
             // This FetchBuffer is shared between the application and network threads.
             this.fetchBuffer = new FetchBuffer(logContext);
@@ -332,7 +333,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     metrics,
                     fetchMetricsManager.throttleTimeSensor(),
                     clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null),
-                    backgroundEventHandler);
+                    backgroundEventHandler,
+                    Optional.of(kafkaConsumerMetrics));
             this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
             this.asyncCommitFenced = new AtomicBoolean(false);
             this.groupMetadata.set(initializeGroupMetadata(config, groupRebalanceConfig));
@@ -363,7 +365,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     new CompletableEventReaper(logContext),
                     applicationEventProcessorSupplier,
                     networkClientDelegateSupplier,
-                    requestManagersSupplier);
+                    requestManagersSupplier,
+                    Optional.of(kafkaConsumerMetrics));
 
             ConsumerRebalanceListenerInvoker rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
                     logContext,
@@ -384,8 +387,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     deserializers,
                     fetchMetricsManager,
                     time);
-
-            this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, CONSUMER_METRIC_GROUP_PREFIX);
 
             if (groupMetadata.get().isPresent() &&
                 GroupProtocol.of(config.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG)) == GroupProtocol.CONSUMER) {
@@ -443,7 +444,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.deserializers = deserializers;
         this.applicationEventHandler = applicationEventHandler;
-        this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer");
+        this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, CONSUMER_METRIC_GROUP_PREFIX, GroupProtocol.CONSUMER);
         this.clientTelemetryReporter = Optional.empty();
         this.autoCommitEnabled = autoCommitEnabled;
         this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
@@ -483,7 +484,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 deserializers,
                 fetchMetricsManager,
                 time);
-        this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer");
+        this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, CONSUMER_METRIC_GROUP_PREFIX, GroupProtocol.CONSUMER);
 
         GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
             config,
@@ -494,7 +495,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventQueue = new LinkedBlockingQueue<>();
-        BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
+        BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, Optional.of(kafkaConsumerMetrics));
         ConsumerRebalanceListenerInvoker rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
             logContext,
             subscriptions,
@@ -508,7 +509,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             logContext,
             client,
             metadata,
-            backgroundEventHandler
+            backgroundEventHandler,
+            Optional.of(kafkaConsumerMetrics)
         );
         this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
         this.asyncCommitFenced = new AtomicBoolean(false);
@@ -541,7 +543,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 new CompletableEventReaper(logContext),
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
-                requestManagersSupplier);
+                requestManagersSupplier,
+                Optional.of(kafkaConsumerMetrics));
         this.backgroundEventProcessor = new BackgroundEventProcessor(rebalanceListenerInvoker);
         this.backgroundEventReaper = new CompletableEventReaper(logContext);
     }
@@ -556,7 +559,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             final CompletableEventReaper applicationEventReaper,
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
             final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
-            final Supplier<RequestManagers> requestManagersSupplier
+            final Supplier<RequestManagers> requestManagersSupplier,
+            final Optional<KafkaConsumerMetrics> kafkaConsumerMetrics
         );
 
     }
@@ -1740,14 +1744,19 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * It is possible that {@link ErrorEvent an error}
      * could occur when processing the events. In such cases, the processor will take a reference to the first
      * error, continue to process the remaining events, and then throw the first error that occurred.
+     *
+     * Visible for testing.
      */
-    private boolean processBackgroundEvents() {
+    boolean processBackgroundEvents() {
         AtomicReference<KafkaException> firstError = new AtomicReference<>();
 
         LinkedList<BackgroundEvent> events = new LinkedList<>();
         backgroundEventQueue.drainTo(events);
+        kafkaConsumerMetrics.recordBackgroundEventQueueSize(backgroundEventQueue.size());
 
         for (BackgroundEvent event : events) {
+            kafkaConsumerMetrics.recordBackgroundEventQueueTime(time.milliseconds() - event.enqueuedMs());
+            long startMs = time.milliseconds();
             try {
                 if (event instanceof CompletableEvent)
                     backgroundEventReaper.add((CompletableEvent<?>) event);
@@ -1758,6 +1767,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
                 if (!firstError.compareAndSet(null, e))
                     log.warn("An error occurred when processing the background event: {}", e.getMessage(), e);
+            } finally {
+                kafkaConsumerMetrics.recordBackgroundEventQueueProcessingTime(time.milliseconds() - startMs);
             }
         }
 
