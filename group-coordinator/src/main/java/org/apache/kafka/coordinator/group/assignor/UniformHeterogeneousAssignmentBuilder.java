@@ -155,7 +155,6 @@ public class UniformHeterogeneousAssignmentBuilder {
 
         // Number the members 0 to M - 1.
         this.memberIds = new ArrayList<>(groupSpec.memberIds());
-        this.memberIds.sort(null);
         this.memberIndices = new HashMap<>();
         for (int memberIndex = 0; memberIndex < this.memberIds.size(); memberIndex++) {
             memberIndices.put(memberIds.get(memberIndex), memberIndex);
@@ -219,8 +218,7 @@ public class UniformHeterogeneousAssignmentBuilder {
                     memberTargetAssignmentSizes[memberIndex2]
                 );
 
-                // Then order by member index, ascending. This is equivalent to ordering by
-                // member id, ascending, since memberIds is sorted.
+                // Then order by member index, ascending.
                 if (order == 0) {
                     order = memberIndex1.compareTo(memberIndex2);
                 }
