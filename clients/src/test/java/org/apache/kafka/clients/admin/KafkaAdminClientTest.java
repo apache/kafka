@@ -8073,7 +8073,7 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testClientInstanceId() {
-        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+        try (AdminClientUnitTestEnv env = mockClientEnv(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, "true")) {
             Uuid expected = Uuid.randomUuid();
 
             GetTelemetrySubscriptionsResponseData responseData =
