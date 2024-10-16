@@ -1054,7 +1054,6 @@ project(':core') {
     implementation libs.joptSimple
     implementation libs.jose4j
     implementation libs.metrics
-    implementation libs.scalaJava8Compat
     // only needed transitively, but set it explicitly to ensure it has the same version as scala-library
     implementation libs.scalaReflect
     implementation libs.scalaLogging
@@ -1549,7 +1548,6 @@ project(':test-common') {
   }
 
   dependencies {
-    implementation libs.scalaJava8Compat
     implementation project(':core')
     implementation project(':metadata')
     implementation project(':server')
@@ -1592,7 +1590,6 @@ project(':test-common:test-common-api') {
 
 
   dependencies {
-    implementation libs.scalaJava8Compat
     implementation project(':clients')
     implementation project(':core')
     implementation project(':group-coordinator')
@@ -1640,6 +1637,11 @@ project(':transaction-coordinator') {
   dependencies {
     implementation libs.jacksonDatabind
     implementation project(':clients')
+    testImplementation libs.junitJupiter
+    testImplementation libs.mockitoCore
+
+    testRuntimeOnly runtimeTestLibs
+
     generator project(':generator')
   }
 
@@ -2440,6 +2442,8 @@ project(':tools') {
     implementation project(':transaction-coordinator')
     implementation project(':group-coordinator')
     implementation project(':coordinator-common')
+    implementation project(':share-coordinator')
+    implementation project(':share')
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonDataformatCsv
@@ -3295,7 +3299,6 @@ project(':jmh-benchmarks') {
     implementation libs.mockitoCore
     implementation libs.slf4jReload4j
     implementation libs.scalaLibrary
-    implementation libs.scalaJava8Compat
   }
 
   tasks.withType(JavaCompile) {
