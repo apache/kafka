@@ -1215,6 +1215,14 @@ class KafkaApis(val requestChannel: RequestChannel,
     errorUnavailableEndpoints: Boolean,
     errorUnavailableListeners: Boolean
   ): Seq[MetadataResponseTopic] = {
+    // TODO(duyuqi)
+    // At my experiments, I find some of topics is not in metadataCache, but
+    // why metadataCache has no some topics?
+    // KafkaServer has started and topics what created before should be persistent to
+    // zookeeper or other meta storage, and when restart KafkaServer, it should be reloaded,
+    // but why metadataCache has no some topics?
+    // If metadataCache is not integrity, I think KafkaServer should not provide the service
+    // until metadataCache has constructed.
     val topicResponses = metadataCache.getTopicMetadata(topics, listenerName,
       errorUnavailableEndpoints, errorUnavailableListeners)
 
