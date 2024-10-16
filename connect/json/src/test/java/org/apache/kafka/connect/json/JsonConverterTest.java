@@ -978,6 +978,41 @@ public class JsonConverterTest {
         assertEquals(AppInfoParser.getVersion(), converter.version());
     }
 
+    @Test
+    public void testSchemaContentIsNull() {
+        converter.configure(Collections.singletonMap(JsonConverterConfig.SCHEMA_CONTENT_CONFIG, null), false);
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "foo-bar-baz"), converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"string\" }, \"payload\": \"foo-bar-baz\" }".getBytes()));
+    }
+
+    @Test
+    public void testSchemaContentIsEmptyString() {
+        converter.configure(Collections.singletonMap(JsonConverterConfig.SCHEMA_CONTENT_CONFIG, ""), false);
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "foo-bar-baz"), converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"string\" }, \"payload\": \"foo-bar-baz\" }".getBytes()));
+    }
+
+    @Test
+    public void testSchemaContentValidSchema() {
+        converter.configure(Collections.singletonMap(JsonConverterConfig.SCHEMA_CONTENT_CONFIG, "{ \"type\": \"string\" }"), false);
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "foo-bar-baz"), converter.toConnectData(TOPIC, "\"foo-bar-baz\"".getBytes()));
+    }
+
+    @Test
+    public void testSchemaContentInValidSchema() {
+        assertThrows(
+            DataException.class,
+            () -> converter.configure(Collections.singletonMap(JsonConverterConfig.SCHEMA_CONTENT_CONFIG, "{ \"string\" }"), false),
+            " Provided schema is invalid , please recheck the schema you have provided");
+    }
+
+    @Test
+    public void testSchemaContentLooksLikeSchema() {
+        converter.configure(Collections.singletonMap(JsonConverterConfig.SCHEMA_CONTENT_CONFIG, "{ \"type\": \"struct\", \"fields\": [{\"field\": \"schema\", \"type\": \"struct\",\"fields\": [{\"field\": \"type\", \"type\": \"string\" }]}, {\"field\": \"payload\", \"type\": \"string\"}]}"), false);
+        SchemaAndValue connectData = converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"string\" }, \"payload\": \"foo-bar-baz\" }".getBytes());
+        assertEquals("foo-bar-baz", ((Struct) connectData.value()).getString("payload"));
+    }
+
+
+
     private JsonNode parse(byte[] json) {
         try {
             return objectMapper.readTree(json);
