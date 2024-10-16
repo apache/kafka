@@ -237,7 +237,7 @@ public class Selector implements Selectable, AutoCloseable {
      * Generates a unique connection ID for the given socket.
      *
      * @param socket The socket for which the connection ID is to be generated.
-     * @param processorId The ID of the processor that will handle this connection.
+     * @param processorId The ID of the server processor that will handle this connection.
      * @param connectionIndex The index to be used in the connection ID to ensure uniqueness.
      * @return A string representing the unique connection ID.
      */

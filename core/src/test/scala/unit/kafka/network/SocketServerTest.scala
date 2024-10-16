@@ -2055,7 +2055,7 @@ class SocketServerTest {
 
   @Test
   def testConnectionDisconnectListenerInvokedOnClose(): Unit = {
-    var listenerConnectionId: String = ""
+    @volatile var listenerConnectionId: String = ""
     val connectionDisconnectListener = new ConnectionDisconnectListener {
       override def onDisconnect(connectionId: String): Unit = {
         // validate same connection id as per request context.
