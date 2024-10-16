@@ -188,7 +188,7 @@ public class AdminClientConfig extends AbstractConfig {
                                         RETRY_BACKOFF_MAX_MS_DOC)
                                 .define(ENABLE_METRICS_PUSH_CONFIG,
                                         Type.BOOLEAN,
-                                        true,
+                                        false,
                                         Importance.LOW,
                                         ENABLE_METRICS_PUSH_DOC)
                                 .define(REQUEST_TIMEOUT_MS_CONFIG,

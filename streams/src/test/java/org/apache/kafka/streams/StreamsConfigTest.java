@@ -65,6 +65,7 @@ import static org.apache.kafka.common.IsolationLevel.READ_UNCOMMITTED;
 import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.ENABLE_METRICS_PUSH_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH;
 import static org.apache.kafka.streams.StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH;
@@ -377,6 +378,12 @@ public class StreamsConfigTest {
         assertEquals("host1", restoreConsumerConfigs.get("custom.property.host"));
         assertEquals("host2", producerConfigs.get("custom.property.host"));
         assertEquals("host3", adminConfigs.get("custom.property.host"));
+    }
+
+    @Test
+    public void shouldOverrideAdminDefaultAdminClientEnableTelemetry() {
+        final Map<String, Object> returnedProps = streamsConfig.getAdminConfigs(clientId);
+        assertThat(returnedProps.get(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG), equalTo("true"));
     }
 
     @Test
@@ -1242,15 +1249,11 @@ public class StreamsConfigTest {
             streamsConfig.getProducerConfigs("clientId")
                 .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
         );
-        assertNull(
-            streamsConfig.getAdminConfigs("clientId")
-                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
-        );
     }
 
     @Test
     public void shouldEnableMetricCollectionForAllInternalClientsByDefault() {
-        props.put(StreamsConfig.ENABLE_METRICS_PUSH_CONFIG, true);
+        props.put(ENABLE_METRICS_PUSH_CONFIG, true);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
 
         assertTrue(
@@ -1277,7 +1280,7 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldDisableMetricCollectionForAllInternalClients() {
-        props.put(StreamsConfig.ENABLE_METRICS_PUSH_CONFIG, false);
+        props.put(ENABLE_METRICS_PUSH_CONFIG, false);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
 
         assertFalse(
@@ -1303,22 +1306,115 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldDisableMetricCollectionOnMainConsumerOnly() {
+    public void shouldThrowConfigExceptionWhenMainConsumerMetricsDisabledStreamsMetricsPushEnabled() {
         props.put(StreamsConfig.mainConsumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), false);
 
+        final Exception exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+
+        assertThat(
+                exception.getMessage(),
+                containsString("main.consumer metrics push is disabled")
+        );
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionConsumerMetricsDisabledStreamsMetricsPushEnabled() {
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), false);
+
+        final Exception exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+
+        assertThat(
+                exception.getMessage(),
+                containsString("Kafka Streams metrics push enabled but consumer.enable.metrics is false, the setting needs to be consistent between the two")
+        );
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionConsumerMetricsEnabledButMainConsumerAndAdminMetricsDisabled() {
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), true);
+        props.put(StreamsConfig.mainConsumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), false);
+        props.put(StreamsConfig.adminClientPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), false);
+
+        final Exception exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+
+        assertThat(
+                exception.getMessage(),
+                containsString("Kafka Streams metrics push and consumer.enable.metrics are enabled, but main.consumer and admin.client metrics push are disabled")
+        );
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionConsumerMetricsEnabledButMainConsumerMetricsDisabled() {
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), true);
+        props.put(StreamsConfig.mainConsumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), false);
+
+        final Exception exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+
+        assertThat(
+                exception.getMessage(),
+                containsString("main.consumer metrics push is disabled")
+        );
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionConsumerMetricsEnabledButAdminClientMetricsDisabled() {
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), true);
+        props.put(StreamsConfig.adminClientPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), false);
+
+        final Exception exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+
+        assertThat(
+                exception.getMessage(),
+                containsString("admin.client metrics push is disabled")
+        );
+    }
+
+    @Test
+    public void shouldEnableMetricsForMainConsumerWhenConsumerPrefixDisabledMetricsPushEnabled() {
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), false);
+        props.put(StreamsConfig.mainConsumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), true);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
 
-        assertFalse(
-            (Boolean) streamsConfig.getMainConsumerConfigs("groupId", "clientId", 0)
-                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        assertTrue(
+                (Boolean) streamsConfig.getMainConsumerConfigs("groupId", "clientId", 0)
+                        .get(StreamsConfig.mainConsumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG))
         );
-        assertNull(
-            streamsConfig.getRestoreConsumerConfigs("clientId")
-                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+    }
+
+    @Test
+    public void shouldEnableMetricsForMainConsumerWhenStreamMetricsPushDisabledButMainConsumerEnabled() {
+        props.put(StreamsConfig.ENABLE_METRICS_PUSH_CONFIG, false);
+        props.put(StreamsConfig.mainConsumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), true);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+        assertTrue(
+                (Boolean) streamsConfig.getMainConsumerConfigs("groupId", "clientId", 0)
+                        .get(StreamsConfig.mainConsumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG))
         );
-        assertNull(
-            streamsConfig.getGlobalConsumerConfigs("clientId")
-                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionWhenAdminClientMetricsDisabledStreamsMetricsPushEnabled() {
+        props.put(StreamsConfig.adminClientPrefix(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG), false);
+
+        final Exception exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+
+        assertThat(
+                exception.getMessage(),
+                containsString("admin.client metrics push is disabled")
+        );
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionWhenAdminClientAndMainConsumerMetricsDisabledStreamsMetricsPushEnabled() {
+        props.put(StreamsConfig.mainConsumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), false);
+        props.put(StreamsConfig.adminClientPrefix(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG), false);
+
+        final Exception exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+
+        assertThat(
+                exception.getMessage(),
+                containsString("main.consumer and admin.client metrics push are disabled")
         );
     }
 
