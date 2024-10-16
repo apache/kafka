@@ -283,14 +283,14 @@ public class SharePartition {
     private SharePartitionState partitionState;
 
     /**
-     * The delayed share fetch purgatory is used to store the share fetch requests that could not be processed immediately.
-     */
-    private final DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory;
-
-    /**
      * The leader epoch is used to track the partition epoch.
      */
     private int leaderEpoch;
+
+    /**
+     * The delayed share fetch purgatory is used to store the share fetch requests that could not be processed immediately.
+     */
+    private final DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory;
 
     SharePartition(
         String groupId,
@@ -303,7 +303,6 @@ public class SharePartition {
         Persister persister,
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory,
         GroupConfigManager groupConfigManager,
-        Persister persister,
         ReplicaManager replicaManager
     ) {
         this.groupId = groupId;
@@ -322,8 +321,6 @@ public class SharePartition {
         this.delayedShareFetchPurgatory = delayedShareFetchPurgatory;
         this.groupConfigManager = groupConfigManager;
         this.replicaManager = replicaManager;
-        // Initialize the partition.
-        initialize();
     }
 
     /**
@@ -356,12 +353,14 @@ public class SharePartition {
 
             // Update state to initializing to avoid any concurrent requests to be processed.
             partitionState = SharePartitionState.INITIALIZING;
+            // Fetch leader epoch for the topic partition.
+            leaderEpoch = getLeaderEpoch(topicIdPartition.topicPartition());
             // Initialize the share partition by reading the state from the persister.
             persister.readState(new ReadShareGroupStateParameters.Builder()
                 .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionIdLeaderEpochData>()
                     .setGroupId(this.groupId)
                     .setTopicsData(Collections.singletonList(new TopicData<>(topicIdPartition.topicId(),
-                        Collections.singletonList(PartitionFactory.newPartitionIdLeaderEpochData(topicIdPartition.partition(), 0)))))
+                        Collections.singletonList(PartitionFactory.newPartitionIdLeaderEpochData(topicIdPartition.partition(), leaderEpoch)))))
                     .build())
                 .build()
             ).whenComplete((result, exception) -> {
@@ -1703,7 +1702,7 @@ public class SharePartition {
                 .setGroupId(this.groupId)
                 .setTopicsData(Collections.singletonList(new TopicData<>(topicIdPartition.topicId(),
                     Collections.singletonList(PartitionFactory.newPartitionStateBatchData(
-                        topicIdPartition.partition(), stateEpoch, startOffset, 0, stateBatches))))
+                        topicIdPartition.partition(), stateEpoch, startOffset, leaderEpoch, stateBatches))))
                 ).build()).build())
             .whenComplete((result, exception) -> {
                 if (exception != null) {

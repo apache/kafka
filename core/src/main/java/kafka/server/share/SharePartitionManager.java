@@ -677,7 +677,8 @@ public class SharePartitionManager implements AutoCloseable {
                             time,
                             persister,
                             delayedShareFetchPurgatory,
-                            groupConfigManager
+                            groupConfigManager,
+                            replicaManager
                     );
                     this.shareGroupMetrics.partitionLoadTime(start);
                     return partition;
