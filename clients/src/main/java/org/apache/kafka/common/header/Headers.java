@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.header;
 
+import java.util.Collection;
+
 public interface Headers extends Iterable<Header> {
     
     /**
@@ -36,6 +38,14 @@ public interface Headers extends Iterable<Header> {
      * @throws IllegalStateException is thrown if headers are in a read-only state.
      */
     Headers add(String key, byte[] value) throws IllegalStateException;
+
+    /**
+     * add a headers, returning if the operation succeeded.
+     *
+     * @return {@code true} if this headers changed as a result of the call
+     * @throws IllegalStateException is thrown if headers are in a read-only state.
+     */
+    boolean addAll(Collection<Header> headers) throws IllegalStateException;
 
     /**
      * Removes all headers for the given key returning if the operation succeeded.
