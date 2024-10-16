@@ -39,6 +39,7 @@ import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.server.share.CachedSharePartition;
 import org.apache.kafka.server.share.SharePartitionKey;
@@ -564,8 +565,8 @@ public class SharePartitionManager implements AutoCloseable {
     @Override
     public void close() throws Exception {
         this.delayedShareFetchPurgatory.shutdown();
-        this.timer.close();
-        this.persister.stop();
+        Utils.closeQuietly(this.timer, "SharePartitionManager timer");
+
         if (!fetchQueue.isEmpty()) {
             log.warn("Closing SharePartitionManager with pending fetch requests count: {}", fetchQueue.size());
             fetchQueue.forEach(shareFetchData -> shareFetchData.future().completeExceptionally(

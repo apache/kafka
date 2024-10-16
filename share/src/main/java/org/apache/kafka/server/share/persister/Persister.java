@@ -17,17 +17,14 @@
 
 package org.apache.kafka.server.share.persister;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.concurrent.CompletableFuture;
 
 /**
  * This interface introduces methods which can be used by callers to interact with the
  * persistence implementation responsible for storing share group/partition states.
- * For KIP-932, the default {@link Persister} use a share coordinator which stores information in
- * an internal topic, but this interface allows for other variations as well.
+ * For KIP-932, the default {@link Persister} uses a share coordinator to store information in
+ * an internal topic.
  */
-@InterfaceStability.Evolving
 public interface Persister {
     /**
      * Initialize the share partition state.
