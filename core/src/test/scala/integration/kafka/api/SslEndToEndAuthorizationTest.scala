@@ -76,7 +76,7 @@ class SslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "server")
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    startSasl(jaasSections(List.empty, None, ZkSasl))
+    startSasl(jaasSections(List.empty, None, KafkaSasl))
     super.setUp(testInfo)
   }
 
