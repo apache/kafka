@@ -82,7 +82,10 @@ public class TopicOptionalIdPartition {
     @Override
     public int hashCode() {
         final int prime = 31;
-        int result = prime + topicId.hashCode();
+        int result = 0;
+        if (topicId != null) {
+            result = prime + topicId.hashCode();
+        }
         result = prime * result + topicPartition.hashCode();
         return result;
     }
