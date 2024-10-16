@@ -555,6 +555,7 @@ public class StandaloneHerder extends AbstractHerder {
             synchronized (StandaloneHerder.this) {
                 configState = configBackingStore.snapshot();
             }
+            resetConnectorActiveTopics(connector);
         }
 
         @Override
