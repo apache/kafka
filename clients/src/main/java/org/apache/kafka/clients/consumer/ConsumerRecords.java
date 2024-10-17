@@ -19,7 +19,6 @@ package org.apache.kafka.clients.consumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.AbstractIterator;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -34,7 +33,7 @@ import java.util.Set;
 public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
     public static final ConsumerRecords<Object, Object> EMPTY = new ConsumerRecords<>(Collections.emptyMap());
 
-    private final Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
+    protected final Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
 
     public ConsumerRecords(Map<TopicPartition, List<ConsumerRecord<K, V>>> records) {
         this.records = records;
@@ -59,12 +58,29 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
     public Iterable<ConsumerRecord<K, V>> records(String topic) {
         if (topic == null)
             throw new IllegalArgumentException("Topic must be non-null.");
-        List<List<ConsumerRecord<K, V>>> recs = new ArrayList<>();
-        for (Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>> entry : records.entrySet()) {
-            if (entry.getKey().topic().equals(topic))
-                recs.add(entry.getValue());
-        }
-        return new ConcatenatedIterable<>(recs);
+
+        return () -> new AbstractIterator<ConsumerRecord<K, V>>() {
+            private final Iterator<Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>>> partitionIterator
+                    = records.entrySet().iterator();
+            private Iterator<ConsumerRecord<K, V>> currentRecordIterator = Collections.emptyIterator();
+
+            @Override
+            protected ConsumerRecord<K, V> makeNext() {
+                if (currentRecordIterator.hasNext()) {
+                    return currentRecordIterator.next();
+                }
+
+                while (partitionIterator.hasNext()) {
+                    Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>> nextPartition = partitionIterator.next();
+                    List<ConsumerRecord<K, V>> records = nextPartition.getValue();
+                    if (topic.equals(nextPartition.getKey().topic()) && !records.isEmpty()) {
+                        currentRecordIterator = records.iterator();
+                        return currentRecordIterator.next();
+                    }
+                }
+                return allDone();
+            }
+        };
     }
 
     /**
@@ -90,7 +106,7 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
         return count;
     }
 
-    private static class ConcatenatedIterable<K, V> implements Iterable<ConsumerRecord<K, V>> {
+    protected static class ConcatenatedIterable<K, V> implements Iterable<ConsumerRecord<K, V>> {
 
         private final Iterable<? extends Iterable<ConsumerRecord<K, V>>> iterables;
 
