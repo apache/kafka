@@ -2450,9 +2450,9 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   private def testMetadataClusterClusterAuthorizedOperations(
-                                                              version: Short,
-                                                              expectedClusterAuthorizedOperations: Int
-                                                            ): Unit = {
+    version: Short,
+    expectedClusterAuthorizedOperations: Int
+  ): Unit = {
     val metadataRequest = new MetadataRequest.Builder(new MetadataRequestData()
       .setTopics(Collections.emptyList())
       .setAllowAutoTopicCreation(true)
@@ -2718,9 +2718,9 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   private def createTopicWithBrokerPrincipal(
-                                              topic: String,
-                                              numPartitions: Int = 1
-                                            ): Unit =  {
+    topic: String,
+    numPartitions: Int = 1
+  ): Unit =  {
     // Note the principal builder implementation maps all connections on the
     // inter-broker listener to the broker principal.
     createTopic(
