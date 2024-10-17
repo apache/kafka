@@ -347,8 +347,10 @@ public class MockLogTest {
         log.updateHighWatermark(readFromEndInfo.startOffsetMetadata);
 
         // Check handling of a fetch from the middle of a batch
+        // Just check equality of metadata, not the offset field, since it is not the first offset
+        // in the returned batch, but the parameter startOffset to match KafkaMetadataLog behavior
         LogFetchInfo readFromMiddleInfo = log.read(16L, Isolation.UNCOMMITTED);
-        assertEquals(readFromEndInfo.startOffsetMetadata, readFromMiddleInfo.startOffsetMetadata);
+        assertEquals(readFromEndInfo.startOffsetMetadata.metadata(), readFromMiddleInfo.startOffsetMetadata.metadata());
     }
 
     @Test
