@@ -94,7 +94,7 @@ public class ShareFetchUtils {
                 // Maybe, in the future, check if no records are acquired, and we want to retry
                 // replica manager fetch. Depends on the share partition manager implementation,
                 // if we want parallel requests for the same share partition or not.
-                if (shareAcquiredRecords.records().isEmpty()) {
+                if (shareAcquiredRecords.acquiredRecords().isEmpty()) {
                     partitionData
                         .setRecords(null)
                         .setAcquiredRecords(Collections.emptyList());
@@ -107,7 +107,7 @@ public class ShareFetchUtils {
                         // sends the max bytes in request which should limit the bytes sent to the client
                         // in the response.
                         .setRecords(fetchPartitionData.records)
-                        .setAcquiredRecords(shareAcquiredRecords.records());
+                        .setAcquiredRecords(shareAcquiredRecords.acquiredRecords());
                     acquiredRecordsCount += shareAcquiredRecords.count();
                 }
             }

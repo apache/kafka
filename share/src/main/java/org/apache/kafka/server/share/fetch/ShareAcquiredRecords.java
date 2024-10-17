@@ -32,7 +32,7 @@ public class ShareAcquiredRecords {
     /**
      * The list of acquired records.
      */
-    private final List<AcquiredRecords> records;
+    private final List<AcquiredRecords> acquiredRecords;
     /**
       * The number of offsets acquired. The acquired records has a first and last offset, and the count
       * is the actual number of offsets acquired.
@@ -40,20 +40,20 @@ public class ShareAcquiredRecords {
     private final int count;
 
     public ShareAcquiredRecords(
-        List<AcquiredRecords> records,
+        List<AcquiredRecords> acquiredRecords,
         int count
     ) {
-        this.records = records;
+        this.acquiredRecords = acquiredRecords;
         this.count = count;
     }
 
     private ShareAcquiredRecords() {
-        this.records = Collections.emptyList();
+        this.acquiredRecords = Collections.emptyList();
         this.count = 0;
     }
 
-    public List<AcquiredRecords> records() {
-        return records;
+    public List<AcquiredRecords> acquiredRecords() {
+        return acquiredRecords;
     }
 
     public int count() {

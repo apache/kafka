@@ -1092,7 +1092,7 @@ public class SharePartition {
         lock.writeLock().lock();
         try {
             // If same batch is fetched and previous batch is removed from the cache then we need to
-            // update the batch first offset to endOffset, only if enfOffset is passed the firstOffset.
+            // update the batch first offset to endOffset, only if endOffset is passed the firstOffset.
             // For an initial start of the share fetch from a topic partition the endOffset will be initialized
             // to 0 but firstOffset can be higher than 0.
             long firstAcquiredOffset = firstOffset;

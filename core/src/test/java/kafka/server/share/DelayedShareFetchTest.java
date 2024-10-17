@@ -72,6 +72,8 @@ import static org.mockito.Mockito.when;
 
 public class DelayedShareFetchTest {
     private static final int MAX_WAIT_MS = 5000;
+    private static final int MAX_FETCH_RECORDS = 100;
+
     private static Timer mockTimer;
 
     @BeforeEach
@@ -108,7 +110,7 @@ public class DelayedShareFetchTest {
         ShareFetchData shareFetchData = new ShareFetchData(
                 new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS,
                         1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
-                new CompletableFuture<>(), partitionMaxBytes, 100);
+                new CompletableFuture<>(), partitionMaxBytes, MAX_FETCH_RECORDS);
 
         when(sp0.canAcquireRecords()).thenReturn(false);
         when(sp1.canAcquireRecords()).thenReturn(false);
@@ -146,7 +148,7 @@ public class DelayedShareFetchTest {
         ShareFetchData shareFetchData = new ShareFetchData(
                 new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS,
                         1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
-                new CompletableFuture<>(), partitionMaxBytes, 100);
+                new CompletableFuture<>(), partitionMaxBytes, MAX_FETCH_RECORDS);
 
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(false);
@@ -190,7 +192,7 @@ public class DelayedShareFetchTest {
         ShareFetchData shareFetchData = new ShareFetchData(
                 new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS,
                         1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
-                new CompletableFuture<>(), partitionMaxBytes, 100);
+                new CompletableFuture<>(), partitionMaxBytes, MAX_FETCH_RECORDS);
 
         when(sp0.canAcquireRecords()).thenReturn(false);
         when(sp1.canAcquireRecords()).thenReturn(false);
@@ -233,7 +235,7 @@ public class DelayedShareFetchTest {
         ShareFetchData shareFetchData = new ShareFetchData(
                 new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS,
                         1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
-                new CompletableFuture<>(), partitionMaxBytes, 100);
+                new CompletableFuture<>(), partitionMaxBytes, MAX_FETCH_RECORDS);
 
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(false);
@@ -274,7 +276,7 @@ public class DelayedShareFetchTest {
         ShareFetchData shareFetchData = new ShareFetchData(
                 new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS,
                         1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
-                future, partitionMaxBytes, 100);
+                future, partitionMaxBytes, MAX_FETCH_RECORDS);
 
         when(sp0.maybeAcquireFetchLock()).thenReturn(true);
         when(sp0.canAcquireRecords()).thenReturn(false);
@@ -329,7 +331,7 @@ public class DelayedShareFetchTest {
         ShareFetchData shareFetchData1 = new ShareFetchData(
             new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS,
                 1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
-            new CompletableFuture<>(), partitionMaxBytes1, 100);
+            new CompletableFuture<>(), partitionMaxBytes1, MAX_FETCH_RECORDS);
 
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
             "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
@@ -357,7 +359,7 @@ public class DelayedShareFetchTest {
         ShareFetchData shareFetchData2 = new ShareFetchData(
             new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS,
                 1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
-            new CompletableFuture<>(), partitionMaxBytes2, 100);
+            new CompletableFuture<>(), partitionMaxBytes2, MAX_FETCH_RECORDS);
 
         doAnswer(invocation -> buildLogReadResult(Collections.singleton(tp1))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
