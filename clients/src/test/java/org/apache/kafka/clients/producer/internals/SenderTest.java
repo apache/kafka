@@ -577,25 +577,27 @@ public class SenderTest {
         doInitTransactions(txnManager, producerIdAndEpoch);
 
         int backoffTimeMs = 10;
-        long now = time.milliseconds();
+        long startTime = time.milliseconds();
         Node nodeToThrottle = metadata.fetch().nodeById(0);
-        // client.throttle(nodeToThrottle, backoffTimeMs);
-        client.backoff(nodeToThrottle, backoffTimeMs);
-        assertTrue(client.isConnected(nodeToThrottle.idString()));
-        client.disconnect(nodeToThrottle.idString());
-        assertFalse(client.isConnected(nodeToThrottle.idString()));
+        client.throttle(nodeToThrottle, backoffTimeMs);
 
         // Verify node is throttled about 10ms. In real-life Apache Kafka, we observe that this can happen
-        // as done above (with a disconnect and a backoff) or if the producer receives a response with
-        // throttleTimeMs > 0.
-        long currentPollDelay = client.pollDelayMs(nodeToThrottle, now);
+        // as done above by throttling or with a disconnect / backoff.
+        long currentPollDelay = client.pollDelayMs(nodeToThrottle, startTime);
         assertTrue(currentPollDelay > 0);
         assertTrue(currentPollDelay <= backoffTimeMs);
 
         txnManager.beginTransaction();
         txnManager.maybeAddPartition(tp0);
 
-        // sender.runOnce();
+        assertFalse(txnManager.hasInFlightRequest());
+        sender.runOnce();
+        assertTrue(txnManager.hasInFlightRequest());
+
+        long totalTimeToRunOnce = time.milliseconds() - startTime;
+
+        // It should have blocked roughly only the backoffTimeMs and some change.
+        assertTrue(totalTimeToRunOnce < REQUEST_TIMEOUT);
     }
 
     @Test

@@ -138,7 +138,7 @@ public class MockClient implements KafkaClient {
 
     @Override
     public long pollDelayMs(Node node, long now) {
-        return connectionDelay(node, now);
+        return connectionState(node.idString()).pollDelayMs(now);
     }
 
     public void backoff(Node node, long durationMs) {
@@ -334,6 +334,12 @@ public class MockClient implements KafkaClient {
         while ((response = this.responses.poll()) != null) {
             response.onComplete();
             copy.add(response);
+        }
+
+        if (copy.isEmpty()) {
+            // Simulate time advancing. If no responses are received, then we know that
+            // we waited for the whole timeoutMs.
+            time.sleep(timeoutMs);
         }
 
         return copy;
@@ -793,6 +799,13 @@ public class MockClient implements KafkaClient {
                 return backingOffUntilMs - now;
 
             return 0;
+        }
+
+        long pollDelayMs(long now) {
+            if (notThrottled(now))
+                return connectionDelay(now);
+
+            return throttledUntilMs - now;
         }
 
         boolean ready(long now) {
