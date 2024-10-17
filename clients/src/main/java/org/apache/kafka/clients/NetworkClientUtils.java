@@ -71,6 +71,15 @@ public final class NetworkClientUtils {
                 throw new IOException("Connection to " + node + " failed.");
             }
             long pollTimeout = timeoutMs - (attemptStartTime - startTime); // initialize in this order to avoid overflow
+
+            // If the network client is delayed for some reason (eg. throttling or retry backoff), polling longer than
+            // that is potentially dangerous as the producer will get stuck waiting with potential for some pending
+            // requests to just not get sent. This fixes KAFKA-17455. This is the way.
+            long timeUntilCanSendDataAgain = client.pollDelayMs(node, startTime);
+            if (timeUntilCanSendDataAgain > 0 && pollTimeout > timeUntilCanSendDataAgain) {
+                pollTimeout = timeUntilCanSendDataAgain;
+            }
+
             client.poll(pollTimeout, attemptStartTime);
             if (client.authenticationException(node) != null)
                 throw client.authenticationException(node);
