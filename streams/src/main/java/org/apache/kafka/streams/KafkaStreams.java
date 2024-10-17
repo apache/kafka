@@ -18,7 +18,6 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.MemberToRemove;
 import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions;
