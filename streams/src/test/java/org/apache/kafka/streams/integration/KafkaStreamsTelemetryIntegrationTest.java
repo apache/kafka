@@ -40,6 +40,7 @@ import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.telemetry.ClientTelemetry;
 import org.apache.kafka.server.telemetry.ClientTelemetryPayload;
 import org.apache.kafka.server.telemetry.ClientTelemetryReceiver;
+import org.apache.kafka.shaded.io.opentelemetry.proto.metrics.v1.MetricsData;
 import org.apache.kafka.streams.ClientInstanceIds;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
@@ -51,6 +52,7 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.tools.ClientMetricsCommand;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -64,6 +66,8 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -91,18 +95,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(600)
 @Tag("integration")
 public class KafkaStreamsTelemetryIntegrationTest {
-    private static EmbeddedKafkaCluster cluster;
     private String appId;
     private String inputTopicTwoPartitions;
     private String outputTopicTwoPartitions;
     private String inputTopicOnePartition;
     private String outputTopicOnePartition;
     private final List<Properties> streamsConfigurations = new ArrayList<>();
+
+    private static EmbeddedKafkaCluster cluster;
     private static final List<MetricsInterceptingConsumer<byte[], byte[]>> INTERCEPTING_CONSUMERS = new ArrayList<>();
     private static final List<TestingMetricsInterceptingAdminClient> INTERCEPTING_ADMIN_CLIENTS = new ArrayList<>();
     private static final int NUM_BROKERS = 3;
     private static final int FIRST_INSTANCE_CONSUMER = 0;
     private static final int SECOND_INSTANCE_CONSUMER = 1;
+    private static final List<String> SUBSCRIBED_METRICS = new ArrayList<>();
+    private static final Logger log = LoggerFactory.getLogger(KafkaStreamsTelemetryIntegrationTest.class);
 
     @BeforeAll
     public static void startCluster() throws IOException {
@@ -160,8 +167,11 @@ public class KafkaStreamsTelemetryIntegrationTest {
     @DisplayName("End-to-end test validating metrics pushed to broker")
     public void shouldPushMetricsToBroker() throws Exception {
         final Properties properties = props(true);
+        final Properties singleValueProps = new Properties();
+        singleValueProps.put("bootstrap.servers", cluster.bootstrapServers());
         final Topology topology = complexTopology();
-        try (final KafkaStreams streams = new KafkaStreams(topology, properties)) {
+        try (final KafkaStreams streams = new KafkaStreams(topology, properties);
+             final ClientMetricsCommand.ClientMetricsService clientMetricsService = new ClientMetricsCommand.ClientMetricsService(singleValueProps)) {
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
             final ClientInstanceIds clientInstanceIds = streams.clientInstanceIds(Duration.ofSeconds(60));
@@ -172,6 +182,23 @@ public class KafkaStreamsTelemetryIntegrationTest {
                     .findFirst().get();
             assertNotNull(adminInstanceId);
             assertNotNull(mainConsumerInstanceId);
+
+            final String[] subscribeCommands = new String[] {
+                    "--bootstrap-server",
+                    cluster.bootstrapServers(),
+                    "--metrics",
+                    "org.apache.kafka.stream",
+                    "--alter",
+                    "--name",
+                    mainConsumerInstanceId.toString(),
+                    "--interval",
+                    "1000"
+            };
+            final ClientMetricsCommand.ClientMetricsCommandOptions commandOptions = new ClientMetricsCommand.ClientMetricsCommandOptions(subscribeCommands);
+            clientMetricsService.alterClientMetrics(commandOptions);
+            TestUtils.waitForCondition(() -> !SUBSCRIBED_METRICS.isEmpty(),
+                    60_000,
+                    "Never subscribed metrics");
         }
     }
 
@@ -451,7 +478,6 @@ public class KafkaStreamsTelemetryIntegrationTest {
     }
 
     public static class TestingClientTelemetry implements ClientTelemetry, MetricsReporter, ClientTelemetryReceiver {
-        public static final List<ClientTelemetryPayload> SUBSCRIBED_METRICS = new ArrayList<>();
 
         public TestingClientTelemetry() {
         }
@@ -485,8 +511,17 @@ public class KafkaStreamsTelemetryIntegrationTest {
 
         @Override
         public void exportMetrics(final AuthorizableRequestContext context, final ClientTelemetryPayload payload) {
-            SUBSCRIBED_METRICS.add(payload);
+            try {
+                MetricsData data = MetricsData.parseFrom(payload.data());
+                List<String> names = data.getResourceMetricsList()
+                        .stream()
+                        .map(rm -> rm.getScopeMetricsList().get(0).getMetrics(0).getName())
+                        .collect(Collectors.toList());
+                log.info("Found metrics {}", names);
+                SUBSCRIBED_METRICS.addAll(names);
+            } catch (Exception e) {
+                e.printStackTrace(System.out);
+            }
         }
     }
-
 }
