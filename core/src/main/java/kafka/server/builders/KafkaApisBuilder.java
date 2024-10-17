@@ -21,7 +21,6 @@ import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
 import kafka.server.ApiVersionManager;
 import kafka.server.AutoTopicCreationManager;
-import kafka.server.BrokerTopicStats;
 import kafka.server.DelegationTokenManager;
 import kafka.server.FetchManager;
 import kafka.server.KafkaApis;
@@ -36,13 +35,16 @@ import kafka.server.share.SharePartitionManager;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupCoordinator;
+import org.apache.kafka.coordinator.share.ShareCoordinator;
 import org.apache.kafka.server.ClientMetricsManager;
 import org.apache.kafka.server.authorizer.Authorizer;
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import java.util.Collections;
 import java.util.Optional;
 
-import scala.compat.java8.OptionConverters;
+import scala.jdk.javaapi.OptionConverters;
+
 
 
 public class KafkaApisBuilder {
@@ -67,6 +69,7 @@ public class KafkaApisBuilder {
     private DelegationTokenManager tokenManager = null;
     private ApiVersionManager apiVersionManager = null;
     private Optional<ClientMetricsManager> clientMetricsManager = Optional.empty();
+    private Optional<ShareCoordinator> shareCoordinator = Optional.empty();
 
     public KafkaApisBuilder setRequestChannel(RequestChannel requestChannel) {
         this.requestChannel = requestChannel;
@@ -90,6 +93,11 @@ public class KafkaApisBuilder {
 
     public KafkaApisBuilder setTxnCoordinator(TransactionCoordinator txnCoordinator) {
         this.txnCoordinator = txnCoordinator;
+        return this;
+    }
+
+    public KafkaApisBuilder setShareCoordinator(Optional<ShareCoordinator> shareCoordinator) {
+        this.shareCoordinator = shareCoordinator;
         return this;
     }
 
@@ -195,6 +203,7 @@ public class KafkaApisBuilder {
                              replicaManager,
                              groupCoordinator,
                              txnCoordinator,
+                             OptionConverters.toScala(shareCoordinator),
                              autoTopicCreationManager,
                              brokerId,
                              config,

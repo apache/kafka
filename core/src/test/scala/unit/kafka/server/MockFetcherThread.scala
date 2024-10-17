@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.storage.internals.log.LogAppendInfo
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 
 import java.util.OptionalInt

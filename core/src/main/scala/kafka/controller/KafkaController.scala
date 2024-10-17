@@ -19,7 +19,6 @@ package kafka.controller
 import com.yammer.metrics.core.{Meter, Timer}
 
 import java.util.concurrent.TimeUnit
-import kafka.api._
 import kafka.common._
 import kafka.cluster.Broker
 import kafka.controller.KafkaController.{ActiveBrokerCountMetricName, ActiveControllerCountMetricName, AlterReassignmentsCallback, ControllerStateMetricName, ElectLeadersCallback, FencedBrokerCountMetricName, GlobalPartitionCountMetricName, GlobalTopicCountMetricName, ListReassignmentsCallback, OfflinePartitionsCountMetricName, PreferredReplicaImbalanceCountMetricName, ReplicasIneligibleToDeleteCountMetricName, ReplicasToDeleteCountMetricName, TopicsIneligibleToDeleteCountMetricName, TopicsToDeleteCountMetricName, UpdateFeaturesCallback, ZkMigrationStateMetricName}
@@ -27,7 +26,6 @@ import kafka.coordinator.transaction.ZkProducerIdManager
 import kafka.server._
 import kafka.server.metadata.ZkFinalizedFeatureCache
 import kafka.utils._
-import kafka.utils.Implicits._
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk.TopicZNode.TopicIdReplicaAssignment
 import kafka.zk.{FeatureZNodeStatus, _}
@@ -43,8 +41,9 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractControlRequest, ApiError, LeaderAndIsrResponse, UpdateFeaturesRequest, UpdateMetadataResponse}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
 import org.apache.kafka.metadata.migration.ZkMigrationState
+import org.apache.kafka.server.BrokerFeatures
 import org.apache.kafka.server.common.{AdminOperationException, ProducerIdsBlock}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.KafkaScheduler
@@ -433,7 +432,7 @@ class KafkaController(val config: KafkaConfig,
       val newVersion = createFeatureZNode(
         FeatureZNode(config.interBrokerProtocolVersion,
           FeatureZNodeStatus.Enabled,
-          brokerFeatures.defaultFinalizedFeatures
+          brokerFeatures.defaultFinalizedFeatures.asScala.map { case (k, v) => (k, v.shortValue()) }
         ))
       featureCache.waitUntilFeatureEpochOrThrow(newVersion, config.zkConnectionTimeoutMs)
     } else {
@@ -1031,7 +1030,7 @@ class KafkaController(val config: KafkaConfig,
 
   private def updateLeaderAndIsrCache(partitions: Seq[TopicPartition] = controllerContext.allPartitions.toSeq): Unit = {
     val leaderIsrAndControllerEpochs = zkClient.getTopicPartitionStates(partitions)
-    leaderIsrAndControllerEpochs.forKeyValue { (partition, leaderIsrAndControllerEpoch) =>
+    leaderIsrAndControllerEpochs.foreachEntry { (partition, leaderIsrAndControllerEpoch) =>
       controllerContext.putPartitionLeadershipInfo(partition, leaderIsrAndControllerEpoch)
     }
   }
@@ -1041,7 +1040,7 @@ class KafkaController(val config: KafkaConfig,
       true
     } else {
       zkClient.getTopicPartitionStates(Seq(partition)).get(partition).exists { leaderIsrAndControllerEpoch =>
-        val isr = leaderIsrAndControllerEpoch.leaderAndIsr.isr.toSet
+        val isr = leaderIsrAndControllerEpoch.leaderAndIsr.isr.asScala.toSet.map(Int.unbox)
         val targetReplicas = assignment.targetReplicas.toSet
         targetReplicas.subsetOf(isr)
       }
@@ -1298,7 +1297,7 @@ class KafkaController(val config: KafkaConfig,
       }.toMap.groupBy { case (_, assignedReplicas) => assignedReplicas.head }
 
     // for each broker, check if a preferred replica election needs to be triggered
-    preferredReplicasForTopicsByBrokers.forKeyValue { (leaderBroker, topicPartitionsForBroker) =>
+    preferredReplicasForTopicsByBrokers.foreachEntry { (leaderBroker, topicPartitionsForBroker) =>
       val topicsNotInPreferredReplica = topicPartitionsForBroker.filter { case (topicPartition, _) =>
         val leadershipInfo = controllerContext.partitionLeadershipInfo(topicPartition)
         leadershipInfo.exists(_.leaderAndIsr.leader != leaderBroker)
@@ -1324,7 +1323,7 @@ class KafkaController(val config: KafkaConfig,
   private def canPreferredReplicaBeLeader(tp: TopicPartition): Boolean = {
     val assignment = controllerContext.partitionReplicaAssignment(tp)
     val liveReplicas = assignment.filter(replica => controllerContext.isReplicaOnline(replica, tp))
-    val isr = controllerContext.partitionLeadershipInfo(tp).get.leaderAndIsr.isr
+    val isr = controllerContext.partitionLeadershipInfo(tp).get.leaderAndIsr.isr.asScala.toSeq.map(_.toInt)
     PartitionLeaderElectionAlgorithms
       .preferredReplicaPartitionLeaderElection(assignment, isr, liveReplicas.toSet)
       .nonEmpty
@@ -1603,7 +1602,7 @@ class KafkaController(val config: KafkaConfig,
           latestFinalizedFeatures =>
             BrokerFeatures.hasIncompatibleFeatures(broker.features,
               latestFinalizedFeatures.finalizedFeatures().asScala.
-                map(kv => (kv._1, kv._2.toShort)).toMap))
+                map(kv => (kv._1, kv._2.toShort: java.lang.Short)).toMap.asJava))
     }
   }
 
@@ -1777,7 +1776,7 @@ class KafkaController(val config: KafkaConfig,
       }
     } else if (partitionsToBeAdded.nonEmpty) {
       info(s"New partitions to be added $partitionsToBeAdded")
-      partitionsToBeAdded.forKeyValue { (topicPartition, assignedReplicas) =>
+      partitionsToBeAdded.foreachEntry { (topicPartition, assignedReplicas) =>
         controllerContext.updatePartitionFullReplicaAssignment(topicPartition, assignedReplicas)
       }
       onNewPartitionCreation(partitionsToBeAdded.keySet)
@@ -1822,7 +1821,7 @@ class KafkaController(val config: KafkaConfig,
       val reassignmentResults = mutable.Map.empty[TopicPartition, ApiError]
       val partitionsToReassign = mutable.Map.empty[TopicPartition, ReplicaAssignment]
 
-      zkClient.getPartitionReassignment.forKeyValue { (tp, targetReplicas) =>
+      zkClient.getPartitionReassignment.foreachEntry { (tp, targetReplicas) =>
         maybeBuildReassignment(tp, Some(targetReplicas)) match {
           case Some(context) => partitionsToReassign.put(tp, context)
           case None => reassignmentResults.put(tp, new ApiError(Errors.NO_REASSIGNMENT_IN_PROGRESS))
@@ -1859,7 +1858,7 @@ class KafkaController(val config: KafkaConfig,
       val reassignmentResults = mutable.Map.empty[TopicPartition, ApiError]
       val partitionsToReassign = mutable.Map.empty[TopicPartition, ReplicaAssignment]
 
-      reassignments.forKeyValue { (tp, targetReplicas) =>
+      reassignments.foreachEntry { (tp, targetReplicas) =>
         val maybeApiError = targetReplicas.flatMap(validateReplicas(tp, _))
         maybeApiError match {
           case None =>
@@ -1985,7 +1984,7 @@ class KafkaController(val config: KafkaConfig,
           s" versionLevel:${update.versionLevel} is lower than the" +
           s" supported minVersion:${supportedVersionRange.min}."))
       } else {
-        val newFinalizedFeature = Utils.mkMap(Utils.mkEntry(update.feature, newVersion)).asScala.toMap
+        val newFinalizedFeature = Utils.mkMap(Utils.mkEntry(update.feature, newVersion: java.lang.Short))
         val numIncompatibleBrokers = controllerContext.liveOrShuttingDownBrokers.count(broker => {
           BrokerFeatures.hasIncompatibleFeatures(broker.features, newFinalizedFeature)
         })
@@ -2241,7 +2240,7 @@ class KafkaController(val config: KafkaConfig,
 
             case ElectionType.UNCLEAN =>
               val currentLeader = controllerContext.partitionLeadershipInfo(partition).get.leaderAndIsr.leader
-              currentLeader == LeaderAndIsr.NoLeader || !controllerContext.isLiveBroker(currentLeader)
+              currentLeader == LeaderAndIsr.NO_LEADER || !controllerContext.isLiveBroker(currentLeader)
           }
         }
 
@@ -2305,7 +2304,7 @@ class KafkaController(val config: KafkaConfig,
 
     // After we have returned the result of the `AlterPartition` request, we should check whether
     // there are any reassignments which can be completed by a successful ISR expansion.
-    partitionResponses.forKeyValue { (topicPartition, partitionResponse) =>
+    partitionResponses.foreachEntry { (topicPartition, partitionResponse) =>
       if (controllerContext.partitionsBeingReassigned.contains(topicPartition)) {
         val isSuccessfulUpdate = partitionResponse.isRight
         if (isSuccessfulUpdate) {
@@ -2367,13 +2366,13 @@ class KafkaController(val config: KafkaConfig,
         case Some(topicName) =>
           topicReq.partitions.forEach { partitionReq =>
             val isr = if (alterPartitionRequestVersion >= 3) {
-              partitionReq.newIsrWithEpochs.asScala.toList.map(brokerState => brokerState.brokerId())
+              partitionReq.newIsrWithEpochs.asScala.toList.map(brokerState => Integer.valueOf(brokerState.brokerId())).asJava
             } else {
-              partitionReq.newIsr.asScala.toList.map(_.toInt)
+              partitionReq.newIsr
             }
             partitionsToAlter.put(
               new TopicPartition(topicName, partitionReq.partitionIndex),
-              LeaderAndIsr(
+              new LeaderAndIsr(
                 alterPartitionRequest.brokerId,
                 partitionReq.leaderEpoch,
                 isr,
@@ -2409,7 +2408,7 @@ class KafkaController(val config: KafkaConfig,
           } else if (newLeaderAndIsr.partitionEpoch < currentLeaderAndIsr.partitionEpoch) {
             partitionResponses(tp) = Left(Errors.INVALID_UPDATE_VERSION)
             None
-          }  else if (newLeaderAndIsr.leaderRecoveryState == LeaderRecoveryState.RECOVERING && newLeaderAndIsr.isr.length > 1) {
+          }  else if (newLeaderAndIsr.leaderRecoveryState == LeaderRecoveryState.RECOVERING && newLeaderAndIsr.isr.size() > 1) {
             partitionResponses(tp) = Left(Errors.INVALID_REQUEST)
             info(
               s"Rejecting AlterPartition from node $brokerId for $tp because leader is recovering and ISR is greater than 1: " +
@@ -2428,7 +2427,7 @@ class KafkaController(val config: KafkaConfig,
           } else {
             // Pull out replicas being added to ISR and verify they are all online.
             // If a replica is not online, reject the update as specified in KIP-841.
-            val ineligibleReplicas = newLeaderAndIsr.isr.toSet -- controllerContext.liveBrokerIds
+            val ineligibleReplicas = newLeaderAndIsr.isr.asScala.toSet.map(Int.unbox) -- controllerContext.liveBrokerIds
             if (ineligibleReplicas.nonEmpty) {
               info(s"Rejecting AlterPartition request from node $brokerId for $tp because " +
                 s"it specified ineligible replicas $ineligibleReplicas in the new ISR ${newLeaderAndIsr.isr}."
@@ -2481,7 +2480,7 @@ class KafkaController(val config: KafkaConfig,
       partitionsToAlter.keySet
     )
 
-    partitionResponses.groupBy(_._1.topic).forKeyValue { (topicName, partitionResponses) =>
+    partitionResponses.groupBy(_._1.topic).foreachEntry { (topicName, partitionResponses) =>
       // Add each topic part to the response
       val topicResponse = if (useTopicsIds) {
         new AlterPartitionResponseData.TopicData()
@@ -2492,7 +2491,7 @@ class KafkaController(val config: KafkaConfig,
       }
       alterPartitionResponse.topics.add(topicResponse)
 
-      partitionResponses.forKeyValue { (tp, errorOrIsr) =>
+      partitionResponses.foreachEntry { (tp, errorOrIsr) =>
         // Add each partition part to the response (new ISR or error)
         errorOrIsr match {
           case Left(error) =>
@@ -2511,7 +2510,7 @@ class KafkaController(val config: KafkaConfig,
                 .setPartitionIndex(tp.partition)
                 .setLeaderId(leaderAndIsr.leader)
                 .setLeaderEpoch(leaderAndIsr.leaderEpoch)
-                .setIsr(leaderAndIsr.isr.map(Integer.valueOf).asJava)
+                .setIsr(leaderAndIsr.isr)
                 .setLeaderRecoveryState(leaderAndIsr.leaderRecoveryState.value)
                 .setPartitionEpoch(leaderAndIsr.partitionEpoch)
             )
@@ -2767,7 +2766,7 @@ case class LeaderIsrAndControllerEpoch(leaderAndIsr: LeaderAndIsr, controllerEpo
   override def toString: String = {
     val leaderAndIsrInfo = new StringBuilder
     leaderAndIsrInfo.append("(Leader:" + leaderAndIsr.leader)
-    leaderAndIsrInfo.append(",ISR:" + leaderAndIsr.isr.mkString(","))
+    leaderAndIsrInfo.append(",ISR:" + leaderAndIsr.isr.asScala.mkString(","))
     leaderAndIsrInfo.append(",LeaderRecoveryState:" + leaderAndIsr.leaderRecoveryState)
     leaderAndIsrInfo.append(",LeaderEpoch:" + leaderAndIsr.leaderEpoch)
     leaderAndIsrInfo.append(",ZkVersion:" + leaderAndIsr.partitionEpoch)

@@ -26,7 +26,7 @@ import kafka.utils._
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
-import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, Config, ConfigEntry}
+import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, Config, ConfigEntry}
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.{InvalidRequestException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.metrics.Quota
@@ -36,6 +36,7 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record.{CompressionType, RecordVersion}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1
 import org.apache.kafka.server.config.{ConfigType, QuotaConfigs, ServerLogConfigs, ZooKeeperInternals}
 import org.apache.kafka.storage.internals.log.LogConfig
@@ -59,7 +60,10 @@ import scala.jdk.CollectionConverters._
 
 @Timeout(100)
 class DynamicConfigChangeTest extends KafkaServerTestHarness {
-  def generateConfigs = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnectOrNull)))
+  override def generateConfigs: Seq[KafkaConfig] = {
+    val cfg = TestUtils.createBrokerConfig(0, zkConnectOrNull)
+    List(KafkaConfig.fromProps(cfg))
+  }
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
@@ -203,6 +207,14 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
         new ClientQuotaAlteration(entity, util.Arrays.asList(
           new Op(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, null),
           new Op(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, null))))
+
+      // validate only
+      admin.alterClientQuotas(removals, new AlterClientQuotasOptions().validateOnly(true)).all().get()
+      assertEquals(Quota.upperBound(1000),
+        quotaManagers.produce.quota(user, clientId), s"User $user clientId $clientId must have same producer quota of 1000")
+      assertEquals(Quota.upperBound(2000),
+        quotaManagers.fetch.quota(user, clientId), s"User $user clientId $clientId must have same consumer quota of 2000")
+
       admin.alterClientQuotas(removals).all().get()
       TestUtils.retry(10000) {
         val producerQuota = quotaManagers.produce.quota(user, clientId)
@@ -564,6 +576,74 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
         assertEquals(value, b.quotaManagers.follower.upperBound)
         assertEquals(value, b.quotaManagers.alterLogDirs.upperBound)
       }
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testDynamicGroupConfigChange(quorum: String): Unit = {
+    val newSessionTimeoutMs = 50000
+    val consumerGroupId = "group-foo"
+    val admin = createAdminClient()
+    try {
+      val resource = new ConfigResource(ConfigResource.Type.GROUP, consumerGroupId)
+      val op = new AlterConfigOp(
+        new ConfigEntry(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, newSessionTimeoutMs.toString),
+        OpType.SET
+      )
+      admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all.get
+    } finally {
+      admin.close()
+    }
+
+    TestUtils.retry(10000) {
+      brokers.head.groupCoordinator.groupMetadataTopicConfigs()
+      val configOpt = brokerServers.head.groupCoordinator.groupConfig(consumerGroupId)
+      assertTrue(configOpt.isPresent)
+    }
+
+    val groupConfig = brokerServers.head.groupCoordinator.groupConfig(consumerGroupId).get()
+    assertEquals(newSessionTimeoutMs, groupConfig.consumerSessionTimeoutMs())
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft+kip848"))
+  def testDynamicShareGroupConfigChange(quorum: String): Unit = {
+    val newRecordLockDurationMs = 50000
+    val shareGroupId = "group-foo"
+    val admin = createAdminClient()
+    try {
+      val resource = new ConfigResource(ConfigResource.Type.GROUP, shareGroupId)
+      val op = new AlterConfigOp(
+        new ConfigEntry(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, newRecordLockDurationMs.toString),
+        OpType.SET
+      )
+      admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all.get
+    } finally {
+      admin.close()
+    }
+
+    TestUtils.retry(10000) {
+      brokers.head.groupCoordinator.groupMetadataTopicConfigs()
+      val configOpt = brokerServers.head.groupCoordinator.groupConfig(shareGroupId)
+      assertTrue(configOpt.isPresent)
+    }
+
+    val groupConfig = brokerServers.head.groupCoordinator.groupConfig(shareGroupId).get()
+    assertEquals(newRecordLockDurationMs, groupConfig.shareRecordLockDurationMs)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testIncrementalAlterDefaultGroupConfig(quorum: String): Unit = {
+    val admin = createAdminClient()
+    try {
+      val resource = new ConfigResource(ConfigResource.Type.GROUP, "")
+      val op = new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "200000"), OpType.SET)
+      val future = admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all
+      TestUtils.assertFutureExceptionTypeEquals(future, classOf[InvalidRequestException])
+    } finally {
+      admin.close()
     }
   }
 

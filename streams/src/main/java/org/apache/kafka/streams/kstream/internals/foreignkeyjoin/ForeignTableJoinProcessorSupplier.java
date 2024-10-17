@@ -123,11 +123,11 @@ public class ForeignTableJoinProcessorSupplier<K, KO, VO> implements
                     if (prefixEquals(next.key.get(), prefixBytes.get())) {
                         final CombinedKey<KO, K> combinedKey = keySchema.fromBytes(next.key);
                         context().forward(
-                            record.withKey(combinedKey.getPrimaryKey())
+                            record.withKey(combinedKey.primaryKey())
                                 .withValue(new SubscriptionResponseWrapper<>(
-                                    next.value.value().getHash(),
+                                    next.value.value().hash(),
                                     record.value().newValue,
-                                    next.value.value().getPrimaryPartition()))
+                                    next.value.value().primaryPartition()))
                         );
                     }
                 }

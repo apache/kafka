@@ -35,6 +35,8 @@ import org.apache.kafka.common.requests.AlterConfigsRequest._
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.{SecurityUtils, Utils}
+import org.apache.kafka.network.RequestConvertToJson
+import org.apache.kafka.network.metrics.RequestChannelMetrics
 import org.apache.kafka.test
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
@@ -49,9 +51,10 @@ import java.util.Collections
 import java.util.concurrent.atomic.AtomicReference
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOption
 
 class RequestChannelTest {
-  private val requestChannelMetrics: RequestChannel.Metrics = mock(classOf[RequestChannel.Metrics])
+  private val requestChannelMetrics: RequestChannelMetrics = mock(classOf[RequestChannelMetrics])
   private val principalSerde = new KafkaPrincipalSerde() {
     override def serialize(principal: KafkaPrincipal): Array[Byte] = Utils.utf8(principal.toString)
     override def deserialize(bytes: Array[Byte]): KafkaPrincipal = SecurityUtils.parseKafkaPrincipal(Utils.utf8(bytes))
@@ -68,7 +71,7 @@ class RequestChannelTest {
       val loggableAlterConfigs = alterConfigs.loggableRequest.asInstanceOf[AlterConfigsRequest]
       val loggedConfig = loggableAlterConfigs.configs.get(resource)
       assertEquals(expectedValues, toMap(loggedConfig))
-      val alterConfigsDesc = RequestConvertToJson.requestDesc(alterConfigs.header, alterConfigs.requestLog, alterConfigs.isForwarded).toString
+      val alterConfigsDesc = RequestConvertToJson.requestDesc(alterConfigs.header, alterConfigs.requestLog.toJava, alterConfigs.isForwarded).toString
       assertFalse(alterConfigsDesc.contains(sensitiveValue), s"Sensitive config logged $alterConfigsDesc")
     }
 
@@ -132,7 +135,7 @@ class RequestChannelTest {
       val loggableAlterConfigs = alterConfigs.loggableRequest.asInstanceOf[IncrementalAlterConfigsRequest]
       val loggedConfig = loggableAlterConfigs.data.resources.find(resource.`type`.id, resource.name).configs
       assertEquals(expectedValues, toMap(loggedConfig))
-      val alterConfigsDesc = RequestConvertToJson.requestDesc(alterConfigs.header, alterConfigs.requestLog, alterConfigs.isForwarded).toString
+      val alterConfigsDesc = RequestConvertToJson.requestDesc(alterConfigs.header, alterConfigs.requestLog.toJava, alterConfigs.isForwarded).toString
       assertFalse(alterConfigsDesc.contains(sensitiveValue), s"Sensitive config logged $alterConfigsDesc")
     }
 
@@ -273,7 +276,7 @@ class RequestChannelTest {
       startTimeNanos = 0,
       mock(classOf[MemoryPool]),
       buffer,
-      mock(classOf[RequestChannel.Metrics])
+      mock(classOf[RequestChannelMetrics])
     )
   }
 

@@ -27,7 +27,7 @@ import java.util.TreeSet;
 /**
  * Contains structure data for Kafka MessageData classes.
  */
-final class StructRegistry {
+public final class StructRegistry {
     private final Map<String, StructInfo> structs;
     private final Set<String> commonStructNames;
 
@@ -58,7 +58,7 @@ final class StructRegistry {
         }
     }
 
-    StructRegistry() {
+    public StructRegistry() {
         this.structs = new TreeMap<>();
         this.commonStructNames = new TreeSet<>();
     }
@@ -66,7 +66,7 @@ final class StructRegistry {
     /**
      * Register all the structures contained a message spec.
      */
-    void register(MessageSpec message) {
+    public void register(MessageSpec message) throws Exception {
         // Register common structures.
         for (StructSpec struct : message.commonStructs()) {
             if (!MessageGenerator.firstIsCapitalized(struct.name())) {
@@ -122,7 +122,7 @@ final class StructRegistry {
     /**
      * Locate the struct corresponding to a field.
      */
-    StructSpec findStruct(FieldSpec field) {
+    public StructSpec findStruct(FieldSpec field) {
         String structFieldName;
         if (field.type().isArray()) {
             FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
@@ -134,6 +134,10 @@ final class StructRegistry {
             throw new RuntimeException("Field " + field.name() +
                     " cannot be treated as a structure.");
         }
+        return findStruct(structFieldName);
+    }
+
+    public StructSpec findStruct(String structFieldName) {
         StructInfo structInfo = structs.get(structFieldName);
         if (structInfo == null) {
             throw new RuntimeException("Unable to locate a specification for the structure " +
@@ -145,7 +149,7 @@ final class StructRegistry {
     /**
      * Return true if the field is a struct array with keys.
      */
-    boolean isStructArrayWithKeys(FieldSpec field) {
+    public boolean isStructArrayWithKeys(FieldSpec field) {
         if (!field.type().isArray()) {
             return false;
         }

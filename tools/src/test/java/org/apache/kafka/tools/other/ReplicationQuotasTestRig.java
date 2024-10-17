@@ -20,9 +20,7 @@ import kafka.log.UnifiedLog;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.server.QuorumTestHarness;
-import kafka.server.QuotaType;
 import kafka.utils.EmptyTestInfo;
-import kafka.utils.Exit;
 import kafka.utils.TestUtils;
 
 import org.apache.kafka.clients.admin.Admin;
@@ -35,8 +33,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.quota.QuotaType;
 import org.apache.kafka.tools.reassign.ReassignPartitionsCommand;
 
 import org.apache.log4j.PropertyConfigurator;
@@ -74,8 +74,8 @@ import java.util.stream.IntStream;
 import javax.imageio.ImageIO;
 
 import scala.Option;
-import scala.collection.JavaConverters;
 import scala.collection.Seq;
+import scala.jdk.javaapi.CollectionConverters;
 
 import static java.nio.file.StandardOpenOption.APPEND;
 import static java.nio.file.StandardOpenOption.CREATE;
@@ -123,7 +123,7 @@ public class ReplicationQuotasTestRig {
         experiments.forEach(def -> run(def, journal, displayChartsOnScreen));
 
         if (!displayChartsOnScreen)
-            Exit.exit(0, Option.empty());
+            Exit.exit(0);
     }
 
     static void run(ExperimentDef config, Journal journal, boolean displayChartsOnScreen) {
@@ -187,7 +187,7 @@ public class ReplicationQuotasTestRig {
             super.tearDown();
         }
 
-        @SuppressWarnings({"unchecked", "deprecation"})
+        @SuppressWarnings("unchecked")
         public void run(ExperimentDef config, Journal journal, boolean displayChartsOnScreen) throws Exception {
             experimentName = config.name;
             List<Integer> brokers = IntStream.rangeClosed(100, 100 + config.brokers).boxed().collect(Collectors.toList());
@@ -208,7 +208,7 @@ public class ReplicationQuotasTestRig {
             ));
 
             startBrokers(brokers);
-            TestUtils.createTopic(zkClient(), TOPIC_NAME, (scala.collection.Map) JavaConverters.mapAsScalaMap(replicas), seq(servers));
+            TestUtils.createTopic(zkClient(), TOPIC_NAME, (scala.collection.Map) CollectionConverters.asScala(replicas), seq(servers));
 
             System.out.println("Writing Data");
             KafkaProducer<byte[], byte[]> producer = createProducer(TestUtils.plaintextBootstrapServers(seq(servers)));
@@ -349,14 +349,14 @@ public class ReplicationQuotasTestRig {
 
         void printRateMetrics() {
             for (KafkaServer broker : servers) {
-                double leaderRate = measuredRate(broker, QuotaType.LeaderReplication$.MODULE$);
+                double leaderRate = measuredRate(broker, QuotaType.LEADER_REPLICATION);
                 if (broker.config().brokerId() == 100)
                     LOGGER.info("waiting... Leader rate on 101 is " + leaderRate);
                 record(leaderRates, broker.config().brokerId(), leaderRate);
                 if (leaderRate > 0)
                     LOGGER.trace("Leader Rate on " + broker.config().brokerId() + " is " + leaderRate);
 
-                double followerRate = measuredRate(broker, QuotaType.FollowerReplication$.MODULE$);
+                double followerRate = measuredRate(broker, QuotaType.FOLLOWER_REPLICATION);
                 record(followerRates, broker.config().brokerId(), followerRate);
                 if (followerRate > 0)
                     LOGGER.trace("Follower Rate on " + broker.config().brokerId() + " is " + followerRate);
@@ -477,8 +477,7 @@ public class ReplicationQuotasTestRig {
         }
     }
 
-    @SuppressWarnings({"deprecation"})
     private static <T> Seq<T> seq(Collection<T> seq) {
-        return JavaConverters.asScalaIteratorConverter(seq.iterator()).asScala().toSeq();
+        return CollectionConverters.asScala(seq).toSeq();
     }
 }

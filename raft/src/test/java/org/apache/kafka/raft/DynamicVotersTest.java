@@ -17,7 +17,6 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.raft.internals.VoterSet;
 
 import org.junit.jupiter.api.Test;
 

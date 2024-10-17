@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.tools.consumer;
 
-import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterTest;
-import kafka.test.junit.ClusterTestExtensions;
-
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -38,6 +34,9 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.test.api.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKeyJsonConverter;
@@ -87,6 +86,7 @@ import static org.apache.kafka.clients.producer.ProducerConfig.TRANSACTIONAL_ID_
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -395,22 +395,43 @@ public class ConsoleConsumerTest {
                 ConsoleConsumer.process(1, options.formatter(), consumerWrapper, output, true);
 
                 JsonNode jsonNode = objectMapper.reader().readTree(out.toByteArray());
-                JsonNode keyNode = jsonNode.get("key");
 
-                GroupMetadataKey groupMetadataKey =
+                // The new group coordinator writes an empty group metadata record when the group is created for
+                // the first time whereas the old group coordinator only writes a group metadata record when
+                // the first rebalance completes.
+                if (cluster.isKRaftTest()) {
+                    JsonNode keyNode = jsonNode.get("key");
+                    GroupMetadataKey groupMetadataKey =
                         GroupMetadataKeyJsonConverter.read(keyNode.get("data"), GroupMetadataKey.HIGHEST_SUPPORTED_VERSION);
-                assertNotNull(groupMetadataKey);
-                assertEquals(groupId, groupMetadataKey.group());
+                    assertNotNull(groupMetadataKey);
+                    assertEquals(groupId, groupMetadataKey.group());
 
-                JsonNode valueNode = jsonNode.get("value");
-                GroupMetadataValue groupMetadataValue = 
+                    JsonNode valueNode = jsonNode.get("value");
+                    GroupMetadataValue groupMetadataValue =
                         GroupMetadataValueJsonConverter.read(valueNode.get("data"), GroupMetadataValue.HIGHEST_SUPPORTED_VERSION);
-                assertNotNull(groupMetadataValue);
-                assertEquals("consumer", groupMetadataValue.protocolType());
-                assertEquals(1, groupMetadataValue.generation());
-                assertEquals("range", groupMetadataValue.protocol());
-                assertNotNull(groupMetadataValue.leader());
-                assertEquals(1, groupMetadataValue.members().size());
+                    assertNotNull(groupMetadataValue);
+                    assertEquals("", groupMetadataValue.protocolType());
+                    assertEquals(0, groupMetadataValue.generation());
+                    assertNull(groupMetadataValue.protocol());
+                    assertNull(groupMetadataValue.leader());
+                    assertEquals(0, groupMetadataValue.members().size());
+                } else {
+                    JsonNode keyNode = jsonNode.get("key");
+                    GroupMetadataKey groupMetadataKey =
+                        GroupMetadataKeyJsonConverter.read(keyNode.get("data"), GroupMetadataKey.HIGHEST_SUPPORTED_VERSION);
+                    assertNotNull(groupMetadataKey);
+                    assertEquals(groupId, groupMetadataKey.group());
+
+                    JsonNode valueNode = jsonNode.get("value");
+                    GroupMetadataValue groupMetadataValue =
+                        GroupMetadataValueJsonConverter.read(valueNode.get("data"), GroupMetadataValue.HIGHEST_SUPPORTED_VERSION);
+                    assertNotNull(groupMetadataValue);
+                    assertEquals("consumer", groupMetadataValue.protocolType());
+                    assertEquals(1, groupMetadataValue.generation());
+                    assertEquals("range", groupMetadataValue.protocol());
+                    assertNotNull(groupMetadataValue.leader());
+                    assertEquals(1, groupMetadataValue.members().size());
+                }
             } finally {
                 consumerWrapper.cleanup();
             }

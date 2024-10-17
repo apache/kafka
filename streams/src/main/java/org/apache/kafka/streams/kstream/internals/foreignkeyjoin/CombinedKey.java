@@ -29,11 +29,11 @@ public class CombinedKey<KF, KP> {
         this.primaryKey = primaryKey;
     }
 
-    public KF getForeignKey() {
+    public KF foreignKey() {
         return foreignKey;
     }
 
-    public KP getPrimaryKey() {
+    public KP primaryKey() {
         return primaryKey;
     }
 

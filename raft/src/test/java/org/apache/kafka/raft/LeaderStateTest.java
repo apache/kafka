@@ -20,9 +20,6 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.raft.internals.BatchAccumulator;
-import org.apache.kafka.raft.internals.ReplicaKey;
-import org.apache.kafka.raft.internals.VoterSet;
-import org.apache.kafka.raft.internals.VoterSetTest;
 import org.apache.kafka.server.common.KRaftVersion;
 
 import org.junit.jupiter.api.Test;
@@ -36,12 +33,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.Set;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.raft.LeaderState.CHECK_QUORUM_TIMEOUT_FACTOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -135,7 +132,7 @@ public class LeaderStateTest {
             localWithRemoteVoterSet(Stream.of(node1, node2), withDirectoryId),
             0L
         );
-        assertEquals(mkSet(node1, node2), state.nonAcknowledgingVoters());
+        assertEquals(Set.of(node1, node2), state.nonAcknowledgingVoters());
         state.addAcknowledgementFrom(node1.id());
         assertEquals(singleton(node2), state.nonAcknowledgingVoters());
         state.addAcknowledgementFrom(node2.id());
@@ -236,7 +233,7 @@ public class LeaderStateTest {
         LeaderState<?> state = newLeaderState(voters, 10L);
 
         assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), voters));
-        assertEquals(mkSet(nodeKey1, nodeKey2), state.nonAcknowledgingVoters());
+        assertEquals(Set.of(nodeKey1, nodeKey2), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
         assertFalse(state.updateReplicaState(nodeKey1, 0, new LogOffsetMetadata(10L)));
         assertEquals(singleton(nodeKey2), state.nonAcknowledgingVoters());

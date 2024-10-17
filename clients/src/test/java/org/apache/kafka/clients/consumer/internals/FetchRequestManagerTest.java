@@ -134,7 +134,6 @@ import static java.util.Collections.singletonMap;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.test.TestUtils.assertOptional;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -182,7 +181,7 @@ public class FetchRequestManagerTest {
     private final int maxWaitMs = 0;
     private final int fetchSize = 1000;
     private final long retryBackoffMs = 100;
-    private final long requestTimeoutMs = 30000;
+    private final int requestTimeoutMs = 30000;
     private final ApiVersions apiVersions = new ApiVersions();
     private MockTime time = new MockTime(1);
     private SubscriptionState subscriptions;
@@ -370,11 +369,10 @@ public class FetchRequestManagerTest {
 
         final ArgumentCaptor<NetworkClientDelegate.UnsentRequest> argument = ArgumentCaptor.forClass(NetworkClientDelegate.UnsentRequest.class);
 
-        Timer timer = time.timer(Duration.ofSeconds(10));
         // NOTE: by design the FetchRequestManager doesn't perform network I/O internally. That means that calling
         // the close() method with a Timer will NOT send out the close session requests on close. The network
         // I/O logic is handled inside ConsumerNetworkThread.runAtClose, so we need to run that logic here.
-        ConsumerNetworkThread.runAtClose(singletonList(Optional.of(fetcher)), networkClientDelegate);
+        ConsumerNetworkThread.runAtClose(singletonList(Optional.of(fetcher)), networkClientDelegate, time.milliseconds());
         // the network is polled during the last state of clean up.
         networkClientDelegate.poll(time.timer(1));
         // validate that closing the fetcher has sent a request with final epoch. 2 requests are sent, one for the
@@ -1444,7 +1442,7 @@ public class FetchRequestManagerTest {
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords;
 
-        assignFromUser(mkSet(tp0, tp1));
+        assignFromUser(Set.of(tp0, tp1));
 
         // seek to tp0 and tp1 in two polls to generate 2 complete requests and responses
 
@@ -1476,7 +1474,7 @@ public class FetchRequestManagerTest {
     public void testFetchOnCompletedFetchesForAllPausedPartitions() {
         buildFetcher();
 
-        assignFromUser(mkSet(tp0, tp1));
+        assignFromUser(Set.of(tp0, tp1));
 
         // seek to tp0 and tp1 in two polls to generate 2 complete requests and responses
 
@@ -1510,7 +1508,7 @@ public class FetchRequestManagerTest {
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords;
 
-        assignFromUser(mkSet(tp0, tp1));
+        assignFromUser(Set.of(tp0, tp1));
 
         subscriptions.seek(tp0, 1);
         assertEquals(1, sendFetches());
@@ -1730,7 +1728,7 @@ public class FetchRequestManagerTest {
         // some fetched partitions cause Exception. This ensures that consumer won't lose record upon exception
         buildFetcher(OffsetResetStrategy.NONE, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_UNCOMMITTED);
-        assignFromUser(mkSet(tp0, tp1));
+        assignFromUser(Set.of(tp0, tp1));
         subscriptions.seek(tp0, 1);
         subscriptions.seek(tp1, 1);
 
@@ -1776,7 +1774,7 @@ public class FetchRequestManagerTest {
         // Ensure the removal of completed fetches that cause an Exception if and only if they contain empty records.
         buildFetcher(OffsetResetStrategy.NONE, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_UNCOMMITTED);
-        assignFromUser(mkSet(tp0, tp1, tp2, tp3));
+        assignFromUser(Set.of(tp0, tp1, tp2, tp3));
 
         subscriptions.seek(tp0, 1);
         subscriptions.seek(tp1, 1);
@@ -1853,7 +1851,7 @@ public class FetchRequestManagerTest {
         buildFetcher(OffsetResetStrategy.NONE, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(), 2, IsolationLevel.READ_UNCOMMITTED);
 
-        assignFromUser(mkSet(tp0));
+        assignFromUser(Set.of(tp0));
         subscriptions.seek(tp0, 1);
         assertEquals(1, sendFetches());
         Map<TopicIdPartition, FetchResponseData.PartitionData> partitions = new HashMap<>();
@@ -1866,7 +1864,7 @@ public class FetchRequestManagerTest {
 
         assertEquals(2, fetchRecords().get(tp0).size());
 
-        subscriptions.assignFromUser(mkSet(tp0, tp1));
+        subscriptions.assignFromUser(Set.of(tp0, tp1));
         subscriptions.seekUnvalidated(tp1, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
 
         assertEquals(1, sendFetches());
@@ -2090,7 +2088,7 @@ public class FetchRequestManagerTest {
         TopicPartition tp1 = new TopicPartition(topic1, 0);
         TopicPartition tp2 = new TopicPartition(topic2, 0);
 
-        subscriptions.assignFromUser(mkSet(tp1, tp2));
+        subscriptions.assignFromUser(Set.of(tp1, tp2));
 
         Map<String, Integer> partitionCounts = new HashMap<>();
         partitionCounts.put(topic1, 1);
@@ -2104,7 +2102,7 @@ public class FetchRequestManagerTest {
         int expectedBytes = 0;
         LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> fetchPartitionData = new LinkedHashMap<>();
 
-        for (TopicIdPartition tp : mkSet(tidp1, tidp2)) {
+        for (TopicIdPartition tp : Set.of(tidp1, tidp2)) {
             subscriptions.seek(tp.topicPartition(), 0);
 
             MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), Compression.NONE,
@@ -2168,7 +2166,7 @@ public class FetchRequestManagerTest {
     @Test
     public void testFetchResponseMetricsWithOnePartitionError() {
         buildFetcher();
-        assignFromUser(mkSet(tp0, tp1));
+        assignFromUser(Set.of(tp0, tp1));
         subscriptions.seek(tp0, 0);
         subscriptions.seek(tp1, 0);
 
@@ -2211,7 +2209,7 @@ public class FetchRequestManagerTest {
     public void testFetchResponseMetricsWithOnePartitionAtTheWrongOffset() {
         buildFetcher();
 
-        assignFromUser(mkSet(tp0, tp1));
+        assignFromUser(Set.of(tp0, tp1));
         subscriptions.seek(tp0, 0);
         subscriptions.seek(tp1, 0);
 
@@ -2445,7 +2443,7 @@ public class FetchRequestManagerTest {
         for (ConsumerRecord<byte[], byte[]> consumerRecord : fetchedConsumerRecords) {
             fetchedKeys.add(new String(consumerRecord.key(), StandardCharsets.UTF_8));
         }
-        assertEquals(mkSet("commit1-1", "commit1-2", "commit2-1"), fetchedKeys);
+        assertEquals(Set.of("commit1-1", "commit1-2", "commit2-1"), fetchedKeys);
     }
 
     @Test
@@ -3598,7 +3596,7 @@ public class FetchRequestManagerTest {
                 metadata,
                 time,
                 retryBackoffMs,
-                (int) requestTimeoutMs,
+                requestTimeoutMs,
                 Integer.MAX_VALUE);
         offsetFetcher = new OffsetFetcher(logContext,
                 consumerNetworkClient,

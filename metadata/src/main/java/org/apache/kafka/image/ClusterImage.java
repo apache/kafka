@@ -70,6 +70,14 @@ public final class ClusterImage {
         return brokers.containsKey(brokerId);
     }
 
+    public long brokerEpoch(int brokerId) {
+        BrokerRegistration brokerRegistration = broker(brokerId);
+        if (brokerRegistration == null) {
+            return -1L;
+        }
+        return brokerRegistration.epoch();
+    }
+
     public void write(ImageWriter writer, ImageWriterOptions options) {
         for (BrokerRegistration broker : brokers.values()) {
             writer.write(broker.toRecord(options));

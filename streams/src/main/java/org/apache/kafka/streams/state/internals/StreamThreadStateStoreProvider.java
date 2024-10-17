@@ -41,7 +41,7 @@ public class StreamThreadStateStoreProvider {
         this.streamThread = streamThread;
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "deprecation"})
     public <T> List<T> stores(final StoreQueryParameters storeQueryParams) {
         final StreamThread.State state = streamThread.state();
         if (state == StreamThread.State.DEAD) {
@@ -62,9 +62,9 @@ public class StreamThreadStateStoreProvider {
                 for (final Task task : tasks) {
                     if (task.id().partition() == storeQueryParams.partition() &&
                         (topologyName == null || topologyName.equals(task.id().topologyName())) &&
-                        task.getStore(storeName) != null &&
-                        storeName.equals(task.getStore(storeName).name())) {
-                        final T typedStore = validateAndCastStores(task.getStore(storeName), queryableStoreType, storeName, task.id());
+                        task.store(storeName) != null &&
+                        storeName.equals(task.store(storeName).name())) {
+                        final T typedStore = validateAndCastStores(task.store(storeName), queryableStoreType, storeName, task.id());
                         return Collections.singletonList(typedStore);
                     }
                 }
@@ -72,7 +72,7 @@ public class StreamThreadStateStoreProvider {
             } else {
                 final List<T> list = new ArrayList<>();
                 for (final Task task : tasks) {
-                    final StateStore store = task.getStore(storeName);
+                    final StateStore store = task.store(storeName);
                     if (store == null) {
                         // then this task doesn't have that store
                     } else {

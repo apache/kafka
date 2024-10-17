@@ -47,14 +47,18 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r docker/requirements.txt
     - name: Set up QEMU
-      uses: docker/setup-qemu-action@v3
+      uses: docker/setup-qemu-action@49b3bc8e6bdd4a60e6116a5414239cba5943d3cf # v3.2.0
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      uses: docker/setup-buildx-action@988b5a0280414f521da01fcc63a27aeeb4b104db # v3.6.1
     - name: Login to Docker Hub
-      uses: docker/login-action@v3
+      uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
       with:
         username: ${{ secrets.DOCKERHUB_USER }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
     - name: Release the RC docker image
+      env:
+        RC_DOCKER_IMAGE: ${{ github.event.inputs.rc_docker_image }}
+        KAFKA_URL: ${{ github.event.inputs.kafka_url }}
+        IMAGE_TYPE: ${{ github.event.inputs.image_type }}
       run: |
-        python docker/docker_release.py ${{ github.event.inputs.rc_docker_image }} --kafka-url ${{ github.event.inputs.kafka_url }} --image-type ${{ github.event.inputs.image_type }}
+        python docker/docker_release.py $RC_DOCKER_IMAGE --kafka-url $KAFKA_URL --image-type $IMAGE_TYPE

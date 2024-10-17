@@ -23,12 +23,10 @@ import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
 import scala.collection.{Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
 import kafka.cluster.{Broker, EndPoint}
-import kafka.api._
 import kafka.controller.StateChangeLogger
-import kafka.server.{BrokerFeatures, CachedControllerId, KRaftCachedControllerId, MetadataCache, ZkCachedControllerId}
+import kafka.server.{CachedControllerId, KRaftCachedControllerId, MetadataCache, ZkCachedControllerId}
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
-import kafka.utils.Implicits._
 import org.apache.kafka.admin.BrokerMetadata
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataPartitionState, UpdateMetadataTopicState}
@@ -40,6 +38,8 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractControlRequest, ApiVersionsResponse, MetadataResponse, UpdateMetadataRequest}
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.metadata.LeaderAndIsr
+import org.apache.kafka.server.BrokerFeatures
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
 
 import java.util.concurrent.{ThreadLocalRandom, TimeUnit}
@@ -74,7 +74,7 @@ object ZkMetadataCache {
     val topicIdToNewState = new util.HashMap[Uuid, UpdateMetadataTopicState]()
     requestTopicStates.forEach(state => topicIdToNewState.put(state.topicId(), state))
     val newRequestTopicStates = new util.ArrayList[UpdateMetadataTopicState]()
-    currentMetadata.topicNames.forKeyValue((id, name) => {
+    currentMetadata.topicNames.foreachEntry((id, name) => {
       try {
         Option(topicIdToNewState.get(id)) match {
           case None =>
@@ -134,7 +134,7 @@ object ZkMetadataCache {
       .setTopicName(topicName)
       .setPartitionStates(new util.ArrayList())
     partitions.foreach(partition => {
-      val lisr = LeaderAndIsr.duringDelete(partition.isr().asScala.map(_.intValue()).toList)
+      val lisr = LeaderAndIsr.duringDelete(partition.isr())
       val newPartitionState = new UpdateMetadataPartitionState()
         .setPartitionIndex(partition.partitionIndex())
         .setTopicName(topicName)
@@ -143,7 +143,7 @@ object ZkMetadataCache {
         .setControllerEpoch(requestControllerEpoch)
         .setReplicas(partition.replicas())
         .setZkVersion(lisr.partitionEpoch)
-        .setIsr(lisr.isr.map(Integer.valueOf).asJava)
+        .setIsr(lisr.isr)
       topicState.partitionStates().add(newPartitionState)
     })
     topicState
@@ -443,7 +443,7 @@ class ZkMetadataCache(
     }
 
     val partitions = getAllPartitions(snapshot)
-      .filter { case (_, state) => state.leader != LeaderAndIsr.LeaderDuringDelete }
+      .filter { case (_, state) => state.leader != LeaderAndIsr.LEADER_DURING_DELETE }
       .map { case (tp, state) =>
         new PartitionInfo(tp.topic, tp.partition, node(state.leader),
           state.replicas.asScala.map(node).toArray,
@@ -560,7 +560,7 @@ class ZkMetadataCache(
       } else {
         //since kafka may do partial metadata updates, we start by copying the previous state
         val partitionStates = new mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataPartitionState]](metadataSnapshot.partitionStates.size)
-        metadataSnapshot.partitionStates.forKeyValue { (topic, oldPartitionStates) =>
+        metadataSnapshot.partitionStates.foreachEntry { (topic, oldPartitionStates) =>
           val copy = new mutable.LongMap[UpdateMetadataPartitionState](oldPartitionStates.size)
           copy ++= oldPartitionStates
           partitionStates(topic) = copy
@@ -573,7 +573,7 @@ class ZkMetadataCache(
         newStates.foreach { state =>
           // per-partition logging here can be very expensive due going through all partitions in the cluster
           val tp = new TopicPartition(state.topicName, state.partitionIndex)
-          if (state.leader == LeaderAndIsr.LeaderDuringDelete) {
+          if (state.leader == LeaderAndIsr.LEADER_DURING_DELETE) {
             removePartitionInfo(partitionStates, topicIds, tp.topic, tp.partition)
             if (traceEnabled)
               stateChangeLogger.trace(s"Deleted partition $tp from metadata cache in response to UpdateMetadata " +
@@ -650,8 +650,8 @@ class ZkMetadataCache(
       throw new FeatureCacheUpdateException(errorMsg)
     } else {
       val incompatibleFeatures = brokerFeatures.incompatibleFeatures(
-        latest.finalizedFeatures().asScala.map(kv => (kv._1, kv._2.toShort)).toMap)
-      if (incompatibleFeatures.nonEmpty) {
+        latest.finalizedFeatures().asScala.map(kv => (kv._1, kv._2.toShort: java.lang.Short)).toMap.asJava)
+      if (!incompatibleFeatures.isEmpty) {
         val errorMsg = "FinalizedFeatureCache update failed since feature compatibility" +
           s" checks failed! Supported ${brokerFeatures.supportedFeatures} has incompatibilities" +
           s" with the latest $latest."

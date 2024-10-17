@@ -24,13 +24,13 @@ import kafka.log.UnifiedLog
 import kafka.network.ConnectionQuotas
 import kafka.server.Constants._
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.utils.Implicits._
 import kafka.utils.Logging
 import org.apache.kafka.server.config.{QuotaConfigs, ReplicationConfigs, ZooKeeperInternals}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
 import org.apache.kafka.common.utils.Sanitizer
+import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.storage.internals.log.{LogStartOffsetIncrementReason, ThrottledReplicaListValidator}
@@ -63,7 +63,7 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     // Validate the configurations.
     val configNamesToExclude = excludedConfigs(topic, topicConfig)
     val props = new Properties()
-    topicConfig.asScala.forKeyValue { (key, value) =>
+    topicConfig.asScala.foreachEntry { (key, value) =>
       if (!configNamesToExclude.contains(key)) props.put(key, value)
     }
 
@@ -300,5 +300,14 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
 class ClientMetricsConfigHandler(private val clientMetricsManager: ClientMetricsManager) extends ConfigHandler with Logging {
   def processConfigChanges(subscriptionGroupId: String, properties: Properties): Unit = {
     clientMetricsManager.updateSubscription(subscriptionGroupId, properties)
+  }
+}
+
+/**
+ * The GroupConfigHandler will process individual group config changes.
+ */
+class GroupConfigHandler(private val groupCoordinator: GroupCoordinator) extends ConfigHandler with Logging {
+  override def processConfigChanges(groupId: String, properties: Properties): Unit = {
+    groupCoordinator.updateGroupConfig(groupId, properties)
   }
 }

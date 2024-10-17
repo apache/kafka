@@ -24,8 +24,8 @@ import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.util.ShutdownableThread
 import org.apache.kafka.server.config.{ServerConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions._
@@ -57,8 +57,8 @@ class TransactionsBounceTest extends IntegrationTestHarness {
   overridingProps.put(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, 2.toString)
   overridingProps.put(GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, "10") // set small enough session timeout
   overridingProps.put(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0")
-  overridingProps.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, 1.toString)
-  overridingProps.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, 3.toString)
+  overridingProps.put(TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, 1.toString)
+  overridingProps.put(TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, 3.toString)
 
   // This is the one of the few tests we currently allow to preallocate ports, despite the fact that this can result in transient
   // failures due to ports getting reused. We can't use random ports because of bad behavior that can result from bouncing

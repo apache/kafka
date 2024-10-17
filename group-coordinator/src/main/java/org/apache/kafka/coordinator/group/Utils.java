@@ -22,6 +22,7 @@ import org.apache.kafka.common.message.ConsumerProtocolAssignment;
 import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -98,6 +99,22 @@ public class Utils {
      * Increments value by 1; This helper is meant to be used with Map#compute.
      */
     public static Integer incValue(String key, Integer value) {
+        return value == null ? 1 : value + 1;
+    }
+
+    /**
+     * Decrements value by 1; returns null when reaching zero. This helper is
+     * meant to be used with Map#compute.
+     */
+    public static Long decValue(Object key, Long value) {
+        if (value == null) return null;
+        return value == 1 ? null : value - 1;
+    }
+
+    /**
+     * Increments value by 1; This helper is meant to be used with Map#compute.
+     */
+    public static Long incValue(Object key, Long value) {
         return value == null ? 1 : value + 1;
     }
 
@@ -192,6 +209,20 @@ public class Utils {
         return topicPartitionsList.stream().collect(Collectors.toMap(
             ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions::topicId,
             topicPartitions -> Collections.unmodifiableSet(new HashSet<>(topicPartitions.partitions()))));
+    }
+
+    /**
+     * Creates a map of topic id and partition set from a list of share group TopicPartitions.
+     *
+     * @param topicPartitionsList   The list of TopicPartitions.
+     * @return a map of topic id and partition set.
+     */
+    public static Map<Uuid, Set<Integer>> assignmentFromShareGroupTopicPartitions(
+            List<ShareGroupCurrentMemberAssignmentValue.TopicPartitions> topicPartitionsList
+    ) {
+        return topicPartitionsList.stream().collect(Collectors.toMap(
+                ShareGroupCurrentMemberAssignmentValue.TopicPartitions::topicId,
+                topicPartitions -> Collections.unmodifiableSet(new HashSet<>(topicPartitions.partitions()))));
     }
 
     /**

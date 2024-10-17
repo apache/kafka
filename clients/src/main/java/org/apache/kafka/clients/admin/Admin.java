@@ -33,6 +33,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.FeatureUpdateFailedException;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
@@ -446,7 +447,7 @@ public interface Admin extends AutoCloseable {
      * <p>
      * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
-     * @param resources The resources (topic and broker resource types are currently supported)
+     * @param resources See relevant type {@link ConfigResource.Type}
      * @return The DescribeConfigsResult
      */
     default DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources) {
@@ -464,9 +465,22 @@ public interface Admin extends AutoCloseable {
      * <p>
      * Config entries where isReadOnly() is true cannot be updated.
      * <p>
+     * The different behavior of nonexistent resource:
+     * <ul>
+     *     <li>{@link ConfigResource.Type#BROKER}:
+     *     will throw a {@link org.apache.kafka.common.errors.TimeoutException} exception</li>
+     *     <li>{@link ConfigResource.Type#TOPIC}:
+     *     will throw a {@link org.apache.kafka.common.errors.UnknownTopicOrPartitionException} exception</li>
+     *     <li>{@link ConfigResource.Type#GROUP}:
+     *     just return default configs even if the target group is nonexistent</li>
+     *     <li>{@link ConfigResource.Type#BROKER_LOGGER}:
+     *     will throw a {@link org.apache.kafka.common.errors.TimeoutException} exception</li>
+     *     <li>{@link ConfigResource.Type#CLIENT_METRICS}: will return empty configs</li>
+     * </ul>
+     * <p>
      * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
-     * @param resources The resources (topic and broker resource types are currently supported)
+     * @param resources See relevant type {@link ConfigResource.Type}
      * @param options   The options to use when describing configs
      * @return The DescribeConfigsResult
      */
@@ -1809,6 +1823,41 @@ public interface Admin extends AutoCloseable {
     default ListShareGroupsResult listShareGroups() {
         return listShareGroups(new ListShareGroupsOptions());
     }
+
+
+    /**
+     * Add the provided application metric for subscription.
+     * This metric will be added to this client's metrics
+     * that are available for subscription and sent as
+     * telemetry data to the broker.
+     * The provided metric must map to an OTLP metric data point
+     * type in the OpenTelemetry v1 metrics protobuf message types.
+     * Specifically, the metric should be one of the following:
+     * <ul>
+     *  <li>
+     *     `Sum`: Monotonic total count meter (Counter). Suitable for metrics like total number of X, e.g., total bytes sent.
+     *  </li>
+     *  <li>
+     *     `Gauge`: Non-monotonic current value meter (UpDownCounter). Suitable for metrics like current value of Y, e.g., current queue count.
+     *  </li>
+     * </ul>
+     * Metrics not matching these types are silently ignored.
+     * Executing this method for a previously registered metric is a benign operation and results in updating that metrics entry.
+     *
+     * @param metric The application metric to register
+     */
+    void registerMetricForSubscription(KafkaMetric metric);
+
+    /**
+     * Remove the provided application metric for subscription.
+     * This metric is removed from this client's metrics
+     * and will not be available for subscription any longer.
+     * Executing this method with a metric that has not been registered is a
+     * benign operation and does not result in any action taken (no-op).
+     *
+     * @param metric The application metric to remove
+     */
+    void unregisterMetricFromSubscription(KafkaMetric metric);
 
     /**
      * Get the metrics kept by the adminClient

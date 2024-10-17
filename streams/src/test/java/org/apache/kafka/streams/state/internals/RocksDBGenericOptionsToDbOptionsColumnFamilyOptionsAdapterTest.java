@@ -108,6 +108,10 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
             add("notifyAll");
             add("toString");
             add("getOptionStringFromProps");
+            add("maxBackgroundCompactions");
+            add("setMaxBackgroundCompactions");
+            add("maxBackgroundFlushes");
+            add("setMaxBackgroundFlushes");
             addAll(walRelatedMethods);
         }
     };

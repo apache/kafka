@@ -278,7 +278,6 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.SecurityUtils;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Assertions;
@@ -2355,7 +2354,7 @@ public class RequestResponseTest {
                             .setMaxNumOffsets(10)
                             .setCurrentLeaderEpoch(5)));
             return ListOffsetsRequest.Builder
-                    .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, false)
+                    .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
                     .setTargetTimes(singletonList(topic))
                     .build(version);
         } else if (version == 1) {
@@ -2366,7 +2365,7 @@ public class RequestResponseTest {
                             .setTimestamp(1000000L)
                             .setCurrentLeaderEpoch(5)));
             return ListOffsetsRequest.Builder
-                    .forConsumer(true, IsolationLevel.READ_UNCOMMITTED, false, false)
+                    .forConsumer(true, IsolationLevel.READ_UNCOMMITTED)
                     .setTargetTimes(singletonList(topic))
                     .build(version);
         } else if (version >= 2 && version <= LIST_OFFSETS.latestVersion()) {
@@ -2379,7 +2378,7 @@ public class RequestResponseTest {
                     .setName("test")
                     .setPartitions(singletonList(partition));
             return ListOffsetsRequest.Builder
-                    .forConsumer(true, IsolationLevel.READ_COMMITTED, false, false)
+                    .forConsumer(true, IsolationLevel.READ_COMMITTED)
                     .setTargetTimes(singletonList(topic))
                     .build(version);
         } else {
@@ -2696,7 +2695,7 @@ public class RequestResponseTest {
             .setReplicas(replicas)
             .setIsNew(false));
 
-        Set<Node> leaders = Utils.mkSet(
+        Set<Node> leaders = Set.of(
                 new Node(0, "test0", 1223),
                 new Node(1, "test1", 1223)
         );

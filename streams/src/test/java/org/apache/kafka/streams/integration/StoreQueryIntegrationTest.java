@@ -119,7 +119,7 @@ public class StoreQueryIntegrationTest {
     @AfterEach
     public void after() {
         for (final KafkaStreams kafkaStreams : streamsToCleanup) {
-            kafkaStreams.close();
+            kafkaStreams.close(Duration.ofSeconds(60));
         }
         streamsToCleanup.clear();
     }
@@ -151,7 +151,8 @@ public class StoreQueryIntegrationTest {
         assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
         until(() -> {
 
-            final KeyQueryMetadata keyQueryMetadata = kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> 0);
+            final KeyQueryMetadata keyQueryMetadata = kafkaStreams1
+                    .queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> Optional.of(Collections.singleton(0)));
 
             final QueryableStoreType<ReadOnlyKeyValueStore<Integer, Integer>> queryableStoreType = keyValueStore();
             final ReadOnlyKeyValueStore<Integer, Integer> store1 = getStore(TABLE_NAME, kafkaStreams1, queryableStoreType);
@@ -197,7 +198,8 @@ public class StoreQueryIntegrationTest {
         // Assert that all messages in the first batch were processed in a timely manner
         assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
         until(() -> {
-            final KeyQueryMetadata keyQueryMetadata = kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> 0);
+            final KeyQueryMetadata keyQueryMetadata = kafkaStreams1
+                    .queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> Optional.of(Collections.singleton(0)));
 
             //key belongs to this partition
             final int keyPartition = keyQueryMetadata.partition();
@@ -313,7 +315,8 @@ public class StoreQueryIntegrationTest {
 
         // Assert that all messages in the first batch were processed in a timely manner
         assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
-        final KeyQueryMetadata keyQueryMetadata = kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> 0);
+        final KeyQueryMetadata keyQueryMetadata = kafkaStreams1
+                .queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> Optional.of(Collections.singleton(0)));
 
         //key belongs to this partition
         final int keyPartition = keyQueryMetadata.partition();
@@ -413,6 +416,7 @@ public class StoreQueryIntegrationTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldQuerySpecificStalePartitionStoresMultiStreamThreadsNamedTopology() throws Exception {
         final int batch1NumMessages = 100;
         final int key = 1;
@@ -556,12 +560,6 @@ public class StoreQueryIntegrationTest {
 
         class BroadcastingPartitioner implements StreamPartitioner<Integer, String> {
             @Override
-            @Deprecated
-            public Integer partition(final String topic, final Integer key, final String value, final int numPartitions) {
-                return null;
-            }
-
-            @Override
             public Optional<Set<Integer>> partitions(final String topic, final Integer key, final String value, final int numPartitions) {
                 return Optional.of(IntStream.range(0, numPartitions).boxed().collect(Collectors.toSet()));
             }
@@ -638,6 +636,7 @@ public class StoreQueryIntegrationTest {
         return streams;
     }
 
+    @SuppressWarnings("deprecation")
     private KafkaStreamsNamedTopologyWrapper createNamedTopologyKafkaStreams(final Properties config) {
         final KafkaStreamsNamedTopologyWrapper streams = new KafkaStreamsNamedTopologyWrapper(config);
         streamsToCleanup.add(streams);

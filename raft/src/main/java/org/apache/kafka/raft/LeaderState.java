@@ -30,8 +30,6 @@ import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.raft.internals.AddVoterHandlerState;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.RemoveVoterHandlerState;
-import org.apache.kafka.raft.internals.ReplicaKey;
-import org.apache.kafka.raft.internals.VoterSet;
 import org.apache.kafka.server.common.KRaftVersion;
 
 import org.slf4j.Logger;
@@ -372,7 +370,6 @@ public class LeaderState<T> implements EpochState {
                 return builder.build();
             }
         });
-        accumulator.forceDrain();
     }
 
     public long appendVotersRecord(VoterSet voters, long currentTimeMs) {
@@ -387,7 +384,7 @@ public class LeaderState<T> implements EpochState {
     }
 
     public boolean isReplicaCaughtUp(ReplicaKey replicaKey, long currentTimeMs) {
-        // In summary, let's consider a replica caughed up for add voter, if they
+        // In summary, let's consider a replica caught up for add voter, if they
         // have fetched within the last hour
         long anHourInMs = TimeUnit.HOURS.toMillis(1);
         return Optional.ofNullable(observerStates.get(replicaKey))
@@ -681,6 +678,9 @@ public class LeaderState<T> implements EpochState {
 
             // Make sure that the replica key in the replica state matches the voter's
             state.setReplicaKey(voterNode.voterKey());
+
+            // Make sure that the listeners are updated
+            state.updateListeners(voterNode.listeners());
             newVoterStates.put(state.replicaKey.id(), state);
         }
         voterStates = newVoterStates;
@@ -692,7 +692,7 @@ public class LeaderState<T> implements EpochState {
         }
     }
 
-    static class ReplicaState implements Comparable<ReplicaState> {
+    public static class ReplicaState implements Comparable<ReplicaState> {
         private ReplicaKey replicaKey;
         private Endpoints listeners;
         private Optional<LogOffsetMetadata> endOffset;
@@ -755,8 +755,12 @@ public class LeaderState<T> implements EpochState {
             this.replicaKey = replicaKey;
         }
 
+        void updateListeners(Endpoints listeners) {
+            this.listeners = listeners;
+        }
+
         void clearListeners() {
-            this.listeners = Endpoints.empty();
+            updateListeners(Endpoints.empty());
         }
 
         boolean matchesKey(ReplicaKey replicaKey) {

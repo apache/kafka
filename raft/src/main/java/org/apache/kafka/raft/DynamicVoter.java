@@ -20,8 +20,6 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.raft.internals.ReplicaKey;
-import org.apache.kafka.raft.internals.VoterSet;
 
 import java.net.InetSocketAddress;
 import java.util.Collections;

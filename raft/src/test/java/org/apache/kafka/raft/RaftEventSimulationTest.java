@@ -19,6 +19,7 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.metrics.Metrics;
@@ -31,7 +32,6 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.MockLog.LogBatch;
 import org.apache.kafka.raft.MockLog.LogEntry;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
@@ -259,21 +259,21 @@ public class RaftEventSimulationTest {
         // to make progress even if an election is needed in the larger set.
         router.filter(
             0,
-            new DropOutboundRequestsTo(cluster.endpointsFromIds(Utils.mkSet(2, 3, 4)))
+            new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(2, 3, 4)))
         );
         router.filter(
             1,
-            new DropOutboundRequestsTo(cluster.endpointsFromIds(Utils.mkSet(2, 3, 4)))
+            new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(2, 3, 4)))
         );
-        router.filter(2, new DropOutboundRequestsTo(cluster.endpointsFromIds(Utils.mkSet(0, 1))));
-        router.filter(3, new DropOutboundRequestsTo(cluster.endpointsFromIds(Utils.mkSet(0, 1))));
-        router.filter(4, new DropOutboundRequestsTo(cluster.endpointsFromIds(Utils.mkSet(0, 1))));
+        router.filter(2, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 1))));
+        router.filter(3, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 1))));
+        router.filter(4, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 1))));
 
         long partitionLogEndOffset = cluster.maxLogEndOffset();
         scheduler.runUntil(() -> cluster.anyReachedHighWatermark(2 * partitionLogEndOffset));
 
-        long minorityHighWatermark = cluster.maxHighWatermarkReached(Utils.mkSet(0, 1));
-        long majorityHighWatermark = cluster.maxHighWatermarkReached(Utils.mkSet(2, 3, 4));
+        long minorityHighWatermark = cluster.maxHighWatermarkReached(Set.of(0, 1));
+        long majorityHighWatermark = cluster.maxHighWatermarkReached(Set.of(2, 3, 4));
 
         assertTrue(
             majorityHighWatermark > minorityHighWatermark,
@@ -763,14 +763,14 @@ public class RaftEventSimulationTest {
                 .stream()
                 .collect(Collectors.toMap(Node::id, Cluster::nodeAddress));
 
-            QuorumConfig quorumConfig = new QuorumConfig(
-                REQUEST_TIMEOUT_MS,
-                RETRY_BACKOFF_MS,
-                ELECTION_TIMEOUT_MS,
-                ELECTION_JITTER_MS,
-                FETCH_TIMEOUT_MS,
-                LINGER_MS
-            );
+            Map<String, Integer> configMap = new HashMap<>();
+            configMap.put(QuorumConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_MS);
+            configMap.put(QuorumConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG, RETRY_BACKOFF_MS);
+            configMap.put(QuorumConfig.QUORUM_ELECTION_TIMEOUT_MS_CONFIG, ELECTION_TIMEOUT_MS);
+            configMap.put(QuorumConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG, ELECTION_JITTER_MS);
+            configMap.put(QuorumConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG, FETCH_TIMEOUT_MS);
+            configMap.put(QuorumConfig.QUORUM_LINGER_MS_CONFIG, LINGER_MS);
+            QuorumConfig quorumConfig = new QuorumConfig(new AbstractConfig(QuorumConfig.CONFIG_DEF, configMap));
             Metrics metrics = new Metrics(time);
 
             persistentState.log.reopen();
@@ -789,6 +789,7 @@ public class RaftEventSimulationTest {
                 time,
                 new MockExpirationService(time),
                 FETCH_MAX_WAIT_MS,
+                true,
                 clusterId,
                 Collections.emptyList(),
                 endpointsFromId(nodeId, channel.listenerName()),

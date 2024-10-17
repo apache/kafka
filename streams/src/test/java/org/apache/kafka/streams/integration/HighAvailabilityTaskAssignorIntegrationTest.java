@@ -67,12 +67,10 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
-import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
@@ -81,19 +79,11 @@ import static org.hamcrest.Matchers.is;
 @Tag("integration")
 public class HighAvailabilityTaskAssignorIntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3,
-        new Properties(),
-        asList(
-            new Properties() {{
-                    setProperty(ServerConfigs.BROKER_RACK_CONFIG, AssignmentTestUtils.RACK_0);
-                }},
-            new Properties() {{
-                    setProperty(ServerConfigs.BROKER_RACK_CONFIG, AssignmentTestUtils.RACK_1);
-                }},
-            new Properties() {{
-                    setProperty(ServerConfigs.BROKER_RACK_CONFIG, AssignmentTestUtils.RACK_2);
-                }}
-        )
-    );
+        new Properties(), mkMap(
+            mkEntry(0, mkMap(mkEntry(ServerConfigs.BROKER_RACK_CONFIG, AssignmentTestUtils.RACK_0))),
+            mkEntry(1, mkMap(mkEntry(ServerConfigs.BROKER_RACK_CONFIG, AssignmentTestUtils.RACK_1))),
+            mkEntry(2, mkMap(mkEntry(ServerConfigs.BROKER_RACK_CONFIG, AssignmentTestUtils.RACK_2)))
+    ));
 
     @BeforeAll
     public static void startCluster() throws IOException {
@@ -134,14 +124,14 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
         final String testId = safeUniqueTestName(testInfo).replaceAll("balance_subtopology", "balance");
         final String appId = "appId_" + System.currentTimeMillis() + "_" + testId;
         final String inputTopic = "input" + testId;
-        final Set<TopicPartition> inputTopicPartitions = mkSet(
+        final Set<TopicPartition> inputTopicPartitions = Set.of(
             new TopicPartition(inputTopic, 0),
             new TopicPartition(inputTopic, 1)
         );
 
         final String storeName = "store" + testId;
         final String storeChangelog = appId + "-store" + testId + "-changelog";
-        final Set<TopicPartition> changelogTopicPartitions = mkSet(
+        final Set<TopicPartition> changelogTopicPartitions = Set.of(
             new TopicPartition(storeChangelog, 0),
             new TopicPartition(storeChangelog, 1)
         );
@@ -258,7 +248,7 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
 
             restoreCompleteLatch.await();
             // We should finalize the restoration without having restored any records (because they're already in
-            // the store. Otherwise, we failed to properly re-use the state from the standby.
+            // the store). Otherwise, we failed to properly re-use the state from the standby.
             assertThat(instance1TotalRestored.get(), is(0L));
             // Belt-and-suspenders check that we never even attempt to restore any records.
             assertThat(instance1NumRestored.get(), is(-1L));

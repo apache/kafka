@@ -30,442 +30,443 @@ import org.apache.kafka.common.requests.AssignReplicasToDirsResponse;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.server.common.TopicIdPartition;
-import org.apache.kafka.server.metrics.KafkaMetricsGroup;
+import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+
+import com.yammer.metrics.core.Gauge;
+import com.yammer.metrics.core.MetricName;
+import com.yammer.metrics.core.MetricsRegistry;
 
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
+import java.util.Iterator;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
-public class AssignmentsManager {
+import static org.apache.kafka.common.requests.AssignReplicasToDirsRequest.MAX_ASSIGNMENTS_PER_REQUEST;
 
-    private static final Logger log = LoggerFactory.getLogger(AssignmentsManager.class);
+public final class AssignmentsManager {
+    static final ExponentialBackoff STANDARD_BACKOFF = new ExponentialBackoff(
+            TimeUnit.MILLISECONDS.toNanos(100),
+            2,
+            TimeUnit.SECONDS.toNanos(10),
+            0.02);
 
     /**
-     * Assignments are dispatched to the controller this long after
-     * being submitted to {@link AssignmentsManager}, if there
-     * is no request in flight already.
-     * The interval is reset when a new assignment is submitted.
-     * If {@link AssignReplicasToDirsRequest#MAX_ASSIGNMENTS_PER_REQUEST}
-     * is reached, we ignore this interval and dispatch immediately.
+     * The minimum amount of time we will wait before logging individual assignment failures.
      */
-    private static final long DISPATCH_INTERVAL_NS = TimeUnit.MILLISECONDS.toNanos(500);
+    static final long MIN_NOISY_FAILURE_INTERVAL_NS = TimeUnit.MINUTES.toNanos(2);
 
-    private static final long MAX_BACKOFF_INTERVAL_MS = TimeUnit.SECONDS.toNanos(10);
+    /**
+     * The metric reflecting the number of pending assignments.
+     */
+    static final MetricName QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC =
+            metricName("QueuedReplicaToDirAssignments");
 
-    // visible for testing.
-    static final String QUEUE_REPLICA_TO_DIR_ASSIGNMENTS_METRIC_NAME = "QueuedReplicaToDirAssignments";
+    /**
+     * The event at which we send assignments, if appropriate.
+     */
+    static final String MAYBE_SEND_ASSIGNMENTS_EVENT = "MaybeSendAssignmentsEvent";
 
+    /**
+     * The log4j object.
+     */
+    private final Logger log;
+
+    /**
+     * The exponential backoff strategy to use.
+     */
+    private final ExponentialBackoff backoff;
+
+    /**
+     * The clock object to use.
+     */
     private final Time time;
+
+    /**
+     * Used to send messages to the controller.
+     */
     private final NodeToControllerChannelManager channelManager;
-    private final int brokerId;
-    private final Supplier<Long> brokerEpochSupplier;
+
+    /**
+     * The node ID.
+     */
+    private final int nodeId;
+
+    /**
+     * Supplies the latest MetadataImage.
+     */
+    private final Supplier<MetadataImage> metadataImageSupplier;
+
+    /**
+     * Maps directory IDs to descriptions for logging purposes.
+     */
+    private final Function<Uuid, String> directoryIdToDescription;
+
+    /**
+     * Maps partitions to assignments that are ready to send.
+     */
+    private final ConcurrentHashMap<TopicIdPartition, Assignment> ready;
+
+    /**
+     * Maps partitions to assignments that are in-flight. Older entries come first.
+     */
+    private volatile Map<TopicIdPartition, Assignment> inflight;
+
+    /**
+     * The registry to register our metrics with.
+     */
+    private final MetricsRegistry metricsRegistry;
+
+    /**
+     * The number of global failures we had previously (cleared after any success).
+     */
+    private int previousGlobalFailures;
+
+    /**
+     * The event queue.
+     */
     private final KafkaEventQueue eventQueue;
-    private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup(this.getClass());
 
-    // These variables should only be mutated from the KafkaEventQueue thread,
-    // but `inflight` and `pending` are also read from a Yammer metrics gauge.
-    private volatile Map<TopicIdPartition, AssignmentEvent> inflight = null;
-    private volatile Map<TopicIdPartition, AssignmentEvent> pending = new HashMap<>();
-    private final ExponentialBackoff resendExponentialBackoff =
-            new ExponentialBackoff(100, 2, MAX_BACKOFF_INTERVAL_MS, 0.02);
-    private final Function<Uuid, Optional<String>> dirIdToPath;
-    private final Function<Uuid, Optional<String>> topicIdToName;
-    private int failedAttempts = 0;
+    static MetricName metricName(String name) {
+        return KafkaYammerMetrics.getMetricName("org.apache.kafka.server", "AssignmentsManager", name);
+    }
 
-    public AssignmentsManager(Time time,
-                              NodeToControllerChannelManager channelManager,
-                              int brokerId,
-                              Supplier<Long> brokerEpochSupplier,
-                              Function<Uuid, Optional<String>> dirIdToPath,
-                              Function<Uuid, Optional<String>> topicIdToName) {
+    public AssignmentsManager(
+        Time time,
+        NodeToControllerChannelManager channelManager,
+        int nodeId,
+        Supplier<MetadataImage> metadataImageSupplier,
+        Function<Uuid, String> directoryIdToDescription
+    ) {
+        this(STANDARD_BACKOFF,
+            time,
+            channelManager,
+            nodeId,
+            metadataImageSupplier,
+            directoryIdToDescription,
+            KafkaYammerMetrics.defaultRegistry());
+    }
+
+    AssignmentsManager(
+        ExponentialBackoff backoff,
+        Time time,
+        NodeToControllerChannelManager channelManager,
+        int nodeId,
+        Supplier<MetadataImage> metadataImageSupplier,
+        Function<Uuid, String> directoryIdToDescription,
+        MetricsRegistry metricsRegistry
+    ) {
+        this.log = new LogContext("[AssignmentsManager id=" + nodeId + "] ").
+            logger(AssignmentsManager.class);
+        this.backoff = backoff;
         this.time = time;
         this.channelManager = channelManager;
-        this.brokerId = brokerId;
-        this.brokerEpochSupplier = brokerEpochSupplier;
+        this.nodeId = nodeId;
+        this.directoryIdToDescription = directoryIdToDescription;
+        this.metadataImageSupplier = metadataImageSupplier;
+        this.ready = new ConcurrentHashMap<>();
+        this.inflight = Collections.emptyMap();
+        this.metricsRegistry = metricsRegistry;
+        this.metricsRegistry.newGauge(QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC, new Gauge<Integer>() {
+                @Override
+                public Integer value() {
+                    return numPending();
+                }
+            });
+        this.previousGlobalFailures = 0;
         this.eventQueue = new KafkaEventQueue(time,
-                new LogContext("[AssignmentsManager id=" + brokerId + "]"),
-                "broker-" + brokerId + "-directory-assignments-manager-",
-                new ShutdownEvent());
+            new LogContext("[AssignmentsManager id=" + nodeId + "]"),
+            "broker-" + nodeId + "-directory-assignments-manager-",
+            new ShutdownEvent());
         channelManager.start();
-        this.metricsGroup.newGauge(QUEUE_REPLICA_TO_DIR_ASSIGNMENTS_METRIC_NAME, () -> getMapSize(inflight) + getMapSize(pending));
-        if (dirIdToPath == null) dirIdToPath = id -> Optional.empty();
-        this.dirIdToPath = dirIdToPath;
-        if (topicIdToName == null) topicIdToName = id -> Optional.empty();
-        this.topicIdToName = topicIdToName;
+    }
+
+    public int numPending() {
+        return ready.size() + inflight.size();
     }
 
     public void close() throws InterruptedException {
-        try {
-            eventQueue.close();
-        } finally {
-            metricsGroup.removeMetric(QUEUE_REPLICA_TO_DIR_ASSIGNMENTS_METRIC_NAME);
-        }
+        eventQueue.close();
     }
 
-    public void onAssignment(TopicIdPartition topicPartition, Uuid dirId, String reason) {
-        onAssignment(topicPartition, dirId, reason, null);
+    public void onAssignment(
+        TopicIdPartition topicIdPartition,
+        Uuid directoryId,
+        String reason,
+        Runnable successCallback
+    ) {
+        long nowNs = time.nanoseconds();
+        Assignment assignment = new Assignment(
+                topicIdPartition, directoryId, nowNs, successCallback);
+        ready.put(topicIdPartition, assignment);
+        if (log.isTraceEnabled()) {
+            String topicDescription = Optional.ofNullable(metadataImageSupplier.get().topics().
+                getTopic(assignment.topicIdPartition().topicId())).
+                    map(TopicImage::name).orElse(assignment.topicIdPartition().topicId().toString());
+            log.trace("Registered assignment {}: {}, moving {}-{} into {}",
+                assignment,
+                reason,
+                topicDescription,
+                topicIdPartition.partitionId(),
+                directoryIdToDescription.apply(assignment.directoryId()));
+        }
+        rescheduleMaybeSendAssignmentsEvent(nowNs);
     }
 
-    public void onAssignment(TopicIdPartition topicPartition, Uuid dirId, String reason, Runnable callback) {
-        if (callback == null) {
-            callback = () -> { };
-        }
-        AssignmentEvent assignment = new AssignmentEvent(time.nanoseconds(), topicPartition, dirId, reason, callback);
-        if (log.isDebugEnabled()) {
-            log.debug("Queued assignment {}", assignment);
-        }
-        eventQueue.append(assignment);
-    }
-
-    // only for testing
-    void wakeup() {
-        eventQueue.wakeup();
+    void rescheduleMaybeSendAssignmentsEvent(long nowNs) {
+        eventQueue.scheduleDeferred(MAYBE_SEND_ASSIGNMENTS_EVENT,
+            new AssignmentsManagerDeadlineFunction(backoff,
+                nowNs, previousGlobalFailures, !inflight.isEmpty(), ready.size()),
+            new MaybeSendAssignmentsEvent());
     }
 
     /**
-     * Base class for all the events handled by {@link AssignmentsManager}.
+     * Handles shutdown.
      */
-    private abstract static class Event implements EventQueue.Event {
-        /**
-         * Override the default behavior in
-         * {@link EventQueue.Event#handleException}
-         * which swallows the exception.
-         */
-        @Override
-        public void handleException(Throwable e) {
-            log.error("Unexpected error handling {}", this, e);
-        }
-    }
-
-    /**
-     * Handles shutdown of the {@link AssignmentsManager}.
-     */
-    private class ShutdownEvent extends Event {
+    private class ShutdownEvent implements EventQueue.Event {
         @Override
         public void run() {
-            channelManager.shutdown();
+            log.info("shutting down.");
+            try {
+                channelManager.shutdown();
+            } catch (Exception e) {
+                log.error("Unexpected exception shutting down NodeToControllerChannelManager", e);
+            }
+            try {
+                metricsRegistry.removeMetric(QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC);
+            } catch (Exception e) {
+                log.error("Unexpected exception removing metrics.", e);
+            }
         }
     }
 
     /**
-     * Handles new generated assignments, to be propagated to the controller.
-     * Assignment events may be handled out of order, so for any two assignment
-     * events for the same topic partition, the one with the oldest timestamp is
-     * disregarded.
+     * An event that processes the assignments in the ready map.
      */
-    private class AssignmentEvent extends Event {
-        final long timestampNs;
-        final TopicIdPartition partition;
-        final Uuid dirId;
-        final String reason;
-        final List<Runnable> completionHandlers;
-        AssignmentEvent(long timestampNs, TopicIdPartition partition, Uuid dirId, String reason, Runnable onComplete) {
-            this.timestampNs = timestampNs;
-            this.partition = Objects.requireNonNull(partition);
-            this.dirId = Objects.requireNonNull(dirId);
-            this.reason = reason;
-            this.completionHandlers = new ArrayList<>();
-            if (onComplete != null) {
-                completionHandlers.add(onComplete);
-            }
-        }
-        void merge(AssignmentEvent other) {
-            if (!partition.equals(other.partition)) {
-                throw new IllegalArgumentException("Cannot merge events for different partitions");
-            }
-            completionHandlers.addAll(other.completionHandlers);
-        }
-        void onComplete() {
-            for (Runnable onComplete : completionHandlers) {
-                onComplete.run();
-            }
-        }
+    private class MaybeSendAssignmentsEvent implements EventQueue.Event {
         @Override
         public void run() {
-            log.trace("Received assignment {}", this);
-            AssignmentEvent existing = pending.getOrDefault(partition, null);
-            boolean existingIsInFlight = false;
-            if (existing == null && inflight != null) {
-                existing = inflight.getOrDefault(partition, null);
-                existingIsInFlight = true;
+            try {
+                maybeSendAssignments();
+            } catch (Exception e) {
+                log.error("Unexpected exception in MaybeSendAssignmentsEvent", e);
             }
-            if (existing != null) {
-                if (existing.dirId.equals(dirId)) {
-                    existing.merge(this);
-                    log.debug("Ignoring duplicate assignment {}", this);
-                    return;
-                }
-                if (existing.timestampNs > timestampNs) {
-                    existing.merge(this);
-                    log.debug("Dropping assignment {} because it's older than existing {}", this, existing);
-                    return;
-                } else if (!existingIsInFlight) {
-                    this.merge(existing);
-                    log.debug("Dropping existing assignment {} because it's older than {}", existing, this);
-                }
-            }
-            log.debug("Queueing new assignment {}", this);
-            pending.put(partition, this);
-
-            if (inflight == null || inflight.isEmpty()) {
-                scheduleDispatch();
-            }
-        }
-        @Override
-        public String toString() {
-            String partitionString = topicIdToName.apply(partition.topicId())
-                    .map(name -> name + ":" + partition.partitionId())
-                    .orElseGet(() -> "<topic name unknown id: " + partition.topicId() + " partition: " + partition.partitionId() + ">");
-            String dirString = dirIdToPath.apply(dirId)
-                    .orElseGet(() -> "<dir path unknown id:" + dirId + ">");
-            return "Assignment{" +
-                    "timestampNs=" + timestampNs +
-                    ", partition=" + partitionString +
-                    ", dir=" + dirString +
-                    ", reason='" + reason + '\'' +
-                    '}';
-        }
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            AssignmentEvent that = (AssignmentEvent) o;
-            return timestampNs == that.timestampNs
-                    && Objects.equals(partition, that.partition)
-                    && Objects.equals(dirId, that.dirId)
-                    && Objects.equals(reason, that.reason);
-        }
-        @Override
-        public int hashCode() {
-            return Objects.hash(timestampNs, partition, dirId, reason);
         }
     }
 
     /**
-     * Gathers pending assignments and pushes them to the controller in a {@link AssignReplicasToDirsRequest}.
+     * An event that handles the controller's response to our request.
      */
-    private class DispatchEvent extends Event {
-        static final String TAG = "dispatch";
-        @Override
-        public void run() {
-            if (inflight != null) {
-                throw new IllegalStateException("Bug. Should not be dispatching while there are assignments in flight");
-            }
-            if (pending.isEmpty()) {
-                log.trace("No pending assignments, no-op dispatch");
-                return;
-            }
-            Collection<AssignmentEvent> events = pending.values();
-            pending = new HashMap<>();
-            inflight = new HashMap<>();
-            for (AssignmentEvent event : events) {
-                if (inflight.size() < AssignReplicasToDirsRequest.MAX_ASSIGNMENTS_PER_REQUEST) {
-                    inflight.put(event.partition, event);
-                } else {
-                    pending.put(event.partition, event);
-                }
-            }
-            if (!pending.isEmpty()) {
-                log.warn("Too many assignments ({}) to fit in one call, sending only {} and queueing the rest",
-                        AssignReplicasToDirsRequest.MAX_ASSIGNMENTS_PER_REQUEST + pending.size(),
-                        AssignReplicasToDirsRequest.MAX_ASSIGNMENTS_PER_REQUEST);
-            }
-            Map<TopicIdPartition, Uuid> assignment = inflight.entrySet().stream()
-                    .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().dirId));
-            log.debug("Dispatching {} assignments:  {}", assignment.size(), assignment);
-            channelManager.sendRequest(new AssignReplicasToDirsRequest.Builder(
-                    buildRequestData(brokerId, brokerEpochSupplier.get(), assignment)),
-                    new AssignReplicasToDirsRequestCompletionHandler());
-        }
-    }
+    private class HandleResponseEvent implements EventQueue.Event {
+        private final Map<TopicIdPartition, Assignment> sent;
+        private final Optional<ClientResponse> response;
 
-    /**
-     * Handles the response to a dispatched {@link AssignReplicasToDirsRequest}.
-     */
-    private class AssignmentResponseEvent extends Event {
-        private final ClientResponse response;
-        public AssignmentResponseEvent(ClientResponse response) {
+        HandleResponseEvent(
+            Map<TopicIdPartition, Assignment> sent,
+            Optional<ClientResponse> response
+        ) {
+            this.sent = sent;
             this.response = response;
         }
+
         @Override
         public void run() {
-            if (inflight == null) {
-                throw new IllegalStateException("Bug. Cannot not be handling a client response if there is are no assignments in flight");
-            }
-            if (responseIsError(response)) {
-                requeueAllAfterFailure();
-            } else {
-                failedAttempts = 0;
-                AssignReplicasToDirsResponseData data = ((AssignReplicasToDirsResponse) response.responseBody()).data();
-
-                Set<AssignmentEvent> failed = filterFailures(data, inflight);
-                Set<AssignmentEvent> completed = Utils.diff(HashSet::new, new HashSet<>(inflight.values()), failed);
-                for (AssignmentEvent assignmentEvent : completed) {
-                    if (log.isDebugEnabled()) {
-                        log.debug("Successfully propagated assignment {}", assignmentEvent);
-                    }
-                    assignmentEvent.onComplete();
-                }
-
-                if (!failed.isEmpty()) {
-                    log.warn("Re-queueing assignments: {}", failed);
-                    for (AssignmentEvent event : failed) {
-                        pending.put(event.partition, event);
-                    }
-                }
-                inflight = null;
-                if (!pending.isEmpty()) {
-                    scheduleDispatch();
+            try {
+                handleResponse(sent, response);
+            } catch (Exception e) {
+                log.error("Unexpected exception in HandleResponseEvent", e);
+            } finally {
+                if (!ready.isEmpty()) {
+                    rescheduleMaybeSendAssignmentsEvent(time.nanoseconds());
                 }
             }
         }
     }
 
     /**
-     * Callback for a {@link AssignReplicasToDirsRequest}.
+     * A callback object that handles the controller's response to our request.
      */
-    private class AssignReplicasToDirsRequestCompletionHandler implements ControllerRequestCompletionHandler {
+    private class CompletionHandler implements ControllerRequestCompletionHandler {
+        private final Map<TopicIdPartition, Assignment> sent;
+
+        CompletionHandler(Map<TopicIdPartition, Assignment> sent) {
+            this.sent = sent;
+        }
+
         @Override
         public void onTimeout() {
-            log.warn("Request to controller timed out");
-            appendResponseEvent(null);
+            eventQueue.append(new HandleResponseEvent(sent, Optional.empty()));
         }
+
         @Override
         public void onComplete(ClientResponse response) {
-            log.debug("Received controller response: {}", response);
-            appendResponseEvent(response);
-        }
-        void appendResponseEvent(ClientResponse response) {
-            eventQueue.prepend(new AssignmentResponseEvent(response));
+            eventQueue.append(new HandleResponseEvent(sent, Optional.of(response)));
         }
     }
 
-    private void scheduleDispatch() {
-        if (pending.size() < AssignReplicasToDirsRequest.MAX_ASSIGNMENTS_PER_REQUEST) {
-            scheduleDispatch(DISPATCH_INTERVAL_NS);
-        } else {
-            log.debug("Too many pending assignments, dispatching immediately");
-            eventQueue.enqueue(EventQueue.EventInsertionType.APPEND, DispatchEvent.TAG + "-immediate",
-                    new EventQueue.NoDeadlineFunction(), new DispatchEvent());
+    void maybeSendAssignments() {
+        int inflightSize = inflight.size();
+        if (log.isTraceEnabled()) {
+            log.trace("maybeSendAssignments: inflightSize = {}.", inflightSize);
         }
-    }
-
-    private void scheduleDispatch(long delayNs) {
-        log.debug("Scheduling dispatch in {}ns", delayNs);
-        eventQueue.enqueue(EventQueue.EventInsertionType.DEFERRED, DispatchEvent.TAG,
-                new EventQueue.LatestDeadlineFunction(time.nanoseconds() + delayNs), new DispatchEvent());
-    }
-
-    private void requeueAllAfterFailure() {
-        if (inflight != null) {
-            log.debug("Re-queueing all in-flight assignments after failure");
-            for (AssignmentEvent event : inflight.values()) {
-                pending.put(event.partition, event);
+        if (inflightSize > 0) {
+            log.trace("maybeSendAssignments: cannot send new assignments because there are " +
+                "{} still in flight.", inflightSize);
+            return;
+        }
+        MetadataImage image = metadataImageSupplier.get();
+        Map<TopicIdPartition, Assignment> newInFlight = new HashMap<>();
+        int numInvalid = 0;
+        for (Iterator<Assignment> iterator = ready.values().iterator();
+             iterator.hasNext() && newInFlight.size() < MAX_ASSIGNMENTS_PER_REQUEST;
+             ) {
+            Assignment assignment = iterator.next();
+            iterator.remove();
+            if (assignment.valid(nodeId, image)) {
+                newInFlight.put(assignment.topicIdPartition(), assignment);
+            } else {
+                numInvalid++;
             }
-            inflight = null;
-            ++failedAttempts;
-            long backoffNs = TimeUnit.MILLISECONDS.toNanos(resendExponentialBackoff.backoff(failedAttempts));
-            scheduleDispatch(DISPATCH_INTERVAL_NS + backoffNs);
+        }
+        log.info("maybeSendAssignments: sending {} assignments; invalidated {} assignments " +
+            "prior to sending.", newInFlight.size(), numInvalid);
+        if (!newInFlight.isEmpty()) {
+            sendAssignments(image.cluster().brokerEpoch(nodeId), newInFlight);
         }
     }
 
-    private static boolean responseIsError(ClientResponse response) {
-        if (response == null) {
-            log.error("Response is null");
-            return true;
-        }
-        if (response.authenticationException() != null) {
-            log.error("Failed to propagate directory assignments because authentication failed", response.authenticationException());
-            return true;
-        }
-        if (response.versionMismatch() != null) {
-            log.error("Failed to propagate directory assignments because the request version is unsupported", response.versionMismatch());
-            return true;
-        }
-        if (response.wasDisconnected()) {
-            log.error("Failed to propagate directory assignments because the connection to the controller was disconnected");
-            return true;
-        }
-        if (response.wasTimedOut()) {
-            log.error("Failed to propagate directory assignments because the request timed out");
-            return true;
-        }
-        if (response.responseBody() == null) {
-            log.error("Failed to propagate directory assignments because the Controller returned an empty response");
-            return true;
-        }
-        if (!(response.responseBody() instanceof AssignReplicasToDirsResponse)) {
-            log.error("Failed to propagate directory assignments because the Controller returned an invalid response type");
-            return true;
-        }
-        AssignReplicasToDirsResponseData data = ((AssignReplicasToDirsResponse) response.responseBody()).data();
-        Errors error = Errors.forCode(data.errorCode());
-        if (error != Errors.NONE) {
-            log.error("Failed to propagate directory assignments because the Controller returned error {}", error.name());
-            return true;
-        }
-        return false;
+    void sendAssignments(long brokerEpoch, Map<TopicIdPartition, Assignment> newInflight) {
+        CompletionHandler completionHandler = new CompletionHandler(newInflight);
+        channelManager.sendRequest(new AssignReplicasToDirsRequest.Builder(
+            buildRequestData(nodeId, brokerEpoch, newInflight)),
+            completionHandler);
+        inflight = newInflight;
     }
 
-    private static Set<AssignmentEvent> filterFailures(
-            AssignReplicasToDirsResponseData data,
-            Map<TopicIdPartition, AssignmentEvent> sent) {
-        Set<AssignmentEvent> failures = new HashSet<>();
-        Set<TopicIdPartition> acknowledged = new HashSet<>();
-        for (AssignReplicasToDirsResponseData.DirectoryData directory : data.directories()) {
-            for (AssignReplicasToDirsResponseData.TopicData topic : directory.topics()) {
-                for (AssignReplicasToDirsResponseData.PartitionData partition : topic.partitions()) {
-                    TopicIdPartition topicPartition = new TopicIdPartition(topic.topicId(), partition.partitionIndex());
-                    AssignmentEvent event = sent.get(topicPartition);
-                    if (event == null) {
-                        log.error("AssignReplicasToDirsResponse contains unexpected partition {} into directory {}", partition, directory.id());
-                    } else {
-                        acknowledged.add(topicPartition);
-                        Errors error = Errors.forCode(partition.errorCode());
-                        if (error == Errors.NOT_LEADER_OR_FOLLOWER) {
-                            log.info("Dropping late directory assignment for partition {} into directory {} because this broker is no longer a replica", partition, event.dirId);
-                        } else if (error != Errors.NONE) {
-                            log.error("Controller returned error {} for assignment of partition {} into directory {}",
-                                    error.name(), partition, event.dirId);
-                            failures.add(event);
-                        }
-                    }
+    void handleResponse(
+        Map<TopicIdPartition, Assignment> sent,
+        Optional<ClientResponse> assignmentResponse
+    ) {
+        inflight = Collections.emptyMap();
+        Optional<String> globalResponseError = globalResponseError(assignmentResponse);
+        if (globalResponseError.isPresent()) {
+            previousGlobalFailures++;
+            log.error("handleResponse: {} assignments failed; global error: {}. Retrying.",
+                sent.size(), globalResponseError.get());
+            sent.entrySet().forEach(e -> ready.putIfAbsent(e.getKey(), e.getValue()));
+            return;
+        }
+        previousGlobalFailures = 0;
+        AssignReplicasToDirsResponseData responseData =
+            ((AssignReplicasToDirsResponse) assignmentResponse.get().responseBody()).data();
+        long nowNs = time.nanoseconds();
+        for (AssignReplicasToDirsResponseData.DirectoryData directoryData : responseData.directories()) {
+            for (AssignReplicasToDirsResponseData.TopicData topicData : directoryData.topics()) {
+                for (AssignReplicasToDirsResponseData.PartitionData partitionData : topicData.partitions()) {
+                    TopicIdPartition topicIdPartition =
+                        new TopicIdPartition(topicData.topicId(), partitionData.partitionIndex());
+                    handleAssignmentResponse(topicIdPartition, sent,
+                            Errors.forCode(partitionData.errorCode()), nowNs);
+                    sent.remove(topicIdPartition);
                 }
             }
         }
-        for (AssignmentEvent event : sent.values()) {
-            if (!acknowledged.contains(event.partition)) {
-                log.error("AssignReplicasToDirsResponse is missing assignment of partition {} into directory {}", event.partition, event.dirId);
-                failures.add(event);
-            }
+        for (Assignment assignment : sent.values()) {
+            ready.putIfAbsent(assignment.topicIdPartition(), assignment);
+            log.error("handleResponse: no result in response for partition {}.",
+                assignment.topicIdPartition());
         }
-        return failures;
     }
 
-    // visible for testing
-    static AssignReplicasToDirsRequestData buildRequestData(int brokerId, long brokerEpoch, Map<TopicIdPartition, Uuid> assignment) {
+    void handleAssignmentResponse(
+        TopicIdPartition topicIdPartition,
+        Map<TopicIdPartition, Assignment> sent,
+        Errors error,
+        long nowNs
+    ) {
+        Assignment assignment = sent.get(topicIdPartition);
+        if (assignment == null) {
+            log.error("handleResponse: response contained topicIdPartition {}, but this was not " +
+                "in the request.", topicIdPartition);
+        } else if (error.equals(Errors.NONE)) {
+            try {
+                assignment.successCallback().run();
+            } catch (Exception e) {
+                log.error("handleResponse: unexpected callback exception", e);
+            }
+        } else {
+            ready.putIfAbsent(topicIdPartition, assignment);
+            if (log.isDebugEnabled() || nowNs > assignment.submissionTimeNs() + MIN_NOISY_FAILURE_INTERVAL_NS) {
+                log.error("handleResponse: error assigning {}: {}.", assignment.topicIdPartition(), error);
+            }
+        }
+    }
+
+    int previousGlobalFailures() throws ExecutionException, InterruptedException {
+        CompletableFuture<Integer> future = new CompletableFuture<>();
+        eventQueue.append(() -> future.complete(previousGlobalFailures));
+        return future.get();
+    }
+
+    int numInFlight() {
+        return inflight.size();
+    }
+
+    static Optional<String> globalResponseError(Optional<ClientResponse> response) {
+        if (!response.isPresent()) {
+            return Optional.of("Timeout");
+        }
+        if (response.get().authenticationException() != null) {
+            return Optional.of("AuthenticationException");
+        }
+        if (response.get().wasTimedOut()) {
+            return Optional.of("Disonnected[Timeout]");
+        }
+        if (response.get().wasDisconnected()) {
+            return Optional.of("Disconnected");
+        }
+        if (response.get().versionMismatch() != null) {
+            return Optional.of("UnsupportedVersionException");
+        }
+        if (response.get().responseBody() == null) {
+            return Optional.of("EmptyResponse");
+        }
+        if (!(response.get().responseBody() instanceof AssignReplicasToDirsResponse)) {
+            return Optional.of("ClassCastException");
+        }
+        AssignReplicasToDirsResponseData data = ((AssignReplicasToDirsResponse)
+            response.get().responseBody()).data();
+        Errors error = Errors.forCode(data.errorCode());
+        if (error != Errors.NONE) {
+            return Optional.of("Response-level error: " + error.name());
+        }
+        return Optional.empty();
+    }
+
+    static AssignReplicasToDirsRequestData buildRequestData(
+        int nodeId,
+        long brokerEpoch,
+        Map<TopicIdPartition, Assignment> assignments
+    ) {
         Map<Uuid, DirectoryData> directoryMap = new HashMap<>();
         Map<Uuid, Map<Uuid, TopicData>> topicMap = new HashMap<>();
-        for (Map.Entry<TopicIdPartition, Uuid> entry : assignment.entrySet()) {
+        for (Map.Entry<TopicIdPartition, Assignment> entry : assignments.entrySet()) {
             TopicIdPartition topicPartition = entry.getKey();
-            Uuid directoryId = entry.getValue();
+            Uuid directoryId = entry.getValue().directoryId();
             DirectoryData directory = directoryMap.computeIfAbsent(directoryId, d -> new DirectoryData().setId(directoryId));
             TopicData topic = topicMap.computeIfAbsent(directoryId, d -> new HashMap<>())
                     .computeIfAbsent(topicPartition.topicId(), topicId -> {
@@ -477,12 +478,8 @@ public class AssignmentsManager {
             topic.partitions().add(partition);
         }
         return new AssignReplicasToDirsRequestData()
-                .setBrokerId(brokerId)
+                .setBrokerId(nodeId)
                 .setBrokerEpoch(brokerEpoch)
                 .setDirectories(new ArrayList<>(directoryMap.values()));
-    }
-
-    private static int getMapSize(Map<TopicIdPartition, AssignmentEvent> map) {
-        return map == null ? 0 : map.size();
     }
 }

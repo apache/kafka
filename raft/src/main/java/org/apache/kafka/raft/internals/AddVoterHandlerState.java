@@ -20,6 +20,7 @@ package org.apache.kafka.raft.internals;
 import org.apache.kafka.common.message.AddRaftVoterResponseData;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.raft.Endpoints;
+import org.apache.kafka.raft.ReplicaKey;
 
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;

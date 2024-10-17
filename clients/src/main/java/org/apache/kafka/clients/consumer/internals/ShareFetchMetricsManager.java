@@ -21,6 +21,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 
 public class ShareFetchMetricsManager {
+    private final Metrics metrics;
     private final Sensor throttleTime;
     private final Sensor bytesFetched;
     private final Sensor recordsFetched;
@@ -29,6 +30,8 @@ public class ShareFetchMetricsManager {
     private final Sensor failedAcknowledgements;
 
     public ShareFetchMetricsManager(Metrics metrics, ShareFetchMetricsRegistry metricsRegistry) {
+        this.metrics = metrics;
+
         this.bytesFetched = new SensorBuilder(metrics, "bytes-fetched")
                 .withAvg(metricsRegistry.fetchSizeAvg)
                 .withMax(metricsRegistry.fetchSizeMax)
@@ -64,8 +67,14 @@ public class ShareFetchMetricsManager {
         return throttleTime;
     }
 
-    void recordLatency(long requestLatencyMs) {
+    void recordLatency(String node, long requestLatencyMs) {
         fetchLatency.record(requestLatencyMs);
+        if (!node.isEmpty()) {
+            String nodeTimeName = "node-" + node + ".latency";
+            Sensor nodeRequestTime = metrics.getSensor(nodeTimeName);
+            if (nodeRequestTime != null)
+                nodeRequestTime.record(requestLatencyMs);
+        }
     }
 
     void recordBytesFetched(int bytes) {

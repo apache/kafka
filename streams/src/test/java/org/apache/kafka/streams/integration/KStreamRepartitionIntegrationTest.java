@@ -138,7 +138,7 @@ public class KStreamRepartitionIntegrationTest {
     public void whenShuttingDown() throws IOException {
         kafkaStreamsInstances.stream()
                              .filter(Objects::nonNull)
-                             .forEach(KafkaStreams::close);
+                             .forEach(ks -> ks.close(Duration.ofSeconds(60)));
 
         Utils.delete(testFolder);
     }
@@ -312,12 +312,6 @@ public class KStreamRepartitionIntegrationTest {
 
         class BroadcastingPartitioner implements StreamPartitioner<Integer, String> {
             @Override
-            @Deprecated
-            public Integer partition(final String topic, final Integer key, final String value, final int numPartitions) {
-                return null;
-            }
-
-            @Override
             public Optional<Set<Integer>> partitions(final String topic, final Integer key, final String value, final int numPartitions) {
                 partitionerInvocation.incrementAndGet();
                 return Optional.of(IntStream.range(0, numPartitions).boxed().collect(Collectors.toSet()));
@@ -382,7 +376,7 @@ public class KStreamRepartitionIntegrationTest {
             .<Integer, String>as(repartitionName)
             .withStreamPartitioner((topic, key, value, numPartitions) -> {
                 partitionerInvocation.incrementAndGet();
-                return partition;
+                return Optional.of(Collections.singleton(partition));
             });
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))

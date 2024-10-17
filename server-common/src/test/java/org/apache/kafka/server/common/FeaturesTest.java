@@ -123,7 +123,7 @@ public class FeaturesTest {
     @EnumSource(MetadataVersion.class)
     public void testDefaultTestVersion(MetadataVersion metadataVersion) {
         short expectedVersion;
-        if (!metadataVersion.isLessThan(MetadataVersion.IBP_3_9_IV0)) {
+        if (!metadataVersion.isLessThan(MetadataVersion.latestTesting())) {
             expectedVersion = 2;
         } else if (!metadataVersion.isLessThan(MetadataVersion.IBP_3_7_IV0)) {
             expectedVersion = 1;
@@ -135,8 +135,12 @@ public class FeaturesTest {
 
     @Test
     public void testUnstableTestVersion() {
-        assertThrows(IllegalArgumentException.class, () ->
-            Features.TEST_VERSION.fromFeatureLevel(Features.TEST_VERSION.latestTesting(), false));
+        // If the latest MetadataVersion is stable, we don't throw an error. In that case, we don't worry about unstable feature
+        // versions since all feature versions are stable.
+        if (MetadataVersion.latestProduction().isLessThan(MetadataVersion.latestTesting())) {
+            assertThrows(IllegalArgumentException.class, () ->
+                Features.TEST_VERSION.fromFeatureLevel(Features.TEST_VERSION.latestTesting(), false));
+        }
         Features.TEST_VERSION.fromFeatureLevel(Features.TEST_VERSION.latestTesting(), true);
     }
 }

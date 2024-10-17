@@ -21,8 +21,8 @@ import java.util.Properties
 import joptsimple.OptionParser
 import kafka.server.{KafkaConfig, KafkaRaftServer, KafkaServer, Server}
 import kafka.utils.Implicits._
-import kafka.utils.{Exit, Logging}
-import org.apache.kafka.common.utils.{Java, LoggingSignalHandler, OperatingSystem, Time, Utils}
+import kafka.utils.Logging
+import org.apache.kafka.common.utils.{Exit, Java, LoggingSignalHandler, OperatingSystem, Time, Utils}
 import org.apache.kafka.server.util.CommandLineUtils
 
 object Kafka extends Logging {
@@ -99,7 +99,7 @@ object Kafka extends Logging {
       }
 
       // attach shutdown handler to catch terminating signals as well as normal termination
-      Exit.addShutdownHook("kafka-shutdown-hook", {
+      Exit.addShutdownHook("kafka-shutdown-hook", () => {
         try server.shutdown()
         catch {
           case _: Throwable =>

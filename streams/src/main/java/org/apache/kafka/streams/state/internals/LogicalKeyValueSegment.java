@@ -19,8 +19,8 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.internals.RocksDBVersionedStore.VersionedStoreSegment;
 
@@ -89,7 +89,7 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
                 + "an entire store is closed, via the close() method rather than destroy().");
         }
 
-        final Bytes keyPrefix = prefixKeyFormatter.getPrefix();
+        final Bytes keyPrefix = prefixKeyFormatter.prefix();
 
         // this deleteRange() call deletes all entries with the given prefix, because the
         // deleteRange() implementation calls Bytes.increment() in order to make keyTo inclusive
@@ -136,9 +136,8 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
         return name;
     }
 
-    @Deprecated
     @Override
-    public void init(final ProcessorContext context, final StateStore root) {
+    public void init(final StateStoreContext context, final StateStore root) {
         throw new UnsupportedOperationException("cannot initialize a logical segment");
     }
 
@@ -193,8 +192,8 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
         }
     }
 
-    public Snapshot getSnapshot() {
-        return physicalStore.getSnapshot();
+    public Snapshot snapshot() {
+        return physicalStore.snapshot();
     }
 
     public void releaseSnapshot(final Snapshot snapshot) {
@@ -205,14 +204,14 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
     public synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
         // from bound is inclusive. if the provided bound is null, replace with prefix
         final Bytes fromBound = from == null
-            ? prefixKeyFormatter.getPrefix()
+            ? prefixKeyFormatter.prefix()
             : prefixKeyFormatter.addPrefix(from);
         // to bound is inclusive. if the provided bound is null, replace with the next prefix.
         // this requires potentially filtering out the element corresponding to the next prefix
         // with empty bytes from the returned iterator. this filtering is accomplished by
         // passing the prefix filter into StrippedPrefixKeyValueIteratorAdapter().
         final Bytes toBound = to == null
-            ? incrementWithoutOverflow(prefixKeyFormatter.getPrefix())
+            ? incrementWithoutOverflow(prefixKeyFormatter.prefix())
             : prefixKeyFormatter.addPrefix(to);
         final KeyValueIterator<Bytes, byte[]> iteratorWithKeyPrefixes = physicalStore.range(
             fromBound,
@@ -227,7 +226,7 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> all() {
         final KeyValueIterator<Bytes, byte[]> iteratorWithKeyPrefixes = physicalStore.prefixScan(
-            prefixKeyFormatter.getPrefix(),
+            prefixKeyFormatter.prefix(),
             new BytesSerializer(),
             openIterators);
         return new StrippedPrefixKeyValueIteratorAdapter(
@@ -289,7 +288,7 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
             return rawKey;
         }
 
-        Bytes getPrefix() {
+        Bytes prefix() {
             return Bytes.wrap(prefix);
         }
 

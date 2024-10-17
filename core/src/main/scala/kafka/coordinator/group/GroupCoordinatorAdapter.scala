@@ -17,8 +17,7 @@
 package kafka.coordinator.group
 
 import kafka.common.OffsetAndMetadata
-import kafka.server.{KafkaConfig, ReplicaManager, RequestLocal}
-import kafka.utils.Implicits.MapExtensionMethods
+import kafka.server.{KafkaConfig, ReplicaManager}
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.message.{ConsumerGroupDescribeResponseData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchRequestData, OffsetFetchResponseData, ShareGroupDescribeResponseData, ShareGroupHeartbeatRequestData, ShareGroupHeartbeatResponseData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
 import org.apache.kafka.common.metrics.Metrics
@@ -26,7 +25,9 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{OffsetCommitRequest, RequestContext, TransactionResult}
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
+import org.apache.kafka.coordinator.group
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
+import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.util.FutureUtils
 
 import java.time.Duration
@@ -64,6 +65,8 @@ private[group] class GroupCoordinatorAdapter(
   private val coordinator: GroupCoordinator,
   private val time: Time
 ) extends org.apache.kafka.coordinator.group.GroupCoordinator {
+
+  override def isNewGroupCoordinator: Boolean = false
 
   override def consumerGroupHeartbeat(
     context: RequestContext,
@@ -129,7 +132,7 @@ private[group] class GroupCoordinatorAdapter(
       protocols,
       callback,
       Option(request.reason),
-      RequestLocal(bufferSupplier)
+      new RequestLocal(bufferSupplier)
     )
 
     future
@@ -165,7 +168,7 @@ private[group] class GroupCoordinatorAdapter(
       Option(request.groupInstanceId),
       assignmentMap.result(),
       callback,
-      RequestLocal(bufferSupplier)
+      new RequestLocal(bufferSupplier)
     )
 
     future
@@ -276,8 +279,8 @@ private[group] class GroupCoordinatorAdapter(
     val results = new DeleteGroupsResponseData.DeletableGroupResultCollection()
     coordinator.handleDeleteGroups(
       groupIds.asScala.toSet,
-      RequestLocal(bufferSupplier)
-    ).forKeyValue { (groupId, error) =>
+      new RequestLocal(bufferSupplier)
+    ).foreachEntry { (groupId, error) =>
       results.add(new DeleteGroupsResponseData.DeletableGroupResult()
         .setGroupId(groupId)
         .setErrorCode(error.code))
@@ -334,7 +337,7 @@ private[group] class GroupCoordinatorAdapter(
       val topicsList = new util.ArrayList[OffsetFetchResponseData.OffsetFetchResponseTopics]()
       val topicsMap = new mutable.HashMap[String, OffsetFetchResponseData.OffsetFetchResponseTopics]()
 
-      results.forKeyValue { (tp, offset) =>
+      results.foreachEntry { (tp, offset) =>
         val topic = topicsMap.get(tp.topic) match {
           case Some(topic) =>
             topic
@@ -374,7 +377,7 @@ private[group] class GroupCoordinatorAdapter(
       val response = new OffsetCommitResponseData()
       val byTopics = new mutable.HashMap[String, OffsetCommitResponseData.OffsetCommitResponseTopic]()
 
-      commitStatus.forKeyValue { (tp, error) =>
+      commitStatus.foreachEntry { (tp, error) =>
         val topic = byTopics.get(tp.topic) match {
           case Some(existingTopic) =>
             existingTopic
@@ -423,7 +426,7 @@ private[group] class GroupCoordinatorAdapter(
       request.generationIdOrMemberEpoch,
       partitions.toMap,
       callback,
-      RequestLocal(bufferSupplier)
+      new RequestLocal(bufferSupplier)
     )
 
     future
@@ -441,7 +444,7 @@ private[group] class GroupCoordinatorAdapter(
       val response = new TxnOffsetCommitResponseData()
       val byTopics = new mutable.HashMap[String, TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic]()
 
-      results.forKeyValue { (tp, error) =>
+      results.foreachEntry { (tp, error) =>
         val topic = byTopics.get(tp.topic) match {
           case Some(existingTopic) =>
             existingTopic
@@ -485,7 +488,7 @@ private[group] class GroupCoordinatorAdapter(
       request.generationId,
       partitions.toMap,
       callback,
-      RequestLocal(bufferSupplier),
+      new RequestLocal(bufferSupplier),
       context.apiVersion()
     )
 
@@ -535,14 +538,14 @@ private[group] class GroupCoordinatorAdapter(
     val (groupError, topicPartitionResults) = coordinator.handleDeleteOffsets(
       request.groupId,
       partitions,
-      RequestLocal(bufferSupplier)
+      new RequestLocal(bufferSupplier)
     )
 
     if (groupError != Errors.NONE) {
       future.completeExceptionally(groupError.exception)
     } else {
       val response = new OffsetDeleteResponseData()
-      topicPartitionResults.forKeyValue { (topicPartition, error) =>
+      topicPartitionResults.foreachEntry { (topicPartition, error) =>
         var topic = response.topics.find(topicPartition.topic)
         if (topic == null) {
           topic = new OffsetDeleteResponseData.OffsetDeleteResponseTopic().setName(topicPartition.topic)
@@ -592,7 +595,7 @@ private[group] class GroupCoordinatorAdapter(
     topicPartitions: util.List[TopicPartition],
     bufferSupplier: BufferSupplier
   ): Unit = {
-    coordinator.handleDeletedPartitions(topicPartitions.asScala, RequestLocal(bufferSupplier))
+    coordinator.handleDeletedPartitions(topicPartitions.asScala, new RequestLocal(bufferSupplier))
   }
 
   override def onElection(
@@ -618,6 +621,17 @@ private[group] class GroupCoordinatorAdapter(
 
   override def groupMetadataTopicConfigs(): Properties = {
     coordinator.offsetsTopicConfigs
+  }
+
+  override def groupConfig(groupId: String): Optional[group.GroupConfig] = {
+    throw Errors.UNSUPPORTED_VERSION.exception("The old group coordinator does not support get group config.")
+  }
+
+  override def updateGroupConfig(
+    groupId: String,
+    newGroupConfig: Properties
+  ): Unit = {
+    throw Errors.UNSUPPORTED_VERSION.exception("The old group coordinator does not support update group config.")
   }
 
   override def startup(groupMetadataTopicPartitionCount: IntSupplier): Unit = {

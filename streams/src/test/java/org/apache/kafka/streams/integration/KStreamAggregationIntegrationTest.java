@@ -155,7 +155,7 @@ public class KStreamAggregationIntegrationTest {
     @AfterEach
     public void whenShuttingDown() throws Exception {
         if (kafkaStreams != null) {
-            kafkaStreams.close();
+            kafkaStreams.close(Duration.ofSeconds(60));
         }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
@@ -210,7 +210,6 @@ public class KStreamAggregationIntegrationTest {
         return keyComparison;
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldReduceWindowed(final TestInfo testInfo) throws Exception {
         final long firstBatchTimestamp = mockTime.milliseconds();
@@ -222,7 +221,7 @@ public class KStreamAggregationIntegrationTest {
 
         final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class, 500L);
         groupedStream
-            .windowedBy(TimeWindows.of(ofMillis(500L)))
+            .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(500L), ofMinutes(1L)))
             .reduce(reducer)
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, Serdes.String()));
@@ -328,7 +327,6 @@ public class KStreamAggregationIntegrationTest {
         );
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldAggregateWindowed(final TestInfo testInfo) throws Exception {
         final long firstTimestamp = mockTime.milliseconds();
@@ -339,7 +337,7 @@ public class KStreamAggregationIntegrationTest {
         produceMessages(secondTimestamp);
 
         final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class, 500L);
-        groupedStream.windowedBy(TimeWindows.of(ofMillis(500L)))
+        groupedStream.windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(500L), ofMinutes(1L)))
             .aggregate(
                 initializer,
                 aggregator,
@@ -459,7 +457,6 @@ public class KStreamAggregationIntegrationTest {
         shouldCountHelper(testInfo);
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldGroupByKey(final TestInfo testInfo) throws Exception {
         final long timestamp = mockTime.milliseconds();
@@ -467,7 +464,7 @@ public class KStreamAggregationIntegrationTest {
         produceMessages(timestamp);
 
         stream.groupByKey(Grouped.with(Serdes.Integer(), Serdes.String()))
-            .windowedBy(TimeWindows.of(ofMillis(500L)))
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(500L)))
             .count()
             .toStream((windowedKey, value) -> windowedKey.key() + "@" + windowedKey.window().start()).to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
 
@@ -499,7 +496,6 @@ public class KStreamAggregationIntegrationTest {
         );
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldReduceSlidingWindows(final TestInfo testInfo) throws Exception {
         final long firstBatchTimestamp = mockTime.milliseconds();
@@ -512,7 +508,7 @@ public class KStreamAggregationIntegrationTest {
 
         final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class, timeDifference);
         groupedStream
-            .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(timeDifference), ofMillis(2000L)))
+            .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(timeDifference), ofMillis(2000L)))
             .reduce(reducer)
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, Serdes.String()));
@@ -607,7 +603,6 @@ public class KStreamAggregationIntegrationTest {
         }
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldAggregateSlidingWindows(final TestInfo testInfo) throws Exception {
         final long firstBatchTimestamp = mockTime.milliseconds();
@@ -619,8 +614,7 @@ public class KStreamAggregationIntegrationTest {
         produceMessages(thirdBatchTimestamp);
 
         final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class, timeDifference);
-        //noinspection deprecation
-        groupedStream.windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(500L), ofMinutes(5)))
+        groupedStream.windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(500L), ofMinutes(5)))
             .aggregate(
                 initializer,
                 aggregator,
@@ -720,7 +714,6 @@ public class KStreamAggregationIntegrationTest {
         }
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldCountSessionWindows() throws Exception {
         final long sessionGap = 5 * 60 * 1000L;
@@ -800,10 +793,9 @@ public class KStreamAggregationIntegrationTest {
         final Map<Windowed<String>, KeyValue<Long, Long>> results = new HashMap<>();
         final CountDownLatch latch = new CountDownLatch(13);
 
-        //noinspection deprecation
         builder.stream(userSessionsStream, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(SessionWindows.with(ofMillis(sessionGap)))
+            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(sessionGap)))
             .count()
             .toStream()
             .process(() -> (Processor<Windowed<String>, Long, Object, Object>) record -> {
@@ -823,7 +815,6 @@ public class KStreamAggregationIntegrationTest {
         assertThat(results.get(new Windowed<>("penny", new SessionWindow(t3, t3))), equalTo(KeyValue.pair(1L, t3)));
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldReduceSessionWindows() throws Exception {
         final long sessionGap = 1000L; // something to do with time
@@ -903,9 +894,9 @@ public class KStreamAggregationIntegrationTest {
         final Map<Windowed<String>, KeyValue<String, Long>> results = new HashMap<>();
         final CountDownLatch latch = new CountDownLatch(13);
         final String userSessionsStore = "UserSessionsStore";
-        //noinspection deprecation
+
         builder.stream(userSessionsStream, Consumed.with(Serdes.String(), Serdes.String()))
-            .groupByKey(Grouped.with(Serdes.String(), Serdes.String())) .windowedBy(SessionWindows.with(ofMillis(sessionGap))) .reduce((value1, value2) -> value1 + ":" + value2, Materialized.as(userSessionsStore))
+            .groupByKey(Grouped.with(Serdes.String(), Serdes.String())) .windowedBy(SessionWindows.ofInactivityGapAndGrace(ofMillis(sessionGap), ofMinutes(1))) .reduce((value1, value2) -> value1 + ":" + value2, Materialized.as(userSessionsStore))
             .toStream()
             .process(() -> (Processor<Windowed<String>, String, Object, Object>) record -> {
                 results.put(record.key(), KeyValue.pair(record.value(), record.timestamp()));

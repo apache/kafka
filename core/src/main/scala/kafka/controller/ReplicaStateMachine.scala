@@ -16,17 +16,18 @@
 */
 package kafka.controller
 
-import kafka.api.LeaderAndIsr
 import kafka.common.StateChangeFailedException
 import kafka.server.KafkaConfig
-import kafka.utils.Implicits._
 import kafka.utils.Logging
 import kafka.zk.KafkaZkClient
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk.TopicPartitionStateZNode
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ControllerMovedException
+import org.apache.kafka.metadata.LeaderAndIsr
 import org.apache.zookeeper.KeeperException.Code
+
+import java.util.stream.Collectors
 import scala.collection.{Seq, mutable}
 
 abstract class ReplicaStateMachine(controllerContext: ControllerContext) extends Logging {
@@ -108,7 +109,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
     if (replicas.nonEmpty) {
       try {
         controllerBrokerRequestBatch.newBatch()
-        replicas.groupBy(_.replica).forKeyValue { (replicaId, replicas) =>
+        replicas.groupBy(_.replica).foreachEntry { (replicaId, replicas) =>
           doHandleStateChanges(replicaId, replicas, targetState)
         }
         controllerBrokerRequestBatch.sendRequestsToBrokers(controllerContext.epoch)
@@ -225,7 +226,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
           controllerContext.partitionLeadershipInfo(replica.topicPartition).isDefined
         }
         val updatedLeaderIsrAndControllerEpochs = removeReplicasFromIsr(replicaId, replicasWithLeadershipInfo.map(_.topicPartition))
-        updatedLeaderIsrAndControllerEpochs.forKeyValue { (partition, leaderIsrAndControllerEpoch) =>
+        updatedLeaderIsrAndControllerEpochs.foreachEntry { (partition, leaderIsrAndControllerEpoch) =>
           stateLogger.info(s"Partition $partition state changed to $leaderIsrAndControllerEpoch after removing replica $replicaId from the ISR as part of transition to $OfflineReplica")
           if (!controllerContext.isTopicQueuedUpForDeletion(partition.topic)) {
             val recipients = controllerContext.partitionReplicaAssignment(partition).filterNot(_ == replicaId)
@@ -341,8 +342,10 @@ class ZkReplicaStateMachine(config: KafkaConfig,
     val adjustedLeaderAndIsrs: Map[TopicPartition, LeaderAndIsr] = leaderAndIsrsWithReplica.flatMap {
       case (partition, result) =>
         result.toOption.map { leaderAndIsr =>
-          val newLeader = if (replicaId == leaderAndIsr.leader) LeaderAndIsr.NoLeader else leaderAndIsr.leader
-          val adjustedIsr = if (leaderAndIsr.isr.size == 1) leaderAndIsr.isr else leaderAndIsr.isr.filter(_ != replicaId)
+          val newLeader = if (replicaId == leaderAndIsr.leader) LeaderAndIsr.NO_LEADER else leaderAndIsr.leader
+          val adjustedIsr =
+            if (leaderAndIsr.isr.size == 1) leaderAndIsr.isr
+            else leaderAndIsr.isr.stream().filter(_ != replicaId).collect(Collectors.toList[Integer])
           partition -> leaderAndIsr.newLeaderAndIsr(newLeader, adjustedIsr)
         }
     }

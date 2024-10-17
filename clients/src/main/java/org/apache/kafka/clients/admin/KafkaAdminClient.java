@@ -41,6 +41,7 @@ import org.apache.kafka.clients.admin.internals.AdminApiFuture;
 import org.apache.kafka.clients.admin.internals.AdminApiFuture.SimpleAdminApiFuture;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler;
 import org.apache.kafka.clients.admin.internals.AdminBootstrapAddresses;
+import org.apache.kafka.clients.admin.internals.AdminFetchMetricsManager;
 import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
 import org.apache.kafka.clients.admin.internals.AllBrokersStrategy;
 import org.apache.kafka.clients.admin.internals.AlterConsumerGroupOffsetsHandler;
@@ -164,6 +165,7 @@ import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
 import org.apache.kafka.common.message.UnregisterBrokerRequestData;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResult;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -290,6 +292,7 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.clients.admin.internals.AdminUtils.validAclOperations;
 import static org.apache.kafka.common.internals.Topic.CLUSTER_METADATA_TOPIC_NAME;
 import static org.apache.kafka.common.internals.Topic.CLUSTER_METADATA_TOPIC_PARTITION;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignablePartition;
@@ -405,6 +408,7 @@ public class KafkaAdminClient extends AdminClient {
     private final ExponentialBackoff retryBackoff;
     private final boolean clientTelemetryEnabled;
     private final MetadataRecoveryStrategy metadataRecoveryStrategy;
+    private final AdminFetchMetricsManager adminFetchMetricsManager;
 
     /**
      * The telemetry requests client instance id.
@@ -619,6 +623,7 @@ public class KafkaAdminClient extends AdminClient {
             CommonClientConfigs.RETRY_BACKOFF_JITTER);
         this.clientTelemetryEnabled = config.getBoolean(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG);
         this.metadataRecoveryStrategy = MetadataRecoveryStrategy.forName(config.getString(AdminClientConfig.METADATA_RECOVERY_STRATEGY_CONFIG));
+        this.adminFetchMetricsManager = new AdminFetchMetricsManager(metrics);
         config.logUnused();
         AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
         log.debug("Kafka admin client initialized");
@@ -1397,6 +1402,7 @@ public class KafkaAdminClient extends AdminClient {
                 } else {
                     try {
                         call.handleResponse(response.responseBody());
+                        adminFetchMetricsManager.recordLatency(response.destination(), response.requestLatencyMs());
                         if (log.isTraceEnabled())
                             log.trace("{} got response {}", call, response.responseBody());
                     } catch (Throwable t) {
@@ -2568,7 +2574,7 @@ public class KafkaAdminClient extends AdminClient {
         final long now = time.milliseconds();
         final KafkaFutureImpl<Collection<AclBinding>> future = new KafkaFutureImpl<>();
         runnable.call(new Call("describeAcls", calcDeadlineMs(now, options.timeoutMs()),
-            new LeastLoadedNodeProvider()) {
+            new LeastLoadedBrokerOrActiveKController()) {
 
             @Override
             DescribeAclsRequest.Builder createRequest(int timeoutMs) {
@@ -2615,7 +2621,7 @@ public class KafkaAdminClient extends AdminClient {
         }
         final CreateAclsRequestData data = new CreateAclsRequestData().setCreations(aclCreations);
         runnable.call(new Call("createAcls", calcDeadlineMs(now, options.timeoutMs()),
-            new LeastLoadedNodeProvider()) {
+            new LeastLoadedBrokerOrActiveKController()) {
 
             @Override
             CreateAclsRequest.Builder createRequest(int timeoutMs) {
@@ -2667,7 +2673,7 @@ public class KafkaAdminClient extends AdminClient {
         }
         final DeleteAclsRequestData data = new DeleteAclsRequestData().setFilters(deleteAclsFilters);
         runnable.call(new Call("deleteAcls", calcDeadlineMs(now, options.timeoutMs()),
-            new LeastLoadedNodeProvider()) {
+            new LeastLoadedBrokerOrActiveKController()) {
 
             @Override
             DeleteAclsRequest.Builder createRequest(int timeoutMs) {
@@ -3495,19 +3501,6 @@ public class KafkaAdminClient extends AdminClient {
                 .collect(Collectors.toMap(entry -> entry.getKey().idValue, Map.Entry::getValue)));
     }
 
-    private Set<AclOperation> validAclOperations(final int authorizedOperations) {
-        if (authorizedOperations == MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED) {
-            return null;
-        }
-        return Utils.from32BitField(authorizedOperations)
-            .stream()
-            .map(AclOperation::fromCode)
-            .filter(operation -> operation != AclOperation.UNKNOWN
-                && operation != AclOperation.ALL
-                && operation != AclOperation.ANY)
-            .collect(Collectors.toSet());
-    }
-
     private static final class ListConsumerGroupsResults {
         private final List<Throwable> errors;
         private final HashMap<String, ConsumerGroupListing> listings;
@@ -3902,7 +3895,7 @@ public class KafkaAdminClient extends AdminClient {
 
         final long now = time.milliseconds();
         Call call = new Call("alterPartitionReassignments", calcDeadlineMs(now, options.timeoutMs()),
-                new ControllerNodeProvider()) {
+                new ControllerNodeProvider(true)) {
 
             @Override
             public AlterPartitionReassignmentsRequest.Builder createRequest(int timeoutMs) {
@@ -4037,7 +4030,7 @@ public class KafkaAdminClient extends AdminClient {
         }
         final long now = time.milliseconds();
         runnable.call(new Call("listPartitionReassignments", calcDeadlineMs(now, options.timeoutMs()),
-            new ControllerNodeProvider()) {
+            new ControllerNodeProvider(true)) {
 
             @Override
             ListPartitionReassignmentsRequest.Builder createRequest(int timeoutMs) {
@@ -4122,27 +4115,34 @@ public class KafkaAdminClient extends AdminClient {
         }
     }
 
-    private List<MemberIdentity> getMembersFromGroup(String groupId, String reason) {
-        Collection<MemberDescription> members;
-        try {
-            members = describeConsumerGroups(Collections.singleton(groupId)).describedGroups().get(groupId).get().members();
-        } catch (Exception ex) {
-            throw new KafkaException("Encounter exception when trying to get members from group: " + groupId, ex);
-        }
+    private KafkaFutureImpl<List<MemberIdentity>> getMembersFromGroup(String groupId, String reason) {
+        KafkaFutureImpl<List<MemberIdentity>> future = new KafkaFutureImpl<>();
 
-        List<MemberIdentity> membersToRemove = new ArrayList<>();
-        for (final MemberDescription member : members) {
-            MemberIdentity memberIdentity = new MemberIdentity().setReason(reason);
-
-            if (member.groupInstanceId().isPresent()) {
-                memberIdentity.setGroupInstanceId(member.groupInstanceId().get());
+        describeConsumerGroups(Collections.singleton(groupId)).describedGroups().get(groupId).whenComplete((res, ex) -> {
+            if (ex != null) {
+                future.completeExceptionally(new KafkaException("Encounter exception when trying to get members from group: " + groupId, ex));
             } else {
-                memberIdentity.setMemberId(member.consumerId());
-            }
+                List<MemberIdentity> membersToRemove = res.members().stream().map(member ->
+                    member.groupInstanceId().map(id -> new MemberIdentity().setGroupInstanceId(id))
+                    .orElseGet(() -> new MemberIdentity().setMemberId(member.consumerId()))
+                    .setReason(reason)
+                ).collect(Collectors.toList());
 
-            membersToRemove.add(memberIdentity);
-        }
-        return membersToRemove;
+                future.complete(membersToRemove);
+            }
+        });
+
+        return future;
+    }
+
+    @Override
+    public void registerMetricForSubscription(KafkaMetric metric) {
+        throw new UnsupportedOperationException("not implemented");
+    }
+
+    @Override
+    public void unregisterMetricFromSubscription(KafkaMetric metric) {
+        throw new UnsupportedOperationException("not implemented");
     }
 
     @Override
@@ -4151,20 +4151,29 @@ public class KafkaAdminClient extends AdminClient {
         String reason = options.reason() == null || options.reason().isEmpty() ?
             DEFAULT_LEAVE_GROUP_REASON : JoinGroupRequest.maybeTruncateReason(options.reason());
 
-        List<MemberIdentity> members;
+        final SimpleAdminApiFuture<CoordinatorKey, Map<MemberIdentity, Errors>> adminFuture =
+                RemoveMembersFromConsumerGroupHandler.newFuture(groupId);
+
+        KafkaFutureImpl<List<MemberIdentity>> memFuture;
         if (options.removeAll()) {
-            members = getMembersFromGroup(groupId, reason);
+            memFuture = getMembersFromGroup(groupId, reason);
         } else {
-            members = options.members().stream()
-                .map(m -> m.toMemberIdentity().setReason(reason))
-                .collect(Collectors.toList());
+            memFuture = new KafkaFutureImpl<>();
+            memFuture.complete(options.members().stream()
+                    .map(m -> m.toMemberIdentity().setReason(reason))
+                    .collect(Collectors.toList()));
         }
 
-        SimpleAdminApiFuture<CoordinatorKey, Map<MemberIdentity, Errors>> future =
-                RemoveMembersFromConsumerGroupHandler.newFuture(groupId);
-        RemoveMembersFromConsumerGroupHandler handler = new RemoveMembersFromConsumerGroupHandler(groupId, members, logContext);
-        invokeDriver(handler, future, options.timeoutMs);
-        return new RemoveMembersFromConsumerGroupResult(future.get(CoordinatorKey.byGroupId(groupId)), options.members());
+        memFuture.whenComplete((members, ex) -> {
+            if (ex != null) {
+                adminFuture.completeExceptionally(Collections.singletonMap(CoordinatorKey.byGroupId(groupId), ex));
+            } else {
+                RemoveMembersFromConsumerGroupHandler handler = new RemoveMembersFromConsumerGroupHandler(groupId, members, logContext);
+                invokeDriver(handler, adminFuture, options.timeoutMs());
+            }
+        });
+
+        return new RemoveMembersFromConsumerGroupResult(adminFuture.get(CoordinatorKey.byGroupId(groupId)), options.members());
     }
 
     @Override
@@ -4187,7 +4196,7 @@ public class KafkaAdminClient extends AdminClient {
             ListOffsetsHandler.newFuture(topicPartitionOffsets.keySet());
         Map<TopicPartition, Long> offsetQueriesByPartition = topicPartitionOffsets.entrySet().stream()
             .collect(Collectors.toMap(Map.Entry::getKey, e -> getOffsetFromSpec(e.getValue())));
-        ListOffsetsHandler handler = new ListOffsetsHandler(offsetQueriesByPartition, options, logContext);
+        ListOffsetsHandler handler = new ListOffsetsHandler(offsetQueriesByPartition, options, logContext, defaultApiTimeoutMs);
         invokeDriver(handler, future, options.timeoutMs);
         return new ListOffsetsResult(future.all());
     }
@@ -4541,22 +4550,29 @@ public class KafkaAdminClient extends AdminClient {
                 ApiError topLevelError = response.topLevelError();
                 switch (topLevelError.error()) {
                     case NONE:
-                        for (final UpdatableFeatureResult result : response.data().results()) {
-                            final KafkaFutureImpl<Void> future = updateFutures.get(result.feature());
-                            if (future == null) {
-                                log.warn("Server response mentioned unknown feature {}", result.feature());
-                            } else {
-                                final Errors error = Errors.forCode(result.errorCode());
-                                if (error == Errors.NONE) {
-                                    future.complete(null);
+                        // For V2 and above, None responses will just have a top level NONE error -- mark all the futures as completed.
+                        if (response.data().results().isEmpty()) {
+                            for (final KafkaFutureImpl<Void> future : updateFutures.values()) {
+                                future.complete(null);
+                            }
+                        } else {
+                            for (final UpdatableFeatureResult result : response.data().results()) {
+                                final KafkaFutureImpl<Void> future = updateFutures.get(result.feature());
+                                if (future == null) {
+                                    log.warn("Server response mentioned unknown feature {}", result.feature());
                                 } else {
-                                    future.completeExceptionally(error.exception(result.errorMessage()));
+                                    final Errors error = Errors.forCode(result.errorCode());
+                                    if (error == Errors.NONE) {
+                                        future.complete(null);
+                                    } else {
+                                        future.completeExceptionally(error.exception(result.errorMessage()));
+                                    }
                                 }
                             }
+                            // The server should send back a response for every feature, but we do a sanity check anyway.
+                            completeUnrealizedFutures(updateFutures.entrySet().stream(),
+                                    feature -> "The controller response did not contain a result for feature " + feature);
                         }
-                        // The server should send back a response for every feature, but we do a sanity check anyway.
-                        completeUnrealizedFutures(updateFutures.entrySet().stream(),
-                            feature -> "The controller response did not contain a result for feature " + feature);
                         break;
                     case NOT_CONTROLLER:
                         handleNotControllerError(topLevelError.error());
