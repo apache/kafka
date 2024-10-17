@@ -51,6 +51,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.UnalignedMemoryRecords;
 import org.apache.kafka.common.record.UnalignedRecords;
@@ -61,6 +62,7 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.FetchSnapshotRequest;
 import org.apache.kafka.common.requests.FetchSnapshotResponse;
+import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -3424,6 +3426,12 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     ) {
         if (!isInitialized()) {
             throw new IllegalStateException("Cannot create snapshot before the replica has been initialized");
+        }
+
+        AbstractIterator<? extends RecordBatch> batchIterator = log.read(snapshotId.offset(), Isolation.COMMITTED).records.batchIterator();
+        if (batchIterator.hasNext() && batchIterator.peek().baseOffset() != snapshotId.offset()) {
+            logger.error("Cannot create snapshot at offset {} because it is not batch aligned", snapshotId.offset());
+            return Optional.empty();
         }
 
         return log.createNewSnapshot(snapshotId).map(writer -> {
