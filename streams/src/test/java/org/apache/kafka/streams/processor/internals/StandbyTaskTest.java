@@ -59,11 +59,12 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.metrics.Sensor.RecordingLevel.DEBUG;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
 import static org.apache.kafka.streams.processor.internals.Task.State.RUNNING;
@@ -107,7 +108,7 @@ public class StandbyTaskTest {
 
     private final ProcessorTopology topology = ProcessorTopologyFactories.withLocalStores(
         asList(store1, store2),
-        Map.ofEntries(Map.entry(storeName1, storeChangelogTopicName1), Map.entry(storeName2, storeChangelogTopicName2))
+        mkMap(mkEntry(storeName1, storeChangelogTopicName1), mkEntry(storeName2, storeChangelogTopicName2))
     );
 
     private final MockTime time = new MockTime();
@@ -120,13 +121,13 @@ public class StandbyTaskTest {
     private StandbyTask task;
 
     private StreamsConfig createConfig(final File baseDir) throws IOException {
-        return new StreamsConfig(mkProperties(Map.ofEntries(
-            Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, applicationId),
-            Map.entry(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, DEBUG.name),
-            Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
-            Map.entry(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3"),
-            Map.entry(StreamsConfig.STATE_DIR_CONFIG, baseDir.getCanonicalPath()),
-            Map.entry(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName())
+        return new StreamsConfig(mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, applicationId),
+            mkEntry(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, DEBUG.name),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
+            mkEntry(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3"),
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, baseDir.getCanonicalPath()),
+            mkEntry(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName())
         )));
     }
 
@@ -447,10 +448,10 @@ public class StandbyTaskTest {
 
         final MetricName metricName = setupCloseTaskMetric();
 
-        config = new StreamsConfig(mkProperties(Map.ofEntries(
-            Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, applicationId),
-            Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
-            Map.entry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2)
+        config = new StreamsConfig(mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, applicationId),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
+            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2)
         )));
 
         task = createStandbyTask();
@@ -554,9 +555,9 @@ public class StandbyTaskTest {
             String.format(nameFormat, operation),
             "stream-task-metrics",
             descriptionIsNotVerified,
-            Map.ofEntries(
-                Map.entry("task-id", taskId),
-                Map.entry(THREAD_ID_TAG, Thread.currentThread().getName())
+            mkMap(
+                mkEntry("task-id", taskId),
+                mkEntry(THREAD_ID_TAG, Thread.currentThread().getName())
             )
         ));
     }

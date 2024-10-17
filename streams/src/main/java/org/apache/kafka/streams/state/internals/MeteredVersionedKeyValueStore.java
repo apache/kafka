@@ -50,6 +50,8 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 /**
@@ -100,20 +102,20 @@ public class MeteredVersionedKeyValueStore<K, V>
         private StateSerdes<K, V> plainValueSerdes;
 
         private final Map<Class, QueryHandler> queryHandlers =
-            Map.ofEntries(
-                Map.entry(
+            mkMap(
+                mkEntry(
                     RangeQuery.class,
                     (query, positionBound, config, store) -> runRangeQuery(query, positionBound, config)
                 ),
-                Map.entry(
+                mkEntry(
                     KeyQuery.class,
                     (query, positionBound, config, store) -> runKeyQuery(query, positionBound, config)
                 ),
-                Map.entry(
+                mkEntry(
                     VersionedKeyQuery.class,
                     (query, positionBound, config, store) -> runVersionedKeyQuery(query, positionBound, config)
                 ),
-                Map.entry(
+                mkEntry(
                     MultiVersionedKeyQuery.class,
                     (query, positionBound, config, store) -> runMultiVersionedKeyQuery(query, positionBound, config)
                 )

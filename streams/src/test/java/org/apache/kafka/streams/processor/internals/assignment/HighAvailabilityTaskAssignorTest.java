@@ -46,6 +46,8 @@ import java.util.stream.Stream;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_CLIENT_TAGS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_RACK_AWARE_ASSIGNMENT_TAGS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_TASKS;
@@ -147,10 +149,10 @@ public class HighAvailabilityTaskAssignorTest {
             PID_3
         );
 
-        final Map<ProcessId, ClientState> clientStates = Map.ofEntries(
-            Map.entry(PID_1, clientState1),
-            Map.entry(PID_2, clientState2),
-            Map.entry(PID_3, clientState3)
+        final Map<ProcessId, ClientState> clientStates = mkMap(
+            mkEntry(PID_1, clientState1),
+            mkEntry(PID_2, clientState2),
+            mkEntry(PID_3, clientState3)
         );
 
         final AssignmentConfigs configs = new AssignmentConfigs(
@@ -163,10 +165,10 @@ public class HighAvailabilityTaskAssignorTest {
             null,
             rackAwareStrategy
         );
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2)),
-            Map.entry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2)),
-            Map.entry(new Subtopology(2, null), Set.of(TASK_2_0, TASK_2_1, TASK_2_2))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2)),
+            mkEntry(new Subtopology(2, null), Set.of(TASK_2_0, TASK_2_1, TASK_2_2))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -204,10 +206,10 @@ public class HighAvailabilityTaskAssignorTest {
             PID_3
         );
 
-        final Map<ProcessId, ClientState> clientStates = Map.ofEntries(
-            Map.entry(PID_1, clientState1),
-            Map.entry(PID_2, clientState2),
-            Map.entry(PID_3, clientState3)
+        final Map<ProcessId, ClientState> clientStates = mkMap(
+            mkEntry(PID_1, clientState1),
+            mkEntry(PID_2, clientState2),
+            mkEntry(PID_3, clientState3)
         );
 
         final AssignmentConfigs configs = new AssignmentConfigs(
@@ -220,10 +222,10 @@ public class HighAvailabilityTaskAssignorTest {
             null,
             rackAwareStrategy
         );
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2)),
-            Map.entry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2)),
-            Map.entry(new Subtopology(2, null), Set.of(TASK_2_0, TASK_2_1, TASK_2_2))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2)),
+            mkEntry(new Subtopology(2, null), Set.of(TASK_2_0, TASK_2_1, TASK_2_2))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -271,10 +273,10 @@ public class HighAvailabilityTaskAssignorTest {
             null,
             rackAwareStrategy
         );
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2)),
-            Map.entry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2)),
-            Map.entry(new Subtopology(2, null), Set.of(TASK_2_0, TASK_2_1, TASK_2_2))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2)),
+            mkEntry(new Subtopology(2, null), Set.of(TASK_2_0, TASK_2_1, TASK_2_2))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -326,10 +328,10 @@ public class HighAvailabilityTaskAssignorTest {
             null,
             rackAwareStrategy
         );
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2)),
-            Map.entry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2)),
-            Map.entry(new Subtopology(2, null), Set.of(TASK_2_0, TASK_2_1, TASK_2_2))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2)),
+            mkEntry(new Subtopology(2, null), Set.of(TASK_2_0, TASK_2_1, TASK_2_2))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -379,10 +381,10 @@ public class HighAvailabilityTaskAssignorTest {
             null,
             rackAwareStrategy
         );
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2)),
-            Map.entry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2)),
-            Map.entry(new Subtopology(2, null), Set.of(TASK_2_0, TASK_2_1, TASK_2_2))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2)),
+            mkEntry(new Subtopology(2, null), Set.of(TASK_2_0, TASK_2_1, TASK_2_2))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -430,9 +432,9 @@ public class HighAvailabilityTaskAssignorTest {
             null,
             rackAwareStrategy
         );
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2)),
-            Map.entry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -488,8 +490,8 @@ public class HighAvailabilityTaskAssignorTest {
             null,
             rackAwareStrategy
         );
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -538,10 +540,10 @@ public class HighAvailabilityTaskAssignorTest {
             null,
             rackAwareStrategy
         );
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2)),
-            Map.entry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2)),
-            Map.entry(new Subtopology(2, null), Set.of(TASK_2_0, TASK_2_1, TASK_2_2))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2)),
+            mkEntry(new Subtopology(2, null), Set.of(TASK_2_0, TASK_2_1, TASK_2_2))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -596,9 +598,9 @@ public class HighAvailabilityTaskAssignorTest {
             null,
             rackAwareStrategy
         );
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1)),
-            Map.entry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -661,9 +663,9 @@ public class HighAvailabilityTaskAssignorTest {
             null,
             rackAwareStrategy
         );
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1)),
-            Map.entry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -708,10 +710,10 @@ public class HighAvailabilityTaskAssignorTest {
             null,
             rackAwareStrategy
         );
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2)),
-            Map.entry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2)),
-            Map.entry(new Subtopology(2, null), Set.of(TASK_2_0, TASK_2_1, TASK_2_2))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2)),
+            mkEntry(new Subtopology(2, null), Set.of(TASK_2_0, TASK_2_1, TASK_2_2))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -745,8 +747,8 @@ public class HighAvailabilityTaskAssignorTest {
         final Map<ProcessId, ClientState> clientStates = singletonMap(PID_1, client1);
 
         final AssignmentConfigs configs = getConfigWithoutStandbys(rackAwareStrategy);
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -779,11 +781,11 @@ public class HighAvailabilityTaskAssignorTest {
         final ClientState client2 = new ClientState(emptySet(), emptySet(), singletonMap(TASK_0_0, 0L), EMPTY_CLIENT_TAGS, 1,
             PID_2
         );
-        final Map<ProcessId, ClientState> clientStates = Map.ofEntries(Map.entry(PID_1, client1), Map.entry(PID_2, client2));
+        final Map<ProcessId, ClientState> clientStates = mkMap(mkEntry(PID_1, client1), mkEntry(PID_2, client2));
 
         final AssignmentConfigs configs = getConfigWithStandbys(rackAwareStrategy);
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -814,14 +816,14 @@ public class HighAvailabilityTaskAssignorTest {
         final ClientState client2 = new ClientState(singleton(TASK_0_1), emptySet(), singletonMap(TASK_0_0, 0L), EMPTY_CLIENT_TAGS, 1,
             PID_2
         );
-        final Map<ProcessId, ClientState> clientStates = Map.ofEntries(
-            Map.entry(PID_1, client1),
-            Map.entry(PID_2, client2)
+        final Map<ProcessId, ClientState> clientStates = mkMap(
+            mkEntry(PID_1, client1),
+            mkEntry(PID_2, client2)
         );
 
         final AssignmentConfigs configs = getConfigWithoutStandbys(rackAwareStrategy);
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -855,15 +857,15 @@ public class HighAvailabilityTaskAssignorTest {
         final ClientState client3 = new ClientState(emptySet(), emptySet(), singletonMap(TASK_0_0, 500L), EMPTY_CLIENT_TAGS, 1,
             PID_3
         );
-        final Map<ProcessId, ClientState> clientStates = Map.ofEntries(
-                Map.entry(PID_1, client1),
-                Map.entry(PID_2, client2),
-                Map.entry(PID_3, client3)
+        final Map<ProcessId, ClientState> clientStates = mkMap(
+                mkEntry(PID_1, client1),
+                mkEntry(PID_2, client2),
+                mkEntry(PID_3, client3)
         );
 
         final AssignmentConfigs configs = getConfigWithStandbys(rackAwareStrategy);
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -901,8 +903,8 @@ public class HighAvailabilityTaskAssignorTest {
         );
 
         final AssignmentConfigs configs = getConfigWithStandbys(rackAwareStrategy);
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -936,8 +938,8 @@ public class HighAvailabilityTaskAssignorTest {
         final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2);
 
         final AssignmentConfigs configs = getConfigWithStandbys(rackAwareStrategy);
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -969,8 +971,8 @@ public class HighAvailabilityTaskAssignorTest {
         final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2);
 
         final AssignmentConfigs configs = getConfigWithoutStandbys(rackAwareStrategy);
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -1013,8 +1015,8 @@ public class HighAvailabilityTaskAssignorTest {
             null,
             rackAwareStrategy
         );
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -1061,8 +1063,8 @@ public class HighAvailabilityTaskAssignorTest {
             null,
             rackAwareStrategy
         );
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -1096,8 +1098,8 @@ public class HighAvailabilityTaskAssignorTest {
         final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1);
 
         final AssignmentConfigs configs = getConfigWithStandbys(rackAwareStrategy);
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -1124,8 +1126,8 @@ public class HighAvailabilityTaskAssignorTest {
         final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1);
 
         final AssignmentConfigs configs = getConfigWithStandbys(rackAwareStrategy);
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -1157,8 +1159,8 @@ public class HighAvailabilityTaskAssignorTest {
         final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
 
         final AssignmentConfigs configs = getConfigWithStandbys(rackAwareStrategy);
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -1196,9 +1198,9 @@ public class HighAvailabilityTaskAssignorTest {
         final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2);
 
         final AssignmentConfigs configs = getConfigWithStandbys(rackAwareStrategy);
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)),
-            Map.entry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -1240,10 +1242,10 @@ public class HighAvailabilityTaskAssignorTest {
         final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
 
         final AssignmentConfigs configs = getConfigWithoutStandbys(rackAwareStrategy);
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)),
-            Map.entry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2, TASK_1_3)),
-            Map.entry(new Subtopology(2, null), Set.of(TASK_2_0))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2, TASK_1_3)),
+            mkEntry(new Subtopology(2, null), Set.of(TASK_2_0))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -1276,8 +1278,8 @@ public class HighAvailabilityTaskAssignorTest {
         final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2);
 
         final AssignmentConfigs configs = getConfigWithoutStandbys(rackAwareStrategy);
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -1307,8 +1309,8 @@ public class HighAvailabilityTaskAssignorTest {
         final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2);
 
         final AssignmentConfigs configs = getConfigWithoutStandbys(rackAwareStrategy);
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -1333,8 +1335,8 @@ public class HighAvailabilityTaskAssignorTest {
         );
 
         final AssignmentConfigs configs = getConfigWithoutStandbys(rackAwareStrategy);
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -1372,9 +1374,9 @@ public class HighAvailabilityTaskAssignorTest {
             null,
             rackAwareStrategy
         );
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)),
-            Map.entry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -1424,9 +1426,9 @@ public class HighAvailabilityTaskAssignorTest {
             null,
             rackAwareStrategy
         );
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)),
-            Map.entry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -1476,9 +1478,9 @@ public class HighAvailabilityTaskAssignorTest {
             null,
             rackAwareStrategy
         );
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)),
-            Map.entry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -1528,9 +1530,9 @@ public class HighAvailabilityTaskAssignorTest {
             null,
             rackAwareStrategy
         );
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)),
-            Map.entry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 

@@ -24,6 +24,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.DELETE_SEGMENT;
 
 public final class DeleteSegmentsDueToLogStartOffsetBreachTest extends TieredStorageTestHarness {
@@ -42,7 +44,7 @@ public final class DeleteSegmentsDueToLogStartOffsetBreachTest extends TieredSto
         final Integer partitionCount = 1;
         final Integer replicationFactor = 2;
         final Integer maxBatchCountPerSegment = 2;
-        final Map<Integer, List<Integer>> replicaAssignment = Map.ofEntries(Map.entry(p0, Arrays.asList(broker0, broker1)));
+        final Map<Integer, List<Integer>> replicaAssignment = mkMap(mkEntry(p0, Arrays.asList(broker0, broker1)));
         final boolean enableRemoteLogStorage = true;
         final int beginEpoch = 0;
         final long startOffset = 3;

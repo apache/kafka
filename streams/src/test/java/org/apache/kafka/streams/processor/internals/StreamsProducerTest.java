@@ -53,6 +53,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.closeTo;
 import static org.hamcrest.Matchers.equalTo;
@@ -118,8 +120,8 @@ public class StreamsProducerTest {
     private final ProducerRecord<byte[], byte[]> record =
         new ProducerRecord<>(topic, 0, 0L, new byte[0], new byte[0], new RecordHeaders());
 
-    private final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = Map.ofEntries(
-        Map.entry(new TopicPartition(topic, 0), new OffsetAndMetadata(0L, null))
+    private final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = mkMap(
+        mkEntry(new TopicPartition(topic, 0), new OffsetAndMetadata(0L, null))
     );
 
     @BeforeEach

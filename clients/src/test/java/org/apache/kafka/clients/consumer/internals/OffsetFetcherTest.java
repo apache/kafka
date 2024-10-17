@@ -59,6 +59,7 @@ import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -828,12 +829,12 @@ public class OffsetFetcherTest {
 
             Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap =
                 offsetFetcher.offsetsForTimes(
-                    Map.ofEntries(Map.entry(tp0, fetchTimestamp),
-                    Map.entry(tp1, fetchTimestamp)), time.timer(Integer.MAX_VALUE));
+                    Utils.mkMap(Utils.mkEntry(tp0, fetchTimestamp),
+                    Utils.mkEntry(tp1, fetchTimestamp)), time.timer(Integer.MAX_VALUE));
 
-            assertEquals(Map.ofEntries(
-                Map.entry(tp0, new OffsetAndTimestamp(4L, fetchTimestamp)),
-                Map.entry(tp1, new OffsetAndTimestamp(5L, fetchTimestamp))), offsetAndTimestampMap);
+            assertEquals(Utils.mkMap(
+                Utils.mkEntry(tp0, new OffsetAndTimestamp(4L, fetchTimestamp)),
+                Utils.mkEntry(tp1, new OffsetAndTimestamp(5L, fetchTimestamp))), offsetAndTimestampMap);
 
             // The NOT_LEADER exception future should not be cleared as we already refreshed the metadata before
             // first retry, thus never hitting.

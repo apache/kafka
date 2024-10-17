@@ -48,8 +48,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.internals.ThreadCacheTest.memoryCacheEntrySize;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -219,7 +220,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         );
 
         assertEquals(
-            Position.fromMap(Map.ofEntries(Map.entry("", Map.ofEntries(Map.entry(0, 2L))))),
+            Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 2L))))),
             store.getPosition()
         );
         assertEquals(Position.emptyPosition(), underlyingStore.getPosition());
@@ -227,11 +228,11 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         store.flush();
 
         assertEquals(
-            Position.fromMap(Map.ofEntries(Map.entry("", Map.ofEntries(Map.entry(0, 2L))))),
+            Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 2L))))),
             store.getPosition()
         );
         assertEquals(
-            Position.fromMap(Map.ofEntries(Map.entry("", Map.ofEntries(Map.entry(0, 2L))))),
+            Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 2L))))),
             underlyingStore.getPosition()
         );
     }

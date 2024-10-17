@@ -55,6 +55,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.nullValue;
@@ -97,7 +99,7 @@ public class MeteredTimestampedKeyValueStoreTest {
     private InternalProcessorContext context;
     private MockTime mockTime;
 
-    private static final Map<String, Object> CONFIGS =  Map.ofEntries(Map.entry(StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE, APPLICATION_ID));
+    private static final Map<String, Object> CONFIGS =  mkMap(mkEntry(StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE, APPLICATION_ID));
 
     private MeteredTimestampedKeyValueStore<String, String> metered;
     private final KeyValue<Bytes, byte[]> byteKeyValueTimestampPair = KeyValue.pair(KEY_BYTES,
@@ -116,10 +118,10 @@ public class MeteredTimestampedKeyValueStoreTest {
                 new ValueAndTimestampSerde<>(Serdes.String())
         );
         metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
-        tags = Map.ofEntries(
-                Map.entry(THREAD_ID_TAG_KEY, threadId),
-                Map.entry("task-id", taskId.toString()),
-                Map.entry(STORE_TYPE + "-state-id", STORE_NAME)
+        tags = mkMap(
+                mkEntry(THREAD_ID_TAG_KEY, threadId),
+                mkEntry("task-id", taskId.toString()),
+                mkEntry(STORE_TYPE + "-state-id", STORE_NAME)
         );
     }
 

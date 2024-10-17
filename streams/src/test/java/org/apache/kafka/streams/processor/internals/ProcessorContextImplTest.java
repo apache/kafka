@@ -61,6 +61,8 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextImpl.BYTEARRAY_VALUE_SERIALIZER;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextImpl.BYTES_KEY_SERIALIZER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -898,9 +900,9 @@ public class ProcessorContextImplTest {
         assertEquals(emptyMetadata, context.processorMetadata());
 
         final ProcessorMetadata metadata = new ProcessorMetadata(
-            Map.ofEntries(
-                Map.entry("key1", 10L),
-                Map.entry("key2", 100L)
+            mkMap(
+                mkEntry("key1", 10L),
+                mkEntry("key2", 100L)
             )
         );
 

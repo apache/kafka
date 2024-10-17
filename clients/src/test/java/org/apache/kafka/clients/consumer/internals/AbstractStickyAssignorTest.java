@@ -53,6 +53,8 @@ import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssig
 import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.racks;
 import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.verifyRackAssignment;
 import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -181,8 +183,8 @@ public abstract class AbstractStickyAssignorTest {
         initializeRacks(rackConfig);
         Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, partitionInfos(topic, 2));
-        subscriptions = Map.ofEntries(
-                Map.entry(consumerId, buildSubscriptionV2Above(
+        subscriptions = mkMap(
+                mkEntry(consumerId, buildSubscriptionV2Above(
                         topics(topic),
                         Arrays.asList(tp(topic, 0), tp(topic, 1), tp(otherTopic, 0), tp(otherTopic, 1)),
                         generationId, 0)
@@ -1268,7 +1270,7 @@ public abstract class AbstractStickyAssignorTest {
 
     @Test
     public void testRackAwareAssignmentWithUniformSubscription() {
-        Map<String, Integer> topics = Map.ofEntries(Map.entry("t1", 6), Map.entry("t2", 7), Map.entry("t3", 2));
+        Map<String, Integer> topics = mkMap(mkEntry("t1", 6), mkEntry("t2", 7), mkEntry("t3", 2));
         List<String> allTopics = asList("t1", "t2", "t3");
         List<List<String>> consumerTopics = asList(allTopics, allTopics, allTopics);
         List<String> nonRackAwareAssignment = asList(
@@ -1335,7 +1337,7 @@ public abstract class AbstractStickyAssignorTest {
 
     @Test
     public void testRackAwareAssignmentWithNonEqualSubscription() {
-        Map<String, Integer> topics = Map.ofEntries(Map.entry("t1", 6), Map.entry("t2", 7), Map.entry("t3", 2));
+        Map<String, Integer> topics = mkMap(mkEntry("t1", 6), mkEntry("t2", 7), mkEntry("t3", 2));
         List<String> allTopics = asList("t1", "t2", "t3");
         List<List<String>> consumerTopics = asList(allTopics, allTopics, asList("t1", "t3"));
         List<String> nonRackAwareAssignment = asList(

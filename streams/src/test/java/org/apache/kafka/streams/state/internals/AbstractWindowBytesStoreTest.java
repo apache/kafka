@@ -58,6 +58,8 @@ import java.util.Set;
 
 import static java.time.Instant.ofEpochMilli;
 import static java.util.Arrays.asList;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.StreamsTestUtils.toList;
 import static org.apache.kafka.test.StreamsTestUtils.toSet;
 import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
@@ -1014,9 +1016,9 @@ public abstract class AbstractWindowBytesStoreTest {
             "dropped-records-total",
             "stream-task-metrics",
             "",
-            Map.ofEntries(
-                Map.entry("thread-id", threadId),
-                Map.entry("task-id", "0_0")
+            mkMap(
+                mkEntry("thread-id", threadId),
+                mkEntry("task-id", "0_0")
             )
         ));
 
@@ -1024,9 +1026,9 @@ public abstract class AbstractWindowBytesStoreTest {
             "dropped-records-rate",
             "stream-task-metrics",
             "",
-           Map.ofEntries(
-                Map.entry("thread-id", threadId),
-                Map.entry("task-id", "0_0")
+            mkMap(
+                mkEntry("thread-id", threadId),
+                mkEntry("task-id", "0_0")
             )
         ));
         assertEquals(1.0, dropTotal.metricValue());

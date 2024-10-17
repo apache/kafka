@@ -28,6 +28,7 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData;
+import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -87,9 +88,9 @@ public class OffsetFetchResponseTest {
                 OffsetFetchResponse response = new OffsetFetchResponse(throttleTimeMs, Errors.NOT_COORDINATOR, partitionDataMap);
                 assertEquals(Errors.NOT_COORDINATOR, response.error());
                 assertEquals(3, response.errorCounts().size());
-                assertEquals(Map.ofEntries(Map.entry(Errors.NOT_COORDINATOR, 1),
-                    Map.entry(Errors.TOPIC_AUTHORIZATION_FAILED, 1),
-                    Map.entry(Errors.UNKNOWN_TOPIC_OR_PARTITION, 1)),
+                assertEquals(Utils.mkMap(Utils.mkEntry(Errors.NOT_COORDINATOR, 1),
+                    Utils.mkEntry(Errors.TOPIC_AUTHORIZATION_FAILED, 1),
+                    Utils.mkEntry(Errors.UNKNOWN_TOPIC_OR_PARTITION, 1)),
                     response.errorCounts());
 
                 assertEquals(throttleTimeMs, response.throttleTimeMs());
@@ -104,9 +105,9 @@ public class OffsetFetchResponseTest {
                     Collections.singletonMap(groupOne, partitionDataMap));
                 assertEquals(Errors.NOT_COORDINATOR, response.groupLevelError(groupOne));
                 assertEquals(3, response.errorCounts().size());
-                assertEquals(Map.ofEntries(Map.entry(Errors.NOT_COORDINATOR, 1),
-                    Map.entry(Errors.TOPIC_AUTHORIZATION_FAILED, 1),
-                    Map.entry(Errors.UNKNOWN_TOPIC_OR_PARTITION, 1)),
+                assertEquals(Utils.mkMap(Utils.mkEntry(Errors.NOT_COORDINATOR, 1),
+                    Utils.mkEntry(Errors.TOPIC_AUTHORIZATION_FAILED, 1),
+                    Utils.mkEntry(Errors.UNKNOWN_TOPIC_OR_PARTITION, 1)),
                     response.errorCounts());
 
                 assertEquals(throttleTimeMs, response.throttleTimeMs());
@@ -158,11 +159,11 @@ public class OffsetFetchResponseTest {
                 assertTrue(response.groupHasError(groupTwo));
                 assertFalse(response.groupHasError(groupThree));
                 assertEquals(5, response.errorCounts().size());
-                assertEquals(Map.ofEntries(Map.entry(Errors.NOT_COORDINATOR, 1),
-                    Map.entry(Errors.TOPIC_AUTHORIZATION_FAILED, 1),
-                    Map.entry(Errors.UNKNOWN_TOPIC_OR_PARTITION, 1),
-                    Map.entry(Errors.COORDINATOR_LOAD_IN_PROGRESS, 1),
-                    Map.entry(Errors.NONE, 2)),
+                assertEquals(Utils.mkMap(Utils.mkEntry(Errors.NOT_COORDINATOR, 1),
+                    Utils.mkEntry(Errors.TOPIC_AUTHORIZATION_FAILED, 1),
+                    Utils.mkEntry(Errors.UNKNOWN_TOPIC_OR_PARTITION, 1),
+                    Utils.mkEntry(Errors.COORDINATOR_LOAD_IN_PROGRESS, 1),
+                    Utils.mkEntry(Errors.NONE, 2)),
                     response.errorCounts());
 
                 assertEquals(throttleTimeMs, response.throttleTimeMs());
@@ -205,17 +206,17 @@ public class OffsetFetchResponseTest {
 
                     // Partition level error populated in older versions.
                     assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, oldResponse.error());
-                    assertEquals(Map.ofEntries(Map.entry(Errors.GROUP_AUTHORIZATION_FAILED, 2),
-                        Map.entry(Errors.TOPIC_AUTHORIZATION_FAILED, 1)),
+                    assertEquals(Utils.mkMap(Utils.mkEntry(Errors.GROUP_AUTHORIZATION_FAILED, 2),
+                        Utils.mkEntry(Errors.TOPIC_AUTHORIZATION_FAILED, 1)),
                         oldResponse.errorCounts());
                 } else {
                     assertEquals(Errors.NONE.code(), data.errorCode());
 
                     assertEquals(Errors.NONE, oldResponse.error());
-                    assertEquals(Map.ofEntries(
-                        Map.entry(Errors.NONE, 1),
-                        Map.entry(Errors.GROUP_AUTHORIZATION_FAILED, 1),
-                        Map.entry(Errors.TOPIC_AUTHORIZATION_FAILED, 1)),
+                    assertEquals(Utils.mkMap(
+                        Utils.mkEntry(Errors.NONE, 1),
+                        Utils.mkEntry(Errors.GROUP_AUTHORIZATION_FAILED, 1),
+                        Utils.mkEntry(Errors.TOPIC_AUTHORIZATION_FAILED, 1)),
                         oldResponse.errorCounts());
                 }
 
@@ -256,10 +257,10 @@ public class OffsetFetchResponseTest {
                 assertEquals(Errors.NONE.code(), data.groups().get(0).errorCode());
 
                 assertEquals(Errors.NONE, oldResponse.groupLevelError(groupOne));
-                assertEquals(Map.ofEntries(
-                    Map.entry(Errors.NONE, 1),
-                    Map.entry(Errors.GROUP_AUTHORIZATION_FAILED, 1),
-                    Map.entry(Errors.TOPIC_AUTHORIZATION_FAILED, 1)),
+                assertEquals(Utils.mkMap(
+                    Utils.mkEntry(Errors.NONE, 1),
+                    Utils.mkEntry(Errors.GROUP_AUTHORIZATION_FAILED, 1),
+                    Utils.mkEntry(Errors.TOPIC_AUTHORIZATION_FAILED, 1)),
                     oldResponse.errorCounts());
                 assertEquals(throttleTimeMs, oldResponse.throttleTimeMs());
 

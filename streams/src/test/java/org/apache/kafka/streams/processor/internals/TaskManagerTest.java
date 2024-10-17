@@ -95,6 +95,8 @@ import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.intersection;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.streams.processor.internals.TopologyMetadata.UNNAMED_TOPOLOGY;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.standbyTask;
@@ -248,9 +250,9 @@ public class TaskManagerTest {
     @Test
     public void shouldClassifyExistingTasksWithoutStateUpdater() {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, false);
-        final Map<TaskId, Set<TopicPartition>> runningActiveTasks = Map.ofEntries(Map.entry(taskId01, Set.of(t1p1)));
-        final Map<TaskId, Set<TopicPartition>> standbyTasks = Map.ofEntries(Map.entry(taskId02, Set.of(t2p2)));
-        final Map<TaskId, Set<TopicPartition>> restoringActiveTasks = Map.ofEntries(Map.entry(taskId03, Set.of(t1p3)));
+        final Map<TaskId, Set<TopicPartition>> runningActiveTasks = mkMap(mkEntry(taskId01, Set.of(t1p1)));
+        final Map<TaskId, Set<TopicPartition>> standbyTasks = mkMap(mkEntry(taskId02, Set.of(t2p2)));
+        final Map<TaskId, Set<TopicPartition>> restoringActiveTasks = mkMap(mkEntry(taskId03, Set.of(t1p3)));
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>(runningActiveTasks);
         activeTasks.putAll(restoringActiveTasks);
         handleAssignment(runningActiveTasks, standbyTasks, restoringActiveTasks);
@@ -286,7 +288,7 @@ public class TaskManagerTest {
 
         taskManager.handleAssignment(
             Collections.emptyMap(),
-            Map.ofEntries(Map.entry(standbyTask.id(), newInputPartition))
+            mkMap(mkEntry(standbyTask.id(), newInputPartition))
         );
 
         verify(standbyTask).resume();
@@ -339,8 +341,8 @@ public class TaskManagerTest {
         when(schedulingTaskManager.lockTasks(any())).thenReturn(mockFuture);
 
         taskManager.handleAssignment(
-            Map.ofEntries(Map.entry(taskId00, taskId00Partitions)),
-                Map.ofEntries(Map.entry(taskId01, taskId01Partitions))
+            mkMap(mkEntry(taskId00, taskId00Partitions)),
+                mkMap(mkEntry(taskId01, taskId01Partitions))
         );
 
         verify(schedulingTaskManager).lockTasks(Set.of(taskId00, taskId01));
@@ -545,7 +547,7 @@ public class TaskManagerTest {
         future.complete(new StateUpdater.RemovedTaskResult(activeTaskToUpdateInputPartitions));
 
         taskManager.handleAssignment(
-            Map.ofEntries(Map.entry(activeTaskToUpdateInputPartitions.id(), newInputPartitions)),
+            mkMap(mkEntry(activeTaskToUpdateInputPartitions.id(), newInputPartitions)),
             Collections.emptyMap()
         );
 
@@ -576,7 +578,7 @@ public class TaskManagerTest {
 
         taskManager.handleAssignment(
             Collections.emptyMap(),
-            Map.ofEntries(Map.entry(activeTaskToRecycle.id(), activeTaskToRecycle.inputPartitions()))
+            mkMap(mkEntry(activeTaskToRecycle.id(), activeTaskToRecycle.inputPartitions()))
         );
 
         verify(tasks).addPendingTasksToInit(Collections.singleton(recycledStandbyTask));
@@ -602,7 +604,7 @@ public class TaskManagerTest {
             StreamsException.class,
             () -> taskManager.handleAssignment(
                 Collections.emptyMap(),
-                Map.ofEntries(Map.entry(activeTaskToRecycle.id(), activeTaskToRecycle.inputPartitions()))
+                mkMap(mkEntry(activeTaskToRecycle.id(), activeTaskToRecycle.inputPartitions()))
             )
         );
 
@@ -629,7 +631,7 @@ public class TaskManagerTest {
         future.complete(new StateUpdater.RemovedTaskResult(standbyTaskToRecycle));
 
         taskManager.handleAssignment(
-            Map.ofEntries(Map.entry(standbyTaskToRecycle.id(), standbyTaskToRecycle.inputPartitions())),
+            mkMap(mkEntry(standbyTaskToRecycle.id(), standbyTaskToRecycle.inputPartitions())),
             Collections.emptyMap()
         );
 
@@ -658,7 +660,7 @@ public class TaskManagerTest {
         assertThrows(
             StreamsException.class,
             () -> taskManager.handleAssignment(
-                Map.ofEntries(Map.entry(standbyTaskToRecycle.id(), standbyTaskToRecycle.inputPartitions())),
+                mkMap(mkEntry(standbyTaskToRecycle.id(), standbyTaskToRecycle.inputPartitions())),
                 Collections.emptyMap()
             )
         );
@@ -678,7 +680,7 @@ public class TaskManagerTest {
         when(stateUpdater.tasks()).thenReturn(Set.of(reassignedActiveTask));
 
         taskManager.handleAssignment(
-            Map.ofEntries(Map.entry(reassignedActiveTask.id(), reassignedActiveTask.inputPartitions())),
+            mkMap(mkEntry(reassignedActiveTask.id(), reassignedActiveTask.inputPartitions())),
             Collections.emptyMap()
         );
 
@@ -697,7 +699,7 @@ public class TaskManagerTest {
         when(tasks.allNonFailedTasks()).thenReturn(Set.of(reassignedActiveTask));
 
         taskManager.handleAssignment(
-            Map.ofEntries(Map.entry(reassignedActiveTask.id(), reassignedActiveTask.inputPartitions())),
+            mkMap(mkEntry(reassignedActiveTask.id(), reassignedActiveTask.inputPartitions())),
             Collections.emptyMap()
         );
 
@@ -725,7 +727,7 @@ public class TaskManagerTest {
             StreamsException.class,
             () -> taskManager.handleAssignment(
                 Collections.emptyMap(),
-                Map.ofEntries(Map.entry(failedActiveTaskToRecycle.id(), failedActiveTaskToRecycle.inputPartitions()))
+                mkMap(mkEntry(failedActiveTaskToRecycle.id(), failedActiveTaskToRecycle.inputPartitions()))
             )
         );
 
@@ -754,7 +756,7 @@ public class TaskManagerTest {
         final StreamsException exception = assertThrows(
             StreamsException.class,
             () -> taskManager.handleAssignment(
-                Map.ofEntries(Map.entry(failedStandbyTaskToRecycle.id(), failedStandbyTaskToRecycle.inputPartitions())),
+                mkMap(mkEntry(failedStandbyTaskToRecycle.id(), failedStandbyTaskToRecycle.inputPartitions())),
                 Collections.emptyMap()
             )
         );
@@ -784,7 +786,7 @@ public class TaskManagerTest {
         final StreamsException exception = assertThrows(
             StreamsException.class,
             () -> taskManager.handleAssignment(
-                Map.ofEntries(Map.entry(failedActiveTaskToReassign.id(), taskId00Partitions)),
+                mkMap(mkEntry(failedActiveTaskToReassign.id(), taskId00Partitions)),
                 Collections.emptyMap()
             )
         );
@@ -813,9 +815,9 @@ public class TaskManagerTest {
             .thenReturn(CompletableFuture.completedFuture(new StateUpdater.RemovedTaskResult(reassignedActiveTask2)));
 
         taskManager.handleAssignment(
-            Map.ofEntries(
-                Map.entry(reassignedActiveTask1.id(), reassignedActiveTask1.inputPartitions()),
-                Map.entry(reassignedActiveTask2.id(), taskId00Partitions)
+            mkMap(
+                mkEntry(reassignedActiveTask1.id(), reassignedActiveTask1.inputPartitions()),
+                mkEntry(reassignedActiveTask2.id(), taskId00Partitions)
             ),
             Collections.emptyMap()
         );
@@ -837,7 +839,7 @@ public class TaskManagerTest {
 
         taskManager.handleAssignment(
             Collections.emptyMap(),
-            Map.ofEntries(Map.entry(standbyTaskToUpdateInputPartitions.id(), taskId03Partitions))
+            mkMap(mkEntry(standbyTaskToUpdateInputPartitions.id(), taskId03Partitions))
         );
         verify(stateUpdater, never()).remove(standbyTaskToUpdateInputPartitions.id());
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
@@ -855,7 +857,7 @@ public class TaskManagerTest {
 
         taskManager.handleAssignment(
             Collections.emptyMap(),
-            Map.ofEntries(Map.entry(reassignedStandbyTask.id(), reassignedStandbyTask.inputPartitions()))
+            mkMap(mkEntry(reassignedStandbyTask.id(), reassignedStandbyTask.inputPartitions()))
         );
 
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
@@ -886,7 +888,7 @@ public class TaskManagerTest {
         futureForStandbyTaskToRecycle.complete(new StateUpdater.RemovedTaskResult(standbyTaskToRecycle));
 
         taskManager.handleAssignment(
-            Map.ofEntries(Map.entry(standbyTaskToRecycle.id(), standbyTaskToRecycle.inputPartitions())),
+            mkMap(mkEntry(standbyTaskToRecycle.id(), standbyTaskToRecycle.inputPartitions())),
             Collections.emptyMap()
         );
 
@@ -912,14 +914,14 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
 
         when(stateUpdater.tasks()).thenReturn(Set.of(standbyTaskInStateUpdater));
-        when(tasks.allTasksPerId()).thenReturn(Map.ofEntries(Map.entry(taskId03, runningActiveTask)));
+        when(tasks.allTasksPerId()).thenReturn(mkMap(mkEntry(taskId03, runningActiveTask)));
         when(tasks.pendingTasksToInit()).thenReturn(Set.of(activeTaskToInit));
         assertEquals(
             taskManager.allTasks(),
-            Map.ofEntries(
-                Map.entry(taskId03, runningActiveTask),
-                Map.entry(taskId02, standbyTaskInStateUpdater),
-                Map.entry(taskId01, activeTaskToInit)
+            mkMap(
+                mkEntry(taskId03, runningActiveTask),
+                mkEntry(taskId02, standbyTaskInStateUpdater),
+                mkEntry(taskId01, activeTaskToInit)
             )
         );
     }
@@ -935,8 +937,8 @@ public class TaskManagerTest {
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
 
-        when(tasks.allTasksPerId()).thenReturn(Map.ofEntries(Map.entry(taskId03, activeTask)));
-        assertEquals(taskManager.allOwnedTasks(), Map.ofEntries(Map.entry(taskId03, activeTask)));
+        when(tasks.allTasksPerId()).thenReturn(mkMap(mkEntry(taskId03, activeTask)));
+        assertEquals(taskManager.allOwnedTasks(), mkMap(mkEntry(taskId03, activeTask)));
     }
 
     @Test
@@ -947,8 +949,8 @@ public class TaskManagerTest {
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
         final Set<Task> createdTasks = Set.of(activeTaskToBeCreated);
-        final Map<TaskId, Set<TopicPartition>> tasksToBeCreated = Map.ofEntries(
-            Map.entry(activeTaskToBeCreated.id(), activeTaskToBeCreated.inputPartitions()));
+        final Map<TaskId, Set<TopicPartition>> tasksToBeCreated = mkMap(
+            mkEntry(activeTaskToBeCreated.id(), activeTaskToBeCreated.inputPartitions()));
         when(activeTaskCreator.createTasks(consumer, tasksToBeCreated)).thenReturn(createdTasks);
 
         taskManager.handleAssignment(tasksToBeCreated, Collections.emptyMap());
@@ -965,13 +967,13 @@ public class TaskManagerTest {
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
         final Set<Task> createdTasks = Set.of(standbyTaskToBeCreated);
-        when(standbyTaskCreator.createTasks(Map.ofEntries(
-            Map.entry(standbyTaskToBeCreated.id(), standbyTaskToBeCreated.inputPartitions())))
+        when(standbyTaskCreator.createTasks(mkMap(
+            mkEntry(standbyTaskToBeCreated.id(), standbyTaskToBeCreated.inputPartitions())))
         ).thenReturn(createdTasks);
 
         taskManager.handleAssignment(
             Collections.emptyMap(),
-            Map.ofEntries(Map.entry(standbyTaskToBeCreated.id(), standbyTaskToBeCreated.inputPartitions()))
+            mkMap(mkEntry(standbyTaskToBeCreated.id(), standbyTaskToBeCreated.inputPartitions()))
         );
 
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
@@ -992,7 +994,7 @@ public class TaskManagerTest {
             .thenReturn(standbyTask);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
 
-        taskManager.handleAssignment(emptyMap(), Map.ofEntries(Map.entry(taskId01, taskId01Partitions)));
+        taskManager.handleAssignment(emptyMap(), mkMap(mkEntry(taskId01, taskId01Partitions)));
 
         verify(activeTaskToRecycle).prepareCommit();
         verify(tasks).addPendingTasksToInit(Set.of(standbyTask));
@@ -1015,7 +1017,7 @@ public class TaskManagerTest {
             .thenReturn(standbyTask);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, false);
 
-        taskManager.handleAssignment(emptyMap(), Map.ofEntries(Map.entry(taskId01, taskId01Partitions)));
+        taskManager.handleAssignment(emptyMap(), mkMap(mkEntry(taskId01, taskId01Partitions)));
 
         verify(activeTaskToRecycle).prepareCommit();
         verify(tasks).replaceActiveWithStandby(standbyTask);
@@ -1035,7 +1037,7 @@ public class TaskManagerTest {
         final IllegalStateException illegalStateException = assertThrows(
             IllegalStateException.class,
             () -> taskManager.handleAssignment(
-                Map.ofEntries(Map.entry(standbyTaskToRecycle.id(), standbyTaskToRecycle.inputPartitions())),
+                mkMap(mkEntry(standbyTaskToRecycle.id(), standbyTaskToRecycle.inputPartitions())),
                 Collections.emptyMap()
             )
         );
@@ -1094,7 +1096,7 @@ public class TaskManagerTest {
         when(tasks.updateActiveTaskInputPartitions(activeTaskToUpdateInputPartitions, newInputPartitions)).thenReturn(true);
 
         taskManager.handleAssignment(
-            Map.ofEntries(Map.entry(activeTaskToUpdateInputPartitions.id(), newInputPartitions)),
+            mkMap(mkEntry(activeTaskToUpdateInputPartitions.id(), newInputPartitions)),
             Collections.emptyMap()
         );
 
@@ -1113,7 +1115,7 @@ public class TaskManagerTest {
         when(tasks.allNonFailedTasks()).thenReturn(Set.of(activeTaskToResume));
 
         taskManager.handleAssignment(
-            Map.ofEntries(Map.entry(activeTaskToResume.id(), activeTaskToResume.inputPartitions())),
+            mkMap(mkEntry(activeTaskToResume.id(), activeTaskToResume.inputPartitions())),
             Collections.emptyMap()
         );
 
@@ -1131,7 +1133,7 @@ public class TaskManagerTest {
         when(tasks.allNonFailedTasks()).thenReturn(Set.of(activeTaskToResume));
 
         taskManager.handleAssignment(
-            Map.ofEntries(Map.entry(activeTaskToResume.id(), activeTaskToResume.inputPartitions())),
+            mkMap(mkEntry(activeTaskToResume.id(), activeTaskToResume.inputPartitions())),
             Collections.emptyMap()
         );
 
@@ -1156,7 +1158,7 @@ public class TaskManagerTest {
             IllegalStateException.class,
             () -> taskManager.handleAssignment(
                 Collections.emptyMap(),
-                Map.ofEntries(Map.entry(standbyTaskToUpdateInputPartitions.id(), newInputPartitions))
+                mkMap(mkEntry(standbyTaskToUpdateInputPartitions.id(), newInputPartitions))
             )
         );
 
@@ -1178,13 +1180,13 @@ public class TaskManagerTest {
         when(tasks.allNonFailedTasks()).thenReturn(Set.of(activeTaskToClose));
 
         taskManager.handleAssignment(
-            Map.ofEntries(Map.entry(activeTaskToCreate.id(), activeTaskToCreate.inputPartitions())),
+            mkMap(mkEntry(activeTaskToCreate.id(), activeTaskToCreate.inputPartitions())),
             Collections.emptyMap()
         );
 
         verify(activeTaskCreator).createTasks(
             consumer,
-            Map.ofEntries(Map.entry(activeTaskToCreate.id(), activeTaskToCreate.inputPartitions()))
+            mkMap(mkEntry(activeTaskToCreate.id(), activeTaskToCreate.inputPartitions()))
         );
         verify(activeTaskToClose).closeClean();
         verify(standbyTaskCreator).createTasks(Collections.emptyMap());
@@ -1708,13 +1710,13 @@ public class TaskManagerTest {
 
     @Test
     public void shouldAddSubscribedTopicsFromAssignmentToTopologyMetadata() {
-        final Map<TaskId, Set<TopicPartition>> activeTasksAssignment = Map.ofEntries(
-            Map.entry(taskId01, Set.of(t1p1)),
-            Map.entry(taskId02, Set.of(t1p2, t2p2))
+        final Map<TaskId, Set<TopicPartition>> activeTasksAssignment = mkMap(
+            mkEntry(taskId01, Set.of(t1p1)),
+            mkEntry(taskId02, Set.of(t1p2, t2p2))
         );
-        final Map<TaskId, Set<TopicPartition>> standbyTasksAssignment = Map.ofEntries(
-            Map.entry(taskId03, Set.of(t1p3)),
-            Map.entry(taskId04, Set.of(t1p4))
+        final Map<TaskId, Set<TopicPartition>> standbyTasksAssignment = mkMap(
+            mkEntry(taskId03, Set.of(t1p3)),
+            mkEntry(taskId04, Set.of(t1p4))
         );
         when(standbyTaskCreator.createTasks(standbyTasksAssignment)).thenReturn(Collections.emptySet());
 
@@ -1828,7 +1830,7 @@ public class TaskManagerTest {
             .withInputPartitions(taskId03Partitions).build();
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
-        when(tasks.allTasksPerId()).thenReturn(Map.ofEntries(Map.entry(taskId00, runningStatefulTask)));
+        when(tasks.allTasksPerId()).thenReturn(mkMap(mkEntry(taskId00, runningStatefulTask)));
         when(stateUpdater.tasks()).thenReturn(Set.of(standbyTask, restoringStatefulTask));
         when(tasks.allNonFailedTasks()).thenReturn(Set.of(runningStatefulTask));
         expectLockObtainedFor(taskId00, taskId01, taskId02, taskId03);
@@ -1853,22 +1855,22 @@ public class TaskManagerTest {
 
     @Test
     public void shouldReportLatestOffsetAsOffsetSumForRunningTask() throws Exception {
-        final Map<TopicPartition, Long> changelogOffsets = Map.ofEntries(
-            Map.entry(new TopicPartition("changelog", 0), Task.LATEST_OFFSET),
-            Map.entry(new TopicPartition("changelog", 1), Task.LATEST_OFFSET)
+        final Map<TopicPartition, Long> changelogOffsets = mkMap(
+            mkEntry(new TopicPartition("changelog", 0), Task.LATEST_OFFSET),
+            mkEntry(new TopicPartition("changelog", 1), Task.LATEST_OFFSET)
         );
-        final Map<TaskId, Long> expectedOffsetSums = Map.ofEntries(Map.entry(taskId00, Task.LATEST_OFFSET));
+        final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, Task.LATEST_OFFSET));
 
         computeOffsetSumAndVerify(changelogOffsets, expectedOffsetSums);
     }
 
     @Test
     public void shouldComputeOffsetSumForNonRunningActiveTask() throws Exception {
-        final Map<TopicPartition, Long> changelogOffsets = Map.ofEntries(
-            Map.entry(new TopicPartition("changelog", 0), 5L),
-            Map.entry(new TopicPartition("changelog", 1), 10L)
+        final Map<TopicPartition, Long> changelogOffsets = mkMap(
+            mkEntry(new TopicPartition("changelog", 0), 5L),
+            mkEntry(new TopicPartition("changelog", 1), 10L)
         );
-        final Map<TaskId, Long> expectedOffsetSums = Map.ofEntries(Map.entry(taskId00, 15L));
+        final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, 15L));
 
         computeOffsetSumAndVerify(changelogOffsets, expectedOffsetSums);
     }
@@ -1878,17 +1880,17 @@ public class TaskManagerTest {
         final StreamTask restoringStatefulTask = statefulTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RESTORING).build();
         final long changelogOffset = 42L;
-        when(restoringStatefulTask.changelogOffsets()).thenReturn(Map.ofEntries(Map.entry(t1p0changelog, changelogOffset)));
+        when(restoringStatefulTask.changelogOffsets()).thenReturn(mkMap(mkEntry(t1p0changelog, changelogOffset)));
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
-        final Map<TopicPartition, Long> changelogOffsetInCheckpoint = Map.ofEntries(Map.entry(t1p0changelog, 24L));
+        final Map<TopicPartition, Long> changelogOffsetInCheckpoint = mkMap(mkEntry(t1p0changelog, 24L));
         writeCheckpointFile(taskId00, changelogOffsetInCheckpoint);
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
         when(stateUpdater.tasks()).thenReturn(Set.of(restoringStatefulTask));
         taskManager.handleRebalanceStart(singleton("topic"));
 
-        assertThat(taskManager.taskOffsetSums(), is(Map.ofEntries(Map.entry(taskId00, changelogOffset))));
+        assertThat(taskManager.taskOffsetSums(), is(mkMap(mkEntry(taskId00, changelogOffset))));
     }
 
     @Test
@@ -1896,17 +1898,17 @@ public class TaskManagerTest {
         final StandbyTask restoringStandbyTask = standbyTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RUNNING).build();
         final long changelogOffset = 42L;
-        when(restoringStandbyTask.changelogOffsets()).thenReturn(Map.ofEntries(Map.entry(t1p0changelog, changelogOffset)));
+        when(restoringStandbyTask.changelogOffsets()).thenReturn(mkMap(mkEntry(t1p0changelog, changelogOffset)));
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
-        final Map<TopicPartition, Long> changelogOffsetInCheckpoint = Map.ofEntries(Map.entry(t1p0changelog, 24L));
+        final Map<TopicPartition, Long> changelogOffsetInCheckpoint = mkMap(mkEntry(t1p0changelog, 24L));
         writeCheckpointFile(taskId00, changelogOffsetInCheckpoint);
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
         when(stateUpdater.tasks()).thenReturn(Set.of(restoringStandbyTask));
         taskManager.handleRebalanceStart(singleton("topic"));
 
-        assertThat(taskManager.taskOffsetSums(), is(Map.ofEntries(Map.entry(taskId00, changelogOffset))));
+        assertThat(taskManager.taskOffsetSums(), is(mkMap(mkEntry(taskId00, changelogOffset))));
     }
 
     @Test
@@ -1921,33 +1923,33 @@ public class TaskManagerTest {
         final long changelogOffsetOfRestoringStatefulTask = 24L;
         final long changelogOffsetOfRestoringStandbyTask = 84L;
         when(runningStatefulTask.changelogOffsets())
-            .thenReturn(Map.ofEntries(Map.entry(t1p0changelog, changelogOffsetOfRunningTask)));
+            .thenReturn(mkMap(mkEntry(t1p0changelog, changelogOffsetOfRunningTask)));
         when(restoringStatefulTask.changelogOffsets())
-            .thenReturn(Map.ofEntries(Map.entry(t1p1changelog, changelogOffsetOfRestoringStatefulTask)));
+            .thenReturn(mkMap(mkEntry(t1p1changelog, changelogOffsetOfRestoringStatefulTask)));
         when(restoringStandbyTask.changelogOffsets())
-            .thenReturn(Map.ofEntries(Map.entry(t1p2changelog, changelogOffsetOfRestoringStandbyTask)));
+            .thenReturn(mkMap(mkEntry(t1p2changelog, changelogOffsetOfRestoringStandbyTask)));
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
-        when(tasks.allTasksPerId()).thenReturn(Map.ofEntries(Map.entry(taskId00, runningStatefulTask)));
+        when(tasks.allTasksPerId()).thenReturn(mkMap(mkEntry(taskId00, runningStatefulTask)));
         when(stateUpdater.tasks()).thenReturn(Set.of(restoringStandbyTask, restoringStatefulTask));
 
         assertThat(
             taskManager.taskOffsetSums(),
-            is(Map.ofEntries(
-                Map.entry(taskId00, changelogOffsetOfRunningTask),
-                Map.entry(taskId01, changelogOffsetOfRestoringStatefulTask),
-                Map.entry(taskId02, changelogOffsetOfRestoringStandbyTask)
+            is(mkMap(
+                mkEntry(taskId00, changelogOffsetOfRunningTask),
+                mkEntry(taskId01, changelogOffsetOfRestoringStatefulTask),
+                mkEntry(taskId02, changelogOffsetOfRestoringStandbyTask)
             ))
         );
     }
 
     @Test
     public void shouldSkipUnknownOffsetsWhenComputingOffsetSum() throws Exception {
-        final Map<TopicPartition, Long> changelogOffsets = Map.ofEntries(
-            Map.entry(new TopicPartition("changelog", 0), OffsetCheckpoint.OFFSET_UNKNOWN),
-            Map.entry(new TopicPartition("changelog", 1), 10L)
+        final Map<TopicPartition, Long> changelogOffsets = mkMap(
+            mkEntry(new TopicPartition("changelog", 0), OffsetCheckpoint.OFFSET_UNKNOWN),
+            mkEntry(new TopicPartition("changelog", 1), 10L)
         );
-        final Map<TaskId, Long> expectedOffsetSums = Map.ofEntries(Map.entry(taskId00, 10L));
+        final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, 10L));
 
         computeOffsetSumAndVerify(changelogOffsets, expectedOffsetSums);
     }
@@ -1971,11 +1973,11 @@ public class TaskManagerTest {
 
     @Test
     public void shouldComputeOffsetSumForStandbyTask() throws Exception {
-        final Map<TopicPartition, Long> changelogOffsets = Map.ofEntries(
-            Map.entry(new TopicPartition("changelog", 0), 5L),
-            Map.entry(new TopicPartition("changelog", 1), 10L)
+        final Map<TopicPartition, Long> changelogOffsets = mkMap(
+            mkEntry(new TopicPartition("changelog", 0), 5L),
+            mkEntry(new TopicPartition("changelog", 1), 10L)
         );
-        final Map<TaskId, Long> expectedOffsetSums = Map.ofEntries(Map.entry(taskId00, 15L));
+        final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, 15L));
 
         expectLockObtainedFor(taskId00);
         expectDirectoryNotEmpty(taskId00);
@@ -1994,11 +1996,11 @@ public class TaskManagerTest {
 
     @Test
     public void shouldComputeOffsetSumForUnassignedTaskWeCanLock() throws Exception {
-        final Map<TopicPartition, Long> changelogOffsets = Map.ofEntries(
-            Map.entry(new TopicPartition("changelog", 0), 5L),
-            Map.entry(new TopicPartition("changelog", 1), 10L)
+        final Map<TopicPartition, Long> changelogOffsets = mkMap(
+            mkEntry(new TopicPartition("changelog", 0), 5L),
+            mkEntry(new TopicPartition("changelog", 1), 10L)
         );
-        final Map<TaskId, Long> expectedOffsetSums = Map.ofEntries(Map.entry(taskId00, 15L));
+        final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, 15L));
 
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
@@ -2011,11 +2013,11 @@ public class TaskManagerTest {
 
     @Test
     public void shouldComputeOffsetSumFromCheckpointFileForUninitializedTask() throws Exception {
-        final Map<TopicPartition, Long> changelogOffsets = Map.ofEntries(
-            Map.entry(new TopicPartition("changelog", 0), 5L),
-            Map.entry(new TopicPartition("changelog", 1), 10L)
+        final Map<TopicPartition, Long> changelogOffsets = mkMap(
+            mkEntry(new TopicPartition("changelog", 0), 5L),
+            mkEntry(new TopicPartition("changelog", 1), 10L)
         );
-        final Map<TaskId, Long> expectedOffsetSums = Map.ofEntries(Map.entry(taskId00, 15L));
+        final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, 15L));
 
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
@@ -2034,11 +2036,11 @@ public class TaskManagerTest {
 
     @Test
     public void shouldComputeOffsetSumFromCheckpointFileForClosedTask() throws Exception {
-        final Map<TopicPartition, Long> changelogOffsets = Map.ofEntries(
-            Map.entry(new TopicPartition("changelog", 0), 5L),
-            Map.entry(new TopicPartition("changelog", 1), 10L)
+        final Map<TopicPartition, Long> changelogOffsets = mkMap(
+            mkEntry(new TopicPartition("changelog", 0), 5L),
+            mkEntry(new TopicPartition("changelog", 1), 10L)
         );
-        final Map<TaskId, Long> expectedOffsetSums = Map.ofEntries(Map.entry(taskId00, 15L));
+        final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, 15L));
 
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
@@ -2083,12 +2085,12 @@ public class TaskManagerTest {
     @Test
     public void shouldPinOffsetSumToLongMaxValueInCaseOfOverflow() throws Exception {
         final long largeOffset = Long.MAX_VALUE / 2;
-        final Map<TopicPartition, Long> changelogOffsets = Map.ofEntries(
-            Map.entry(new TopicPartition("changelog", 1), largeOffset),
-            Map.entry(new TopicPartition("changelog", 2), largeOffset),
-            Map.entry(new TopicPartition("changelog", 3), largeOffset)
+        final Map<TopicPartition, Long> changelogOffsets = mkMap(
+            mkEntry(new TopicPartition("changelog", 1), largeOffset),
+            mkEntry(new TopicPartition("changelog", 2), largeOffset),
+            mkEntry(new TopicPartition("changelog", 3), largeOffset)
         );
-        final Map<TaskId, Long> expectedOffsetSums = Map.ofEntries(Map.entry(taskId00, Long.MAX_VALUE));
+        final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, Long.MAX_VALUE));
 
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
@@ -2379,7 +2381,7 @@ public class TaskManagerTest {
             .withInputPartitions(taskId02Partitions)
             .inState(State.RUNNING).build();
         final TasksRegistry tasks = mock(TasksRegistry.class);
-        when(tasks.allTasksPerId()).thenReturn(Map.ofEntries(Map.entry(taskId02, corruptedTask)));
+        when(tasks.allTasksPerId()).thenReturn(mkMap(mkEntry(taskId02, corruptedTask)));
         when(tasks.task(taskId02)).thenReturn(corruptedTask);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
         when(consumer.assignment()).thenReturn(intersection(HashSet::new, taskId00Partitions, taskId01Partitions, taskId02Partitions));
@@ -2407,10 +2409,10 @@ public class TaskManagerTest {
             .withInputPartitions(taskId02Partitions)
             .inState(State.RUNNING).build();
         final TasksRegistry tasks = mock(TasksRegistry.class);
-        when(tasks.allTasksPerId()).thenReturn(Map.ofEntries(
-            Map.entry(taskId00, activeRestoringTask),
-            Map.entry(taskId01, standbyTask),
-            Map.entry(taskId02, corruptedTask)
+        when(tasks.allTasksPerId()).thenReturn(mkMap(
+            mkEntry(taskId00, activeRestoringTask),
+            mkEntry(taskId01, standbyTask),
+            mkEntry(taskId02, corruptedTask)
         ));
         when(tasks.task(taskId02)).thenReturn(corruptedTask);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, false);
@@ -2669,10 +2671,10 @@ public class TaskManagerTest {
         expectedCommittedOffsets.putAll(offsets00);
         expectedCommittedOffsets.putAll(offsets01);
 
-        final Map<TaskId, Set<TopicPartition>> assignmentActive = Map.ofEntries(
-            Map.entry(taskId00, taskId00Partitions),
-            Map.entry(taskId01, taskId01Partitions),
-            Map.entry(taskId02, taskId02Partitions)
+        final Map<TaskId, Set<TopicPartition>> assignmentActive = mkMap(
+            mkEntry(taskId00, taskId00Partitions),
+            mkEntry(taskId01, taskId01Partitions),
+            mkEntry(taskId02, taskId02Partitions)
         );
 
         when(consumer.assignment())
@@ -2727,10 +2729,10 @@ public class TaskManagerTest {
         expectedCommittedOffsets.putAll(revokedActiveTaskOffsets);
         expectedCommittedOffsets.putAll(unrevokedTaskOffsets);
 
-        final Map<TaskId, Set<TopicPartition>> assignmentActive = Map.ofEntries(
-            Map.entry(taskId00, taskId00Partitions),
-            Map.entry(taskId01, taskId01Partitions),
-            Map.entry(taskId02, taskId02Partitions)
+        final Map<TaskId, Set<TopicPartition>> assignmentActive = mkMap(
+            mkEntry(taskId00, taskId00Partitions),
+            mkEntry(taskId01, taskId01Partitions),
+            mkEntry(taskId02, taskId02Partitions)
             );
 
         when(consumer.assignment())
@@ -2854,9 +2856,9 @@ public class TaskManagerTest {
 
     @Test
     public void shouldNotCompleteRestorationIfTasksCannotInitialize() {
-        final Map<TaskId, Set<TopicPartition>> assignment = Map.ofEntries(
-            Map.entry(taskId00, taskId00Partitions),
-            Map.entry(taskId01, taskId01Partitions)
+        final Map<TaskId, Set<TopicPartition>> assignment = mkMap(
+            mkEntry(taskId00, taskId00Partitions),
+            mkEntry(taskId01, taskId01Partitions)
         );
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
             @Override
@@ -2884,7 +2886,7 @@ public class TaskManagerTest {
         assertThat(task01.state(), is(Task.State.CREATED));
         assertThat(
             taskManager.activeTaskMap(),
-            Matchers.equalTo(Map.ofEntries(Map.entry(taskId00, task00), Map.entry(taskId01, task01)))
+            Matchers.equalTo(mkMap(mkEntry(taskId00, task00), mkEntry(taskId01, task01)))
         );
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         verify(changeLogReader).enforceRestoreActive();
@@ -2893,8 +2895,8 @@ public class TaskManagerTest {
 
     @Test
     public void shouldNotCompleteRestorationIfTaskCannotCompleteRestoration() {
-        final Map<TaskId, Set<TopicPartition>> assignment = Map.ofEntries(
-            Map.entry(taskId00, taskId00Partitions)
+        final Map<TaskId, Set<TopicPartition>> assignment = mkMap(
+            mkEntry(taskId00, taskId00Partitions)
         );
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
             @Override
@@ -2914,7 +2916,7 @@ public class TaskManagerTest {
         assertThat(task00.state(), is(Task.State.RESTORING));
         assertThat(
             taskManager.activeTaskMap(),
-            Matchers.equalTo(Map.ofEntries(Map.entry(taskId00, task00)))
+            Matchers.equalTo(mkMap(mkEntry(taskId00, task00)))
         );
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         verify(changeLogReader).enforceRestoreActive();
@@ -2963,14 +2965,14 @@ public class TaskManagerTest {
         expectedCommittedOffsets.putAll(offsets00);
         expectedCommittedOffsets.putAll(offsets01);
 
-        final Map<TaskId, Set<TopicPartition>> assignmentActive = Map.ofEntries(
-            Map.entry(taskId00, taskId00Partitions),
-            Map.entry(taskId01, taskId01Partitions),
-            Map.entry(taskId02, taskId02Partitions)
+        final Map<TaskId, Set<TopicPartition>> assignmentActive = mkMap(
+            mkEntry(taskId00, taskId00Partitions),
+            mkEntry(taskId01, taskId01Partitions),
+            mkEntry(taskId02, taskId02Partitions)
         );
 
-        final Map<TaskId, Set<TopicPartition>> assignmentStandby = Map.ofEntries(
-            Map.entry(taskId10, taskId10Partitions)
+        final Map<TaskId, Set<TopicPartition>> assignmentStandby = mkMap(
+            mkEntry(taskId10, taskId10Partitions)
         );
         when(consumer.assignment()).thenReturn(assignment);
 
@@ -3028,14 +3030,14 @@ public class TaskManagerTest {
         expectedCommittedOffsets.putAll(offsets00);
         expectedCommittedOffsets.putAll(offsets01);
 
-        final Map<TaskId, Set<TopicPartition>> assignmentActive = Map.ofEntries(
-            Map.entry(taskId00, taskId00Partitions),
-            Map.entry(taskId01, taskId01Partitions),
-            Map.entry(taskId02, taskId02Partitions)
+        final Map<TaskId, Set<TopicPartition>> assignmentActive = mkMap(
+            mkEntry(taskId00, taskId00Partitions),
+            mkEntry(taskId01, taskId01Partitions),
+            mkEntry(taskId02, taskId02Partitions)
         );
 
-        final Map<TaskId, Set<TopicPartition>> assignmentStandby = Map.ofEntries(
-            Map.entry(taskId10, taskId10Partitions)
+        final Map<TaskId, Set<TopicPartition>> assignmentStandby = mkMap(
+            mkEntry(taskId10, taskId10Partitions)
         );
         when(consumer.assignment()).thenReturn(assignment);
 
@@ -3169,11 +3171,11 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(processingMode, null, false);
 
         final TopicPartition changelog = new TopicPartition("changelog", 0);
-        final Map<TaskId, Set<TopicPartition>> assignment = Map.ofEntries(
-            Map.entry(taskId00, taskId00Partitions),
-            Map.entry(taskId01, taskId01Partitions),
-            Map.entry(taskId02, taskId02Partitions),
-            Map.entry(taskId03, taskId03Partitions)
+        final Map<TaskId, Set<TopicPartition>> assignment = mkMap(
+            mkEntry(taskId00, taskId00Partitions),
+            mkEntry(taskId01, taskId01Partitions),
+            mkEntry(taskId02, taskId02Partitions),
+            mkEntry(taskId03, taskId03Partitions)
         );
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
             @Override
@@ -3243,11 +3245,11 @@ public class TaskManagerTest {
         assertThat(
             taskManager.activeTaskMap(),
             Matchers.equalTo(
-                Map.ofEntries(
-                    Map.entry(taskId00, task00),
-                    Map.entry(taskId01, task01),
-                    Map.entry(taskId02, task02),
-                    Map.entry(taskId03, task03)
+                mkMap(
+                    mkEntry(taskId00, task00),
+                    mkEntry(taskId01, task01),
+                    mkEntry(taskId02, task02),
+                    mkEntry(taskId03, task03)
                 )
             )
         );
@@ -3277,8 +3279,8 @@ public class TaskManagerTest {
     @Test
     public void shouldCloseActiveTasksAndPropagateStreamsProducerExceptionsOnCleanShutdown() {
         final TopicPartition changelog = new TopicPartition("changelog", 0);
-        final Map<TaskId, Set<TopicPartition>> assignment = Map.ofEntries(
-            Map.entry(taskId00, taskId00Partitions)
+        final Map<TaskId, Set<TopicPartition>> assignment = mkMap(
+            mkEntry(taskId00, taskId00Partitions)
         );
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
             @Override
@@ -3300,8 +3302,8 @@ public class TaskManagerTest {
         assertThat(
             taskManager.activeTaskMap(),
             Matchers.equalTo(
-                Map.ofEntries(
-                    Map.entry(taskId00, task00)
+                mkMap(
+                    mkEntry(taskId00, task00)
                 )
             )
         );
@@ -3383,10 +3385,10 @@ public class TaskManagerTest {
     @Test
     public void shouldCloseActiveTasksAndIgnoreExceptionsOnUncleanShutdown() {
         final TopicPartition changelog = new TopicPartition("changelog", 0);
-        final Map<TaskId, Set<TopicPartition>> assignment = Map.ofEntries(
-            Map.entry(taskId00, taskId00Partitions),
-            Map.entry(taskId01, taskId01Partitions),
-            Map.entry(taskId02, taskId02Partitions)
+        final Map<TaskId, Set<TopicPartition>> assignment = mkMap(
+            mkEntry(taskId00, taskId00Partitions),
+            mkEntry(taskId01, taskId01Partitions),
+            mkEntry(taskId02, taskId02Partitions)
         );
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
             @Override
@@ -3426,10 +3428,10 @@ public class TaskManagerTest {
         assertThat(
             taskManager.activeTaskMap(),
             Matchers.equalTo(
-                Map.ofEntries(
-                    Map.entry(taskId00, task00),
-                    Map.entry(taskId01, task01),
-                    Map.entry(taskId02, task02)
+                mkMap(
+                    mkEntry(taskId00, task00),
+                    mkEntry(taskId01, task01),
+                    mkEntry(taskId02, task02)
                 )
             )
         );
@@ -3664,15 +3666,15 @@ public class TaskManagerTest {
         final StateMachineTask task04 = new StateMachineTask(taskId04, taskId04Partitions, false, stateManager);
         final StateMachineTask task05 = new StateMachineTask(taskId05, taskId05Partitions, false, stateManager);
 
-        final Map<TaskId, Set<TopicPartition>> assignmentActive = Map.ofEntries(
-            Map.entry(taskId00, taskId00Partitions),
-            Map.entry(taskId01, taskId01Partitions),
-            Map.entry(taskId02, taskId02Partitions)
+        final Map<TaskId, Set<TopicPartition>> assignmentActive = mkMap(
+            mkEntry(taskId00, taskId00Partitions),
+            mkEntry(taskId01, taskId01Partitions),
+            mkEntry(taskId02, taskId02Partitions)
         );
-        final Map<TaskId, Set<TopicPartition>> assignmentStandby = Map.ofEntries(
-            Map.entry(taskId03, taskId03Partitions),
-            Map.entry(taskId04, taskId04Partitions),
-            Map.entry(taskId05, taskId05Partitions)
+        final Map<TaskId, Set<TopicPartition>> assignmentStandby = mkMap(
+            mkEntry(taskId03, taskId03Partitions),
+            mkEntry(taskId04, taskId04Partitions),
+            mkEntry(taskId05, taskId05Partitions)
         );
 
         when(consumer.assignment()).thenReturn(assignment);
@@ -3954,15 +3956,15 @@ public class TaskManagerTest {
         expectedCommittedOffsets.putAll(offsets0);
         expectedCommittedOffsets.putAll(offsets1);
 
-        final Map<TaskId, Set<TopicPartition>> assignmentActive = Map.ofEntries(
-            Map.entry(taskId00, taskId00Partitions),
-            Map.entry(taskId01, taskId01Partitions),
-            Map.entry(taskId02, taskId02Partitions),
-            Map.entry(taskId03, taskId03Partitions)
+        final Map<TaskId, Set<TopicPartition>> assignmentActive = mkMap(
+            mkEntry(taskId00, taskId00Partitions),
+            mkEntry(taskId01, taskId01Partitions),
+            mkEntry(taskId02, taskId02Partitions),
+            mkEntry(taskId03, taskId03Partitions)
         );
 
-        final Map<TaskId, Set<TopicPartition>> assignmentStandby = Map.ofEntries(
-            Map.entry(taskId10, taskId10Partitions)
+        final Map<TaskId, Set<TopicPartition>> assignmentStandby = mkMap(
+            mkEntry(taskId10, taskId10Partitions)
         );
 
         when(consumer.assignment()).thenReturn(assignment);

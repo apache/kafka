@@ -37,6 +37,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.collection.IsEmptyCollection.empty;
@@ -244,13 +246,13 @@ public class ResponseJoinProcessorSupplierTest {
 
     static Object getDroppedRecordsTotalMetric(final InternalProcessorContext<String, ?> context) {
         final MetricName dropTotalMetric = new MetricName(
-                "dropped-records-total",
-                "stream-task-metrics",
-                "The total number of dropped records",
-                Map.ofEntries(
-                        Map.entry("thread-id", Thread.currentThread().getName()),
-                        Map.entry("task-id", "0_0")
-                )
+            "dropped-records-total",
+            "stream-task-metrics",
+            "The total number of dropped records",
+            mkMap(
+                mkEntry("thread-id", Thread.currentThread().getName()),
+                mkEntry("task-id", "0_0")
+            )
         );
 
         return context.metrics().metrics().get(dropTotalMetric).metricValue();
@@ -258,13 +260,13 @@ public class ResponseJoinProcessorSupplierTest {
 
     static Object getDroppedRecordsRateMetric(final InternalProcessorContext<String, ?> context) {
         final MetricName dropRateMetric = new MetricName(
-                "dropped-records-rate",
-                "stream-task-metrics",
-                "The average number of dropped records per second",
-                Map.ofEntries(
-                        Map.entry("thread-id", Thread.currentThread().getName()),
-                        Map.entry("task-id", "0_0")
-                )
+            "dropped-records-rate",
+            "stream-task-metrics",
+            "The average number of dropped records per second",
+            mkMap(
+                mkEntry("thread-id", Thread.currentThread().getName()),
+                mkEntry("task-id", "0_0")
+            )
         );
 
         return context.metrics().metrics().get(dropRateMetric).metricValue();

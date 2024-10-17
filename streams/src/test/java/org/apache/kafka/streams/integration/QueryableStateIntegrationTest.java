@@ -99,6 +99,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static java.time.Duration.ofMillis;
 import static java.time.Duration.ofSeconds;
 import static java.time.Instant.ofEpochMilli;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.StoreQueryParameters.fromNameAndType;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getRunningStreams;
@@ -453,9 +455,9 @@ public class QueryableStateIntegrationTest {
                 .withValueSerde(Serdes.String())
         );
 
-        final Properties properties = mkProperties(Map.ofEntries(
-            Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName),
-            Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
+        final Properties properties = mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
         ));
 
         CLUSTER.createTopic(input);
@@ -493,9 +495,9 @@ public class QueryableStateIntegrationTest {
 
         CLUSTER.createTopic(input);
 
-        final Properties properties = mkProperties(Map.ofEntries(
-            Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app"),
-            Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
+        final Properties properties = mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
         ));
 
         try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {

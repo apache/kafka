@@ -95,6 +95,8 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.streams.Topology.AutoOffsetReset.EARLIEST;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
@@ -145,7 +147,7 @@ public class RestoreIntegrationTest {
     }
 
     private Properties props(final boolean stateUpdaterEnabled) {
-        return props(mkObjectProperties(Map.ofEntries(Map.entry(InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled))));
+        return props(mkObjectProperties(mkMap(mkEntry(InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled))));
     }
 
     private Properties props(final Properties extraProperties) {
@@ -550,14 +552,14 @@ public class RestoreIntegrationTest {
         CLUSTER.createTopic(inputTopic, 5, 1);
         CLUSTER.createTopic(outputTopic, 5, 1);
 
-        final Map<String, Object> kafkaStreams1Configuration = Map.ofEntries(
-            Map.entry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks1"),
-            Map.entry(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks1"),
-            Map.entry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1)
+        final Map<String, Object> kafkaStreams1Configuration = mkMap(
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks1"),
+            mkEntry(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks1"),
+            mkEntry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1)
         );
-        final Map<String, Object> kafkaStreams2Configuration = Map.ofEntries(
-            Map.entry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks2"),
-            Map.entry(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks2")
+        final Map<String, Object> kafkaStreams2Configuration = mkMap(
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks2"),
+            mkEntry(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks2")
         );
 
         final StreamsBuilder builder = new StreamsBuilder();

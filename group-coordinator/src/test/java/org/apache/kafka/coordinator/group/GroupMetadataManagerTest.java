@@ -3595,8 +3595,8 @@ public class GroupMetadataManagerTest {
         ClassicGroup group4 = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId4, true);
 
         context.groupMetadataManager.updateClassicGroupSizeCounter();
-        verify(context.metrics, times(1)).setClassicGroupGauges(eq(Map.ofEntries(
-            Map.entry(ClassicGroupState.EMPTY, 4L)
+        verify(context.metrics, times(1)).setClassicGroupGauges(eq(Utils.mkMap(
+            Utils.mkEntry(ClassicGroupState.EMPTY, 4L)
         )));
 
         group1.transitionTo(PREPARING_REBALANCE);
@@ -3608,11 +3608,11 @@ public class GroupMetadataManagerTest {
         group4.transitionTo(DEAD);
 
         context.groupMetadataManager.updateClassicGroupSizeCounter();
-        verify(context.metrics, times(1)).setClassicGroupGauges(eq(Map.ofEntries(
-            Map.entry(ClassicGroupState.PREPARING_REBALANCE, 1L),
-            Map.entry(ClassicGroupState.COMPLETING_REBALANCE, 1L),
-            Map.entry(ClassicGroupState.STABLE, 1L),
-            Map.entry(ClassicGroupState.DEAD, 1L)
+        verify(context.metrics, times(1)).setClassicGroupGauges(eq(Utils.mkMap(
+            Utils.mkEntry(ClassicGroupState.PREPARING_REBALANCE, 1L),
+            Utils.mkEntry(ClassicGroupState.COMPLETING_REBALANCE, 1L),
+            Utils.mkEntry(ClassicGroupState.STABLE, 1L),
+            Utils.mkEntry(ClassicGroupState.DEAD, 1L)
         )));
     }
 

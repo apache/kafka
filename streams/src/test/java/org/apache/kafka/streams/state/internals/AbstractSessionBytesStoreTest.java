@@ -59,6 +59,8 @@ import java.util.Set;
 
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.toList;
 import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -866,9 +868,9 @@ public abstract class AbstractSessionBytesStoreTest {
             "dropped-records-total",
             "stream-task-metrics",
             "",
-            Map.ofEntries(
-                Map.entry("thread-id", threadId),
-                Map.entry("task-id", "0_0")
+            mkMap(
+                mkEntry("thread-id", threadId),
+                mkEntry("task-id", "0_0")
             )
         ));
 
@@ -876,9 +878,9 @@ public abstract class AbstractSessionBytesStoreTest {
             "dropped-records-rate",
             "stream-task-metrics",
             "",
-            Map.ofEntries(
-                Map.entry("thread-id", threadId),
-                Map.entry("task-id", "0_0")
+            mkMap(
+                mkEntry("thread-id", threadId),
+                mkEntry("task-id", "0_0")
             )
         ));
         assertEquals(1.0, dropTotal.metricValue());
@@ -977,7 +979,7 @@ public abstract class AbstractSessionBytesStoreTest {
         context.setRecordContext(new ProcessorRecordContext(0, 3, 0, "", new RecordHeaders()));
         sessionStore.put(new Windowed<String>("a", new SessionWindow(10, 20)), 3L);
 
-        final Position expected = Position.fromMap(Map.ofEntries(Map.entry("", Map.ofEntries(Map.entry(0, 3L)))));
+        final Position expected = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 3L)))));
         final Position actual = sessionStore.getPosition();
         assertThat(expected, is(actual));
     }

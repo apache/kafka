@@ -50,6 +50,8 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -91,9 +93,9 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
-        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(Map.ofEntries(
-            Map.entry(OFFSET_KEY_SERIALIZED, null),
-            Map.entry(OFFSET_KEY_SERIALIZED_1, OFFSET_VALUE_SERIALIZED))
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(mkMap(
+            mkEntry(OFFSET_KEY_SERIALIZED, null),
+            mkEntry(OFFSET_KEY_SERIALIZED_1, OFFSET_VALUE_SERIALIZED))
         ), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
@@ -124,9 +126,9 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
-        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(Map.ofEntries(
-            Map.entry(OFFSET_KEY_SERIALIZED, null),
-            Map.entry(OFFSET_KEY_SERIALIZED_1, OFFSET_VALUE_SERIALIZED)
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(mkMap(
+            mkEntry(OFFSET_KEY_SERIALIZED, null),
+            mkEntry(OFFSET_KEY_SERIALIZED_1, OFFSET_VALUE_SERIALIZED)
         )), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
@@ -159,9 +161,9 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
-        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(Map.ofEntries(
-            Map.entry(OFFSET_KEY_SERIALIZED, OFFSET_VALUE_SERIALIZED),
-            Map.entry(OFFSET_KEY_SERIALIZED_1, null))
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(mkMap(
+            mkEntry(OFFSET_KEY_SERIALIZED, OFFSET_VALUE_SERIALIZED),
+            mkEntry(OFFSET_KEY_SERIALIZED_1, null))
         ), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
@@ -195,9 +197,9 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
-        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(Map.ofEntries(
-            Map.entry(OFFSET_KEY_SERIALIZED, OFFSET_VALUE_SERIALIZED),
-            Map.entry(OFFSET_KEY_SERIALIZED_1, OFFSET_VALUE_SERIALIZED)
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(mkMap(
+            mkEntry(OFFSET_KEY_SERIALIZED, OFFSET_VALUE_SERIALIZED),
+            mkEntry(OFFSET_KEY_SERIALIZED_1, OFFSET_VALUE_SERIALIZED)
         )), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
@@ -228,9 +230,9 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
-        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(Map.ofEntries(
-            Map.entry(OFFSET_KEY_SERIALIZED, null),
-            Map.entry(OFFSET_KEY_SERIALIZED_1, OFFSET_VALUE_SERIALIZED)
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(mkMap(
+            mkEntry(OFFSET_KEY_SERIALIZED, null),
+            mkEntry(OFFSET_KEY_SERIALIZED_1, OFFSET_VALUE_SERIALIZED)
         )), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
@@ -258,7 +260,7 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
-        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(Map.ofEntries(Map.entry(OFFSET_KEY_SERIALIZED, OFFSET_VALUE_SERIALIZED))), (error, result) -> {
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(mkMap(mkEntry(OFFSET_KEY_SERIALIZED, OFFSET_VALUE_SERIALIZED))), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
             callbackError.set(error);
@@ -284,7 +286,7 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
-        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(Map.ofEntries(Map.entry(OFFSET_KEY_SERIALIZED, OFFSET_VALUE_SERIALIZED))), (error, result) -> {
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(mkMap(mkEntry(OFFSET_KEY_SERIALIZED, OFFSET_VALUE_SERIALIZED))), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
             callbackError.set(error);
@@ -313,7 +315,7 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
-        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(Map.ofEntries(Map.entry(OFFSET_KEY_SERIALIZED, null))), (error, result) -> {
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(mkMap(mkEntry(OFFSET_KEY_SERIALIZED, null))), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
             callbackError.set(error);
@@ -343,7 +345,7 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
-        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(Map.ofEntries(Map.entry(OFFSET_KEY_SERIALIZED, null))), (error, result) -> {
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(mkMap(mkEntry(OFFSET_KEY_SERIALIZED, null))), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
             callbackError.set(error);
@@ -372,9 +374,9 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
-        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(Map.ofEntries(
-            Map.entry(OFFSET_KEY_SERIALIZED, null),
-            Map.entry(OFFSET_KEY_SERIALIZED_1, OFFSET_VALUE_SERIALIZED)
+        Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(mkMap(
+            mkEntry(OFFSET_KEY_SERIALIZED, null),
+            mkEntry(OFFSET_KEY_SERIALIZED_1, OFFSET_VALUE_SERIALIZED)
         )), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
@@ -439,7 +441,7 @@ public class ConnectorOffsetBackingStoreTest {
         Node noNode = Node.noNode();
         Node[] nodes = new Node[]{noNode};
         consumer.updatePartitions(topic, Collections.singletonList(new PartitionInfo(topic, 0, noNode, nodes, nodes)));
-        consumer.updateBeginningOffsets(Map.ofEntries(Map.entry(new TopicPartition(topic, 0), 100L)));
+        consumer.updateBeginningOffsets(mkMap(mkEntry(new TopicPartition(topic, 0), 100L)));
         return consumer;
     }
 

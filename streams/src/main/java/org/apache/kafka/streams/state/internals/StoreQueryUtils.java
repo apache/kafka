@@ -58,6 +58,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 
 public final class StoreQueryUtils {
 
@@ -78,28 +80,28 @@ public final class StoreQueryUtils {
 
     @SuppressWarnings("rawtypes")
     private static final Map<Class, QueryHandler> QUERY_HANDLER_MAP =
-        Map.ofEntries(
-            Map.entry(
+        mkMap(
+            mkEntry(
                 RangeQuery.class,
                 StoreQueryUtils::runRangeQuery
             ),
-            Map.entry(
+            mkEntry(
                 KeyQuery.class,
                 StoreQueryUtils::runKeyQuery
             ),
-            Map.entry(
+            mkEntry(
                 WindowKeyQuery.class,
                 StoreQueryUtils::runWindowKeyQuery
             ),
-            Map.entry(
+            mkEntry(
                 WindowRangeQuery.class,
                 StoreQueryUtils::runWindowRangeQuery
             ),
-            Map.entry(
+            mkEntry(
                 VersionedKeyQuery.class,
                 StoreQueryUtils::runVersionedKeyQuery
             ),
-            Map.entry(
+            mkEntry(
                 MultiVersionedKeyQuery.class,
                 StoreQueryUtils::runMultiVersionedKeyQuery
             )

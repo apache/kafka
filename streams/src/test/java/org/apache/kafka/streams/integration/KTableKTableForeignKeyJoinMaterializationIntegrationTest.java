@@ -46,6 +46,8 @@ import java.util.Properties;
 import java.util.function.Function;
 
 import static java.util.Collections.emptyMap;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -61,8 +63,8 @@ public class KTableKTableForeignKeyJoinMaterializationIntegrationTest {
 
     @BeforeEach
     public void before() {
-        streamsConfig = mkProperties(Map.ofEntries(
-            Map.entry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
+        streamsConfig = mkProperties(mkMap(
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
         ));
     }
 
@@ -109,7 +111,7 @@ public class KTableKTableForeignKeyJoinMaterializationIntegrationTest {
                 } else {
                     assertThat(
                         outputTopic.readKeyValuesToMap(),
-                        is(Map.ofEntries(Map.entry("lhs1", null)))
+                        is(mkMap(mkEntry("lhs1", null)))
                     );
                 }
             }

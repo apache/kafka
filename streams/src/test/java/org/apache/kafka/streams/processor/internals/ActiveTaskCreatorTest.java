@@ -50,6 +50,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.emptySet;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -71,9 +73,9 @@ public class ActiveTaskCreatorTest {
 
     private final MockClientSupplier mockClientSupplier = new MockClientSupplier();
     private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "clientId", new MockTime());
-    private final Map<String, Object> properties = Map.ofEntries(
-        Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
-        Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234")
+    private final Map<String, Object> properties = mkMap(
+        mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
+        mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234")
     );
     final UUID uuid = UUID.randomUUID();
 
@@ -267,9 +269,9 @@ public class ActiveTaskCreatorTest {
         assertThat(
             activeTaskCreator.createTasks(
                 mockClientSupplier.consumer,
-               Map.ofEntries(
-                    Map.entry(task00, Collections.singleton(new TopicPartition("topic", 0))),
-                    Map.entry(task01, Collections.singleton(new TopicPartition("topic", 1)))
+                mkMap(
+                    mkEntry(task00, Collections.singleton(new TopicPartition("topic", 0))),
+                    mkEntry(task01, Collections.singleton(new TopicPartition("topic", 1)))
                 )
             ).stream().map(Task::id).collect(Collectors.toSet()),
             equalTo(Set.of(task00, task01))

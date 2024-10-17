@@ -69,6 +69,8 @@ import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -199,10 +201,10 @@ public class ProcessorStateManagerTest {
             logContext,
             stateDirectory,
             changelogReader,
-            Map.ofEntries(
-                Map.entry(persistentStoreName, persistentStoreTopicName),
-                Map.entry(persistentStoreTwoName, persistentStoreTwoTopicName),
-                Map.entry(nonPersistentStoreName, nonPersistentStoreTopicName)
+            mkMap(
+                mkEntry(persistentStoreName, persistentStoreTopicName),
+                mkEntry(persistentStoreTwoName, persistentStoreTwoTopicName),
+                mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)
             ),
             Set.of(persistentStorePartition, nonPersistentStorePartition),
             false);
@@ -220,9 +222,9 @@ public class ProcessorStateManagerTest {
             false,
             logContext,
             stateDirectory,
-            changelogReader, Map.ofEntries(
-                Map.entry(persistentStoreName, persistentStoreTopicName),
-                Map.entry(persistentStoreTwoName, persistentStoreTopicName)
+            changelogReader, mkMap(
+                mkEntry(persistentStoreName, persistentStoreTopicName),
+                mkEntry(persistentStoreTwoName, persistentStoreTopicName)
             ),
             Collections.emptySet(),
             false);
@@ -413,10 +415,10 @@ public class ProcessorStateManagerTest {
     public void shouldInitializeOffsetsFromCheckpointFile() throws IOException {
         final long checkpointOffset = 10L;
 
-        final Map<TopicPartition, Long> offsets = Map.ofEntries(
-            Map.entry(persistentStorePartition, checkpointOffset),
-            Map.entry(nonPersistentStorePartition, checkpointOffset),
-            Map.entry(irrelevantPartition, 999L)
+        final Map<TopicPartition, Long> offsets = mkMap(
+            mkEntry(persistentStorePartition, checkpointOffset),
+            mkEntry(nonPersistentStorePartition, checkpointOffset),
+            mkEntry(irrelevantPartition, 999L)
         );
         checkpoint.write(offsets);
 
@@ -434,10 +436,10 @@ public class ProcessorStateManagerTest {
                 persistentStoreTwoPartition,
                 nonPersistentStorePartition),
                 stateMgr.changelogPartitions());
-            assertEquals(Map.ofEntries(
-                Map.entry(persistentStorePartition, checkpointOffset + 1L),
-                Map.entry(persistentStoreTwoPartition, 0L),
-                Map.entry(nonPersistentStorePartition, 0L)),
+            assertEquals(mkMap(
+                mkEntry(persistentStorePartition, checkpointOffset + 1L),
+                mkEntry(persistentStoreTwoPartition, 0L),
+                mkEntry(nonPersistentStorePartition, 0L)),
                 stateMgr.changelogOffsets()
             );
 
@@ -454,10 +456,10 @@ public class ProcessorStateManagerTest {
     public void shouldInitializeOffsetsFromCheckpointFileAndDeleteIfEOSEnabled() throws IOException {
         final long checkpointOffset = 10L;
 
-        final Map<TopicPartition, Long> offsets = Map.ofEntries(
-                Map.entry(persistentStorePartition, checkpointOffset),
-                Map.entry(nonPersistentStorePartition, checkpointOffset),
-                Map.entry(irrelevantPartition, 999L)
+        final Map<TopicPartition, Long> offsets = mkMap(
+                mkEntry(persistentStorePartition, checkpointOffset),
+                mkEntry(nonPersistentStorePartition, checkpointOffset),
+                mkEntry(irrelevantPartition, 999L)
         );
         checkpoint.write(offsets);
 
@@ -475,10 +477,10 @@ public class ProcessorStateManagerTest {
                     persistentStoreTwoPartition,
                     nonPersistentStorePartition),
                     stateMgr.changelogPartitions());
-            assertEquals(Map.ofEntries(
-                    Map.entry(persistentStorePartition, checkpointOffset + 1L),
-                    Map.entry(persistentStoreTwoPartition, 0L),
-                    Map.entry(nonPersistentStorePartition, 0L)),
+            assertEquals(mkMap(
+                    mkEntry(persistentStorePartition, checkpointOffset + 1L),
+                    mkEntry(persistentStoreTwoPartition, 0L),
+                    mkEntry(nonPersistentStorePartition, 0L)),
                     stateMgr.changelogOffsets()
             );
 
@@ -605,9 +607,9 @@ public class ProcessorStateManagerTest {
             assertThat(storeMetadata.offset(), equalTo(100L));
 
             // should ignore irrelevant topic partitions
-            stateMgr.updateChangelogOffsets(Map.ofEntries(
-                Map.entry(persistentStorePartition, 220L),
-                Map.entry(irrelevantPartition, 9000L)
+            stateMgr.updateChangelogOffsets(mkMap(
+                mkEntry(persistentStorePartition, 220L),
+                mkEntry(irrelevantPartition, 9000L)
             ));
             stateMgr.checkpoint();
 
@@ -906,10 +908,10 @@ public class ProcessorStateManagerTest {
     public void shouldThrowTaskCorruptedWithoutPersistentStoreCheckpointAndNonEmptyDir() throws IOException {
         final long checkpointOffset = 10L;
 
-        final Map<TopicPartition, Long> offsets = Map.ofEntries(
-            Map.entry(persistentStorePartition, checkpointOffset),
-            Map.entry(nonPersistentStorePartition, checkpointOffset),
-            Map.entry(irrelevantPartition, 999L)
+        final Map<TopicPartition, Long> offsets = mkMap(
+            mkEntry(persistentStorePartition, checkpointOffset),
+            mkEntry(nonPersistentStorePartition, checkpointOffset),
+            mkEntry(irrelevantPartition, 999L)
         );
         checkpoint.write(offsets);
 
@@ -936,9 +938,9 @@ public class ProcessorStateManagerTest {
     public void shouldNotThrowTaskCorruptedWithoutInMemoryStoreCheckpointAndNonEmptyDir() throws IOException {
         final long checkpointOffset = 10L;
 
-        final Map<TopicPartition, Long> offsets = Map.ofEntries(
-            Map.entry(persistentStorePartition, checkpointOffset),
-            Map.entry(irrelevantPartition, 999L)
+        final Map<TopicPartition, Long> offsets = mkMap(
+            mkEntry(persistentStorePartition, checkpointOffset),
+            mkEntry(irrelevantPartition, 999L)
         );
         checkpoint.write(offsets);
 
@@ -966,9 +968,9 @@ public class ProcessorStateManagerTest {
             assertThat(stateMgr.storeMetadata(nonPersistentStorePartition), notNullValue());
             assertThat(stateMgr.storeMetadata(persistentStorePartition), notNullValue());
 
-            stateMgr.updateChangelogOffsets(Map.ofEntries(
-                Map.entry(nonPersistentStorePartition, 876L),
-                Map.entry(persistentStorePartition, 666L))
+            stateMgr.updateChangelogOffsets(mkMap(
+                mkEntry(nonPersistentStorePartition, 876L),
+                mkEntry(persistentStorePartition, 666L))
             );
             stateMgr.checkpoint();
 
@@ -1014,10 +1016,10 @@ public class ProcessorStateManagerTest {
     @Test
     public void shouldDeleteCheckPointFileIfEosEnabled() throws IOException {
         final long checkpointOffset = 10L;
-        final Map<TopicPartition, Long> offsets = Map.ofEntries(
-                Map.entry(persistentStorePartition, checkpointOffset),
-                Map.entry(nonPersistentStorePartition, checkpointOffset),
-                Map.entry(irrelevantPartition, 999L)
+        final Map<TopicPartition, Long> offsets = mkMap(
+                mkEntry(persistentStorePartition, checkpointOffset),
+                mkEntry(nonPersistentStorePartition, checkpointOffset),
+                mkEntry(irrelevantPartition, 999L)
         );
         checkpoint.write(offsets);
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true);
@@ -1029,10 +1031,10 @@ public class ProcessorStateManagerTest {
     @Test
     public void shouldNotDeleteCheckPointFileIfEosNotEnabled() throws IOException {
         final long checkpointOffset = 10L;
-        final Map<TopicPartition, Long> offsets = Map.ofEntries(
-                Map.entry(persistentStorePartition, checkpointOffset),
-                Map.entry(nonPersistentStorePartition, checkpointOffset),
-                Map.entry(irrelevantPartition, 999L)
+        final Map<TopicPartition, Long> offsets = mkMap(
+                mkEntry(persistentStorePartition, checkpointOffset),
+                mkEntry(nonPersistentStorePartition, checkpointOffset),
+                mkEntry(irrelevantPartition, 999L)
         );
         checkpoint.write(offsets);
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, false);
@@ -1169,10 +1171,10 @@ public class ProcessorStateManagerTest {
             logContext,
             stateDirectory,
             changelogReader,
-            Map.ofEntries(
-                Map.entry(persistentStoreName, persistentStoreTopicName),
-                Map.entry(persistentStoreTwoName, persistentStoreTwoTopicName),
-                Map.entry(nonPersistentStoreName, nonPersistentStoreTopicName)
+            mkMap(
+                mkEntry(persistentStoreName, persistentStoreTopicName),
+                mkEntry(persistentStoreTwoName, persistentStoreTwoTopicName),
+                mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)
             ),
             emptySet(),
             false);

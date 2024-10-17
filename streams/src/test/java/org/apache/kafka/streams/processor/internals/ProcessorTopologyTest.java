@@ -60,13 +60,14 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.function.Supplier;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
@@ -223,9 +224,9 @@ public class ProcessorTopologyTest {
         topology.addSource(sourceNodeWithinSubtopology, topicWithinSubtopology);
         final ProcessorTopology processorTopology = topology.getInternalBuilder("X").buildTopology();
 
-        processorTopology.updateSourceTopics(Map.ofEntries(
-            Map.entry(sourceNodeWithinSubtopology, Collections.singletonList(topicWithinSubtopology)),
-            Map.entry(sourceNodeOutsideSubtopology, Collections.singletonList(topicOutsideSubtopology))
+        processorTopology.updateSourceTopics(mkMap(
+            mkEntry(sourceNodeWithinSubtopology, Collections.singletonList(topicWithinSubtopology)),
+            mkEntry(sourceNodeOutsideSubtopology, Collections.singletonList(topicOutsideSubtopology))
             )
         );
 
@@ -263,9 +264,9 @@ public class ProcessorTopologyTest {
 
         final Throwable exception = assertThrows(
             IllegalStateException.class,
-            () -> processorTopology.updateSourceTopics(Map.ofEntries(
-                Map.entry(sourceNode, Collections.singletonList(doublySubscribedTopic)),
-                Map.entry(updatedSourceNode, Arrays.asList(topic, doublySubscribedTopic))
+            () -> processorTopology.updateSourceTopics(mkMap(
+                mkEntry(sourceNode, Collections.singletonList(doublySubscribedTopic)),
+                mkEntry(updatedSourceNode, Arrays.asList(topic, doublySubscribedTopic))
             ))
         );
         assertThat(

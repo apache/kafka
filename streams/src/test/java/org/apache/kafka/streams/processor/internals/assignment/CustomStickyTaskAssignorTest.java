@@ -48,6 +48,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment.AssignedTask.Type.ACTIVE;
 import static org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment.AssignedTask.Type.STANDBY;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
@@ -95,12 +96,12 @@ public class CustomStickyTaskAssignorTest {
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY,
     })
     public void shouldAssignOneActiveTaskToEachProcessWhenTaskCountSameAsProcessCount(final String rackAwareStrategy) {
-        final Map<ProcessId, KafkaStreamsState> streamStates = Map.ofEntries(
+        final Map<ProcessId, KafkaStreamsState> streamStates = mkMap(
             mkStreamState(1, 1, Optional.empty()),
             mkStreamState(2, 1, Optional.empty()),
             mkStreamState(3, 1, Optional.empty())
         );
-        final Map<TaskId, TaskInfo> tasks = Map.ofEntries(
+        final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, false),
             mkTaskInfo(TASK_0_1, false),
             mkTaskInfo(TASK_0_2, false)
@@ -120,12 +121,12 @@ public class CustomStickyTaskAssignorTest {
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY,
     })
     public void shouldAssignTopicGroupIdEvenlyAcrossClientsWithNoStandByTasks(final String rackAwareStrategy) {
-        final Map<ProcessId, KafkaStreamsState> streamStates = Map.ofEntries(
+        final Map<ProcessId, KafkaStreamsState> streamStates = mkMap(
             mkStreamState(1, 2, Optional.empty()),
             mkStreamState(2, 2, Optional.empty()),
             mkStreamState(3, 2, Optional.empty())
         );
-        final Map<TaskId, TaskInfo> tasks = Map.ofEntries(
+        final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_1_0, false),
             mkTaskInfo(TASK_1_1, false),
             mkTaskInfo(TASK_2_2, false),
@@ -146,13 +147,13 @@ public class CustomStickyTaskAssignorTest {
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY,
     })
     public void shouldAssignTopicGroupIdEvenlyAcrossClientsWithStandByTasks(final String rackAwareStrategy) {
-        final Map<ProcessId, KafkaStreamsState> streamStates = Map.ofEntries(
+        final Map<ProcessId, KafkaStreamsState> streamStates = mkMap(
             mkStreamState(1, 2, Optional.empty()),
             mkStreamState(2, 2, Optional.empty()),
             mkStreamState(3, 2, Optional.empty())
         );
 
-        final Map<TaskId, TaskInfo> tasks = Map.ofEntries(
+        final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_2_0, false),
             mkTaskInfo(TASK_1_1, false),
             mkTaskInfo(TASK_1_2, false),
@@ -172,12 +173,12 @@ public class CustomStickyTaskAssignorTest {
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY,
     })
     public void shouldNotMigrateActiveTaskToOtherProcess(final String rackAwareStrategy) {
-        final Map<ProcessId, KafkaStreamsState> streamStates = Map.ofEntries(
+        final Map<ProcessId, KafkaStreamsState> streamStates = mkMap(
             mkStreamState(1, 1, Optional.empty(), Set.of(TASK_0_0), Set.of()),
             mkStreamState(2, 1, Optional.empty(), Set.of(TASK_0_1), Set.of())
         );
 
-        final Map<TaskId, TaskInfo> tasks = Map.ofEntries(
+        final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, false),
             mkTaskInfo(TASK_0_1, false),
             mkTaskInfo(TASK_0_2, false)
@@ -187,7 +188,7 @@ public class CustomStickyTaskAssignorTest {
         assertHasAssignment(assignments, 1, TASK_0_0, ACTIVE);
         assertHasAssignment(assignments, 2, TASK_0_1, ACTIVE);
 
-        final Map<ProcessId, KafkaStreamsState> streamStates2 = Map.ofEntries(
+        final Map<ProcessId, KafkaStreamsState> streamStates2 = mkMap(
             mkStreamState(1, 1, Optional.empty(), Set.of(TASK_0_1), Set.of()),
             mkStreamState(2, 1, Optional.empty(), Set.of(TASK_0_0), Set.of())
         );
@@ -204,13 +205,13 @@ public class CustomStickyTaskAssignorTest {
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY,
     })
     public void shouldMigrateActiveTasksToNewProcessWithoutChangingAllAssignments(final String rackAwareStrategy) {
-        final Map<TaskId, TaskInfo> tasks = Map.ofEntries(
+        final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, false),
             mkTaskInfo(TASK_0_1, false),
             mkTaskInfo(TASK_0_2, false)
         );
 
-        final Map<ProcessId, KafkaStreamsState> streamStates = Map.ofEntries(
+        final Map<ProcessId, KafkaStreamsState> streamStates = mkMap(
             mkStreamState(1, 1, Optional.empty(), Set.of(TASK_0_0, TASK_0_2), Set.of()),
             mkStreamState(2, 1, Optional.empty(), Set.of(TASK_0_1), Set.of()),
             mkStreamState(3, 1, Optional.empty())
@@ -232,12 +233,12 @@ public class CustomStickyTaskAssignorTest {
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY,
     })
     public void shouldAssignBasedOnCapacity(final String rackAwareStrategy) {
-        final Map<TaskId, TaskInfo> tasks = Map.ofEntries(
+        final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, false),
             mkTaskInfo(TASK_0_1, false),
             mkTaskInfo(TASK_0_2, false)
         );
-        final Map<ProcessId, KafkaStreamsState> streamStates = Map.ofEntries(
+        final Map<ProcessId, KafkaStreamsState> streamStates = mkMap(
             mkStreamState(1, 1, Optional.empty()),
             mkStreamState(2, 2, Optional.empty())
         );
@@ -254,7 +255,7 @@ public class CustomStickyTaskAssignorTest {
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY,
     })
     public void shouldAssignTasksEvenlyWithUnequalTopicGroupSizes(final String rackAwareStrategy) {
-        final Map<TaskId, TaskInfo> tasks = Map.ofEntries(
+        final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_1_0, false),
             mkTaskInfo(TASK_0_0, false),
             mkTaskInfo(TASK_0_1, false),
@@ -264,7 +265,7 @@ public class CustomStickyTaskAssignorTest {
             mkTaskInfo(TASK_0_5, false)
         );
 
-        final Map<ProcessId, KafkaStreamsState> streamStates = Map.ofEntries(
+        final Map<ProcessId, KafkaStreamsState> streamStates = mkMap(
             mkStreamState(1, 1, Optional.empty(), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5, TASK_1_0), Set.of()),
             mkStreamState(2, 1, Optional.empty())
         );
@@ -299,13 +300,13 @@ public class CustomStickyTaskAssignorTest {
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY,
     })
     public void shouldKeepActiveTaskStickinessWhenMoreClientThanActiveTasks(final String rackAwareStrategy) {
-        final Map<TaskId, TaskInfo> tasks = Map.ofEntries(
+        final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, false),
             mkTaskInfo(TASK_0_1, false),
             mkTaskInfo(TASK_0_2, false)
         );
 
-        final Map<ProcessId, KafkaStreamsState> streamStates = Map.ofEntries(
+        final Map<ProcessId, KafkaStreamsState> streamStates = mkMap(
             mkStreamState(1, 1, Optional.empty(), Set.of(TASK_0_0), Set.of()),
             mkStreamState(2, 1, Optional.empty(), Set.of(TASK_0_2), Set.of()),
             mkStreamState(3, 1, Optional.empty(), Set.of(TASK_0_1), Set.of()),
@@ -325,7 +326,7 @@ public class CustomStickyTaskAssignorTest {
         assertHasAssignment(assignments, 3, TASK_0_1, ACTIVE);
 
 
-        final Map<ProcessId, KafkaStreamsState> streamStates2 = Map.ofEntries(
+        final Map<ProcessId, KafkaStreamsState> streamStates2 = mkMap(
             mkStreamState(1, 1, Optional.empty()),
             mkStreamState(2, 1, Optional.empty()),
             mkStreamState(3, 1, Optional.empty(), Set.of(TASK_0_1), Set.of()),
@@ -353,13 +354,13 @@ public class CustomStickyTaskAssignorTest {
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY,
     })
     public void shouldAssignTasksToClientWithPreviousStandbyTasks(final String rackAwareStrategy) {
-        final Map<TaskId, TaskInfo> tasks = Map.ofEntries(
+        final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, false),
             mkTaskInfo(TASK_0_1, false),
             mkTaskInfo(TASK_0_2, false)
         );
 
-        final Map<ProcessId, KafkaStreamsState> streamStates = Map.ofEntries(
+        final Map<ProcessId, KafkaStreamsState> streamStates = mkMap(
             mkStreamState(1, 1, Optional.empty(), Set.of(), Set.of(TASK_0_2)),
             mkStreamState(2, 1, Optional.empty(), Set.of(), Set.of(TASK_0_1)),
             mkStreamState(3, 1, Optional.empty(), Set.of(), Set.of(TASK_0_0))
@@ -379,13 +380,13 @@ public class CustomStickyTaskAssignorTest {
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY,
     })
     public void shouldAssignBasedOnCapacityWhenMultipleClientHaveStandbyTasks(final String rackAwareStrategy) {
-        final Map<TaskId, TaskInfo> tasks = Map.ofEntries(
+        final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, false),
             mkTaskInfo(TASK_0_1, false),
             mkTaskInfo(TASK_0_2, false)
         );
 
-        final Map<ProcessId, KafkaStreamsState> streamStates = Map.ofEntries(
+        final Map<ProcessId, KafkaStreamsState> streamStates = mkMap(
             mkStreamState(1, 1, Optional.empty(), Set.of(TASK_0_0), Set.of(TASK_0_1)),
             mkStreamState(2, 2, Optional.empty(), Set.of(TASK_0_2), Set.of(TASK_0_1))
         );
@@ -406,14 +407,14 @@ public class CustomStickyTaskAssignorTest {
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY,
     })
     public void shouldAssignStandbyTasksToDifferentClientThanCorrespondingActiveTaskIsAssignedTo(final String rackAwareStrategy) {
-        final Map<TaskId, TaskInfo> tasks = Map.ofEntries(
+        final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, true),
             mkTaskInfo(TASK_0_1, true),
             mkTaskInfo(TASK_0_2, true),
             mkTaskInfo(TASK_0_3, true)
         );
 
-        final Map<ProcessId, KafkaStreamsState> streamStates = Map.ofEntries(
+        final Map<ProcessId, KafkaStreamsState> streamStates = mkMap(
             mkStreamState(1, 1, Optional.empty(), Set.of(TASK_0_0), Set.of()),
             mkStreamState(2, 1, Optional.empty(), Set.of(TASK_0_1), Set.of()),
             mkStreamState(3, 1, Optional.empty(), Set.of(TASK_0_2), Set.of()),
@@ -458,13 +459,13 @@ public class CustomStickyTaskAssignorTest {
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY,
     })
     public void shouldAssignMultipleReplicasOfStandbyTask(final String rackAwareStrategy) {
-        final Map<TaskId, TaskInfo> tasks = Map.ofEntries(
+        final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, true),
             mkTaskInfo(TASK_0_1, true),
             mkTaskInfo(TASK_0_2, true)
         );
 
-        final Map<ProcessId, KafkaStreamsState> streamStates = Map.ofEntries(
+        final Map<ProcessId, KafkaStreamsState> streamStates = mkMap(
             mkStreamState(1, 1, Optional.empty(), Set.of(TASK_0_0), Set.of()),
             mkStreamState(2, 1, Optional.empty(), Set.of(TASK_0_1), Set.of()),
             mkStreamState(3, 1, Optional.empty(), Set.of(TASK_0_2), Set.of())
@@ -488,11 +489,11 @@ public class CustomStickyTaskAssignorTest {
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY,
     })
     public void shouldNotAssignStandbyTaskReplicasWhenNoClientAvailableWithoutHavingTheTaskAssigned(final String rackAwareStrategy) {
-        final Map<TaskId, TaskInfo> tasks = Map.ofEntries(
+        final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, true)
         );
 
-        final Map<ProcessId, KafkaStreamsState> streamStates = Map.ofEntries(
+        final Map<ProcessId, KafkaStreamsState> streamStates = mkMap(
             mkStreamState(1, 1, Optional.empty(), Set.of(TASK_0_0), Set.of())
         );
         final Map<ProcessId, KafkaStreamsAssignment> assignments = assign(streamStates, tasks, 2, rackAwareStrategy);
@@ -508,13 +509,13 @@ public class CustomStickyTaskAssignorTest {
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY,
     })
     public void shouldAssignActiveAndStandbyTasks(final String rackAwareStrategy) {
-        final Map<TaskId, TaskInfo> tasks = Map.ofEntries(
+        final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, true),
             mkTaskInfo(TASK_0_1, true),
             mkTaskInfo(TASK_0_2, true)
         );
 
-        final Map<ProcessId, KafkaStreamsState> streamStates = Map.ofEntries(
+        final Map<ProcessId, KafkaStreamsState> streamStates = mkMap(
             mkStreamState(1, 1, Optional.empty()),
             mkStreamState(2, 1, Optional.empty()),
             mkStreamState(3, 1, Optional.empty())
@@ -536,13 +537,13 @@ public class CustomStickyTaskAssignorTest {
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY,
     })
     public void shouldAssignAtLeastOneTaskToEachClientIfPossible(final String rackAwareStrategy) {
-        final Map<TaskId, TaskInfo> tasks = Map.ofEntries(
+        final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, false),
             mkTaskInfo(TASK_0_1, false),
             mkTaskInfo(TASK_0_2, false)
         );
 
-        final Map<ProcessId, KafkaStreamsState> streamStates = Map.ofEntries(
+        final Map<ProcessId, KafkaStreamsState> streamStates = mkMap(
             mkStreamState(1, 3, Optional.empty()),
             mkStreamState(2, 1, Optional.empty()),
             mkStreamState(3, 1, Optional.empty())
@@ -562,13 +563,13 @@ public class CustomStickyTaskAssignorTest {
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY,
     })
     public void shouldAssignEachActiveTaskToOneClientWhenMoreClientsThanTasks(final String rackAwareStrategy) {
-        final Map<TaskId, TaskInfo> tasks = Map.ofEntries(
+        final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, false),
             mkTaskInfo(TASK_0_1, false),
             mkTaskInfo(TASK_0_2, false)
         );
 
-        final Map<ProcessId, KafkaStreamsState> streamStates = Map.ofEntries(
+        final Map<ProcessId, KafkaStreamsState> streamStates = mkMap(
             mkStreamState(1, 1, Optional.empty()),
             mkStreamState(2, 1, Optional.empty()),
             mkStreamState(3, 1, Optional.empty()),
@@ -596,13 +597,13 @@ public class CustomStickyTaskAssignorTest {
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY,
     })
     public void shouldBalanceActiveAndStandbyTasksAcrossAvailableClients(final String rackAwareStrategy) {
-        final Map<TaskId, TaskInfo> tasks = Map.ofEntries(
+        final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, true),
             mkTaskInfo(TASK_0_1, true),
             mkTaskInfo(TASK_0_2, true)
         );
 
-        final Map<ProcessId, KafkaStreamsState> streamStates = Map.ofEntries(
+        final Map<ProcessId, KafkaStreamsState> streamStates = mkMap(
             mkStreamState(1, 1, Optional.empty()),
             mkStreamState(2, 1, Optional.empty()),
             mkStreamState(3, 1, Optional.empty()),
@@ -625,7 +626,7 @@ public class CustomStickyTaskAssignorTest {
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY,
     })
     public void shouldAssignMoreTasksToClientWithMoreCapacity(final String rackAwareStrategy) {
-        final Map<TaskId, TaskInfo> tasks = Map.ofEntries(
+        final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, false),
             mkTaskInfo(TASK_0_1, false),
             mkTaskInfo(TASK_0_2, false),
@@ -640,7 +641,7 @@ public class CustomStickyTaskAssignorTest {
             mkTaskInfo(TASK_3_2, false)
         );
 
-        final Map<ProcessId, KafkaStreamsState> streamStates = Map.ofEntries(
+        final Map<ProcessId, KafkaStreamsState> streamStates = mkMap(
             mkStreamState(1, 1, Optional.empty()),
             mkStreamState(2, 2, Optional.empty())
         );
@@ -664,14 +665,14 @@ public class CustomStickyTaskAssignorTest {
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY,
     })
     public void shouldNotHaveSameAssignmentOnAnyTwoHosts(final String rackAwareStrategy) {
-        final Map<TaskId, TaskInfo> tasks = Map.ofEntries(
+        final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, true),
             mkTaskInfo(TASK_0_1, true),
             mkTaskInfo(TASK_0_2, true),
             mkTaskInfo(TASK_0_3, true)
         );
 
-        final Map<ProcessId, KafkaStreamsState> streamStates = Map.ofEntries(
+        final Map<ProcessId, KafkaStreamsState> streamStates = mkMap(
             mkStreamState(1, 1, Optional.empty()),
             mkStreamState(2, 1, Optional.empty()),
             mkStreamState(3, 1, Optional.empty()),
@@ -700,14 +701,14 @@ public class CustomStickyTaskAssignorTest {
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY,
     })
     public void shouldNotHaveSameAssignmentOnAnyTwoHostsWhenThereArePreviousActiveTasks(final String rackAwareStrategy) {
-        final Map<TaskId, TaskInfo> tasks = Map.ofEntries(
+        final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, true),
             mkTaskInfo(TASK_0_1, true),
             mkTaskInfo(TASK_0_2, true),
             mkTaskInfo(TASK_0_3, true)
         );
 
-        final Map<ProcessId, KafkaStreamsState> streamStates = Map.ofEntries(
+        final Map<ProcessId, KafkaStreamsState> streamStates = mkMap(
             mkStreamState(1, 1, Optional.empty(), Set.of(TASK_0_1, TASK_0_2), Set.of()),
             mkStreamState(2, 1, Optional.empty(), Set.of(TASK_0_3), Set.of()),
             mkStreamState(3, 1, Optional.empty(), Set.of(TASK_0_0), Set.of()),
@@ -736,13 +737,13 @@ public class CustomStickyTaskAssignorTest {
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY,
     })
     public void shouldAssignMultipleStandbys(final String rackAwareStrategy) {
-        final Map<TaskId, TaskInfo> tasks = Map.ofEntries(
+        final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, true),
             mkTaskInfo(TASK_0_1, false),
             mkTaskInfo(TASK_0_2, false)
         );
 
-        final Map<ProcessId, KafkaStreamsState> streamStates = Map.ofEntries(
+        final Map<ProcessId, KafkaStreamsState> streamStates = mkMap(
             mkStreamState(1, 1, Optional.empty()),
             mkStreamState(2, 1, Optional.empty()),
             mkStreamState(3, 1, Optional.empty()),
@@ -770,7 +771,7 @@ public class CustomStickyTaskAssignorTest {
         final int clientCount = 20;
         final int clientCapacity = 50;
 
-        final Map<TaskId, TaskInfo> tasks = Map.ofEntries();
+        final Map<TaskId, TaskInfo> tasks = mkMap();
         for (int i = 0; i < topicCount; i++) {
             for (int j = 0; j < taskPerTopic; j++) {
                 final TaskId newTaskId = new TaskId(i, j);
@@ -782,7 +783,7 @@ public class CustomStickyTaskAssignorTest {
             }
         }
 
-        final Map<ProcessId, KafkaStreamsState> streamStates = Map.ofEntries();
+        final Map<ProcessId, KafkaStreamsState> streamStates = mkMap();
         for (int i = 0; i < clientCount; i++) {
             final Map.Entry<ProcessId, KafkaStreamsState> newClient = mkStreamState(
                 i + 1,

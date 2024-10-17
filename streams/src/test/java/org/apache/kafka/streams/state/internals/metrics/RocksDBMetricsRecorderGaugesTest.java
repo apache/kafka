@@ -32,6 +32,8 @@ import org.rocksdb.Statistics;
 import java.math.BigInteger;
 import java.util.Map;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.STATE_STORE_LEVEL_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.STORE_ID_TAG;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_ID_TAG;
@@ -253,10 +255,10 @@ public class RocksDBMetricsRecorderGaugesTest {
                                final long expectedValue) {
 
         final Map<MetricName, ? extends Metric> metrics = streamsMetrics.metrics();
-        final Map<String, String> tagMap = Map.ofEntries(
-            Map.entry(THREAD_ID_TAG, Thread.currentThread().getName()),
-            Map.entry(TASK_ID_TAG, TASK_ID.toString()),
-            Map.entry(METRICS_SCOPE + "-" + STORE_ID_TAG, STORE_NAME)
+        final Map<String, String> tagMap = mkMap(
+            mkEntry(THREAD_ID_TAG, Thread.currentThread().getName()),
+            mkEntry(TASK_ID_TAG, TASK_ID.toString()),
+            mkEntry(METRICS_SCOPE + "-" + STORE_ID_TAG, STORE_NAME)
         );
         final KafkaMetric metric = (KafkaMetric) metrics.get(new MetricName(
             propertyName,

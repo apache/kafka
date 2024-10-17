@@ -66,6 +66,8 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_BATCH;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_END;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_START;
@@ -143,12 +145,12 @@ public class GlobalStateManagerImplTest {
         optionalMockReprocessFactory = mock(Optional.class);
         when(optionalMockReprocessFactory.isPresent()).thenReturn(false);
         topology = withGlobalStores(asList(store1, store2, store3, store4, store5), storeToTopic,
-           Map.ofEntries(
-                Map.entry(storeName1, Optional.empty()),
-                Map.entry(storeName2, Optional.empty()),
-                Map.entry(storeName3, Optional.empty()),
-                Map.entry(storeName4, Optional.empty()),
-                Map.entry(storeName5, optionalMockReprocessFactory)
+            mkMap(
+                mkEntry(storeName1, Optional.empty()),
+                mkEntry(storeName2, Optional.empty()),
+                mkEntry(storeName3, Optional.empty()),
+                mkEntry(storeName4, Optional.empty()),
+                mkEntry(storeName5, optionalMockReprocessFactory)
             )
         );
         streamsConfig = new StreamsConfig(new Properties() {
@@ -586,11 +588,11 @@ public class GlobalStateManagerImplTest {
         };
         initializeConsumer(0, 0, t1, t2, t3, t4);
 
-        streamsConfig = new StreamsConfig(Map.ofEntries(
-            Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
-            Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
-            Map.entry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-            Map.entry(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 0L)
+        streamsConfig = new StreamsConfig(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
+            mkEntry(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 0L)
         ));
 
         stateManager = new GlobalStateManagerImpl(
@@ -629,11 +631,11 @@ public class GlobalStateManagerImplTest {
         };
         initializeConsumer(0, 0, t1, t2, t3, t4);
 
-        streamsConfig = new StreamsConfig(Map.ofEntries(
-            Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
-            Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
-            Map.entry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-            Map.entry(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 1L)
+        streamsConfig = new StreamsConfig(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
+            mkEntry(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 1L)
         ));
 
         stateManager = new GlobalStateManagerImpl(
@@ -670,11 +672,11 @@ public class GlobalStateManagerImplTest {
         };
         initializeConsumer(0, 0, t1, t2, t3, t4);
 
-        streamsConfig = new StreamsConfig(Map.ofEntries(
-            Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
-            Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
-            Map.entry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-            Map.entry(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 1000L)
+        streamsConfig = new StreamsConfig(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
+            mkEntry(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 1000L)
         ));
 
         stateManager = new GlobalStateManagerImpl(
@@ -718,11 +720,11 @@ public class GlobalStateManagerImplTest {
         };
         initializeConsumer(0, 0, t1, t2, t3, t4, t5);
 
-        streamsConfig = new StreamsConfig(Map.ofEntries(
-            Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
-            Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
-            Map.entry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-            Map.entry(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 10L)
+        streamsConfig = new StreamsConfig(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
+            mkEntry(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 10L)
         ));
 
         stateManager = new GlobalStateManagerImpl(
@@ -752,11 +754,11 @@ public class GlobalStateManagerImplTest {
         };
         initializeConsumer(0, 0, t1, t2, t3, t4);
 
-        streamsConfig = new StreamsConfig(Map.ofEntries(
-            Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
-            Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
-            Map.entry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-            Map.entry(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 0L)
+        streamsConfig = new StreamsConfig(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
+            mkEntry(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 0L)
         ));
 
         stateManager = new GlobalStateManagerImpl(
@@ -795,11 +797,11 @@ public class GlobalStateManagerImplTest {
         };
         initializeConsumer(0, 0, t1, t2, t3, t4);
 
-        streamsConfig = new StreamsConfig(Map.ofEntries(
-            Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
-            Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
-            Map.entry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-            Map.entry(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 1L)
+        streamsConfig = new StreamsConfig(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
+            mkEntry(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 1L)
         ));
 
         stateManager = new GlobalStateManagerImpl(
@@ -836,11 +838,11 @@ public class GlobalStateManagerImplTest {
         };
         initializeConsumer(0, 0, t1, t2, t3, t4);
 
-        streamsConfig = new StreamsConfig(Map.ofEntries(
-            Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
-            Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
-            Map.entry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-            Map.entry(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 1000L)
+        streamsConfig = new StreamsConfig(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
+            mkEntry(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 1000L)
         ));
 
         stateManager = new GlobalStateManagerImpl(
@@ -884,11 +886,11 @@ public class GlobalStateManagerImplTest {
         };
         initializeConsumer(0, 0, t1, t2, t3, t4, t5);
 
-        streamsConfig = new StreamsConfig(Map.ofEntries(
-            Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
-            Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
-            Map.entry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-            Map.entry(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 10L)
+        streamsConfig = new StreamsConfig(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
+            mkEntry(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 10L)
         ));
 
         stateManager = new GlobalStateManagerImpl(
@@ -918,11 +920,11 @@ public class GlobalStateManagerImplTest {
         };
         initializeConsumer(0, 0, t1, t2, t3, t4);
 
-        streamsConfig = new StreamsConfig(Map.ofEntries(
-            Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
-            Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
-            Map.entry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-            Map.entry(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 0L)
+        streamsConfig = new StreamsConfig(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
+            mkEntry(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 0L)
         ));
 
         stateManager = new GlobalStateManagerImpl(
@@ -961,11 +963,11 @@ public class GlobalStateManagerImplTest {
         };
         initializeConsumer(0, 0, t1, t2, t3, t4);
 
-        streamsConfig = new StreamsConfig(Map.ofEntries(
-            Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
-            Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
-            Map.entry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-            Map.entry(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 1L)
+        streamsConfig = new StreamsConfig(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
+            mkEntry(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 1L)
         ));
 
         stateManager = new GlobalStateManagerImpl(
@@ -1002,11 +1004,11 @@ public class GlobalStateManagerImplTest {
         };
         initializeConsumer(0, 0, t1, t2, t3, t4);
 
-        streamsConfig = new StreamsConfig(Map.ofEntries(
-            Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
-            Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
-            Map.entry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-            Map.entry(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 1000L)
+        streamsConfig = new StreamsConfig(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
+            mkEntry(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 1000L)
         ));
 
         stateManager = new GlobalStateManagerImpl(
@@ -1045,11 +1047,11 @@ public class GlobalStateManagerImplTest {
         };
         initializeConsumer(0, 0, t1, t2, t3, t4, t5);
 
-        streamsConfig = new StreamsConfig(Map.ofEntries(
-            Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
-            Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
-            Map.entry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-            Map.entry(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 10L)
+        streamsConfig = new StreamsConfig(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
+            mkEntry(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 10L)
         ));
 
         stateManager = new GlobalStateManagerImpl(
@@ -1086,10 +1088,10 @@ public class GlobalStateManagerImplTest {
         consumer.updateBeginningOffsets(startOffsets);
         consumer.updateEndOffsets(endOffsets);
 
-        streamsConfig = new StreamsConfig(Map.ofEntries(
-            Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
-            Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
-            Map.entry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
+        streamsConfig = new StreamsConfig(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
         ));
 
         stateManager = new GlobalStateManagerImpl(

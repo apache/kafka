@@ -26,6 +26,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 
 public class Fetch<K, V> {
     private final Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
@@ -43,7 +45,7 @@ public class Fetch<K, V> {
     ) {
         Map<TopicPartition, List<ConsumerRecord<K, V>>> recordsMap = records.isEmpty()
                 ? new HashMap<>()
-                : Map.ofEntries(Map.entry(partition, records));
+                : mkMap(mkEntry(partition, records));
         return new Fetch<>(recordsMap, positionAdvanced, records.size());
     }
 

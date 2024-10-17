@@ -21,6 +21,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -60,7 +62,7 @@ public class SupportedVersionRangeTest {
 
         Map<String, Short> versionRangeMap = versionRange.toMap();
         assertEquals(
-            Map.ofEntries(Map.entry("min_version", versionRange.min()), Map.entry("max_version", versionRange.max())),
+            mkMap(mkEntry("min_version", versionRange.min()), mkEntry("max_version", versionRange.max())),
             versionRangeMap);
 
         SupportedVersionRange newVersionRange = SupportedVersionRange.fromMap(versionRangeMap);
@@ -73,42 +75,42 @@ public class SupportedVersionRangeTest {
     public void testFromMapFailure() {
         // min_version can't be < 0.
         Map<String, Short> invalidWithBadMinVersion =
-            Map.ofEntries(Map.entry("min_version", (short) -1), Map.entry("max_version", (short) 0));
+            mkMap(mkEntry("min_version", (short) -1), mkEntry("max_version", (short) 0));
         assertThrows(
             IllegalArgumentException.class,
             () -> SupportedVersionRange.fromMap(invalidWithBadMinVersion));
 
         // max_version can't be < 0.
         Map<String, Short> invalidWithBadMaxVersion =
-            Map.ofEntries(Map.entry("min_version", (short) 0), Map.entry("max_version", (short) -1));
+            mkMap(mkEntry("min_version", (short) 0), mkEntry("max_version", (short) -1));
         assertThrows(
             IllegalArgumentException.class,
             () -> SupportedVersionRange.fromMap(invalidWithBadMaxVersion));
 
         // min_version and max_version can't be < 0.
         Map<String, Short> invalidWithBadMinMaxVersion =
-            Map.ofEntries(Map.entry("min_version", (short) -1), Map.entry("max_version", (short) -1));
+            mkMap(mkEntry("min_version", (short) -1), mkEntry("max_version", (short) -1));
         assertThrows(
             IllegalArgumentException.class,
             () -> SupportedVersionRange.fromMap(invalidWithBadMinMaxVersion));
 
         // min_version can't be > max_version.
         Map<String, Short> invalidWithLowerMaxVersion =
-            Map.ofEntries(Map.entry("min_version", (short) 2), Map.entry("max_version", (short) 1));
+            mkMap(mkEntry("min_version", (short) 2), mkEntry("max_version", (short) 1));
         assertThrows(
             IllegalArgumentException.class,
             () -> SupportedVersionRange.fromMap(invalidWithLowerMaxVersion));
 
         // min_version key missing.
         Map<String, Short> invalidWithMinKeyMissing =
-            Map.ofEntries(Map.entry("max_version", (short) 1));
+            mkMap(mkEntry("max_version", (short) 1));
         assertThrows(
             IllegalArgumentException.class,
             () -> SupportedVersionRange.fromMap(invalidWithMinKeyMissing));
 
         // max_version key missing.
         Map<String, Short> invalidWithMaxKeyMissing =
-            Map.ofEntries(Map.entry("min_version", (short) 1));
+            mkMap(mkEntry("min_version", (short) 1));
         assertThrows(
             IllegalArgumentException.class,
             () -> SupportedVersionRange.fromMap(invalidWithMaxKeyMissing));

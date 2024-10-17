@@ -44,10 +44,11 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
@@ -163,9 +164,9 @@ public class MockProcessorContextStateStoreTest {
         final File stateDir = TestUtils.tempDirectory();
         try {
             final MockProcessorContext<Void, Void> context = new MockProcessorContext<>(
-                mkProperties(Map.ofEntries(
-                    Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, ""),
-                    Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "")
+                mkProperties(mkMap(
+                    mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, ""),
+                    mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "")
                 )),
                 new TaskId(0, 0),
                 stateDir

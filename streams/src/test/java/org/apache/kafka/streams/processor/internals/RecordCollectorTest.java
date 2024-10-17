@@ -86,6 +86,8 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonMap;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.producerRecordSizeInBytes;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOPIC_LEVEL_GROUP;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -460,9 +462,9 @@ public class RecordCollectorTest {
                 "dropped-records-total",
                 "stream-task-metrics",
                 "The total number of dropped records",
-               Map.ofEntries(
-                        Map.entry("thread-id", Thread.currentThread().getName()),
-                        Map.entry("task-id", taskId.toString())
+                mkMap(
+                        mkEntry("thread-id", Thread.currentThread().getName()),
+                        mkEntry("task-id", taskId.toString())
                 )
         ));
 
@@ -1299,9 +1301,9 @@ public class RecordCollectorTest {
             "dropped-records-total",
             "stream-task-metrics",
             "The total number of dropped records",
-            Map.ofEntries(
-                Map.entry("thread-id", Thread.currentThread().getName()),
-                Map.entry("task-id", taskId.toString())
+            mkMap(
+                mkEntry("thread-id", Thread.currentThread().getName()),
+                mkEntry("task-id", taskId.toString())
             )
         ));
         assertEquals(1.0, metric.metricValue());
@@ -1544,9 +1546,9 @@ public class RecordCollectorTest {
                     "dropped-records-total",
                     "stream-task-metrics",
                     "The total number of dropped records",
-                    Map.ofEntries(
-                        Map.entry("thread-id", Thread.currentThread().getName()),
-                        Map.entry("task-id", taskId.toString())
+                    mkMap(
+                        mkEntry("thread-id", Thread.currentThread().getName()),
+                        mkEntry("task-id", taskId.toString())
                     ))).metricValue(),
                 equalTo(1.0)
             );

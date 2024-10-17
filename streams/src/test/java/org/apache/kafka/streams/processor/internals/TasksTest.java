@@ -25,9 +25,10 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.standbyTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statefulTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statelessTask;
@@ -82,10 +83,10 @@ public class TasksTest {
         assertEquals(Set.of(statefulTask, standbyTask), tasks.tasks(Set.of(statefulTask.id(), standbyTask.id())));
         assertEquals(Set.of(statefulTask.id(), statelessTask.id(), standbyTask.id()), tasks.allTaskIds());
         assertEquals(
-            Map.ofEntries(
-                Map.entry(statefulTask.id(), statefulTask),
-                Map.entry(statelessTask.id(), statelessTask),
-                Map.entry(standbyTask.id(), standbyTask)
+            mkMap(
+                mkEntry(statefulTask.id(), statefulTask),
+                mkEntry(statelessTask.id(), statelessTask),
+                mkEntry(standbyTask.id(), standbyTask)
             ),
             tasks.allTasksPerId());
         assertTrue(tasks.contains(statefulTask.id()));
@@ -95,28 +96,28 @@ public class TasksTest {
 
     @Test
     public void shouldDrainPendingTasksToCreate() {
-        tasks.addPendingActiveTasksToCreate(Map.ofEntries(
-            Map.entry(new TaskId(0, 0, "A"), Set.of(TOPIC_PARTITION_A_0)),
-            Map.entry(new TaskId(0, 1, "A"), Set.of(TOPIC_PARTITION_A_1)),
-            Map.entry(new TaskId(0, 0, "B"), Set.of(TOPIC_PARTITION_B_0)),
-            Map.entry(new TaskId(0, 1, "B"), Set.of(TOPIC_PARTITION_B_1))
+        tasks.addPendingActiveTasksToCreate(mkMap(
+            mkEntry(new TaskId(0, 0, "A"), Set.of(TOPIC_PARTITION_A_0)),
+            mkEntry(new TaskId(0, 1, "A"), Set.of(TOPIC_PARTITION_A_1)),
+            mkEntry(new TaskId(0, 0, "B"), Set.of(TOPIC_PARTITION_B_0)),
+            mkEntry(new TaskId(0, 1, "B"), Set.of(TOPIC_PARTITION_B_1))
         ));
 
-        tasks.addPendingStandbyTasksToCreate(Map.ofEntries(
-            Map.entry(new TaskId(0, 0, "A"), Set.of(TOPIC_PARTITION_A_0)),
-            Map.entry(new TaskId(0, 1, "A"), Set.of(TOPIC_PARTITION_A_1)),
-            Map.entry(new TaskId(0, 0, "B"), Set.of(TOPIC_PARTITION_B_0)),
-            Map.entry(new TaskId(0, 1, "B"), Set.of(TOPIC_PARTITION_B_1))
+        tasks.addPendingStandbyTasksToCreate(mkMap(
+            mkEntry(new TaskId(0, 0, "A"), Set.of(TOPIC_PARTITION_A_0)),
+            mkEntry(new TaskId(0, 1, "A"), Set.of(TOPIC_PARTITION_A_1)),
+            mkEntry(new TaskId(0, 0, "B"), Set.of(TOPIC_PARTITION_B_0)),
+            mkEntry(new TaskId(0, 1, "B"), Set.of(TOPIC_PARTITION_B_1))
         ));
 
-        assertEquals(Map.ofEntries(
-            Map.entry(new TaskId(0, 0, "A"), Set.of(TOPIC_PARTITION_A_0)),
-            Map.entry(new TaskId(0, 1, "A"), Set.of(TOPIC_PARTITION_A_1))
+        assertEquals(mkMap(
+            mkEntry(new TaskId(0, 0, "A"), Set.of(TOPIC_PARTITION_A_0)),
+            mkEntry(new TaskId(0, 1, "A"), Set.of(TOPIC_PARTITION_A_1))
         ), tasks.drainPendingActiveTasksForTopologies(Set.of("A")));
 
-        assertEquals(Map.ofEntries(
-            Map.entry(new TaskId(0, 0, "A"), Set.of(TOPIC_PARTITION_A_0)),
-            Map.entry(new TaskId(0, 1, "A"), Set.of(TOPIC_PARTITION_A_1))
+        assertEquals(mkMap(
+            mkEntry(new TaskId(0, 0, "A"), Set.of(TOPIC_PARTITION_A_0)),
+            mkEntry(new TaskId(0, 1, "A"), Set.of(TOPIC_PARTITION_A_1))
         ), tasks.drainPendingStandbyTasksForTopologies(Set.of("A")));
 
         tasks.clearPendingTasksToCreate();

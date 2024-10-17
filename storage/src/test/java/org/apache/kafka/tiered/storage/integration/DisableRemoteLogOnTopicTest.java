@@ -30,6 +30,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.DELETE_SEGMENT;
 
 public final class DisableRemoteLogOnTopicTest extends TieredStorageTestHarness {
@@ -55,8 +57,8 @@ public final class DisableRemoteLogOnTopicTest extends TieredStorageTestHarness 
         final Integer replicationFactor = 2;
         final Integer maxBatchCountPerSegment = 1;
         final boolean enableRemoteLogStorage = true;
-        final Map<Integer, List<Integer>> assignment = Map.ofEntries(
-                Map.entry(p0, Arrays.asList(broker0, broker1))
+        final Map<Integer, List<Integer>> assignment = mkMap(
+                mkEntry(p0, Arrays.asList(broker0, broker1))
         );
         // local.retention.ms/bytes need to set to the same value as retention.ms/bytes when disabling remote log copy
         final Map<String, String> disableRemoteCopy = new HashMap<>();

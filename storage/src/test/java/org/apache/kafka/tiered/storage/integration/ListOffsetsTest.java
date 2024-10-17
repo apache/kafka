@@ -32,6 +32,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.DELETE_SEGMENT;
 
 public class ListOffsetsTest extends TieredStorageTestHarness {
@@ -60,7 +62,7 @@ public class ListOffsetsTest extends TieredStorageTestHarness {
         final int p0 = 0;
         final Time time = new MockTime();
         final long timestamp = time.milliseconds();
-        final Map<Integer, List<Integer>> assignment = Map.ofEntries(Map.entry(p0, Arrays.asList(broker0, broker1)));
+        final Map<Integer, List<Integer>> assignment = mkMap(mkEntry(p0, Arrays.asList(broker0, broker1)));
 
         builder
                 .createTopic(topicA, 1, 2, 2, assignment, true)

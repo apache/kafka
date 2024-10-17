@@ -50,6 +50,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.standbyTask;
@@ -116,12 +118,12 @@ class DefaultStateUpdaterTest {
     }
 
     private Properties configProps(final int commitInterval) {
-        return mkObjectProperties(Map.ofEntries(
-            Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
-            Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
-            Map.entry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2),
-            Map.entry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, commitInterval),
-            Map.entry(producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), commitInterval)
+        return mkObjectProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
+            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2),
+            mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, commitInterval),
+            mkEntry(producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), commitInterval)
         ));
     }
 
@@ -133,9 +135,9 @@ class DefaultStateUpdaterTest {
         final StandbyTask standbyTask = standbyTask(TASK_0_2, Set.of(TOPIC_PARTITION_C_0)).inState(State.RUNNING).build();
         when(changelogReader.completedChangelogs()).thenReturn(Set.of(TOPIC_PARTITION_B_0));
         final TaskCorruptedException taskCorruptedException = new TaskCorruptedException(Set.of(TASK_1_1));
-        doThrow(taskCorruptedException).when(changelogReader).restore(Map.ofEntries(
-            Map.entry(TASK_1_1, failedStatefulTask),
-            Map.entry(TASK_0_2, standbyTask)
+        doThrow(taskCorruptedException).when(changelogReader).restore(mkMap(
+            mkEntry(TASK_1_1, failedStatefulTask),
+            mkEntry(TASK_0_2, standbyTask)
         ));
         stateUpdater.add(statelessTask);
         stateUpdater.add(restoredStatefulTask);
@@ -212,7 +214,7 @@ class DefaultStateUpdaterTest {
     public void shouldThrowIfRestartedWithNonEmptyFailedTasks() throws Exception {
         final StreamTask failedTask = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final TaskCorruptedException taskCorruptedException = new TaskCorruptedException(Set.of(TASK_0_0));
-        doThrow(taskCorruptedException).when(changelogReader).restore(Map.ofEntries(Map.entry(TASK_0_0, failedTask)));
+        doThrow(taskCorruptedException).when(changelogReader).restore(mkMap(mkEntry(TASK_0_0, failedTask)));
         stateUpdater.start();
         stateUpdater.add(failedTask);
         verifyExceptionsAndFailedTasks(new ExceptionAndTask(taskCorruptedException, failedTask));
@@ -456,7 +458,7 @@ class DefaultStateUpdaterTest {
         when(changelogReader.allChangelogsCompleted())
             .thenReturn(false);
         final TaskCorruptedException taskCorruptedException = new TaskCorruptedException(Set.of(task.id()));
-        doThrow(taskCorruptedException).when(changelogReader).restore(Map.ofEntries(Map.entry(TASK_0_0, task)));
+        doThrow(taskCorruptedException).when(changelogReader).restore(mkMap(mkEntry(TASK_0_0, task)));
         stateUpdater.start();
         stateUpdater.add(task);
         verifyRestoredActiveTasks();
@@ -650,10 +652,10 @@ class DefaultStateUpdaterTest {
         final StandbyTask standbyTask = standbyTask(TASK_1_0, Set.of(TOPIC_PARTITION_C_0)).inState(State.RUNNING).build();
         final TaskCorruptedException taskCorruptedException =
             new TaskCorruptedException(Set.of(activeTask1.id(), activeTask2.id()));
-        final Map<TaskId, Task> updatingTasks1 = Map.ofEntries(
-            Map.entry(activeTask1.id(), activeTask1),
-            Map.entry(activeTask2.id(), activeTask2),
-            Map.entry(standbyTask.id(), standbyTask)
+        final Map<TaskId, Task> updatingTasks1 = mkMap(
+            mkEntry(activeTask1.id(), activeTask1),
+            mkEntry(activeTask2.id(), activeTask2),
+            mkEntry(standbyTask.id(), standbyTask)
         );
         doThrow(taskCorruptedException).doReturn(0L).when(changelogReader).restore(updatingTasks1);
         when(changelogReader.allChangelogsCompleted()).thenReturn(false);
@@ -675,9 +677,9 @@ class DefaultStateUpdaterTest {
     public void shouldNotTransitToStandbyAgainAfterStandbyTaskFailed() throws Exception {
         final StandbyTask task1 = standbyTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
         final StandbyTask task2 = standbyTask(TASK_1_0, Set.of(TOPIC_PARTITION_B_0)).inState(State.RUNNING).build();
-        final Map<TaskId, Task> updatingTasks = Map.ofEntries(
-            Map.entry(task1.id(), task1),
-            Map.entry(task2.id(), task2)
+        final Map<TaskId, Task> updatingTasks = mkMap(
+            mkEntry(task1.id(), task1),
+            mkEntry(task2.id(), task2)
         );
         final TaskCorruptedException taskCorruptedException = new TaskCorruptedException(Set.of(task1.id()));
         final ExceptionAndTask expectedExceptionAndTasks = new ExceptionAndTask(taskCorruptedException, task1);
@@ -923,7 +925,7 @@ class DefaultStateUpdaterTest {
         final StreamsException streamsException = new StreamsException("Something happened", task.id());
         when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
         when(changelogReader.allChangelogsCompleted()).thenReturn(false);
-        final Map<TaskId, Task> updatingTasks = Map.ofEntries(Map.entry(task.id(), task));
+        final Map<TaskId, Task> updatingTasks = mkMap(mkEntry(task.id(), task));
         doThrow(streamsException)
             .doReturn(0L)
             .when(changelogReader).restore(updatingTasks);
@@ -948,9 +950,9 @@ class DefaultStateUpdaterTest {
         final StreamTask restoredTask = statefulTask(TASK_0_1, Set.of(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
         final StreamTask failedTask = statefulTask(TASK_0_2, Set.of(TOPIC_PARTITION_C_0)).inState(State.RESTORING).build();
         final TaskCorruptedException taskCorruptedException = new TaskCorruptedException(Set.of(TASK_0_2));
-        doThrow(taskCorruptedException).when(changelogReader).restore(Map.ofEntries(
-            Map.entry(TASK_0_0, updatingTask),
-            Map.entry(TASK_0_2, failedTask)
+        doThrow(taskCorruptedException).when(changelogReader).restore(mkMap(
+            mkEntry(TASK_0_0, updatingTask),
+            mkEntry(TASK_0_2, failedTask)
         ));
         when(changelogReader.completedChangelogs()).thenReturn(Set.of(TOPIC_PARTITION_B_0));
         when(changelogReader.allChangelogsCompleted()).thenReturn(false);
@@ -1097,9 +1099,9 @@ class DefaultStateUpdaterTest {
         final StreamsException streamsException = new StreamsException("Something happened", task.id());
         when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
         when(changelogReader.allChangelogsCompleted()).thenReturn(false);
-        final Map<TaskId, Task> updatingTasks = Map.ofEntries(
-            Map.entry(task.id(), task),
-            Map.entry(controlTask.id(), controlTask)
+        final Map<TaskId, Task> updatingTasks = mkMap(
+            mkEntry(task.id(), task),
+            mkEntry(controlTask.id(), controlTask)
         );
         doThrow(streamsException)
             .doReturn(0L)
@@ -1214,9 +1216,9 @@ class DefaultStateUpdaterTest {
         final StreamsException streamsException = new StreamsException("Something happened", task.id());
         when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
         when(changelogReader.allChangelogsCompleted()).thenReturn(false);
-        final Map<TaskId, Task> updatingTasks = Map.ofEntries(
-            Map.entry(task.id(), task),
-            Map.entry(controlTask.id(), controlTask)
+        final Map<TaskId, Task> updatingTasks = mkMap(
+            mkEntry(task.id(), task),
+            mkEntry(controlTask.id(), controlTask)
         );
         doThrow(streamsException)
             .doReturn(0L)
@@ -1239,9 +1241,9 @@ class DefaultStateUpdaterTest {
         final StandbyTask task2 = standbyTask(TASK_0_2, Set.of(TOPIC_PARTITION_B_0)).inState(State.RUNNING).build();
         final String exceptionMessage = "The Streams were crossed!";
         final StreamsException streamsException = new StreamsException(exceptionMessage);
-        final Map<TaskId, Task> updatingTasks = Map.ofEntries(
-            Map.entry(task1.id(), task1),
-            Map.entry(task2.id(), task2)
+        final Map<TaskId, Task> updatingTasks = mkMap(
+            mkEntry(task1.id(), task1),
+            mkEntry(task2.id(), task2)
         );
         doReturn(0L).doThrow(streamsException).when(changelogReader).restore(updatingTasks);
         stateUpdater.start();
@@ -1266,14 +1268,14 @@ class DefaultStateUpdaterTest {
         final String exceptionMessage = "The Streams were crossed!";
         final StreamsException streamsException1 = new StreamsException(exceptionMessage, task1.id());
         final StreamsException streamsException2 = new StreamsException(exceptionMessage, task3.id());
-        final Map<TaskId, Task> updatingTasksBeforeFirstThrow = Map.ofEntries(
-            Map.entry(task1.id(), task1),
-            Map.entry(task2.id(), task2),
-            Map.entry(task3.id(), task3)
+        final Map<TaskId, Task> updatingTasksBeforeFirstThrow = mkMap(
+            mkEntry(task1.id(), task1),
+            mkEntry(task2.id(), task2),
+            mkEntry(task3.id(), task3)
         );
-        final Map<TaskId, Task> updatingTasksBeforeSecondThrow = Map.ofEntries(
-            Map.entry(task2.id(), task2),
-            Map.entry(task3.id(), task3)
+        final Map<TaskId, Task> updatingTasksBeforeSecondThrow = mkMap(
+            mkEntry(task2.id(), task2),
+            mkEntry(task3.id(), task3)
         );
         doReturn(0L)
             .doThrow(streamsException1)
@@ -1303,10 +1305,10 @@ class DefaultStateUpdaterTest {
         final StreamTask task3 = statefulTask(TASK_1_0, Set.of(TOPIC_PARTITION_C_0)).inState(State.RESTORING).build();
         final Set<TaskId> expectedTaskIds = Set.of(task1.id(), task2.id());
         final TaskCorruptedException taskCorruptedException = new TaskCorruptedException(expectedTaskIds);
-        final Map<TaskId, Task> updatingTasks = Map.ofEntries(
-            Map.entry(task1.id(), task1),
-            Map.entry(task2.id(), task2),
-            Map.entry(task3.id(), task3)
+        final Map<TaskId, Task> updatingTasks = mkMap(
+            mkEntry(task1.id(), task1),
+            mkEntry(task2.id(), task2),
+            mkEntry(task3.id(), task3)
         );
         doReturn(0L).doThrow(taskCorruptedException).doReturn(0L).when(changelogReader).restore(updatingTasks);
         stateUpdater.start();
@@ -1331,9 +1333,9 @@ class DefaultStateUpdaterTest {
         final StreamTask task1 = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final StandbyTask task2 = standbyTask(TASK_0_2, Set.of(TOPIC_PARTITION_B_0)).inState(State.RUNNING).build();
         final IllegalStateException illegalStateException = new IllegalStateException("Nobody expects the Spanish inquisition!");
-        final Map<TaskId, Task> updatingTasks = Map.ofEntries(
-            Map.entry(task1.id(), task1),
-            Map.entry(task2.id(), task2)
+        final Map<TaskId, Task> updatingTasks = mkMap(
+            mkEntry(task1.id(), task1),
+            mkEntry(task2.id(), task2)
         );
         doThrow(illegalStateException).when(changelogReader).restore(updatingTasks);
         stateUpdater.start();
@@ -1361,27 +1363,27 @@ class DefaultStateUpdaterTest {
         final StreamTask task4 = statefulTask(TASK_0_2, Set.of(TOPIC_PARTITION_D_0)).inState(State.RESTORING).build();
         final String exceptionMessage = "The Streams were crossed!";
         final StreamsException streamsException1 = new StreamsException(exceptionMessage, task1.id());
-        final Map<TaskId, Task> updatingTasks1 = Map.ofEntries(
-            Map.entry(task1.id(), task1)
+        final Map<TaskId, Task> updatingTasks1 = mkMap(
+            mkEntry(task1.id(), task1)
         );
         doThrow(streamsException1)
             .when(changelogReader).restore(updatingTasks1);
         final StreamsException streamsException2 = new StreamsException(exceptionMessage, task2.id());
         final StreamsException streamsException3 = new StreamsException(exceptionMessage, task3.id());
         final StreamsException streamsException4 = new StreamsException(exceptionMessage, task4.id());
-        final Map<TaskId, Task> updatingTasks2 = Map.ofEntries(
-            Map.entry(task2.id(), task2),
-            Map.entry(task3.id(), task3),
-            Map.entry(task4.id(), task4)
+        final Map<TaskId, Task> updatingTasks2 = mkMap(
+            mkEntry(task2.id(), task2),
+            mkEntry(task3.id(), task3),
+            mkEntry(task4.id(), task4)
         );
         doThrow(streamsException2).when(changelogReader).restore(updatingTasks2);
-        final Map<TaskId, Task> updatingTasks3 = Map.ofEntries(
-            Map.entry(task3.id(), task3),
-            Map.entry(task4.id(), task4)
+        final Map<TaskId, Task> updatingTasks3 = mkMap(
+            mkEntry(task3.id(), task3),
+            mkEntry(task4.id(), task4)
         );
         doThrow(streamsException3).when(changelogReader).restore(updatingTasks3);
-        final Map<TaskId, Task> updatingTasks4 = Map.ofEntries(
-            Map.entry(task4.id(), task4)
+        final Map<TaskId, Task> updatingTasks4 = mkMap(
+            mkEntry(task4.id(), task4)
         );
         doThrow(streamsException4).when(changelogReader).restore(updatingTasks4);
         stateUpdater.start();
@@ -1526,14 +1528,14 @@ class DefaultStateUpdaterTest {
         final TaskCorruptedException taskCorruptedException =
             new TaskCorruptedException(Set.of(standbyTask1.id(), standbyTask2.id()));
         final StreamsException streamsException = new StreamsException("The Streams were crossed!", activeTask1.id());
-        final Map<TaskId, Task> updatingTasks1 = Map.ofEntries(
-            Map.entry(activeTask1.id(), activeTask1),
-            Map.entry(standbyTask1.id(), standbyTask1),
-            Map.entry(standbyTask2.id(), standbyTask2)
+        final Map<TaskId, Task> updatingTasks1 = mkMap(
+            mkEntry(activeTask1.id(), activeTask1),
+            mkEntry(standbyTask1.id(), standbyTask1),
+            mkEntry(standbyTask2.id(), standbyTask2)
         );
         doReturn(0L).doThrow(taskCorruptedException).doReturn(0L).when(changelogReader).restore(updatingTasks1);
-        final Map<TaskId, Task> updatingTasks2 = Map.ofEntries(
-            Map.entry(activeTask1.id(), activeTask1)
+        final Map<TaskId, Task> updatingTasks2 = mkMap(
+            mkEntry(activeTask1.id(), activeTask1)
         );
         doReturn(0L).doThrow(streamsException).doReturn(0L).when(changelogReader).restore(updatingTasks2);
         stateUpdater.start();
@@ -1574,15 +1576,15 @@ class DefaultStateUpdaterTest {
         final StreamTask activeTask2 = statefulTask(TASK_B_0_0, Set.of(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
         final StandbyTask standbyTask3 = standbyTask(TASK_A_0_1, Set.of(TOPIC_PARTITION_A_1)).inState(State.RUNNING).build();
         final StandbyTask standbyTask4 = standbyTask(TASK_B_0_1, Set.of(TOPIC_PARTITION_B_1)).inState(State.RUNNING).build();
-        final Map<TaskId, Task> tasks1234 = Map.ofEntries(
-            Map.entry(activeTask1.id(), activeTask1),
-            Map.entry(activeTask2.id(), activeTask2),
-            Map.entry(standbyTask3.id(), standbyTask3),
-            Map.entry(standbyTask4.id(), standbyTask4)
+        final Map<TaskId, Task> tasks1234 = mkMap(
+            mkEntry(activeTask1.id(), activeTask1),
+            mkEntry(activeTask2.id(), activeTask2),
+            mkEntry(standbyTask3.id(), standbyTask3),
+            mkEntry(standbyTask4.id(), standbyTask4)
         );
-        final Map<TaskId, Task> tasks13 = Map.ofEntries(
-            Map.entry(activeTask1.id(), activeTask1),
-            Map.entry(standbyTask3.id(), standbyTask3)
+        final Map<TaskId, Task> tasks13 = mkMap(
+            mkEntry(activeTask1.id(), activeTask1),
+            mkEntry(standbyTask3.id(), standbyTask3)
         );
 
         when(topologyMetadata.isPaused(activeTask2.id().topologyName())).thenReturn(true);

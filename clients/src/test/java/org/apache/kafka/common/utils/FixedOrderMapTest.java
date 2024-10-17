@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Iterator;
 import java.util.Map;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -35,9 +36,9 @@ public class FixedOrderMapTest {
         map.put("c", 2);
         map.put("b", 3);
         final Iterator<Map.Entry<String, Integer>> iterator = map.entrySet().iterator();
-        assertEquals(Map.entry("a", 0), iterator.next());
-        assertEquals(Map.entry("b", 3), iterator.next());
-        assertEquals(Map.entry("c", 2), iterator.next());
+        assertEquals(mkEntry("a", 0), iterator.next());
+        assertEquals(mkEntry("b", 3), iterator.next());
+        assertEquals(mkEntry("c", 2), iterator.next());
         assertFalse(iterator.hasNext());
     }
 

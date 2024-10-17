@@ -45,6 +45,8 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.state.internals.ExceptionUtils.executeAll;
 import static org.apache.kafka.streams.state.internals.ExceptionUtils.throwSuppressed;
@@ -77,8 +79,8 @@ public class CachingKeyValueStore
 
     @SuppressWarnings("rawtypes")
     private final Map<Class, CacheQueryHandler> queryHandlers =
-        Map.ofEntries(
-            Map.entry(
+        mkMap(
+            mkEntry(
                 KeyQuery.class,
                 (query, mergedPosition, positionBound, config, store) ->
                     runKeyQuery(query, mergedPosition, positionBound, config)

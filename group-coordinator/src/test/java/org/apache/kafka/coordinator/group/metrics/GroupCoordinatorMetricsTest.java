@@ -24,6 +24,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState;
@@ -37,7 +38,6 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.stream.IntStream;
 
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME;
@@ -167,18 +167,18 @@ public class GroupCoordinatorMetricsTest {
         coordinatorMetrics.activateMetricsShard(shard0);
         coordinatorMetrics.activateMetricsShard(shard1);
 
-        shard0.setClassicGroupGauges(Map.ofEntries(
-            Map.entry(ClassicGroupState.PREPARING_REBALANCE, 1L),
-            Map.entry(ClassicGroupState.COMPLETING_REBALANCE, 1L),
-            Map.entry(ClassicGroupState.STABLE, 1L),
-            Map.entry(ClassicGroupState.EMPTY, 1L)
+        shard0.setClassicGroupGauges(Utils.mkMap(
+            Utils.mkEntry(ClassicGroupState.PREPARING_REBALANCE, 1L),
+            Utils.mkEntry(ClassicGroupState.COMPLETING_REBALANCE, 1L),
+            Utils.mkEntry(ClassicGroupState.STABLE, 1L),
+            Utils.mkEntry(ClassicGroupState.EMPTY, 1L)
         ));
-        shard1.setClassicGroupGauges(Map.ofEntries(
-            Map.entry(ClassicGroupState.PREPARING_REBALANCE, 1L),
-            Map.entry(ClassicGroupState.COMPLETING_REBALANCE, 1L),
-            Map.entry(ClassicGroupState.STABLE, 1L),
-            Map.entry(ClassicGroupState.EMPTY, 1L),
-            Map.entry(ClassicGroupState.DEAD, 1L)
+        shard1.setClassicGroupGauges(Utils.mkMap(
+            Utils.mkEntry(ClassicGroupState.PREPARING_REBALANCE, 1L),
+            Utils.mkEntry(ClassicGroupState.COMPLETING_REBALANCE, 1L),
+            Utils.mkEntry(ClassicGroupState.STABLE, 1L),
+            Utils.mkEntry(ClassicGroupState.EMPTY, 1L),
+            Utils.mkEntry(ClassicGroupState.DEAD, 1L)
         ));
 
         IntStream.range(0, 5).forEach(__ -> shard0.incrementNumConsumerGroups(ConsumerGroupState.ASSIGNING));

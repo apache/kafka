@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group.metrics;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState;
@@ -108,25 +109,25 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
 
         this.classicGroupGauges = Collections.emptyMap();
 
-        this.consumerGroupGauges = Map.ofEntries(
-            Map.entry(ConsumerGroupState.EMPTY,
+        this.consumerGroupGauges = Utils.mkMap(
+            Utils.mkEntry(ConsumerGroupState.EMPTY,
                 new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0))),
-            Map.entry(ConsumerGroupState.ASSIGNING,
+            Utils.mkEntry(ConsumerGroupState.ASSIGNING,
                 new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0))),
-            Map.entry(ConsumerGroupState.RECONCILING,
+            Utils.mkEntry(ConsumerGroupState.RECONCILING,
                 new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0))),
-            Map.entry(ConsumerGroupState.STABLE,
+            Utils.mkEntry(ConsumerGroupState.STABLE,
                 new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0))),
-            Map.entry(ConsumerGroupState.DEAD,
+            Utils.mkEntry(ConsumerGroupState.DEAD,
                 new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0)))
         );
 
-        this.shareGroupGauges = Map.ofEntries(
-            Map.entry(ShareGroup.ShareGroupState.EMPTY,
+        this.shareGroupGauges = Utils.mkMap(
+            Utils.mkEntry(ShareGroup.ShareGroupState.EMPTY,
                 new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0))),
-            Map.entry(ShareGroup.ShareGroupState.STABLE,
+            Utils.mkEntry(ShareGroup.ShareGroupState.STABLE,
                 new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0))),
-            Map.entry(ShareGroup.ShareGroupState.DEAD,
+            Utils.mkEntry(ShareGroup.ShareGroupState.DEAD,
                 new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0)))
         );
 

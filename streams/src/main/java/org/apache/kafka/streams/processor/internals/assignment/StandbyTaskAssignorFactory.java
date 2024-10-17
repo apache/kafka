@@ -22,6 +22,8 @@ import org.apache.kafka.streams.processor.assignment.ProcessId;
 import java.util.Collections;
 import java.util.Map;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 
 class StandbyTaskAssignorFactory {
     private StandbyTaskAssignorFactory() {}
@@ -34,7 +36,7 @@ class StandbyTaskAssignorFactory {
             // racksForProcess should be populated if rackAwareTaskAssignor isn't null
             final Map<ProcessId, String> racksForProcess = rackAwareTaskAssignor.racksForProcess();
             return new ClientTagAwareStandbyTaskAssignor(
-                (processId, clientState) -> Map.ofEntries(Map.entry("rack", racksForProcess.get(processId))),
+                (processId, clientState) -> mkMap(mkEntry("rack", racksForProcess.get(processId))),
                 assignmentConfigs -> Collections.singletonList("rack")
             );
         } else {

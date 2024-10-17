@@ -56,6 +56,8 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -113,10 +115,10 @@ public class MeteredSessionStoreTest {
             Serdes.String(),
             mockTime
         );
-        tags = Map.ofEntries(
-            Map.entry(THREAD_ID_TAG_KEY, threadId),
-            Map.entry("task-id", taskId.toString()),
-            Map.entry(STORE_TYPE + "-state-id", STORE_NAME)
+        tags = mkMap(
+            mkEntry(THREAD_ID_TAG_KEY, threadId),
+            mkEntry("task-id", taskId.toString()),
+            mkEntry(STORE_TYPE + "-state-id", STORE_NAME)
         );
     }
 

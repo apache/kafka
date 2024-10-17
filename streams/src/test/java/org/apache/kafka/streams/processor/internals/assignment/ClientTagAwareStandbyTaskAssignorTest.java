@@ -35,6 +35,8 @@ import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_3;
@@ -87,18 +89,18 @@ public class ClientTagAwareStandbyTaskAssignorTest {
             TASK_1_2
         );
 
-        final Map<ProcessId, ClientState> clientStates = Map.ofEntries(
-            Map.entry(PID_1, createClientStateWithCapacity(PID_1, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_1), Map.entry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0, TASK_1_0)),
-            Map.entry(PID_2, createClientStateWithCapacity(PID_2, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_2), Map.entry(CLUSTER_TAG, CLUSTER_1)))),
-            Map.entry(PID_3, createClientStateWithCapacity(PID_3, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_3), Map.entry(CLUSTER_TAG, CLUSTER_1)))),
+        final Map<ProcessId, ClientState> clientStates = mkMap(
+            mkEntry(PID_1, createClientStateWithCapacity(PID_1, 2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0, TASK_1_0)),
+            mkEntry(PID_2, createClientStateWithCapacity(PID_2, 2, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_1)))),
+            mkEntry(PID_3, createClientStateWithCapacity(PID_3, 2, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_1)))),
 
-            Map.entry(PID_4, createClientStateWithCapacity(PID_4, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_1), Map.entry(CLUSTER_TAG, CLUSTER_2)), TASK_0_1, TASK_1_1)),
-            Map.entry(PID_5, createClientStateWithCapacity(PID_5, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_2), Map.entry(CLUSTER_TAG, CLUSTER_2)))),
-            Map.entry(PID_6, createClientStateWithCapacity(PID_6, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_3), Map.entry(CLUSTER_TAG, CLUSTER_2)))),
+            mkEntry(PID_4, createClientStateWithCapacity(PID_4, 2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_2)), TASK_0_1, TASK_1_1)),
+            mkEntry(PID_5, createClientStateWithCapacity(PID_5, 2, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_2)))),
+            mkEntry(PID_6, createClientStateWithCapacity(PID_6, 2, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_2)))),
 
-            Map.entry(PID_7, createClientStateWithCapacity(PID_7, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_1), Map.entry(CLUSTER_TAG, CLUSTER_3)), TASK_0_2, TASK_1_2)),
-            Map.entry(PID_8, createClientStateWithCapacity(PID_8, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_2), Map.entry(CLUSTER_TAG, CLUSTER_3)))),
-            Map.entry(PID_9, createClientStateWithCapacity(PID_9, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_3), Map.entry(CLUSTER_TAG, CLUSTER_3))))
+            mkEntry(PID_7, createClientStateWithCapacity(PID_7, 2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_3)), TASK_0_2, TASK_1_2)),
+            mkEntry(PID_8, createClientStateWithCapacity(PID_8, 2, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_3)))),
+            mkEntry(PID_9, createClientStateWithCapacity(PID_9, 2, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_3))))
         );
 
         final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
@@ -117,17 +119,17 @@ public class ClientTagAwareStandbyTaskAssignorTest {
     public void shouldRemoveClientToRemainingStandbysAndNotPopulatePendingStandbyTasksToClientIdWhenAllStandbyTasksWereAssigned() {
         final int numStandbyReplicas = 2;
         final Set<String> rackAwareAssignmentTags = Set.of(ZONE_TAG, CLUSTER_TAG);
-        final Map<ProcessId, ClientState> clientStates = Map.ofEntries(
-            Map.entry(PID_1, createClientStateWithCapacity(PID_1, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_1), Map.entry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0)),
-            Map.entry(PID_2, createClientStateWithCapacity(PID_2, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_1), Map.entry(CLUSTER_TAG, CLUSTER_2)), TASK_0_1)),
-            Map.entry(PID_3, createClientStateWithCapacity(PID_3, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_1), Map.entry(CLUSTER_TAG, CLUSTER_3)), TASK_0_2))
+        final Map<ProcessId, ClientState> clientStates = mkMap(
+            mkEntry(PID_1, createClientStateWithCapacity(PID_1, 2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0)),
+            mkEntry(PID_2, createClientStateWithCapacity(PID_2, 2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_2)), TASK_0_1)),
+            mkEntry(PID_3, createClientStateWithCapacity(PID_3, 2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_3)), TASK_0_2))
         );
 
         final ConstrainedPrioritySet constrainedPrioritySet = createLeastLoadedPrioritySetConstrainedByAssignedTask(clientStates);
         final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
-        final Map<TaskId, ProcessId> taskToClientId = Map.ofEntries(Map.entry(TASK_0_0, PID_1),
-                                                       Map.entry(TASK_0_1, PID_2),
-                                                       Map.entry(TASK_0_2, PID_3));
+        final Map<TaskId, ProcessId> taskToClientId = mkMap(mkEntry(TASK_0_0, PID_1),
+                                                       mkEntry(TASK_0_1, PID_2),
+                                                       mkEntry(TASK_0_2, PID_3));
 
         final Map<String, Set<String>> tagKeyToValues = new HashMap<>();
         final Map<TagEntry, Set<ProcessId>> tagEntryToClients = new HashMap<>();
@@ -159,18 +161,18 @@ public class ClientTagAwareStandbyTaskAssignorTest {
     @Test
     public void shouldUpdateClientToRemainingStandbysAndPendingStandbyTasksToClientIdWhenNotAllStandbyTasksWereAssigned() {
         final Set<String> rackAwareAssignmentTags = Set.of(ZONE_TAG, CLUSTER_TAG);
-        final Map<ProcessId, ClientState> clientStates = Map.ofEntries(
-            Map.entry(PID_1, createClientStateWithCapacity(PID_1, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_1), Map.entry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0)),
-            Map.entry(PID_2, createClientStateWithCapacity(PID_2, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_1), Map.entry(CLUSTER_TAG, CLUSTER_2)), TASK_0_1)),
-            Map.entry(PID_3, createClientStateWithCapacity(PID_3, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_1), Map.entry(CLUSTER_TAG, CLUSTER_3)), TASK_0_2))
+        final Map<ProcessId, ClientState> clientStates = mkMap(
+            mkEntry(PID_1, createClientStateWithCapacity(PID_1, 2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0)),
+            mkEntry(PID_2, createClientStateWithCapacity(PID_2, 2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_2)), TASK_0_1)),
+            mkEntry(PID_3, createClientStateWithCapacity(PID_3, 2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_3)), TASK_0_2))
         );
 
         final ConstrainedPrioritySet constrainedPrioritySet = createLeastLoadedPrioritySetConstrainedByAssignedTask(clientStates);
         final int numStandbyReplicas = 3;
         final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
-        final Map<TaskId, ProcessId> taskToClientId = Map.ofEntries(Map.entry(TASK_0_0, PID_1),
-                                                       Map.entry(TASK_0_1, PID_2),
-                                                       Map.entry(TASK_0_2, PID_3));
+        final Map<TaskId, ProcessId> taskToClientId = mkMap(mkEntry(TASK_0_0, PID_1),
+                                                       mkEntry(TASK_0_1, PID_2),
+                                                       mkEntry(TASK_0_2, PID_3));
 
         final Map<String, Set<String>> tagKeyToValues = new HashMap<>();
         final Map<TagEntry, Set<ProcessId>> tagEntryToClients = new HashMap<>();
@@ -214,29 +216,29 @@ public class ClientTagAwareStandbyTaskAssignorTest {
 
     @Test
     public void shouldPermitTaskMovementWhenClientTagsMatch() {
-        final ClientState source = createClientStateWithCapacity(PID_1, 1, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_1), Map.entry(CLUSTER_TAG, CLUSTER_1)));
-        final ClientState destination = createClientStateWithCapacity(PID_2, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_1), Map.entry(CLUSTER_TAG, CLUSTER_1)));
+        final ClientState source = createClientStateWithCapacity(PID_1, 1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)));
+        final ClientState destination = createClientStateWithCapacity(PID_2, 2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)));
 
         assertTrue(standbyTaskAssignor.isAllowedTaskMovement(source, destination));
     }
 
     @Test
     public void shouldDeclineTaskMovementWhenClientTagsDoNotMatch() {
-        final ClientState source = createClientStateWithCapacity(PID_1, 1, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_1), Map.entry(CLUSTER_TAG, CLUSTER_1)));
-        final ClientState destination = createClientStateWithCapacity(PID_2, 1, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_2), Map.entry(CLUSTER_TAG, CLUSTER_1)));
+        final ClientState source = createClientStateWithCapacity(PID_1, 1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)));
+        final ClientState destination = createClientStateWithCapacity(PID_2, 1, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_1)));
 
         assertFalse(standbyTaskAssignor.isAllowedTaskMovement(source, destination));
     }
 
     @Test
     public void shouldPermitSingleTaskMoveWhenClientTagMatch() {
-        final ClientState source = createClientStateWithCapacity(PID_1, 1, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_1), Map.entry(CLUSTER_TAG, CLUSTER_1)));
-        final ClientState destination = createClientStateWithCapacity(PID_2, 1, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_1), Map.entry(CLUSTER_TAG, CLUSTER_1)));
-        final ClientState clientState = createClientStateWithCapacity(PID_3, 1, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_3), Map.entry(CLUSTER_TAG, CLUSTER_2)));
-        final Map<ProcessId, ClientState> clientStateMap = Map.ofEntries(
-            Map.entry(PID_1, source),
-            Map.entry(PID_2, destination),
-            Map.entry(PID_3, clientState)
+        final ClientState source = createClientStateWithCapacity(PID_1, 1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)));
+        final ClientState destination = createClientStateWithCapacity(PID_2, 1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)));
+        final ClientState clientState = createClientStateWithCapacity(PID_3, 1, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_2)));
+        final Map<ProcessId, ClientState> clientStateMap = mkMap(
+            mkEntry(PID_1, source),
+            mkEntry(PID_2, destination),
+            mkEntry(PID_3, clientState)
         );
         final TaskId taskId = new TaskId(0, 0);
         clientState.assignActive(taskId);
@@ -247,13 +249,13 @@ public class ClientTagAwareStandbyTaskAssignorTest {
 
     @Test
     public void shouldPermitSingleTaskMoveWhenDifferentClientTagCountNotChange() {
-        final ClientState source = createClientStateWithCapacity(PID_1, 1, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_1), Map.entry(CLUSTER_TAG, CLUSTER_1)));
-        final ClientState destination = createClientStateWithCapacity(PID_2, 1, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_2), Map.entry(CLUSTER_TAG, CLUSTER_1)));
-        final ClientState clientState = createClientStateWithCapacity(PID_3, 1, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_3), Map.entry(CLUSTER_TAG, CLUSTER_2)));
-        final Map<ProcessId, ClientState> clientStateMap = Map.ofEntries(
-            Map.entry(PID_1, source),
-            Map.entry(PID_2, destination),
-            Map.entry(PID_3, clientState)
+        final ClientState source = createClientStateWithCapacity(PID_1, 1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)));
+        final ClientState destination = createClientStateWithCapacity(PID_2, 1, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_1)));
+        final ClientState clientState = createClientStateWithCapacity(PID_3, 1, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_2)));
+        final Map<ProcessId, ClientState> clientStateMap = mkMap(
+            mkEntry(PID_1, source),
+            mkEntry(PID_2, destination),
+            mkEntry(PID_3, clientState)
         );
         final TaskId taskId = new TaskId(0, 0);
         clientState.assignActive(taskId);
@@ -264,13 +266,13 @@ public class ClientTagAwareStandbyTaskAssignorTest {
 
     @Test
     public void shouldDeclineSingleTaskMoveWhenReduceClientTagCount() {
-        final ClientState source = createClientStateWithCapacity(PID_1, 1, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_1), Map.entry(CLUSTER_TAG, CLUSTER_1)));
-        final ClientState destination = createClientStateWithCapacity(PID_2, 1, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_3), Map.entry(CLUSTER_TAG, CLUSTER_1)));
-        final ClientState clientState = createClientStateWithCapacity(PID_3, 1, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_3), Map.entry(CLUSTER_TAG, CLUSTER_2)));
-        final Map<ProcessId, ClientState> clientStateMap = Map.ofEntries(
-            Map.entry(PID_1, source),
-            Map.entry(PID_2, destination),
-            Map.entry(PID_3, clientState)
+        final ClientState source = createClientStateWithCapacity(PID_1, 1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)));
+        final ClientState destination = createClientStateWithCapacity(PID_2, 1, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_1)));
+        final ClientState clientState = createClientStateWithCapacity(PID_3, 1, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_2)));
+        final Map<ProcessId, ClientState> clientStateMap = mkMap(
+            mkEntry(PID_1, source),
+            mkEntry(PID_2, destination),
+            mkEntry(PID_3, clientState)
         );
         final TaskId taskId = new TaskId(0, 0);
         clientState.assignActive(taskId);
@@ -282,18 +284,18 @@ public class ClientTagAwareStandbyTaskAssignorTest {
 
     @Test
     public void shouldDistributeStandbyTasksWhenActiveTasksAreLocatedOnSameZone() {
-        final Map<ProcessId, ClientState> clientStates = Map.ofEntries(
-            Map.entry(PID_1, createClientStateWithCapacity(PID_1, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_1), Map.entry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0, TASK_1_0)),
-            Map.entry(PID_2, createClientStateWithCapacity(PID_2, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_2), Map.entry(CLUSTER_TAG, CLUSTER_1)))),
-            Map.entry(PID_3, createClientStateWithCapacity(PID_3, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_3), Map.entry(CLUSTER_TAG, CLUSTER_1)))),
+        final Map<ProcessId, ClientState> clientStates = mkMap(
+            mkEntry(PID_1, createClientStateWithCapacity(PID_1, 2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0, TASK_1_0)),
+            mkEntry(PID_2, createClientStateWithCapacity(PID_2, 2, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_1)))),
+            mkEntry(PID_3, createClientStateWithCapacity(PID_3, 2, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_1)))),
 
-            Map.entry(PID_4, createClientStateWithCapacity(PID_4, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_1), Map.entry(CLUSTER_TAG, CLUSTER_2)), TASK_0_1, TASK_1_1)),
-            Map.entry(PID_5, createClientStateWithCapacity(PID_5, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_2), Map.entry(CLUSTER_TAG, CLUSTER_2)))),
-            Map.entry(PID_6, createClientStateWithCapacity(PID_6, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_3), Map.entry(CLUSTER_TAG, CLUSTER_2)))),
+            mkEntry(PID_4, createClientStateWithCapacity(PID_4, 2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_2)), TASK_0_1, TASK_1_1)),
+            mkEntry(PID_5, createClientStateWithCapacity(PID_5, 2, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_2)))),
+            mkEntry(PID_6, createClientStateWithCapacity(PID_6, 2, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_2)))),
 
-            Map.entry(PID_7, createClientStateWithCapacity(PID_7, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_1), Map.entry(CLUSTER_TAG, CLUSTER_3)), TASK_0_2, TASK_1_2)),
-            Map.entry(PID_8, createClientStateWithCapacity(PID_8, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_2), Map.entry(CLUSTER_TAG, CLUSTER_3)))),
-            Map.entry(PID_9, createClientStateWithCapacity(PID_9, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_3), Map.entry(CLUSTER_TAG, CLUSTER_3))))
+            mkEntry(PID_7, createClientStateWithCapacity(PID_7, 2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_3)), TASK_0_2, TASK_1_2)),
+            mkEntry(PID_8, createClientStateWithCapacity(PID_8, 2, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_3)))),
+            mkEntry(PID_9, createClientStateWithCapacity(PID_9, 2, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_3))))
         );
 
         final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
@@ -367,16 +369,16 @@ public class ClientTagAwareStandbyTaskAssignorTest {
 
     @Test
     public void shouldDistributeStandbyTasksUsingFunctionAndSupplierTags() {
-        final Map<ProcessId, String> racksForProcess = Map.ofEntries(
-            Map.entry(PID_1, "rack1"),
-            Map.entry(PID_2, "rack2"),
-            Map.entry(PID_3, "rack3"),
-            Map.entry(PID_4, "rack1"),
-            Map.entry(PID_5, "rack2"),
-            Map.entry(PID_6, "rack3"),
-            Map.entry(PID_7, "rack1"),
-            Map.entry(PID_8, "rack2"),
-            Map.entry(PID_9, "rack3")
+        final Map<ProcessId, String> racksForProcess = mkMap(
+            mkEntry(PID_1, "rack1"),
+            mkEntry(PID_2, "rack2"),
+            mkEntry(PID_3, "rack3"),
+            mkEntry(PID_4, "rack1"),
+            mkEntry(PID_5, "rack2"),
+            mkEntry(PID_6, "rack3"),
+            mkEntry(PID_7, "rack1"),
+            mkEntry(PID_8, "rack2"),
+            mkEntry(PID_9, "rack3")
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = mock(RackAwareTaskAssignor.class);
         when(rackAwareTaskAssignor.validClientRack()).thenReturn(true);
@@ -385,32 +387,32 @@ public class ClientTagAwareStandbyTaskAssignorTest {
         standbyTaskAssignor = StandbyTaskAssignorFactory.create(assignmentConfigs, rackAwareTaskAssignor);
         verify(rackAwareTaskAssignor, times(1)).racksForProcess();
 
-        final Map<ProcessId, ClientState> clientStates = Map.ofEntries(
-            Map.entry(PID_1, createClientStateWithCapacity(PID_1, 2, Map.ofEntries(), TASK_0_0, TASK_1_0)),
-            Map.entry(PID_2, createClientStateWithCapacity(PID_2, 2, Map.ofEntries(), TASK_0_1, TASK_1_1)),
-            Map.entry(PID_3, createClientStateWithCapacity(PID_3, 2, Map.ofEntries(), TASK_0_2, TASK_1_2)),
+        final Map<ProcessId, ClientState> clientStates = mkMap(
+            mkEntry(PID_1, createClientStateWithCapacity(PID_1, 2, mkMap(), TASK_0_0, TASK_1_0)),
+            mkEntry(PID_2, createClientStateWithCapacity(PID_2, 2, mkMap(), TASK_0_1, TASK_1_1)),
+            mkEntry(PID_3, createClientStateWithCapacity(PID_3, 2, mkMap(), TASK_0_2, TASK_1_2)),
 
-            Map.entry(PID_4, createClientStateWithCapacity(PID_4, 2, Map.ofEntries())),
-            Map.entry(PID_5, createClientStateWithCapacity(PID_5, 2, Map.ofEntries())),
-            Map.entry(PID_6, createClientStateWithCapacity(PID_6, 2, Map.ofEntries())),
+            mkEntry(PID_4, createClientStateWithCapacity(PID_4, 2, mkMap())),
+            mkEntry(PID_5, createClientStateWithCapacity(PID_5, 2, mkMap())),
+            mkEntry(PID_6, createClientStateWithCapacity(PID_6, 2, mkMap())),
 
-            Map.entry(PID_7, createClientStateWithCapacity(PID_7, 2, Map.ofEntries())),
-            Map.entry(PID_8, createClientStateWithCapacity(PID_8, 2, Map.ofEntries())),
-            Map.entry(PID_9, createClientStateWithCapacity(PID_9, 2, Map.ofEntries()))
+            mkEntry(PID_7, createClientStateWithCapacity(PID_7, 2, mkMap())),
+            mkEntry(PID_8, createClientStateWithCapacity(PID_8, 2, mkMap())),
+            mkEntry(PID_9, createClientStateWithCapacity(PID_9, 2, mkMap()))
         );
 
-        final Map<ProcessId, ClientState> clientStatesWithTags = Map.ofEntries(
-            Map.entry(PID_1, createClientStateWithCapacity(PID_1, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_1)), TASK_0_0, TASK_1_0)),
-            Map.entry(PID_2, createClientStateWithCapacity(PID_2, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_2)), TASK_0_1, TASK_1_1)),
-            Map.entry(PID_3, createClientStateWithCapacity(PID_3, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_3)), TASK_0_2, TASK_1_2)),
+        final Map<ProcessId, ClientState> clientStatesWithTags = mkMap(
+            mkEntry(PID_1, createClientStateWithCapacity(PID_1, 2, mkMap(mkEntry(ZONE_TAG, ZONE_1)), TASK_0_0, TASK_1_0)),
+            mkEntry(PID_2, createClientStateWithCapacity(PID_2, 2, mkMap(mkEntry(ZONE_TAG, ZONE_2)), TASK_0_1, TASK_1_1)),
+            mkEntry(PID_3, createClientStateWithCapacity(PID_3, 2, mkMap(mkEntry(ZONE_TAG, ZONE_3)), TASK_0_2, TASK_1_2)),
 
-            Map.entry(PID_4, createClientStateWithCapacity(PID_4, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_1)))),
-            Map.entry(PID_5, createClientStateWithCapacity(PID_5, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_2)))),
-            Map.entry(PID_6, createClientStateWithCapacity(PID_6, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_3)))),
+            mkEntry(PID_4, createClientStateWithCapacity(PID_4, 2, mkMap(mkEntry(ZONE_TAG, ZONE_1)))),
+            mkEntry(PID_5, createClientStateWithCapacity(PID_5, 2, mkMap(mkEntry(ZONE_TAG, ZONE_2)))),
+            mkEntry(PID_6, createClientStateWithCapacity(PID_6, 2, mkMap(mkEntry(ZONE_TAG, ZONE_3)))),
 
-            Map.entry(PID_7, createClientStateWithCapacity(PID_7, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_1)))),
-            Map.entry(PID_8, createClientStateWithCapacity(PID_8, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_2)))),
-            Map.entry(PID_9, createClientStateWithCapacity(PID_9, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_3))))
+            mkEntry(PID_7, createClientStateWithCapacity(PID_7, 2, mkMap(mkEntry(ZONE_TAG, ZONE_1)))),
+            mkEntry(PID_8, createClientStateWithCapacity(PID_8, 2, mkMap(mkEntry(ZONE_TAG, ZONE_2)))),
+            mkEntry(PID_9, createClientStateWithCapacity(PID_9, 2, mkMap(mkEntry(ZONE_TAG, ZONE_3))))
         );
 
         final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
@@ -480,18 +482,18 @@ public class ClientTagAwareStandbyTaskAssignorTest {
 
     @Test
     public void shouldDistributeStandbyTasksWhenActiveTasksAreLocatedOnSameCluster() {
-        final Map<ProcessId, ClientState> clientStates = Map.ofEntries(
-            Map.entry(PID_1, createClientStateWithCapacity(PID_1, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_1), Map.entry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0, TASK_1_0)),
-            Map.entry(PID_2, createClientStateWithCapacity(PID_2, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_2), Map.entry(CLUSTER_TAG, CLUSTER_1)), TASK_0_1, TASK_1_1)),
-            Map.entry(PID_3, createClientStateWithCapacity(PID_3, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_3), Map.entry(CLUSTER_TAG, CLUSTER_1)), TASK_0_2, TASK_1_2)),
+        final Map<ProcessId, ClientState> clientStates = mkMap(
+            mkEntry(PID_1, createClientStateWithCapacity(PID_1, 2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0, TASK_1_0)),
+            mkEntry(PID_2, createClientStateWithCapacity(PID_2, 2, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_1, TASK_1_1)),
+            mkEntry(PID_3, createClientStateWithCapacity(PID_3, 2, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_2, TASK_1_2)),
 
-            Map.entry(PID_4, createClientStateWithCapacity(PID_4, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_1), Map.entry(CLUSTER_TAG, CLUSTER_2)))),
-            Map.entry(PID_5, createClientStateWithCapacity(PID_5, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_2), Map.entry(CLUSTER_TAG, CLUSTER_2)))),
-            Map.entry(PID_6, createClientStateWithCapacity(PID_6, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_3), Map.entry(CLUSTER_TAG, CLUSTER_2)))),
+            mkEntry(PID_4, createClientStateWithCapacity(PID_4, 2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_2)))),
+            mkEntry(PID_5, createClientStateWithCapacity(PID_5, 2, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_2)))),
+            mkEntry(PID_6, createClientStateWithCapacity(PID_6, 2, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_2)))),
 
-            Map.entry(PID_7, createClientStateWithCapacity(PID_7, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_1), Map.entry(CLUSTER_TAG, CLUSTER_3)))),
-            Map.entry(PID_8, createClientStateWithCapacity(PID_8, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_2), Map.entry(CLUSTER_TAG, CLUSTER_3)))),
-            Map.entry(PID_9, createClientStateWithCapacity(PID_9, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_3), Map.entry(CLUSTER_TAG, CLUSTER_3))))
+            mkEntry(PID_7, createClientStateWithCapacity(PID_7, 2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_3)))),
+            mkEntry(PID_8, createClientStateWithCapacity(PID_8, 2, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_3)))),
+            mkEntry(PID_9, createClientStateWithCapacity(PID_9, 2, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_3))))
         );
 
         final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
@@ -565,14 +567,14 @@ public class ClientTagAwareStandbyTaskAssignorTest {
 
     @Test
     public void shouldDoThePartialRackAwareness() {
-        final Map<ProcessId, ClientState> clientStates = Map.ofEntries(
-            Map.entry(PID_1, createClientStateWithCapacity(PID_1, 1, Map.ofEntries(Map.entry(CLUSTER_TAG, CLUSTER_1), Map.entry(ZONE_TAG, ZONE_1)), TASK_0_0)),
-            Map.entry(PID_2, createClientStateWithCapacity(PID_2, 1, Map.ofEntries(Map.entry(CLUSTER_TAG, CLUSTER_1), Map.entry(ZONE_TAG, ZONE_2)))),
-            Map.entry(PID_3, createClientStateWithCapacity(PID_3, 1, Map.ofEntries(Map.entry(CLUSTER_TAG, CLUSTER_1), Map.entry(ZONE_TAG, ZONE_3)))),
+        final Map<ProcessId, ClientState> clientStates = mkMap(
+            mkEntry(PID_1, createClientStateWithCapacity(PID_1, 1, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_1), mkEntry(ZONE_TAG, ZONE_1)), TASK_0_0)),
+            mkEntry(PID_2, createClientStateWithCapacity(PID_2, 1, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_1), mkEntry(ZONE_TAG, ZONE_2)))),
+            mkEntry(PID_3, createClientStateWithCapacity(PID_3, 1, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_1), mkEntry(ZONE_TAG, ZONE_3)))),
 
-            Map.entry(PID_4, createClientStateWithCapacity(PID_4, 1, Map.ofEntries(Map.entry(CLUSTER_TAG, CLUSTER_2), Map.entry(ZONE_TAG, ZONE_1)))),
-            Map.entry(PID_5, createClientStateWithCapacity(PID_5, 1, Map.ofEntries(Map.entry(CLUSTER_TAG, CLUSTER_2), Map.entry(ZONE_TAG, ZONE_2)))),
-            Map.entry(PID_6, createClientStateWithCapacity(PID_6, 1, Map.ofEntries(Map.entry(CLUSTER_TAG, CLUSTER_2), Map.entry(ZONE_TAG, ZONE_3)), TASK_1_0))
+            mkEntry(PID_4, createClientStateWithCapacity(PID_4, 1, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_2), mkEntry(ZONE_TAG, ZONE_1)))),
+            mkEntry(PID_5, createClientStateWithCapacity(PID_5, 1, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_2), mkEntry(ZONE_TAG, ZONE_2)))),
+            mkEntry(PID_6, createClientStateWithCapacity(PID_6, 1, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_2), mkEntry(ZONE_TAG, ZONE_3)), TASK_1_0))
         );
 
         final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
@@ -630,13 +632,13 @@ public class ClientTagAwareStandbyTaskAssignorTest {
 
     @Test
     public void shouldDistributeClientsOnDifferentZoneTagsEvenWhenClientsReachedCapacity() {
-        final Map<ProcessId, ClientState> clientStates = Map.ofEntries(
-            Map.entry(PID_1, createClientStateWithCapacity(PID_1, 1, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_1), Map.entry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0)),
-            Map.entry(PID_2, createClientStateWithCapacity(PID_2, 1, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_2), Map.entry(CLUSTER_TAG, CLUSTER_1)), TASK_0_1)),
-            Map.entry(PID_3, createClientStateWithCapacity(PID_3, 1, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_3), Map.entry(CLUSTER_TAG, CLUSTER_1)), TASK_0_2)),
-            Map.entry(PID_4, createClientStateWithCapacity(PID_4, 1, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_1), Map.entry(CLUSTER_TAG, CLUSTER_1)), TASK_1_0)),
-            Map.entry(PID_5, createClientStateWithCapacity(PID_5, 1, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_2), Map.entry(CLUSTER_TAG, CLUSTER_1)), TASK_1_1)),
-            Map.entry(PID_6, createClientStateWithCapacity(PID_6, 1, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_3), Map.entry(CLUSTER_TAG, CLUSTER_1)), TASK_1_2))
+        final Map<ProcessId, ClientState> clientStates = mkMap(
+            mkEntry(PID_1, createClientStateWithCapacity(PID_1, 1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0)),
+            mkEntry(PID_2, createClientStateWithCapacity(PID_2, 1, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_1)),
+            mkEntry(PID_3, createClientStateWithCapacity(PID_3, 1, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_2)),
+            mkEntry(PID_4, createClientStateWithCapacity(PID_4, 1, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_1_0)),
+            mkEntry(PID_5, createClientStateWithCapacity(PID_5, 1, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_1_1)),
+            mkEntry(PID_6, createClientStateWithCapacity(PID_6, 1, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_1_2))
         );
 
         final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
@@ -707,11 +709,11 @@ public class ClientTagAwareStandbyTaskAssignorTest {
 
     @Test
     public void shouldIgnoreTagsThatAreNotPresentInRackAwareness() {
-        final Map<ProcessId, ClientState> clientStates = Map.ofEntries(
-            Map.entry(PID_1, createClientStateWithCapacity(PID_1, 1, Map.ofEntries(Map.entry(CLUSTER_TAG, CLUSTER_1), Map.entry(ZONE_TAG, ZONE_1)), TASK_0_0)),
-            Map.entry(PID_2, createClientStateWithCapacity(PID_2, 2, Map.ofEntries(Map.entry(CLUSTER_TAG, CLUSTER_1), Map.entry(ZONE_TAG, ZONE_2)))),
+        final Map<ProcessId, ClientState> clientStates = mkMap(
+            mkEntry(PID_1, createClientStateWithCapacity(PID_1, 1, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_1), mkEntry(ZONE_TAG, ZONE_1)), TASK_0_0)),
+            mkEntry(PID_2, createClientStateWithCapacity(PID_2, 2, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_1), mkEntry(ZONE_TAG, ZONE_2)))),
 
-            Map.entry(PID_3, createClientStateWithCapacity(PID_3, 1, Map.ofEntries(Map.entry(CLUSTER_TAG, CLUSTER_2), Map.entry(ZONE_TAG, ZONE_1))))
+            mkEntry(PID_3, createClientStateWithCapacity(PID_3, 1, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_2), mkEntry(ZONE_TAG, ZONE_1))))
         );
 
         final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
@@ -725,9 +727,9 @@ public class ClientTagAwareStandbyTaskAssignorTest {
 
     @Test
     public void shouldHandleOverlappingTagValuesBetweenDifferentTagKeys() {
-        final Map<ProcessId, ClientState> clientStates = Map.ofEntries(
-            Map.entry(PID_1, createClientStateWithCapacity(PID_1, 2, Map.ofEntries(Map.entry(ZONE_TAG, ZONE_1), Map.entry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0)),
-            Map.entry(PID_2, createClientStateWithCapacity(PID_2, 2, Map.ofEntries(Map.entry(ZONE_TAG, CLUSTER_1), Map.entry(CLUSTER_TAG, CLUSTER_3))))
+        final Map<ProcessId, ClientState> clientStates = mkMap(
+            mkEntry(PID_1, createClientStateWithCapacity(PID_1, 2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0)),
+            mkEntry(PID_2, createClientStateWithCapacity(PID_2, 2, mkMap(mkEntry(ZONE_TAG, CLUSTER_1), mkEntry(CLUSTER_TAG, CLUSTER_3))))
         );
 
         final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
@@ -749,11 +751,11 @@ public class ClientTagAwareStandbyTaskAssignorTest {
 
     @Test
     public void shouldDistributeStandbyTasksOnLeastLoadedClientsWhenClientsAreNotOnDifferentTagDimensions() {
-        final Map<ProcessId, ClientState> clientStates = Map.ofEntries(
-            Map.entry(PID_1, createClientStateWithCapacity(PID_1, 3, Map.ofEntries(Map.entry(CLUSTER_TAG, CLUSTER_1), Map.entry(ZONE_TAG, ZONE_1)), TASK_0_0)),
-            Map.entry(PID_2, createClientStateWithCapacity(PID_2, 3, Map.ofEntries(Map.entry(CLUSTER_TAG, CLUSTER_1), Map.entry(ZONE_TAG, ZONE_1)), TASK_0_1)),
-            Map.entry(PID_3, createClientStateWithCapacity(PID_3, 3, Map.ofEntries(Map.entry(CLUSTER_TAG, CLUSTER_1), Map.entry(ZONE_TAG, ZONE_1)), TASK_0_2)),
-            Map.entry(PID_4, createClientStateWithCapacity(PID_4, 3, Map.ofEntries(Map.entry(CLUSTER_TAG, CLUSTER_1), Map.entry(ZONE_TAG, ZONE_1)), TASK_1_0))
+        final Map<ProcessId, ClientState> clientStates = mkMap(
+            mkEntry(PID_1, createClientStateWithCapacity(PID_1, 3, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_1), mkEntry(ZONE_TAG, ZONE_1)), TASK_0_0)),
+            mkEntry(PID_2, createClientStateWithCapacity(PID_2, 3, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_1), mkEntry(ZONE_TAG, ZONE_1)), TASK_0_1)),
+            mkEntry(PID_3, createClientStateWithCapacity(PID_3, 3, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_1), mkEntry(ZONE_TAG, ZONE_1)), TASK_0_2)),
+            mkEntry(PID_4, createClientStateWithCapacity(PID_4, 3, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_1), mkEntry(ZONE_TAG, ZONE_1)), TASK_1_0))
         );
 
         final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
@@ -770,8 +772,8 @@ public class ClientTagAwareStandbyTaskAssignorTest {
 
     @Test
     public void shouldNotAssignStandbyTasksIfThereAreNoEnoughClients() {
-        final Map<ProcessId, ClientState> clientStates = Map.ofEntries(
-            Map.entry(PID_1, createClientStateWithCapacity(PID_1, 3, Map.ofEntries(Map.entry(CLUSTER_TAG, CLUSTER_1), Map.entry(ZONE_TAG, ZONE_1)), TASK_0_0))
+        final Map<ProcessId, ClientState> clientStates = mkMap(
+            mkEntry(PID_1, createClientStateWithCapacity(PID_1, 3, mkMap(mkEntry(CLUSTER_TAG, CLUSTER_1), mkEntry(ZONE_TAG, ZONE_1)), TASK_0_0))
         );
 
         final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);

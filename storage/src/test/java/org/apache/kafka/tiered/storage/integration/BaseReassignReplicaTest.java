@@ -25,6 +25,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 
 public abstract class BaseReassignReplicaTest extends TieredStorageTestHarness {
     protected final Integer broker0 = 0;
@@ -73,7 +75,7 @@ public abstract class BaseReassignReplicaTest extends TieredStorageTestHarness {
                 .expectUserTopicMappedToMetadataPartitions(topicA, metadataPartitions)
                 // create topicB with 1 partition and 1 RF
                 .createTopic(topicB, partitionCount, replicationFactor, maxBatchCountPerSegment,
-                        Map.ofEntries(Map.entry(p0, Collections.singletonList(broker0))), enableRemoteLogStorage)
+                        mkMap(mkEntry(p0, Collections.singletonList(broker0))), enableRemoteLogStorage)
                 // send records to partition 0
                 .expectSegmentToBeOffloaded(broker0, topicB, p0, 0, new KeyValueSpec("k0", "v0"))
                 .expectSegmentToBeOffloaded(broker0, topicB, p0, 1, new KeyValueSpec("k1", "v1"))

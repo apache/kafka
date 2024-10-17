@@ -23,8 +23,9 @@ import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 
 public final class PartitionsExpandTest extends TieredStorageTestHarness {
 
@@ -59,7 +60,7 @@ public final class PartitionsExpandTest extends TieredStorageTestHarness {
                 .produce(topicA, p0, new KeyValueSpec("k0", "v0"), new KeyValueSpec("k1", "v1"),
                         new KeyValueSpec("k2", "v2"))
                 // expand the topicA partition-count to 3
-                .createPartitions(topicA, 3, Map.ofEntries(Map.entry(p1, p1Assignment), Map.entry(p2, p2Assignment)))
+                .createPartitions(topicA, 3, mkMap(mkEntry(p1, p1Assignment), mkEntry(p2, p2Assignment)))
                 // consume from the beginning of the topic to read data from local and remote storage for partition 0
                 .expectFetchFromTieredStorage(broker0, topicA, p0, 2)
                 .consume(topicA, p0, 0L, 3, 2)

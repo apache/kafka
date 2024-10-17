@@ -38,10 +38,11 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -264,7 +265,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         context.setRecordContext(new ProcessorRecordContext(0, 3, 0, "", new RecordHeaders()));
         inMemoryKeyValueStore.put(bytesKey("key3"), bytesValue("value3"));
 
-        final Position expected = Position.fromMap(Map.ofEntries(Map.entry("", Map.ofEntries(Map.entry(0, 3L)))));
+        final Position expected = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 3L)))));
         final Position actual = inMemoryKeyValueStore.getPosition();
         assertEquals(expected, actual);
     }

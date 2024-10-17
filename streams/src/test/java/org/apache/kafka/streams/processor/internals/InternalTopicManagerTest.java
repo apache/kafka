@@ -74,6 +74,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.anEmptyMap;
 import static org.hamcrest.Matchers.empty;
@@ -147,9 +149,9 @@ public class InternalTopicManagerTest {
         final InternalTopicConfig internalTopicConfig1 = setupRepartitionTopicConfig(topic1, 1);
         final InternalTopicConfig internalTopicConfig2 = setupRepartitionTopicConfig(topic2, 1);
 
-        internalTopicManager.setup(Map.ofEntries(
-            Map.entry(topic1, internalTopicConfig1),
-            Map.entry(topic2, internalTopicConfig2)
+        internalTopicManager.setup(mkMap(
+            mkEntry(topic1, internalTopicConfig1),
+            mkEntry(topic2, internalTopicConfig2)
         ));
 
         final Set<String> newlyCreatedTopics = mockAdminClient.listTopics().names().get();
@@ -183,18 +185,18 @@ public class InternalTopicManagerTest {
         final NewTopic newTopic1 = newTopic(topic1, internalTopicConfig1, streamsConfig);
         final NewTopic newTopic2 = newTopic(topic2, internalTopicConfig2, streamsConfig);
         when(admin.createTopics(Set.of(newTopic1, newTopic2)))
-            .thenAnswer(answer -> new MockCreateTopicsResult(Map.ofEntries(
-                Map.entry(topic1, createTopicSuccessfulFuture),
-                Map.entry(topic2, createTopicFailFuture)
+            .thenAnswer(answer -> new MockCreateTopicsResult(mkMap(
+                mkEntry(topic1, createTopicSuccessfulFuture),
+                mkEntry(topic2, createTopicFailFuture)
             )));
         when(admin.createTopics(Set.of(newTopic2)))
-            .thenAnswer(answer -> new MockCreateTopicsResult(Map.ofEntries(
-                Map.entry(topic2, createTopicSuccessfulFuture)
+            .thenAnswer(answer -> new MockCreateTopicsResult(mkMap(
+                mkEntry(topic2, createTopicSuccessfulFuture)
             )));
 
-        topicManager.setup(Map.ofEntries(
-            Map.entry(topic1, internalTopicConfig1),
-            Map.entry(topic2, internalTopicConfig2)
+        topicManager.setup(mkMap(
+            mkEntry(topic1, internalTopicConfig1),
+            mkEntry(topic2, internalTopicConfig2)
         ));
     }
 
@@ -221,15 +223,15 @@ public class InternalTopicManagerTest {
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
         final NewTopic newTopic = newTopic(topic1, internalTopicConfig, streamsConfig);
         when(admin.createTopics(Set.of(newTopic)))
-            .thenAnswer(answer -> new MockCreateTopicsResult(Map.ofEntries(
-                Map.entry(topic1, createTopicSuccessfulFuture)
+            .thenAnswer(answer -> new MockCreateTopicsResult(mkMap(
+                mkEntry(topic1, createTopicSuccessfulFuture)
             )))
-            .thenAnswer(answer -> new MockCreateTopicsResult(Map.ofEntries(
-                    Map.entry(topic2, createTopicSuccessfulFuture)
+            .thenAnswer(answer -> new MockCreateTopicsResult(mkMap(
+                    mkEntry(topic2, createTopicSuccessfulFuture)
             )));
 
-        topicManager.setup(Map.ofEntries(
-            Map.entry(topic1, internalTopicConfig)
+        topicManager.setup(mkMap(
+            mkEntry(topic1, internalTopicConfig)
         ));
     }
 
@@ -392,12 +394,12 @@ public class InternalTopicManagerTest {
         createTopicFailFuture.completeExceptionally(new IllegalStateException("Nobody expects the Spanish inquisition"));
         final NewTopic newTopic = newTopic(topic1, internalTopicConfig, streamsConfig);
         when(admin.createTopics(Set.of(newTopic)))
-            .thenAnswer(answer -> new MockCreateTopicsResult(Map.ofEntries(
-                Map.entry(topic1, createTopicFailFuture)
+            .thenAnswer(answer -> new MockCreateTopicsResult(mkMap(
+                mkEntry(topic1, createTopicFailFuture)
             )));
 
-        assertThrows(StreamsException.class, () -> topicManager.setup(Map.ofEntries(
-            Map.entry(topic1, internalTopicConfig)
+        assertThrows(StreamsException.class, () -> topicManager.setup(mkMap(
+            mkEntry(topic1, internalTopicConfig)
         )));
     }
 
@@ -430,7 +432,7 @@ public class InternalTopicManagerTest {
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
         final NewTopic newTopic = newTopic(topic1, internalTopicConfig, streamsConfig);
         when(admin.createTopics(Set.of(newTopic)))
-            .thenAnswer(answer -> new MockCreateTopicsResult(Map.ofEntries(Map.entry(topic1, createTopicFailFuture))));
+            .thenAnswer(answer -> new MockCreateTopicsResult(mkMap(mkEntry(topic1, createTopicFailFuture))));
 
         assertThrows(
             TimeoutException.class,
@@ -450,7 +452,7 @@ public class InternalTopicManagerTest {
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
         final NewTopic newTopic = newTopic(topic1, internalTopicConfig, streamsConfig);
         when(admin.createTopics(Set.of(newTopic)))
-            .thenAnswer(answer -> new MockCreateTopicsResult(Map.ofEntries(Map.entry(topic1, createTopicFutureThatNeverCompletes))));
+            .thenAnswer(answer -> new MockCreateTopicsResult(mkMap(mkEntry(topic1, createTopicFutureThatNeverCompletes))));
 
         assertThrows(
             TimeoutException.class,
@@ -472,13 +474,13 @@ public class InternalTopicManagerTest {
         final KafkaFutureImpl<Void> deleteTopicSuccessfulFuture = new KafkaFutureImpl<>();
         deleteTopicSuccessfulFuture.complete(null);
         when(admin.deleteTopics(Set.of(topic1)))
-            .thenAnswer(answer -> new MockDeleteTopicsResult(Map.ofEntries(Map.entry(topic1, deleteTopicSuccessfulFuture))));
+            .thenAnswer(answer -> new MockDeleteTopicsResult(mkMap(mkEntry(topic1, deleteTopicSuccessfulFuture))));
 
         assertThrows(
             StreamsException.class,
-            () -> topicManager.setup(Map.ofEntries(
-                Map.entry(topic1, internalTopicConfig1),
-                Map.entry(topic2, internalTopicConfig2)
+            () -> topicManager.setup(mkMap(
+                mkEntry(topic1, internalTopicConfig1),
+                mkEntry(topic2, internalTopicConfig2)
             ))
         );
     }
@@ -499,24 +501,24 @@ public class InternalTopicManagerTest {
         final NewTopic newTopic1 = newTopic(topic1, internalTopicConfig1, streamsConfig);
         final NewTopic newTopic2 = newTopic(topic2, internalTopicConfig2, streamsConfig);
         when(admin.createTopics(Set.of(newTopic1, newTopic2)))
-            .thenAnswer(answer -> new MockCreateTopicsResult(Map.ofEntries(
-                Map.entry(topic1, createTopicSuccessfulFuture),
-                Map.entry(topic2, createTopicFailFuture1)
+            .thenAnswer(answer -> new MockCreateTopicsResult(mkMap(
+                mkEntry(topic1, createTopicSuccessfulFuture),
+                mkEntry(topic2, createTopicFailFuture1)
             )));
         when(admin.createTopics(Set.of(newTopic2)))
-            .thenAnswer(answer -> new MockCreateTopicsResult(Map.ofEntries(
-                Map.entry(topic3, createTopicSuccessfulFuture)
+            .thenAnswer(answer -> new MockCreateTopicsResult(mkMap(
+                mkEntry(topic3, createTopicSuccessfulFuture)
             )));
         final KafkaFutureImpl<Void> deleteTopicSuccessfulFuture = new KafkaFutureImpl<>();
         deleteTopicSuccessfulFuture.complete(null);
         when(admin.deleteTopics(Set.of(topic1)))
-            .thenAnswer(answer -> new MockDeleteTopicsResult(Map.ofEntries(Map.entry(topic1, deleteTopicSuccessfulFuture))));
+            .thenAnswer(answer -> new MockDeleteTopicsResult(mkMap(mkEntry(topic1, deleteTopicSuccessfulFuture))));
 
         assertThrows(
             IllegalStateException.class,
-            () -> topicManager.setup(Map.ofEntries(
-                Map.entry(topic1, internalTopicConfig1),
-                Map.entry(topic2, internalTopicConfig2)
+            () -> topicManager.setup(mkMap(
+                mkEntry(topic1, internalTopicConfig1),
+                mkEntry(topic2, internalTopicConfig2)
             ))
         );
     }
@@ -540,23 +542,23 @@ public class InternalTopicManagerTest {
         final NewTopic newTopic1 = newTopic(topic1, internalTopicConfig1, streamsConfig);
         final NewTopic newTopic2 = newTopic(topic2, internalTopicConfig2, streamsConfig);
         when(admin.createTopics(Set.of(newTopic1, newTopic2)))
-            .thenAnswer(answer -> new MockCreateTopicsResult(Map.ofEntries(
-                Map.entry(topic1, createTopicSuccessfulFuture),
-                Map.entry(topic2, createTopicFailFuture1)
+            .thenAnswer(answer -> new MockCreateTopicsResult(mkMap(
+                mkEntry(topic1, createTopicSuccessfulFuture),
+                mkEntry(topic2, createTopicFailFuture1)
             )));
         final KafkaFutureImpl<TopicMetadataAndConfig> createTopicFutureThatNeverCompletes = new KafkaFutureImpl<>();
         when(admin.createTopics(Set.of(newTopic2)))
-            .thenAnswer(answer -> new MockCreateTopicsResult(Map.ofEntries(Map.entry(topic2, createTopicFutureThatNeverCompletes))));
+            .thenAnswer(answer -> new MockCreateTopicsResult(mkMap(mkEntry(topic2, createTopicFutureThatNeverCompletes))));
         final KafkaFutureImpl<Void> deleteTopicSuccessfulFuture = new KafkaFutureImpl<>();
         deleteTopicSuccessfulFuture.complete(null);
         when(admin.deleteTopics(Set.of(topic1)))
-            .thenAnswer(answer -> new MockDeleteTopicsResult(Map.ofEntries(Map.entry(topic1, deleteTopicSuccessfulFuture))));
+            .thenAnswer(answer -> new MockDeleteTopicsResult(mkMap(mkEntry(topic1, deleteTopicSuccessfulFuture))));
 
         assertThrows(
             TimeoutException.class,
-            () -> topicManager.setup(Map.ofEntries(
-                Map.entry(topic1, internalTopicConfig1),
-                Map.entry(topic2, internalTopicConfig2)
+            () -> topicManager.setup(mkMap(
+                mkEntry(topic1, internalTopicConfig1),
+                mkEntry(topic2, internalTopicConfig2)
             ))
         );
     }
@@ -588,14 +590,14 @@ public class InternalTopicManagerTest {
         final KafkaFutureImpl<Void> deleteTopicSuccessfulFuture = new KafkaFutureImpl<>();
         deleteTopicSuccessfulFuture.complete(null);
         when(admin.deleteTopics(Set.of(topic1)))
-            .thenAnswer(answer -> new MockDeleteTopicsResult(Map.ofEntries(Map.entry(topic1, deleteTopicFailFuture))))
-            .thenAnswer(answer -> new MockDeleteTopicsResult(Map.ofEntries(Map.entry(topic1, deleteTopicSuccessfulFuture))));
+            .thenAnswer(answer -> new MockDeleteTopicsResult(mkMap(mkEntry(topic1, deleteTopicFailFuture))))
+            .thenAnswer(answer -> new MockDeleteTopicsResult(mkMap(mkEntry(topic1, deleteTopicSuccessfulFuture))));
 
         assertThrows(
             StreamsException.class,
-            () -> topicManager.setup(Map.ofEntries(
-                Map.entry(topic1, internalTopicConfig1),
-                Map.entry(topic2, internalTopicConfig2)
+            () -> topicManager.setup(mkMap(
+                mkEntry(topic1, internalTopicConfig1),
+                mkEntry(topic2, internalTopicConfig2)
             ))
         );
     }
@@ -613,13 +615,13 @@ public class InternalTopicManagerTest {
         setupCleanUpScenario(admin, streamsConfig, internalTopicConfig1, internalTopicConfig2);
         final KafkaFutureImpl<Void> deleteTopicFutureThatNeverCompletes = new KafkaFutureImpl<>();
         when(admin.deleteTopics(Set.of(topic1)))
-            .thenAnswer(answer -> new MockDeleteTopicsResult(Map.ofEntries(Map.entry(topic1, deleteTopicFutureThatNeverCompletes))));
+            .thenAnswer(answer -> new MockDeleteTopicsResult(mkMap(mkEntry(topic1, deleteTopicFutureThatNeverCompletes))));
 
         assertThrows(
             TimeoutException.class,
-            () -> topicManager.setup(Map.ofEntries(
-                Map.entry(topic1, internalTopicConfig1),
-                Map.entry(topic2, internalTopicConfig2)
+            () -> topicManager.setup(mkMap(
+                mkEntry(topic1, internalTopicConfig1),
+                mkEntry(topic2, internalTopicConfig2)
             ))
         );
     }
@@ -635,13 +637,13 @@ public class InternalTopicManagerTest {
         final KafkaFutureImpl<Void> deleteTopicFailFuture = new KafkaFutureImpl<>();
         deleteTopicFailFuture.completeExceptionally(new IllegalStateException("Nobody expects the Spanish inquisition"));
         when(admin.deleteTopics(Set.of(topic1)))
-            .thenAnswer(answer -> new MockDeleteTopicsResult(Map.ofEntries(Map.entry(topic1, deleteTopicFailFuture))));
+            .thenAnswer(answer -> new MockDeleteTopicsResult(mkMap(mkEntry(topic1, deleteTopicFailFuture))));
 
         assertThrows(
             StreamsException.class,
-            () -> topicManager.setup(Map.ofEntries(
-                Map.entry(topic1, internalTopicConfig1),
-                Map.entry(topic2, internalTopicConfig2)
+            () -> topicManager.setup(mkMap(
+                mkEntry(topic1, internalTopicConfig1),
+                mkEntry(topic2, internalTopicConfig2)
             ))
         );
     }
@@ -658,13 +660,13 @@ public class InternalTopicManagerTest {
         final NewTopic newTopic1 = newTopic(topic1, internalTopicConfig1, streamsConfig);
         final NewTopic newTopic2 = newTopic(topic2, internalTopicConfig2, streamsConfig);
         when(admin.createTopics(Set.of(newTopic1, newTopic2)))
-            .thenAnswer(answer -> new MockCreateTopicsResult(Map.ofEntries(
-                Map.entry(topic1, createTopicSuccessfulFuture),
-                Map.entry(topic2, createTopicFailFuture1)
+            .thenAnswer(answer -> new MockCreateTopicsResult(mkMap(
+                mkEntry(topic1, createTopicSuccessfulFuture),
+                mkEntry(topic2, createTopicFailFuture1)
             )));
         when(admin.createTopics(Set.of(newTopic2)))
-            .thenAnswer(answer -> new MockCreateTopicsResult(Map.ofEntries(
-                Map.entry(topic2, createTopicFailFuture2)
+            .thenAnswer(answer -> new MockCreateTopicsResult(mkMap(
+                mkEntry(topic2, createTopicFailFuture2)
             )));
     }
 
@@ -777,13 +779,13 @@ public class InternalTopicManagerTest {
         // let the first describe succeed on topic, and fail on topic2, and then let creation throws topics-existed;
         // it should retry with just topic2 and then let it succeed
         when(admin.describeTopics(Set.of(topic1, topic2)))
-            .thenAnswer(answer -> new MockDescribeTopicsResult(Map.ofEntries(
-                Map.entry(topic1, topicDescriptionSuccessFuture),
-                Map.entry(topic2, topicDescriptionFailFuture)
+            .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap(
+                mkEntry(topic1, topicDescriptionSuccessFuture),
+                mkEntry(topic2, topicDescriptionFailFuture)
             )));
         when(admin.createTopics(Collections.singleton(new NewTopic(topic2, Optional.of(1), Optional.of((short) 1))
-            .configs(Map.ofEntries(Map.entry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT),
-                                 Map.entry(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "CreateTime"))))))
+            .configs(mkMap(mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT),
+                                 mkEntry(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "CreateTime"))))))
             .thenAnswer(answer -> new MockCreateTopicsResult(Collections.singletonMap(topic2, topicCreationFuture)));
         when(admin.describeTopics(Collections.singleton(topic2)))
             .thenAnswer(answer -> new MockDescribeTopicsResult(Collections.singletonMap(topic2, topicDescriptionSuccessFuture)));
@@ -792,9 +794,9 @@ public class InternalTopicManagerTest {
         topicConfig.setNumberOfPartitions(1);
         final InternalTopicConfig topic2Config = new UnwindowedUnversionedChangelogTopicConfig(topic2, Collections.emptyMap());
         topic2Config.setNumberOfPartitions(1);
-        topicManager.makeReady(Map.ofEntries(
-            Map.entry(topic1, topicConfig),
-            Map.entry(topic2, topic2Config)
+        topicManager.makeReady(mkMap(
+            mkEntry(topic1, topicConfig),
+            mkEntry(topic2, topic2Config)
         ));
     }
 
@@ -920,10 +922,10 @@ public class InternalTopicManagerTest {
                 Collections.singletonMap(topic1, topicDescriptionUnknownTopicFuture)));
         when(admin.createTopics(Collections.singleton(
                 new NewTopic(topic1, Optional.of(1), Optional.of((short) 1))
-            .configs(Map.ofEntries(Map.entry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE),
-                Map.entry(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "CreateTime"),
-                Map.entry(TopicConfig.SEGMENT_BYTES_CONFIG, "52428800"),
-                Map.entry(TopicConfig.RETENTION_MS_CONFIG, "-1"))))))
+            .configs(mkMap(mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE),
+                mkEntry(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "CreateTime"),
+                mkEntry(TopicConfig.SEGMENT_BYTES_CONFIG, "52428800"),
+                mkEntry(TopicConfig.RETENTION_MS_CONFIG, "-1"))))))
             .thenAnswer(answer -> new MockCreateTopicsResult(Collections.singletonMap(topic1, topicCreationFuture)));
 
         final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic1, Collections.emptyMap());
@@ -1032,9 +1034,9 @@ public class InternalTopicManagerTest {
         final InternalTopicConfig internalTopicConfig1 = setupRepartitionTopicConfig(topic1, 1);
         final InternalTopicConfig internalTopicConfig2 = setupRepartitionTopicConfig(topic2, 1);
 
-        final ValidationResult validationResult = internalTopicManager.validate(Map.ofEntries(
-            Map.entry(topic1, internalTopicConfig1),
-            Map.entry(topic2, internalTopicConfig2)
+        final ValidationResult validationResult = internalTopicManager.validate(mkMap(
+            mkEntry(topic1, internalTopicConfig1),
+            mkEntry(topic2, internalTopicConfig2)
         ));
 
         assertThat(validationResult.missingTopics(), empty());
@@ -1060,10 +1062,10 @@ public class InternalTopicManagerTest {
         final InternalTopicConfig internalTopicConfig2 = setupRepartitionTopicConfig(missingTopic1, 1);
         final InternalTopicConfig internalTopicConfig3 = setupRepartitionTopicConfig(missingTopic2, 1);
 
-        final ValidationResult validationResult = internalTopicManager.validate(Map.ofEntries(
-            Map.entry(topic1, internalTopicConfig1),
-            Map.entry(missingTopic1, internalTopicConfig2),
-            Map.entry(missingTopic2, internalTopicConfig3)
+        final ValidationResult validationResult = internalTopicManager.validate(mkMap(
+            mkEntry(topic1, internalTopicConfig1),
+            mkEntry(missingTopic1, internalTopicConfig2),
+            mkEntry(missingTopic2, internalTopicConfig3)
         ));
 
         final Set<String> missingTopics = validationResult.missingTopics();
@@ -1082,10 +1084,10 @@ public class InternalTopicManagerTest {
         final InternalTopicConfig internalTopicConfig2 = setupRepartitionTopicConfig(topic2, 3);
         final InternalTopicConfig internalTopicConfig3 = setupRepartitionTopicConfig(topic3, 1);
 
-        final ValidationResult validationResult = internalTopicManager.validate(Map.ofEntries(
-            Map.entry(topic1, internalTopicConfig1),
-            Map.entry(topic2, internalTopicConfig2),
-            Map.entry(topic3, internalTopicConfig3)
+        final ValidationResult validationResult = internalTopicManager.validate(mkMap(
+            mkEntry(topic1, internalTopicConfig1),
+            mkEntry(topic2, internalTopicConfig2),
+            mkEntry(topic3, internalTopicConfig3)
         ));
 
         final Map<String, List<String>> misconfigurationsForTopics = validationResult.misconfigurationsForTopics();
@@ -1125,10 +1127,10 @@ public class InternalTopicManagerTest {
         final InternalTopicConfig internalTopicConfig2 = setupUnwindowedUnversionedChangelogTopicConfig(topic2, 1);
         final InternalTopicConfig internalTopicConfig3 = setupUnwindowedUnversionedChangelogTopicConfig(topic3, 1);
 
-        final ValidationResult validationResult = internalTopicManager.validate(Map.ofEntries(
-            Map.entry(topic1, internalTopicConfig1),
-            Map.entry(topic2, internalTopicConfig2),
-            Map.entry(topic3, internalTopicConfig3)
+        final ValidationResult validationResult = internalTopicManager.validate(mkMap(
+            mkEntry(topic1, internalTopicConfig1),
+            mkEntry(topic2, internalTopicConfig2),
+            mkEntry(topic3, internalTopicConfig3)
         ));
 
         final Map<String, List<String>> misconfigurationsForTopics = validationResult.misconfigurationsForTopics();
@@ -1172,12 +1174,12 @@ public class InternalTopicManagerTest {
         final InternalTopicConfig internalTopicConfig4 = setupWindowedChangelogTopicConfig(topic4, 1, retentionMs);
         final InternalTopicConfig internalTopicConfig5 = setupWindowedChangelogTopicConfig(topic5, 1, retentionMs);
 
-        final ValidationResult validationResult = internalTopicManager.validate(Map.ofEntries(
-            Map.entry(topic1, internalTopicConfig1),
-            Map.entry(topic2, internalTopicConfig2),
-            Map.entry(topic3, internalTopicConfig3),
-            Map.entry(topic4, internalTopicConfig4),
-            Map.entry(topic5, internalTopicConfig5)
+        final ValidationResult validationResult = internalTopicManager.validate(mkMap(
+            mkEntry(topic1, internalTopicConfig1),
+            mkEntry(topic2, internalTopicConfig2),
+            mkEntry(topic3, internalTopicConfig3),
+            mkEntry(topic4, internalTopicConfig4),
+            mkEntry(topic5, internalTopicConfig5)
         ));
 
         final Map<String, List<String>> misconfigurationsForTopics = validationResult.misconfigurationsForTopics();
@@ -1225,11 +1227,11 @@ public class InternalTopicManagerTest {
         final InternalTopicConfig internalTopicConfig3 = setupVersionedChangelogTopicConfig(topic3, 1, compactionLagMs);
         final InternalTopicConfig internalTopicConfig4 = setupVersionedChangelogTopicConfig(topic4, 1, compactionLagMs);
 
-        final ValidationResult validationResult = internalTopicManager.validate(Map.ofEntries(
-            Map.entry(topic1, internalTopicConfig1),
-            Map.entry(topic2, internalTopicConfig2),
-            Map.entry(topic3, internalTopicConfig3),
-            Map.entry(topic4, internalTopicConfig4)
+        final ValidationResult validationResult = internalTopicManager.validate(mkMap(
+            mkEntry(topic1, internalTopicConfig1),
+            mkEntry(topic2, internalTopicConfig2),
+            mkEntry(topic3, internalTopicConfig3),
+            mkEntry(topic4, internalTopicConfig4)
         ));
 
         final Map<String, List<String>> misconfigurationsForTopics = validationResult.misconfigurationsForTopics();
@@ -1284,12 +1286,12 @@ public class InternalTopicManagerTest {
         final InternalTopicConfig internalTopicConfig4 = setupRepartitionTopicConfig(topic4, 1);
         final InternalTopicConfig internalTopicConfig5 = setupRepartitionTopicConfig(topic5, 1);
 
-        final ValidationResult validationResult = internalTopicManager.validate(Map.ofEntries(
-            Map.entry(topic1, internalTopicConfig1),
-            Map.entry(topic2, internalTopicConfig2),
-            Map.entry(topic3, internalTopicConfig3),
-            Map.entry(topic4, internalTopicConfig4),
-            Map.entry(topic5, internalTopicConfig5)
+        final ValidationResult validationResult = internalTopicManager.validate(mkMap(
+            mkEntry(topic1, internalTopicConfig1),
+            mkEntry(topic2, internalTopicConfig2),
+            mkEntry(topic3, internalTopicConfig3),
+            mkEntry(topic4, internalTopicConfig4),
+            mkEntry(topic5, internalTopicConfig5)
         ));
 
         final Map<String, List<String>> misconfigurationsForTopics = validationResult.misconfigurationsForTopics();
@@ -1334,8 +1336,8 @@ public class InternalTopicManagerTest {
         setupTopicInMockAdminClient(topic1, windowedChangelogConfig);
         final InternalTopicConfig internalTopicConfig1 = setupWindowedChangelogTopicConfig(topic1, 1, retentionMs);
 
-        final ValidationResult validationResult = internalTopicManager.validate(Map.ofEntries(
-            Map.entry(topic1, internalTopicConfig1)
+        final ValidationResult validationResult = internalTopicManager.validate(mkMap(
+            mkEntry(topic1, internalTopicConfig1)
         ));
 
         final Map<String, List<String>> misconfigurationsForTopics = validationResult.misconfigurationsForTopics();
@@ -1413,8 +1415,8 @@ public class InternalTopicManagerTest {
             Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList()))
         ));
         when(admin.describeTopics(Collections.singleton(topic1)))
-            .thenAnswer(answer -> new MockDescribeTopicsResult(Map.ofEntries(Map.entry(topic1, topicDescriptionFailFuture))))
-            .thenAnswer(answer -> new MockDescribeTopicsResult(Map.ofEntries(Map.entry(topic1, topicDescriptionSuccessfulFuture))));
+            .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap(mkEntry(topic1, topicDescriptionFailFuture))))
+            .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap(mkEntry(topic1, topicDescriptionSuccessfulFuture))));
         final KafkaFutureImpl<Config> topicConfigSuccessfulFuture = new KafkaFutureImpl<>();
         topicConfigSuccessfulFuture.complete(
             new Config(repartitionTopicConfig().entrySet().stream()
@@ -1422,7 +1424,7 @@ public class InternalTopicManagerTest {
         );
         final ConfigResource topicResource = new ConfigResource(Type.TOPIC, topic1);
         when(admin.describeConfigs(Collections.singleton(topicResource)))
-            .thenAnswer(answer -> new MockDescribeConfigsResult(Map.ofEntries(Map.entry(topicResource, topicConfigSuccessfulFuture))));
+            .thenAnswer(answer -> new MockDescribeConfigsResult(mkMap(mkEntry(topicResource, topicConfigSuccessfulFuture))));
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
 
         final ValidationResult validationResult = topicManager.validate(Collections.singletonMap(topic1, internalTopicConfig));
@@ -1446,7 +1448,7 @@ public class InternalTopicManagerTest {
             Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList()))
         ));
         when(admin.describeTopics(Collections.singleton(topic1)))
-            .thenAnswer(answer -> new MockDescribeTopicsResult(Map.ofEntries(Map.entry(topic1, topicDescriptionSuccessfulFuture))));
+            .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap(mkEntry(topic1, topicDescriptionSuccessfulFuture))));
         final KafkaFutureImpl<Config> topicConfigsFailFuture = new KafkaFutureImpl<>();
         topicConfigsFailFuture.completeExceptionally(new LeaderNotAvailableException("Leader Not Available!"));
         final KafkaFutureImpl<Config> topicConfigSuccessfulFuture = new KafkaFutureImpl<>();
@@ -1456,8 +1458,8 @@ public class InternalTopicManagerTest {
         );
         final ConfigResource topicResource = new ConfigResource(Type.TOPIC, topic1);
         when(admin.describeConfigs(Collections.singleton(topicResource)))
-            .thenAnswer(answer -> new MockDescribeConfigsResult(Map.ofEntries(Map.entry(topicResource, topicConfigsFailFuture))))
-            .thenAnswer(answer -> new MockDescribeConfigsResult(Map.ofEntries(Map.entry(topicResource, topicConfigSuccessfulFuture))));
+            .thenAnswer(answer -> new MockDescribeConfigsResult(mkMap(mkEntry(topicResource, topicConfigsFailFuture))))
+            .thenAnswer(answer -> new MockDescribeConfigsResult(mkMap(mkEntry(topicResource, topicConfigSuccessfulFuture))));
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
 
         final ValidationResult validationResult = topicManager.validate(Collections.singletonMap(topic1, internalTopicConfig));
@@ -1489,13 +1491,13 @@ public class InternalTopicManagerTest {
             Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList()))
         ));
         when(admin.describeTopics(Set.of(topic1, topic2)))
-            .thenAnswer(answer -> new MockDescribeTopicsResult(Map.ofEntries(
-                Map.entry(topic1, topicDescriptionSuccessfulFuture1),
-                Map.entry(topic2, topicDescriptionFailFuture)
+            .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap(
+                mkEntry(topic1, topicDescriptionSuccessfulFuture1),
+                mkEntry(topic2, topicDescriptionFailFuture)
             )));
         when(admin.describeTopics(Set.of(topic2)))
-            .thenAnswer(answer -> new MockDescribeTopicsResult(Map.ofEntries(
-                Map.entry(topic2, topicDescriptionSuccessfulFuture2)
+            .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap(
+                mkEntry(topic2, topicDescriptionSuccessfulFuture2)
             )));
         final KafkaFutureImpl<Config> topicConfigSuccessfulFuture = new KafkaFutureImpl<>();
         topicConfigSuccessfulFuture.complete(
@@ -1505,16 +1507,16 @@ public class InternalTopicManagerTest {
         final ConfigResource topicResource1 = new ConfigResource(Type.TOPIC, topic1);
         final ConfigResource topicResource2 = new ConfigResource(Type.TOPIC, topic2);
         when(admin.describeConfigs(Set.of(topicResource1, topicResource2)))
-            .thenAnswer(answer -> new MockDescribeConfigsResult(Map.ofEntries(
-                Map.entry(topicResource1, topicConfigSuccessfulFuture),
-                Map.entry(topicResource2, topicConfigSuccessfulFuture)
+            .thenAnswer(answer -> new MockDescribeConfigsResult(mkMap(
+                mkEntry(topicResource1, topicConfigSuccessfulFuture),
+                mkEntry(topicResource2, topicConfigSuccessfulFuture)
             )));
         final InternalTopicConfig internalTopicConfig1 = setupRepartitionTopicConfig(topic1, 1);
         final InternalTopicConfig internalTopicConfig2 = setupRepartitionTopicConfig(topic2, 1);
 
-        final ValidationResult validationResult = topicManager.validate(Map.ofEntries(
-            Map.entry(topic1, internalTopicConfig1),
-            Map.entry(topic2, internalTopicConfig2)
+        final ValidationResult validationResult = topicManager.validate(mkMap(
+            mkEntry(topic1, internalTopicConfig1),
+            mkEntry(topic2, internalTopicConfig2)
         ));
 
         assertThat(validationResult.missingTopics(), empty());
@@ -1532,7 +1534,7 @@ public class InternalTopicManagerTest {
         final KafkaFutureImpl<TopicDescription> topicDescriptionFailFuture = new KafkaFutureImpl<>();
         topicDescriptionFailFuture.completeExceptionally(new IllegalStateException("Nobody expects the Spanish inquisition"));
         when(admin.describeTopics(Collections.singleton(topic1)))
-            .thenAnswer(answer -> new MockDescribeTopicsResult(Map.ofEntries(Map.entry(topic1, topicDescriptionFailFuture))));
+            .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap(mkEntry(topic1, topicDescriptionFailFuture))));
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
 
         assertThrows(Throwable.class, () -> topicManager.validate(Collections.singletonMap(topic1, internalTopicConfig)));
@@ -1547,12 +1549,12 @@ public class InternalTopicManagerTest {
             new StreamsConfig(config)
         );
         when(admin.describeTopics(Collections.singleton(topic1)))
-            .thenAnswer(answer -> new MockDescribeTopicsResult(Map.ofEntries()));
+            .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap()));
         final KafkaFutureImpl<Config> configDescriptionFailFuture = new KafkaFutureImpl<>();
         configDescriptionFailFuture.completeExceptionally(new IllegalStateException("Nobody expects the Spanish inquisition"));
         final ConfigResource topicResource = new ConfigResource(Type.TOPIC, topic1);
         when(admin.describeConfigs(Collections.singleton(topicResource)))
-            .thenAnswer(answer -> new MockDescribeConfigsResult(Map.ofEntries(Map.entry(topicResource, configDescriptionFailFuture))));
+            .thenAnswer(answer -> new MockDescribeConfigsResult(mkMap(mkEntry(topicResource, configDescriptionFailFuture))));
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
 
         assertThrows(Throwable.class, () -> topicManager.validate(Collections.singletonMap(topic1, internalTopicConfig)));
@@ -1573,12 +1575,12 @@ public class InternalTopicManagerTest {
             Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList()))
         ));
         when(admin.describeTopics(Collections.singleton(topic1)))
-            .thenAnswer(answer -> new MockDescribeTopicsResult(Map.ofEntries(Map.entry(topic2, topicDescriptionSuccessfulFuture))));
+            .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap(mkEntry(topic2, topicDescriptionSuccessfulFuture))));
         final KafkaFutureImpl<Config> topicConfigSuccessfulFuture = new KafkaFutureImpl<>();
         topicConfigSuccessfulFuture.complete(new Config(Collections.emptySet()));
         final ConfigResource topicResource = new ConfigResource(Type.TOPIC, topic1);
         when(admin.describeConfigs(Collections.singleton(topicResource)))
-            .thenAnswer(answer -> new MockDescribeConfigsResult(Map.ofEntries(Map.entry(topicResource, topicConfigSuccessfulFuture))));
+            .thenAnswer(answer -> new MockDescribeConfigsResult(mkMap(mkEntry(topicResource, topicConfigSuccessfulFuture))));
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
 
         assertThrows(
@@ -1602,13 +1604,13 @@ public class InternalTopicManagerTest {
             Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList()))
         ));
         when(admin.describeTopics(Collections.singleton(topic1)))
-            .thenAnswer(answer -> new MockDescribeTopicsResult(Map.ofEntries(Map.entry(topic1, topicDescriptionSuccessfulFuture))));
+            .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap(mkEntry(topic1, topicDescriptionSuccessfulFuture))));
         final KafkaFutureImpl<Config> topicConfigSuccessfulFuture = new KafkaFutureImpl<>();
         topicConfigSuccessfulFuture.complete(new Config(Collections.emptySet()));
         final ConfigResource topicResource1 = new ConfigResource(Type.TOPIC, topic1);
         final ConfigResource topicResource2 = new ConfigResource(Type.TOPIC, topic2);
         when(admin.describeConfigs(Collections.singleton(topicResource1)))
-            .thenAnswer(answer -> new MockDescribeConfigsResult(Map.ofEntries(Map.entry(topicResource2, topicConfigSuccessfulFuture))));
+            .thenAnswer(answer -> new MockDescribeConfigsResult(mkMap(mkEntry(topicResource2, topicConfigSuccessfulFuture))));
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
 
         assertThrows(
@@ -1698,12 +1700,12 @@ public class InternalTopicManagerTest {
             Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList()))
         ));
         when(admin.describeTopics(Collections.singleton(topic1)))
-            .thenAnswer(answer -> new MockDescribeTopicsResult(Map.ofEntries(Map.entry(topic1, topicDescriptionSuccessfulFuture))));
+            .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap(mkEntry(topic1, topicDescriptionSuccessfulFuture))));
         final KafkaFutureImpl<Config> topicConfigSuccessfulFuture = new KafkaFutureImpl<>();
         topicConfigSuccessfulFuture.complete(brokerSideTopicConfig);
         final ConfigResource topicResource1 = new ConfigResource(Type.TOPIC, topic1);
         when(admin.describeConfigs(Collections.singleton(topicResource1)))
-            .thenAnswer(answer -> new MockDescribeConfigsResult(Map.ofEntries(Map.entry(topicResource1, topicConfigSuccessfulFuture))));
+            .thenAnswer(answer -> new MockDescribeConfigsResult(mkMap(mkEntry(topicResource1, topicConfigSuccessfulFuture))));
 
         assertThrows(
             IllegalStateException.class,
@@ -1725,7 +1727,7 @@ public class InternalTopicManagerTest {
         final KafkaFutureImpl<TopicDescription> topicDescriptionFailFuture = new KafkaFutureImpl<>();
         topicDescriptionFailFuture.completeExceptionally(new TimeoutException());
         when(admin.describeTopics(Collections.singleton(topic1)))
-            .thenAnswer(answer -> new MockDescribeTopicsResult(Map.ofEntries(Map.entry(topic1, topicDescriptionFailFuture))));
+            .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap(mkEntry(topic1, topicDescriptionFailFuture))));
         final KafkaFutureImpl<Config> topicConfigSuccessfulFuture = new KafkaFutureImpl<>();
         topicConfigSuccessfulFuture.complete(
             new Config(repartitionTopicConfig().entrySet().stream()
@@ -1733,7 +1735,7 @@ public class InternalTopicManagerTest {
         );
         final ConfigResource topicResource = new ConfigResource(Type.TOPIC, topic1);
         when(admin.describeConfigs(Collections.singleton(topicResource)))
-            .thenAnswer(answer -> new MockDescribeConfigsResult(Map.ofEntries(Map.entry(topicResource, topicConfigSuccessfulFuture))));
+            .thenAnswer(answer -> new MockDescribeConfigsResult(mkMap(mkEntry(topicResource, topicConfigSuccessfulFuture))));
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
 
         assertThrows(
@@ -1755,7 +1757,7 @@ public class InternalTopicManagerTest {
         );
         final KafkaFutureImpl<TopicDescription> topicDescriptionFutureThatNeverCompletes = new KafkaFutureImpl<>();
         when(admin.describeTopics(Collections.singleton(topic1)))
-            .thenAnswer(answer -> new MockDescribeTopicsResult(Map.ofEntries(Map.entry(topic1, topicDescriptionFutureThatNeverCompletes))));
+            .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap(mkEntry(topic1, topicDescriptionFutureThatNeverCompletes))));
         final KafkaFutureImpl<Config> topicConfigSuccessfulFuture = new KafkaFutureImpl<>();
         topicConfigSuccessfulFuture.complete(
             new Config(repartitionTopicConfig().entrySet().stream()
@@ -1763,7 +1765,7 @@ public class InternalTopicManagerTest {
         );
         final ConfigResource topicResource = new ConfigResource(Type.TOPIC, topic1);
         when(admin.describeConfigs(Collections.singleton(topicResource)))
-            .thenAnswer(answer -> new MockDescribeConfigsResult(Map.ofEntries(Map.entry(topicResource, topicConfigSuccessfulFuture))));
+            .thenAnswer(answer -> new MockDescribeConfigsResult(mkMap(mkEntry(topicResource, topicConfigSuccessfulFuture))));
         final InternalTopicConfig internalTopicConfig = setupRepartitionTopicConfig(topic1, 1);
 
         assertThrows(
@@ -1786,31 +1788,31 @@ public class InternalTopicManagerTest {
     }
 
     private Map<String, String> repartitionTopicConfig() {
-        return Map.ofEntries(
-            Map.entry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE),
-            Map.entry(TopicConfig.RETENTION_MS_CONFIG, "-1"),
-            Map.entry(TopicConfig.RETENTION_BYTES_CONFIG, null)
+        return mkMap(
+            mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE),
+            mkEntry(TopicConfig.RETENTION_MS_CONFIG, "-1"),
+            mkEntry(TopicConfig.RETENTION_BYTES_CONFIG, null)
         );
     }
 
     private Map<String, String> unwindowedUnversionedChangelogConfig() {
-        return Map.ofEntries(
-            Map.entry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
+        return mkMap(
+            mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
         );
     }
 
     private Map<String, String> windowedChangelogConfig(final long retentionMs) {
-        return Map.ofEntries(
-            Map.entry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE),
-            Map.entry(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(retentionMs)),
-            Map.entry(TopicConfig.RETENTION_BYTES_CONFIG, null)
+        return mkMap(
+            mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE),
+            mkEntry(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(retentionMs)),
+            mkEntry(TopicConfig.RETENTION_BYTES_CONFIG, null)
         );
     }
 
     private Map<String, String> versionedChangelogConfig(final long compactionLagMs) {
-        return Map.ofEntries(
-            Map.entry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT),
-            Map.entry(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, String.valueOf(compactionLagMs))
+        return mkMap(
+            mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT),
+            mkEntry(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, String.valueOf(compactionLagMs))
         );
     }
 
@@ -1836,7 +1838,7 @@ public class InternalTopicManagerTest {
                                                                   final long retentionMs) {
         final InternalTopicConfig internalTopicConfig = new WindowedChangelogTopicConfig(
             topicName,
-            Map.ofEntries(Map.entry(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(retentionMs))),
+            mkMap(mkEntry(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(retentionMs))),
             10
         );
         internalTopicConfig.setNumberOfPartitions(partitionCount);
@@ -1848,7 +1850,7 @@ public class InternalTopicManagerTest {
                                                                    final long compactionLagMs) {
         final InternalTopicConfig internalTopicConfig = new VersionedChangelogTopicConfig(
             topicName,
-            Map.ofEntries(Map.entry(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, String.valueOf(compactionLagMs))),
+            mkMap(mkEntry(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, String.valueOf(compactionLagMs))),
             12
         );
         internalTopicConfig.setNumberOfPartitions(partitionCount);

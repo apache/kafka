@@ -33,9 +33,10 @@ import org.junit.jupiter.api.Test;
 
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 
 import static java.time.Duration.ofMillis;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.toStoreKeyBinary;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -179,7 +180,7 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
         context.setRecordContext(new ProcessorRecordContext(0, 4, 0, "", new RecordHeaders()));
         windowStore.put(3, "3", SEGMENT_INTERVAL);
 
-        final Position expected = Position.fromMap(Map.ofEntries(Map.entry("", Map.ofEntries(Map.entry(0, 4L)))));
+        final Position expected = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 4L)))));
         final Position actual = inMemoryWindowStore.getPosition();
         assertEquals(expected, actual);
     }

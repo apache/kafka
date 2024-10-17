@@ -45,11 +45,12 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
@@ -85,7 +86,7 @@ public class PartitionGroupTest {
 
     private final Metrics metrics = new Metrics();
     private final Sensor enforcedProcessingSensor = metrics.sensor(UUID.randomUUID().toString());
-    private final MetricName lastLatenessValue = new MetricName("record-lateness-last-value", "", "", Map.ofEntries());
+    private final MetricName lastLatenessValue = new MetricName("record-lateness-last-value", "", "", mkMap());
 
 
     private static Sensor getValueSensor(final Metrics metrics, final MetricName metricName) {
@@ -432,8 +433,8 @@ public class PartitionGroupTest {
         final PartitionGroup group =
             new PartitionGroup(
                 logContext,
-                Map.ofEntries(
-                    Map.entry(partition1, queue1)
+                mkMap(
+                    mkEntry(partition1, queue1)
                 ),
                 tp -> OptionalLong.of(0L),
                 getValueSensor(metrics, lastLatenessValue),
@@ -497,7 +498,7 @@ public class PartitionGroupTest {
     public void shouldUpdatePartitionQueuesExpand() {
         final PartitionGroup group = new PartitionGroup(
             logContext,
-            Map.ofEntries(Map.entry(partition1, queue1)),
+            mkMap(mkEntry(partition1, queue1)),
             tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
@@ -530,7 +531,7 @@ public class PartitionGroupTest {
     public void shouldUpdatePartitionQueuesShrinkAndExpand() {
         final PartitionGroup group = new PartitionGroup(
             logContext,
-            Map.ofEntries(Map.entry(partition1, queue1)),
+            mkMap(mkEntry(partition1, queue1)),
             tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
@@ -562,9 +563,9 @@ public class PartitionGroupTest {
     public void shouldNeverWaitIfIdlingIsDisabled() {
         final PartitionGroup group = new PartitionGroup(
             logContext,
-            Map.ofEntries(
-                Map.entry(partition1, queue1),
-                Map.entry(partition2, queue2)
+            mkMap(
+                mkEntry(partition1, queue1),
+                mkEntry(partition2, queue2)
             ),
             tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
@@ -600,9 +601,9 @@ public class PartitionGroupTest {
     public void shouldBeReadyIfAllPartitionsAreBuffered() {
         final PartitionGroup group = new PartitionGroup(
             logContext,
-            Map.ofEntries(
-                Map.entry(partition1, queue1),
-                Map.entry(partition2, queue2)
+            mkMap(
+                mkEntry(partition1, queue1),
+                mkEntry(partition2, queue2)
             ),
             tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
@@ -639,9 +640,9 @@ public class PartitionGroupTest {
         final HashMap<TopicPartition, OptionalLong> lags = new HashMap<>();
         final PartitionGroup group = new PartitionGroup(
             logContext,
-            Map.ofEntries(
-                Map.entry(partition1, queue1),
-                Map.entry(partition2, queue2)
+            mkMap(
+                mkEntry(partition1, queue1),
+                mkEntry(partition2, queue2)
             ),
             tp -> lags.getOrDefault(tp, OptionalLong.empty()),
             getValueSensor(metrics, lastLatenessValue),
@@ -676,9 +677,9 @@ public class PartitionGroupTest {
         final HashMap<TopicPartition, OptionalLong> lags = new HashMap<>();
         final PartitionGroup group = new PartitionGroup(
             logContext,
-            Map.ofEntries(
-                Map.entry(partition1, queue1),
-                Map.entry(partition2, queue2)
+            mkMap(
+                mkEntry(partition1, queue1),
+                mkEntry(partition2, queue2)
             ),
             tp -> lags.getOrDefault(tp, OptionalLong.empty()),
             getValueSensor(metrics, lastLatenessValue),
@@ -713,9 +714,9 @@ public class PartitionGroupTest {
     public void shouldIdleAsSpecifiedWhenLagIsZero() {
         final PartitionGroup group = new PartitionGroup(
             logContext,
-            Map.ofEntries(
-                Map.entry(partition1, queue1),
-                Map.entry(partition2, queue2)
+            mkMap(
+                mkEntry(partition1, queue1),
+                mkEntry(partition2, queue2)
             ),
             tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
@@ -818,8 +819,8 @@ public class PartitionGroupTest {
         final HashMap<TopicPartition, OptionalLong> lags = new HashMap<>();
         final PartitionGroup group = new PartitionGroup(
             logContext,
-            Map.ofEntries(
-                Map.entry(partition1, queue1)
+            mkMap(
+                mkEntry(partition1, queue1)
             ),
             tp -> lags.getOrDefault(tp, OptionalLong.empty()),
             getValueSensor(metrics, lastLatenessValue),
@@ -854,9 +855,9 @@ public class PartitionGroupTest {
     private PartitionGroup getBasicGroup() {
         return new PartitionGroup(
             logContext,
-            Map.ofEntries(
-                Map.entry(partition1, queue1),
-                Map.entry(partition2, queue2)
+            mkMap(
+                mkEntry(partition1, queue1),
+                mkEntry(partition2, queue2)
             ),
             tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),

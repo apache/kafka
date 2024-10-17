@@ -54,6 +54,8 @@ import java.util.stream.Stream;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.CHANGELOG_TP_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.CHANGELOG_TP_0_NAME;
@@ -174,7 +176,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = spy(new RackAwareTaskAssignor(
             getClusterForTopic0(),
             getTaskTopicPartitionMapForTask0(true),
-            Map.ofEntries(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessRacksForProcess0(),
             mockInternalTopicManager,
@@ -195,7 +197,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = spy(new RackAwareTaskAssignor(
             getClusterForTopic0(),
             getTaskTopicPartitionMapForTask0(true),
-            Map.ofEntries(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessRacksForProcess0(),
             mockInternalTopicManager,
@@ -217,7 +219,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = spy(new RackAwareTaskAssignor(
             getClusterWithPartitionMissingRack(),
             getTaskTopicPartitionMapForTask0(),
-            Map.ofEntries(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessRacksForProcess0(),
             mockInternalTopicManager,
@@ -239,7 +241,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForTopic0(),
             getTaskTopicPartitionMapForTask0(),
-            Map.ofEntries(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessRacksForProcess0(true),
             mockInternalTopicManager,
@@ -257,7 +259,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForTopic0(),
             getTaskTopicPartitionMapForTask0(),
-            Map.ofEntries(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessWithNoConsumerRacks(),
             mockInternalTopicManager,
@@ -276,7 +278,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForTopic0(),
             getTaskTopicPartitionMapForTask0(),
-            Map.ofEntries(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessRacksForProcess0(),
             mockInternalTopicManager,
@@ -284,7 +286,7 @@ public class RackAwareTaskAssignorTest {
             time
         );
         final Map<ProcessId, String> racksForProcess = assignor.racksForProcess();
-        assertEquals(Map.ofEntries(Map.entry(PID_1, RACK_1)), racksForProcess);
+        assertEquals(mkMap(mkEntry(PID_1, RACK_1)), racksForProcess);
     }
 
     @ParameterizedTest
@@ -301,7 +303,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForTopic0(),
             getTaskTopicPartitionMapForTask0(),
-            Map.ofEntries(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             processRacks,
             mockInternalTopicManager,
@@ -319,7 +321,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForTopic0(),
             getTaskTopicPartitionMapForTask0(),
-            Map.ofEntries(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessRacksForProcess0(),
             mockInternalTopicManager,
@@ -338,7 +340,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = spy(new RackAwareTaskAssignor(
             getClusterForTopic0(),
             getTaskTopicPartitionMapForTask0(),
-            Map.ofEntries(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessRacksForProcess0(),
             mockInternalTopicManager,
@@ -373,7 +375,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterWithNoNode(),
             getTaskTopicPartitionMapForTask0(),
-            Map.ofEntries(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessRacksForProcess0(),
             spyTopicManager,
@@ -423,9 +425,9 @@ public class RackAwareTaskAssignorTest {
         verify(assignor, times(1)).populateTopicsToDescribe(anySet(), eq(true));
 
         final Map<TopicPartition, Set<String>> racksForPartition = assignor.racksForPartition();
-        final Map<TopicPartition, Set<String>> expected = Map.ofEntries(
-            Map.entry(TP_0_0, Set.of(RACK_1, RACK_2)),
-            Map.entry(CHANGELOG_TP_0_0, Set.of(RACK_1, RACK_2))
+        final Map<TopicPartition, Set<String>> expected = mkMap(
+            mkEntry(TP_0_0, Set.of(RACK_1, RACK_2)),
+            mkEntry(CHANGELOG_TP_0_0, Set.of(RACK_1, RACK_2))
         );
         assertEquals(expected, racksForPartition);
     }
@@ -474,7 +476,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = spy(new RackAwareTaskAssignor(
             getClusterWithNoNode(),
             getTaskTopicPartitionMapForTask0(),
-            Map.ofEntries(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessRacksForProcess0(),
             spyTopicManager,
@@ -495,7 +497,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForAllTopics(),
             getTaskTopicPartitionMapForAllTasks(),
-            Map.ofEntries(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessRacksForAllProcess(),
             mockInternalTopicManager,
@@ -507,8 +509,8 @@ public class RackAwareTaskAssignorTest {
 
         clientState1.assignActiveTasks(Set.of(TASK_0_1, TASK_1_1));
 
-        final SortedMap<ProcessId, ClientState> clientStateMap = new TreeMap<>(Map.ofEntries(
-            Map.entry(PID_1, clientState1)
+        final SortedMap<ProcessId, ClientState> clientStateMap = new TreeMap<>(mkMap(
+            mkEntry(PID_1, clientState1)
         ));
         final SortedSet<TaskId> taskIds = mkSortedSet();
 
@@ -526,14 +528,14 @@ public class RackAwareTaskAssignorTest {
     @MethodSource("paramStoreType")
     public void shouldOptimizeActiveTasks(final boolean stateful, final String assignmentStrategy) {
         setUp(stateful);
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1)),
-            Map.entry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1))
         );
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForAllTopics(),
             getTaskTopicPartitionMapForAllTasks(),
-            Map.ofEntries(),
+            mkMap(),
             tasksForTopicGroup,
             getProcessRacksForAllProcess(),
             mockInternalTopicManager,
@@ -554,10 +556,10 @@ public class RackAwareTaskAssignorTest {
         // task_1_0 has same rack as ProcessId_1 and ProcessId_3
         // task_1_1 has same rack as ProcessId_2
         // Optimal assignment is ProcessId_1: {0_0, 1_0}, ProcessId_2: {1_1}, ProcessId_3: {0_1} which result in no cross rack traffic
-        final SortedMap<ProcessId, ClientState> clientStateMap = new TreeMap<>(Map.ofEntries(
-            Map.entry(PID_1, clientState1),
-            Map.entry(PID_2, clientState2),
-            Map.entry(PID_3, clientState3)
+        final SortedMap<ProcessId, ClientState> clientStateMap = new TreeMap<>(mkMap(
+            mkEntry(PID_1, clientState1),
+            mkEntry(PID_2, clientState2),
+            mkEntry(PID_3, clientState3)
         ));
         final SortedSet<TaskId> taskIds = mkSortedSet(TASK_0_0, TASK_0_1, TASK_1_0, TASK_1_1);
 
@@ -587,7 +589,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getRandomCluster(nodeSize, tpSize, partitionSize),
             taskTopicPartitionMap,
-            Map.ofEntries(),
+            mkMap(),
             getTasksForTopicGroup(tpSize, partitionSize),
             getRandomProcessRacks(clientSize, nodeSize),
             mockInternalTopicManager,
@@ -626,7 +628,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getRandomCluster(nodeSize, tpSize, partitionSize),
             taskTopicPartitionMap,
-            Map.ofEntries(),
+            mkMap(),
             getTasksForTopicGroup(tpSize, partitionSize),
             getRandomProcessRacks(clientSize, nodeSize),
             mockInternalTopicManager,
@@ -668,14 +670,14 @@ public class RackAwareTaskAssignorTest {
     @MethodSource("paramStoreType")
     public void shouldOptimizeActiveTasksWithMoreClients(final boolean stateful, final String assignmentStrategy) {
         setUp(stateful);
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0)),
-            Map.entry(new Subtopology(1, null), Set.of(TASK_1_0))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0))
         );
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForAllTopics(),
             getTaskTopicPartitionMapForAllTasks(),
-            Map.ofEntries(),
+            mkMap(),
             tasksForTopicGroup,
             getProcessRacksForAllProcess(),
             mockInternalTopicManager,
@@ -694,10 +696,10 @@ public class RackAwareTaskAssignorTest {
         // task_1_0 has same rack as ProcessId_1 and ProcessId_3
         // Optimal assignment is ProcessId_1: {}, ProcessId_2: {0_0}, ProcessId_3: {1_0} which result in no cross rack traffic
         // and keeps ProcessId_1 empty since it was originally empty
-        final SortedMap<ProcessId, ClientState> clientStateMap = new TreeMap<>(Map.ofEntries(
-            Map.entry(PID_1, clientState1),
-            Map.entry(PID_2, clientState2),
-            Map.entry(PID_3, clientState3)
+        final SortedMap<ProcessId, ClientState> clientStateMap = new TreeMap<>(mkMap(
+            mkEntry(PID_1, clientState1),
+            mkEntry(PID_2, clientState2),
+            mkEntry(PID_3, clientState3)
         ));
         final SortedSet<TaskId> taskIds = mkSortedSet(TASK_0_0, TASK_1_0);
 
@@ -720,14 +722,14 @@ public class RackAwareTaskAssignorTest {
     @MethodSource("paramStoreType")
     public void shouldOptimizeActiveTasksWithMoreClientsWithMoreThanOneTask(final boolean stateful, final String assignmentStrategy) {
         setUp(stateful);
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1)),
-            Map.entry(new Subtopology(1, null), Set.of(TASK_1_0))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0))
         );
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForAllTopics(),
             getTaskTopicPartitionMapForAllTasks(),
-            Map.ofEntries(),
+            mkMap(),
             tasksForTopicGroup,
             getProcessRacksForAllProcess(),
             mockInternalTopicManager,
@@ -746,10 +748,10 @@ public class RackAwareTaskAssignorTest {
         // task_0_1 has same rack as ProcessId_2 and ProcessId_3
         // task_1_0 has same rack as ProcessId_1 and ProcessId_3
         // Optimal assignment is ProcessId_1: {}, ProcessId_2: {0_0, 0_1}, ProcessId_3: {1_0} which result in no cross rack traffic
-        final SortedMap<ProcessId, ClientState> clientStateMap = new TreeMap<>(Map.ofEntries(
-            Map.entry(PID_1, clientState1),
-            Map.entry(PID_2, clientState2),
-            Map.entry(PID_3, clientState3)
+        final SortedMap<ProcessId, ClientState> clientStateMap = new TreeMap<>(mkMap(
+            mkEntry(PID_1, clientState1),
+            mkEntry(PID_2, clientState2),
+            mkEntry(PID_3, clientState3)
         ));
         final SortedSet<TaskId> taskIds = mkSortedSet(TASK_0_0, TASK_0_1, TASK_1_0);
 
@@ -772,14 +774,14 @@ public class RackAwareTaskAssignorTest {
     @MethodSource("paramStoreType")
     public void shouldBalanceAssignmentWithMoreCost(final boolean stateful, final String assignmentStrategy) {
         setUp(stateful);
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = Map.ofEntries(
-            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1)),
-            Map.entry(new Subtopology(1, null), Set.of(TASK_1_1))
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1)),
+            mkEntry(new Subtopology(1, null), Set.of(TASK_1_1))
         );
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForAllTopics(),
             getTaskTopicPartitionMapForAllTasks(),
-            Map.ofEntries(),
+            mkMap(),
             tasksForTopicGroup,
             getProcessRacksForAllProcess(),
             mockInternalTopicManager,
@@ -797,9 +799,9 @@ public class RackAwareTaskAssignorTest {
         // task_0_1 has same rack as ProcessId_2
         // task_1_1 has same rack as ProcessId_2
         // ProcessId_5 is not in same rack as any task
-        final SortedMap<ProcessId, ClientState> clientStateMap = new TreeMap<>(Map.ofEntries(
-            Map.entry(PID_2, clientState1),
-            Map.entry(PID_5, clientState2)
+        final SortedMap<ProcessId, ClientState> clientStateMap = new TreeMap<>(mkMap(
+            mkEntry(PID_2, clientState1),
+            mkEntry(PID_5, clientState2)
         ));
         final SortedSet<TaskId> taskIds = mkSortedSet(TASK_0_0, TASK_0_1, TASK_1_1);
 
@@ -829,7 +831,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForAllTopics(),
             getTaskTopicPartitionMapForAllTasks(),
-            Map.ofEntries(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessRacksForAllProcess(),
             mockInternalTopicManager,
@@ -843,9 +845,9 @@ public class RackAwareTaskAssignorTest {
         clientState1.assignActiveTasks(Set.of(TASK_0_0, TASK_1_1));
         clientState2.assignActive(TASK_0_1);
 
-        final SortedMap<ProcessId, ClientState> clientStateMap = new TreeMap<>(Map.ofEntries(
-            Map.entry(PID_2, clientState1),
-            Map.entry(PID_5, clientState2)
+        final SortedMap<ProcessId, ClientState> clientStateMap = new TreeMap<>(mkMap(
+            mkEntry(PID_2, clientState1),
+            mkEntry(PID_5, clientState2)
         ));
         final SortedSet<TaskId> taskIds = mkSortedSet(TASK_0_0, TASK_0_1, TASK_1_1);
         final Exception exception = assertThrows(IllegalStateException.class,
@@ -861,7 +863,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForAllTopics(),
             getTaskTopicPartitionMapForAllTasks(),
-            Map.ofEntries(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessRacksForAllProcess(),
             mockInternalTopicManager,
@@ -875,9 +877,9 @@ public class RackAwareTaskAssignorTest {
         clientState1.assignActiveTasks(Set.of(TASK_0_0, TASK_1_1));
         clientState2.assignActiveTasks(Set.of(TASK_0_1, TASK_1_1));
 
-        final SortedMap<ProcessId, ClientState> clientStateMap = new TreeMap<>(Map.ofEntries(
-            Map.entry(PID_2, clientState1),
-            Map.entry(PID_5, clientState2)
+        final SortedMap<ProcessId, ClientState> clientStateMap = new TreeMap<>(mkMap(
+            mkEntry(PID_2, clientState1),
+            mkEntry(PID_5, clientState2)
         ));
         final SortedSet<TaskId> taskIds = mkSortedSet(TASK_0_0, TASK_0_1, TASK_1_1);
         assertTrue(assignor.canEnableRackAwareAssignor());
@@ -895,7 +897,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForAllTopics(),
             getTaskTopicPartitionMapForAllTasks(),
-            Map.ofEntries(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessRacksForAllProcess(),
             mockInternalTopicManager,
@@ -909,9 +911,9 @@ public class RackAwareTaskAssignorTest {
         clientState1.assignActiveTasks(Set.of(TASK_0_0, TASK_1_1));
         clientState2.assignActive(TASK_0_1);
 
-        final SortedMap<ProcessId, ClientState> clientStateMap = new TreeMap<>(Map.ofEntries(
-            Map.entry(PID_2, clientState1),
-            Map.entry(PID_5, clientState2)
+        final SortedMap<ProcessId, ClientState> clientStateMap = new TreeMap<>(mkMap(
+            mkEntry(PID_2, clientState1),
+            mkEntry(PID_5, clientState2)
         ));
         final SortedSet<TaskId> taskIds = mkSortedSet(TASK_0_0, TASK_0_1, TASK_1_0, TASK_1_1);
         assertTrue(assignor.canEnableRackAwareAssignor());
@@ -928,7 +930,7 @@ public class RackAwareTaskAssignorTest {
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForAllTopics(),
             getTaskTopicPartitionMapForAllTasks(),
-            Map.ofEntries(),
+            mkMap(),
             getTopologyGroupTaskMap(),
             getProcessRacksForAllProcess(),
             mockInternalTopicManagerForChangelog(),
@@ -950,10 +952,10 @@ public class RackAwareTaskAssignorTest {
         clientState2.assignActive(TASK_1_0);
         clientState3.assignActive(TASK_0_0);
 
-        final SortedMap<ProcessId, ClientState> clientStateMap = new TreeMap<>(Map.ofEntries(
-            Map.entry(PID_1, clientState1),
-            Map.entry(PID_2, clientState2),
-            Map.entry(PID_3, clientState3)
+        final SortedMap<ProcessId, ClientState> clientStateMap = new TreeMap<>(mkMap(
+            mkEntry(PID_1, clientState1),
+            mkEntry(PID_2, clientState2),
+            mkEntry(PID_3, clientState3)
         ));
 
         final long originalCost = assignor.standByTasksCost(new TreeSet<>(), clientStateMap, 10, 1);
@@ -999,13 +1001,13 @@ public class RackAwareTaskAssignorTest {
             PID_7
         );
 
-        final SortedMap<ProcessId, ClientState> clientStateMap = new TreeMap<>(Map.ofEntries(
-            Map.entry(PID_1, clientState1),
-            Map.entry(PID_2, clientState2),
-            Map.entry(PID_3, clientState3),
-            Map.entry(PID_4, clientState4),
-            Map.entry(PID_6, clientState5),
-            Map.entry(PID_7, clientState6)
+        final SortedMap<ProcessId, ClientState> clientStateMap = new TreeMap<>(mkMap(
+            mkEntry(PID_1, clientState1),
+            mkEntry(PID_2, clientState2),
+            mkEntry(PID_3, clientState3),
+            mkEntry(PID_4, clientState4),
+            mkEntry(PID_6, clientState5),
+            mkEntry(PID_7, clientState6)
         ));
 
         clientState1.assignActive(TASK_0_0);
@@ -1076,13 +1078,13 @@ public class RackAwareTaskAssignorTest {
             PID_7
         );
 
-        final SortedMap<ProcessId, ClientState> clientStateMap = new TreeMap<>(Map.ofEntries(
-            Map.entry(PID_1, clientState1),
-            Map.entry(PID_2, clientState2),
-            Map.entry(PID_3, clientState3),
-            Map.entry(PID_4, clientState4),
-            Map.entry(PID_6, clientState5),
-            Map.entry(PID_7, clientState6)
+        final SortedMap<ProcessId, ClientState> clientStateMap = new TreeMap<>(mkMap(
+            mkEntry(PID_1, clientState1),
+            mkEntry(PID_2, clientState2),
+            mkEntry(PID_3, clientState3),
+            mkEntry(PID_4, clientState4),
+            mkEntry(PID_6, clientState5),
+            mkEntry(PID_7, clientState6)
         ));
 
         clientState1.assignActive(TASK_0_0);
@@ -1215,8 +1217,8 @@ public class RackAwareTaskAssignorTest {
     }
 
     private Map<ProcessId, Map<String, Optional<String>>> getProcessWithNoConsumerRacks() {
-        return Map.ofEntries(
-            Map.entry(PID_1, Map.ofEntries())
+        return mkMap(
+            mkEntry(PID_1, mkMap())
         );
     }
 
@@ -1225,8 +1227,8 @@ public class RackAwareTaskAssignorTest {
     }
 
     private Map<TaskId, Set<TopicPartition>> getTaskChangeLogTopicPartitionMapForTask0() {
-        return Map.ofEntries(
-            Map.entry(TASK_0_0, Set.of(CHANGELOG_TP_0_0))
+        return mkMap(
+            mkEntry(TASK_0_0, Set.of(CHANGELOG_TP_0_0))
         );
     }
 

@@ -29,6 +29,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_T0_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_T0_0_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_T0_1_0;
@@ -54,9 +56,9 @@ public class AssignmentInfoTest {
         TASK_1_0
     );
 
-    private final Map<TaskId, Set<TopicPartition>> standbyTasks = Map.ofEntries(
-        Map.entry(TASK_1_0, Set.of(new TopicPartition("t1", 0), new TopicPartition("t2", 0))),
-        Map.entry(TASK_1_1, Set.of(new TopicPartition("t1", 1), new TopicPartition("t2", 1)))
+    private final Map<TaskId, Set<TopicPartition>> standbyTasks = mkMap(
+        mkEntry(TASK_1_0, Set.of(new TopicPartition("t1", 0), new TopicPartition("t2", 0))),
+        mkEntry(TASK_1_1, Set.of(new TopicPartition("t1", 1), new TopicPartition("t2", 1)))
     );
 
     private static final List<TaskId> NAMED_ACTIVE_TASKS = Arrays.asList(
@@ -69,28 +71,28 @@ public class AssignmentInfoTest {
         NAMED_TASK_T2_2_0
     );
 
-    private static final Map<TaskId, Set<TopicPartition>> NAMED_STANDBY_TASKS = Map.ofEntries(
-        Map.entry(NAMED_TASK_T0_0_0, Set.of(new TopicPartition("t0-1", 0), new TopicPartition("t0-2", 0))),
-        Map.entry(NAMED_TASK_T0_0_1, Set.of(new TopicPartition("t0-1", 1), new TopicPartition("t0-2", 1))),
-        Map.entry(NAMED_TASK_T1_0_0, Set.of(new TopicPartition("t1-1", 0), new TopicPartition("t1-2", 0)))
+    private static final Map<TaskId, Set<TopicPartition>> NAMED_STANDBY_TASKS = mkMap(
+        mkEntry(NAMED_TASK_T0_0_0, Set.of(new TopicPartition("t0-1", 0), new TopicPartition("t0-2", 0))),
+        mkEntry(NAMED_TASK_T0_0_1, Set.of(new TopicPartition("t0-1", 1), new TopicPartition("t0-2", 1))),
+        mkEntry(NAMED_TASK_T1_0_0, Set.of(new TopicPartition("t1-1", 0), new TopicPartition("t1-2", 0)))
     );
 
-    private final Map<HostInfo, Set<TopicPartition>> activeAssignment = Map.ofEntries(
-        Map.entry(new HostInfo("localhost", 8088),
+    private final Map<HostInfo, Set<TopicPartition>> activeAssignment = mkMap(
+        mkEntry(new HostInfo("localhost", 8088),
             Set.of(new TopicPartition("t0", 0),
                 new TopicPartition("t1", 0),
                 new TopicPartition("t2", 0))),
-        Map.entry(new HostInfo("localhost", 8089),
+        mkEntry(new HostInfo("localhost", 8089),
             Set.of(new TopicPartition("t0", 1),
                 new TopicPartition("t1", 1),
                 new TopicPartition("t2", 1)))
     );
 
-    private final Map<HostInfo, Set<TopicPartition>> standbyAssignment = Map.ofEntries(
-        Map.entry(new HostInfo("localhost", 8088),
+    private final Map<HostInfo, Set<TopicPartition>> standbyAssignment = mkMap(
+        mkEntry(new HostInfo("localhost", 8088),
             Set.of(new TopicPartition("t1", 0),
                 new TopicPartition("t2", 0))),
-        Map.entry(new HostInfo("localhost", 8089),
+        mkEntry(new HostInfo("localhost", 8089),
             Set.of(new TopicPartition("t1", 1),
                 new TopicPartition("t2", 1)))
     );

@@ -64,6 +64,8 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static java.util.Collections.singletonMap;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.StoreChangelogReader.ChangelogReaderState.ACTIVE_RESTORING;
 import static org.apache.kafka.streams.processor.internals.StoreChangelogReader.ChangelogReaderState.STANDBY_UPDATING;
 import static org.apache.kafka.streams.processor.internals.Task.TaskType.ACTIVE;
@@ -1179,10 +1181,10 @@ public class StoreChangelogReaderTest {
         when(storeMetadataTwo.offset()).thenReturn(0L);
         when(activeStateManager.storeMetadata(tp1)).thenReturn(storeMetadataOne);
         when(activeStateManager.storeMetadata(tp2)).thenReturn(storeMetadataTwo);
-        when(activeStateManager.changelogOffsets()).thenReturn(Map.ofEntries(
-            Map.entry(tp, 5L),
-            Map.entry(tp1, 5L),
-            Map.entry(tp2, 5L)
+        when(activeStateManager.changelogOffsets()).thenReturn(mkMap(
+            mkEntry(tp, 5L),
+            mkEntry(tp1, 5L),
+            mkEntry(tp2, 5L)
         ));
 
         setupConsumer(10, tp);
