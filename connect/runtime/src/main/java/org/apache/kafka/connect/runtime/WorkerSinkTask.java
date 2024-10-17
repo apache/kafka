@@ -48,6 +48,7 @@ import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.runtime.errors.WorkerErrantRecordReporter;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
+import org.apache.kafka.connect.reporter.ErrorRecordReporter;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
@@ -121,9 +122,10 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
                           RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator,
                           WorkerErrantRecordReporter workerErrantRecordReporter,
                           StatusBackingStore statusBackingStore,
-                          Supplier<List<ErrorReporter<ConsumerRecord<byte[], byte[]>>>> errorReportersSupplier) {
+                          Supplier<List<ErrorReporter<ConsumerRecord<byte[], byte[]>>>> errorReportersSupplier,
+                          Supplier<List<ErrorRecordReporter<ConsumerRecord<byte[], byte[]>>>> errorRecordReportersSupplier) {
         super(id, statusListener, initialState, loader, connectMetrics, errorMetrics,
-                retryWithToleranceOperator, transformationChain, errorReportersSupplier, time, statusBackingStore);
+                retryWithToleranceOperator, transformationChain, errorReportersSupplier, errorRecordReportersSupplier, time, statusBackingStore);
 
         this.workerConfig = workerConfig;
         this.task = task;

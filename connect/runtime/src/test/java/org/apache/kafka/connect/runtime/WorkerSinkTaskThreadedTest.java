@@ -178,7 +178,7 @@ public class WorkerSinkTaskThreadedTest {
                 taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics, keyConverter,
                 valueConverter, errorHandlingMetrics, headerConverter, transformationChain,
                 consumer, pluginLoader, time, RetryWithToleranceOperatorTest.noopOperator(), null, statusBackingStore,
-                Collections::emptyList);
+                Collections::emptyList, Collections::emptyList);
         recordsReturned = 0;
     }
 

@@ -24,6 +24,9 @@ import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.apache.kafka.connect.reporter.ErrorContext;
+import org.apache.kafka.connect.reporter.ErrorRecordReporter;
+import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 
@@ -505,6 +508,37 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
         @Override
         public void configure(Map<String, ?> configs) {
+        }
+    }
+
+    @Test
+    public void singleErrorReporter() {
+        Map<String, String> props = new HashMap<>();
+        props.put("name", "test");
+        props.put("connector.class", TestConnector.class.getName());
+        props.put("errors.reporters", "example");
+        props.put("errors.reporters.example.type", SimpleErrorRecordReporter.class.getName());
+        props.put("errors.reporters.example.param", "testValue");
+        final ConnectorConfig config = new ConnectorConfig(MOCK_PLUGINS, props);
+        final List<ErrorRecordReporter<SourceRecord>> errorRecordReporters = config.errorRecordReporters();
+        assertEquals(1, errorRecordReporters.size());
+        final ErrorRecordReporter<SourceRecord> errorRecordReporter = errorRecordReporters.get(0);
+        assertEquals(SimpleErrorRecordReporter.class, errorRecordReporter.getClass());
+        assertEquals("testValue", ((SimpleErrorRecordReporter<SourceRecord>) errorRecordReporter).param);
+    }
+
+    public static class SimpleErrorRecordReporter<R extends ConnectRecord<R>> implements ErrorRecordReporter<R> {
+
+        String param;
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            param = (String) configs.get("param");
+        }
+
+        @Override
+        public void report(ErrorContext<R> context) {
+
         }
     }
 }

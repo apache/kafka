@@ -43,6 +43,7 @@ import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
+import org.apache.kafka.connect.reporter.ErrorRecordReporter;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
@@ -363,7 +364,7 @@ public class AbstractWorkerSourceTaskTest {
         SampleConverterWithHeaders testConverter = new SampleConverterWithHeaders();
 
         createWorkerTask(stringConverter, testConverter, stringConverter, RetryWithToleranceOperatorTest.noopOperator(),
-                Collections::emptyList);
+                Collections::emptyList, Collections::emptyList);
 
         expectSendRecord(null);
         expectApplyTransformationChain();
@@ -818,16 +819,16 @@ public class AbstractWorkerSourceTaskTest {
     }
 
     private void createWorkerTask() {
-        createWorkerTask(keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.noopOperator(), Collections::emptyList);
+        createWorkerTask(keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.noopOperator(), Collections::emptyList, Collections::emptyList);
     }
 
     private void createWorkerTask(Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter,
-                                  RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator, Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier) {
+                                  RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator, Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier, Supplier<List<ErrorRecordReporter<SourceRecord>>> errorRecordReportersSupplier) {
         workerTask = new AbstractWorkerSourceTask(
                 taskId, sourceTask, statusListener, TargetState.STARTED, keyConverter, valueConverter, headerConverter, transformationChain,
                 sourceTaskContext, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig), offsetReader, offsetWriter, offsetStore,
                 config, metrics, errorHandlingMetrics,  plugins.delegatingLoader(), Time.SYSTEM, retryWithToleranceOperator,
-                statusBackingStore, Runnable::run, errorReportersSupplier) {
+                statusBackingStore, Runnable::run, errorReportersSupplier, errorRecordReportersSupplier) {
             @Override
             protected void prepareToInitializeTask() {
             }

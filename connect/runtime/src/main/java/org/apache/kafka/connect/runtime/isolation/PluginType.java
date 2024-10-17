@@ -20,6 +20,7 @@ import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.sink.SinkConnector;
+import org.apache.kafka.connect.reporter.ErrorRecordReporter;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
@@ -33,6 +34,7 @@ public enum PluginType {
     SINK(SinkConnector.class),
     CONVERTER(Converter.class),
     HEADER_CONVERTER(HeaderConverter.class),
+    ERROR_RECORD_REPORTER(ErrorRecordReporter.class),
     TRANSFORMATION(Transformation.class),
     PREDICATE(Predicate.class),
     CONFIGPROVIDER(ConfigProvider.class),

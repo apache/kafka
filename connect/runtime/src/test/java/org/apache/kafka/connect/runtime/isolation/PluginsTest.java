@@ -115,6 +115,7 @@ public class PluginsTest {
                 Collections.emptySortedSet(),
                 Collections.emptySortedSet(),
                 Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
                 Collections.emptySortedSet()
         );
         empty = new PluginScanResult(Collections.emptyList());

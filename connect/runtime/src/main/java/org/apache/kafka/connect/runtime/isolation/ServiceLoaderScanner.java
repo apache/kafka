@@ -20,6 +20,7 @@ import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.sink.SinkConnector;
+import org.apache.kafka.connect.reporter.ErrorRecordReporter;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
@@ -60,12 +61,18 @@ public class ServiceLoaderScanner extends PluginScanner {
                 getServiceLoaderPluginDesc(PluginType.SOURCE, source),
                 getServiceLoaderPluginDesc(PluginType.CONVERTER, source),
                 getServiceLoaderPluginDesc(PluginType.HEADER_CONVERTER, source),
+                getErrorRecordReporterPluginDesc(source),
                 getTransformationPluginDesc(source),
                 getPredicatePluginDesc(source),
                 getServiceLoaderPluginDesc(PluginType.CONFIGPROVIDER, source),
                 getServiceLoaderPluginDesc(PluginType.REST_EXTENSION, source),
                 getServiceLoaderPluginDesc(PluginType.CONNECTOR_CLIENT_CONFIG_OVERRIDE_POLICY, source)
         );
+    }
+
+    @SuppressWarnings({"unchecked"})
+    private SortedSet<PluginDesc<ErrorRecordReporter<?>>> getErrorRecordReporterPluginDesc(PluginSource source) {
+        return (SortedSet<PluginDesc<ErrorRecordReporter<?>>>) (SortedSet<?>) getServiceLoaderPluginDesc(PluginType.ERROR_RECORD_REPORTER, source);
     }
 
     @SuppressWarnings({"unchecked"})
