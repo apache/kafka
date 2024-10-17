@@ -75,6 +75,8 @@ trait MetadataCache {
 
   def getAliveBrokerNodes(listenerName: ListenerName): Iterable[Node]
 
+  def getBrokerNodes(listenerName: ListenerName): Iterable[Node]
+
   def getPartitionInfo(topic: String, partitionId: Int): Option[UpdateMetadataRequestData.UpdateMetadataPartitionState]
 
   /**
