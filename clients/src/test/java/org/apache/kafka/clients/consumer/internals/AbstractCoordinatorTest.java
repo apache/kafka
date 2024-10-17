@@ -69,12 +69,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.emptyMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -422,6 +424,61 @@ public class AbstractCoordinatorTest {
         assertTrue(coordinator.hasMatchingGenerationId(defaultGeneration));
         future = coordinator.sendJoinGroupRequest();
         assertTrue(consumerClient.poll(future, mockTime.timer(REBALANCE_TIMEOUT_MS)));
+    }
+
+    @Test
+    public void testJoinGroupRequestWithMemberIdAssignedAfterClose() {
+        setupCoordinator();
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(mockTime.timer(0));
+
+        RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
+        // Hack: have to invoke poll to ensure the request gets sent to the mock client;
+        // use a short timeout because we want to return before a response has been received.
+        // This is unlikely to happen in the wild; more likely that the consumer is woken up
+        // while polling with a longer timeout, but that's harder to test and this should suffice.
+        assertFalse(consumerClient.poll(future, mockTime.timer(0)));
+
+        // Close the coordinator just after it sends its initial JoinGroup request,
+        // and before it receives a response
+        coordinator.close();
+
+        // Respond to the initial JoinGroup request, and give the coordinator an assigned member ID
+        mockClient.respond(
+                body -> body instanceof JoinGroupRequest,
+                joinGroupFollowerResponse(defaultGeneration, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.MEMBER_ID_REQUIRED)
+        );
+
+        // Give the coordinator a chance to send off its LeaveGroup request
+        // The future is still not completed since it depends on the LeaveGroup request
+        assertFalse(consumerClient.poll(future, mockTime.timer(0)));
+
+        // Respond to (and verify) the subsequent LeaveGroup request, which should contain the assigned member ID
+        MemberResponse memberResponse = new MemberResponse()
+                .setMemberId(memberId)
+                .setErrorCode(Errors.NONE.code());
+        mockClient.respond(body -> {
+            if (!(body instanceof LeaveGroupRequest)) {
+                return false;
+            }
+            LeaveGroupRequest leaveGroupRequest = (LeaveGroupRequest) body;
+            Set<String> actualMemberIds = leaveGroupRequest.data().members().stream()
+                    .map(LeaveGroupRequestData.MemberIdentity::memberId)
+                    .collect(Collectors.toSet());
+            Set<String> expectedMemberIds = Collections.singleton(memberId);
+
+            // This is the most important line in the test: we need to verify that the
+            // coordinator has notified the broker that it should not wait for a member
+            // with this member ID to participate in any ongoing or subsequent rebalances
+            return expectedMemberIds.equals(actualMemberIds);
+        }, leaveGroupResponse(Collections.singletonList(memberResponse)));
+
+        // The future should finally be done, and it should report that the attempt to join the group failed
+        assertTrue(consumerClient.poll(future, mockTime.timer(REBALANCE_TIMEOUT_MS)));
+        assertTrue(future.isDone());
+        assertTrue(future.failed());
+        // There should also be no more pending requests (which could otherwise block consumer shutdown)
+        assertFalse(consumerClient.hasPendingRequests());
     }
 
     @Test
