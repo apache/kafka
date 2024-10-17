@@ -650,12 +650,6 @@ public class FetchCollectorTest {
         verify(subscriptions).requestOffsetResetIfPartitionAssigned(topicPartition0);
         verify(fetchBuffer).setNextInLineFetch(null);
     }
-    private List<FetchResponseData.AbortedTransaction> newAbortedTransactions() {
-        FetchResponseData.AbortedTransaction abortedTransaction = new FetchResponseData.AbortedTransaction();
-        abortedTransaction.setFirstOffset(0);
-        abortedTransaction.setProducerId(100L);
-        return Collections.singletonList(abortedTransaction);
-    }
 
     @Test
     public void testReadCommittedWithAbortedTransaction() {
