@@ -64,8 +64,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.{Condition, ReentrantLock}
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
 import scala.collection.Map
-import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOption
 
 
 /**
@@ -120,6 +120,8 @@ class BrokerServer(
   var tokenCache: DelegationTokenCache = _
 
   @volatile var groupCoordinator: GroupCoordinator = _
+
+  var groupConfigManager: GroupConfigManager = _
 
   var transactionCoordinator: TransactionCoordinator = _
 
@@ -351,6 +353,9 @@ class BrokerServer(
       tokenManager = new DelegationTokenManager(config, tokenCache, time)
       tokenManager.startup()
 
+      /* initializing the groupConfigManager */
+      groupConfigManager = new GroupConfigManager(config.groupCoordinatorConfig.extractGroupConfigMap(config.shareGroupConfig))
+
       shareCoordinator = createShareCoordinator()
 
       groupCoordinator = createGroupCoordinator()
@@ -430,6 +435,7 @@ class BrokerServer(
         config.shareGroupConfig.shareFetchPurgatoryPurgeIntervalRequests,
         persister,
         defaultActionQueue,
+        groupConfigManager,
         new Metrics()
       )
 
@@ -570,7 +576,7 @@ class BrokerServer(
       // authorizer future is completed.
       val endpointReadyFutures = {
         val builder = new EndpointReadyFutures.Builder()
-        builder.build(authorizer.asJava,
+        builder.build(authorizer.toJava,
           new KafkaAuthorizerServerInfo(
             new ClusterResource(clusterId),
             config.nodeId,
@@ -621,7 +627,6 @@ class BrokerServer(
       val writer = new CoordinatorPartitionWriter(
         replicaManager
       )
-      val groupConfigManager = new GroupConfigManager(config.groupCoordinatorConfig.extractGroupConfigMap())
       new GroupCoordinatorService.Builder(config.brokerId, config.groupCoordinatorConfig)
         .withTime(time)
         .withTimer(timer)
@@ -674,7 +679,7 @@ class BrokerServer(
   protected def createRemoteLogManager(): Option[RemoteLogManager] = {
     if (config.remoteLogManagerConfig.isRemoteStorageSystemEnabled()) {
       Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
-        (tp: TopicPartition) => logManager.getLog(tp).asJava,
+        (tp: TopicPartition) => logManager.getLog(tp).toJava,
         (tp: TopicPartition, remoteLogStartOffset: java.lang.Long) => {
           logManager.getLog(tp).foreach { log =>
             log.updateLogStartOffsetFromRemoteTier(remoteLogStartOffset)
@@ -736,6 +741,9 @@ class BrokerServer(
 
       if (transactionCoordinator != null)
         CoreUtils.swallow(transactionCoordinator.shutdown(), this)
+
+      if (groupConfigManager != null)
+        CoreUtils.swallow(groupConfigManager.close(), this)
       if (groupCoordinator != null)
         CoreUtils.swallow(groupCoordinator.shutdown(), this)
       if (shareCoordinator.isDefined)

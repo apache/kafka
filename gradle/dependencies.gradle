@@ -79,6 +79,7 @@ versions += [
   // gradle/resources/dependencycheck-suppressions.xml
   checkstyle: "8.36.2",
   commonsCli: "1.4",
+  commonsIo: "2.14.0", // ZooKeeper dependency. Do not use, this is going away.
   commonsValidator: "1.9.0",
   classgraph: "4.8.173",
   dropwizardMetrics: "4.1.12.1",
@@ -88,7 +89,7 @@ versions += [
   jackson: "2.16.2",
   jacoco: "0.8.10",
   javassist: "3.29.2-GA",
-  jetty: "9.4.54.v20240208",
+  jetty: "9.4.56.v20240826",
   jersey: "2.39.1",
   jline: "3.25.1",
   jmh: "1.37",
@@ -132,6 +133,7 @@ versions += [
   metrics: "2.2.0",
   netty: "4.1.111.Final",
   opentelemetryProto: "1.0.0-alpha",
+  protobuf: "3.25.5", // a dependency of opentelemetryProto
   pcollections: "4.0.1",
   reload4j: "1.2.25",
   rocksDB: "7.9.2",
@@ -139,11 +141,10 @@ versions += [
   // has the version field as mandatory in its configuration, see
   // https://github.com/scalameta/scalafmt/releases/tag/v3.1.0.
   scalafmt: "3.7.14",
-  scalaJava8Compat : "1.0.2",
   scoverage: "2.0.11",
   slf4j: "1.7.36",
   snappy: "1.1.10.5",
-  spotbugs: "4.8.0",
+  spotbugs: "4.8.6",
   zinc: "1.9.2",
   zookeeper: "3.8.4",
   // When updating the zstd version, please do as well in docker/native/native-image-configs/resource-config.json
@@ -169,6 +170,7 @@ libs += [
   caffeine: "com.github.ben-manes.caffeine:caffeine:$versions.caffeine",
   classgraph: "io.github.classgraph:classgraph:$versions.classgraph",
   commonsCli: "commons-cli:commons-cli:$versions.commonsCli",
+  commonsIo: "commons-io:commons-io:$versions.commonsIo",
   commonsValidator: "commons-validator:commons-validator:$versions.commonsValidator",
   jacksonAnnotations: "com.fasterxml.jackson.core:jackson-annotations:$versions.jackson",
   jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jackson",
@@ -232,9 +234,9 @@ libs += [
   nettyTransportNativeEpoll: "io.netty:netty-transport-native-epoll:$versions.netty",
   pcollections: "org.pcollections:pcollections:$versions.pcollections",
   opentelemetryProto: "io.opentelemetry.proto:opentelemetry-proto:$versions.opentelemetryProto",
+  protobuf: "com.google.protobuf:protobuf-java:$versions.protobuf",
   reload4j: "ch.qos.reload4j:reload4j:$versions.reload4j",
   rocksDBJni: "org.rocksdb:rocksdbjni:$versions.rocksDB",
-  scalaJava8Compat: "org.scala-lang.modules:scala-java8-compat_$versions.baseScala:$versions.scalaJava8Compat",
   scalaLibrary: "org.scala-lang:scala-library:$versions.scala",
   scalaLogging: "com.typesafe.scala-logging:scala-logging_$versions.baseScala:$versions.scalaLogging",
   scalaReflect: "org.scala-lang:scala-reflect:$versions.scala",

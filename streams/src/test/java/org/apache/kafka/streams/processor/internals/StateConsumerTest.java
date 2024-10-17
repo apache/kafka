@@ -21,7 +21,6 @@ import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,6 +29,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -56,7 +56,7 @@ public class StateConsumerTest {
     @Test
     public void shouldAssignPartitionsToConsumer() {
         stateConsumer.initialize();
-        assertEquals(Utils.mkSet(topicOne, topicTwo), consumer.assignment());
+        assertEquals(Set.of(topicOne, topicTwo), consumer.assignment());
     }
 
     @Test

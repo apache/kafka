@@ -66,7 +66,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.StoreChangelogReader.ChangelogReaderState.ACTIVE_RESTORING;
 import static org.apache.kafka.streams.processor.internals.StoreChangelogReader.ChangelogReaderState.STANDBY_UPDATING;
 import static org.apache.kafka.streams.processor.internals.Task.TaskType.ACTIVE;
@@ -1256,8 +1255,8 @@ public class StoreChangelogReaderTest {
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp1).state());
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp2).state());
-        assertEquals(mkSet(tp, tp1, tp2), consumer.assignment());
-        assertEquals(mkSet(tp1, tp2), consumer.paused());
+        assertEquals(Set.of(tp, tp1, tp2), consumer.assignment());
+        assertEquals(Set.of(tp1, tp2), consumer.paused());
         assertEquals(ACTIVE_RESTORING, changelogReader.state());
 
         // transition to restore active is idempotent
@@ -1270,7 +1269,7 @@ public class StoreChangelogReaderTest {
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp1).state());
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp2).state());
-        assertEquals(mkSet(tp, tp1, tp2), consumer.assignment());
+        assertEquals(Set.of(tp, tp1, tp2), consumer.assignment());
         assertEquals(Collections.emptySet(), consumer.paused());
 
         // transition to update standby is NOT idempotent
@@ -1288,14 +1287,14 @@ public class StoreChangelogReaderTest {
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp1).state());
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp2).state());
-        assertEquals(mkSet(tp, tp1, tp2), consumer.assignment());
+        assertEquals(Set.of(tp, tp1, tp2), consumer.assignment());
         assertEquals(Collections.emptySet(), consumer.paused());
         assertEquals(STANDBY_UPDATING, changelogReader.state());
 
         changelogReader.enforceRestoreActive();
         assertEquals(ACTIVE_RESTORING, changelogReader.state());
-        assertEquals(mkSet(tp, tp1, tp2), consumer.assignment());
-        assertEquals(mkSet(tp1, tp2), consumer.paused());
+        assertEquals(Set.of(tp, tp1, tp2), consumer.assignment());
+        assertEquals(Set.of(tp1, tp2), consumer.paused());
     }
 
     @Test
@@ -1306,7 +1305,7 @@ public class StoreChangelogReaderTest {
         changelogReader.register(tp1, standbyStateManager);
         changelogReader.transitToUpdateStandby();
 
-        changelogReader.unregister(mkSet(tp1));
+        changelogReader.unregister(Set.of(tp1));
         assertTrue(changelogReader.isEmpty());
         assertEquals(ACTIVE_RESTORING, changelogReader.state());
     }

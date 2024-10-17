@@ -41,7 +41,7 @@ import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig, SslConfig
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter}
-import org.apache.kafka.common.requests.{DeleteRecordsRequest}
+import org.apache.kafka.common.requests.DeleteRecordsRequest
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -62,10 +62,10 @@ import org.slf4j.LoggerFactory
 import java.util.AbstractMap.SimpleImmutableEntry
 import scala.annotation.nowarn
 import scala.collection.Seq
-import scala.compat.java8.OptionConverters._
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOption
 import scala.util.{Random, Using}
 
 /**
@@ -653,7 +653,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val newTopics = Seq(
       new NewTopic("mytopic", Map((0: Integer) -> Seq[Integer](1, 2).asJava, (1: Integer) -> Seq[Integer](2, 0).asJava).asJava),
       new NewTopic("mytopic2", 3, 3.toShort),
-      new NewTopic("mytopic3", Option.empty[Integer].asJava, Option.empty[java.lang.Short].asJava)
+      new NewTopic("mytopic3", Option.empty[Integer].toJava, Option.empty[java.lang.Short].toJava)
     )
     val createResult = client.createTopics(newTopics.asJava)
     createResult.all.get()
@@ -1121,7 +1121,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     ).asJava, new AlterConfigsOptions().validateOnly(true))
 
     assertFutureExceptionTypeEquals(alterResult.values.get(groupResource), classOf[InvalidConfigurationException],
-      Some("consumer.session.timeout.ms must be greater than or equals to group.consumer.min.session.timeout.ms"))
+      Some("consumer.session.timeout.ms must be greater than or equal to group.consumer.min.session.timeout.ms"))
   }
 
   @ParameterizedTest
@@ -3393,7 +3393,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       (1: Integer) -> Seq[Integer](2, 0).asJava).asJava).
       configs(Collections.singletonMap(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "9999999")),
       new NewTopic("bar", 3, 3.toShort),
-      new NewTopic("baz", Option.empty[Integer].asJava, Option.empty[java.lang.Short].asJava)
+      new NewTopic("baz", Option.empty[Integer].toJava, Option.empty[java.lang.Short].toJava)
     )
     val result = client.createTopics(newTopics.asJava)
     result.all.get()

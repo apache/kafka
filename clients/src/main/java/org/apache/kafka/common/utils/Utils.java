@@ -774,20 +774,6 @@ public final class Utils {
     }
 
     /**
-     * Creates a set
-     * @param elems the elements
-     * @param <T> the type of element
-     * @return Set
-     */
-    @SafeVarargs
-    public static <T> Set<T> mkSet(T... elems) {
-        Set<T> result = new HashSet<>((int) (elems.length / 0.75) + 1);
-        for (T elem : elems)
-            result.add(elem);
-        return result;
-    }
-
-    /**
      * Creates a sorted set
      * @param elems the elements
      * @param <T> the type of element, must be comparable
@@ -1538,11 +1524,6 @@ public final class Utils {
             final Date date = simpleDateFormat.parse(timestamp);
             return date.getTime();
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    public static <S> Iterator<S> covariantCast(Iterator<? extends S> iterator) {
-        return (Iterator<S>) iterator;
     }
 
     /**
