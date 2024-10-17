@@ -414,7 +414,7 @@ public class LogSegment implements Closeable {
      *
      * This method is thread-safe.
      *
-     * @param startOffset The logical log offset we are trying to read
+     * @param startOffset The logical log offset we are trying to read, which is a lower bound when startOffset is the base offset of a batch
      * @param maxSize The maximum number of bytes to include in the message set we read
      * @param maxPositionOpt The maximum position in the log segment that should be exposed for read
      * @param minOneMessage If this is true, the first message will be returned even if it exceeds `maxSize` (if one exists)
