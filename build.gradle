@@ -1614,9 +1614,9 @@ project(':test-common:test-common-api') {
     implementation project(':test-common')
     implementation libs.junitJupiterApi
 
+    testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
 
-    testRuntimeOnly libs.junitPlatformLanucher
     testRuntimeOnly runtimeTestLibs
   }
 
