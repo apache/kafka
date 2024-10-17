@@ -348,7 +348,9 @@ public class TransactionManager {
                             .setTransactionalId(transactionalId)
                             .setProducerId(producerIdAndEpoch.producerId)
                             .setProducerEpoch(producerIdAndEpoch.epoch)
-                            .setCommitted(transactionResult.id));
+                            .setCommitted(transactionResult.id),
+                    isTransactionV2Enabled
+            );
 
             EndTxnHandler handler = new EndTxnHandler(builder);
             enqueueRequest(handler);
@@ -677,7 +679,7 @@ public class TransactionManager {
                 || exception instanceof UnsupportedVersionException) {
             transitionToFatalError(exception);
         } else if (isTransactional()) {
-            if (canBumpEpoch() && !isCompleting()) {
+            if (!isTransactionV2Enabled && canBumpEpoch() && !isCompleting()) {
                 epochBumpRequired = true;
             }
             transitionToAbortableError(exception);
@@ -762,7 +764,7 @@ public class TransactionManager {
                         // For the transactional producer, we bump the epoch if possible, otherwise we transition to a fatal error
                         String unackedMessagesErr = "The client hasn't received acknowledgment for some previously " +
                                 "sent messages and can no longer retry them. ";
-                        if (canBumpEpoch()) {
+                        if (!isTransactionV2Enabled && canBumpEpoch()) {
                             epochBumpRequired = true;
                             KafkaException exception = new KafkaException(unackedMessagesErr + "It is safe to abort " +
                                     "the transaction and continue.");
@@ -1212,7 +1214,7 @@ public class TransactionManager {
         }
 
         void abortableErrorIfPossible(RuntimeException e) {
-            if (canBumpEpoch()) {
+            if (!isTransactionV2Enabled && canBumpEpoch()) {
                 epochBumpRequired = true;
                 abortableError(e);
             } else {
@@ -1568,6 +1570,19 @@ public class TransactionManager {
             Errors error = endTxnResponse.error();
 
             if (error == Errors.NONE) {
+                // For End Txn version 5+, the broker includes the producerId and producerEpoch in the EndTxnResponse.
+                // For versions lower than 5, the producer Id and epoch are set to -1 by default.
+                // When Transaction Version 2 is enabled, the end txn request 5+ is used,
+                // it mandates bumping the epoch after every transaction.
+                // If the epoch overflows, a new producerId is returned with epoch set to 0.
+                if (endTxnResponse.data().producerId() != -1) {
+                    ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(
+                        endTxnResponse.data().producerId(),
+                        endTxnResponse.data().producerEpoch()
+                    );
+                    setProducerIdAndEpoch(producerIdAndEpoch);
+                    resetSequenceNumbers();
+                }
                 completeTransaction();
                 result.done();
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
