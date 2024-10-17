@@ -81,6 +81,8 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegexKey;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegexValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
@@ -107,6 +109,8 @@ import org.apache.kafka.coordinator.group.modern.TargetAssignmentBuilder;
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
+import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupRegex;
+import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupRegex.Resolution;
 import org.apache.kafka.coordinator.group.modern.consumer.CurrentAssignmentBuilder;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupAssignmentBuilder;
@@ -210,6 +214,7 @@ public class GroupMetadataManager {
         private int shareGroupSessionTimeoutMs = 45 * 1000;
         private int shareGroupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
         private GroupCoordinatorMetricsShard metrics;
+        private GroupRegexManager groupRegexManager = null;
 
         Builder withLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -301,6 +306,11 @@ public class GroupMetadataManager {
             return this;
         }
 
+        Builder withGroupRegexManager(GroupRegexManager groupRegexManager) {
+            this.groupRegexManager = groupRegexManager;
+            return this;
+        }
+
         Builder withShareGroupAssignor(ShareGroupPartitionAssignor shareGroupAssignor) {
             this.shareGroupAssignor = shareGroupAssignor;
             return this;
@@ -352,6 +362,7 @@ public class GroupMetadataManager {
                 consumerGroupAssignors,
                 metadataImage,
                 groupConfigManager,
+                groupRegexManager,
                 consumerGroupMaxSize,
                 consumerGroupSessionTimeoutMs,
                 consumerGroupHeartbeatIntervalMs,
@@ -452,6 +463,11 @@ public class GroupMetadataManager {
     private MetadataImage metadataImage;
 
     /**
+     * The manager responsible for evaluating and maintaining regular expressions for all groups.
+     */
+    private final GroupRegexManager groupRegexManager;
+
+    /**
      * An empty result returned to the state machine. This means that
      * there are no records to append to the log.
      *
@@ -524,6 +540,7 @@ public class GroupMetadataManager {
         List<ConsumerGroupPartitionAssignor> consumerGroupAssignors,
         MetadataImage metadataImage,
         GroupConfigManager groupConfigManager,
+        GroupRegexManager groupRegexManager,
         int consumerGroupMaxSize,
         int consumerGroupSessionTimeoutMs,
         int consumerGroupHeartbeatIntervalMs,
@@ -567,6 +584,7 @@ public class GroupMetadataManager {
         this.shareGroupSessionTimeoutMs = shareGroupSessionTimeoutMs;
         this.shareGroupHeartbeatIntervalMs = shareGroupHeartbeatIntervalMs;
         this.shareGroupMetadataRefreshIntervalMs = shareGroupMetadataRefreshIntervalMs;
+        this.groupRegexManager = groupRegexManager;
     }
 
     /**
@@ -1303,7 +1321,6 @@ public class GroupMetadataManager {
         throwIfEmptyString(request.groupId(), "GroupId can't be empty.");
         throwIfEmptyString(request.instanceId(), "InstanceId can't be empty.");
         throwIfEmptyString(request.rackId(), "RackId can't be empty.");
-        throwIfNotNull(request.subscribedTopicRegex(), "SubscribedTopicRegex is not supported yet.");
 
         if (request.memberEpoch() > 0 || request.memberEpoch() == LEAVE_GROUP_MEMBER_EPOCH) {
             throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
@@ -1314,8 +1331,12 @@ public class GroupMetadataManager {
             if (request.topicPartitions() == null || !request.topicPartitions().isEmpty()) {
                 throw new InvalidRequestException("TopicPartitions must be empty when (re-)joining.");
             }
-            if (request.subscribedTopicNames() == null || request.subscribedTopicNames().isEmpty()) {
-                throw new InvalidRequestException("SubscribedTopicNames must be set in first request.");
+            boolean hasSubscribedTopics =
+                    request.subscribedTopicNames() != null && !request.subscribedTopicNames().isEmpty();
+            boolean hasSubscribedTopicsRegex =
+                    request.subscribedTopicRegex() != null && !request.subscribedTopicRegex().isEmpty();
+            if (!hasSubscribedTopics && !hasSubscribedTopicsRegex) {
+                throw new InvalidRequestException("SubscribedTopicNames or SubscribedTopicRegex must be set in first request.");
             }
         } else if (request.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
             throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
@@ -1734,6 +1755,10 @@ public class GroupMetadataManager {
     ) throws ApiException {
         final long currentTimeMs = time.milliseconds();
         final List<CoordinatorRecord> records = new ArrayList<>();
+
+        if (subscribedTopicRegex != null) {
+            groupRegexManager.validateAndRequestEval(groupId, subscribedTopicRegex);
+        }
 
         // Get or create the consumer group.
         boolean createIfNotExists = memberEpoch == 0;
@@ -3576,6 +3601,65 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Replays ConsumerGroupRegexKey/Value to update the hard state of
+     * the consumer group related to a regular expression. It updates
+     * the resolution of the regular expression with the value, or deletes
+     * the regular expression if the record value is null.
+     *
+     * @param key   A ConsumerGroupRegexKey record.
+     * @param value A ConsumerGroupRegexValue record.
+     */
+    public void replay(
+        ConsumerGroupRegexKey key,
+        ConsumerGroupRegexValue value
+    ) {
+
+        String groupId = key.groupId();
+        String regex = key.regex();
+
+        try {
+            getOrMaybeCreatePersistedConsumerGroup(groupId, value != null);
+        } catch (GroupIdNotFoundException ex) {
+            // If the group does not exist anymore do not load regex.
+            // TODO: validate if this could be a case: group does exist anymore but regex record being replayed.
+            return;
+        }
+
+        if (value != null) {
+            updateGroupRegex(
+                new ConsumerGroupRegex.RegexKey.Builder().updateWith(key).build(),
+                new Resolution.Builder().updateWith(value).build()
+            );
+        } else {
+            removeGroupRegex(groupId, regex);
+        }
+    }
+
+    /**
+     * Update the given regex resolution in the GroupRegexManager
+     * so it becomes available for use as needed from heartbeats.
+     */
+    private void updateGroupRegex(
+        ConsumerGroupRegex.RegexKey key,
+        Resolution resolution
+    ) {
+        groupRegexManager.updateRegex(key, resolution);
+    }
+
+    /**
+     * Remove the given regex, and it's resolution, from the GroupRegexManager
+     * so that it's not maintained anymore as topics metadata changes.
+     */
+    private void removeGroupRegex(
+        String groupId,
+        String regex
+    ) {
+        if (groupRegexManager.removeRegex(groupId, regex)) {
+            log.debug("Removed regular expression {} from group {}", regex, groupId);
+        }
+    }
+
+    /**
      * Replays ShareGroupMemberMetadataKey/Value to update the hard state of
      * the share group. It updates the subscription part of the member or
      * delete the member.
@@ -3765,6 +3849,7 @@ public class GroupMetadataManager {
      */
     public void onNewMetadataImage(MetadataImage newImage, MetadataDelta delta) {
         metadataImage = newImage;
+        groupRegexManager.onNewMetadataImage(metadataImage);
 
         // Notify all the groups subscribed to the created, updated or
         // deleted topics.
@@ -3860,6 +3945,8 @@ public class GroupMetadataManager {
      * ClassicGroup: Complete all awaiting join and sync futures. Transition group to Dead.
      */
     public void onUnloaded() {
+        groupRegexManager.onUnloaded();
+
         groups.values().forEach(group -> {
             switch (group.type()) {
                 case CONSUMER:

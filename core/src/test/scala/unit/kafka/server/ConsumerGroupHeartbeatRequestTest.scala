@@ -465,6 +465,64 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     }, msg = s"Dynamic update consumer group config failed. Last response $consumerGroupHeartbeatResponse.")
   }
 
+  @ClusterTest(
+    types = Array(Type.KRAFT),
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    )
+  )
+  def testConsumerGroupHeartbeatWithRegex(): Unit = {
+    val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
+    val admin = cluster.createAdminClient()
+    val instanceId = "instanceId"
+    val consumerGroupId = "grp"
+
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    TestUtils.createOffsetsTopicWithAdmin(
+      admin = admin,
+      brokers = raftCluster.brokers.values().asScala.toSeq,
+      controllers = raftCluster.controllers().values().asScala.toSeq
+    )
+
+    // Create the topic.
+    TestUtils.createTopicWithAdminRaw(
+      admin = admin,
+      topic = "foo",
+      numPartitions = 3
+    )
+
+    // TODO: remove once RPC version stable
+    val version = 1:Short
+
+    // Heartbeat request to join the group using a regular expression
+    val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
+      new ConsumerGroupHeartbeatRequestData()
+        .setGroupId(consumerGroupId)
+        .setInstanceId(instanceId)
+        .setMemberEpoch(0)
+        .setRebalanceTimeoutMs(5 * 60 * 1000)
+        .setSubscribedTopicRegex("^f*")
+        .setTopicPartitions(List.empty.asJava)
+    ).build(version)
+
+    // Send the request until receiving a successful response. There is a delay
+    // here because the group coordinator is loaded in the background.
+    var consumerGroupHeartbeatResponse: ConsumerGroupHeartbeatResponse = null
+    TestUtils.waitUntilTrue(() => {
+      consumerGroupHeartbeatResponse = connectAndReceive(consumerGroupHeartbeatRequest)
+      consumerGroupHeartbeatResponse.data.errorCode == Errors.NONE.code
+    }, msg = s"Could not join the group successfully. Last response $consumerGroupHeartbeatResponse.")
+
+    // Verify the response.
+    assertNotNull(consumerGroupHeartbeatResponse.data.memberId)
+    assertEquals(1, consumerGroupHeartbeatResponse.data.memberEpoch)
+
+    // TODO: verify expected assignment once regex matching topics are integrated into assignment computation.
+    //  At this point this test is only ensuring that a HB with regex is processed successfully and has a response.
+  }
+
   private def connectAndReceive(request: ConsumerGroupHeartbeatRequest): ConsumerGroupHeartbeatResponse = {
     IntegrationTestUtils.connectAndReceive[ConsumerGroupHeartbeatResponse](
       request,
