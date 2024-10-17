@@ -36,18 +36,25 @@ public class TestKitNodeTest {
             assertEquals("Currently only support PLAINTEXT security protocol",
                     assertThrows(IllegalArgumentException.class,
                             () -> new TestKitNodes.Builder().setBrokerSecurityProtocol(securityProtocol).build()).getMessage());
+            assertEquals("Currently only support PLAINTEXT security protocol",
+                assertThrows(IllegalArgumentException.class,
+                    () -> new TestKitNodes.Builder().setControllerSecurityProtocol(securityProtocol).build()).getMessage());
         }
     }
 
     @Test
     public void testListenerName() {
-        ListenerName listenerName = ListenerName.normalised("FOOBAR");
+        ListenerName brokerListenerName = ListenerName.normalised("FOOBAR");
+        ListenerName controllerListenerName = ListenerName.normalised("BAZQUX");
         TestKitNodes testKitNodes = new TestKitNodes.Builder()
                 .setNumBrokerNodes(1)
                 .setNumControllerNodes(1)
-                .setBrokerListenerName(listenerName)
+                .setBrokerListenerName(brokerListenerName)
                 .setBrokerSecurityProtocol(SecurityProtocol.PLAINTEXT)
+                .setControllerListenerName(controllerListenerName)
+                .setControllerSecurityProtocol(SecurityProtocol.PLAINTEXT)
                 .build();
-        assertEquals(listenerName, testKitNodes.brokerListenerName());
+        assertEquals(brokerListenerName, testKitNodes.brokerListenerName());
+        assertEquals(controllerListenerName, testKitNodes.controllerListenerName());
     }
 }
