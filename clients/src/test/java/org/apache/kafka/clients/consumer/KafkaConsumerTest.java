@@ -3436,10 +3436,6 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
         }
     }
 
-    private boolean requestGenerated(MockClient client, ApiKeys apiKey) {
-        return client.requests().stream().anyMatch(request -> request.requestBuilder().apiKey().equals(apiKey));
-    }
-
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class)
     public void testPollSendsRequestToJoin(GroupProtocol groupProtocol) throws InterruptedException {
@@ -3462,6 +3458,10 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
                 requestGenerated(client, ApiKeys.JOIN_GROUP) :
                 requestGenerated(client, ApiKeys.CONSUMER_GROUP_HEARTBEAT),
                 "Expected " + (groupProtocol == GroupProtocol.CLASSIC ? "JoinGroup" : "Heartbeat") + " request");
+    }
+
+    private boolean requestGenerated(MockClient client, ApiKeys apiKey) {
+        return client.requests().stream().anyMatch(request -> request.requestBuilder().apiKey().equals(apiKey));
     }
 
     private static final List<String> CLIENT_IDS = new ArrayList<>();
