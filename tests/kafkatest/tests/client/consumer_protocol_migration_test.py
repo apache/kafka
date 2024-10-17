@@ -43,8 +43,9 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
 
     all_consumer_versions = [LATEST_2_1, LATEST_2_3, LATEST_2_4, LATEST_2_5, \
                              LATEST_3_2, LATEST_3_4, LATEST_3_5, LATEST_3_6, LATEST_3_7, LATEST_3_8, DEV_BRANCH]
-    consumer_versions_supporting_static_membership = [v for v in all_consumer_versions if v >= LATEST_2_3]
-    consumer_versions_supporting_cooperative_sticky_assignor = [v for v in all_consumer_versions if v >= LATEST_2_4]
+    consumer_versions_supporting_range_assignnor = [str(v) for v in all_consumer_versions]
+    consumer_versions_supporting_static_membership = [str(v) for v in all_consumer_versions if v >= LATEST_2_3]
+    consumer_versions_supporting_cooperative_sticky_assignor = [str(v) for v in all_consumer_versions if v >= LATEST_2_4]
 
     def __init__(self, test_context):
         super(ConsumerProtocolMigrationTest, self).__init__(test_context, num_consumers=5, num_producers=1,
@@ -102,7 +103,7 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
         static_membership=[False],
         metadata_quorum=[quorum.isolated_kraft],
         consumer_group_migration_policy=["disabled"],
-        consumer_version=all_consumer_versions,
+        consumer_version=consumer_versions_supporting_range_assignnor,
         assignment_strategy=[RANGE]
     )
     @matrix(
@@ -136,10 +137,11 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
         """
         producer = self.setup_producer(self.TOPIC)
         consumer = self.setup_consumer(self.TOPIC, group_protocol=consumer_group.classic_group_protocol,
-                                       version=str(consumer_version), assignment_strategy=assignment_strategy,
+                                       version=consumer_version, assignment_strategy=assignment_strategy,
                                        enable_autocommit=True)
 
-        if consumer_version == LATEST_2_3 or consumer_version == LATEST_2_4 or (static_membership and consumer_version > LATEST_2_4):
+        kafka_version = KafkaVersion(consumer_version)
+        if kafka_version == LATEST_2_3 or kafka_version == LATEST_2_4 or (static_membership and kafka_version > LATEST_2_4):
             # group-instance-id is required in 2.3 and 2.4 in verifiable consumer.
             self.set_group_instance_id(consumer)
 
@@ -160,7 +162,7 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
 
         # Downgrade the group protocol and restart all consumers.
         consumer.group_protocol = consumer_group.classic_group_protocol
-        self.set_consumer_version(consumer, consumer_version)
+        self.set_consumer_version(consumer, kafka_version)
         self.bounce_all_consumers(consumer)
         self.assert_group_type("classic")
 
@@ -171,7 +173,7 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
         static_membership=[False],
         metadata_quorum=[quorum.isolated_kraft],
         consumer_group_migration_policy=["bidirectional", "upgrade"],
-        consumer_version=all_consumer_versions,
+        consumer_version=consumer_versions_supporting_range_assignnor,
         assignment_strategy=[RANGE]
     )
     @matrix(
@@ -203,17 +205,18 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
         """
         producer = self.setup_producer(self.TOPIC)
         consumer = self.setup_consumer(self.TOPIC, group_protocol=consumer_group.classic_group_protocol,
-                                       version=str(consumer_version), assignment_strategy=assignment_strategy,
+                                       version=consumer_version, assignment_strategy=assignment_strategy,
                                        enable_autocommit=True)
 
-        if consumer_version == LATEST_2_3 or consumer_version == LATEST_2_4 or (static_membership and consumer_version > LATEST_2_4):
+        kafka_version = KafkaVersion(consumer_version)
+        if kafka_version == LATEST_2_3 or kafka_version == LATEST_2_4 or (static_membership and kafka_version > LATEST_2_4):
             # group-instance-id is required in 2.3 and 2.4 in verifiable consumer.
             self.set_group_instance_id(consumer)
 
         producer.start()
         self.await_produced_messages(producer)
 
-        self.set_consumer_version(consumer, consumer_version)
+        self.set_consumer_version(consumer, kafka_version)
         consumer.start()
         self.await_all_members(consumer)
         self.await_consumed_messages(consumer)
@@ -232,7 +235,7 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
         static_membership=[False],
         metadata_quorum=[quorum.isolated_kraft],
         consumer_group_migration_policy=["downgrade"],
-        consumer_version=all_consumer_versions,
+        consumer_version=consumer_versions_supporting_range_assignnor,
         assignment_strategy=[RANGE]
     )
     @matrix(
@@ -267,7 +270,8 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
                                        assignment_strategy=assignment_strategy,
                                        enable_autocommit=True)
 
-        if consumer_version == LATEST_2_3 or consumer_version == LATEST_2_4 or (static_membership and consumer_version > LATEST_2_4):
+        kafka_version = KafkaVersion(consumer_version)
+        if kafka_version == LATEST_2_3 or kafka_version == LATEST_2_4 or (static_membership and kafka_version > LATEST_2_4):
             # group-instance-id is required in 2.3 and 2.4 in verifiable consumer.
             self.set_group_instance_id(consumer)
 
@@ -282,7 +286,7 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
 
         # Downgrade the group protocol and rolling restart the consumers.
         consumer.group_protocol = consumer_group.classic_group_protocol
-        self.set_consumer_version(consumer, consumer_version)
+        self.set_consumer_version(consumer, kafka_version)
         self.rolling_bounce_consumers(consumer)
         self.assert_group_type("classic")
 
