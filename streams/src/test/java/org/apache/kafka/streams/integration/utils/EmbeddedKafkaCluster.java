@@ -16,19 +16,35 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
-import kafka.server.KafkaServer;
-import kafka.zk.EmbeddedZookeeper;
-
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.clients.admin.ListTopicsOptions;
+import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.errors.InvalidReplicationFactorException;
+import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.test.KafkaClusterTestKit;
+import org.apache.kafka.common.test.TestKitNodes;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.network.SocketServerConfigs;
-import org.apache.kafka.server.config.ConfigType;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
-import org.apache.kafka.server.config.ZkConfigs;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.test.TestCondition;
@@ -37,115 +53,143 @@ import org.apache.kafka.test.TestUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collection;
+import java.time.Duration;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.common.utils.Utils.mkProperties;
 
 /**
- * Runs an in-memory, "embedded" Kafka cluster with 1 ZooKeeper instance and supplied number of Kafka brokers.
+ * Setup an embedded Kafka KRaft cluster for integration tests (using {@link org.apache.kafka.common.test.KafkaClusterTestKit} internally) with the
+ * specified number of brokers and the specified broker properties.
+ * Additional Kafka client properties can also be supplied if required.
+ * This class also provides various utility methods to easily create Kafka topics, produce data, consume data etc.
  */
 public class EmbeddedKafkaCluster {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedKafkaCluster.class);
-    private static final int DEFAULT_BROKER_PORT = 0; // 0 results in a random port being selected
-    private static final int TOPIC_CREATION_TIMEOUT = 30000;
-    private static final int TOPIC_DELETION_TIMEOUT = 30000;
-    private EmbeddedZookeeper zookeeper = null;
-    private final KafkaEmbedded[] brokers;
-
+    private final KafkaClusterTestKit cluster;
     private final Properties brokerConfig;
-    private final List<Properties> brokerConfigOverrides;
     public final MockTime time;
-
     public EmbeddedKafkaCluster(final int numBrokers) {
         this(numBrokers, new Properties());
     }
 
-    public EmbeddedKafkaCluster(final int numBrokers,
-                                final Properties brokerConfig) {
-        this(numBrokers, brokerConfig, System.currentTimeMillis());
+    public EmbeddedKafkaCluster(final int numBrokers, final Properties brokerConfig) {
+        this(numBrokers, brokerConfig, Collections.emptyMap());
     }
 
     public EmbeddedKafkaCluster(final int numBrokers,
                                 final Properties brokerConfig,
                                 final long mockTimeMillisStart) {
-        this(numBrokers, brokerConfig, Collections.emptyList(), mockTimeMillisStart);
+        this(numBrokers, brokerConfig, Collections.emptyMap(), mockTimeMillisStart, System.nanoTime());
     }
-
     public EmbeddedKafkaCluster(final int numBrokers,
                                 final Properties brokerConfig,
-                                final List<Properties> brokerConfigOverrides) {
-        this(numBrokers, brokerConfig, brokerConfigOverrides, System.currentTimeMillis());
+                                final Map<Integer, Map<String, String>> brokerConfigOverrides) {
+        this(numBrokers, brokerConfig, brokerConfigOverrides, System.currentTimeMillis(), System.nanoTime());
     }
-
     public EmbeddedKafkaCluster(final int numBrokers,
                                 final Properties brokerConfig,
-                                final List<Properties> brokerConfigOverrides,
-                                final long mockTimeMillisStart) {
-        this(numBrokers, brokerConfig, brokerConfigOverrides, mockTimeMillisStart, System.nanoTime());
-    }
-
-    public EmbeddedKafkaCluster(final int numBrokers,
-                                final Properties brokerConfig,
-                                final List<Properties> brokerConfigOverrides,
+                                final Map<Integer, Map<String, String>> brokerConfigOverrides,
                                 final long mockTimeMillisStart,
                                 final long mockTimeNanoStart) {
+        addDefaultBrokerPropsIfAbsent(brokerConfig);
+
         if (!brokerConfigOverrides.isEmpty() && brokerConfigOverrides.size() != numBrokers) {
             throw new IllegalArgumentException("Size of brokerConfigOverrides " + brokerConfigOverrides.size()
-                + " must match broker number " + numBrokers);
+                    + " must match broker number " + numBrokers);
         }
-        brokers = new KafkaEmbedded[numBrokers];
+        try {
+            final KafkaClusterTestKit.Builder clusterBuilder = new KafkaClusterTestKit.Builder(
+                    new TestKitNodes.Builder()
+                            .setCombined(true)
+                            .setNumBrokerNodes(numBrokers)
+                            .setPerServerProperties(brokerConfigOverrides)
+                            // Reduce number of controllers for faster startup
+                            // We may make this configurable in the future if there's a use case for it
+                            .setNumControllerNodes(1)
+                            .build()
+            );
+
+            brokerConfig.forEach((k, v) -> clusterBuilder.setConfigProp((String) k, v));
+            cluster = clusterBuilder.build();
+            cluster.nonFatalFaultHandler().setIgnore(true);
+        } catch (final Exception e) {
+            throw new KafkaException("Failed to create test Kafka cluster", e);
+        }
         this.brokerConfig = brokerConfig;
-        time = new MockTime(mockTimeMillisStart, mockTimeNanoStart);
-        this.brokerConfigOverrides = brokerConfigOverrides;
+        this.time = new MockTime(mockTimeMillisStart, mockTimeNanoStart);
+    }
+
+    public void start() {
+        try {
+            cluster.format();
+            cluster.startup();
+            cluster.waitForReadyBrokers();
+        } catch (final Exception e) {
+            throw new KafkaException("Failed to start test Kafka cluster", e);
+        }
+
+        verifyClusterReadiness();
     }
 
     /**
-     * Creates and starts a Kafka cluster.
+     * Perform an extended check to ensure that the primary APIs of the cluster are available, including:
+     * <ul>
+     *     <li>Ability to create a topic</li>
+     *     <li>Ability to produce to a topic</li>
+     *     <li>Ability to form a consumer group</li>
+     *     <li>Ability to consume from a topic</li>
+     * </ul>
+     * If this method completes successfully, all resources created to verify the cluster health
+     * (such as topics and consumer groups) will be cleaned up before it returns.
+     * <p>
+     * This provides extra guarantees compared to other cluster readiness checks such as
+     * {@link KafkaClusterTestKit#waitForReadyBrokers()}, which verify that brokers have
+     * completed startup and joined the cluster, but do not verify that the internal consumer
+     * offsets topic has been created or that it's actually possible for users to create and
+     * interact with topics.
      */
-    public void start() throws IOException {
-        log.debug("Initiating embedded Kafka cluster startup");
-        log.debug("Starting a ZooKeeper instance");
-        zookeeper = new EmbeddedZookeeper();
-        log.debug("ZooKeeper instance is running at {}", zKConnectString());
+    public void verifyClusterReadiness() {
+        final UUID uuid = UUID.randomUUID();
+        final String consumerGroupId = "group-warmup-" + uuid;
+        final Map<String, Object> consumerConfig = Collections.singletonMap(GROUP_ID_CONFIG, consumerGroupId);
+        final String topic = "topic-warmup-" + uuid;
 
-        brokerConfig.put(ZkConfigs.ZK_CONNECT_CONFIG, zKConnectString());
-        putIfAbsent(brokerConfig, SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:" + DEFAULT_BROKER_PORT);
-        putIfAbsent(brokerConfig, ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, true);
-        putIfAbsent(brokerConfig, CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, 2 * 1024 * 1024L);
-        putIfAbsent(brokerConfig, GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, 0);
-        putIfAbsent(brokerConfig, GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0);
-        putIfAbsent(brokerConfig, GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, (short) 1);
-        putIfAbsent(brokerConfig, GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, 5);
-        putIfAbsent(brokerConfig, TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, 5);
-        putIfAbsent(brokerConfig, ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, true);
+        createTopic(topic);
+        final Map<String, Object> producerProps = new HashMap<>(clientDefaultConfig());
+        producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, "warmup-producer");
+        produce(producerProps, topic, null, "warmup message key", "warmup message value");
 
-        for (int i = 0; i < brokers.length; i++) {
-            brokerConfig.put(ServerConfigs.BROKER_ID_CONFIG, i);
-            log.debug("Starting a Kafka instance on {} ...", brokerConfig.get(SocketServerConfigs.LISTENERS_CONFIG));
-
-            final Properties effectiveConfig = new Properties();
-            effectiveConfig.putAll(brokerConfig);
-            if (brokerConfigOverrides != null && brokerConfigOverrides.size() > i) {
-                effectiveConfig.putAll(brokerConfigOverrides.get(i));
+        try (Consumer<?, ?> consumer = createConsumerAndSubscribeTo(consumerConfig, topic)) {
+            final ConsumerRecords<?, ?> records = consumer.poll(Duration.ofMillis(TimeUnit.MINUTES.toMillis(2)));
+            if (records.isEmpty()) {
+                throw new AssertionError("Failed to verify availability of group coordinator and produce/consume APIs on Kafka cluster in time");
             }
-            brokers[i] = new KafkaEmbedded(effectiveConfig, time);
-
-            log.debug("Kafka instance is running at {}, connected to ZooKeeper at {}",
-                brokers[i].brokerList(), brokers[i].zookeeperConnect());
         }
-    }
 
-    private void putIfAbsent(final Properties props, final String propertyKey, final Object propertyValue) {
-        if (!props.containsKey(propertyKey)) {
-            brokerConfig.put(propertyKey, propertyValue);
+        try (Admin admin = createAdminClient()) {
+            admin.deleteConsumerGroups(Collections.singleton(consumerGroupId)).all().get(30, TimeUnit.SECONDS);
+            admin.deleteTopics(Collections.singleton(topic)).all().get(30, TimeUnit.SECONDS);
+        } catch (final InterruptedException | ExecutionException | TimeoutException e) {
+            throw new AssertionError("Failed to clean up cluster health check resource(s)", e);
         }
     }
 
@@ -153,46 +197,22 @@ public class EmbeddedKafkaCluster {
      * Stop the Kafka cluster.
      */
     public void stop() {
-        if (brokers.length > 1) {
-            // delete the topics first to avoid cascading leader elections while shutting down the brokers
-            final Set<String> topics = getAllTopicsInCluster();
-            if (!topics.isEmpty()) {
-                try (final Admin adminClient = brokers[0].createAdminClient()) {
-                    adminClient.deleteTopics(topics).all().get();
-                } catch (final InterruptedException e) {
-                    log.warn("Got interrupted while deleting topics in preparation for stopping embedded brokers", e);
-                    throw new RuntimeException(e);
-                } catch (final ExecutionException | RuntimeException e) {
-                    log.warn("Couldn't delete all topics before stopping brokers", e);
-                }
-            }
+        final AtomicReference<Throwable> shutdownFailure = new AtomicReference<>();
+        Utils.closeQuietly(cluster, "embedded Kafka cluster", shutdownFailure);
+        if (shutdownFailure.get() != null) {
+            throw new KafkaException("Failed to shut down producer / embedded Kafka cluster", shutdownFailure.get());
         }
-        for (final KafkaEmbedded broker : brokers) {
-            broker.stopAsync();
-        }
-        for (final KafkaEmbedded broker : brokers) {
-            broker.awaitStoppedAndPurge();
-        }
-        zookeeper.shutdown();
     }
 
-    /**
-     * The ZooKeeper connection string aka `zookeeper.connect` in `hostnameOrIp:port` format.
-     * Example: `127.0.0.1:2181`.
-     * <p>
-     * You can use this to e.g. tell Kafka brokers how to connect to this instance.
-     */
-    public String zKConnectString() {
-        return "127.0.0.1:" + zookeeper.port();
-    }
-
-    /**
-     * This cluster's `bootstrap.servers` value.  Example: `127.0.0.1:9092`.
-     * <p>
-     * You can use this to tell Kafka producers how to connect to this cluster.
-     */
     public String bootstrapServers() {
-        return brokers[0].brokerList();
+        return cluster.bootstrapServers();
+    }
+
+    public boolean sslEnabled() {
+        final String listenerSecurityProtocolMap = brokerConfig.getProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG);
+        if (listenerSecurityProtocolMap == null)
+            return false;
+        return listenerSecurityProtocolMap.contains(":SSL") || listenerSecurityProtocolMap.contains(":SASL_SSL");
     }
 
     /**
@@ -211,8 +231,18 @@ public class EmbeddedKafkaCluster {
      *
      * @param topic The name of the topic.
      */
-    public void createTopic(final String topic) throws InterruptedException {
-        createTopic(topic, 1, 1, Collections.emptyMap());
+    public void createTopic(final String topic) {
+        createTopic(topic, 1);
+    }
+
+    /**
+     * Create a Kafka topic with given partition and a replication factor of 1.
+     *
+     * @param topic The name of the topic.
+     * @param partitions  The number of partitions for this topic.
+     */
+    public void createTopic(final String topic, final int partitions) {
+        createTopic(topic, partitions, 1, Collections.emptyMap());
     }
 
     /**
@@ -227,116 +257,177 @@ public class EmbeddedKafkaCluster {
     }
 
     /**
-     * Create a Kafka topic with the given parameters.
+     * Create a Kafka topic with given partition, replication factor, and topic config.
      *
-     * @param topic       The name of the topic.
+     * @param topic The name of the topic.
      * @param partitions  The number of partitions for this topic.
      * @param replication The replication factor for (partitions of) this topic.
      * @param topicConfig Additional topic-level configuration settings.
      */
-    public void createTopic(final String topic,
-                            final int partitions,
-                            final int replication,
-                            final Map<String, String> topicConfig) throws InterruptedException {
-        brokers[0].createTopic(topic, partitions, replication, topicConfig);
-        final List<TopicPartition> topicPartitions = new ArrayList<>();
-        for (int partition = 0; partition < partitions; partition++) {
-            topicPartitions.add(new TopicPartition(topic, partition));
+    public void createTopic(final String topic, final int partitions, final int replication, final Map<String, String> topicConfig) {
+        if (replication > cluster.brokers().size()) {
+            throw new InvalidReplicationFactorException("Insufficient brokers ("
+                    + cluster.brokers().size() + ") for desired replication (" + replication + ")");
         }
-        IntegrationTestUtils.waitForTopicPartitions(brokers(), topicPartitions, TOPIC_CREATION_TIMEOUT);
+
+        log.info("Creating topic { name: {}, partitions: {}, replication: {}, config: {} }",
+                topic, partitions, replication, topicConfig);
+        final NewTopic newTopic = new NewTopic(topic, partitions, (short) replication);
+        newTopic.configs(topicConfig);
+
+        try (final Admin adminClient = createAdminClient()) {
+            adminClient.createTopics(Collections.singletonList(newTopic)).all().get();
+            TestUtils.waitForCondition(() -> adminClient.listTopics().names().get().contains(topic),
+                    "Wait for topic " + topic + " to get created.");
+        } catch (final TopicExistsException ignored) {
+        } catch (final InterruptedException | ExecutionException e) {
+            if (!(e.getCause() instanceof TopicExistsException)) {
+                throw new RuntimeException(e);
+            }
+        }
     }
 
-    /**
-     * Deletes a topic returns immediately.
-     *
-     * @param topic the name of the topic
-     */
-    public void deleteTopic(final String topic) throws InterruptedException {
-        deleteTopicsAndWait(-1L, topic);
-    }
-
-    /**
-     * Deletes a topic and blocks for max 30 sec until the topic got deleted.
-     *
-     * @param topic the name of the topic
-     */
-    public void deleteTopicAndWait(final String topic) throws InterruptedException {
-        deleteTopicsAndWait(TOPIC_DELETION_TIMEOUT, topic);
-    }
-
-    /**
-     * Deletes multiple topics returns immediately.
-     *
-     * @param topics the name of the topics
-     */
-    public void deleteTopics(final String... topics) throws InterruptedException {
-        deleteTopicsAndWait(-1, topics);
-    }
-
-    /**
-     * Deletes multiple topics and blocks for max 30 sec until all topics got deleted.
-     *
-     * @param topics the name of the topics
-     */
-    public void deleteTopicsAndWait(final String... topics) throws InterruptedException {
-        deleteTopicsAndWait(TOPIC_DELETION_TIMEOUT, topics);
-    }
-
-    /**
-     * Deletes multiple topics and blocks until all topics got deleted.
-     *
-     * @param timeoutMs the max time to wait for the topics to be deleted (does not block if {@code <= 0})
-     * @param topics the name of the topics
-     */
-    public void deleteTopicsAndWait(final long timeoutMs, final String... topics) throws InterruptedException {
+    public void deleteTopics(final String... topics) {
         for (final String topic : topics) {
-            try {
-                brokers[0].deleteTopic(topic);
-            } catch (final UnknownTopicOrPartitionException ignored) { }
+            deleteTopic(topic);
         }
+    }
 
-        if (timeoutMs > 0) {
-            TestUtils.waitForCondition(new TopicsDeletedCondition(topics), timeoutMs, "Topics not deleted after " + timeoutMs + " milli seconds.");
+
+    /**
+     * Delete a Kafka topic.
+     *
+     * @param topic the topic to delete; may not be null
+     */
+    public void deleteTopic(final String topic) {
+        try (final Admin adminClient = createAdminClient()) {
+            adminClient.deleteTopics(Collections.singleton(topic)).all().get();
+        } catch (final InterruptedException | ExecutionException e) {
+            if (!(e.getCause() instanceof UnknownTopicOrPartitionException)) {
+                throw new RuntimeException(e);
+            }
         }
     }
 
     /**
-     * Deletes all topics and blocks until all topics got deleted.
-     *
-     * @param timeoutMs the max time to wait for the topics to be deleted (does not block if {@code <= 0})
+     * Delete all topics except internal topics.
      */
-    public void deleteAllTopicsAndWait(final long timeoutMs) throws InterruptedException {
-        final Set<String> topics = getAllTopicsInCluster();
-        for (final String topic : topics) {
-            try {
-                brokers[0].deleteTopic(topic);
-            } catch (final UnknownTopicOrPartitionException ignored) { }
+    public void deleteAllTopics() {
+        try (final Admin adminClient = createAdminClient()) {
+            final Set<String> topics = adminClient.listTopics().names().get();
+            adminClient.deleteTopics(topics).all().get();
+        } catch (final UnknownTopicOrPartitionException ignored) {
+        } catch (final ExecutionException | InterruptedException e) {
+            if (!(e.getCause() instanceof UnknownTopicOrPartitionException)) {
+                throw new RuntimeException(e);
+            }
         }
+    }
 
-        if (timeoutMs > 0) {
-            TestUtils.waitForCondition(new TopicsDeletedCondition(topics), timeoutMs, "Topics not deleted after " + timeoutMs + " milli seconds.");
+    /**
+     * Produce given key and value to topic partition.
+     * @param topic the topic to produce to; may not be null.
+     * @param partition the topic partition to produce to.
+     * @param key the record key.
+     * @param value the record value.
+     */
+    public void produce(final Map<String, Object> producerProps, final String topic, final Integer partition, final String key, final String value) {
+        try (KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps, new ByteArraySerializer(), new ByteArraySerializer())) {
+            final ProducerRecord<byte[], byte[]> msg = new ProducerRecord<>(topic, partition, key == null ? null : key.getBytes(), value == null ? null : value.getBytes());
+            try {
+                producer.send(msg).get(TimeUnit.SECONDS.toMillis(120), TimeUnit.MILLISECONDS);
+                producer.flush();
+            } catch (final Exception e) {
+                throw new KafkaException("Could not produce message: " + msg, e);
+            }
         }
+    }
+
+    public Admin createAdminClient() {
+        return Admin.create(mkProperties(clientDefaultConfig()));
+    }
+
+    public Map<String, String> clientDefaultConfig() {
+        final Map<String, String> props = new HashMap<>();
+        props.putIfAbsent(BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
+        if (sslEnabled()) {
+            props.putIfAbsent(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG).toString());
+            props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, ((Password) brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)).value());
+            props.putIfAbsent(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL");
+        }
+        return props;
+    }
+
+    public KafkaConsumer<byte[], byte[]> createConsumer(final Map<String, Object> consumerProps) {
+        final Map<String, Object> props = new HashMap<>(clientDefaultConfig());
+        props.putAll(consumerProps);
+
+        props.putIfAbsent(GROUP_ID_CONFIG, UUID.randomUUID().toString());
+        props.putIfAbsent(ENABLE_AUTO_COMMIT_CONFIG, "false");
+        props.putIfAbsent(AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.putIfAbsent(KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+        props.putIfAbsent(VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+
+        final KafkaConsumer<byte[], byte[]> consumer;
+        try {
+            consumer = new KafkaConsumer<>(props);
+        } catch (final Throwable t) {
+            throw new KafkaException("Failed to create consumer", t);
+        }
+        return consumer;
+    }
+
+    public KafkaConsumer<byte[], byte[]> createConsumerAndSubscribeTo(final Map<String, Object> consumerProps, final String... topics) {
+        return createConsumerAndSubscribeTo(consumerProps, null, topics);
+    }
+
+    public KafkaConsumer<byte[], byte[]> createConsumerAndSubscribeTo(final Map<String, Object> consumerProps, final ConsumerRebalanceListener rebalanceListener, final String... topics) {
+        final KafkaConsumer<byte[], byte[]> consumer = createConsumer(consumerProps);
+        if (rebalanceListener != null) {
+            consumer.subscribe(Arrays.asList(topics), rebalanceListener);
+        } else {
+            consumer.subscribe(Arrays.asList(topics));
+        }
+        return consumer;
+    }
+
+    private void addDefaultBrokerPropsIfAbsent(final Properties brokerConfig) {
+        brokerConfig.putIfAbsent(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, 2 * 1024 * 1024L);
+        brokerConfig.putIfAbsent(GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, "0");
+        brokerConfig.putIfAbsent(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0");
+        brokerConfig.putIfAbsent(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "5");
+        brokerConfig.putIfAbsent(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
+        brokerConfig.putIfAbsent(TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, "5");
+        brokerConfig.putIfAbsent(TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
+        brokerConfig.putIfAbsent(ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, true);
+        brokerConfig.putIfAbsent(ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, true);
     }
 
     public void waitForRemainingTopics(final long timeoutMs, final String... topics) throws InterruptedException {
         TestUtils.waitForCondition(new TopicsRemainingCondition(topics), timeoutMs, "Topics are not expected after " + timeoutMs + " milli seconds.");
     }
 
-    private final class TopicsDeletedCondition implements TestCondition {
-        final Set<String> deletedTopics = new HashSet<>();
-
-        private TopicsDeletedCondition(final String... topics) {
-            Collections.addAll(deletedTopics, topics);
+    public Set<String> getAllTopicsInCluster() {
+        try (final Admin adminClient = createAdminClient()) {
+            return adminClient.listTopics(new ListTopicsOptions().listInternal(true)).names().get();
+        } catch (final InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
         }
+    }
 
-        private TopicsDeletedCondition(final Collection<String> topics) {
-            deletedTopics.addAll(topics);
-        }
-
-        @Override
-        public boolean conditionMet() {
-            final Set<String> allTopics = getAllTopicsInCluster();
-            return !allTopics.removeAll(deletedTopics);
+    public Properties getLogConfig(final String topic) {
+        try (final Admin adminClient = createAdminClient()) {
+            final ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
+            final Config config = adminClient.describeConfigs(Collections.singleton(configResource)).values().get(configResource).get();
+            final Properties properties = new Properties();
+            for (final ConfigEntry configEntry : config.entries()) {
+                if (configEntry.source() == ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG) {
+                    properties.put(configEntry.name(), configEntry.value());
+                }
+            }
+            return properties;
+        } catch (final InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -352,26 +443,5 @@ public class EmbeddedKafkaCluster {
             final Set<String> allTopics = getAllTopicsInCluster();
             return allTopics.equals(remainingTopics);
         }
-    }
-
-    private List<KafkaServer> brokers() {
-        final List<KafkaServer> servers = new ArrayList<>();
-        for (final KafkaEmbedded broker : brokers) {
-            servers.add(broker.kafkaServer());
-        }
-        return servers;
-    }
-
-    public Properties getLogConfig(final String topic) {
-        return brokers[0].kafkaServer().zkClient().getEntityConfigs(ConfigType.TOPIC, topic);
-    }
-
-    public Set<String> getAllTopicsInCluster() {
-        final scala.collection.Iterator<String> topicsIterator = brokers[0].kafkaServer().zkClient().getAllTopicsInCluster(false).iterator();
-        final Set<String> topics = new HashSet<>();
-        while (topicsIterator.hasNext()) {
-            topics.add(topicsIterator.next());
-        }
-        return topics;
     }
 }

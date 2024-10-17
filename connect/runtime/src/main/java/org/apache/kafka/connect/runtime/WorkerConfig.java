@@ -24,6 +24,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -160,9 +161,6 @@ public class WorkerConfig extends AbstractConfig {
     public static final String METRICS_RECORDING_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG;
     public static final String METRIC_REPORTER_CLASSES_CONFIG = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG;
 
-    @Deprecated
-    public static final String AUTO_INCLUDE_JMX_REPORTER_CONFIG = CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG;
-
     public static final String TOPIC_TRACKING_ENABLE_CONFIG = "topic.tracking.enable";
     protected static final String TOPIC_TRACKING_ENABLE_DOC = "Enable tracking the set of active "
             + "topics per connector during runtime.";
@@ -234,13 +232,8 @@ public class WorkerConfig extends AbstractConfig {
                         Importance.LOW,
                         CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
                 .define(METRIC_REPORTER_CLASSES_CONFIG, Type.LIST,
-                        "", Importance.LOW,
+                        JmxReporter.class.getName(), Importance.LOW,
                         CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
-                .define(AUTO_INCLUDE_JMX_REPORTER_CONFIG,
-                        Type.BOOLEAN,
-                        true,
-                        Importance.LOW,
-                        CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_DOC)
                 .define(HEADER_CONVERTER_CLASS_CONFIG, Type.CLASS,
                         HEADER_CONVERTER_CLASS_DEFAULT,
                         Importance.LOW, HEADER_CONVERTER_CLASS_DOC)

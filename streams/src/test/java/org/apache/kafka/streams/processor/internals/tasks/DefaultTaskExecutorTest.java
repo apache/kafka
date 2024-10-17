@@ -118,7 +118,7 @@ public class DefaultTaskExecutorTest {
 
         taskExecutor.start();
 
-        verify(taskManager, timeout(VERIFICATION_TIMEOUT).atLeastOnce()).awaitProcessableTasks();
+        verify(taskManager, timeout(VERIFICATION_TIMEOUT).atLeastOnce()).awaitProcessableTasks(any());
     }
 
     @Test

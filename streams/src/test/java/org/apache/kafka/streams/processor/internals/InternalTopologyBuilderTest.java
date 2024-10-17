@@ -25,6 +25,7 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.TopologyDescription;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
+import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateStore;
@@ -62,7 +63,6 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_2;
@@ -583,10 +583,10 @@ public class InternalTopologyBuilderTest {
 
         builder.buildTopology();
         final Set<String> stateStoreNames = builder.stateStoreNamesForSubtopology(0);
-        assertThat(stateStoreNames, equalTo(mkSet(storeBuilder.name())));
+        assertThat(stateStoreNames, equalTo(Set.of(storeBuilder.name())));
 
         final Set<String> emptyStoreNames = builder.stateStoreNamesForSubtopology(1);
-        assertThat(emptyStoreNames, equalTo(mkSet()));
+        assertThat(emptyStoreNames, equalTo(Set.of()));
 
         final Set<String> stateStoreNamesUnknownSubtopology = builder.stateStoreNamesForSubtopology(13);
         assertThat(stateStoreNamesUnknownSubtopology, nullValue());
@@ -628,16 +628,16 @@ public class InternalTopologyBuilderTest {
         final Map<Subtopology, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.subtopologyToTopicsInfo();
 
         final Map<Subtopology, InternalTopologyBuilder.TopicsInfo> expectedTopicGroups = new HashMap<>();
-        expectedTopicGroups.put(SUBTOPOLOGY_0, new InternalTopologyBuilder.TopicsInfo(Collections.emptySet(), mkSet("topic-1", "X-topic-1x", "topic-2"), Collections.emptyMap(), Collections.emptyMap()));
-        expectedTopicGroups.put(SUBTOPOLOGY_1, new InternalTopologyBuilder.TopicsInfo(Collections.emptySet(), mkSet("topic-3", "topic-4"), Collections.emptyMap(), Collections.emptyMap()));
-        expectedTopicGroups.put(SUBTOPOLOGY_2, new InternalTopologyBuilder.TopicsInfo(Collections.emptySet(), mkSet("topic-5"), Collections.emptyMap(), Collections.emptyMap()));
+        expectedTopicGroups.put(SUBTOPOLOGY_0, new InternalTopologyBuilder.TopicsInfo(Collections.emptySet(), Set.of("topic-1", "X-topic-1x", "topic-2"), Collections.emptyMap(), Collections.emptyMap()));
+        expectedTopicGroups.put(SUBTOPOLOGY_1, new InternalTopologyBuilder.TopicsInfo(Collections.emptySet(), Set.of("topic-3", "topic-4"), Collections.emptyMap(), Collections.emptyMap()));
+        expectedTopicGroups.put(SUBTOPOLOGY_2, new InternalTopologyBuilder.TopicsInfo(Collections.emptySet(), Set.of("topic-5"), Collections.emptyMap(), Collections.emptyMap()));
 
         assertEquals(3, topicGroups.size());
         assertEquals(expectedTopicGroups, topicGroups);
 
         final Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
 
-        assertEquals(mkSet(mkSet("topic-1", "X-topic-1x", "topic-2")), new HashSet<>(copartitionGroups));
+        assertEquals(Set.of(Set.of("topic-1", "X-topic-1x", "topic-2")), new HashSet<>(copartitionGroups));
     }
 
     @Test
@@ -669,15 +669,15 @@ public class InternalTopologyBuilderTest {
         final String store2 = ProcessorStateManager.storeChangelogTopic("X", "store-2", builder.topologyName());
         final String store3 = ProcessorStateManager.storeChangelogTopic("X", "store-3", builder.topologyName());
         expectedTopicGroups.put(SUBTOPOLOGY_0, new InternalTopologyBuilder.TopicsInfo(
-            Collections.emptySet(), mkSet("topic-1", "topic-1x", "topic-2"),
+            Collections.emptySet(), Set.of("topic-1", "topic-1x", "topic-2"),
             Collections.emptyMap(),
             Collections.singletonMap(store1, new UnwindowedUnversionedChangelogTopicConfig(store1, Collections.emptyMap()))));
         expectedTopicGroups.put(SUBTOPOLOGY_1, new InternalTopologyBuilder.TopicsInfo(
-            Collections.emptySet(), mkSet("topic-3", "topic-4"),
+            Collections.emptySet(), Set.of("topic-3", "topic-4"),
             Collections.emptyMap(),
             Collections.singletonMap(store2, new UnwindowedUnversionedChangelogTopicConfig(store2, Collections.emptyMap()))));
         expectedTopicGroups.put(SUBTOPOLOGY_2, new InternalTopologyBuilder.TopicsInfo(
-            Collections.emptySet(), mkSet("topic-5"),
+            Collections.emptySet(), Set.of("topic-5"),
             Collections.emptyMap(),
             Collections.singletonMap(store3, new UnwindowedUnversionedChangelogTopicConfig(store3, Collections.emptyMap()))));
 
@@ -702,9 +702,9 @@ public class InternalTopologyBuilderTest {
         final ProcessorTopology topology1 = builder.buildSubtopology(1);
         final ProcessorTopology topology2 = builder.buildSubtopology(2);
 
-        assertEquals(mkSet("source-1", "source-2", "processor-1", "processor-2"), nodeNames(topology0.processors()));
-        assertEquals(mkSet("source-3", "source-4", "processor-3"), nodeNames(topology1.processors()));
-        assertEquals(mkSet("source-5"), nodeNames(topology2.processors()));
+        assertEquals(Set.of("source-1", "source-2", "processor-1", "processor-2"), nodeNames(topology0.processors()));
+        assertEquals(Set.of("source-3", "source-4", "processor-3"), nodeNames(topology1.processors()));
+        assertEquals(Set.of("source-5"), nodeNames(topology2.processors()));
     }
 
     @Test
@@ -1046,7 +1046,7 @@ public class InternalTopologyBuilderTest {
         topologyOverrides.put(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 1000L);
         topologyOverrides.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 15);
         topologyOverrides.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
-        topologyOverrides.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
+        topologyOverrides.put(StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
         topologyOverrides.put(StreamsConfig.DEFAULT_DSL_STORE_CONFIG, StreamsConfig.IN_MEMORY);
 
         final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
@@ -1066,6 +1066,25 @@ public class InternalTopologyBuilderTest {
         assertThat(topologyBuilder.topologyConfigs().parseStoreType(), equalTo(Materialized.StoreType.IN_MEMORY));
     }
 
+    @SuppressWarnings("deprecation")
+    @Test
+    public void newDeserializationExceptionHandlerConfigShouldOverwriteOldOne() {
+        final Properties topologyOverrides = new Properties();
+        topologyOverrides.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndFailExceptionHandler.class);
+        topologyOverrides.put(StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
+
+        final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
+        final InternalTopologyBuilder topologyBuilder = new InternalTopologyBuilder(
+            new TopologyConfig(
+                "my-topology",
+                config,
+                topologyOverrides)
+        );
+
+        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().deserializationExceptionHandler.getClass(), equalTo(LogAndContinueExceptionHandler.class));
+    }
+
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotOverrideGlobalStreamsConfigWhenGivenUnnamedTopologyProps() {
         final Properties streamsProps = StreamsTestUtils.getStreamsConfig();

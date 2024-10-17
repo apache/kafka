@@ -20,7 +20,6 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.Topology.AutoOffsetReset;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Branched;
@@ -75,6 +74,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
@@ -263,7 +263,7 @@ public class StreamsBuilderTest {
             equalTo(2));
         assertThat(
             topology.processorConnectedStateStores("KSTREAM-JOIN-0000000010"),
-            equalTo(Utils.mkSet(topology.stateStores().get(0).name(), topology.stateStores().get(1).name())));
+            equalTo(Set.of(topology.stateStores().get(0).name(), topology.stateStores().get(1).name())));
         assertTrue(
             topology.processorConnectedStateStores("KTABLE-MERGE-0000000007").isEmpty());
     }
@@ -330,28 +330,6 @@ public class StreamsBuilderTest {
         // no exception was thrown
         assertEquals(Collections.singletonList(new KeyValueTimestamp<>("A", "aa", 0)),
                      processorSupplier.theCapturedProcessor().processed());
-    }
-
-    @Deprecated
-    @Test
-    public void shouldProcessViaThroughTopic() {
-        final KStream<String, String> source = builder.stream("topic-source");
-        final KStream<String, String> through = source.through("topic-sink");
-
-        final MockApiProcessorSupplier<String, String, Void, Void> sourceProcessorSupplier = new MockApiProcessorSupplier<>();
-        source.process(sourceProcessorSupplier);
-
-        final MockApiProcessorSupplier<String, String, Void, Void> throughProcessorSupplier = new MockApiProcessorSupplier<>();
-        through.process(throughProcessorSupplier);
-
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic("topic-source", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            inputTopic.pipeInput("A", "aa");
-        }
-
-        assertEquals(Collections.singletonList(new KeyValueTimestamp<>("A", "aa", 0)), sourceProcessorSupplier.theCapturedProcessor().processed());
-        assertEquals(Collections.singletonList(new KeyValueTimestamp<>("A", "aa", 0)), throughProcessorSupplier.theCapturedProcessor().processed());
     }
 
     @Test

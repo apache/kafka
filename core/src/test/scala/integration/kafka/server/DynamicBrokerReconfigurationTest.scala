@@ -24,7 +24,7 @@ import java.lang.management.ManagementFactory
 import java.security.KeyStore
 import java.time.Duration
 import java.util
-import java.util.{Collections, Properties}
+import java.util.{Collections, Optional, Properties}
 import java.util.concurrent._
 import javax.management.ObjectName
 import com.yammer.metrics.core.MetricName
@@ -53,7 +53,7 @@ import org.apache.kafka.common.config.provider.FileConfigProvider
 import org.apache.kafka.common.errors.{AuthenticationException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.MetadataRequestData
-import org.apache.kafka.common.metrics.{KafkaMetric, MetricsContext, MetricsReporter, Quota}
+import org.apache.kafka.common.metrics.{JmxReporter, KafkaMetric, MetricsContext, MetricsReporter, Quota}
 import org.apache.kafka.common.network.{ConnectionMode, ListenerName}
 import org.apache.kafka.common.network.CertStores.{KEYSTORE_PROPS, TRUSTSTORE_PROPS}
 import org.apache.kafka.common.record.TimestampType
@@ -64,7 +64,7 @@ import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializ
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.{PasswordEncoder, PasswordEncoderConfigs}
-import org.apache.kafka.server.config.{ConfigType, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ZkConfigs}
+import org.apache.kafka.server.config.{ConfigType, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms, ZkConfigs}
 import org.apache.kafka.server.metrics.{KafkaYammerMetrics, MetricConfigs}
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.ShutdownableThread
@@ -107,8 +107,8 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
   private val trustStoreFile1 = TestUtils.tempFile("truststore", ".jks")
   private val trustStoreFile2 = TestUtils.tempFile("truststore", ".jks")
-  private val sslProperties1 = TestUtils.sslConfigs(ConnectionMode.SERVER, clientCert = false, Some(trustStoreFile1), "kafka")
-  private val sslProperties2 = TestUtils.sslConfigs(ConnectionMode.SERVER, clientCert = false, Some(trustStoreFile2), "kafka")
+  private val sslProperties1 = JaasTestUtils.sslConfigs(ConnectionMode.SERVER, false, Optional.of(trustStoreFile1), "kafka")
+  private val sslProperties2 = JaasTestUtils.sslConfigs(ConnectionMode.SERVER, false, Optional.of(trustStoreFile2), "kafka")
   private val invalidSslProperties = invalidSslConfigs
 
   @BeforeEach
@@ -576,6 +576,13 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
     // Verify that produce/consume worked throughout this test without any retries in producer
     stopAndVerifyProduceConsume(producerThread, consumerThread)
+
+    servers.foreach(_.shutdown())
+    servers.foreach(_.awaitShutdown())
+    servers.foreach(_.startup())
+
+    // Verify dynamic config persists a server restart
+    verifyThreads("kafka-log-cleaner-thread-", countPerBroker = 2)
   }
 
   @ParameterizedTest
@@ -668,8 +675,10 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
     val log = servers.head.logManager.getLog(new TopicPartition(topic, 0)).getOrElse(throw new IllegalStateException("Log not found"))
     TestUtils.waitUntilTrue(() => log.config.segmentSize == 4000, "Existing topic config using defaults not updated")
+    val KafkaConfigToLogConfigName: Map[String, String] =
+      ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.asScala.map { case (k, v) => (v, k) }
     props.asScala.foreach { case (k, v) =>
-      val logConfigName = DynamicLogConfig.KafkaConfigToLogConfigName(k)
+      val logConfigName = KafkaConfigToLogConfigName(k)
       val expectedValue = if (k == ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG) s"[$v]" else v
       assertEquals(expectedValue, log.config.originals.get(logConfigName).toString,
         s"Not reconfigured $logConfigName for existing log")
@@ -946,7 +955,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     // Add a new metrics reporter
     val newProps = new Properties
     newProps.put(TestMetricsReporter.PollingIntervalProp, "100")
-    configureMetricsReporters(Seq(classOf[TestMetricsReporter]), newProps)
+    configureMetricsReporters(Seq(classOf[JmxReporter], classOf[TestMetricsReporter]), newProps)
 
     val reporters = TestMetricsReporter.waitForReporters(servers.size)
     reporters.foreach { reporter =>

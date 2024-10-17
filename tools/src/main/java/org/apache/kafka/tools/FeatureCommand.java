@@ -24,6 +24,7 @@ import org.apache.kafka.clients.admin.UpdateFeaturesOptions;
 import org.apache.kafka.clients.admin.UpdateFeaturesResult;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.common.FeatureVersion;
 import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.util.CommandLineUtils;
@@ -91,6 +92,7 @@ public class FeatureCommand {
         addDowngradeParser(subparsers);
         addDisableParser(subparsers);
         addVersionMappingParser(subparsers);
+        addFeatureDependenciesParser(subparsers);
 
         Namespace namespace = parser.parseArgsOrFail(args);
         String command = namespace.getString("command");
@@ -116,7 +118,10 @@ public class FeatureCommand {
                     handleDisable(namespace, adminClient);
                     break;
                 case "version-mapping":
-                    handleVersionMapping(namespace);
+                    handleVersionMapping(namespace, Features.PRODUCTION_FEATURES);
+                    break;
+                case "feature-dependencies":
+                    handleFeatureDependencies(namespace, Features.PRODUCTION_FEATURES);
                     break;
                 default:
                     throw new TerseException("Unknown command " + command);
@@ -133,7 +138,11 @@ public class FeatureCommand {
         Subparser upgradeParser = subparsers.addParser("upgrade")
                 .help("Upgrade one or more feature flags.");
         upgradeParser.addArgument("--metadata")
-                .help("The level to which we should upgrade the metadata. For example, 3.3-IV3.")
+                .help("DEPRECATED -- The level to which we should upgrade the metadata. For example, 3.3-IV3.")
+                .action(store());
+        upgradeParser.addArgument("--release-version")
+                .help("The release version to update all features to. For example, 3.9-IV0 will set metadata.version=21 and kraft.version=1." +
+                      " Use the version-mapping command to learn which features will be set for any given version.")
                 .action(store());
         upgradeParser.addArgument("--feature")
                 .help("A feature upgrade we should perform, in feature=level format. For example: `metadata.version=5`.")
@@ -148,7 +157,11 @@ public class FeatureCommand {
         Subparser downgradeParser = subparsers.addParser("downgrade")
                 .help("Upgrade one or more feature flags.");
         downgradeParser.addArgument("--metadata")
-                .help("The level to which we should downgrade the metadata. For example, 3.3-IV0.")
+                .help("DEPRECATED -- The level to which we should downgrade the metadata. For example, 3.3-IV0.")
+                .action(store());
+        downgradeParser.addArgument("--release-version")
+                .help("The release version to downgrade all features to. For example, 3.9-IV0 will set metadata.version=21 and kraft.version=1." +
+                        " Use the version-mapping command to learn which features will be set for any given version.")
                 .action(store());
         downgradeParser.addArgument("--feature")
                 .help("A feature downgrade we should perform, in feature=level format. For example: `metadata.version=5`.")
@@ -185,6 +198,20 @@ public class FeatureCommand {
                 .help("The release version to use for the corresponding feature mapping. The minimum is " +
                         MetadataVersion.IBP_3_0_IV0 + "; the default is " + MetadataVersion.LATEST_PRODUCTION)
                 .action(store());
+    }
+
+    private static void addFeatureDependenciesParser(Subparsers subparsers) {
+        Subparser featureDependenciesParser = subparsers.addParser("feature-dependencies")
+                .help("Look up dependencies for a given feature version. " +
+                        "If the feature is not known or the version not yet defined, an error is thrown. " +
+                        "Multiple features can be specified."
+                );
+        featureDependenciesParser.addArgument("--feature")
+                .help("The feature and version to look up dependencies for, in feature=version format. " +
+                        "For example: `metadata.version=5`."
+                )
+                .required(true)
+                .action(append());
     }
 
     static String levelToString(String feature, short level) {
@@ -253,30 +280,61 @@ public class FeatureCommand {
     }
 
     private static void handleUpgradeOrDowngrade(String op, Namespace namespace, Admin admin, FeatureUpdate.UpgradeType upgradeType) throws TerseException {
-        Map<String, FeatureUpdate> updates = new HashMap<>();
-        MetadataVersion version;
         String metadata = namespace.getString("metadata");
-        if (metadata !=  null) {
+        List<String> features = namespace.getList("feature");
+        String releaseVersion = namespace.getString("release_version");
+
+        if (releaseVersion != null && (metadata != null || features != null)) {
+            throw new TerseException("Can not specify `release-version` with other feature flags.");
+        }
+
+        Map<String, FeatureUpdate> updates = new HashMap<>();
+        MetadataVersion metadataVersion;
+
+        if (releaseVersion != null) {
             try {
-                version = MetadataVersion.fromVersionString(metadata);
+                metadataVersion = MetadataVersion.fromVersionString(releaseVersion);
+                updates.put(metadataVersion.featureName(), new FeatureUpdate(metadataVersion.featureLevel(), upgradeType));
             } catch (Throwable e) {
-                throw new TerseException("Unsupported metadata.version " + metadata +
+                throw new TerseException("Unknown metadata.version " + releaseVersion +
                         ". Supported metadata.version are " + metadataVersionsToString(
                         MetadataVersion.MINIMUM_BOOTSTRAP_VERSION, MetadataVersion.latestProduction()));
             }
-            updates.put(MetadataVersion.FEATURE_NAME, new FeatureUpdate(version.featureLevel(), upgradeType));
-        }
-
-        List<String> features = namespace.getList("feature");
-        if (features != null) {
-            features.forEach(feature -> {
-                String[] nameAndLevel;
-                nameAndLevel = parseNameAndLevel(feature);
-
-                if (updates.put(nameAndLevel[0], new FeatureUpdate(Short.parseShort(nameAndLevel[1]), upgradeType)) != null) {
-                    throw new RuntimeException("Feature " + nameAndLevel[0] + " was specified more than once.");
+            try {
+                for (Features feature : Features.PRODUCTION_FEATURES) {
+                    short featureLevel = feature.defaultValue(metadataVersion);
+                    // Don't send a request to upgrade a feature to 0.
+                    if (upgradeType != FeatureUpdate.UpgradeType.UPGRADE || featureLevel > 0) {
+                        updates.put(feature.featureName(), new FeatureUpdate(featureLevel, upgradeType));
+                    }
                 }
-            });
+            } catch (Throwable e) {
+                throw new TerseException(upgradeType.name() + " for release version " + releaseVersion +
+                    " failed because at least one feature had the following error: " + e.getMessage());
+            }
+        } else {
+            if (metadata != null) {
+                System.out.println(" `metadata` flag is deprecated and may be removed in a future release.");
+                try {
+                    metadataVersion = MetadataVersion.fromVersionString(metadata);
+                } catch (Throwable e) {
+                    throw new TerseException("Unknown metadata.version " + metadata +
+                            ". Supported metadata.version are " + metadataVersionsToString(
+                            MetadataVersion.MINIMUM_BOOTSTRAP_VERSION, MetadataVersion.latestProduction()));
+                }
+                updates.put(MetadataVersion.FEATURE_NAME, new FeatureUpdate(metadataVersion.featureLevel(), upgradeType));
+            }
+
+            if (features != null) {
+                features.forEach(feature -> {
+                    String[] nameAndLevel;
+                    nameAndLevel = parseNameAndLevel(feature);
+
+                    if (updates.put(nameAndLevel[0], new FeatureUpdate(Short.parseShort(nameAndLevel[1]), upgradeType)) != null) {
+                        throw new RuntimeException("Feature " + nameAndLevel[0] + " was specified more than once.");
+                    }
+                });
+            }
         }
 
         update(op, admin, updates, namespace.getBoolean("dry_run"));
@@ -298,7 +356,7 @@ public class FeatureCommand {
         update("disable", adminClient, updates, namespace.getBoolean("dry_run"));
     }
 
-    static void handleVersionMapping(Namespace namespace) throws TerseException {
+    static void handleVersionMapping(Namespace namespace, List<Features> validFeatures) throws TerseException {
         // Get the release version from the command-line arguments or default to the latest stable version
         String releaseVersion = Optional.ofNullable(namespace.getString("release_version"))
             .orElseGet(() -> MetadataVersion.latestProduction().version());
@@ -309,14 +367,62 @@ public class FeatureCommand {
             short metadataVersionLevel = version.featureLevel();
             System.out.printf("metadata.version=%d (%s)%n", metadataVersionLevel, releaseVersion);
 
-            for (Features feature : Features.values()) {
+            for (Features feature : validFeatures) {
                 short featureLevel = feature.defaultValue(version);
                 System.out.printf("%s=%d%n", feature.featureName(), featureLevel);
             }
         } catch (IllegalArgumentException e) {
-            throw new TerseException("Unsupported release version '" + releaseVersion + "'." +
+            throw new TerseException("Unknown release version '" + releaseVersion + "'." +
                 " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION +
                 " to " + MetadataVersion.LATEST_PRODUCTION);
+        }
+    }
+
+    static void handleFeatureDependencies(Namespace namespace, List<Features> validFeatures) throws TerseException {
+        List<String> featureArgs = namespace.getList("feature");
+
+        // Iterate over each feature specified with --feature
+        if (featureArgs != null) {
+            for (String feature : featureArgs) {
+                String[] nameAndLevel = parseNameAndLevel(feature);
+
+                String featureName = nameAndLevel[0];
+                short featureLevel = Short.parseShort(nameAndLevel[1]);
+
+                if (featureName.equals(MetadataVersion.FEATURE_NAME)) {
+                    MetadataVersion metadataVersion;
+                    try {
+                        metadataVersion = MetadataVersion.fromFeatureLevel(featureLevel);
+                    } catch (IllegalArgumentException e) {
+                        throw new TerseException("Unknown metadata.version " + featureLevel);
+                    }
+
+                    // Assuming metadata versions do not have dependencies.
+                    System.out.printf("%s=%d (%s) has no dependencies.%n", featureName, featureLevel, metadataVersion.version());
+                } else {
+                    Features featureEnum = validFeatures.stream()
+                            .filter(f -> f.featureName().equals(featureName))
+                            .findFirst()
+                            .orElseThrow(() -> new TerseException("Unknown feature: " + featureName));
+
+                    FeatureVersion featureVersion = featureEnum.fromFeatureLevel(featureLevel, true);
+                    Map<String, Short> dependencies = featureVersion.dependencies();
+
+                    if (dependencies.isEmpty()) {
+                        System.out.printf("%s=%d has no dependencies.%n", featureName, featureLevel);
+                    } else {
+                        System.out.printf("%s=%d requires:%n", featureName, featureLevel);
+                        dependencies.forEach((depFeature, depLevel) -> {
+                            if (depFeature.equals(MetadataVersion.FEATURE_NAME)) {
+                                MetadataVersion depMetadataVersion = MetadataVersion.fromFeatureLevel(depLevel);
+                                System.out.printf("    %s=%d (%s)%n", depFeature, depLevel, depMetadataVersion.version());
+                            } else {
+                                System.out.printf("    %s=%d%n", depFeature, depLevel);
+                            }
+                        });
+                    }
+                }
+            }
         }
     }
 

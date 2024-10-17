@@ -1692,7 +1692,7 @@ KStream&lt;String, String&gt; joined = left.outerJoin(right,
                         <p><strong>Semantics of stream-stream joins:</strong>
                             The semantics of the various stream-stream join variants are explained below.
                             To improve the readability of the table, assume that (1) all records have the same key (and thus the key in the table is omitted), and (2) all records are processed in timestamp order.
-                            We assume a join window size of 10 seconds with a grace period of 5 seconds.</p>
+                            We assume a join window size of 15 seconds with a grace period of 5 seconds.</p>
                         <p><b>Note:</b> If you use the old and now deprecated API to specify the grace period, i.e., <code class="docutils literal"><span class="pre">JoinWindows.of(...).grace(...)</span></code>,
                             left/outer join results are emitted eagerly, and the observed result might differ from the result shown below.</p>
                         <p>The columns INNER JOIN, LEFT JOIN, and OUTER JOIN denote what is passed as arguments to the user-supplied

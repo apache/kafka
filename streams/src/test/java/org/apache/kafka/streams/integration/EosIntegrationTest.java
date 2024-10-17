@@ -111,7 +111,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@SuppressWarnings("deprecation")
 @Tag("integration")
 @Timeout(600)
 public class EosIntegrationTest {
@@ -163,8 +162,7 @@ public class EosIntegrationTest {
     @BeforeEach
     public void createTopics() throws Exception {
         applicationId = "appId-" + TEST_NUMBER.getAndIncrement();
-        CLUSTER.deleteTopicsAndWait(
-            60_000L,
+        CLUSTER.deleteTopics(
             SINGLE_PARTITION_INPUT_TOPIC, MULTI_PARTITION_INPUT_TOPIC,
             SINGLE_PARTITION_THROUGH_TOPIC, MULTI_PARTITION_THROUGH_TOPIC,
             SINGLE_PARTITION_OUTPUT_TOPIC, MULTI_PARTITION_OUTPUT_TOPIC);
@@ -176,13 +174,13 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
+    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
     public void shouldBeAbleToRunWithEosEnabled(final String eosConfig) throws Exception {
         runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
+    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
     public void shouldCommitCorrectOffsetIfInputTopicIsTransactional(final String eosConfig) throws Exception {
         runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, true, eosConfig);
 
@@ -210,31 +208,31 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
+    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
     public void shouldBeAbleToRestartAfterClose(final String eosConfig) throws Exception {
         runSimpleCopyTest(2, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
+    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
     public void shouldBeAbleToCommitToMultiplePartitions(final String eosConfig) throws Exception {
         runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, MULTI_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
+    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
     public void shouldBeAbleToCommitMultiplePartitionOffsets(final String eosConfig) throws Exception {
         runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
+    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
     public void shouldBeAbleToRunWithTwoSubtopologies(final String eosConfig) throws Exception {
         runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, SINGLE_PARTITION_THROUGH_TOPIC, SINGLE_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
+    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
     public void shouldBeAbleToRunWithTwoSubtopologiesAndMultiplePartitions(final String eosConfig) throws Exception {
         runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, MULTI_PARTITION_THROUGH_TOPIC, MULTI_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
@@ -327,7 +325,7 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
+    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
     public void shouldBeAbleToPerformMultipleTransactions(final String eosConfig) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(SINGLE_PARTITION_INPUT_TOPIC).to(SINGLE_PARTITION_OUTPUT_TOPIC);
@@ -378,8 +376,6 @@ public class EosIntegrationTest {
     @CsvSource({
             StreamsConfig.AT_LEAST_ONCE + ",true",
             StreamsConfig.AT_LEAST_ONCE + ",false",
-            StreamsConfig.EXACTLY_ONCE + ",true",
-            StreamsConfig.EXACTLY_ONCE + ",false",
             StreamsConfig.EXACTLY_ONCE_V2 + ",true",
             StreamsConfig.EXACTLY_ONCE_V2 + ",false"
     })
@@ -489,8 +485,6 @@ public class EosIntegrationTest {
     @CsvSource({
             StreamsConfig.AT_LEAST_ONCE + ",true",
             StreamsConfig.AT_LEAST_ONCE + ",false",
-            StreamsConfig.EXACTLY_ONCE + ",true",
-            StreamsConfig.EXACTLY_ONCE + ",false",
             StreamsConfig.EXACTLY_ONCE_V2 + ",true",
             StreamsConfig.EXACTLY_ONCE_V2 + ",false"
     })
@@ -615,8 +609,6 @@ public class EosIntegrationTest {
     @CsvSource({
             StreamsConfig.AT_LEAST_ONCE + ",true",
             StreamsConfig.AT_LEAST_ONCE + ",false",
-            StreamsConfig.EXACTLY_ONCE + ",true",
-            StreamsConfig.EXACTLY_ONCE + ",false",
             StreamsConfig.EXACTLY_ONCE_V2 + ",true",
             StreamsConfig.EXACTLY_ONCE_V2 + ",false"
     })
@@ -785,8 +777,6 @@ public class EosIntegrationTest {
     @CsvSource({
             StreamsConfig.AT_LEAST_ONCE + ",true",
             StreamsConfig.AT_LEAST_ONCE + ",false",
-            StreamsConfig.EXACTLY_ONCE + ",true",
-            StreamsConfig.EXACTLY_ONCE + ",false",
             StreamsConfig.EXACTLY_ONCE_V2 + ",true",
             StreamsConfig.EXACTLY_ONCE_V2 + ",false"
     })
@@ -826,8 +816,6 @@ public class EosIntegrationTest {
     @CsvSource({
             StreamsConfig.AT_LEAST_ONCE + ",true",
             StreamsConfig.AT_LEAST_ONCE + ",false",
-            StreamsConfig.EXACTLY_ONCE + ",true",
-            StreamsConfig.EXACTLY_ONCE + ",false",
             StreamsConfig.EXACTLY_ONCE_V2 + ",true",
             StreamsConfig.EXACTLY_ONCE_V2 + ",false"
     })
@@ -840,8 +828,6 @@ public class EosIntegrationTest {
     @CsvSource({
             StreamsConfig.AT_LEAST_ONCE + ",true",
             StreamsConfig.AT_LEAST_ONCE + ",false",
-            StreamsConfig.EXACTLY_ONCE + ",true",
-            StreamsConfig.EXACTLY_ONCE + ",false",
             StreamsConfig.EXACTLY_ONCE_V2 + ",true",
             StreamsConfig.EXACTLY_ONCE_V2 + ",false"
     })
@@ -856,7 +842,7 @@ public class EosIntegrationTest {
             final String eosConfig,
             final boolean processingThreadsEnabled,
             final boolean stateUpdaterEnabled) throws Exception {
-        if (!eosConfig.equals(StreamsConfig.EXACTLY_ONCE) && !eosConfig.equals(StreamsConfig.EXACTLY_ONCE_V2)) {
+        if (!eosConfig.equals(StreamsConfig.EXACTLY_ONCE_V2)) {
             return;
         }
         final Properties streamsConfiguration = new Properties();
@@ -1045,6 +1031,7 @@ public class EosIntegrationTest {
         return data;
     }
 
+    @SuppressWarnings("deprecation")
     // the threads should no longer fail one thread one at a time
     private KafkaStreams getKafkaStreams(final String dummyHostName,
                                          final boolean withState,

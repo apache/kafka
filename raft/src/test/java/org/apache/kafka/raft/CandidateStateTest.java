@@ -19,7 +19,6 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -28,6 +27,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Collections;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -107,7 +107,7 @@ public class CandidateStateTest {
         );
         assertFalse(state.isVoteGranted());
         assertFalse(state.isVoteRejected());
-        assertEquals(Utils.mkSet(node1, node2), state.unrecordedVoters());
+        assertEquals(Set.of(node1, node2), state.unrecordedVoters());
         assertTrue(state.recordGrantedVote(node1.id()));
         assertEquals(Collections.singleton(node2), state.unrecordedVoters());
         assertTrue(state.isVoteGranted());
@@ -128,7 +128,7 @@ public class CandidateStateTest {
         );
         assertFalse(state.isVoteGranted());
         assertFalse(state.isVoteRejected());
-        assertEquals(Utils.mkSet(node1, node2), state.unrecordedVoters());
+        assertEquals(Set.of(node1, node2), state.unrecordedVoters());
         assertTrue(state.recordRejectedVote(node1.id()));
         assertEquals(Collections.singleton(node2), state.unrecordedVoters());
         assertFalse(state.isVoteGranted());

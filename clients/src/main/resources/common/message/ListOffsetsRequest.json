@@ -36,7 +36,9 @@
   // Version 8 enables listing offsets by local log start offset (KIP-405).
   //
   // Version 9 enables listing offsets by last tiered offset (KIP-1005).
-  "validVersions": "0-9",
+  //
+  // Version 10 enables async remote list offsets support (KIP-1075)
+  "validVersions": "0-10",
   "deprecatedVersions": "0",
   "flexibleVersions": "6+",
   "latestVersionUnstable": false,
@@ -60,6 +62,8 @@
         { "name": "MaxNumOffsets", "type": "int32", "versions": "0", "default": "1",
           "about": "The maximum number of offsets to report." }
       ]}
-    ]}
+    ]},
+    { "name": "TimeoutMs", "type": "int32", "versions": "10+", "ignorable": true,
+      "about": "The timeout to await a response in milliseconds for requests that require reading from remote storage for topics enabled with tiered storage." }
   ]
 }

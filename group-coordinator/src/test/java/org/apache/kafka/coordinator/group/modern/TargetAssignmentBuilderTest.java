@@ -37,13 +37,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedListEquals;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpersTest.mkMapOfPartitionRacks;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.apache.kafka.coordinator.group.modern.TargetAssignmentBuilder.createMemberSubscriptionAndAssignment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -102,15 +100,13 @@ public class TargetAssignmentBuilderTest {
 
         public Uuid addTopicMetadata(
             String topicName,
-            int numPartitions,
-            Map<Integer, Set<String>> partitionRacks
+            int numPartitions
         ) {
             Uuid topicId = Uuid.randomUuid();
             subscriptionMetadata.put(topicName, new TopicMetadata(
                 topicId,
                 topicName,
-                numPartitions,
-                partitionRacks
+                numPartitions
             ));
             topicsImageBuilder = topicsImageBuilder.addTopic(topicId, topicName, numPartitions);
 
@@ -164,6 +160,7 @@ public class TargetAssignmentBuilderTest {
 
         public TargetAssignmentBuilder.TargetAssignmentResult build() {
             TopicsImage topicsImage = topicsImageBuilder.build().topics();
+            TopicIds.TopicResolver topicResolver = new TopicIds.CachedTopicResolver(topicsImage);
             // Prepare expected member specs.
             Map<String, MemberSubscriptionAndAssignmentImpl> memberSubscriptions = new HashMap<>();
 
@@ -172,7 +169,7 @@ public class TargetAssignmentBuilderTest {
                 memberSubscriptions.put(memberId, createMemberSubscriptionAndAssignment(
                     member,
                     targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
-                    topicsImage
+                    topicResolver
                 ))
             );
 
@@ -195,7 +192,7 @@ public class TargetAssignmentBuilderTest {
                     memberSubscriptions.put(memberId, createMemberSubscriptionAndAssignment(
                         updatedMemberOrNull,
                         assignment,
-                        topicsImage
+                        topicResolver
                     ));
                 }
             });
@@ -266,6 +263,7 @@ public class TargetAssignmentBuilderTest {
             .addTopic(barTopicId, "bar", 5)
             .build()
             .topics();
+        TopicIds.TopicResolver topicResolver = new TopicIds.DefaultTopicResolver(topicsImage);
 
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
             .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
@@ -281,13 +279,13 @@ public class TargetAssignmentBuilderTest {
         MemberSubscription subscriptionSpec = createMemberSubscriptionAndAssignment(
             member,
             assignment,
-            topicsImage
+            topicResolver
         );
 
         assertEquals(new MemberSubscriptionAndAssignmentImpl(
             Optional.of("rackId"),
             Optional.of("instanceId"),
-            new TopicIds(mkSet("bar", "foo", "zar"), topicsImage),
+            new TopicIds(Set.of("bar", "foo", "zar"), topicsImage),
             assignment
         ), subscriptionSpec);
     }
@@ -314,8 +312,8 @@ public class TargetAssignmentBuilderTest {
             20
         );
 
-        Uuid fooTopicId = context.addTopicMetadata("foo", 6, Collections.emptyMap());
-        Uuid barTopicId = context.addTopicMetadata("bar", 6, Collections.emptyMap());
+        Uuid fooTopicId = context.addTopicMetadata("foo", 6);
+        Uuid barTopicId = context.addTopicMetadata("bar", 6);
 
         context.addGroupMember("member-1", Arrays.asList("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2, 3),
@@ -364,8 +362,8 @@ public class TargetAssignmentBuilderTest {
             20
         );
 
-        Uuid fooTopicId = context.addTopicMetadata("foo", 6, Collections.emptyMap());
-        Uuid barTopicId = context.addTopicMetadata("bar", 6, Collections.emptyMap());
+        Uuid fooTopicId = context.addTopicMetadata("foo", 6);
+        Uuid barTopicId = context.addTopicMetadata("bar", 6);
 
         context.addGroupMember("member-1", Arrays.asList("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2, 3),
@@ -427,8 +425,8 @@ public class TargetAssignmentBuilderTest {
             20
         );
 
-        Uuid fooTopicId = context.addTopicMetadata("foo", 6, Collections.emptyMap());
-        Uuid barTopicId = context.addTopicMetadata("bar", 6, Collections.emptyMap());
+        Uuid fooTopicId = context.addTopicMetadata("foo", 6);
+        Uuid barTopicId = context.addTopicMetadata("bar", 6);
 
         context.addGroupMember("member-1", Arrays.asList("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2, 3),
@@ -505,8 +503,8 @@ public class TargetAssignmentBuilderTest {
             20
         );
 
-        Uuid fooTopicId = context.addTopicMetadata("foo", 6, Collections.emptyMap());
-        Uuid barTopicId = context.addTopicMetadata("bar", 6, Collections.emptyMap());
+        Uuid fooTopicId = context.addTopicMetadata("foo", 6);
+        Uuid barTopicId = context.addTopicMetadata("bar", 6);
 
         context.addGroupMember("member-1", Arrays.asList("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2, 3),
@@ -592,8 +590,8 @@ public class TargetAssignmentBuilderTest {
             20
         );
 
-        Uuid fooTopicId = context.addTopicMetadata("foo", 6, mkMapOfPartitionRacks(6));
-        Uuid barTopicId = context.addTopicMetadata("bar", 6, mkMapOfPartitionRacks(6));
+        Uuid fooTopicId = context.addTopicMetadata("foo", 6);
+        Uuid barTopicId = context.addTopicMetadata("bar", 6);
 
         context.addGroupMember("member-1", Arrays.asList("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2),
@@ -670,8 +668,8 @@ public class TargetAssignmentBuilderTest {
             20
         );
 
-        Uuid fooTopicId = context.addTopicMetadata("foo", 6, Collections.emptyMap());
-        Uuid barTopicId = context.addTopicMetadata("bar", 6, Collections.emptyMap());
+        Uuid fooTopicId = context.addTopicMetadata("foo", 6);
+        Uuid barTopicId = context.addTopicMetadata("bar", 6);
 
         context.addGroupMember("member-1", Arrays.asList("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2),
@@ -740,8 +738,8 @@ public class TargetAssignmentBuilderTest {
             20
         );
 
-        Uuid fooTopicId = context.addTopicMetadata("foo", 6, Collections.emptyMap());
-        Uuid barTopicId = context.addTopicMetadata("bar", 6, Collections.emptyMap());
+        Uuid fooTopicId = context.addTopicMetadata("foo", 6);
+        Uuid barTopicId = context.addTopicMetadata("bar", 6);
 
         context.addGroupMember("member-1", "instance-member-1", Arrays.asList("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2),

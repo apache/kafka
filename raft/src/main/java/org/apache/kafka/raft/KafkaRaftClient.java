@@ -2911,7 +2911,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             if (quorum.isVoter()) {
                 transitionToCandidate(currentTimeMs);
             } else {
-                // It is posible that the old leader is not a voter in the new voter set.
+                // It is possible that the old leader is not a voter in the new voter set.
                 // In that case increase the epoch and transition to unattached. The epoch needs
                 // to be increased to avoid FETCH responses with the leader being this replica.
                 transitionToUnattached(quorum.epoch() + 1);
@@ -3036,11 +3036,13 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             logger.info("Become candidate due to fetch timeout");
             transitionToCandidate(currentTimeMs);
             backoffMs = 0;
-        } else if (state.hasUpdateVoterPeriodExpired(currentTimeMs) &&
-            partitionState.lastKraftVersion().isReconfigSupported() &&
-            partitionState.lastVoterSet().voterNodeNeedsUpdate(quorum.localVoterNodeOrThrow())
-        ) {
-            backoffMs = maybeSendUpdateVoterRequest(state, currentTimeMs);
+        } else if (state.hasUpdateVoterPeriodExpired(currentTimeMs)) {
+            if (partitionState.lastKraftVersion().isReconfigSupported() &&
+                partitionState.lastVoterSet().voterNodeNeedsUpdate(quorum.localVoterNodeOrThrow())) {
+                backoffMs = maybeSendUpdateVoterRequest(state, currentTimeMs);
+            } else {
+                backoffMs = maybeSendFetchOrFetchSnapshot(state, currentTimeMs);
+            }
             state.resetUpdateVoterPeriod(currentTimeMs);
         } else {
             backoffMs = maybeSendFetchOrFetchSnapshot(state, currentTimeMs);

@@ -26,6 +26,7 @@ import java.util.Properties
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
+import kafka.security.JaasTestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.network.{ConnectionMode, ListenerName}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
@@ -36,6 +37,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
 import scala.collection.mutable
 import scala.collection.Seq
+import scala.jdk.javaapi.OptionConverters
 
 /**
  * A helper class for writing integration tests that involve producers, consumers, and servers
@@ -71,12 +73,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     if (isZkMigrationTest()) {
       cfgs.foreach(_.setProperty(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true"))
     }
-    if (isNewGroupCoordinatorEnabled()) {
-      cfgs.foreach(_.setProperty(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "true"))
-      cfgs.foreach(_.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer"))
-    }
     if (isShareGroupTest()) {
-      cfgs.foreach(_.setProperty(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "true"))
       cfgs.foreach(_.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,share"))
       cfgs.foreach(_.setProperty(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true"))
     }
@@ -175,8 +172,8 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   }
 
   def clientSecurityProps(certAlias: String): Properties = {
-    TestUtils.securityConfigs(ConnectionMode.CLIENT, securityProtocol, trustStoreFile, certAlias, TestUtils.SslCertificateCn,
-      clientSaslProperties)
+    JaasTestUtils.securityConfigs(ConnectionMode.CLIENT, securityProtocol, OptionConverters.toJava(trustStoreFile), certAlias,
+      JaasTestUtils.SSL_CERTIFICATE_CN, OptionConverters.toJava(clientSaslProperties))
   }
 
   def superuserSecurityProps(certAlias: String): Properties = {

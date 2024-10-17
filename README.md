@@ -11,9 +11,7 @@ the broker and tools has been deprecated since Apache Kafka 3.7 and removal of b
 see [KIP-750](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308223) and
 [KIP-1013](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=284789510) for more details).
 
-Scala 2.12 and 2.13 are supported and 2.13 is used by default. Scala 2.12 support has been deprecated since
-Apache Kafka 3.0 and will be removed in Apache Kafka 4.0 (see [KIP-751](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308218)
-for more details). See below for how to use a specific Scala version or all of the supported Scala versions.
+Scala 2.13 is the only supported version in Apache Kafka.
 
 ### Build a jar and run it ###
     ./gradlew jar
@@ -34,14 +32,16 @@ Follow instructions in https://kafka.apache.org/quickstart
     ./gradlew docsJar # builds both (if applicable) javadoc and scaladoc jars for each module
 
 ### Run unit/integration tests ###
-    ./gradlew test # runs both unit and integration tests
+    ./gradlew test  # runs both unit and integration tests
     ./gradlew unitTest
     ./gradlew integrationTest
+    ./gradlew quarantinedTest  # runs the quarantined tests
+
     
 ### Force re-running tests without code change ###
-    ./gradlew test --rerun
-    ./gradlew unitTest --rerun
-    ./gradlew integrationTest --rerun
+    ./gradlew test --rerun-tasks
+    ./gradlew unitTest --rerun-tasks
+    ./gradlew integrationTest --rerun-tasks
 
 ### Running a particular unit/integration test ###
     ./gradlew clients:test --tests RequestResponseTest
@@ -64,11 +64,17 @@ to `log4j.logger.org.apache.kafka=INFO` and then run:
 And you should see `INFO` level logs in the file under the `clients/build/test-results/test` directory.
 
 ### Specifying test retries ###
-By default, each failed test is retried once up to a maximum of five retries per test run. Tests are retried at the end of the test task. Adjust these parameters in the following way:
+By default, each failed test is retried once up to a maximum of three total retries per test run. 
+Tests are retried at the end of the test task. Adjust these parameters in the following way:
 
-    ./gradlew test -PmaxTestRetries=1 -PmaxTestRetryFailures=5
-    
-See [Test Retry Gradle Plugin](https://github.com/gradle/test-retry-gradle-plugin) for more details.
+    ./gradlew test -PmaxTestRetries=1 -PmaxTestRetryFailures=3
+
+Additionally, quarantined tests are automatically retried three times up to a total of
+20 retries per run. This is controlled by similar parameters.
+
+    ./gradlew test -PmaxQuarantineTestRetries=3 -PmaxQuarantineTestRetryFailures=20
+
+See [Test Retry Gradle Plugin](https://github.com/gradle/test-retry-gradle-plugin) for and [build.yml](.github/workflows/build.yml) more details.
 
 ### Generating test coverage reports ###
 Generate coverage reports for the whole project:
@@ -102,34 +108,8 @@ Using docker image:
 
     docker run -p 9092:9092 apache/kafka:3.7.0
 
-### Running a Kafka broker in ZooKeeper mode
-
-Using compiled files:
-
-    ./bin/zookeeper-server-start.sh config/zookeeper.properties
-    ./bin/kafka-server-start.sh config/server.properties
-
->Since ZooKeeper mode is already deprecated and planned to be removed in Apache Kafka 4.0, the docker image only supports running in KRaft mode
-
 ### Cleaning the build ###
     ./gradlew clean
-
-### Running a task with one of the Scala versions available (2.12.x or 2.13.x) ###
-*Note that if building the jars with a version other than 2.13.x, you need to set the `SCALA_VERSION` variable or change it in `bin/kafka-run-class.sh` to run the quick start.*
-
-You can pass either the major version (eg 2.12) or the full version (eg 2.12.7):
-
-    ./gradlew -PscalaVersion=2.12 jar
-    ./gradlew -PscalaVersion=2.12 test
-    ./gradlew -PscalaVersion=2.12 releaseTarGz
-
-### Running a task with all the scala versions enabled by default ###
-
-Invoke the `gradlewAll` script followed by the task(s):
-
-    ./gradlewAll test
-    ./gradlewAll jar
-    ./gradlewAll releaseTarGz
 
 ### Running a task for a specific project ###
 This is for `core`, `examples` and `clients`
@@ -153,24 +133,6 @@ Streams has multiple sub-projects, but you can run all the tests:
 The `eclipse` task has been configured to use `${project_dir}/build_eclipse` as Eclipse's build directory. Eclipse's default
 build directory (`${project_dir}/bin`) clashes with Kafka's scripts directory and we don't use Gradle's build directory
 to avoid known issues with this configuration.
-
-### Publishing the jar for all versions of Scala and for all projects to maven ###
-The recommended command is:
-
-    ./gradlewAll publish
-
-For backwards compatibility, the following also works:
-
-    ./gradlewAll uploadArchives
-
-Please note for this to work you should create/update `${GRADLE_USER_HOME}/gradle.properties` (typically, `~/.gradle/gradle.properties`) and assign the following variables
-
-    mavenUrl=
-    mavenUsername=
-    mavenPassword=
-    signing.keyId=
-    signing.password=
-    signing.secretKeyRingFile=
 
 ### Publishing the streams quickstart archetype artifact to maven ###
 For the Streams archetype project, one cannot use gradle to upload to maven; instead the `mvn deploy` command needs to be called at the quickstart folder:
@@ -201,22 +163,10 @@ Please note for this to work you should create/update user maven settings (typic
      </servers>
      ...
 
-
-### Installing ALL the jars to the local Maven repository ###
-The recommended command to build for both Scala 2.12 and 2.13 is:
-
-    ./gradlewAll publishToMavenLocal
-
-For backwards compatibility, the following also works:
-
-    ./gradlewAll install
-
 ### Installing specific projects to the local Maven repository ###
 
     ./gradlew -PskipSigning=true :streams:publishToMavenLocal
     
-If needed, you can specify the Scala version with `-PscalaVersion=2.13`.
-
 ### Building the test jar ###
     ./gradlew testJar
 

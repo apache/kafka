@@ -20,10 +20,9 @@ import java.nio.ByteBuffer
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
-import kafka.server.{MetadataCache, ReplicaManager, RequestLocal}
+import kafka.server.{MetadataCache, ReplicaManager}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{Logging, Pool}
-import kafka.utils.Implicits._
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.ListTransactionsResponseData
@@ -36,11 +35,12 @@ import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
-import org.apache.kafka.server.common.TransactionVersion
+import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.record.BrokerCompressionType
+import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.Scheduler
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation}
+import org.apache.kafka.storage.internals.log.AppendOrigin
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -101,8 +101,10 @@ class TransactionStateManager(brokerId: Int,
     TransactionStateManagerConfig.METRICS_GROUP,
     "The avg time it took to load the partitions in the last 30sec"), new Avg())
 
-  private[transaction] def usesFlexibleRecords(): Boolean = {
-    metadataCache.features().finalizedFeatures().getOrDefault(TransactionVersion.FEATURE_NAME, 0.toShort) > 0
+  private[transaction] def transactionVersionLevel(): TransactionVersion = {
+    val version = TransactionVersion.fromFeatureLevel(metadataCache.features().finalizedFeatures().getOrDefault(
+      TransactionVersion.FEATURE_NAME, 0.toShort))
+    version
   }
 
   // visible for testing only
@@ -234,7 +236,7 @@ class TransactionStateManager(brokerId: Int,
 
   private[transaction] def removeExpiredTransactionalIds(): Unit = {
     inReadLock(stateLock) {
-      transactionMetadataCache.forKeyValue { (partitionId, partitionCacheEntry) =>
+      transactionMetadataCache.foreachEntry { (partitionId, partitionCacheEntry) =>
         val transactionPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
         removeExpiredTransactionalIds(transactionPartition, partitionCacheEntry)
       }
@@ -247,7 +249,7 @@ class TransactionStateManager(brokerId: Int,
     tombstoneRecords: MemoryRecords
   ): Unit = {
     def removeFromCacheCallback(responses: collection.Map[TopicPartition, PartitionResponse]): Unit = {
-      responses.forKeyValue { (topicPartition, response) =>
+      responses.foreachEntry { (topicPartition, response) =>
         inReadLock(stateLock) {
           transactionMetadataCache.get(topicPartition.partition).foreach { txnMetadataCacheEntry =>
             expiredForPartition.foreach { idCoordinatorEpochAndMetadata =>
@@ -283,7 +285,7 @@ class TransactionStateManager(brokerId: Int,
         origin = AppendOrigin.COORDINATOR,
         entriesPerPartition = Map(transactionPartition -> tombstoneRecords),
         responseCallback = removeFromCacheCallback,
-        requestLocal = RequestLocal.NoCaching)
+        requestLocal = RequestLocal.noCaching)
     }
   }
 
@@ -342,7 +344,7 @@ class TransactionStateManager(brokerId: Int,
         }
 
         val states = new java.util.ArrayList[ListTransactionsResponseData.TransactionState]
-        transactionMetadataCache.forKeyValue { (_, cache) =>
+        transactionMetadataCache.foreachEntry { (_, cache) =>
           cache.metadataPerTransactionalId.values.foreach { txnMetadata =>
             txnMetadata.inLock {
               if (shouldInclude(txnMetadata)) {
@@ -624,7 +626,7 @@ class TransactionStateManager(brokerId: Int,
 
     // generate the message for this transaction metadata
     val keyBytes = TransactionLog.keyToBytes(transactionalId)
-    val valueBytes = TransactionLog.valueToBytes(newMetadata, usesFlexibleRecords())
+    val valueBytes = TransactionLog.valueToBytes(newMetadata, transactionVersionLevel())
     val timestamp = time.milliseconds()
 
     val records = MemoryRecords.withRecords(TransactionLog.EnforcedCompression, new SimpleRecord(timestamp, keyBytes, valueBytes))

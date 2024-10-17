@@ -13,6 +13,7 @@
 package kafka.api
 
 import kafka.security.JaasTestUtils
+
 import java.util
 import java.util.Properties
 import kafka.security.authorizer.AclAuthorizer
@@ -31,6 +32,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNull}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import scala.jdk.CollectionConverters._
+import scala.jdk.javaapi.OptionConverters
 
 object DescribeAuthorizedOperationsTest {
   val Group1 = "group1"
@@ -126,7 +128,7 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
     adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     adminClientConfig.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "20000")
     val securityProps: util.Map[Object, Object] =
-      TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
+      JaasTestUtils.adminClientSecurityConfigs(securityProtocol, OptionConverters.toJava(trustStoreFile), OptionConverters.toJava(clientSaslProperties))
     adminClientConfig.putAll(securityProps)
     adminClientConfig
   }

@@ -18,6 +18,7 @@ package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.requests.FetchRequest;
+import org.apache.kafka.server.storage.log.FetchIsolation;
 
 public class RemoteStorageFetchInfo {
 

@@ -28,15 +28,16 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFailureChannel, LogSegment, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFailureChannel, LogLoader, LogSegment, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 
 import java.lang.{Long => JLong}
 import java.util
+import java.util.concurrent.ConcurrentHashMap
 import scala.collection.mutable
-import scala.compat.java8.OptionConverters._
+import scala.jdk.OptionConverters.RichOption
 
 /**
   * Unit tests for the log cleaning logic
@@ -119,12 +120,14 @@ class LogCleanerManagerTest extends Logging {
       time.scheduler,
       time,
       logDirFailureChannel,
-      hadCleanShutdown = true,
+      true,
       segments,
       0L,
       0L,
-      leaderEpochCache.asJava,
-      producerStateManager
+      leaderEpochCache.toJava,
+      producerStateManager,
+      new ConcurrentHashMap[String, Integer],
+      false
     ).load()
     val localLog = new LocalLog(tpDir, config, segments, offsets.recoveryPoint,
       offsets.nextOffsetMetadata, time.scheduler, time, tp, logDirFailureChannel)
