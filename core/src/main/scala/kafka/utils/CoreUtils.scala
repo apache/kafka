@@ -241,24 +241,6 @@ object CoreUtils {
     properties
   }
 
-  /**
-   * Atomic `getOrElseUpdate` for concurrent maps. This is optimized for the case where
-   * keys often exist in the map, avoiding the need to create a new value. `createValue`
-   * may be invoked more than once if multiple threads attempt to insert a key at the same
-   * time, but the same inserted value will be returned to all threads.
-   *
-   * In Scala 2.12, `ConcurrentMap.getOrElse` has the same behaviour as this method, but JConcurrentMapWrapper that
-   * wraps Java maps does not.
-   */
-  def atomicGetOrUpdate[K, V](map: concurrent.Map[K, V], key: K, createValue: => V): V = {
-    map.get(key) match {
-      case Some(value) => value
-      case None =>
-        val value = createValue
-        map.putIfAbsent(key, value).getOrElse(value)
-    }
-  }
-
   def replicaToBrokerAssignmentAsScala(map: util.Map[Integer, util.List[Integer]]): Map[Int, Seq[Int]] = {
     map.asScala.map(e => (e._1.asInstanceOf[Int], e._2.asScala.map(_.asInstanceOf[Int])))
   }
