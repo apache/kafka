@@ -35,7 +35,6 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Utils;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -62,12 +61,7 @@ public class ConsumerConfig extends AbstractConfig {
     // a list contains all the assignor names that only assign subscribed topics to consumer. Should be updated when new assignor added.
     // This is to help optimize ConsumerCoordinator#performAssignment method
     public static final List<String> ASSIGN_FROM_SUBSCRIBED_ASSIGNORS =
-        Collections.unmodifiableList(Arrays.asList(
-            RANGE_ASSIGNOR_NAME,
-            ROUNDROBIN_ASSIGNOR_NAME,
-            STICKY_ASSIGNOR_NAME,
-            COOPERATIVE_STICKY_ASSIGNOR_NAME
-        ));
+            List.of(RANGE_ASSIGNOR_NAME, ROUNDROBIN_ASSIGNOR_NAME, STICKY_ASSIGNOR_NAME, COOPERATIVE_STICKY_ASSIGNOR_NAME);
 
     /*
      * NOTE: DO NOT CHANGE EITHER CONFIG STRINGS OR THEIR JAVA VARIABLE NAMES AS
@@ -381,7 +375,7 @@ public class ConsumerConfig extends AbstractConfig {
 
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
     private static final List<Class<? extends AbstractPartitionAssignor>> PARTITION_ASSIGNOR_DEFAULT_VALUE =
-            Collections.unmodifiableList(Arrays.asList(RangeAssignor.class, CooperativeStickyAssignor.class));
+            List.of(RangeAssignor.class, CooperativeStickyAssignor.class);
 
     /**
      * A list of configuration keys for CLASSIC protocol not supported. we should check the input string and clean up the
@@ -395,11 +389,8 @@ public class ConsumerConfig extends AbstractConfig {
      * A list of configuration keys for consumer protocol not supported. we should check the input string and clean up the
      * default value.
      */
-    private static final List<String> CONSUMER_PROTOCOL_UNSUPPORTED_CONFIGS = Collections.unmodifiableList(Arrays.asList(
-            PARTITION_ASSIGNMENT_STRATEGY_CONFIG, 
-            HEARTBEAT_INTERVAL_MS_CONFIG, 
-            SESSION_TIMEOUT_MS_CONFIG
-    ));
+    private static final List<String> CONSUMER_PROTOCOL_UNSUPPORTED_CONFIGS = 
+            List.of(PARTITION_ASSIGNMENT_STRATEGY_CONFIG, HEARTBEAT_INTERVAL_MS_CONFIG, SESSION_TIMEOUT_MS_CONFIG);
     
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
@@ -739,13 +730,6 @@ public class ConsumerConfig extends AbstractConfig {
                 Object config = originals().get(configName);
                 if (config != null && !Utils.isBlank(config.toString())) {
                     throw new ConfigException(configName + " cannot be set when " + GROUP_PROTOCOL_CONFIG + "=" + groupProtocol.name());
-                } else {
-                    /*
-                      Some default values are not supported in the CONSUMER protocol or CLASSIC protocol. When these default 
-                      values are printed in the log, they can misdirect users. Therefore, in this case, the default values 
-                      should be cleared.
-                     */
-                    super.clearConfig(configName);
                 }
             });
         }

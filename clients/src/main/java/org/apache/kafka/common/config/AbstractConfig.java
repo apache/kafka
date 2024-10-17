@@ -355,14 +355,6 @@ public class AbstractConfig {
         return nonInternalConfigs;
     }
 
-    protected void clearConfig(String key) {
-        Object value = values.get(key);
-        if (value instanceof Number)
-            values.put(key, 0);
-        else
-            values.remove(key);
-    }
-
     private void logAll() {
         StringBuilder b = new StringBuilder();
         b.append(getClass().getSimpleName());
