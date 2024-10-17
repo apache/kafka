@@ -409,7 +409,7 @@ public class LogSegment implements Closeable {
     }
 
     /**
-     * Read a message set from the segment that contains startOffset. The message set will include
+     * Read a message set from this segment that contains startOffset. The message set will include
      * no more than maxSize bytes and will end before maxOffset if a maxOffset is specified.
      *
      * This method is thread-safe.
