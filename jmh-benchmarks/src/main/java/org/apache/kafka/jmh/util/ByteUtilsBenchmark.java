@@ -196,7 +196,7 @@ public class ByteUtilsBenchmark {
 
     @Benchmark
     @CompilerControl(CompilerControl.Mode.DONT_INLINE)
-    public void testUnsignedReadVarlongUnrolled(IterationStateForLong state, Blackhole bk) throws IOException {
+    public void testUnsignedReadVarlongUnrolled(IterationStateForLong state, Blackhole bk) {
         for (long randomValue : state.getRandomValues()) {
             ByteUtils.writeUnsignedVarlong(randomValue, state.getTestBuffer());
             // prepare for reading
