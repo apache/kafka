@@ -648,6 +648,11 @@ class ReplicaManager(val config: KafkaConfig,
     errorMap
   }
 
+  def topicIdPartition(topicPartition: TopicPartition): TopicIdPartition = {
+    val topicId = metadataCache.getTopicId(topicPartition.topic())
+    new TopicIdPartition(topicId, topicPartition)
+  }
+
   def getPartition(topicPartition: TopicPartition): HostedPartition = {
     Option(allPartitions.get(topicPartition)).getOrElse(HostedPartition.None)
   }
@@ -770,10 +775,10 @@ class ReplicaManager(val config: KafkaConfig,
                     requiredAcks: Short,
                     internalTopicsAllowed: Boolean,
                     origin: AppendOrigin,
-                    entriesPerPartition: Map[TopicPartition, MemoryRecords],
-                    responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
+                    entriesPerPartition: Map[TopicIdPartition, MemoryRecords],
+                    responseCallback: Map[TopicIdPartition, PartitionResponse] => Unit,
                     delayedProduceLock: Option[Lock] = None,
-                    recordValidationStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
+                    recordValidationStatsCallback: Map[TopicIdPartition, RecordValidationStats] => Unit = _ => (),
                     requestLocal: RequestLocal = RequestLocal.noCaching,
                     actionQueue: ActionQueue = this.defaultActionQueue,
                     verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty): Unit = {
@@ -827,20 +832,21 @@ class ReplicaManager(val config: KafkaConfig,
                           requiredAcks: Short,
                           internalTopicsAllowed: Boolean,
                           transactionalId: String,
-                          entriesPerPartition: Map[TopicPartition, MemoryRecords],
-                          responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
-                          recordValidationStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
+                          entriesPerPartition: Map[TopicIdPartition, MemoryRecords],
+                          responseCallback: Map[TopicIdPartition, PartitionResponse] => Unit,
+                          recordValidationStatsCallback: Map[TopicIdPartition, RecordValidationStats] => Unit = _ => (),
                           requestLocal: RequestLocal = RequestLocal.noCaching,
                           actionQueue: ActionQueue = this.defaultActionQueue,
                           transactionSupportedOperation: TransactionSupportedOperation): Unit = {
 
     val transactionalProducerInfo = mutable.HashSet[(Long, Short)]()
     val topicPartitionBatchInfo = mutable.Map[TopicPartition, Int]()
-    entriesPerPartition.foreachEntry { (topicPartition, records) =>
+    val topicIds = entriesPerPartition.keys.map(tp => tp.topic() -> tp.topicId()).toMap
+    entriesPerPartition.foreachEntry { (topicIdPartition, records) =>
       // Produce requests (only requests that require verification) should only have one batch per partition in "batches" but check all just to be safe.
       val transactionalBatches = records.batches.asScala.filter(batch => batch.hasProducerId && batch.isTransactional)
       transactionalBatches.foreach(batch => transactionalProducerInfo.add(batch.producerId, batch.producerEpoch))
-      if (transactionalBatches.nonEmpty) topicPartitionBatchInfo.put(topicPartition, records.firstBatch.baseSequence)
+      if (transactionalBatches.nonEmpty) topicPartitionBatchInfo.put(topicIdPartition.topicPartition(), records.firstBatch.baseSequence)
     }
     if (transactionalProducerInfo.size > 1) {
       throw new InvalidPidMappingException("Transactional records contained more than one producer ID")
@@ -849,7 +855,7 @@ class ReplicaManager(val config: KafkaConfig,
     def postVerificationCallback(newRequestLocal: RequestLocal,
                                  results: (Map[TopicPartition, Errors], Map[TopicPartition, VerificationGuard])): Unit = {
       val (preAppendErrors, verificationGuards) = results
-      val errorResults = preAppendErrors.map {
+      val errorResults: Map[TopicIdPartition, LogAppendResult] = preAppendErrors.map {
         case (topicPartition, error) =>
           // translate transaction coordinator errors to known producer response errors
           val customException =
@@ -867,17 +873,17 @@ class ReplicaManager(val config: KafkaConfig,
                 s"Unable to verify the partition has been added to the transaction. Underlying error: ${error.toString}"))
               case _ => None
             }
-          topicPartition -> LogAppendResult(
+          new TopicIdPartition(topicIds.getOrElse(topicPartition.topic(), Uuid.ZERO_UUID), topicPartition) -> LogAppendResult(
             LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
             Some(customException.getOrElse(error.exception)),
             hasCustomErrorMessage = customException.isDefined
           )
       }
-      val entriesWithoutErrorsPerPartition = entriesPerPartition.filter { case (key, _) => !errorResults.contains(key) }
+      val entriesWithoutErrorsPerPartition = entriesPerPartition.filter { case (key, _) => !errorResults.exists(_._1.topicPartition() == key.topicPartition()) }
 
       val preAppendPartitionResponses = buildProducePartitionStatus(errorResults).map { case (k, status) => k -> status.responseStatus }
 
-      def newResponseCallback(responses: Map[TopicPartition, PartitionResponse]): Unit = {
+      def newResponseCallback(responses: Map[TopicIdPartition, PartitionResponse]): Unit = {
         responseCallback(preAppendPartitionResponses ++ responses)
       }
 
@@ -920,8 +926,8 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   private def buildProducePartitionStatus(
-    results: Map[TopicPartition, LogAppendResult]
-  ): Map[TopicPartition, ProducePartitionStatus] = {
+    results: Map[TopicIdPartition, LogAppendResult]
+  ): Map[TopicIdPartition, ProducePartitionStatus] = {
     results.map { case (topicPartition, result) =>
       topicPartition -> ProducePartitionStatus(
         result.info.lastOffset + 1, // required offset
@@ -940,7 +946,7 @@ class ReplicaManager(val config: KafkaConfig,
 
   private def addCompletePurgatoryAction(
     actionQueue: ActionQueue,
-    appendResults: Map[TopicPartition, LogAppendResult]
+    appendResults: Map[TopicIdPartition, LogAppendResult]
   ): Unit = {
     actionQueue.add {
       () => appendResults.foreach { case (topicPartition, result) =>
@@ -965,10 +971,10 @@ class ReplicaManager(val config: KafkaConfig,
     requiredAcks: Short,
     delayedProduceLock: Option[Lock],
     timeoutMs: Long,
-    entriesPerPartition: Map[TopicPartition, MemoryRecords],
-    initialAppendResults: Map[TopicPartition, LogAppendResult],
-    initialProduceStatus: Map[TopicPartition, ProducePartitionStatus],
-    responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
+    entriesPerPartition: Map[TopicIdPartition, MemoryRecords],
+    initialAppendResults: Map[TopicIdPartition, LogAppendResult],
+    initialProduceStatus: Map[TopicIdPartition, ProducePartitionStatus],
+    responseCallback: Map[TopicIdPartition, PartitionResponse] => Unit,
   ): Unit = {
     if (delayedProduceRequestRequired(requiredAcks, entriesPerPartition, initialAppendResults)) {
       // create delayed produce operation
@@ -989,8 +995,8 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  private def sendInvalidRequiredAcksResponse(entries: Map[TopicPartition, MemoryRecords],
-                                             responseCallback: Map[TopicPartition, PartitionResponse] => Unit): Unit = {
+  private def sendInvalidRequiredAcksResponse(entries: Map[TopicIdPartition, MemoryRecords],
+                                             responseCallback: Map[TopicIdPartition, PartitionResponse] => Unit): Unit = {
     // If required.acks is outside accepted range, something is wrong with the client
     // Just return an error and don't handle the request at all
     val responseStatus = entries.map { case (topicPartition, _) =>
@@ -1373,8 +1379,8 @@ class ReplicaManager(val config: KafkaConfig,
   // 2. there is data to append
   // 3. at least one partition append was successful (fewer errors than partitions)
   private def delayedProduceRequestRequired(requiredAcks: Short,
-                                            entriesPerPartition: Map[TopicPartition, MemoryRecords],
-                                            localProduceResults: Map[TopicPartition, LogAppendResult]): Boolean = {
+                                            entriesPerPartition: Map[TopicIdPartition, MemoryRecords],
+                                            localProduceResults: Map[TopicIdPartition, LogAppendResult]): Boolean = {
     requiredAcks == -1 &&
     entriesPerPartition.nonEmpty &&
     localProduceResults.values.count(_.exception.isDefined) < entriesPerPartition.size
@@ -1389,10 +1395,10 @@ class ReplicaManager(val config: KafkaConfig,
    */
   private def appendToLocalLog(internalTopicsAllowed: Boolean,
                                origin: AppendOrigin,
-                               entriesPerPartition: Map[TopicPartition, MemoryRecords],
+                               entriesPerPartition: Map[TopicIdPartition, MemoryRecords],
                                requiredAcks: Short,
                                requestLocal: RequestLocal,
-                               verificationGuards: Map[TopicPartition, VerificationGuard]): Map[TopicPartition, LogAppendResult] = {
+                               verificationGuards: Map[TopicPartition, VerificationGuard]): Map[TopicIdPartition, LogAppendResult] = {
     val traceEnabled = isTraceEnabled
     def processFailedRecord(topicPartition: TopicPartition, t: Throwable) = {
       val logStartOffset = onlinePartition(topicPartition).map(_.logStartOffset).getOrElse(-1L)
@@ -1411,34 +1417,34 @@ class ReplicaManager(val config: KafkaConfig,
     if (traceEnabled)
       trace(s"Append [$entriesPerPartition] to local log")
 
-    entriesPerPartition.map { case (topicPartition, records) =>
-      brokerTopicStats.topicStats(topicPartition.topic).totalProduceRequestRate.mark()
+    entriesPerPartition.map { case (topicIdPartition, records) =>
+      brokerTopicStats.topicStats(topicIdPartition.topic).totalProduceRequestRate.mark()
       brokerTopicStats.allTopicsStats.totalProduceRequestRate.mark()
 
       // reject appending to internal topics if it is not allowed
-      if (Topic.isInternal(topicPartition.topic) && !internalTopicsAllowed) {
-        (topicPartition, LogAppendResult(
+      if (Topic.isInternal(topicIdPartition.topic) && !internalTopicsAllowed) {
+        (topicIdPartition, LogAppendResult(
           LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
-          Some(new InvalidTopicException(s"Cannot append to internal topic ${topicPartition.topic}")),
+          Some(new InvalidTopicException(s"Cannot append to internal topic ${topicIdPartition.topic}")),
           hasCustomErrorMessage = false))
       } else {
         try {
-          val partition = getPartitionOrException(topicPartition)
+          val partition = getPartitionOrException(topicIdPartition.topicPartition())
           val info = partition.appendRecordsToLeader(records, origin, requiredAcks, requestLocal,
-            verificationGuards.getOrElse(topicPartition, VerificationGuard.SENTINEL))
+            verificationGuards.getOrElse(topicIdPartition.topicPartition(), VerificationGuard.SENTINEL))
           val numAppendedMessages = info.numMessages
 
           // update stats for successfully appended bytes and messages as bytesInRate and messageInRate
-          brokerTopicStats.topicStats(topicPartition.topic).bytesInRate.mark(records.sizeInBytes)
+          brokerTopicStats.topicStats(topicIdPartition.topic).bytesInRate.mark(records.sizeInBytes)
           brokerTopicStats.allTopicsStats.bytesInRate.mark(records.sizeInBytes)
-          brokerTopicStats.topicStats(topicPartition.topic).messagesInRate.mark(numAppendedMessages)
+          brokerTopicStats.topicStats(topicIdPartition.topic).messagesInRate.mark(numAppendedMessages)
           brokerTopicStats.allTopicsStats.messagesInRate.mark(numAppendedMessages)
 
           if (traceEnabled)
-            trace(s"${records.sizeInBytes} written to log $topicPartition beginning at offset " +
+            trace(s"${records.sizeInBytes} written to log $topicIdPartition beginning at offset " +
               s"${info.firstOffset} and ending at offset ${info.lastOffset}")
 
-          (topicPartition, LogAppendResult(info, exception = None, hasCustomErrorMessage = false))
+          (topicIdPartition, LogAppendResult(info, exception = None, hasCustomErrorMessage = false))
         } catch {
           // NOTE: Failed produce requests metric is not incremented for known exceptions
           // it is supposed to indicate un-expected failures of a broker in handling a produce request
@@ -1448,15 +1454,15 @@ class ReplicaManager(val config: KafkaConfig,
                    _: RecordBatchTooLargeException |
                    _: CorruptRecordException |
                    _: KafkaStorageException) =>
-            (topicPartition, LogAppendResult(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO, Some(e), hasCustomErrorMessage = false))
+            (topicIdPartition, LogAppendResult(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO, Some(e), hasCustomErrorMessage = false))
           case rve: RecordValidationException =>
-            val logStartOffset = processFailedRecord(topicPartition, rve.invalidException)
+            val logStartOffset = processFailedRecord(topicIdPartition.topicPartition(), rve.invalidException)
             val recordErrors = rve.recordErrors
-            (topicPartition, LogAppendResult(LogAppendInfo.unknownLogAppendInfoWithAdditionalInfo(logStartOffset, recordErrors),
+            (topicIdPartition, LogAppendResult(LogAppendInfo.unknownLogAppendInfoWithAdditionalInfo(logStartOffset, recordErrors),
               Some(rve.invalidException), hasCustomErrorMessage = true))
           case t: Throwable =>
-            val logStartOffset = processFailedRecord(topicPartition, t)
-            (topicPartition, LogAppendResult(LogAppendInfo.unknownLogAppendInfoWithLogStartOffset(logStartOffset),
+            val logStartOffset = processFailedRecord(topicIdPartition.topicPartition(), t)
+            (topicIdPartition, LogAppendResult(LogAppendInfo.unknownLogAppendInfoWithLogStartOffset(logStartOffset),
               Some(t), hasCustomErrorMessage = false))
         }
       }

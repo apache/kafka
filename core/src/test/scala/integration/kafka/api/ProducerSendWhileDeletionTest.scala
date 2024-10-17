@@ -17,11 +17,11 @@
 package kafka.api
 
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.NewPartitionReassignment
-import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.admin.{Admin, NewPartitionReassignment, TopicDescription}
+import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -33,7 +33,7 @@ import scala.jdk.CollectionConverters._
 
 class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
   val producerCount: Int = 1
-  val brokerCount: Int = 2
+  val brokerCount: Int = 3
 
   serverConfig.put(ServerLogConfigs.NUM_PARTITIONS_CONFIG, 2.toString)
   serverConfig.put(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, 2.toString)
@@ -50,7 +50,7 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
    * succeed as long as the partition is included in the metadata.
    */
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testSendWithTopicDeletionMidWay(quorum: String): Unit = {
     val numRecords = 10
     val topic = "topic"
@@ -84,4 +84,83 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
     assertEquals(topic, producer.send(new ProducerRecord(topic, null, "value".getBytes(StandardCharsets.UTF_8))).get.topic())
   }
 
+  /**
+   * Tests that Producer produce to new topic id after recreation.
+   *
+   * Producer will attempt to send messages to the partition specified in each record, and should
+   * succeed as long as the metadata has been updated with new topic id.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testSendWithRecreatedTopic(quorum: String): Unit = {
+    val numRecords = 10
+    val topic = "topic"
+    createTopic(topic)
+    val admin = createAdminClient()
+    val topicId = topicMetadata(admin, topic).topicId()
+    val producer = createProducer()
+
+    (1 to numRecords).foreach { i =>
+      val resp = producer.send(new ProducerRecord(topic, null, ("value" + i).getBytes(StandardCharsets.UTF_8))).get
+      assertEquals(topic, resp.topic())
+    }
+    // Start topic deletion
+    deleteTopic(topic, listenerName)
+
+    // Verify that the topic is deleted when no metadata request comes in
+    TestUtils.verifyTopicDeletion(zkClientOrNull, topic, 2, brokers)
+    createTopic(topic)
+    assertNotEquals(topicId, topicMetadata(admin, topic).topicId())
+
+    // Producer should be able to send messages even after topic gets recreated
+    val recordMetadata: RecordMetadata = producer.send(new ProducerRecord(topic, null, "value".getBytes(StandardCharsets.UTF_8))).get
+    assertEquals(topic, recordMetadata.topic())
+    assertEquals(0, recordMetadata.offset())
+  }
+
+  /**
+   * Tests that Producer produce to topic during reassignment where topic metadata change on broker side.
+   *
+   * Producer will attempt to send messages to the partition specified in each record, and should
+   * succeed as long as the metadata on the leader has been updated with new topic id.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testSendWithTopicReassignmentIsMidWay(quorum: String): Unit = {
+    val numRecords = 10
+    val topic = "topic"
+    val partition0: TopicPartition = new TopicPartition(topic, 0)
+    val partition1 = new TopicPartition(topic, 1)
+    val admin: Admin = createAdminClient()
+
+    // Create topic with leader as 0 for the 2 partitions.
+    createTopicWithAssignment(topic, Map(0 -> Seq(0, 1), 1 -> Seq(0, 1)))
+    TestUtils.assertLeader(admin, partition1, 0)
+
+    val topicDetails = topicMetadata(admin, topic)
+    assertEquals(0, topicDetails.partitions().get(0).leader().id())
+    val producer = createProducer()
+
+    (1 to numRecords).foreach { i =>
+      val resp = producer.send(new ProducerRecord(topic, null, ("value" + i).getBytes(StandardCharsets.UTF_8))).get
+      assertEquals(topic, resp.topic())
+    }
+
+    val reassignment = Map(
+      partition0 -> Optional.of(new NewPartitionReassignment(util.Arrays.asList(1, 2))),
+      partition1 -> Optional.of(new NewPartitionReassignment(util.Arrays.asList(1, 2)))
+    )
+
+    // Change assignment of one of the replicas from 0 to 2. Leadership moves be 1.
+    admin.alterPartitionReassignments(reassignment.asJava).all().get()
+    TestUtils.assertLeader(admin, partition1, 1)
+    assertEquals(topicDetails.topicId(), topicMetadata(admin, topic).topicId())
+
+    // Producer should be able to send messages even after topic gets reassigned
+    assertEquals(topic, producer.send(new ProducerRecord(topic, null, "value".getBytes(StandardCharsets.UTF_8))).get.topic())
+  }
+
+  def topicMetadata(admin: Admin, topic: String): TopicDescription = {
+    admin.describeTopics(util.Collections.singletonList(topic)).allTopicNames().get().get(topic)
+  }
 }

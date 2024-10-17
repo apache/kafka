@@ -88,5 +88,4 @@ public class ApiVersions {
     public synchronized byte maxUsableProduceMagic() {
         return maxUsableProduceMagic;
     }
-
 }

@@ -26,6 +26,7 @@ import kafka.log.UnifiedLog
 import kafka.server.{KafkaConfig, MetadataCache}
 import kafka.utils.{Pool, TestUtils}
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
 import org.apache.kafka.common.metrics.Metrics
@@ -34,7 +35,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{LogContext, MockTime, ProducerIdAndEpoch}
-import org.apache.kafka.common.{Node, TopicPartition}
+import org.apache.kafka.common.{Node, TopicPartition, Uuid}
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion, RequestLocal, TransactionVersion}
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.storage.internals.log.{FetchDataInfo, LogConfig, LogOffsetMetadata}
@@ -95,7 +96,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
 
     when(metadataCache.metadataVersion())
       .thenReturn(MetadataVersion.latestProduction())
-    
+
     txnStateManager = new TransactionStateManager(0, scheduler, replicaManager, metadataCache, txnConfig, time,
       new Metrics())
     txnStateManager.startup(() => zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME).get,
@@ -117,6 +118,10 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       networkClient,
       txnStateManager,
       time)
+
+    val transactionStateTopicId = Uuid.randomUuid()
+    when(replicaManager.metadataCache.getTopicName(transactionStateTopicId)).thenReturn(Some(Topic.TRANSACTION_STATE_TOPIC_NAME))
+    when(replicaManager.metadataCache.getTopicId(Topic.TRANSACTION_STATE_TOPIC_NAME)).thenReturn(transactionStateTopicId)
 
     transactionCoordinator = new TransactionCoordinator(
       txnConfig,

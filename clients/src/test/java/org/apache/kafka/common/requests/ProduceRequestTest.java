@@ -18,6 +18,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.InvalidRecordException;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.message.ProduceRequestData;
@@ -121,13 +122,35 @@ public class ProduceRequestTest {
         ProduceRequest.Builder requestBuilder = ProduceRequest.forMagic(RecordBatch.CURRENT_MAGIC_VALUE,
                 new ProduceRequestData()
                         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
-                                new ProduceRequestData.TopicProduceData().setName("test").setPartitionData(Collections.singletonList(
-                                        new ProduceRequestData.PartitionProduceData().setIndex(9).setRecords(builder.build()))))
+                                new ProduceRequestData.TopicProduceData()
+                                        .setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
+                                        .setPartitionData(Collections.singletonList(
+                                                new ProduceRequestData.PartitionProduceData().setIndex(9).setRecords(builder.build()))))
                                 .iterator()))
                         .setAcks((short) 1)
                         .setTimeoutMs(5000));
         assertEquals(3, requestBuilder.oldestAllowedVersion());
         assertEquals(ApiKeys.PRODUCE.latestVersion(), requestBuilder.latestAllowedVersion());
+    }
+
+    @Test
+    public void testBuildWithCurrentMessageFormatWithoutTopicId() {
+        ByteBuffer buffer = ByteBuffer.allocate(256);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE,
+                Compression.NONE, TimestampType.CREATE_TIME, 0L);
+        builder.append(10L, null, "a".getBytes());
+        ProduceRequest.Builder requestBuilder = ProduceRequest.forMagic(RecordBatch.CURRENT_MAGIC_VALUE,
+                new ProduceRequestData()
+                        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+                                        new ProduceRequestData.TopicProduceData()
+                                                .setName("test")
+                                                .setPartitionData(Collections.singletonList(
+                                                        new ProduceRequestData.PartitionProduceData().setIndex(9).setRecords(builder.build()))))
+                                .iterator()))
+                        .setAcks((short) 1)
+                        .setTimeoutMs(5000));
+        assertEquals(3, requestBuilder.oldestAllowedVersion());
+        assertEquals(11, requestBuilder.latestAllowedVersion());
     }
 
     @Test

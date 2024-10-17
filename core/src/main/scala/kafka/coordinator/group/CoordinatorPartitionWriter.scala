@@ -18,7 +18,7 @@ package kafka.coordinator.group
 
 import kafka.cluster.PartitionListener
 import kafka.server.{ActionQueue, ReplicaManager, defaultError, genericError}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -138,13 +138,13 @@ class CoordinatorPartitionWriter(
     verificationGuard: VerificationGuard,
     records: MemoryRecords
   ): Long = {
-    var appendResults: Map[TopicPartition, PartitionResponse] = Map.empty
+    var appendResults: Map[TopicIdPartition, PartitionResponse] = Map.empty
     replicaManager.appendRecords(
       timeout = 0L,
       requiredAcks = 1,
       internalTopicsAllowed = true,
       origin = AppendOrigin.COORDINATOR,
-      entriesPerPartition = Map(tp -> records),
+      entriesPerPartition = Map(replicaManager.topicIdPartition(tp) -> records),
       responseCallback = results => appendResults = results,
       requestLocal = RequestLocal.noCaching,
       verificationGuards = Map(tp -> verificationGuard),
@@ -154,7 +154,7 @@ class CoordinatorPartitionWriter(
       actionQueue = directActionQueue
     )
 
-    val partitionResult = appendResults.getOrElse(tp,
+    val partitionResult = appendResults.getOrElse(replicaManager.topicIdPartition(tp),
       throw new IllegalStateException(s"Append status $appendResults should have partition $tp."))
 
     if (partitionResult.error != Errors.NONE) {

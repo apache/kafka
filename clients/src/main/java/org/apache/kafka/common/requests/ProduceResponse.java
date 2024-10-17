@@ -17,7 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.message.ProduceResponseData.LeaderIdAndEpoch;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -72,7 +72,7 @@ public class ProduceResponse extends AbstractResponse {
      * @param responses Produced data grouped by topic-partition
      */
     @Deprecated
-    public ProduceResponse(Map<TopicPartition, PartitionResponse> responses) {
+    public ProduceResponse(Map<TopicIdPartition, PartitionResponse> responses) {
         this(responses, DEFAULT_THROTTLE_TIME, Collections.emptyList());
     }
 
@@ -83,7 +83,7 @@ public class ProduceResponse extends AbstractResponse {
      * @param throttleTimeMs Time in milliseconds the response was throttled
      */
     @Deprecated
-    public ProduceResponse(Map<TopicPartition, PartitionResponse> responses, int throttleTimeMs) {
+    public ProduceResponse(Map<TopicIdPartition, PartitionResponse> responses, int throttleTimeMs) {
         this(toData(responses, throttleTimeMs, Collections.emptyList()));
     }
 
@@ -96,16 +96,16 @@ public class ProduceResponse extends AbstractResponse {
      * @param nodeEndpoints List of node endpoints
      */
     @Deprecated
-    public ProduceResponse(Map<TopicPartition, PartitionResponse> responses, int throttleTimeMs, List<Node> nodeEndpoints) {
+    public ProduceResponse(Map<TopicIdPartition, PartitionResponse> responses, int throttleTimeMs, List<Node> nodeEndpoints) {
         this(toData(responses, throttleTimeMs, nodeEndpoints));
     }
 
-    private static ProduceResponseData toData(Map<TopicPartition, PartitionResponse> responses, int throttleTimeMs, List<Node> nodeEndpoints) {
+    private static ProduceResponseData toData(Map<TopicIdPartition, PartitionResponse> responses, int throttleTimeMs, List<Node> nodeEndpoints) {
         ProduceResponseData data = new ProduceResponseData().setThrottleTimeMs(throttleTimeMs);
         responses.forEach((tp, response) -> {
-            ProduceResponseData.TopicProduceResponse tpr = data.responses().find(tp.topic());
+            ProduceResponseData.TopicProduceResponse tpr = data.responses().find(tp.topic(), tp.topicId());
             if (tpr == null) {
-                tpr = new ProduceResponseData.TopicProduceResponse().setName(tp.topic());
+                tpr = new ProduceResponseData.TopicProduceResponse().setName(tp.topic()).setTopicId(tp.topicId());
                 data.responses().add(tpr);
             }
             tpr.partitionResponses()

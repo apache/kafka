@@ -33,7 +33,7 @@ import org.apache.kafka.common.record.{FileRecords, MemoryRecords, MemoryRecords
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.{KafkaException, TopicIdPartition, TopicPartition}
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.config.ServerConfigs
@@ -248,7 +248,7 @@ class TransactionStateManager(brokerId: Int,
     expiredForPartition: Iterable[TransactionalIdCoordinatorEpochAndMetadata],
     tombstoneRecords: MemoryRecords
   ): Unit = {
-    def removeFromCacheCallback(responses: collection.Map[TopicPartition, PartitionResponse]): Unit = {
+    def removeFromCacheCallback(responses: collection.Map[TopicIdPartition, PartitionResponse]): Unit = {
       responses.foreachEntry { (topicPartition, response) =>
         inReadLock(stateLock) {
           transactionMetadataCache.get(topicPartition.partition).foreach { txnMetadataCacheEntry =>
@@ -283,7 +283,7 @@ class TransactionStateManager(brokerId: Int,
         requiredAcks = TransactionLog.EnforcedRequiredAcks,
         internalTopicsAllowed = true,
         origin = AppendOrigin.COORDINATOR,
-        entriesPerPartition = Map(transactionPartition -> tombstoneRecords),
+        entriesPerPartition = Map(replicaManager.topicIdPartition(transactionPartition) -> tombstoneRecords),
         responseCallback = removeFromCacheCallback,
         requestLocal = RequestLocal.noCaching)
     }
@@ -631,16 +631,17 @@ class TransactionStateManager(brokerId: Int,
 
     val records = MemoryRecords.withRecords(TransactionLog.EnforcedCompression, new SimpleRecord(timestamp, keyBytes, valueBytes))
     val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionFor(transactionalId))
-    val recordsPerPartition = Map(topicPartition -> records)
+    val transactionStateTopicIdPartition = replicaManager.topicIdPartition(topicPartition)
+    val recordsPerPartition = Map(transactionStateTopicIdPartition -> records)
 
     // set the callback function to update transaction status in cache after log append completed
-    def updateCacheCallback(responseStatus: collection.Map[TopicPartition, PartitionResponse]): Unit = {
+    def updateCacheCallback(responseStatus: collection.Map[TopicIdPartition, PartitionResponse]): Unit = {
       // the append response should only contain the topics partition
-      if (responseStatus.size != 1 || !responseStatus.contains(topicPartition))
+      if (responseStatus.size != 1 || !responseStatus.contains(transactionStateTopicIdPartition))
         throw new IllegalStateException("Append status %s should only have one partition %s"
           .format(responseStatus, topicPartition))
 
-      val status = responseStatus(topicPartition)
+      val status = responseStatus(transactionStateTopicIdPartition)
 
       var responseError = if (status.error == Errors.NONE) {
         Errors.NONE

@@ -471,8 +471,9 @@ public class RequestResponseTest {
 
     @Test
     public void testProduceRequestPartitionSize() {
-        TopicPartition tp0 = new TopicPartition("test", 0);
-        TopicPartition tp1 = new TopicPartition("test", 1);
+        Uuid topicId = Uuid.fromString("e9TvBGX5JkYAB0AQorYD4w");
+        TopicIdPartition tp0 = createTopicIdPartition(topicId, 0);
+        TopicIdPartition tp1 = createTopicIdPartition(topicId, 1);
         MemoryRecords records0 = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2,
             Compression.NONE, new SimpleRecord("woot".getBytes()));
         MemoryRecords records1 = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2,
@@ -480,11 +481,8 @@ public class RequestResponseTest {
         ProduceRequest request = ProduceRequest.forMagic(RecordBatch.MAGIC_VALUE_V2,
                 new ProduceRequestData()
                         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(asList(
-                                new ProduceRequestData.TopicProduceData().setName(tp0.topic()).setPartitionData(
-                                        singletonList(new ProduceRequestData.PartitionProduceData().setIndex(tp0.partition()).setRecords(records0))),
-                                new ProduceRequestData.TopicProduceData().setName(tp1.topic()).setPartitionData(
-                                        singletonList(new ProduceRequestData.PartitionProduceData().setIndex(tp1.partition()).setRecords(records1))))
-                                .iterator()))
+                                createTopicProduceData(PRODUCE.latestVersion(), records0, tp0),
+                                createTopicProduceData(PRODUCE.latestVersion(), records1, tp1)).iterator()))
                         .setAcks((short) 1)
                         .setTimeoutMs(5000)
                         .setTransactionalId("transactionalId"))
@@ -2563,41 +2561,56 @@ public class RequestResponseTest {
                     .setAcks((short) -1)
                     .setTimeoutMs(123)
                     .setTopicData(new ProduceRequestData.TopicProduceDataCollection(singletonList(
-                            new ProduceRequestData.TopicProduceData()
-                                    .setName("topic1")
-                                    .setPartitionData(singletonList(new ProduceRequestData.PartitionProduceData()
-                                            .setIndex(1)
-                                            .setRecords(records)))).iterator()));
+                            createTopicProduceData(version, records, new TopicIdPartition(Uuid.ZERO_UUID, 1, "topic1"))
+                    ).iterator()));
             return new ProduceRequest.Builder(version, version, data).build(version);
         }
+
         byte magic = version == 2 ? RecordBatch.MAGIC_VALUE_V1 : RecordBatch.MAGIC_VALUE_V2;
         MemoryRecords records = MemoryRecords.withRecords(magic, Compression.NONE, new SimpleRecord("woot".getBytes()));
+        TopicIdPartition topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "test");
         return ProduceRequest.forMagic(magic,
                 new ProduceRequestData()
-                        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(singletonList(
-                                new ProduceRequestData.TopicProduceData()
-                                        .setName("test")
-                                        .setPartitionData(singletonList(new ProduceRequestData.PartitionProduceData()
-                                                .setIndex(0)
-                                                .setRecords(records)))).iterator()))
+                        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
+                                singletonList(createTopicProduceData(version, records, topicIdPartition)).iterator()
+                        ))
                         .setAcks((short) 1)
                         .setTimeoutMs(5000)
                         .setTransactionalId(version >= 3 ? "transactionalId" : null))
                 .build(version);
     }
 
+    private static ProduceRequestData.TopicProduceData createTopicProduceData(short version, MemoryRecords records, TopicIdPartition tp) {
+        ProduceRequestData.TopicProduceData topicProduceData = new ProduceRequestData.TopicProduceData()
+                .setPartitionData(singletonList(new ProduceRequestData.PartitionProduceData()
+                        .setIndex(tp.partition())
+                        .setRecords(records)));
+        if (version >= 12) {
+            topicProduceData.setTopicId(tp.topicId());
+        } else {
+            topicProduceData.setName(tp.topic());
+        }
+        return topicProduceData;
+    }
+
+    private static TopicIdPartition createTopicIdPartition(Uuid topicId, int partitionIndex) {
+        return new TopicIdPartition(topicId, partitionIndex, "");
+    }
+
     @SuppressWarnings("deprecation")
     private ProduceResponse createProduceResponse() {
-        Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
-        responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE,
+        Map<TopicIdPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
+        Uuid topicId = Uuid.fromString("0AQorYD4we9TvBGX5JkYAB");
+        responseData.put(new TopicIdPartition(topicId, 0, "test"), new ProduceResponse.PartitionResponse(Errors.NONE,
                 10000, RecordBatch.NO_TIMESTAMP, 100));
         return new ProduceResponse(responseData, 0);
     }
 
     @SuppressWarnings("deprecation")
     private ProduceResponse createProduceResponseWithErrorMessage() {
-        Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
-        responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE,
+        Map<TopicIdPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
+        Uuid topicId = Uuid.fromString("0AQorYD4we9TvBGX5JkYAB");
+        responseData.put(new TopicIdPartition(topicId, 0, "test"), new ProduceResponse.PartitionResponse(Errors.NONE,
                 10000, RecordBatch.NO_TIMESTAMP, 100, singletonList(new ProduceResponse.RecordError(0, "error message")),
                 "global error message"));
         return new ProduceResponse(responseData, 0);

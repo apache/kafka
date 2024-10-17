@@ -91,6 +91,10 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     // Transactional appends attempt to schedule to the request handler thread using
     // a non request handler thread. Set this to avoid error.
     KafkaRequestHandler.setBypassThreadCheck(true)
+
+    val groupMetadataTopicId = Uuid.randomUuid()
+    when(replicaManager.metadataCache.getTopicName(groupMetadataTopicId)).thenReturn(Some(Topic.GROUP_METADATA_TOPIC_NAME))
+    when(replicaManager.metadataCache.getTopicId(Topic.GROUP_METADATA_TOPIC_NAME)).thenReturn(groupMetadataTopicId)
   }
 
   @AfterEach
