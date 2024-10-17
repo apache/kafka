@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.test.api;
 
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.util.timer.SystemTimer;
 
@@ -248,10 +249,10 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             .setControllers(clusterTest.controllers() == 0 ? defaults.controllers() : clusterTest.controllers())
             .setDisksPerBroker(clusterTest.disksPerBroker() == 0 ? defaults.disksPerBroker() : clusterTest.disksPerBroker())
             .setAutoStart(clusterTest.autoStart() == AutoStart.DEFAULT ? defaults.autoStart() : clusterTest.autoStart() == AutoStart.YES)
-            .setListenerName(clusterTest.listener().trim().isEmpty() ? null : clusterTest.listener())
+            .setBrokerListenerName(ListenerName.normalised(clusterTest.brokerListener()))
             .setServerProperties(serverProperties)
             .setPerServerProperties(perServerProperties)
-            .setSecurityProtocol(clusterTest.securityProtocol())
+            .setBrokerSecurityProtocol(clusterTest.brokerSecurityProtocol())
             .setMetadataVersion(clusterTest.metadataVersion())
             .setTags(Arrays.asList(clusterTest.tags()))
             .setFeatures(features)
