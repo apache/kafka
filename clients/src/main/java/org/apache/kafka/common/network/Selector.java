@@ -237,15 +237,16 @@ public class Selector implements Selectable, AutoCloseable {
      * Generates a unique connection ID for the given socket.
      *
      * @param socket The socket for which the connection ID is to be generated.
+     * @param processorId The ID of the server processor that will handle this connection.
      * @param connectionIndex The index to be used in the connection ID to ensure uniqueness.
      * @return A string representing the unique connection ID.
      */
-    public static String generateConnectionId(Socket socket, int connectionIndex) {
+    public static String generateConnectionId(Socket socket, int processorId, int connectionIndex) {
         String localHost = socket.getLocalAddress().getHostAddress();
         int localPort = socket.getLocalPort();
         String remoteHost = socket.getInetAddress().getHostAddress();
         int remotePort = socket.getPort();
-        return localHost + ":" + localPort + "-" + remoteHost + ":" + remotePort + "-" + connectionIndex;
+        return localHost + ":" + localPort + "-" + remoteHost + ":" + remotePort + "-" + processorId + "-" + connectionIndex;
     }
 
     /**

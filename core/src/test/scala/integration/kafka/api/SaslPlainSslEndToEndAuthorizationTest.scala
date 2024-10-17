@@ -37,8 +37,8 @@ import javax.security.auth.Subject
 import javax.security.auth.callback._
 import javax.security.auth.login.AppConfigurationEntry
 import scala.collection.Seq
-import scala.compat.java8.OptionConverters
 import scala.jdk.CollectionConverters._
+import scala.jdk.javaapi.OptionConverters
 
 object SaslPlainSslEndToEndAuthorizationTest {
 
