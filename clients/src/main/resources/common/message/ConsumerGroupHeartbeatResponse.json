@@ -17,7 +17,7 @@
   "apiKey": 68,
   "type": "response",
   "name": "ConsumerGroupHeartbeatResponse",
-  "validVersions": "0-1",
+  "validVersions": "0-2",
   "flexibleVersions": "0+",
   // Supported errors:
   // - GROUP_AUTHORIZATION_FAILED (version 0+)

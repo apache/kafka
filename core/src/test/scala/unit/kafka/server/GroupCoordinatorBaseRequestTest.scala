@@ -569,7 +569,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
 
   protected def consumerGroupHeartbeat(
     groupId: String,
-    memberId: String = "",
+    memberId: String = Uuid.randomUuid().toString,
     memberEpoch: Int = 0,
     instanceId: String = null,
     rackId: String = null,
