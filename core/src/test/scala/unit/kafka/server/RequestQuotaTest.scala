@@ -491,7 +491,8 @@ class RequestQuotaTest extends BaseRequestTest {
             .setTransactionalId("test-transactional-id")
             .setProducerId(1)
             .setProducerEpoch(0)
-            .setCommitted(false)
+            .setCommitted(false),
+          true
           )
 
         case ApiKeys.WRITE_TXN_MARKERS =>

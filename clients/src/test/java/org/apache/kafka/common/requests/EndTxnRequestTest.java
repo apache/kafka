@@ -34,13 +34,16 @@ public class EndTxnRequestTest {
         int producerId = 1;
         String transactionId = "txn_id";
         int throttleTimeMs = 10;
+        boolean isTransactionV2Enabled = true;
 
         EndTxnRequest.Builder builder = new EndTxnRequest.Builder(
             new EndTxnRequestData()
                 .setCommitted(true)
                 .setProducerEpoch(producerEpoch)
                 .setProducerId(producerId)
-                .setTransactionalId(transactionId));
+                .setTransactionalId(transactionId),
+            isTransactionV2Enabled
+        );
 
         for (short version : ApiKeys.END_TXN.allVersions()) {
             EndTxnRequest request = builder.build(version);
@@ -53,5 +56,62 @@ public class EndTxnRequestTest {
 
             assertEquals(throttleTimeMs, response.throttleTimeMs());
         }
+    }
+
+    @Test
+    public void testEndTxnRequestWithTransactionsV2Enabled() {
+        // Simulate transactions V2 being enabled
+        boolean isTransactionV2Enabled = true;
+        short latestVersion = ApiKeys.END_TXN.latestVersion();
+
+        EndTxnRequestData requestData = new EndTxnRequestData()
+                .setTransactionalId("txn_id")
+                .setCommitted(true)
+                .setProducerId(1L)
+                .setProducerEpoch((short) 0);
+
+        EndTxnRequest.Builder builder = new EndTxnRequest.Builder(
+                requestData,
+                false,
+                isTransactionV2Enabled
+        );
+        EndTxnRequest request = builder.build(latestVersion);
+
+        // Verify that the request is built with the latest version
+        assertEquals(latestVersion, request.version());
+
+        // Verify that producerId and producerEpoch are included
+        assertEquals(1L, request.data().producerId());
+        assertEquals((short) 0, request.data().producerEpoch());
+    }
+
+    @Test
+    public void testEndTxnRequestWithTransactionsV2Disabled() {
+        // Simulate transactions V2 being disabled
+        boolean isTransactionV2Enabled = false;
+        short latestVersion = ApiKeys.END_TXN.latestVersion();
+
+        // Use a version less than 5 when transactions V2 are disabled
+        short desiredVersion = (short) Math.min(latestVersion - 1, (short) 4);
+
+        EndTxnRequestData requestData = new EndTxnRequestData()
+                .setTransactionalId("txn_id")
+                .setCommitted(true)
+                .setProducerId(1L)
+                .setProducerEpoch((short) 0);
+
+        EndTxnRequest.Builder builder = new EndTxnRequest.Builder(
+                requestData,
+                false,
+                isTransactionV2Enabled
+        );
+        EndTxnRequest request = builder.build(latestVersion);
+
+        // Verify that the request is built with the desired version
+        assertEquals(desiredVersion, request.version());
+
+        // Verify that producerId and producerEpoch are included
+        assertEquals(1L, request.data().producerId());
+        assertEquals((short) 0, request.data().producerEpoch());
     }
 }

@@ -27,7 +27,7 @@
   // Version 4 adds support for new error code TRANSACTION_ABORTABLE (KIP-890).
   //
   // Version 5 enables bumping epoch on every transaction (KIP-890 Part 2)
-  "latestVersionUnstable": true,
+  "latestVersionUnstable": false,
   "validVersions": "0-5",
   "flexibleVersions": "3+",
   "fields": [
