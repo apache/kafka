@@ -71,6 +71,8 @@ public class Values {
     static final String ISO_8601_DATE_FORMAT_PATTERN = "yyyy-MM-dd";
     static final String ISO_8601_TIME_FORMAT_PATTERN = "HH:mm:ss.SSS'Z'";
     static final String ISO_8601_TIMESTAMP_FORMAT_PATTERN = ISO_8601_DATE_FORMAT_PATTERN + "'T'" + ISO_8601_TIME_FORMAT_PATTERN;
+    private static BigDecimal TOO_BIG = new BigDecimal("1e1000000");
+    private static BigDecimal TOO_SMALL = new BigDecimal("1e-1000000");
 
     private static final Pattern TWO_BACKSLASHES = Pattern.compile("\\\\");
 
@@ -1041,6 +1043,10 @@ public class Values {
         }
 
         private static SchemaAndValue parseAsExactDecimal(BigDecimal decimal) {
+            BigDecimal abs = decimal.abs();
+            if (abs.compareTo(TOO_BIG) > 0 || (abs.compareTo(TOO_SMALL) < 0 && BigDecimal.ZERO.compareTo(abs) != 0)) {
+                throw new NumberFormatException("outside efficient parsing range");
+            }
             BigDecimal ceil = decimal.setScale(0, RoundingMode.CEILING);
             BigDecimal floor = decimal.setScale(0, RoundingMode.FLOOR);
             if (ceil.equals(floor)) {
