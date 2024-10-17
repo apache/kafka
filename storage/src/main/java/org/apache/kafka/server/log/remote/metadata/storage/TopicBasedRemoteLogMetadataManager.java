@@ -448,6 +448,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                     log.info("Initialized topic-based RLMM resources successfully");
                 } catch (Exception e) {
                     log.error("Encountered error while initializing producer/consumer", e);
+                    initializationFailed = true;
                     return;
                 } finally {
                     lock.writeLock().unlock();
@@ -568,23 +569,18 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         // Close all the resources.
         log.info("Closing topic-based RLMM resources");
         if (closing.compareAndSet(false, true)) {
-            lock.writeLock().lock();
-            try {
-                if (initializationThread != null) {
-                    try {
-                        initializationThread.join();
-                    } catch (InterruptedException e) {
-                        log.error("Initialization thread was interrupted while waiting to join on close.", e);
-                    }
+            if (initializationThread != null) {
+                try {
+                    initializationThread.join();
+                } catch (InterruptedException e) {
+                    log.error("Initialization thread was interrupted while waiting to join on close.", e);
                 }
-
-                Utils.closeQuietly(producerManager, "ProducerTask");
-                Utils.closeQuietly(consumerManager, "RLMMConsumerManager");
-                Utils.closeQuietly(remotePartitionMetadataStore, "RemotePartitionMetadataStore");
-            } finally {
-                lock.writeLock().unlock();
-                log.info("Closed topic-based RLMM resources");
             }
+
+            Utils.closeQuietly(producerManager, "ProducerTask");
+            Utils.closeQuietly(consumerManager, "RLMMConsumerManager");
+            Utils.closeQuietly(remotePartitionMetadataStore, "RemotePartitionMetadataStore");
+            log.info("Closed topic-based RLMM resources");
         }
     }
 }
