@@ -177,18 +177,6 @@ public class ConnectorsResource {
     }
 
     @GET
-    @Path("/{connector}/tasks-config")
-    @Operation(deprecated = true, summary = "Get the configuration of all tasks for the specified connector")
-    public Map<ConnectorTaskId, Map<String, String>> getTasksConfig(
-            final @PathParam("connector") String connector) throws Throwable {
-        log.warn("The 'GET /connectors/{connector}/tasks-config' endpoint is deprecated and will be removed in the next major release. "
-            + "Please use the 'GET /connectors/{connector}/tasks' endpoint instead.");
-        FutureCallback<Map<ConnectorTaskId, Map<String, String>>> cb = new FutureCallback<>();
-        herder.tasksConfig(connector, cb);
-        return requestHandler.completeRequest(cb);
-    }
-
-    @GET
     @Path("/{connector}/status")
     @Operation(summary = "Get the status for the specified connector")
     public ConnectorStateInfo getConnectorStatus(final @PathParam("connector") String connector) {
