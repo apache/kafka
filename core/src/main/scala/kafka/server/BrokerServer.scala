@@ -261,10 +261,11 @@ class BrokerServer(
         Some(clientMetricsManager)
       )
 
+      val connectionDisconnectListeners = Seq(clientMetricsManager.connectionDisconnectListener())
       // Create and start the socket server acceptor threads so that the bound port is known.
       // Delay starting processors until the end of the initialization sequence to ensure
       // that credentials have been loaded before processing authentications.
-      socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
+      socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager, connectionDisconnectListeners)
 
       clientQuotaMetadataManager = new ClientQuotaMetadataManager(quotaManagers, socketServer.connectionQuotas)
 
@@ -432,9 +433,7 @@ class BrokerServer(
         config.shareGroupConfig.shareGroupRecordLockDurationMs,
         config.shareGroupConfig.shareGroupDeliveryCountLimit,
         config.shareGroupConfig.shareGroupPartitionMaxRecordLocks,
-        config.shareGroupConfig.shareFetchPurgatoryPurgeIntervalRequests,
         persister,
-        defaultActionQueue,
         groupConfigManager,
         new Metrics()
       )

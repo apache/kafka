@@ -36,13 +36,11 @@ public final class Checksums {
 
     static {
         MethodHandle byteBufferUpdate = null;
-        if (Java.IS_JAVA9_COMPATIBLE) {
-            try {
-                byteBufferUpdate = MethodHandles.publicLookup().findVirtual(Checksum.class, "update",
+        try {
+            byteBufferUpdate = MethodHandles.publicLookup().findVirtual(Checksum.class, "update",
                     MethodType.methodType(void.class, ByteBuffer.class));
-            } catch (Throwable t) {
-                handleUpdateThrowable(t);
-            }
+        } catch (Throwable t) {
+            handleUpdateThrowable(t);
         }
         BYTE_BUFFER_UPDATE = byteBufferUpdate;
     }

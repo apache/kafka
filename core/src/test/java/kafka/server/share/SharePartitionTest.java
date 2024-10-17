@@ -17,7 +17,6 @@
 package kafka.server.share;
 
 import kafka.cluster.Partition;
-import kafka.server.DelayedOperationPurgatory;
 import kafka.server.ReplicaManager;
 import kafka.server.share.SharePartition.InFlightState;
 import kafka.server.share.SharePartition.RecordState;
@@ -4965,7 +4964,7 @@ public class SharePartitionTest {
         private int maxDeliveryCount = MAX_DELIVERY_COUNT;
         private int maxInflightMessages = MAX_IN_FLIGHT_MESSAGES;
         private Persister persister = NoOpShareStatePersister.getInstance();
-        private final DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = Mockito.mock(DelayedOperationPurgatory.class);
+        private final ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
         private GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
 
         private SharePartitionBuilder withMaxInflightMessages(int maxInflightMessages) {
@@ -4998,8 +4997,8 @@ public class SharePartitionTest {
         }
 
         public SharePartition build() {
-            return new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 0, maxInflightMessages, maxDeliveryCount, defaultAcquisitionLockTimeoutMs,
-                mockTimer, MOCK_TIME, persister, delayedShareFetchPurgatory, groupConfigManager);
+            return new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 0, maxInflightMessages, maxDeliveryCount,
+                    defaultAcquisitionLockTimeoutMs, mockTimer, MOCK_TIME, persister, replicaManager, groupConfigManager);
         }
     }
 }

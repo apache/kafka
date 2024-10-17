@@ -16,7 +16,7 @@
  */
 package kafka.server.share;
 
-import kafka.server.DelayedOperationPurgatory;
+import kafka.server.ReplicaManager;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
@@ -277,9 +277,10 @@ public class SharePartition {
     private SharePartitionState partitionState;
 
     /**
-     * The delayed share fetch purgatory is used to store the share fetch requests that could not be processed immediately.
+     * The replica manager is used to check to see if any delayed share fetch request can be completed because of data
+     * availability due to acquisition lock timeout.
      */
-    private final DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory;
+    private final ReplicaManager replicaManager;
 
     SharePartition(
         String groupId,
@@ -291,7 +292,7 @@ public class SharePartition {
         Timer timer,
         Time time,
         Persister persister,
-        DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory,
+        ReplicaManager replicaManager,
         GroupConfigManager groupConfigManager
     ) {
         this.groupId = groupId;
@@ -308,7 +309,7 @@ public class SharePartition {
         this.time = time;
         this.persister = persister;
         this.partitionState = SharePartitionState.EMPTY;
-        this.delayedShareFetchPurgatory = delayedShareFetchPurgatory;
+        this.replicaManager = replicaManager;
         this.groupConfigManager = groupConfigManager;
     }
 
@@ -1818,7 +1819,7 @@ public class SharePartition {
                     // If we have an acquisition lock timeout for a share-partition, then we should check if
                     // there is a pending share fetch request for the share-partition and complete it.
                     DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId(), topicIdPartition.partition());
-                    delayedShareFetchPurgatory.checkAndComplete(delayedShareFetchKey);
+                    replicaManager.completeDelayedShareFetchRequest(delayedShareFetchKey);
                 });
             }
         } finally {
