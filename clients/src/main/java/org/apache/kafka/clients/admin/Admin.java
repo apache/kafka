@@ -1844,7 +1844,7 @@ public interface Admin extends AutoCloseable {
      * Metrics not matching these types are silently ignored.
      * Executing this method for a previously registered metric is a benign operation and results in updating that metrics entry.
      *
-     * @param metric The application metric to register
+     * @param metric, the application metric to register
      */
     void registerMetricForSubscription(KafkaMetric metric);
 
