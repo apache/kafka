@@ -16,10 +16,10 @@
  */
 package kafka.server.share;
 
+import kafka.cluster.Partition;
 import kafka.server.DelayedActionQueue;
 import kafka.server.DelayedOperationPurgatory;
 import kafka.server.LogReadResult;
-import kafka.cluster.Partition;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicaQuota;
 

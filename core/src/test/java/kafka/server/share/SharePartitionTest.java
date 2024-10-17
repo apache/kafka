@@ -16,8 +16,8 @@
  */
 package kafka.server.share;
 
-import kafka.server.DelayedOperationPurgatory;
 import kafka.cluster.Partition;
+import kafka.server.DelayedOperationPurgatory;
 import kafka.server.ReplicaManager;
 import kafka.server.share.SharePartition.InFlightState;
 import kafka.server.share.SharePartition.RecordState;
@@ -28,7 +28,6 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.FencedStateEpochException;
-import org.apache.kafka.common.errors.FencedLeaderEpochException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
@@ -4999,8 +4998,8 @@ public class SharePartitionTest {
         }
 
         public SharePartition build() {
-            return new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, maxInflightMessages, maxDeliveryCount, defaultAcquisitionLockTimeoutMs,
-                mockTimer, MOCK_TIME, persister, delayedShareFetchPurgatory, groupConfigManager, null);
+            return new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 0, maxInflightMessages, maxDeliveryCount, defaultAcquisitionLockTimeoutMs,
+                mockTimer, MOCK_TIME, persister, delayedShareFetchPurgatory, groupConfigManager);
         }
     }
 }

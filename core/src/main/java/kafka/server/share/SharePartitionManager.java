@@ -16,6 +16,7 @@
  */
 package kafka.server.share;
 
+import kafka.cluster.Partition;
 import kafka.server.ActionQueue;
 import kafka.server.DelayedOperationPurgatory;
 import kafka.server.ReplicaManager;
@@ -76,6 +77,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import scala.jdk.javaapi.CollectionConverters;
 import scala.runtime.BoxedUnit;
+import scala.util.Either;
 
 /**
  * The SharePartitionManager is responsible for managing the SharePartitions and ShareSessions.
@@ -304,11 +306,13 @@ public class SharePartitionManager implements AutoCloseable {
         this.shareGroupMetrics.shareAcknowledgement();
         Map<TopicIdPartition, CompletableFuture<Errors>> futures = new HashMap<>();
         acknowledgeTopics.forEach((topicIdPartition, acknowledgePartitionBatches) -> {
-            SharePartition sharePartition = partitionCacheMap.get(sharePartitionKey(groupId, topicIdPartition));
+            SharePartitionKey sharePartitionKey = sharePartitionKey(groupId, topicIdPartition);
+            SharePartition sharePartition = partitionCacheMap.get(sharePartitionKey);
             if (sharePartition != null) {
                 CompletableFuture<Errors> future = new CompletableFuture<>();
                 sharePartition.acknowledge(memberId, acknowledgePartitionBatches).whenComplete((result, throwable) -> {
                     if (throwable != null) {
+                        handleSharePartitionException(sharePartitionKey, throwable);
                         future.complete(Errors.forException(throwable));
                         return;
                     }
@@ -381,7 +385,8 @@ public class SharePartitionManager implements AutoCloseable {
 
         Map<TopicIdPartition, CompletableFuture<Errors>> futuresMap = new HashMap<>();
         topicIdPartitions.forEach(topicIdPartition -> {
-            SharePartition sharePartition = partitionCacheMap.get(sharePartitionKey(groupId, topicIdPartition));
+            SharePartitionKey sharePartitionKey = sharePartitionKey(groupId, topicIdPartition);
+            SharePartition sharePartition = partitionCacheMap.get(sharePartitionKey);
             if (sharePartition == null) {
                 log.error("No share partition found for groupId {} topicPartition {} while releasing acquired topic partitions", groupId, topicIdPartition);
                 futuresMap.put(topicIdPartition, CompletableFuture.completedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION));
@@ -389,6 +394,7 @@ public class SharePartitionManager implements AutoCloseable {
                 CompletableFuture<Errors> future = new CompletableFuture<>();
                 sharePartition.releaseAcquiredRecords(memberId).whenComplete((result, throwable) -> {
                     if (throwable != null) {
+                        handleSharePartitionException(sharePartitionKey, throwable);
                         future.complete(Errors.forException(throwable));
                         return;
                     }
@@ -667,9 +673,11 @@ public class SharePartitionManager implements AutoCloseable {
         return partitionCacheMap.computeIfAbsent(sharePartitionKey,
                 k -> {
                     long start = time.hiResClockMs();
+                    int leaderEpoch = getLeaderEpoch(sharePartitionKey.topicIdPartition().topicPartition());
                     SharePartition partition = new SharePartition(
                             sharePartitionKey.groupId(),
                             sharePartitionKey.topicIdPartition(),
+                            leaderEpoch,
                             maxInFlightMessages,
                             maxDeliveryCount,
                             defaultRecordLockDurationMs,
@@ -677,8 +685,7 @@ public class SharePartitionManager implements AutoCloseable {
                             time,
                             persister,
                             delayedShareFetchPurgatory,
-                            groupConfigManager,
-                            replicaManager
+                            groupConfigManager
                     );
                     this.shareGroupMetrics.partitionLoadTime(start);
                     return partition;
@@ -688,7 +695,8 @@ public class SharePartitionManager implements AutoCloseable {
     private void maybeCompleteInitializationWithException(
             SharePartitionKey sharePartitionKey,
             CompletableFuture<Map<TopicIdPartition, PartitionData>> future,
-            Throwable throwable) {
+            Throwable throwable
+    ) {
         if (throwable instanceof LeaderNotAvailableException) {
             log.debug("The share partition with key {} is not initialized yet", sharePartitionKey);
             // Do not process the fetch request for this partition as the leader is not initialized yet.
@@ -697,22 +705,43 @@ public class SharePartitionManager implements AutoCloseable {
             return;
         }
 
+        // Remove the partition from the cache as it's failed to initialize.
+        partitionCacheMap.computeIfPresent(sharePartitionKey, (k, v) -> null);
+        // The partition initialization failed, so complete the request with the exception.
+        // The server should not be in this state, so log the error on broker and surface the same
+        // to the client. The broker should not be in this state, investigate the root cause of the error.
+        log.error("Error initializing share partition with key {}", sharePartitionKey, throwable);
+        future.completeExceptionally(throwable);
+    }
+
+    private void handleSharePartitionException(
+        SharePartitionKey sharePartitionKey,
+        Throwable throwable
+    ) {
         if (throwable instanceof NotLeaderOrFollowerException || throwable instanceof FencedStateEpochException) {
             log.info("The share partition with key {} is fenced: {}", sharePartitionKey, throwable.getMessage());
             // The share partition is fenced hence remove the partition from map and let the client retry.
             // But surface the error to the client so client might take some action i.e. re-fetch
             // the metadata and retry the fetch on new leader.
-            partitionCacheMap.remove(sharePartitionKey);
-            future.completeExceptionally(throwable);
-            return;
+            partitionCacheMap.computeIfPresent(sharePartitionKey, (k, v) -> null);
+        }
+    }
+
+    // TODO: Should the return be -1 or throw an exception?
+    private int getLeaderEpoch(TopicPartition tp) {
+        Either<Errors, Partition> partitionOrError = replicaManager.getPartitionOrError(tp);
+        if (partitionOrError.isLeft()) {
+          log.error("Failed to get partition leader for topic partition: {}-{} due to error: {}",
+              tp.topic(), tp.partition(), partitionOrError.left().get());
+          return -1;
         }
 
-        // The partition initialization failed, so complete the request with the exception.
-        // The server should not be in this state, so log the error on broker and surface the same
-        // to the client. As of now this state is in-recoverable for the broker, and we should
-        // investigate the root cause of the error.
-        log.error("Error initializing share partition with key {}", sharePartitionKey, throwable);
-        future.completeExceptionally(throwable);
+        Partition partition = partitionOrError.right().get();
+        if (!partition.isLeader()) {
+          log.error("The broker is not the leader for topic partition: {}-{}", tp.topic(), tp.partition());
+          return -1;
+        }
+        return partition.getLeaderEpoch();
     }
 
     // Visible for testing.

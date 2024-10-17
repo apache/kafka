@@ -19,15 +19,10 @@ package kafka.server.share;
 import kafka.server.DelayedOperationPurgatory;
 
 import org.apache.kafka.common.KafkaException;
-import kafka.cluster.Partition;
-import kafka.server.ReplicaManager;
-
 import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.FencedStateEpochException;
-import org.apache.kafka.common.errors.FencedLeaderEpochException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
@@ -71,7 +66,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-import scala.util.Either;
 
 /**
  * The SharePartition is used to track the state of a partition that is shared between multiple
@@ -188,6 +182,11 @@ public class SharePartition {
     private final TopicIdPartition topicIdPartition;
 
     /**
+     * The leader epoch is used to track the partition epoch.
+     */
+    private final int leaderEpoch;
+
+    /**
      * The in-flight record is used to track the state of a record that has been fetched from the
      * leader. The state of the record is used to determine if the record should be re-fetched or if it
      * can be acknowledged or archived. Once share partition start offset is moved then the in-flight
@@ -256,11 +255,6 @@ public class SharePartition {
     private final Persister persister;
 
     /**
-     * The replica manager is used to perform partition operations.
-     */
-    private final ReplicaManager replicaManager;
-
-    /**
      * The share partition start offset specifies the partition start offset from which the records
      * are cached in the cachedState of the sharePartition.
      */
@@ -283,11 +277,6 @@ public class SharePartition {
     private SharePartitionState partitionState;
 
     /**
-     * The leader epoch is used to track the partition epoch.
-     */
-    private int leaderEpoch;
-
-    /**
      * The delayed share fetch purgatory is used to store the share fetch requests that could not be processed immediately.
      */
     private final DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory;
@@ -295,6 +284,7 @@ public class SharePartition {
     SharePartition(
         String groupId,
         TopicIdPartition topicIdPartition,
+        int leaderEpoch,
         int maxInFlightMessages,
         int maxDeliveryCount,
         int defaultRecordLockDurationMs,
@@ -302,11 +292,11 @@ public class SharePartition {
         Time time,
         Persister persister,
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory,
-        GroupConfigManager groupConfigManager,
-        ReplicaManager replicaManager
+        GroupConfigManager groupConfigManager
     ) {
         this.groupId = groupId;
         this.topicIdPartition = topicIdPartition;
+        this.leaderEpoch = leaderEpoch;
         this.maxInFlightMessages = maxInFlightMessages;
         this.maxDeliveryCount = maxDeliveryCount;
         this.cachedState = new ConcurrentSkipListMap<>();
@@ -320,7 +310,6 @@ public class SharePartition {
         this.partitionState = SharePartitionState.EMPTY;
         this.delayedShareFetchPurgatory = delayedShareFetchPurgatory;
         this.groupConfigManager = groupConfigManager;
-        this.replicaManager = replicaManager;
     }
 
     /**
@@ -353,8 +342,6 @@ public class SharePartition {
 
             // Update state to initializing to avoid any concurrent requests to be processed.
             partitionState = SharePartitionState.INITIALIZING;
-            // Fetch leader epoch for the topic partition.
-            leaderEpoch = getLeaderEpoch(topicIdPartition.topicPartition());
             // Initialize the share partition by reading the state from the persister.
             persister.readState(new ReadShareGroupStateParameters.Builder()
                 .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionIdLeaderEpochData>()
@@ -1075,22 +1062,6 @@ public class SharePartition {
             default:
                 throw new IllegalStateException("Unknown share partition state: " + currentState);
         }
-    }
-
-    private int getLeaderEpoch(TopicPartition tp) {
-        Either<Errors, Partition> partitionOrError = replicaManager.getPartitionOrError(tp);
-        if (partitionOrError.isLeft()) {
-            log.error("Failed to get partition leader for topic partition: {}-{} due to error: {}",
-                tp.topic(), tp.partition(), partitionOrError.left().get());
-            return -1;
-        }
-
-        Partition partition = partitionOrError.right().get();
-        if (!partition.isLeader()) {
-            log.error("The broker is not the leader for topic partition: {}-{}", tp.topic(), tp.partition());
-            return -1;
-        }
-        return partition.getLeaderEpoch();
     }
 
     private AcquiredRecords acquireNewBatchRecords(
