@@ -287,11 +287,12 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                         .setNumControllerNodes(clusterConfig.numControllers())
                         .setBrokerListenerName(listenerName)
                         .setBrokerSecurityProtocol(clusterConfig.brokerSecurityProtocol())
+                        .setControllerListenerName(clusterConfig.controllerListenerName())
+                        .setControllerSecurityProtocol(clusterConfig.controllerSecurityProtocol())
                         .build();
                 KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(nodes);
                 // Copy properties into the TestKit builder
                 clusterConfig.serverProperties().forEach(builder::setConfigProp);
-                // KAFKA-12512 need to pass security protocol and listener name here
                 this.clusterTestKit = builder.build();
                 this.clusterTestKit.format();
             }
