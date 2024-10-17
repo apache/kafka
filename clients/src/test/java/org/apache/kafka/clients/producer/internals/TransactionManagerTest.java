@@ -2999,7 +2999,8 @@ public class TransactionManagerTest {
         runUntil(responseFuture::isDone);
 
         final short bumpedEpoch = epoch + 1;
-        int version = transactionV2Enabled ? 5 : 4;
+        // When Transaction V2 is enabled, the End Txn API version returned should be 5+.
+        int version = EndTxnResponseData.HIGHEST_SUPPORTED_VERSION;
 
         // Trigger an EndTxn request by completing the transaction.
         TransactionalRequestResult abortResult = transactionManager.beginAbort();
@@ -3030,7 +3031,8 @@ public class TransactionManagerTest {
         runUntil(responseFuture::isDone);
 
         final long newProducerId = producerId + 1;
-        int version = transactionV2Enabled ? 5 : 4;
+        // When Transaction V2 is enabled, the End Txn API version returned should be 5+.
+        int version = EndTxnResponseData.HIGHEST_SUPPORTED_VERSION;
 
         // Trigger an EndTxn request by completing the transaction.
         TransactionalRequestResult commitResult = transactionManager.beginCommit();
