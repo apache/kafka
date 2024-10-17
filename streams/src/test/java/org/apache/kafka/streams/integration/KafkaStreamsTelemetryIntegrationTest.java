@@ -167,7 +167,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
             final ClientInstanceIds clientInstanceIds = streams.clientInstanceIds(Duration.ofSeconds(60));
             final Uuid adminInstanceId = clientInstanceIds.adminInstanceId();
             final Uuid mainConsumerInstanceId = clientInstanceIds.consumerInstanceIds().entrySet().stream()
-                    .filter(entry -> entry.getKey().endsWith("1-consumer"))
+                    .filter(entry -> !entry.getKey().contains("restore"))
                     .map(Map.Entry::getValue)
                     .findFirst().get();
             assertNotNull(adminInstanceId);
@@ -178,13 +178,11 @@ public class KafkaStreamsTelemetryIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("singleAndMultiTaskParameters")
-    @DisplayName("Streams metrics should get passed to Consumer")
+    @DisplayName("Streams metrics should get passed to Admin and Consumer")
     public void shouldPassMetrics(final String topologyType, final boolean stateUpdaterEnabled) throws InterruptedException {
         final Properties properties = props(stateUpdaterEnabled);
         final Topology topology = topologyType.equals("simple") ? simpleTopology() : complexTopology();
-        /*
-           This test verifies that all Kafka Streams metrics with a thread-id tag get passed to the consumer
-         */
+       
         try (final KafkaStreams streams = new KafkaStreams(topology, properties)) {
             streams.start();
             waitForCondition(() -> KafkaStreams.State.RUNNING == streams.state(),
@@ -223,10 +221,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
         final Properties properties2 = props(stateUpdaterEnabled);
         properties2.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks2");
         properties2.put(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks2");
-
-        /*
-          This test ensures metrics are registered and removed correctly with Kafka Steams dynamic membership changes
-         */
+        
 
         final Topology topology = complexTopology();
         try (final KafkaStreams streamsOne = new KafkaStreams(topology, properties1)) {

@@ -88,6 +88,9 @@ import static org.apache.kafka.streams.processor.internals.ClientUtils.restoreCo
 
 public class StreamThread extends Thread implements ProcessingThread {
 
+    private static final String THREAD_ID_SUBSTRING = "-StreamThread-";
+    private static final String STATE_UPDATER_ID_SUBSTRING = "-StateUpdater-";
+
     /**
      * Stream thread states are the possible states that a stream thread can be in.
      * A thread must only be in one state at a time
@@ -368,7 +371,8 @@ public class StreamThread extends Thread implements ProcessingThread {
                                       final int threadIdx,
                                       final Runnable shutdownErrorHook,
                                       final BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler) {
-        final String threadId = clientId + "-StreamThread-" + threadIdx;
+
+        final String threadId = clientId + THREAD_ID_SUBSTRING + threadIdx;
 
         final String logPrefix = String.format("stream-thread [%s] ", threadId);
         final LogContext logContext = new LogContext(logPrefix);
@@ -474,7 +478,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         taskManager.setMainConsumer(mainConsumer);
         referenceContainer.mainConsumer = mainConsumer;
 
-        final String stateUpdaterId = threadId.replace("-StreamThread-", "-StateUpdater-");
+        final String stateUpdaterId = threadId.replace(THREAD_ID_SUBSTRING, STATE_UPDATER_ID_SUBSTRING);
         final StreamsThreadMetricsDelegatingReporter reporter = new StreamsThreadMetricsDelegatingReporter(mainConsumer, threadId, stateUpdaterId);
         streamsMetrics.metricsRegistry().addReporter(reporter);
 
@@ -538,7 +542,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                                                                 final String clientId,
                                                                 final int threadIdx) {
         if (stateUpdaterEnabled) {
-            final String name = clientId + "-StateUpdater-" + threadIdx;
+            final String name = clientId + STATE_UPDATER_ID_SUBSTRING + threadIdx;
             final StateUpdater stateUpdater = new DefaultStateUpdater(
                 name,
                 streamsMetrics.metricsRegistry(),

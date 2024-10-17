@@ -383,7 +383,7 @@ public class StreamsConfigTest {
     @Test
     public void shouldOverrideAdminDefaultAdminClientEnableTelemetry() {
         final Map<String, Object> returnedProps = streamsConfig.getAdminConfigs(clientId);
-        assertThat(returnedProps.get(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG), equalTo("true"));
+        assertTrue((boolean) returnedProps.get(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG));
     }
 
     @Test
