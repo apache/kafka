@@ -386,21 +386,13 @@ public class ConsoleProducer {
         Properties producerProps() throws IOException {
             Properties props = new Properties();
 
-            if (options.has(commandConfigOpt)) {
-                props.putAll(loadProps(options.valueOf(commandConfigOpt)));
-            }
-
-            props.putAll(parseKeyValueArgs(options.valuesOf(commandPropertyOpt)));
+            // default properties
             props.put(BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOpt));
             props.put(COMPRESSION_TYPE_CONFIG, compressionCodec());
-
-            if (props.getProperty(CLIENT_ID_CONFIG) == null) {
-                props.put(CLIENT_ID_CONFIG, "console-producer");
-            }
-
             props.put(KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
             props.put(VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
 
+            // optional properties
             CommandLineUtils.maybeMergeOptions(props, LINGER_MS_CONFIG, options, sendTimeoutOpt);
             CommandLineUtils.maybeMergeOptions(props, ACKS_CONFIG, options, requestRequiredAcksOpt);
             CommandLineUtils.maybeMergeOptions(props, REQUEST_TIMEOUT_MS_CONFIG, options, requestTimeoutMsOpt);
@@ -412,6 +404,17 @@ public class ConsoleProducer {
             CommandLineUtils.maybeMergeOptions(props, BATCH_SIZE_CONFIG, options, maxPartitionMemoryBytesOpt);
             CommandLineUtils.maybeMergeOptions(props, METADATA_MAX_AGE_CONFIG, options, metadataExpiryMsOpt);
             CommandLineUtils.maybeMergeOptions(props, MAX_BLOCK_MS_CONFIG, options, maxBlockMsOpt);
+
+            // command line properties
+            if (options.has(commandConfigOpt)) {
+                props.putAll(loadProps(options.valueOf(commandConfigOpt)));
+            }
+            props.putAll(parseKeyValueArgs(options.valuesOf(commandPropertyOpt)));
+
+            // required properties
+            if (props.getProperty(CLIENT_ID_CONFIG) == null) {
+                props.put(CLIENT_ID_CONFIG, "console-producer");
+            }
 
             return props;
         }
