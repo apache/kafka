@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
+import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.clients.consumer.internals.OffsetAndTimestampInternal;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManager;
@@ -35,6 +36,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -178,22 +180,62 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
     private void process(final AsyncCommitEvent event) {
         if (!requestManagers.commitRequestManager.isPresent()) {
+            event.future().complete(null);
             return;
         }
 
-        CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        CompletableFuture<Void> future = manager.commitAsync(event.offsets());
-        future.whenComplete(complete(event.future()));
+        Map<TopicPartition, OffsetAndMetadata> offsets = event.offsets().isPresent() ?
+                event.offsets().get() : subscriptions.allConsumed();
+        if (offsets.isEmpty()) {
+            event.future().complete(Collections.emptyMap());
+            return;
+        }
+
+        try {
+            ConsumerUtils.maybeUpdateLastSeenEpochIfNewer(metadata, offsets);
+            CommitRequestManager manager = requestManagers.commitRequestManager.get();
+            CompletableFuture<Void> future = manager.commitAsync(offsets);
+            future.whenComplete((r, e) -> {
+                if (e != null) {
+                    log.error("Committing offsets failed", e);
+                    event.future().completeExceptionally(e);
+                } else {
+                    event.future().complete(offsets);
+                }
+            });
+        } catch (Exception e) {
+            event.future().completeExceptionally(e);
+        }
     }
 
     private void process(final SyncCommitEvent event) {
         if (!requestManagers.commitRequestManager.isPresent()) {
+            event.future().complete(null);
             return;
         }
 
-        CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        CompletableFuture<Void> future = manager.commitSync(event.offsets(), event.deadlineMs());
-        future.whenComplete(complete(event.future()));
+        Map<TopicPartition, OffsetAndMetadata> offsets = event.offsets().isPresent() ?
+                event.offsets().get() : subscriptions.allConsumed();
+        if (offsets.isEmpty()) {
+            event.future().complete(Collections.emptyMap());
+            return;
+        }
+
+        try {
+            ConsumerUtils.maybeUpdateLastSeenEpochIfNewer(metadata, offsets);
+            CommitRequestManager manager = requestManagers.commitRequestManager.get();
+            CompletableFuture<Void> future = manager.commitSync(offsets, event.deadlineMs());
+            future.whenComplete((r, e) -> {
+                if (e != null) {
+                    log.error("Committing offsets failed", e);
+                    event.future().completeExceptionally(e);
+                } else {
+                    event.future().complete(offsets);
+                }
+            });
+        } catch (Exception e) {
+            event.future().completeExceptionally(e);
+        }
     }
 
     private void process(final FetchCommittedOffsetsEvent event) {
