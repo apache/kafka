@@ -80,6 +80,7 @@ public class ClientTelemetryTest {
     public void testClientInstanceId(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
         Map<String, Object> configs = new HashMap<>();
         configs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
+        configs.put(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, true);
         try (Admin admin = Admin.create(configs)) {
             String testTopicName = "test_topic";
             admin.createTopics(Collections.singletonList(new NewTopic(testTopicName, 1, (short) 1)));

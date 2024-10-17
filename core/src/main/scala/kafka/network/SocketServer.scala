@@ -48,6 +48,7 @@ import org.apache.kafka.network.{ConnectionQuotaEntity, ConnectionThrottledExcep
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.config.QuotaConfigs
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.network.ConnectionDisconnectListener
 import org.apache.kafka.server.quota.QuotaUtils
 import org.apache.kafka.server.util.FutureUtils
 import org.slf4j.event.Level
@@ -79,7 +80,8 @@ class SocketServer(val config: KafkaConfig,
                    val metrics: Metrics,
                    val time: Time,
                    val credentialProvider: CredentialProvider,
-                   val apiVersionManager: ApiVersionManager)
+                   val apiVersionManager: ApiVersionManager,
+                   val connectionDisconnectListeners: Seq[ConnectionDisconnectListener] = Seq.empty)
   extends Logging with BrokerReconfigurable {
 
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
@@ -849,7 +851,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
     val listenerProcessors = new ArrayBuffer[Processor]()
 
     for (_ <- 0 until toCreate) {
-      val processor = newProcessor(socketServer.nextProcessorId(), listenerName, securityProtocol)
+      val processor = newProcessor(socketServer.nextProcessorId(), listenerName, securityProtocol, socketServer.connectionDisconnectListeners)
       listenerProcessors += processor
       requestChannel.addProcessor(processor)
 
@@ -860,7 +862,10 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
     processors ++= listenerProcessors
   }
 
-  def newProcessor(id: Int, listenerName: ListenerName, securityProtocol: SecurityProtocol): Processor = {
+  def newProcessor(id: Int,
+                   listenerName: ListenerName,
+                   securityProtocol: SecurityProtocol,
+                   connectionDisconnectListeners: Seq[ConnectionDisconnectListener]): Processor = {
     val name = s"${threadPrefix()}-kafka-network-thread-$nodeId-${endPoint.listenerName}-${endPoint.securityProtocol}-$id"
     new Processor(id,
                   time,
@@ -879,7 +884,8 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
                   Processor.ConnectionQueueSize,
                   isPrivilegedListener,
                   apiVersionManager,
-                  name)
+                  name,
+                  connectionDisconnectListeners)
   }
 }
 
@@ -918,7 +924,8 @@ private[kafka] class Processor(
   connectionQueueSize: Int,
   isPrivilegedListener: Boolean,
   apiVersionManager: ApiVersionManager,
-  threadName: String
+  threadName: String,
+  connectionDisconnectListeners: Seq[ConnectionDisconnectListener]
 ) extends Runnable with Logging {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
@@ -929,17 +936,17 @@ private[kafka] class Processor(
 
   private object ConnectionId {
     def fromString(s: String): Option[ConnectionId] = s.split("-") match {
-      case Array(local, remote, index) => BrokerEndPoint.parseHostPort(local).flatMap { case (localHost, localPort) =>
+      case Array(local, remote, processorId, index) => BrokerEndPoint.parseHostPort(local).flatMap { case (localHost, localPort) =>
         BrokerEndPoint.parseHostPort(remote).map { case (remoteHost, remotePort) =>
-          ConnectionId(localHost, localPort, remoteHost, remotePort, Integer.parseInt(index))
+          ConnectionId(localHost, localPort, remoteHost, remotePort, Integer.parseInt(processorId), Integer.parseInt(index))
         }
       }
       case _ => None
     }
   }
 
-  private[network] case class ConnectionId(localHost: String, localPort: Int, remoteHost: String, remotePort: Int, index: Int) {
-    override def toString: String = s"$localHost:$localPort-$remoteHost:$remotePort-$index"
+  private[network] case class ConnectionId(localHost: String, localPort: Int, remoteHost: String, remotePort: Int, processorId: Int, index: Int) {
+    override def toString: String = s"$localHost:$localPort-$remoteHost:$remotePort-$processorId-$index"
   }
 
   private val newConnections = new ArrayBlockingQueue[SocketChannel](connectionQueueSize)
@@ -1220,6 +1227,8 @@ private[kafka] class Processor(
         inflightResponses.remove(connectionId).foreach(updateRequestMetrics)
         // the channel has been closed by the selector but the quotas still need to be updated
         connectionQuotas.dec(listenerName, InetAddress.getByName(remoteHost))
+        // Call listeners to notify for closed connection.
+        connectionDisconnectListeners.foreach(listener => CoreUtils.swallow(() -> listener.onDisconnect(connectionId), this, Level.ERROR))
       } catch {
         case e: Throwable => processException(s"Exception while processing disconnection of $connectionId", e)
       }
@@ -1248,6 +1257,8 @@ private[kafka] class Processor(
       if (address != null)
         connectionQuotas.dec(listenerName, address)
       selector.close(connectionId)
+      // Call listeners to notify for closed connection.
+      connectionDisconnectListeners.foreach(listener => CoreUtils.swallow(() -> listener.onDisconnect(connectionId), this, Level.ERROR))
 
       inflightResponses.remove(connectionId).foreach(response => updateRequestMetrics(response))
     }
@@ -1315,7 +1326,7 @@ private[kafka] class Processor(
 
   // 'protected` to allow override for testing
   protected[network] def connectionId(socket: Socket): String = {
-    val connId = KSelector.generateConnectionId(socket, nextConnectionIndex)
+    val connId = KSelector.generateConnectionId(socket, id, nextConnectionIndex)
     nextConnectionIndex = if (nextConnectionIndex == Int.MaxValue) 0 else nextConnectionIndex + 1
     connId
   }
