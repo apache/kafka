@@ -354,6 +354,25 @@ public class MockLogTest {
     }
 
     @Test
+    public void testReadingFromMiddleOfBatch() {
+        appendBatch(5, 1);
+        appendBatch(5, 1);
+
+        LogFetchInfo batchAlignedInfo = log.read(5, Isolation.UNCOMMITTED);
+        assertEquals(5L, batchAlignedInfo.startOffsetMetadata.offset());
+        assertTrue(batchAlignedInfo.startOffsetMetadata.metadata().isPresent());
+
+        // Check handling of a fetch from the middle of a batch
+        // The offset field of the returned LogFetchInfo object should be the parameter offset
+        // to match KafkaMetadataLog's behavior, but the metadata field will still be for the
+        // associated batch's base offset.
+        long offset = 7L;
+        LogFetchInfo readFromMiddleInfo = log.read(offset, Isolation.UNCOMMITTED);
+        assertEquals(offset, readFromMiddleInfo.startOffsetMetadata.offset());
+        assertEquals(batchAlignedInfo.startOffsetMetadata.metadata(), readFromMiddleInfo.startOffsetMetadata.metadata());
+    }
+
+    @Test
     public void testEndOffsetForEpoch() {
         appendBatch(5, 1);
         appendBatch(10, 1);
