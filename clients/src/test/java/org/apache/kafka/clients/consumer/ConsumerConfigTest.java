@@ -237,4 +237,22 @@ public class ConsumerConfigTest {
             assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
         }
     }
+
+    @Test
+    public void testUnsupportedConfigsWithConsumerGroupProtocol() {
+        testUnsupportedConfigsWithConsumerGroupProtocol(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "RoundRobinAssignor");
+        testUnsupportedConfigsWithConsumerGroupProtocol(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 1000);
+        testUnsupportedConfigsWithConsumerGroupProtocol(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 30000);
+    }
+
+    private void testUnsupportedConfigsWithConsumerGroupProtocol(String configName, Object value) {
+        final Map<String, Object> configs = new HashMap<>();
+        configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
+        configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
+        configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name());
+        configs.put(configName, value);
+        ConfigException exception = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
+        assertTrue(exception.getMessage().contains(configName + 
+                " cannot be set when " + ConsumerConfig.GROUP_PROTOCOL_CONFIG + "=" + GroupProtocol.CONSUMER.name()));
+    }
 }
