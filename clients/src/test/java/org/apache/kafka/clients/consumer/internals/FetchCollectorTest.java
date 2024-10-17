@@ -27,6 +27,8 @@ import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.ControlRecordType;
+import org.apache.kafka.common.record.EndTransactionMarker;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Records;
@@ -48,6 +50,7 @@ import org.mockito.quality.Strictness;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -647,6 +650,50 @@ public class FetchCollectorTest {
         verify(subscriptions).requestOffsetResetIfPartitionAssigned(topicPartition0);
         verify(fetchBuffer).setNextInLineFetch(null);
     }
+    private List<FetchResponseData.AbortedTransaction> newAbortedTransactions() {
+        FetchResponseData.AbortedTransaction abortedTransaction = new FetchResponseData.AbortedTransaction();
+        abortedTransaction.setFirstOffset(0);
+        abortedTransaction.setProducerId(100L);
+        return Collections.singletonList(abortedTransaction);
+    }
+
+    @Test
+    public void testReadCommittedWithAbortedTransaction() {
+        buildDependencies();
+        int recordCount = 20;
+        assignAndSeek(topicAPartition0);
+
+
+        // Initial CompletedFetch
+        CompletedFetch initialCompletedFetch = completedFetchBuilder
+            .recordCount(recordCount)
+            .build();
+        fetchBuffer.add(initialCompletedFetch);
+        Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
+
+        assertFalse(fetch.isEmpty());
+        assertEquals(recordCount, fetch.numRecords());
+        assertEquals(1, fetch.nextOffsets().size());
+        assertEquals(new OffsetAndMetadata(fetch.numRecords(), Optional.empty(), ""), fetch.nextOffsets().get(topicAPartition0));
+
+
+        // Subsequent CompletedFetch with abort marker
+        Records rawRecords = createTranscactionalRecords(ControlRecordType.ABORT, recordCount);
+        FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
+            .setRecords(rawRecords);
+        CompletedFetch fetchWithAbortTxnRecord = completedFetchBuilder
+            .partitionData(partitionData)
+            .fetchOffset(recordCount)
+            .build();
+        fetchBuffer.add(fetchWithAbortTxnRecord);
+        fetch = fetchCollector.collectFetch(fetchBuffer);
+
+        assertFalse(fetch.isEmpty());
+        assertEquals(0, fetch.numRecords());
+        assertEquals(1, fetch.nextOffsets().size());
+        // offset is moved forward due to the control record
+        assertEquals(new OffsetAndMetadata(recordCount + 1, Optional.of(0), ""), fetch.nextOffsets().get(topicAPartition0));
+    }
 
     private FetchCollector<String, String> createFetchCollector(final SubscriptionState subscriptions) {
         final Properties consumerProps = consumerProps();
@@ -855,6 +902,12 @@ public class FetchCollectorTest {
     }
 
     private Records createRecords(final int recordCount) {
+        try (MemoryRecordsBuilder builder = createRecordsBuilder(recordCount)) {
+            return builder.build();
+        }
+    }
+
+    private MemoryRecordsBuilder createRecordsBuilder(final int recordCount) {
         ByteBuffer allocate = ByteBuffer.allocate(1024);
 
         try (MemoryRecordsBuilder builder = MemoryRecords.builder(allocate,
@@ -864,7 +917,22 @@ public class FetchCollectorTest {
             for (int i = 0; i < recordCount; i++)
                 builder.append(0L, "key".getBytes(), ("value-" + i).getBytes());
 
-            return builder.build();
+            return builder;
+        }
+    }
+
+    private Records createTranscactionalRecords(ControlRecordType controlRecordType, int recordCount) {
+        try (MemoryRecordsBuilder builder = createRecordsBuilder(recordCount)) {
+            ByteBuffer buffer = builder.buffer();
+            MemoryRecords.writeEndTransactionalMarker(buffer,
+                recordCount,
+                time.milliseconds(),
+                0,
+                1000L,
+                (short) 0,
+                new EndTransactionMarker(controlRecordType, 0));
+            buffer.flip();
+            return MemoryRecords.readableRecords(buffer);
         }
     }
 }
