@@ -92,6 +92,9 @@ final class KafkaMetadataLog private (
     if (records.sizeInBytes == 0)
       throw new IllegalArgumentException("Attempt to append an empty record set")
 
+    if (epoch < lastFetchedEpoch())
+      throw new IllegalArgumentException("Attempt to append records with stale epoch")
+
     handleAndConvertLogAppendInfo(
       log.appendAsLeader(records.asInstanceOf[MemoryRecords],
         leaderEpoch = epoch,
