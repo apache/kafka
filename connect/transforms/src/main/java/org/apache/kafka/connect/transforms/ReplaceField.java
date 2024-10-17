@@ -21,6 +21,7 @@ import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
@@ -72,6 +73,10 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
             .define(ConfigName.REPLACE_NULL_WITH_DEFAULT_CONFIG, ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.MEDIUM,
                     "Whether to replace fields that have a default value and that are null to the default value. When set to true, the default value is used, otherwise null is used.");
 
+    private static Set<String> configNames() {
+        return CONFIG_DEF.names();
+    }
+
     private static final String PURPOSE = "field replacement";
 
     private Set<String> exclude;
@@ -89,6 +94,7 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
 
     @Override
     public void configure(Map<String, ?> configs) {
+        validate(configs);
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, configs);
 
         exclude = new HashSet<>(config.getList(ConfigName.EXCLUDE));
@@ -98,6 +104,14 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
         replaceNullWithDefault = config.getBoolean(ConfigName.REPLACE_NULL_WITH_DEFAULT_CONFIG);
 
         schemaUpdateCache = new SynchronizedCache<>(new LRUCache<>(16));
+    }
+
+    private static void validate(Map<String, ?> configs) {
+        configs.keySet().forEach(key -> {
+            if (!configNames().contains(key)) {
+                throw new InvalidConfigurationException("Unknown config: " + key);
+            }
+        });
     }
 
     static Map<String, String> parseRenameMappings(List<String> mappings) {
