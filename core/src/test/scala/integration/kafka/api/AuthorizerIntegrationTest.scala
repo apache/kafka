@@ -2163,8 +2163,8 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     producer.send(new ProducerRecord(tp.topic, tp.partition, "1".getBytes, "1".getBytes)).get
 
     def assertListTransactionResult(
-                                     expectedTransactionalIds: Set[String]
-                                   ): Unit = {
+       expectedTransactionalIds: Set[String]
+     ): Unit = {
       val listTransactionsRequest = new ListTransactionsRequest.Builder(new ListTransactionsRequestData()).build()
       val listTransactionsResponse = connectAndReceive[ListTransactionsResponse](listTransactionsRequest)
       assertEquals(Errors.NONE, Errors.forCode(listTransactionsResponse.data.errorCode))
@@ -2604,9 +2604,9 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   private def testDescribeClusterClusterAuthorizedOperations(
-                                                              version: Short,
-                                                              expectedClusterAuthorizedOperations: Int
-                                                            ): Unit = {
+    version: Short,
+    expectedClusterAuthorizedOperations: Int
+  ): Unit = {
     val describeClusterRequest = new DescribeClusterRequest.Builder(new DescribeClusterRequestData()
       .setIncludeClusterAuthorizedOperations(true))
       .build(version)
