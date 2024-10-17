@@ -64,7 +64,6 @@ import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.StateDirectory.PROCESS_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.toTaskDirString;
@@ -296,19 +295,19 @@ public class StateDirectoryTest {
             final TaskDirectory dir2 = new TaskDirectory(new File(appDir, toTaskDirString(task2)), null);
 
             List<TaskDirectory> files = directory.listAllTaskDirectories();
-            assertEquals(mkSet(dir0, dir1, dir2), new HashSet<>(files));
+            assertEquals(Set.of(dir0, dir1, dir2), new HashSet<>(files));
 
             files = directory.listNonEmptyTaskDirectories();
-            assertEquals(mkSet(dir0, dir1, dir2), new HashSet<>(files));
+            assertEquals(Set.of(dir0, dir1, dir2), new HashSet<>(files));
 
             time.sleep(5000);
             directory.cleanRemovedTasks(0);
 
             files = directory.listAllTaskDirectories();
-            assertEquals(mkSet(dir0, dir1), new HashSet<>(files));
+            assertEquals(Set.of(dir0, dir1), new HashSet<>(files));
 
             files = directory.listNonEmptyTaskDirectories();
-            assertEquals(mkSet(dir0, dir1), new HashSet<>(files));
+            assertEquals(Set.of(dir0, dir1), new HashSet<>(files));
         } finally {
             directory.unlock(task0);
             directory.unlock(task1);
@@ -406,7 +405,7 @@ public class StateDirectoryTest {
         final File storeDir = new File(taskDir1.file(), "store");
         assertTrue(storeDir.mkdir());
 
-        assertThat(mkSet(taskDir1, taskDir2), equalTo(new HashSet<>(directory.listAllTaskDirectories())));
+        assertThat(Set.of(taskDir1, taskDir2), equalTo(new HashSet<>(directory.listAllTaskDirectories())));
         assertThat(singletonList(taskDir1), equalTo(directory.listNonEmptyTaskDirectories()));
 
         Utils.delete(taskDir1.file());
@@ -482,7 +481,7 @@ public class StateDirectoryTest {
 
         final File dir0 = new File(appDir, id.toString());
         final File globalDir = new File(appDir, "global");
-        assertEquals(mkSet(dir0, globalDir), Arrays.stream(
+        assertEquals(Set.of(dir0, globalDir), Arrays.stream(
             Objects.requireNonNull(appDir.listFiles())).collect(Collectors.toSet()));
 
         directory.clean();
@@ -674,12 +673,12 @@ public class StateDirectoryTest {
         final File storeDir = new File(taskDir1.file(), "store");
         assertTrue(storeDir.mkdir());
 
-        assertThat(new HashSet<>(directory.listAllTaskDirectories()), equalTo(mkSet(taskDir1, taskDir2, taskDir3)));
+        assertThat(new HashSet<>(directory.listAllTaskDirectories()), equalTo(Set.of(taskDir1, taskDir2, taskDir3)));
         assertThat(directory.listNonEmptyTaskDirectories(), equalTo(singletonList(taskDir1)));
 
         Utils.delete(taskDir1.file());
 
-        assertThat(new HashSet<>(directory.listAllTaskDirectories()), equalTo(mkSet(taskDir2, taskDir3)));
+        assertThat(new HashSet<>(directory.listAllTaskDirectories()), equalTo(Set.of(taskDir2, taskDir3)));
         assertThat(directory.listNonEmptyTaskDirectories(), equalTo(emptyList()));
     }
 

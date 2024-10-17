@@ -447,10 +447,6 @@ public class ReplicationControlManagerTest {
         }
 
         void unfenceBrokers(Integer... brokerIds) {
-            unfenceBrokers(Utils.mkSet(brokerIds));
-        }
-
-        void unfenceBrokers(Set<Integer> brokerIds) {
             for (int brokerId : brokerIds) {
                 ControllerResult<BrokerHeartbeatReply> result = replicationControl.
                     processBrokerHeartbeat(new BrokerHeartbeatRequestData().
@@ -464,10 +460,6 @@ public class ReplicationControlManagerTest {
         }
 
         void inControlledShutdownBrokers(Integer... brokerIds) {
-            inControlledShutdownBrokers(Utils.mkSet(brokerIds));
-        }
-
-        void inControlledShutdownBrokers(Set<Integer> brokerIds) {
             for (int brokerId : brokerIds) {
                 BrokerRegistrationChangeRecord record = new BrokerRegistrationChangeRecord()
                     .setBrokerId(brokerId)
@@ -491,7 +483,7 @@ public class ReplicationControlManagerTest {
         }
 
         void fenceBrokers(Integer... brokerIds) {
-            fenceBrokers(Utils.mkSet(brokerIds));
+            fenceBrokers(Set.of(brokerIds));
         }
 
         void fenceBrokers(Set<Integer> brokerIds) {
@@ -1030,13 +1022,13 @@ public class ReplicationControlManagerTest {
         assertEquals(OptionalInt.of(0), ctx.currentLeader(topicIdPartition));
         ctx.alterTopicConfig("foo", TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3");
 
-        ctx.fenceBrokers(Utils.mkSet(2, 3));
+        ctx.fenceBrokers(Set.of(2, 3));
 
         PartitionRegistration partition = replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
         assertArrayEquals(new int[]{3}, partition.elr, partition.toString());
         assertArrayEquals(new int[]{}, partition.lastKnownElr, partition.toString());
 
-        ctx.fenceBrokers(Utils.mkSet(1, 2, 3));
+        ctx.fenceBrokers(Set.of(1, 2, 3));
 
         partition = replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
         assertArrayEquals(new int[]{1, 3}, partition.elr, partition.toString());
@@ -1114,14 +1106,14 @@ public class ReplicationControlManagerTest {
         assertEquals(OptionalInt.of(0), ctx.currentLeader(topicIdPartition));
         ctx.alterTopicConfig("foo", TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3");
 
-        ctx.fenceBrokers(Utils.mkSet(1, 2, 3));
+        ctx.fenceBrokers(Set.of(1, 2, 3));
 
         PartitionRegistration partition = replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
         assertArrayEquals(new int[]{2, 3}, partition.elr, partition.toString());
         assertArrayEquals(new int[]{}, partition.lastKnownElr, partition.toString());
 
         ctx.unfenceBrokers(2);
-        ctx.fenceBrokers(Utils.mkSet(0, 1));
+        ctx.fenceBrokers(Set.of(0, 1));
         partition = replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
         assertArrayEquals(new int[]{0, 3}, partition.elr, partition.toString());
         assertArrayEquals(new int[]{2}, partition.isr, partition.toString());
@@ -1144,7 +1136,7 @@ public class ReplicationControlManagerTest {
         assertEquals(OptionalInt.of(0), ctx.currentLeader(topicIdPartition));
         ctx.alterTopicConfig("foo", TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3");
 
-        ctx.fenceBrokers(Utils.mkSet(1, 2, 3));
+        ctx.fenceBrokers(Set.of(1, 2, 3));
 
         PartitionRegistration partition = replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
         assertArrayEquals(new int[]{2, 3}, partition.elr, partition.toString());
@@ -2278,8 +2270,8 @@ public class ReplicationControlManagerTest {
         TopicIdPartition partition1 = new TopicIdPartition(fooId, 1);
         TopicIdPartition partition2 = new TopicIdPartition(fooId, 2);
 
-        ctx.fenceBrokers(Utils.mkSet(2, 3));
-        ctx.fenceBrokers(Utils.mkSet(1, 2, 3));
+        ctx.fenceBrokers(Set.of(2, 3));
+        ctx.fenceBrokers(Set.of(1, 2, 3));
 
         assertLeaderAndIsr(replication, partition0, NO_LEADER, new int[]{1});
         assertLeaderAndIsr(replication, partition1, 4, new int[]{4});
@@ -2311,7 +2303,7 @@ public class ReplicationControlManagerTest {
         assertElectLeadersResponse(expectedResponse1, result1.response());
 
         // Now we bring 2 back online which should allow the unclean election of partition 0
-        ctx.unfenceBrokers(Utils.mkSet(2));
+        ctx.unfenceBrokers(2);
 
         // Bring 2 back into the ISR for partition 1. This allows us to verify that
         // preferred election does not occur as a result of the unclean election request.
@@ -2360,9 +2352,9 @@ public class ReplicationControlManagerTest {
         Uuid fooId = ctx.createTestTopic("foo", new int[][]{new int[]{1, 2, 3}}).topicId();
         TopicIdPartition partition = new TopicIdPartition(fooId, 0);
 
-        ctx.fenceBrokers(Utils.mkSet(2, 3));
-        ctx.fenceBrokers(Utils.mkSet(1, 2, 3));
-        ctx.unfenceBrokers(Utils.mkSet(2));
+        ctx.fenceBrokers(Set.of(2, 3));
+        ctx.fenceBrokers(Set.of(1, 2, 3));
+        ctx.unfenceBrokers(2);
 
         assertLeaderAndIsr(replication, partition, NO_LEADER, new int[]{1});
 
@@ -2414,7 +2406,7 @@ public class ReplicationControlManagerTest {
             new int[]{1, 2, 3}, new int[]{2, 3, 4}, new int[]{0, 2, 1}}).topicId();
 
         assertTrue(ctx.clusterControl.fencedBrokerIds().isEmpty());
-        ctx.fenceBrokers(Utils.mkSet(2, 3));
+        ctx.fenceBrokers(Set.of(2, 3));
 
         PartitionRegistration partition0 = replication.getPartition(fooId, 0);
         PartitionRegistration partition1 = replication.getPartition(fooId, 1);

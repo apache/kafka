@@ -23,10 +23,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -46,7 +46,7 @@ public class PositionTest {
         );
 
         final Position position = Position.fromMap(map);
-        assertThat(position.getTopics(), equalTo(mkSet("topic", "topic1")));
+        assertThat(position.getTopics(), equalTo(Set.of("topic", "topic1")));
         assertThat(position.getPartitionPositions("topic"), equalTo(mkMap(mkEntry(0, 5L))));
 
         // Should be a copy of the constructor map
@@ -84,7 +84,7 @@ public class PositionTest {
 
         final Position merged = position.merge(position1);
 
-        assertThat(merged.getTopics(), equalTo(mkSet("topic", "topic1", "topic2")));
+        assertThat(merged.getTopics(), equalTo(Set.of("topic", "topic1", "topic2")));
         assertThat(merged.getPartitionPositions("topic"), equalTo(mkMap(mkEntry(0, 7L))));
         assertThat(merged.getPartitionPositions("topic1"), equalTo(mkMap(
             mkEntry(0, 5L),
@@ -122,7 +122,7 @@ public class PositionTest {
         position.withComponent("topic2", 2, 4L);
 
         // copy has not changed
-        assertThat(copy.getTopics(), equalTo(mkSet("topic", "topic1")));
+        assertThat(copy.getTopics(), equalTo(Set.of("topic", "topic1")));
         assertThat(copy.getPartitionPositions("topic"), equalTo(mkMap(mkEntry(0, 5L))));
         assertThat(copy.getPartitionPositions("topic1"), equalTo(mkMap(
             mkEntry(0, 5L),
@@ -130,7 +130,7 @@ public class PositionTest {
         )));
 
         // original has changed
-        assertThat(position.getTopics(), equalTo(mkSet("topic", "topic1", "topic2")));
+        assertThat(position.getTopics(), equalTo(Set.of("topic", "topic1", "topic2")));
         assertThat(position.getPartitionPositions("topic"), equalTo(mkMap(mkEntry(0, 6L))));
         assertThat(position.getPartitionPositions("topic1"), equalTo(mkMap(
             mkEntry(0, 5L),
@@ -152,7 +152,7 @@ public class PositionTest {
 
         final Position merged = position.merge(null);
 
-        assertThat(merged.getTopics(), equalTo(mkSet("topic", "topic1")));
+        assertThat(merged.getTopics(), equalTo(Set.of("topic", "topic1")));
         assertThat(merged.getPartitionPositions("topic"), equalTo(mkMap(mkEntry(0, 5L))));
         assertThat(merged.getPartitionPositions("topic1"), equalTo(mkMap(
             mkEntry(0, 5L),

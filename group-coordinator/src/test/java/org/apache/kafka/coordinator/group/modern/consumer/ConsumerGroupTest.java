@@ -25,6 +25,7 @@ import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -1117,7 +1118,7 @@ public class ConsumerGroupTest {
         GroupCoordinatorMetricsShard metricsShard = new GroupCoordinatorMetricsShard(
             snapshotRegistry,
             Collections.emptyMap(),
-            new TopicPartition("__consumer_offsets", 0)
+            new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
         );
         ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-foo", metricsShard);
         snapshotRegistry.idempotentCreateSnapshot(0);
@@ -1331,7 +1332,7 @@ public class ConsumerGroupTest {
         GroupCoordinatorMetricsShard metricsShard = new GroupCoordinatorMetricsShard(
             snapshotRegistry,
             Collections.emptyMap(),
-            new TopicPartition("__consumer_offsets", 0)
+            new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
         );
         ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-foo", metricsShard);
         snapshotRegistry.idempotentCreateSnapshot(0);
