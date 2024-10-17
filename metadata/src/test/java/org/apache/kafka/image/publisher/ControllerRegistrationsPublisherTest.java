@@ -60,7 +60,7 @@ public class ControllerRegistrationsPublisherTest {
 
     private static final MetadataImage TEST_IMAGE;
 
-    private static final MetadataProvenance PROVENANCE = new MetadataProvenance(100L, 10, 2000L);
+    private static final MetadataProvenance PROVENANCE = new MetadataProvenance(100L, 10, 2000L, true);
 
     static {
         TEST_DELTA = new MetadataDelta.Builder().build();
@@ -79,7 +79,7 @@ public class ControllerRegistrationsPublisherTest {
         ControllerRegistrationsPublisher publisher = new ControllerRegistrationsPublisher();
         if (fromSnapshot) {
             publisher.onMetadataUpdate(TEST_DELTA, TEST_IMAGE,
-                new SnapshotManifest(new MetadataProvenance(100L, 10, 2000L), 100L));
+                new SnapshotManifest(new MetadataProvenance(100L, 10, 2000L, true), 100L));
         } else {
             publisher.onMetadataUpdate(TEST_DELTA, TEST_IMAGE,
                 LogDeltaManifest.newBuilder().

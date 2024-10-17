@@ -57,7 +57,7 @@ object SaslApiVersionsRequestTest {
     serverProperties.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, s"$securityProtocol://localhost:0,$controlPlaneListenerName://localhost:0")
 
     List(ClusterConfig.defaultBuilder
-      .setSecurityProtocol(securityProtocol)
+      .setBrokerSecurityProtocol(securityProtocol)
       .setTypes(Set(Type.KRAFT).asJava)
       .setSaslServerProperties(saslServerProperties)
       .setSaslClientProperties(saslClientProperties)

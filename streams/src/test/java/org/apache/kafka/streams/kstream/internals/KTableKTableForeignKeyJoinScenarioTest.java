@@ -41,11 +41,11 @@ import org.junit.jupiter.api.Test;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
@@ -214,7 +214,7 @@ public class KTableKTableForeignKeyJoinScenarioTest {
         }
         // verifying primarily that no extra pseudo-topics were used, but it's nice to also verify the rest of the
         // topics our serdes serialize data for
-        assertThat(serdeScope.registeredTopics(), is(mkSet(
+        assertThat(serdeScope.registeredTopics(), is(Set.of(
             // expected pseudo-topics
             applicationId + "-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-0000000006-topic-fk--key",
             applicationId + "-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-0000000006-topic-pk--key",
