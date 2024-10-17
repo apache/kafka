@@ -20,7 +20,7 @@ import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 
 
 /**
- * The type of cluster config being requested. Used by {@link kafka.test.ClusterConfig} and the test annotations.
+ * The type of cluster config being requested. Used by {@link org.apache.kafka.common.test.api.ClusterConfig} and the test annotations.
  */
 public enum Type {
     KRAFT {

@@ -30,14 +30,14 @@ public @interface ClusterConfigProperty {
     /**
      * The config applies to the controller/broker with specified id. Default is -1, indicating the property applied to
      * all controller/broker servers. Note that the "controller" here refers to the KRaft quorum controller.
-     * The id can vary depending on the different {@link kafka.test.annotation.Type}.
+     * The id can vary depending on the different {@link org.apache.kafka.common.test.api.Type}.
      * <ul>
-     *  <li> Under {@link kafka.test.annotation.Type#KRAFT}, the broker id starts from
-     *  {@link kafka.testkit.TestKitNodes#BROKER_ID_OFFSET 0}, the controller id
-     *  starts from {@link kafka.testkit.TestKitNodes#CONTROLLER_ID_OFFSET 3000}
+     *  <li> Under {@link org.apache.kafka.common.test.api.Type#KRAFT}, the broker id starts from
+     *  {@link org.apache.kafka.common.test.TestKitNodes#BROKER_ID_OFFSET 0}, the controller id
+     *  starts from {@link org.apache.kafka.common.test.TestKitNodes#CONTROLLER_ID_OFFSET 3000}
      *  and increases by 1 with each addition broker/controller.</li>
-     *  <li> Under {@link kafka.test.annotation.Type#CO_KRAFT}, the broker id and controller id both start from
-     *  {@link kafka.testkit.TestKitNodes#BROKER_ID_OFFSET 0}
+     *  <li> Under {@link org.apache.kafka.common.test.api.Type#CO_KRAFT}, the broker id and controller id both start from
+     *  {@link org.apache.kafka.common.test.TestKitNodes#BROKER_ID_OFFSET 0}
      *  and increases by 1 with each additional broker/controller.</li>
      * </ul>
      *

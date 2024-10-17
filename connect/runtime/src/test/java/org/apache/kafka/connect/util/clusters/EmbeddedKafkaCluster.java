@@ -91,7 +91,7 @@ import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
- * Setup an embedded Kafka KRaft cluster (using {@link kafka.testkit.KafkaClusterTestKit} internally) with the
+ * Setup an embedded Kafka KRaft cluster (using {@link org.apache.kafka.common.test.KafkaClusterTestKit} internally) with the
  * specified number of brokers and the specified broker properties. This can be used for integration tests and is
  * typically used in conjunction with {@link EmbeddedConnectCluster}. Additional Kafka client properties can also be
  * supplied if required. This class also provides various utility methods to easily create Kafka topics, produce data,
