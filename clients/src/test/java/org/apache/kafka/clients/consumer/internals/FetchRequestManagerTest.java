@@ -3680,7 +3680,7 @@ public class FetchRequestManagerTest {
                                              KafkaClient client,
                                              Metadata metadata,
                                              BackgroundEventHandler backgroundEventHandler) {
-            super(time, config, logContext, client, metadata, backgroundEventHandler);
+            super(time, config, logContext, client, metadata, backgroundEventHandler, Optional.empty());
         }
 
         @Override
