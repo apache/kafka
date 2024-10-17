@@ -116,12 +116,11 @@ class LogCleaner(initialConfig: CleanerConfig,
   private[log] val cleaners = mutable.ArrayBuffer[CleanerThread]()
 
   /**
-   * scala 2.12 does not support maxOption so we handle the empty manually.
    * @param f to compute the result
    * @return the max value (int value) or 0 if there is no cleaner
    */
   private def maxOverCleanerThreads(f: CleanerThread => Double): Int =
-    cleaners.foldLeft(0.0d)((max: Double, thread: CleanerThread) => math.max(max, f(thread))).toInt
+    cleaners.map(f).maxOption.getOrElse(0.0d).toInt
 
   /* a metric to track the maximum utilization of any thread's buffer in the last cleaning */
   metricsGroup.newGauge(MaxBufferUtilizationPercentMetricName,
