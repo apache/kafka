@@ -41,7 +41,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -106,9 +105,9 @@ public class SourceNodeTest {
         final String threadId = Thread.currentThread().getName();
         final String groupName = "stream-processor-node-metrics";
         final Map<String, String> metricTags = mkMap(
-            mkEntry("thread-id", threadId),
-            mkEntry("task-id", context.taskId().toString()),
-            mkEntry("processor-node-id", node.name())
+            Map.entry("thread-id", threadId),
+            Map.entry("task-id", context.taskId().toString()),
+            Map.entry("processor-node-id", node.name())
         );
 
         assertTrue(StreamsTestUtils.containsMetric(metrics, "process-rate", groupName, metricTags));

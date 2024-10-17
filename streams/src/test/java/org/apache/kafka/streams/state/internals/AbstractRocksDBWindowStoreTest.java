@@ -37,13 +37,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static java.time.Duration.ofMillis;
 import static java.time.Instant.ofEpochMilli;
 import static java.util.Arrays.asList;
 import static java.util.Objects.requireNonNull;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -777,7 +777,7 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
         context.setRecordContext(new ProcessorRecordContext(0, 4, 0, "", new RecordHeaders()));
         windowStore.put(3, "3", SEGMENT_INTERVAL);
 
-        final Position expected = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 4L)))));
+        final Position expected = Position.fromMap(mkMap(Map.entry("", mkMap(Map.entry(0, 4L)))));
         final Position actual = rocksDBWindowStore.getPosition();
         assertEquals(expected, actual);
     }

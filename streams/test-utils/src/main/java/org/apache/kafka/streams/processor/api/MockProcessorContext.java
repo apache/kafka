@@ -49,7 +49,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 
@@ -213,8 +212,8 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
     public MockProcessorContext() {
         this(
             mkProperties(mkMap(
-                mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, ""),
-                mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "")
+                Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, ""),
+                Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "")
             )),
             new TaskId(0, 0),
             null

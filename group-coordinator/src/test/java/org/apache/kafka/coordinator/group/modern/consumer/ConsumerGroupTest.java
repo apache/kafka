@@ -58,11 +58,11 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.group.Assertions.assertRecordEquals;
 import static org.apache.kafka.coordinator.group.Assertions.assertRecordsEquals;
@@ -666,7 +666,7 @@ public class ConsumerGroupTest {
         // Compute while taking into account member 1.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
+                Map.entry("foo", new TopicMetadata(fooTopicId, "foo", 1))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 consumerGroup.computeSubscribedTopicNames(null, member1),
@@ -681,7 +681,7 @@ public class ConsumerGroupTest {
         // It should return foo now.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
+                Map.entry("foo", new TopicMetadata(fooTopicId, "foo", 1))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 consumerGroup.computeSubscribedTopicNames(null, null),
@@ -703,8 +703,8 @@ public class ConsumerGroupTest {
         // Compute while taking into account member 2.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
+                Map.entry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
+                Map.entry("bar", new TopicMetadata(barTopicId, "bar", 2))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 consumerGroup.computeSubscribedTopicNames(null, member2),
@@ -719,8 +719,8 @@ public class ConsumerGroupTest {
         // It should return foo and bar.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
+                Map.entry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
+                Map.entry("bar", new TopicMetadata(barTopicId, "bar", 2))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 consumerGroup.computeSubscribedTopicNames(null, null),
@@ -732,7 +732,7 @@ public class ConsumerGroupTest {
         // Compute while taking into account removal of member 2.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
+                Map.entry("foo", new TopicMetadata(fooTopicId, "foo", 1))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 consumerGroup.computeSubscribedTopicNames(member2, null),
@@ -744,7 +744,7 @@ public class ConsumerGroupTest {
         // Removing member1 results in returning bar.
         assertEquals(
             mkMap(
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
+                Map.entry("bar", new TopicMetadata(barTopicId, "bar", 2))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 consumerGroup.computeSubscribedTopicNames(member1, null),
@@ -756,9 +756,9 @@ public class ConsumerGroupTest {
         // Compute while taking into account member 3.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
-                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
+                Map.entry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
+                Map.entry("bar", new TopicMetadata(barTopicId, "bar", 2)),
+                Map.entry("zar", new TopicMetadata(zarTopicId, "zar", 3))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 consumerGroup.computeSubscribedTopicNames(null, member3),
@@ -773,9 +773,9 @@ public class ConsumerGroupTest {
         // It should return foo, bar and zar.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
-                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
+                Map.entry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
+                Map.entry("bar", new TopicMetadata(barTopicId, "bar", 2)),
+                Map.entry("zar", new TopicMetadata(zarTopicId, "zar", 3))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 consumerGroup.computeSubscribedTopicNames(null, null),
@@ -797,7 +797,7 @@ public class ConsumerGroupTest {
         // Compute while taking into account removal of member 2 and member 3.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
+                Map.entry("foo", new TopicMetadata(fooTopicId, "foo", 1))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 consumerGroup.computeSubscribedTopicNames(new HashSet<>(Arrays.asList(member2, member3))),
@@ -809,8 +809,8 @@ public class ConsumerGroupTest {
         // Compute while taking into account removal of member 1.
         assertEquals(
             mkMap(
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
-                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
+                Map.entry("bar", new TopicMetadata(barTopicId, "bar", 2)),
+                Map.entry("zar", new TopicMetadata(zarTopicId, "zar", 3))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 consumerGroup.computeSubscribedTopicNames(Collections.singleton(member1)),
@@ -822,9 +822,9 @@ public class ConsumerGroupTest {
         // It should return foo, bar and zar.
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
-                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
+                Map.entry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
+                Map.entry("bar", new TopicMetadata(barTopicId, "bar", 2)),
+                Map.entry("zar", new TopicMetadata(zarTopicId, "zar", 3))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 consumerGroup.computeSubscribedTopicNames(Collections.emptySet()),
@@ -920,7 +920,7 @@ public class ConsumerGroupTest {
         // Verify that partition 0 is assigned to member1.
         assertEquals(
             mkMap(
-                mkEntry(topicId, mkMap(mkEntry(0, memberId1)))
+                Map.entry(topicId, mkMap(Map.entry(0, memberId1)))
             ),
             consumerGroup.invertedTargetAssignment()
         );
@@ -935,7 +935,7 @@ public class ConsumerGroupTest {
         // Verify that partition 0 is no longer assigned and partition 1 is assigned to member1
         assertEquals(
             mkMap(
-                mkEntry(topicId, mkMap(mkEntry(1, memberId1)))
+                Map.entry(topicId, mkMap(Map.entry(1, memberId1)))
             ),
             consumerGroup.invertedTargetAssignment()
         );
@@ -950,7 +950,7 @@ public class ConsumerGroupTest {
         // Verify that partition 1 is assigned to member2
         assertEquals(
             mkMap(
-                mkEntry(topicId, mkMap(mkEntry(1, memberId2)))
+                Map.entry(topicId, mkMap(Map.entry(1, memberId2)))
             ),
             consumerGroup.invertedTargetAssignment()
         );
@@ -965,9 +965,9 @@ public class ConsumerGroupTest {
         // Verify that partition 1 is still assigned to member2 and partition 0 is assigned to member1
         assertEquals(
             mkMap(
-                mkEntry(topicId, mkMap(
-                    mkEntry(0, memberId1),
-                    mkEntry(1, memberId2)
+                Map.entry(topicId, mkMap(
+                    Map.entry(0, memberId1),
+                    Map.entry(1, memberId2)
                 ))
             ),
             consumerGroup.invertedTargetAssignment()
@@ -979,7 +979,7 @@ public class ConsumerGroupTest {
         // Verify that partition 0 is no longer assigned and partition 1 is still assigned to member2
         assertEquals(
             mkMap(
-                mkEntry(topicId, mkMap(mkEntry(1, memberId2)))
+                Map.entry(topicId, mkMap(Map.entry(1, memberId2)))
             ),
             consumerGroup.invertedTargetAssignment()
         );
@@ -1231,8 +1231,8 @@ public class ConsumerGroupTest {
 
         assertEquals(
             mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
+                Map.entry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
+                Map.entry("bar", new TopicMetadata(barTopicId, "bar", 2))
             ),
             consumerGroup.computeSubscriptionMetadata(
                 consumerGroup.computeSubscribedTopicNames(null, null),

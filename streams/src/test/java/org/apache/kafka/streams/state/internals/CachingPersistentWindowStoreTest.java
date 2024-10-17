@@ -63,6 +63,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 
@@ -70,7 +71,6 @@ import static java.time.Duration.ofHours;
 import static java.time.Duration.ofMinutes;
 import static java.time.Instant.ofEpochMilli;
 import static java.util.Arrays.asList;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.internals.ThreadCacheTest.memoryCacheEntrySize;
 import static org.apache.kafka.test.StreamsTestUtils.toList;
@@ -288,11 +288,11 @@ public class CachingPersistentWindowStoreTest {
         cachingStore.flush();
 
         assertEquals(
-            Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 2L))))),
+            Position.fromMap(mkMap(Map.entry("", mkMap(Map.entry(0, 2L))))),
             cachingStore.getPosition()
         );
         assertEquals(
-            Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 2L))))),
+            Position.fromMap(mkMap(Map.entry("", mkMap(Map.entry(0, 2L))))),
             underlyingStore.getPosition()
         );
     }

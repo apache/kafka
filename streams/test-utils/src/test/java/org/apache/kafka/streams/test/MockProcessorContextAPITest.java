@@ -36,12 +36,12 @@ import org.junit.jupiter.api.Test;
 import java.io.File;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -241,8 +241,8 @@ public class MockProcessorContextAPITest {
     public void shouldCaptureApplicationAndRecordMetadata() {
         final Properties config = mkProperties(
             mkMap(
-                mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "testMetadata"),
-                mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "")
+                Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, "testMetadata"),
+                Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "")
             )
         );
 

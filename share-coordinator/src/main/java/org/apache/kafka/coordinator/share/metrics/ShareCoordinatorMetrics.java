@@ -81,8 +81,8 @@ public class ShareCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             new Max());
 
         this.globalSensors = Collections.unmodifiableMap(Utils.mkMap(
-            Utils.mkEntry(SHARE_COORDINATOR_WRITE_SENSOR_NAME, shareCoordinatorWriteSensor),
-            Utils.mkEntry(SHARE_COORDINATOR_WRITE_LATENCY_SENSOR_NAME, shareCoordinatorWriteLatencySensor)
+            Map.entry(SHARE_COORDINATOR_WRITE_SENSOR_NAME, shareCoordinatorWriteSensor),
+            Map.entry(SHARE_COORDINATOR_WRITE_LATENCY_SENSOR_NAME, shareCoordinatorWriteLatencySensor)
         ));
     }
 

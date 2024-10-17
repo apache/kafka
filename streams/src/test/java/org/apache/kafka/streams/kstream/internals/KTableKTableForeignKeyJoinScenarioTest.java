@@ -43,7 +43,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -177,8 +176,8 @@ public class KTableKTableForeignKeyJoinScenarioTest {
     public void shouldUseExpectedTopicsWithSerde() {
         final String applicationId = "ktable-ktable-joinOnForeignKey";
         final Properties streamsConfig = mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, applicationId),
-            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
+            Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, applicationId),
+            Map.entry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
         ));
 
         final UniqueTopicSerdeScope serdeScope = new UniqueTopicSerdeScope();

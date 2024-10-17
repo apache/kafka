@@ -95,7 +95,7 @@ class BaseVersionRange {
     }
 
     public Map<String, Short> toMap() {
-        return Utils.mkMap(Utils.mkEntry(minKeyLabel, min()), Utils.mkEntry(maxKeyLabel, max()));
+        return Utils.mkMap(Map.entry(minKeyLabel, min()), Map.entry(maxKeyLabel, max()));
     }
 
     private static String mapToString(final Map<String, Short> map) {

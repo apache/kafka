@@ -37,7 +37,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -250,8 +249,8 @@ public class ResponseJoinProcessorSupplierTest {
             "stream-task-metrics",
             "The total number of dropped records",
             mkMap(
-                mkEntry("thread-id", Thread.currentThread().getName()),
-                mkEntry("task-id", "0_0")
+                Map.entry("thread-id", Thread.currentThread().getName()),
+                Map.entry("task-id", "0_0")
             )
         );
 
@@ -264,8 +263,8 @@ public class ResponseJoinProcessorSupplierTest {
             "stream-task-metrics",
             "The average number of dropped records per second",
             mkMap(
-                mkEntry("thread-id", Thread.currentThread().getName()),
-                mkEntry("task-id", "0_0")
+                Map.entry("thread-id", Thread.currentThread().getName()),
+                Map.entry("task-id", "0_0")
             )
         );
 

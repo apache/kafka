@@ -67,7 +67,6 @@ import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
 import static org.apache.kafka.common.utils.Utils.entriesToMap;
 import static org.apache.kafka.common.utils.Utils.intersection;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -663,7 +662,7 @@ public final class AssignmentTestUtils {
         final Map<ProcessId, Map<String, Optional<String>>> processRacks = new HashMap<>();
         for (int i = 1; i <= clientSize; i++) {
             final String rack = racks.get(i % nodeSize);
-            processRacks.put(processIdForInt(i), mkMap(mkEntry("1", Optional.of(rack))));
+            processRacks.put(processIdForInt(i), mkMap(Map.entry("1", Optional.of(rack))));
         }
         return processRacks;
     }
@@ -840,56 +839,56 @@ public final class AssignmentTestUtils {
 
     static Map<TaskId, Set<TopicPartition>> getTaskTopicPartitionMapForAllTasks() {
         return mkMap(
-            mkEntry(TASK_0_0, Set.of(TP_0_0)),
-            mkEntry(TASK_0_1, Set.of(TP_0_1)),
-            mkEntry(TASK_0_2, Set.of(TP_0_2)),
-            mkEntry(TASK_0_3, Set.of(TP_0_3)),
-            mkEntry(TASK_0_4, Set.of(TP_0_4)),
-            mkEntry(TASK_0_5, Set.of(TP_0_5)),
-            mkEntry(TASK_0_6, Set.of(TP_0_6)),
-            mkEntry(TASK_1_0, Set.of(TP_1_0)),
-            mkEntry(TASK_1_1, Set.of(TP_1_1)),
-            mkEntry(TASK_1_2, Set.of(TP_1_2)),
-            mkEntry(TASK_1_3, Set.of(TP_1_3)),
-            mkEntry(TASK_2_0, Set.of(TP_2_0)),
-            mkEntry(TASK_2_1, Set.of(TP_2_1)),
-            mkEntry(TASK_2_2, Set.of(TP_2_2)),
-            mkEntry(TASK_2_3, Set.of(TP_2_3)),
-            mkEntry(TASK_3_0, Set.of(TP_3_0)),
-            mkEntry(TASK_3_1, Set.of(TP_3_1)),
-            mkEntry(TASK_3_2, Set.of(TP_3_2))
+            Map.entry(TASK_0_0, Set.of(TP_0_0)),
+            Map.entry(TASK_0_1, Set.of(TP_0_1)),
+            Map.entry(TASK_0_2, Set.of(TP_0_2)),
+            Map.entry(TASK_0_3, Set.of(TP_0_3)),
+            Map.entry(TASK_0_4, Set.of(TP_0_4)),
+            Map.entry(TASK_0_5, Set.of(TP_0_5)),
+            Map.entry(TASK_0_6, Set.of(TP_0_6)),
+            Map.entry(TASK_1_0, Set.of(TP_1_0)),
+            Map.entry(TASK_1_1, Set.of(TP_1_1)),
+            Map.entry(TASK_1_2, Set.of(TP_1_2)),
+            Map.entry(TASK_1_3, Set.of(TP_1_3)),
+            Map.entry(TASK_2_0, Set.of(TP_2_0)),
+            Map.entry(TASK_2_1, Set.of(TP_2_1)),
+            Map.entry(TASK_2_2, Set.of(TP_2_2)),
+            Map.entry(TASK_2_3, Set.of(TP_2_3)),
+            Map.entry(TASK_3_0, Set.of(TP_3_0)),
+            Map.entry(TASK_3_1, Set.of(TP_3_1)),
+            Map.entry(TASK_3_2, Set.of(TP_3_2))
         );
     }
 
     static Map<Subtopology, Set<TaskId>> getTasksForTopicGroup() {
         return mkMap(
-            mkEntry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5, TASK_0_6)),
-            mkEntry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2, TASK_1_3)),
-            mkEntry(new Subtopology(2, null), Set.of(TASK_2_0, TASK_2_1, TASK_2_2, TASK_2_3)),
-            mkEntry(new Subtopology(3, null), Set.of(TASK_3_0, TASK_3_1, TASK_3_2))
+            Map.entry(new Subtopology(0, null), Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5, TASK_0_6)),
+            Map.entry(new Subtopology(1, null), Set.of(TASK_1_0, TASK_1_1, TASK_1_2, TASK_1_3)),
+            Map.entry(new Subtopology(2, null), Set.of(TASK_2_0, TASK_2_1, TASK_2_2, TASK_2_3)),
+            Map.entry(new Subtopology(3, null), Set.of(TASK_3_0, TASK_3_1, TASK_3_2))
         );
     }
 
     static Map<TaskId, Set<TopicPartition>> getTaskChangelogMapForAllTasks() {
         return mkMap(
-            mkEntry(TASK_0_0, Set.of(CHANGELOG_TP_0_0)),
-            mkEntry(TASK_0_1, Set.of(CHANGELOG_TP_0_1)),
-            mkEntry(TASK_0_2, Set.of(CHANGELOG_TP_0_2)),
-            mkEntry(TASK_0_3, Set.of(CHANGELOG_TP_0_3)),
-            mkEntry(TASK_0_4, Set.of(CHANGELOG_TP_0_4)),
-            mkEntry(TASK_0_5, Set.of(CHANGELOG_TP_0_5)),
-            mkEntry(TASK_0_6, Set.of(CHANGELOG_TP_0_6)),
-            mkEntry(TASK_1_0, Set.of(CHANGELOG_TP_1_0)),
-            mkEntry(TASK_1_1, Set.of(CHANGELOG_TP_1_1)),
-            mkEntry(TASK_1_2, Set.of(CHANGELOG_TP_1_2)),
-            mkEntry(TASK_1_3, Set.of(CHANGELOG_TP_1_3)),
-            mkEntry(TASK_2_0, Set.of(CHANGELOG_TP_2_0)),
-            mkEntry(TASK_2_1, Set.of(CHANGELOG_TP_2_1)),
-            mkEntry(TASK_2_2, Set.of(CHANGELOG_TP_2_2)),
-            mkEntry(TASK_2_3, Set.of(CHANGELOG_TP_2_3)),
-            mkEntry(TASK_3_0, Set.of(CHANGELOG_TP_3_0)),
-            mkEntry(TASK_3_1, Set.of(CHANGELOG_TP_3_1)),
-            mkEntry(TASK_3_2, Set.of(CHANGELOG_TP_3_2))
+            Map.entry(TASK_0_0, Set.of(CHANGELOG_TP_0_0)),
+            Map.entry(TASK_0_1, Set.of(CHANGELOG_TP_0_1)),
+            Map.entry(TASK_0_2, Set.of(CHANGELOG_TP_0_2)),
+            Map.entry(TASK_0_3, Set.of(CHANGELOG_TP_0_3)),
+            Map.entry(TASK_0_4, Set.of(CHANGELOG_TP_0_4)),
+            Map.entry(TASK_0_5, Set.of(CHANGELOG_TP_0_5)),
+            Map.entry(TASK_0_6, Set.of(CHANGELOG_TP_0_6)),
+            Map.entry(TASK_1_0, Set.of(CHANGELOG_TP_1_0)),
+            Map.entry(TASK_1_1, Set.of(CHANGELOG_TP_1_1)),
+            Map.entry(TASK_1_2, Set.of(CHANGELOG_TP_1_2)),
+            Map.entry(TASK_1_3, Set.of(CHANGELOG_TP_1_3)),
+            Map.entry(TASK_2_0, Set.of(CHANGELOG_TP_2_0)),
+            Map.entry(TASK_2_1, Set.of(CHANGELOG_TP_2_1)),
+            Map.entry(TASK_2_2, Set.of(CHANGELOG_TP_2_2)),
+            Map.entry(TASK_2_3, Set.of(CHANGELOG_TP_2_3)),
+            Map.entry(TASK_3_0, Set.of(CHANGELOG_TP_3_0)),
+            Map.entry(TASK_3_1, Set.of(CHANGELOG_TP_3_1)),
+            Map.entry(TASK_3_2, Set.of(CHANGELOG_TP_3_2))
         );
     }
 
@@ -907,7 +906,7 @@ public final class AssignmentTestUtils {
         final MockInternalTopicManager spyTopicManager = spy(mockInternalTopicManager);
         doReturn(
             mkMap(
-                mkEntry(
+                Map.entry(
                     CHANGELOG_TP_0_NAME, Arrays.asList(
                         new TopicPartitionInfo(0, NODE_0, Arrays.asList(REPLICA_0), Collections.emptyList()),
                         new TopicPartitionInfo(1, NODE_1, Arrays.asList(REPLICA_1), Collections.emptyList()),
@@ -918,7 +917,7 @@ public final class AssignmentTestUtils {
                         new TopicPartitionInfo(6, NODE_0, Arrays.asList(REPLICA_0), Collections.emptyList())
                     )
                 ),
-                mkEntry(
+                Map.entry(
                     CHANGELOG_TP_1_NAME, Arrays.asList(
                         new TopicPartitionInfo(0, NODE_2, Arrays.asList(REPLICA_2), Collections.emptyList()),
                         new TopicPartitionInfo(1, NODE_3, Arrays.asList(REPLICA_3), Collections.emptyList()),
@@ -926,7 +925,7 @@ public final class AssignmentTestUtils {
                         new TopicPartitionInfo(3, NODE_4, Arrays.asList(REPLICA_4), Collections.emptyList())
                     )
                 ),
-                mkEntry(
+                Map.entry(
                     CHANGELOG_TP_2_NAME, Arrays.asList(
                         new TopicPartitionInfo(0, NODE_1, Arrays.asList(REPLICA_1), Collections.emptyList()),
                         new TopicPartitionInfo(1, NODE_2, Arrays.asList(REPLICA_2), Collections.emptyList()),
@@ -934,7 +933,7 @@ public final class AssignmentTestUtils {
                         new TopicPartitionInfo(3, NODE_3, Arrays.asList(REPLICA_3), Collections.emptyList())
                     )
                 ),
-                mkEntry(
+                Map.entry(
                     CHANGELOG_TP_3_NAME, Arrays.asList(
                         new TopicPartitionInfo(0, NODE_4, Arrays.asList(REPLICA_4), Collections.emptyList()),
                         new TopicPartitionInfo(1, NODE_3, Arrays.asList(REPLICA_3), Collections.emptyList()),
@@ -1008,13 +1007,13 @@ public final class AssignmentTestUtils {
 
     static Map<ProcessId, Map<String, Optional<String>>> getProcessRacksForAllProcess() {
         return mkMap(
-            mkEntry(PID_1, mkMap(mkEntry("1", Optional.of(RACK_0)))),
-            mkEntry(PID_2, mkMap(mkEntry("1", Optional.of(RACK_1)))),
-            mkEntry(PID_3, mkMap(mkEntry("1", Optional.of(RACK_2)))),
-            mkEntry(PID_4, mkMap(mkEntry("1", Optional.of(RACK_3)))),
-            mkEntry(PID_5, mkMap(mkEntry("1", Optional.of(RACK_4)))),
-            mkEntry(PID_6, mkMap(mkEntry("1", Optional.of(RACK_0)))),
-            mkEntry(PID_7, mkMap(mkEntry("1", Optional.of(RACK_1))))
+            Map.entry(PID_1, mkMap(Map.entry("1", Optional.of(RACK_0)))),
+            Map.entry(PID_2, mkMap(Map.entry("1", Optional.of(RACK_1)))),
+            Map.entry(PID_3, mkMap(Map.entry("1", Optional.of(RACK_2)))),
+            Map.entry(PID_4, mkMap(Map.entry("1", Optional.of(RACK_3)))),
+            Map.entry(PID_5, mkMap(Map.entry("1", Optional.of(RACK_4)))),
+            Map.entry(PID_6, mkMap(Map.entry("1", Optional.of(RACK_0)))),
+            Map.entry(PID_7, mkMap(Map.entry("1", Optional.of(RACK_1))))
         );
     }
 

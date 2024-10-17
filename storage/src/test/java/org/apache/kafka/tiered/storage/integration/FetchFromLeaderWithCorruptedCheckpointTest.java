@@ -28,7 +28,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 
 public class FetchFromLeaderWithCorruptedCheckpointTest extends TieredStorageTestHarness {
@@ -48,7 +47,7 @@ public class FetchFromLeaderWithCorruptedCheckpointTest extends TieredStorageTes
         final Integer replicationFactor = 2;
         final Integer maxBatchCountPerSegment = 1;
         final boolean enableRemoteLogStorage = true;
-        final Map<Integer, List<Integer>> assignment = mkMap(mkEntry(p0, Arrays.asList(broker0, broker1)));
+        final Map<Integer, List<Integer>> assignment = mkMap(Map.entry(p0, Arrays.asList(broker0, broker1)));
         final List<String> checkpointFiles = Arrays.asList(
                 ReplicaManager.HighWatermarkFilename(),
                 LogManager.RecoveryPointCheckpointFile(),
