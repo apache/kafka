@@ -18,7 +18,6 @@
 package org.apache.kafka.jmh.fetcher;
 
 import kafka.cluster.AlterPartitionListener;
-import kafka.cluster.BrokerEndPoint;
 import kafka.cluster.DelayedOperations;
 import kafka.cluster.Partition;
 import kafka.log.LogManager;
@@ -52,6 +51,7 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetFor
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
 import org.apache.kafka.common.message.UpdateMetadataRequestData;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.network.BrokerEndPoint;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.BaseRecords;

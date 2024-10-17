@@ -23,7 +23,7 @@ import kafka.server.KafkaConfig
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
 import org.apache.kafka.common.feature.Features._
 import org.apache.kafka.common.{ClusterResource, Endpoint, Node}
-import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.network.{BrokerEndPoint, ListenerName}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.metadata.{BrokerRegistration, VersionRange}
 import org.apache.kafka.server.authorizer.AuthorizerServerInfo

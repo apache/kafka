@@ -16,7 +16,6 @@
   */
 package kafka.server.epoch
 
-import kafka.cluster.BrokerEndPoint
 import kafka.server.KafkaConfig._
 import kafka.server._
 import kafka.utils.TestUtils._
@@ -26,7 +25,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderPartition, OffsetForLeaderTopic, OffsetForLeaderTopicCollection}
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.network.{BrokerEndPoint, ListenerName}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET

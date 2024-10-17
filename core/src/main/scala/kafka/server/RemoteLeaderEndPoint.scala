@@ -17,8 +17,6 @@
 
 package kafka.server
 
-import kafka.cluster.BrokerEndPoint
-
 import java.util.{Collections, Optional}
 import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
 import kafka.utils.Logging
@@ -28,6 +26,7 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderTopic, OffsetForLeaderTopicCollection}
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
+import org.apache.kafka.common.network.BrokerEndPoint
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, ListOffsetsRequest, ListOffsetsResponse, OffsetsForLeaderEpochRequest, OffsetsForLeaderEpochResponse}
 import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
