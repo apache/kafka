@@ -27,7 +27,6 @@ import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.platform.commons.util.StringUtils;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -95,9 +94,8 @@ public class ConfigCommandIntegrationTest {
             "--entity-type", "users",
             "--entity-name", "admin",
             "--alter", "--add-config", "consumer_byte_rate=20000"));
-        String message = captureStandardMsg(run(command));
-
-        assertTrue(StringUtils.isBlank(message), message);
+        String message = captureStandardStream(false, run(command));
+        assertEquals("Completed updating config for user admin.", message);
     }
 
     @ClusterTest
@@ -106,15 +104,15 @@ public class ConfigCommandIntegrationTest {
             "--entity-type", "groups",
             "--entity-name", "group",
             "--alter", "--add-config", "consumer.session.timeout.ms=50000"));
-        String message = captureStandardMsg(run(command));
-        assertTrue(StringUtils.isBlank(message), message);
+        String message = captureStandardStream(false, run(command));
+        assertEquals("Completed updating config for group group.", message);
 
         // Test for the --group alias
         command = Stream.concat(quorumArgs(), Stream.of(
             "--group", "group",
             "--alter", "--add-config", "consumer.session.timeout.ms=50000"));
-        message = captureStandardMsg(run(command));
-        assertTrue(StringUtils.isBlank(message), message);
+        message = captureStandardStream(false, run(command));
+        assertEquals("Completed updating config for group group.", message);
     }
 
     @ClusterTest
@@ -123,15 +121,15 @@ public class ConfigCommandIntegrationTest {
                 "--entity-type", "client-metrics",
                 "--entity-name", "cm",
                 "--alter", "--add-config", "metrics=org.apache"));
-        String message = captureStandardMsg(run(command));
-        assertTrue(StringUtils.isBlank(message), message);
+        String message = captureStandardStream(false, run(command));
+        assertEquals("Completed updating config for client-metric cm.", message);
 
         // Test for the --client-metrics alias
         command = Stream.concat(quorumArgs(), Stream.of(
                 "--client-metrics", "cm",
                 "--alter", "--add-config", "metrics=org.apache"));
-        message = captureStandardMsg(run(command));
-        assertTrue(StringUtils.isBlank(message), message);
+        message = captureStandardStream(false, run(command));
+        assertEquals("Completed updating config for client-metric cm.", message);
     }
 
     @ClusterTest
@@ -307,7 +305,7 @@ public class ConfigCommandIntegrationTest {
             throw new RuntimeException();
         });
 
-        String errOut = captureStandardMsg(run(args));
+        String errOut = captureStandardStream(true, run(args));
 
         checkErrOut.accept(errOut);
         assertNotNull(exitStatus.get());
@@ -318,8 +316,8 @@ public class ConfigCommandIntegrationTest {
         return Stream.of("--bootstrap-server", cluster.bootstrapServers());
     }
 
-    private List<String> entityOp(Optional<String> brokerId) {
-        return brokerId.map(id -> asList("--entity-name", id))
+    private List<String> entityOp(Optional<String> entityId) {
+        return entityId.map(id -> asList("--entity-name", id))
                 .orElse(singletonList("--entity-default"));
     }
 
@@ -457,10 +455,6 @@ public class ConfigCommandIntegrationTest {
         return Stream.of(lists).flatMap(List::stream).toArray(String[]::new);
     }
 
-    private String captureStandardMsg(Runnable runnable) {
-        return captureStandardStream(runnable);
-    }
-
     private String transferConfigMapToString(Map<String, String> configs) {
         return configs.entrySet()
                 .stream()
@@ -468,17 +462,25 @@ public class ConfigCommandIntegrationTest {
                 .collect(Collectors.joining(","));
     }
 
-    private String captureStandardStream(Runnable runnable) {
+    // Copied from ToolsTestUtils.java, can be removed after we move ConfigCommand to tools module
+    static String captureStandardStream(boolean isErr, Runnable runnable) {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        PrintStream currentStream = System.err;
-        try (PrintStream tempStream = new PrintStream(outputStream)) {
+        PrintStream currentStream = isErr ? System.err : System.out;
+        PrintStream tempStream = new PrintStream(outputStream);
+        if (isErr)
             System.setErr(tempStream);
-            try {
-                runnable.run();
-                return outputStream.toString().trim();
-            } finally {
+        else
+            System.setOut(tempStream);
+        try {
+            runnable.run();
+            return outputStream.toString().trim();
+        } finally {
+            if (isErr)
                 System.setErr(currentStream);
-            }
+            else
+                System.setOut(currentStream);
+
+            tempStream.close();
         }
     }
 }
