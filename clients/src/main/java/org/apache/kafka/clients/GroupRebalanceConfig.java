@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 
@@ -48,7 +50,11 @@ public class GroupRebalanceConfig {
     public final boolean leaveGroupOnClose;
 
     public GroupRebalanceConfig(AbstractConfig config, ProtocolType protocolType) {
-        this.sessionTimeoutMs = config.getInt(CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG);
+        if (protocolType == ProtocolType.CONSUMER && config.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG).equals(GroupProtocol.CONSUMER.name())) {
+            this.sessionTimeoutMs = 0;
+        } else {
+            this.sessionTimeoutMs = config.getInt(CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG);
+        }
 
         // Consumer and Connect use different config names for defining rebalance timeout
         if ((protocolType == ProtocolType.CONSUMER) || (protocolType == ProtocolType.SHARE)) {
