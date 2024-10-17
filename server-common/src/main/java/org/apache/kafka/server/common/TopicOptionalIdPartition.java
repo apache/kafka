@@ -14,9 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common;
+package org.apache.kafka.server.common;
+
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * This represents universally unique identifier with topic id for a topic partition. However, for this wrapper, we can
@@ -24,7 +28,7 @@ import java.util.Objects;
  */
 public class TopicOptionalIdPartition {
 
-    private final Uuid topicId;
+    private final Optional<Uuid> topicId;
     private final TopicPartition topicPartition;
 
     /**
@@ -33,7 +37,7 @@ public class TopicOptionalIdPartition {
      * @param topicId the topic id
      * @param topicPartition the topic partition
      */
-    public TopicOptionalIdPartition(Uuid topicId, TopicPartition topicPartition) {
+    public TopicOptionalIdPartition(Optional<Uuid> topicId, TopicPartition topicPartition) {
         this.topicId = topicId;
         this.topicPartition = Objects.requireNonNull(topicPartition, "topicPartition can not be null");
     }
@@ -41,7 +45,7 @@ public class TopicOptionalIdPartition {
     /**
      * @return Universally unique id representing this topic partition.
      */
-    public Uuid topicId() {
+    public Optional<Uuid> topicId() {
         return topicId;
     }
 
@@ -83,8 +87,8 @@ public class TopicOptionalIdPartition {
     public int hashCode() {
         final int prime = 31;
         int result = 0;
-        if (topicId != null) {
-            result = prime + topicId.hashCode();
+        if (topicId.isPresent()) {
+            result = prime + topicId.get().hashCode();
         }
         result = prime * result + topicPartition.hashCode();
         return result;
@@ -92,6 +96,6 @@ public class TopicOptionalIdPartition {
 
     @Override
     public String toString() {
-        return topicId + ":" + topic() + "-" + partition();
+        return topicId.map(uuid -> uuid + ":" + topic() + "-" + partition()).orElseGet(() -> null + ":" + topic() + "-" + partition());
     }
 }
