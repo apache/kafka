@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
@@ -26,6 +27,8 @@ import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.ControlRecordType;
+import org.apache.kafka.common.record.EndTransactionMarker;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Records;
@@ -100,6 +103,7 @@ public class FetchCollectorTest {
         int recordCount = DEFAULT_MAX_POLL_RECORDS;
         buildDependencies();
         assignAndSeek(topicAPartition0);
+        final OffsetAndMetadata nextOffsetAndMetadata = new OffsetAndMetadata(recordCount, Optional.empty(), "");
 
         CompletedFetch completedFetch = completedFetchBuilder
                 .recordCount(recordCount)
@@ -117,6 +121,8 @@ public class FetchCollectorTest {
         Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
         assertFalse(fetch.isEmpty());
         assertEquals(recordCount, fetch.numRecords());
+        assertEquals(1, fetch.nextOffsets().size());
+        assertEquals(nextOffsetAndMetadata, fetch.nextOffsets().get(topicAPartition0));
 
         // When we collected the data from the buffer, this will cause the completed fetch to get initialized.
         assertTrue(completedFetch.isInitialized());
@@ -143,6 +149,8 @@ public class FetchCollectorTest {
         // The Fetch object is non-null, but it's empty.
         assertEquals(0, fetch.numRecords());
         assertTrue(fetch.isEmpty());
+        assertEquals(1, fetch.nextOffsets().size());
+        assertEquals(nextOffsetAndMetadata, fetch.nextOffsets().get(topicAPartition0));
 
         // However, once we read *past* the end of the records in the CompletedFetch, then we will call
         // drain on it, and it will be considered all consumed.
@@ -167,6 +175,8 @@ public class FetchCollectorTest {
         // The Fetch and read replica settings should be empty.
         assertEquals(DEFAULT_RECORD_COUNT, fetch.numRecords());
         assertEquals(Optional.of(preferredReadReplicaId), subscriptions.preferredReadReplica(topicAPartition0, time.milliseconds()));
+        assertEquals(1, fetch.nextOffsets().size());
+        assertEquals(new OffsetAndMetadata(DEFAULT_RECORD_COUNT, Optional.empty(), ""), fetch.nextOffsets().get(topicAPartition0));
     }
 
     @Test
@@ -189,6 +199,7 @@ public class FetchCollectorTest {
 
         // Verify that no records are fetched for the partition as it did not have a valid position set.
         assertEquals(0, fetch.numRecords());
+        assertEquals(0, fetch.nextOffsets().size());
     }
 
     @ParameterizedTest
@@ -259,6 +270,7 @@ public class FetchCollectorTest {
 
         // There should be no records in the Fetch as the partition being fetched is 'paused'.
         assertEquals(0, fetch.numRecords());
+        assertEquals(0, fetch.nextOffsets().size());
 
         // The FetchBuffer queue should not be empty; the CompletedFetch is added to the FetchBuffer queue by
         // the FetchCollector when it detects a 'paused' partition.
@@ -289,6 +301,7 @@ public class FetchCollectorTest {
         // Fetch the data and validate that we get all the records we want back.
         Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
         assertTrue(fetch.isEmpty());
+        assertEquals(0, fetch.nextOffsets().size());
         assertTrue(metadata.updateRequested());
         assertEquals(Optional.empty(), subscriptions.preferredReadReplica(topicAPartition0, time.milliseconds()));
     }
@@ -305,7 +318,8 @@ public class FetchCollectorTest {
         Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
         assertFalse(fetch.isEmpty());
         assertEquals(DEFAULT_RECORD_COUNT, fetch.numRecords());
-
+        assertEquals(1, fetch.nextOffsets().size());
+        assertEquals(new OffsetAndMetadata(DEFAULT_RECORD_COUNT, Optional.empty(), ""), fetch.nextOffsets().get(topicAPartition0));
         // Try to fetch more data and validate that we get an empty Fetch back.
         completedFetch = completedFetchBuilder
                 .fetchOffset(fetch.numRecords())
@@ -313,6 +327,7 @@ public class FetchCollectorTest {
                 .build();
         fetchBuffer.add(completedFetch);
         fetch = fetchCollector.collectFetch(fetchBuffer);
+        assertEquals(0, fetch.nextOffsets().size());
         assertTrue(fetch.isEmpty());
 
         // Try to fetch more data and validate that we get an empty Fetch back.
@@ -322,6 +337,7 @@ public class FetchCollectorTest {
                 .build();
         fetchBuffer.add(completedFetch);
         fetch = fetchCollector.collectFetch(fetchBuffer);
+        assertEquals(0, fetch.nextOffsets().size());
         assertTrue(fetch.isEmpty());
     }
 
@@ -345,6 +361,7 @@ public class FetchCollectorTest {
 
         // The Fetch and read replica settings should be empty.
         assertTrue(fetch.isEmpty());
+        assertEquals(0, fetch.nextOffsets().size());
         assertEquals(Optional.empty(), subscriptions.preferredReadReplica(topicAPartition0, time.milliseconds()));
     }
 
@@ -372,6 +389,7 @@ public class FetchCollectorTest {
                 .build();
         fetchBuffer.add(completedFetch);
         Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
+        assertEquals(0, fetch.nextOffsets().size());
         assertTrue(fetch.isEmpty());
     }
 
@@ -386,6 +404,7 @@ public class FetchCollectorTest {
                 .build();
         fetchBuffer.add(completedFetch);
         Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
+        assertEquals(0, fetch.nextOffsets().size());
         assertTrue(fetch.isEmpty());
     }
 
@@ -437,6 +456,7 @@ public class FetchCollectorTest {
         final Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
 
         assertTrue(fetch.isEmpty());
+        assertEquals(0, fetch.nextOffsets().size());
         verify(fetchBuffer).setNextInLineFetch(null);
     }
 
@@ -466,6 +486,7 @@ public class FetchCollectorTest {
         final Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
 
         assertTrue(fetch.isEmpty());
+        assertEquals(0, fetch.nextOffsets().size());
         verify(fetchBuffer).setNextInLineFetch(null);
     }
 
@@ -498,6 +519,7 @@ public class FetchCollectorTest {
         final Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
 
         assertTrue(fetch.isEmpty());
+        assertEquals(0, fetch.nextOffsets().size());
         verify(fetchBuffer).setNextInLineFetch(null);
     }
 
@@ -533,6 +555,7 @@ public class FetchCollectorTest {
         final Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
 
         assertTrue(fetch.isEmpty());
+        assertEquals(0, fetch.nextOffsets().size());
         verify(fetchBuffer).setNextInLineFetch(null);
     }
 
@@ -571,6 +594,7 @@ public class FetchCollectorTest {
         final Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
 
         assertTrue(fetch.isEmpty());
+        assertEquals(0, fetch.nextOffsets().size());
         verify(fetchBuffer).setNextInLineFetch(null);
     }
 
@@ -594,6 +618,7 @@ public class FetchCollectorTest {
         final Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
 
         assertTrue(fetch.isEmpty());
+        assertEquals(0, fetch.nextOffsets().size());
         verify(fetchBuffer).setNextInLineFetch(null);
     }
 
@@ -620,8 +645,47 @@ public class FetchCollectorTest {
         final Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
 
         assertTrue(fetch.isEmpty());
+        assertEquals(0, fetch.nextOffsets().size());
         verify(subscriptions).requestOffsetResetIfPartitionAssigned(topicPartition0);
         verify(fetchBuffer).setNextInLineFetch(null);
+    }
+
+    @Test
+    public void testReadCommittedWithAbortedTransaction() {
+        buildDependencies();
+        int recordCount = 20;
+        assignAndSeek(topicAPartition0);
+
+
+        // Initial CompletedFetch
+        CompletedFetch initialCompletedFetch = completedFetchBuilder
+            .recordCount(recordCount)
+            .build();
+        fetchBuffer.add(initialCompletedFetch);
+        Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
+
+        assertFalse(fetch.isEmpty());
+        assertEquals(recordCount, fetch.numRecords());
+        assertEquals(1, fetch.nextOffsets().size());
+        assertEquals(new OffsetAndMetadata(fetch.numRecords(), Optional.empty(), ""), fetch.nextOffsets().get(topicAPartition0));
+
+
+        // Subsequent CompletedFetch with abort marker
+        Records rawRecords = createTranscactionalRecords(ControlRecordType.ABORT, recordCount);
+        FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
+            .setRecords(rawRecords);
+        CompletedFetch fetchWithAbortTxnRecord = completedFetchBuilder
+            .partitionData(partitionData)
+            .fetchOffset(recordCount)
+            .build();
+        fetchBuffer.add(fetchWithAbortTxnRecord);
+        fetch = fetchCollector.collectFetch(fetchBuffer);
+
+        assertFalse(fetch.isEmpty());
+        assertEquals(0, fetch.numRecords());
+        assertEquals(1, fetch.nextOffsets().size());
+        // offset is moved forward due to the control record
+        assertEquals(new OffsetAndMetadata(recordCount + 1, Optional.of(0), ""), fetch.nextOffsets().get(topicAPartition0));
     }
 
     private FetchCollector<String, String> createFetchCollector(final SubscriptionState subscriptions) {
@@ -831,6 +895,12 @@ public class FetchCollectorTest {
     }
 
     private Records createRecords(final int recordCount) {
+        try (MemoryRecordsBuilder builder = createRecordsBuilder(recordCount)) {
+            return builder.build();
+        }
+    }
+
+    private MemoryRecordsBuilder createRecordsBuilder(final int recordCount) {
         ByteBuffer allocate = ByteBuffer.allocate(1024);
 
         try (MemoryRecordsBuilder builder = MemoryRecords.builder(allocate,
@@ -840,7 +910,22 @@ public class FetchCollectorTest {
             for (int i = 0; i < recordCount; i++)
                 builder.append(0L, "key".getBytes(), ("value-" + i).getBytes());
 
-            return builder.build();
+            return builder;
+        }
+    }
+
+    private Records createTranscactionalRecords(ControlRecordType controlRecordType, int recordCount) {
+        try (MemoryRecordsBuilder builder = createRecordsBuilder(recordCount)) {
+            ByteBuffer buffer = builder.buffer();
+            MemoryRecords.writeEndTransactionalMarker(buffer,
+                recordCount,
+                time.milliseconds(),
+                0,
+                1000L,
+                (short) 0,
+                new EndTransactionMarker(controlRecordType, 0));
+            buffer.flip();
+            return MemoryRecords.readableRecords(buffer);
         }
     }
 }
