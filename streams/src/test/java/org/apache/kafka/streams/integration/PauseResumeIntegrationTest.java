@@ -99,6 +99,7 @@ public class PauseResumeIntegrationTest {
 
     private String appId;
     private KafkaStreams kafkaStreams, kafkaStreams2;
+    @SuppressWarnings("deprecation")
     private KafkaStreamsNamedTopologyWrapper streamsNamedTopologyWrapper;
 
     @BeforeAll
@@ -198,6 +199,7 @@ public class PauseResumeIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
+    @SuppressWarnings("deprecation")
     public void shouldPauseAndResumeKafkaStreamsWithNamedTopologies(final boolean stateUpdaterEnabled) throws Exception {
         streamsNamedTopologyWrapper = new KafkaStreamsNamedTopologyWrapper(props(stateUpdaterEnabled));
         final NamedTopologyBuilder builder1 = getNamedTopologyBuilder1();
@@ -233,6 +235,7 @@ public class PauseResumeIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
+    @SuppressWarnings("deprecation")
     public void shouldPauseAndResumeAllKafkaStreamsWithNamedTopologies(final boolean stateUpdaterEnabled) throws Exception {
         streamsNamedTopologyWrapper = new KafkaStreamsNamedTopologyWrapper(props(stateUpdaterEnabled));
         final NamedTopologyBuilder builder1 = getNamedTopologyBuilder1();
@@ -269,6 +272,7 @@ public class PauseResumeIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
+    @SuppressWarnings("deprecation")
     public void shouldAllowForNamedTopologiesToStartPaused(final boolean stateUpdaterEnabled) throws Exception {
         streamsNamedTopologyWrapper = new KafkaStreamsNamedTopologyWrapper(props(stateUpdaterEnabled));
         final NamedTopologyBuilder builder1 = getNamedTopologyBuilder1();
@@ -395,12 +399,14 @@ public class PauseResumeIntegrationTest {
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, topicName, count), CoreMatchers.equalTo(output));
     }
 
+    @SuppressWarnings("deprecation")
     private NamedTopologyBuilder getNamedTopologyBuilder1() {
         final NamedTopologyBuilder builder1 = streamsNamedTopologyWrapper.newNamedTopologyBuilder(TOPOLOGY1);
         builder1.stream(INPUT_STREAM_1).groupByKey().count().toStream().to(OUTPUT_STREAM_1);
         return builder1;
     }
 
+    @SuppressWarnings("deprecation")
     private NamedTopologyBuilder getNamedTopologyBuilder2() {
         final NamedTopologyBuilder builder2 = streamsNamedTopologyWrapper.newNamedTopologyBuilder(TOPOLOGY2);
         builder2.stream(INPUT_STREAM_2)

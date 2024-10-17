@@ -79,12 +79,6 @@ public interface Consumer<K, V> extends Closeable {
     void unsubscribe();
 
     /**
-     * @see KafkaConsumer#poll(long)
-     */
-    @Deprecated
-    ConsumerRecords<K, V> poll(long timeout);
-
-    /**
      * @see KafkaConsumer#poll(Duration)
      */
     ConsumerRecords<K, V> poll(Duration timeout);

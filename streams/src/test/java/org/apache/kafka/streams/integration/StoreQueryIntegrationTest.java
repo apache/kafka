@@ -416,6 +416,7 @@ public class StoreQueryIntegrationTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldQuerySpecificStalePartitionStoresMultiStreamThreadsNamedTopology() throws Exception {
         final int batch1NumMessages = 100;
         final int key = 1;
@@ -635,6 +636,7 @@ public class StoreQueryIntegrationTest {
         return streams;
     }
 
+    @SuppressWarnings("deprecation")
     private KafkaStreamsNamedTopologyWrapper createNamedTopologyKafkaStreams(final Properties config) {
         final KafkaStreamsNamedTopologyWrapper streams = new KafkaStreamsNamedTopologyWrapper(config);
         streamsToCleanup.add(streams);

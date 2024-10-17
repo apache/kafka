@@ -47,7 +47,6 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -110,12 +109,12 @@ public class StreamsMetadataStateTest {
         hostTwo = new HostInfo("host-two", 9090);
         hostThree = new HostInfo("host-three", 7070);
         hostToActivePartitions = new HashMap<>();
-        hostToActivePartitions.put(hostOne, mkSet(topic1P0, topic2P1, topic4P0));
-        hostToActivePartitions.put(hostTwo, mkSet(topic2P0, topic1P1));
+        hostToActivePartitions.put(hostOne, Set.of(topic1P0, topic2P1, topic4P0));
+        hostToActivePartitions.put(hostTwo, Set.of(topic2P0, topic1P1));
         hostToActivePartitions.put(hostThree, Collections.singleton(topic3P0));
         hostToStandbyPartitions = new HashMap<>();
-        hostToStandbyPartitions.put(hostThree, mkSet(topic1P0, topic2P1, topic4P0));
-        hostToStandbyPartitions.put(hostOne, mkSet(topic2P0, topic1P1));
+        hostToStandbyPartitions.put(hostThree, Set.of(topic1P0, topic2P1, topic4P0));
+        hostToStandbyPartitions.put(hostOne, Set.of(topic2P0, topic1P1));
         hostToStandbyPartitions.put(hostTwo, Collections.singleton(topic3P0));
 
         partitionInfos = new HashMap<>();
@@ -131,7 +130,7 @@ public class StreamsMetadataStateTest {
         metadataState = new StreamsMetadataState(topologyMetadata, hostOne, logContext);
         metadataState.onChange(hostToActivePartitions, hostToStandbyPartitions, partitionInfos);
         partitioner = (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(1));
-        storeNames = mkSet("table-one", "table-two", "merged-table", globalTable);
+        storeNames = Set.of("table-one", "table-two", "merged-table", globalTable);
     }
 
     static class MultiValuedPartitioner implements StreamPartitioner<String, Object> {
@@ -157,20 +156,20 @@ public class StreamsMetadataStateTest {
     @Test
     public void shouldGetAllStreamInstances() {
         final StreamsMetadata one = new StreamsMetadataImpl(hostOne,
-            mkSet(globalTable, "table-one", "table-two", "merged-table"),
-            mkSet(topic1P0, topic2P1, topic4P0),
-            mkSet("table-one", "table-two", "merged-table"),
-            mkSet(topic2P0, topic1P1));
+            Set.of(globalTable, "table-one", "table-two", "merged-table"),
+            Set.of(topic1P0, topic2P1, topic4P0),
+            Set.of("table-one", "table-two", "merged-table"),
+            Set.of(topic2P0, topic1P1));
         final StreamsMetadata two = new StreamsMetadataImpl(hostTwo,
-            mkSet(globalTable, "table-two", "table-one", "merged-table"),
-            mkSet(topic2P0, topic1P1),
-            mkSet("table-three"),
-            mkSet(topic3P0));
+            Set.of(globalTable, "table-two", "table-one", "merged-table"),
+            Set.of(topic2P0, topic1P1),
+            Set.of("table-three"),
+            Set.of(topic3P0));
         final StreamsMetadata three = new StreamsMetadataImpl(hostThree,
-            mkSet(globalTable, "table-three"),
+            Set.of(globalTable, "table-three"),
             Collections.singleton(topic3P0),
-            mkSet("table-one", "table-two", "merged-table"),
-            mkSet(topic1P0, topic2P1, topic4P0));
+            Set.of("table-one", "table-two", "merged-table"),
+            Set.of(topic1P0, topic2P1, topic4P0));
 
         final Collection<StreamsMetadata> actual = metadataState.allMetadata();
         assertEquals(3, actual.size());
@@ -185,7 +184,7 @@ public class StreamsMetadataStateTest {
 
         final TopicPartition tp5 = new TopicPartition("topic-five", 1);
         final HostInfo hostFour = new HostInfo("host-four", 8080);
-        hostToActivePartitions.put(hostFour, mkSet(tp5));
+        hostToActivePartitions.put(hostFour, Set.of(tp5));
 
         metadataState.onChange(hostToActivePartitions, Collections.emptyMap(),
             Collections.singletonMap(tp5, new PartitionInfo("topic-five", 1, null, null, null)));
@@ -199,15 +198,15 @@ public class StreamsMetadataStateTest {
     @Test
     public void shouldGetInstancesForStoreName() {
         final StreamsMetadata one = new StreamsMetadataImpl(hostOne,
-            mkSet(globalTable, "table-one", "table-two", "merged-table"),
-            mkSet(topic1P0, topic2P1, topic4P0),
-            mkSet("table-one", "table-two", "merged-table"),
-            mkSet(topic2P0, topic1P1));
+            Set.of(globalTable, "table-one", "table-two", "merged-table"),
+            Set.of(topic1P0, topic2P1, topic4P0),
+            Set.of("table-one", "table-two", "merged-table"),
+            Set.of(topic2P0, topic1P1));
         final StreamsMetadata two = new StreamsMetadataImpl(hostTwo,
-            mkSet(globalTable, "table-two", "table-one", "merged-table"),
-            mkSet(topic2P0, topic1P1),
-            mkSet("table-three"),
-            mkSet(topic3P0));
+            Set.of(globalTable, "table-two", "table-one", "merged-table"),
+            Set.of(topic2P0, topic1P1),
+            Set.of("table-three"),
+            Set.of(topic3P0));
         final Collection<StreamsMetadata> actual = metadataState.allMetadataForStore("table-one");
         final Map<HostInfo, StreamsMetadata> actualAsMap = actual.stream()
             .collect(Collectors.toMap(StreamsMetadata::hostInfo, Function.identity()));
@@ -232,12 +231,12 @@ public class StreamsMetadataStateTest {
     @Test
     public void shouldGetInstanceWithKey() {
         final TopicPartition tp4 = new TopicPartition("topic-three", 1);
-        hostToActivePartitions.put(hostTwo, mkSet(topic2P0, tp4));
+        hostToActivePartitions.put(hostTwo, Set.of(topic2P0, tp4));
 
         metadataState.onChange(hostToActivePartitions, hostToStandbyPartitions,
             Collections.singletonMap(tp4, new PartitionInfo("topic-three", 1, null, null, null)));
 
-        final KeyQueryMetadata expected = new KeyQueryMetadata(hostThree, mkSet(hostTwo), 0);
+        final KeyQueryMetadata expected = new KeyQueryMetadata(hostThree, Set.of(hostTwo), 0);
         final KeyQueryMetadata actual = metadataState.keyQueryMetadataForKey("table-three",
                                                                     "the-key",
                                                                     Serdes.String().serializer());
@@ -247,7 +246,7 @@ public class StreamsMetadataStateTest {
     @Test
     public void shouldGetInstanceWithKeyAndCustomPartitioner() {
         final TopicPartition tp4 = new TopicPartition("topic-three", 1);
-        hostToActivePartitions.put(hostTwo, mkSet(topic2P0, tp4));
+        hostToActivePartitions.put(hostTwo, Set.of(topic2P0, tp4));
 
         metadataState.onChange(hostToActivePartitions, hostToStandbyPartitions,
             Collections.singletonMap(tp4, new PartitionInfo("topic-three", 1, null, null, null)));
@@ -264,7 +263,7 @@ public class StreamsMetadataStateTest {
     @Test
     public void shouldFailWhenIqQueriedWithCustomPartitionerReturningMultiplePartitions() {
         final TopicPartition tp4 = new TopicPartition("topic-three", 1);
-        hostToActivePartitions.put(hostTwo, mkSet(topic2P0, tp4));
+        hostToActivePartitions.put(hostTwo, Set.of(topic2P0, tp4));
 
         metadataState.onChange(hostToActivePartitions, hostToStandbyPartitions,
                 Collections.singletonMap(tp4, new PartitionInfo("topic-three", 1, null, null, null)));
@@ -285,12 +284,12 @@ public class StreamsMetadataStateTest {
     @Test
     public void shouldGetInstanceWithKeyWithMergedStreams() {
         final TopicPartition topic2P2 = new TopicPartition("topic-two", 2);
-        hostToActivePartitions.put(hostTwo, mkSet(topic2P0, topic1P1, topic2P2));
-        hostToStandbyPartitions.put(hostOne, mkSet(topic2P0, topic1P1, topic2P2));
+        hostToActivePartitions.put(hostTwo, Set.of(topic2P0, topic1P1, topic2P2));
+        hostToStandbyPartitions.put(hostOne, Set.of(topic2P0, topic1P1, topic2P2));
         metadataState.onChange(hostToActivePartitions, hostToStandbyPartitions,
                 Collections.singletonMap(topic2P2, new PartitionInfo("topic-two", 2, null, null, null)));
 
-        final KeyQueryMetadata expected = new KeyQueryMetadata(hostTwo, mkSet(hostOne), 2);
+        final KeyQueryMetadata expected = new KeyQueryMetadata(hostTwo, Set.of(hostOne), 2);
 
         final KeyQueryMetadata actual = metadataState.keyQueryMetadataForKey("merged-table",  "the-key",
             (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(2)));

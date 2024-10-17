@@ -67,7 +67,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
@@ -234,7 +233,7 @@ public class KafkaConsumerTest {
         props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
         consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
 
-        assertEquals(3, consumer.metricsRegistry().reporters().size());
+        assertEquals(2, consumer.metricsRegistry().reporters().size());
 
         MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) consumer.metricsRegistry().reporters().stream()
             .filter(reporter -> reporter instanceof MockMetricsReporter).findFirst().get();
@@ -243,12 +242,11 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
-    @SuppressWarnings("deprecation")
     public void testDisableJmxAndClientTelemetryReporter(GroupProtocol groupProtocol) {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        props.setProperty(ConsumerConfig.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false");
+        props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, "");
         props.setProperty(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG, "false");
         consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
         assertTrue(consumer.metricsRegistry().reporters().isEmpty());
@@ -269,12 +267,11 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
-    @SuppressWarnings("deprecation")
     public void testExplicitlyOnlyEnableClientTelemetryReporter(GroupProtocol groupProtocol) {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        props.setProperty(ConsumerConfig.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false");
+        props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, "");
         consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
         assertEquals(1, consumer.metricsRegistry().reporters().size());
         assertInstanceOf(ClientTelemetryReporter.class, consumer.metricsRegistry().reporters().get(0));
@@ -782,31 +779,6 @@ public class KafkaConsumerTest {
         assertEquals(0, requests.stream().filter(request -> request.apiKey().equals(ApiKeys.FETCH)).count());
     }
 
-    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
-    //       Once it is implemented, this should use both group protocols.
-    @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
-    @SuppressWarnings("deprecation")
-    public void verifyDeprecatedPollDoesNotTimeOutDuringMetadataUpdate(GroupProtocol groupProtocol) {
-        final ConsumerMetadata metadata = createMetadata(subscription);
-        final MockClient client = new MockClient(time, metadata);
-
-        initMetadata(client, Collections.singletonMap(topic, 1));
-        Node node = metadata.fetch().nodes().get(0);
-
-        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
-        consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
-        prepareRebalance(client, node, assignor, singletonList(tp0), null);
-
-        consumer.poll(0L);
-
-        // The underlying client SHOULD get a fetch request
-        final Queue<ClientRequest> requests = client.requests();
-        assertEquals(1, requests.size());
-        final Class<? extends AbstractRequest.Builder> aClass = requests.peek().requestBuilder().getClass();
-        assertEquals(FetchRequest.Builder.class, aClass);
-    }
-
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
     @SuppressWarnings("unchecked")
@@ -1133,7 +1105,7 @@ public class KafkaConsumerTest {
 
         // fetch offset for one topic
         client.prepareResponseFrom(offsetResponse(Utils.mkMap(Utils.mkEntry(tp0, offset1), Utils.mkEntry(tp1, -1L)), Errors.NONE), coordinator);
-        final Map<TopicPartition, OffsetAndMetadata> committed = consumer.committed(Utils.mkSet(tp0, tp1));
+        final Map<TopicPartition, OffsetAndMetadata> committed = consumer.committed(Set.of(tp0, tp1));
         assertEquals(2, committed.size());
         assertEquals(offset1, committed.get(tp0).offset());
         assertNull(committed.get(tp1));
@@ -1707,7 +1679,7 @@ public class KafkaConsumerTest {
         Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
 
         // manual assignment
-        Set<TopicPartition> partitions = Utils.mkSet(tp0, tp1);
+        Set<TopicPartition> partitions = Set.of(tp0, tp1);
         consumer.assign(partitions);
         // verify consumer's assignment
         assertEquals(partitions, consumer.assignment());
@@ -2306,11 +2278,11 @@ public class KafkaConsumerTest {
         // a poll with non-zero milliseconds would complete three round-trips (discover, join, sync)
         TestUtils.waitForCondition(() -> {
             consumer.poll(Duration.ofMillis(100L));
-            return consumer.assignment().equals(Utils.mkSet(tp0, t2p0));
+            return consumer.assignment().equals(Set.of(tp0, t2p0));
         }, "Does not complete rebalance in time");
 
-        assertEquals(Utils.mkSet(topic, topic2), consumer.subscription());
-        assertEquals(Utils.mkSet(tp0, t2p0), consumer.assignment());
+        assertEquals(Set.of(topic, topic2), consumer.subscription());
+        assertEquals(Set.of(tp0, t2p0), consumer.assignment());
 
         // prepare a response of the outstanding fetch so that we have data available on the next poll
         Map<TopicPartition, FetchInfo> fetches1 = new HashMap<>();
@@ -2335,8 +2307,8 @@ public class KafkaConsumerTest {
         consumer.subscribe(Arrays.asList(topic, topic3), getConsumerRebalanceListener(consumer));
 
         // verify that subscription has changed but assignment is still unchanged
-        assertEquals(Utils.mkSet(topic, topic3), consumer.subscription());
-        assertEquals(Utils.mkSet(tp0, t2p0), consumer.assignment());
+        assertEquals(Set.of(topic, topic3), consumer.subscription());
+        assertEquals(Set.of(tp0, t2p0), consumer.assignment());
 
         // mock the offset commit response for to be revoked partitions
         Map<TopicPartition, Long> partitionOffsets1 = new HashMap<>();
@@ -2352,7 +2324,7 @@ public class KafkaConsumerTest {
         client.respondFrom(fetchResponse(fetches1), node);
 
         // verify that the fetch still occurred as expected
-        assertEquals(Utils.mkSet(topic, topic3), consumer.subscription());
+        assertEquals(Set.of(topic, topic3), consumer.subscription());
         assertEquals(Collections.singleton(tp0), consumer.assignment());
         assertEquals(1, records.count());
         assertEquals(2L, consumer.position(tp0));
@@ -2368,7 +2340,7 @@ public class KafkaConsumerTest {
         records = consumer.poll(Duration.ZERO);
 
         // should not finish the response yet
-        assertEquals(Utils.mkSet(topic, topic3), consumer.subscription());
+        assertEquals(Set.of(topic, topic3), consumer.subscription());
         assertEquals(Collections.singleton(tp0), consumer.assignment());
         assertEquals(1, records.count());
         assertEquals(3L, consumer.position(tp0));
@@ -2383,13 +2355,13 @@ public class KafkaConsumerTest {
         AtomicInteger count = new AtomicInteger(0);
         TestUtils.waitForCondition(() -> {
             ConsumerRecords<String, String> recs = consumer.poll(Duration.ofMillis(100L));
-            return consumer.assignment().equals(Utils.mkSet(tp0, t3p0)) && count.addAndGet(recs.count()) == 1;
+            return consumer.assignment().equals(Set.of(tp0, t3p0)) && count.addAndGet(recs.count()) == 1;
 
         }, "Does not complete rebalance in time");
 
         // should have t3 but not sent yet the t3 records
-        assertEquals(Utils.mkSet(topic, topic3), consumer.subscription());
-        assertEquals(Utils.mkSet(tp0, t3p0), consumer.assignment());
+        assertEquals(Set.of(topic, topic3), consumer.subscription());
+        assertEquals(Set.of(tp0, t3p0), consumer.assignment());
         assertEquals(4L, consumer.position(tp0));
         assertEquals(0L, consumer.position(t3p0));
 

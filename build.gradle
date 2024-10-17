@@ -39,21 +39,15 @@ plugins {
   id 'org.nosphere.apache.rat' version "0.8.1"
   id "io.swagger.core.v3.swagger-gradle-plugin" version "${swaggerVersion}"
 
-  // When updating the spotbugs gradle plugin, check if it already
-  // includes spotbugs version 4.7.4, in which case CVE-2022-42920 can
-  // be dropped from gradle/resources/dependencycheck-suppressions.xml
-  id "com.github.spotbugs" version '5.1.3' apply false
+  id "com.github.spotbugs" version '6.0.25' apply false
   id 'org.scoverage' version '8.0.3' apply false
   id 'io.github.goooler.shadow' version '8.1.3' apply false
-  //  Spotless 6.13.0 has issue with Java 21 (see https://github.com/diffplug/spotless/pull/1920), and Spotless 6.14.0+ requires JRE 11
-  //  We are going to drop JDK8 support. Hence, the spotless is upgrade to newest version and be applied only if the build env is compatible with JDK 11.
-  //  spotless 6.15.0+ has issue in runtime with JDK8 even through we define it with `apply:false`. see https://github.com/diffplug/spotless/issues/2156 for more details
-  id 'com.diffplug.spotless' version "6.14.0" apply false
+  id 'com.diffplug.spotless' version "6.25.0"
 }
 
 ext {
   gradleVersion = versions.gradle
-  minJavaVersion = 8
+  minJavaVersion = 11
   buildVersionFileName = "kafka-version.properties"
 
   defaultMaxHeapSize = "2g"
@@ -187,12 +181,7 @@ allprojects {
     options.addStringOption('Xdoclint:none', '-quiet')
     // Javadoc warnings should fail the build in JDK 15+ https://bugs.openjdk.org/browse/JDK-8200363
     options.addBooleanOption('Werror', JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_15))
-
-    // The URL structure was changed to include the locale after Java 8
-    if (JavaVersion.current().isJava11Compatible())
-      options.links "https://docs.oracle.com/en/java/javase/${JavaVersion.current().majorVersion}/docs/api/"
-    else
-      options.links "https://docs.oracle.com/javase/8/docs/api/"
+    options.links "https://docs.oracle.com/en/java/javase/${JavaVersion.current().majorVersion}/docs/api/"
   }
 
   clean {
@@ -212,7 +201,22 @@ def determineCommitId() {
   }
 }
 
-
+/**
+ * For a given Project, compute a nice dash separated directory name
+ * to store the JUnit XML files in. E.g., Project ":connect:api" -> "connect-api"
+ */
+static def projectToJUnitXmlPath(project) {
+  var p = project
+  var projectNames = []
+  while (p != null) {
+    projectNames.push(p.name)
+    p = p.parent
+    if (p.name == "kafka") {
+      break;
+    }
+  }
+  return projectNames.join("/")
+}
 
 
 apply from: file('wrapper.gradle')
@@ -312,23 +316,8 @@ subprojects {
     options.compilerArgs << "-Xlint:-serial"
     options.compilerArgs << "-Xlint:-try"
     options.compilerArgs << "-Werror"
-
-    // --release is the recommended way to select the target release, but it's only supported in Java 9 so we also
-    // set --source and --target via `sourceCompatibility` and `targetCompatibility` a couple of lines below
-    if (JavaVersion.current().isJava9Compatible())
-      options.release = minJavaVersion
-    // --source/--target 8 is deprecated in Java 20, suppress warning until Java 8 support is dropped in Kafka 4.0
-    if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_20))
-      options.compilerArgs << "-Xlint:-options"
-
+    options.release = minJavaVersion
     addParametersForTests(name, options)
-  }
-
-  java {
-    // We should only set this if Java version is < 9 (--release is recommended for >= 9), but the Scala plugin for IntelliJ sets
-    // `-target` incorrectly if this is unset
-    sourceCompatibility = minJavaVersion
-    targetCompatibility = minJavaVersion
   }
 
   if (shouldPublish) {
@@ -526,7 +515,8 @@ subprojects {
     // were not run, but instead were restored via FROM-CACHE. See KAFKA-17479 for more details.
     doLast {
       if (ext.isGithubActions) {
-        def dest = rootProject.layout.buildDirectory.dir("junit-xml/${project.name}").get().asFile
+        def moduleDirPath = projectToJUnitXmlPath(project)
+        def dest = rootProject.layout.buildDirectory.dir("junit-xml/${moduleDirPath}").get().asFile
         println "Copy JUnit XML for ${project.name} to $dest"
         ant.copy(todir: "$dest/test") {
           ant.fileset(dir: "${test.reports.junitXml.entryPoint}")
@@ -586,7 +576,8 @@ subprojects {
     // were not run, but instead were restored via FROM-CACHE. See KAFKA-17479 for more details.
     doLast {
       if (ext.isGithubActions) {
-        def dest = rootProject.layout.buildDirectory.dir("junit-xml/${project.name}").get().asFile
+        def moduleDirPath = projectToJUnitXmlPath(project)
+        def dest = rootProject.layout.buildDirectory.dir("junit-xml/${moduleDirPath}").get().asFile
         println "Copy JUnit XML for ${project.name} to $dest"
         ant.copy(todir: "$dest/quarantinedTest", failonerror: "false") {
           ant.fileset(dir: "${quarantinedTest.reports.junitXml.entryPoint}") {
@@ -854,17 +845,12 @@ subprojects {
     skipProjects = [ ":jmh-benchmarks", ":trogdor" ]
     skipConfigurations = [ "zinc" ]
   }
-  //  the task `removeUnusedImports` is implemented by google-java-format,
-  //  and unfortunately the google-java-format version used by spotless 6.14.0 can't work with JDK 21.
-  //  Hence, we apply spotless tasks only if the env is either JDK11 or JDK17
-  if ((JavaVersion.current().isJava11() || (JavaVersion.current() == JavaVersion.VERSION_17))) {
-    apply plugin: 'com.diffplug.spotless'
-    spotless {
-      java {
-        targetExclude('**/generated/**/*.java','**/generated-test/**/*.java')
-        importOrder('kafka', 'org.apache.kafka', 'com', 'net', 'org', 'java', 'javax', '', '\\#')
-        removeUnusedImports()
-      }
+  apply plugin: 'com.diffplug.spotless'
+  spotless {
+    java {
+      targetExclude('**/generated/**/*.java','**/generated-test/**/*.java')
+      importOrder('kafka', 'org.apache.kafka', 'com', 'net', 'org', 'java', 'javax', '', '\\#')
+      removeUnusedImports()
     }
   }
 }
@@ -1082,11 +1068,11 @@ project(':core') {
     implementation libs.joptSimple
     implementation libs.jose4j
     implementation libs.metrics
-    implementation libs.scalaJava8Compat
     // only needed transitively, but set it explicitly to ensure it has the same version as scala-library
     implementation libs.scalaReflect
     implementation libs.scalaLogging
     implementation libs.slf4jApi
+    implementation libs.commonsIo // ZooKeeper dependency. Do not use, this is going away.
     implementation(libs.zookeeper) {
       // Dropwizard Metrics are required by ZooKeeper as of v3.6.0,
       // but the library should *not* be used in Kafka code
@@ -1384,7 +1370,6 @@ project(':metadata') {
     compileOnly libs.reload4j
     testImplementation libs.junitJupiter
     testImplementation libs.jqwik
-    testImplementation libs.hamcrest
     testImplementation libs.mockitoCore
     testImplementation libs.slf4jReload4j
     testImplementation project(':clients').sourceSets.test.output
@@ -1577,7 +1562,6 @@ project(':test-common') {
   }
 
   dependencies {
-    implementation libs.scalaJava8Compat
     implementation project(':core')
     implementation project(':metadata')
     implementation project(':server')
@@ -1620,7 +1604,6 @@ project(':test-common:test-common-api') {
 
 
   dependencies {
-    implementation libs.scalaJava8Compat
     implementation project(':clients')
     implementation project(':core')
     implementation project(':group-coordinator')
@@ -1668,6 +1651,11 @@ project(':transaction-coordinator') {
   dependencies {
     implementation libs.jacksonDatabind
     implementation project(':clients')
+    testImplementation libs.junitJupiter
+    testImplementation libs.mockitoCore
+
+    testRuntimeOnly runtimeTestLibs
+
     generator project(':generator')
   }
 
@@ -1876,6 +1864,7 @@ project(':clients') {
     implementation libs.snappy
     implementation libs.slf4jApi
     implementation libs.opentelemetryProto
+    implementation libs.protobuf
 
     // libraries which should be added as runtime dependencies in generated pom.xml should be defined here:
     shadowed libs.zstd
@@ -2060,7 +2049,6 @@ project(':raft') {
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.jqwik
-    testImplementation libs.hamcrest
 
     testRuntimeOnly runtimeTestLibs
 
@@ -2155,9 +2143,9 @@ project(':server-common') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    testImplementation libs.hamcrest
 
     testRuntimeOnly runtimeTestLibs
+    testRuntimeOnly project(":test-common")
   }
 
   task createVersionFile() {
@@ -2468,6 +2456,8 @@ project(':tools') {
     implementation project(':transaction-coordinator')
     implementation project(':group-coordinator')
     implementation project(':coordinator-common')
+    implementation project(':share-coordinator')
+    implementation project(':share')
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonDataformatCsv
@@ -2509,6 +2499,7 @@ project(':tools') {
     testImplementation libs.apachedsLdifPartition
 
     testRuntimeOnly libs.junitPlatformLanucher
+    testRuntimeOnly project(':test-common')
   }
 
   javadoc {
@@ -2833,15 +2824,12 @@ project(':streams:streams-scala') {
     dependsOn 'copyDependantLibs'
   }
 
-  // spotless 6.14 requires Java 11 at runtime
-  if (JavaVersion.current().isJava11Compatible()) {
-    apply plugin: 'com.diffplug.spotless'
-    spotless {
-      scala {
-        target '**/*.scala'
-        scalafmt("$versions.scalafmt").configFile('../../checkstyle/.scalafmt.conf').scalaMajorVersion(versions.baseScala)
-        licenseHeaderFile '../../checkstyle/java.header', 'package'
-      }
+  apply plugin: 'com.diffplug.spotless'
+  spotless {
+    scala {
+      target '**/*.scala'
+      scalafmt("$versions.scalafmt").configFile('../../checkstyle/.scalafmt.conf').scalaMajorVersion(versions.baseScala)
+      licenseHeaderFile '../../checkstyle/java.header', 'package'
     }
   }
 }
@@ -3325,7 +3313,6 @@ project(':jmh-benchmarks') {
     implementation libs.mockitoCore
     implementation libs.slf4jReload4j
     implementation libs.scalaLibrary
-    implementation libs.scalaJava8Compat
   }
 
   tasks.withType(JavaCompile) {
@@ -3548,7 +3535,6 @@ project(':connect:runtime') {
 
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    testImplementation libs.hamcrest
     testImplementation libs.mockitoJunitJupiter
     testImplementation libs.httpclient
 
