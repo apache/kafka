@@ -104,7 +104,7 @@ public class ProducerInterceptorsTest {
         AppendProducerInterceptor interceptor2 = new AppendProducerInterceptor("Two");
         interceptorList.add(interceptor1);
         interceptorList.add(interceptor2);
-        ProducerInterceptors<Integer, String> interceptors = new ProducerInterceptors<>(interceptorList);
+        ProducerInterceptors<Integer, String> interceptors = new ProducerInterceptors<>(interceptorList, null);
 
         // verify that onSend() mutates the record as expected
         ProducerRecord<Integer, String> interceptedRecord = interceptors.onSend(producerRecord);
@@ -142,7 +142,7 @@ public class ProducerInterceptorsTest {
         AppendProducerInterceptor interceptor2 = new AppendProducerInterceptor("Two");
         interceptorList.add(interceptor1);
         interceptorList.add(interceptor2);
-        ProducerInterceptors<Integer, String> interceptors = new ProducerInterceptors<>(interceptorList);
+        ProducerInterceptors<Integer, String> interceptors = new ProducerInterceptors<>(interceptorList, null);
 
         // verify onAck is called on all interceptors
         RecordMetadata meta = new RecordMetadata(tp, 0, 0, 0, 0, 0);
@@ -166,7 +166,7 @@ public class ProducerInterceptorsTest {
         List<ProducerInterceptor<Integer, String>> interceptorList = new ArrayList<>();
         AppendProducerInterceptor interceptor1 = new AppendProducerInterceptor("One");
         interceptorList.add(interceptor1);
-        ProducerInterceptors<Integer, String> interceptors = new ProducerInterceptors<>(interceptorList);
+        ProducerInterceptors<Integer, String> interceptors = new ProducerInterceptors<>(interceptorList, null);
 
         // verify that metadata contains both topic and partition
         interceptors.onSendError(producerRecord,
