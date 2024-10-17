@@ -73,8 +73,8 @@ import java.util.concurrent.locks.Lock
 import java.util.concurrent.{CompletableFuture, Future, RejectedExecutionException, TimeUnit}
 import java.util.{Collections, Optional, OptionalInt, OptionalLong}
 import scala.collection.{Map, Seq, Set, immutable, mutable}
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.{RichOption, RichOptional}
 
 /*
  * Result metadata of a log append operation on the log
@@ -142,7 +142,7 @@ case class LogReadResult(info: FetchDataInfo,
     this.highWatermark,
     this.leaderLogStartOffset,
     this.info.records,
-    this.divergingEpoch.asJava,
+    this.divergingEpoch.toJava,
     if (this.lastStableOffset.isDefined) OptionalLong.of(this.lastStableOffset.get) else OptionalLong.empty(),
     this.info.abortedTransactions,
     if (this.preferredReadReplica.isDefined) OptionalInt.of(this.preferredReadReplica.get) else OptionalInt.empty(),
@@ -463,11 +463,12 @@ class ReplicaManager(val config: KafkaConfig,
     })
   }
 
-  private def completeDelayedFetchOrProduceRequests(topicPartition: TopicPartition): Unit = {
+  private def completeDelayedOperationsWhenNotPartitionLeader(topicPartition: TopicPartition): Unit = {
     val topicPartitionOperationKey = TopicPartitionOperationKey(topicPartition)
     delayedProducePurgatory.checkAndComplete(topicPartitionOperationKey)
     delayedFetchPurgatory.checkAndComplete(topicPartitionOperationKey)
     delayedRemoteFetchPurgatory.checkAndComplete(topicPartitionOperationKey)
+    delayedRemoteListOffsetsPurgatory.checkAndComplete(topicPartitionOperationKey)
   }
 
   /**
@@ -625,7 +626,7 @@ class ReplicaManager(val config: KafkaConfig,
       }
       // If we were the leader, we may have some operations still waiting for completion.
       // We force completion to prevent them from timing out.
-      completeDelayedFetchOrProduceRequests(topicPartition)
+      completeDelayedOperationsWhenNotPartitionLeader(topicPartition)
     }
 
     // Third delete the logs and checkpoint.
@@ -1556,7 +1557,7 @@ class ReplicaManager(val config: KafkaConfig,
     if (delayedRemoteListOffsetsRequired(statusByPartition)) {
       val delayMs: Long = if (timeoutMs > 0) timeoutMs else config.remoteLogManagerConfig.remoteListOffsetsRequestTimeoutMs()
       // create delayed remote list offsets operation
-      val delayedRemoteListOffsets = new DelayedRemoteListOffsets(delayMs, version, ListOffsetsMetadata(statusByPartition), responseCallback)
+      val delayedRemoteListOffsets = new DelayedRemoteListOffsets(delayMs, version, statusByPartition, this, responseCallback)
       // create a list of (topic, partition) pairs to use as keys for this delayed remote list offsets operation
       val listOffsetsRequestKeys = statusByPartition.keys.map(TopicPartitionOperationKey(_)).toSeq
       // try to complete the request immediately, otherwise put it into the purgatory
@@ -1778,7 +1779,7 @@ class ReplicaManager(val config: KafkaConfig,
           throw new InconsistentTopicIdException("Topic ID in the fetch session did not match the topic ID in the log.")
 
         // If we are the leader, determine the preferred read-replica
-        val preferredReadReplica = params.clientMetadata.asScala.flatMap(
+        val preferredReadReplica = params.clientMetadata.toScala.flatMap(
           metadata => findPreferredReadReplica(partition, metadata, params.replicaId, fetchInfo.fetchOffset, fetchTimeMs))
 
         if (preferredReadReplica.isDefined) {
@@ -1813,7 +1814,7 @@ class ReplicaManager(val config: KafkaConfig,
           val fetchDataInfo = checkFetchDataInfo(partition, readInfo.fetchedData)
 
           LogReadResult(info = fetchDataInfo,
-            divergingEpoch = readInfo.divergingEpoch.asScala,
+            divergingEpoch = readInfo.divergingEpoch.toScala,
             highWatermark = readInfo.highWatermark,
             leaderLogStartOffset = readInfo.logStartOffset,
             leaderLogEndOffset = readInfo.logEndOffset,
@@ -1980,7 +1981,7 @@ class ReplicaManager(val config: KafkaConfig,
           replicaInfoSet.add(leaderReplica)
 
           val partitionInfo = new DefaultPartitionView(replicaInfoSet.asJava, leaderReplica)
-          replicaSelector.select(partition.topicPartition, clientMetadata, partitionInfo).asScala.collect {
+          replicaSelector.select(partition.topicPartition, clientMetadata, partitionInfo).toScala.collect {
             // Even though the replica selector can return the leader, we don't want to send it out with the
             // FetchResponse, so we exclude it here
             case selected if !selected.endpoint.isEmpty && selected != leaderReplica => selected.endpoint.id
@@ -2451,7 +2452,7 @@ class ReplicaManager(val config: KafkaConfig,
         s"epoch $controllerEpoch with correlation id $correlationId for ${partitionsToMakeFollower.size} partitions")
 
       partitionsToMakeFollower.foreach { partition =>
-        completeDelayedFetchOrProduceRequests(partition.topicPartition)
+        completeDelayedOperationsWhenNotPartitionLeader(partition.topicPartition)
       }
 
       if (isShuttingDown.get()) {
@@ -3008,7 +3009,7 @@ class ReplicaManager(val config: KafkaConfig,
       partitionsToStartFetching.foreachEntry { (topicPartition, partition) =>
         val nodeOpt = partition.leaderReplicaIdOpt
           .flatMap(leaderId => Option(newImage.cluster.broker(leaderId)))
-          .flatMap(_.node(listenerName).asScala)
+          .flatMap(_.node(listenerName).toScala)
 
         nodeOpt match {
           case Some(node) =>
@@ -3028,7 +3029,7 @@ class ReplicaManager(val config: KafkaConfig,
       replicaFetcherManager.addFetcherForPartitions(partitionAndOffsets)
       stateChangeLogger.info(s"Started fetchers as part of become-follower for ${partitionsToStartFetching.size} partitions")
 
-      partitionsToStartFetching.keySet.foreach(completeDelayedFetchOrProduceRequests)
+      partitionsToStartFetching.keySet.foreach(completeDelayedOperationsWhenNotPartitionLeader)
 
       updateLeaderAndFollowerMetrics(followerTopicSet)
     }

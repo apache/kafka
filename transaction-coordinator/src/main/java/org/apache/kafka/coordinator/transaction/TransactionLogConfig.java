@@ -76,7 +76,7 @@ public final class TransactionLogConfig {
 
     private final AbstractConfig config;
     private final int transactionTopicMinISR;
-    private final int transactionsLoadBufferSize;
+    private final int transactionLoadBufferSize;
     private final short transactionTopicReplicationFactor;
     private final int transactionTopicPartitions;
     private final int transactionTopicSegmentBytes;
@@ -85,7 +85,7 @@ public final class TransactionLogConfig {
     public TransactionLogConfig(AbstractConfig config) {
         this.config = config;
         this.transactionTopicMinISR = config.getInt(TRANSACTIONS_TOPIC_MIN_ISR_CONFIG);
-        this.transactionsLoadBufferSize = config.getInt(TRANSACTIONS_LOAD_BUFFER_SIZE_CONFIG);
+        this.transactionLoadBufferSize = config.getInt(TRANSACTIONS_LOAD_BUFFER_SIZE_CONFIG);
         this.transactionTopicReplicationFactor = config.getShort(TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG);
         this.transactionTopicPartitions = config.getInt(TRANSACTIONS_TOPIC_PARTITIONS_CONFIG);
         this.transactionTopicSegmentBytes = config.getInt(TRANSACTIONS_TOPIC_SEGMENT_BYTES_CONFIG);
@@ -96,8 +96,8 @@ public final class TransactionLogConfig {
         return transactionTopicMinISR;
     }
 
-    public int transactionsLoadBufferSize() {
-        return transactionsLoadBufferSize;
+    public int transactionLoadBufferSize() {
+        return transactionLoadBufferSize;
     }
 
     public short transactionTopicReplicationFactor() {
@@ -117,7 +117,7 @@ public final class TransactionLogConfig {
     }
 
     // This is a broker dynamic config used for DynamicProducerStateManagerConfig
-    public Boolean transactionPartitionVerificationEnable() {
+    public boolean transactionPartitionVerificationEnable() {
         return config.getBoolean(TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG);
     }
 

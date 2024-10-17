@@ -62,6 +62,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.OptionalLong;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static java.util.Collections.emptyMap;
@@ -70,7 +71,6 @@ import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -206,7 +206,7 @@ public class ProcessorStateManagerTest {
                 mkEntry(persistentStoreTwoName, persistentStoreTwoTopicName),
                 mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)
             ),
-            mkSet(persistentStorePartition, nonPersistentStorePartition),
+            Set.of(persistentStorePartition, nonPersistentStorePartition),
             false);
 
         assertTrue(stateMgr.changelogAsSource(persistentStorePartition));
@@ -431,7 +431,7 @@ public class ProcessorStateManagerTest {
             stateMgr.initializeStoreOffsetsFromCheckpoint(true);
 
             assertTrue(checkpointFile.exists());
-            assertEquals(mkSet(
+            assertEquals(Set.of(
                 persistentStorePartition,
                 persistentStoreTwoPartition,
                 nonPersistentStorePartition),
@@ -472,7 +472,7 @@ public class ProcessorStateManagerTest {
             stateMgr.initializeStoreOffsetsFromCheckpoint(true);
 
             assertFalse(checkpointFile.exists());
-            assertEquals(mkSet(
+            assertEquals(Set.of(
                     persistentStorePartition,
                     persistentStoreTwoPartition,
                     nonPersistentStorePartition),
@@ -997,7 +997,7 @@ public class ProcessorStateManagerTest {
 
         try {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
-            stateMgr.markChangelogAsCorrupted(mkSet(persistentStorePartition));
+            stateMgr.markChangelogAsCorrupted(Set.of(persistentStorePartition));
 
             final ProcessorStateException thrown = assertThrows(ProcessorStateException.class, () -> stateMgr.initializeStoreOffsetsFromCheckpoint(true));
             assertInstanceOf(IllegalStateException.class, thrown.getCause());

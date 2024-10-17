@@ -25,17 +25,16 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Collections;
 
-import scala.collection.JavaConverters;
+import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.common.acl.AclOperation.DESCRIBE;
 import static org.apache.kafka.common.acl.AclPermissionType.ALLOW;
 
 public class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
-    @SuppressWarnings({"deprecation"})
     @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testDescribeGroupCliWithGroupDescribe(String quorum) throws Exception {
-        addAndVerifyAcls(JavaConverters.asScalaSet(Collections.singleton(new AccessControlEntry(ClientPrincipal().toString(), "*", DESCRIBE, ALLOW))).toSet(), groupResource());
+        addAndVerifyAcls(CollectionConverters.asScala(Collections.singleton(new AccessControlEntry(ClientPrincipal().toString(), "*", DESCRIBE, ALLOW))).toSet(), groupResource());
 
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", group()};
         ConsumerGroupCommandOptions opts = ConsumerGroupCommandOptions.fromArgs(cgcArgs);
