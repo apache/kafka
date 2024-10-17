@@ -34,8 +34,8 @@ import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPa
 import java.util
 import java.util.Optional
 import scala.collection.{Map, Seq, Set, mutable}
-import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOption
 
 /**
  * Facilitates fetches from a local replica leader.
@@ -206,7 +206,7 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
     try {
       val logStartOffset = replicaManager.futureLocalLogOrException(topicPartition).logStartOffset
       val lastFetchedEpoch = if (isTruncationOnFetchSupported)
-        fetchState.lastFetchedEpoch.map(_.asInstanceOf[Integer]).asJava
+        fetchState.lastFetchedEpoch.map(_.asInstanceOf[Integer]).toJava
       else
         Optional.empty[Integer]
       val topicId = fetchState.topicId.getOrElse(Uuid.ZERO_UUID)

@@ -2407,7 +2407,7 @@ public class KafkaAdminClientTest {
             DescribeReplicaLogDirsResult result = env.adminClient().describeReplicaLogDirs(asList(tpr1, tpr2));
 
             Map<TopicPartitionReplica, KafkaFuture<DescribeReplicaLogDirsResult.ReplicaLogDirInfo>> values = result.values();
-            assertEquals(TestUtils.toSet(asList(tpr1, tpr2)), values.keySet());
+            assertEquals(Set.of(tpr1, tpr2), values.keySet());
 
             assertNotNull(values.get(tpr1));
             assertEquals(broker1log0, values.get(tpr1).get().getCurrentReplicaLogDir());
@@ -2453,7 +2453,7 @@ public class KafkaAdminClientTest {
             DescribeReplicaLogDirsResult result = env.adminClient().describeReplicaLogDirs(singletonList(expected));
 
             Map<TopicPartitionReplica, KafkaFuture<DescribeReplicaLogDirsResult.ReplicaLogDirInfo>> values = result.values();
-            assertEquals(TestUtils.toSet(singletonList(expected)), values.keySet());
+            assertEquals(Set.of(expected), values.keySet());
 
             assertNotNull(values.get(expected));
             assertEquals(broker1log0, values.get(expected).get().getCurrentReplicaLogDir());
@@ -8073,7 +8073,7 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testClientInstanceId() {
-        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+        try (AdminClientUnitTestEnv env = mockClientEnv(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, "true")) {
             Uuid expected = Uuid.randomUuid();
 
             GetTelemetrySubscriptionsResponseData responseData =

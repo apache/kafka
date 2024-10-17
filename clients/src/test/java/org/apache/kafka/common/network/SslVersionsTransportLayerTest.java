@@ -20,7 +20,6 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.Java;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
@@ -54,24 +53,21 @@ public class SslVersionsTransportLayerTest {
         List<Arguments> parameters = new ArrayList<>();
 
         parameters.add(Arguments.of(Collections.singletonList("TLSv1.2"), Collections.singletonList("TLSv1.2")));
-
-        if (Java.IS_JAVA11_COMPATIBLE) {
-            parameters.add(Arguments.of(Collections.singletonList("TLSv1.2"), Collections.singletonList("TLSv1.3")));
-            parameters.add(Arguments.of(Collections.singletonList("TLSv1.3"), Collections.singletonList("TLSv1.2")));
-            parameters.add(Arguments.of(Collections.singletonList("TLSv1.3"), Collections.singletonList("TLSv1.3")));
-            parameters.add(Arguments.of(Collections.singletonList("TLSv1.2"), Arrays.asList("TLSv1.2", "TLSv1.3")));
-            parameters.add(Arguments.of(Collections.singletonList("TLSv1.2"), Arrays.asList("TLSv1.3", "TLSv1.2")));
-            parameters.add(Arguments.of(Collections.singletonList("TLSv1.3"), Arrays.asList("TLSv1.2", "TLSv1.3")));
-            parameters.add(Arguments.of(Collections.singletonList("TLSv1.3"), Arrays.asList("TLSv1.3", "TLSv1.2")));
-            parameters.add(Arguments.of(Arrays.asList("TLSv1.3", "TLSv1.2"), Collections.singletonList("TLSv1.3")));
-            parameters.add(Arguments.of(Arrays.asList("TLSv1.3", "TLSv1.2"), Collections.singletonList("TLSv1.2")));
-            parameters.add(Arguments.of(Arrays.asList("TLSv1.3", "TLSv1.2"), Arrays.asList("TLSv1.2", "TLSv1.3")));
-            parameters.add(Arguments.of(Arrays.asList("TLSv1.3", "TLSv1.2"), Arrays.asList("TLSv1.3", "TLSv1.2")));
-            parameters.add(Arguments.of(Arrays.asList("TLSv1.2", "TLSv1.3"), Collections.singletonList("TLSv1.3")));
-            parameters.add(Arguments.of(Arrays.asList("TLSv1.2", "TLSv1.3"), Collections.singletonList("TLSv1.2")));
-            parameters.add(Arguments.of(Arrays.asList("TLSv1.2", "TLSv1.3"), Arrays.asList("TLSv1.2", "TLSv1.3")));
-            parameters.add(Arguments.of(Arrays.asList("TLSv1.2", "TLSv1.3"), Arrays.asList("TLSv1.3", "TLSv1.2")));
-        }
+        parameters.add(Arguments.of(Collections.singletonList("TLSv1.2"), Collections.singletonList("TLSv1.3")));
+        parameters.add(Arguments.of(Collections.singletonList("TLSv1.3"), Collections.singletonList("TLSv1.2")));
+        parameters.add(Arguments.of(Collections.singletonList("TLSv1.3"), Collections.singletonList("TLSv1.3")));
+        parameters.add(Arguments.of(Collections.singletonList("TLSv1.2"), Arrays.asList("TLSv1.2", "TLSv1.3")));
+        parameters.add(Arguments.of(Collections.singletonList("TLSv1.2"), Arrays.asList("TLSv1.3", "TLSv1.2")));
+        parameters.add(Arguments.of(Collections.singletonList("TLSv1.3"), Arrays.asList("TLSv1.2", "TLSv1.3")));
+        parameters.add(Arguments.of(Collections.singletonList("TLSv1.3"), Arrays.asList("TLSv1.3", "TLSv1.2")));
+        parameters.add(Arguments.of(Arrays.asList("TLSv1.3", "TLSv1.2"), Collections.singletonList("TLSv1.3")));
+        parameters.add(Arguments.of(Arrays.asList("TLSv1.3", "TLSv1.2"), Collections.singletonList("TLSv1.2")));
+        parameters.add(Arguments.of(Arrays.asList("TLSv1.3", "TLSv1.2"), Arrays.asList("TLSv1.2", "TLSv1.3")));
+        parameters.add(Arguments.of(Arrays.asList("TLSv1.3", "TLSv1.2"), Arrays.asList("TLSv1.3", "TLSv1.2")));
+        parameters.add(Arguments.of(Arrays.asList("TLSv1.2", "TLSv1.3"), Collections.singletonList("TLSv1.3")));
+        parameters.add(Arguments.of(Arrays.asList("TLSv1.2", "TLSv1.3"), Collections.singletonList("TLSv1.2")));
+        parameters.add(Arguments.of(Arrays.asList("TLSv1.2", "TLSv1.3"), Arrays.asList("TLSv1.2", "TLSv1.3")));
+        parameters.add(Arguments.of(Arrays.asList("TLSv1.2", "TLSv1.3"), Arrays.asList("TLSv1.3", "TLSv1.2")));
 
         return parameters.stream();
     }
