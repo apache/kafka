@@ -53,8 +53,8 @@ import java.util.{Optional, OptionalLong, Properties}
 import scala.annotation.nowarn
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Iterable, Map, mutable}
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.{RichOption, RichOptional}
 
 class LogLoaderTest {
   var config: KafkaConfig = _
@@ -163,7 +163,7 @@ class LogLoaderTest {
             this.maxTransactionTimeoutMs, this.producerStateManagerConfig, time)
           val logLoader = new LogLoader(logDir, topicPartition, config, time.scheduler, time,
             logDirFailureChannel, hadCleanShutdown, segments, logStartOffset, logRecoveryPoint,
-            leaderEpochCache.asJava, producerStateManager, new ConcurrentHashMap[String, Integer], false)
+            leaderEpochCache.toJava, producerStateManager, new ConcurrentHashMap[String, Integer], false)
           val offsets = logLoader.load()
           val localLog = new LocalLog(logDir, logConfig, segments, offsets.recoveryPoint,
             offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
@@ -386,7 +386,7 @@ class LogLoaderTest {
         interceptedLogSegments,
         0L,
         recoveryPoint,
-        leaderEpochCache.asJava,
+        leaderEpochCache.toJava,
         producerStateManager,
         new ConcurrentHashMap[String, Integer],
         false
@@ -452,7 +452,7 @@ class LogLoaderTest {
       segments,
       0L,
       0L,
-      leaderEpochCache.asJava,
+      leaderEpochCache.toJava,
       stateManager,
       new ConcurrentHashMap[String, Integer],
       false
@@ -564,7 +564,7 @@ class LogLoaderTest {
       segments,
       0L,
       0L,
-      leaderEpochCache.asJava,
+      leaderEpochCache.toJava,
       stateManager,
       new ConcurrentHashMap[String, Integer],
       false
@@ -621,7 +621,7 @@ class LogLoaderTest {
       segments,
       0L,
       0L,
-      leaderEpochCache.asJava,
+      leaderEpochCache.toJava,
       stateManager,
       new ConcurrentHashMap[String, Integer],
       false
@@ -677,7 +677,7 @@ class LogLoaderTest {
       segments,
       0L,
       0L,
-      leaderEpochCache.asJava,
+      leaderEpochCache.toJava,
       stateManager,
       new ConcurrentHashMap[String, Integer],
       false
@@ -1638,7 +1638,7 @@ class LogLoaderTest {
     assertEquals(9, log.activeSegment.baseOffset)
     assertEquals(9, log.logEndOffset)
     for (offset <- 1 until 10) {
-      val snapshotFileBeforeDeletion = log.producerStateManager.snapshotFileForOffset(offset).asScala
+      val snapshotFileBeforeDeletion = log.producerStateManager.snapshotFileForOffset(offset).toScala
       assertTrue(snapshotFileBeforeDeletion.isDefined)
       assertTrue(snapshotFileBeforeDeletion.get.file.exists)
     }
@@ -1693,7 +1693,7 @@ class LogLoaderTest {
         .filter(snapshotFile => snapshotFile.file.exists())
         .map(_.offset)
     val inMemorySnapshotFiles = (1 until 5)
-        .flatMap(offset => log.producerStateManager.snapshotFileForOffset(offset).asScala)
+        .flatMap(offset => log.producerStateManager.snapshotFileForOffset(offset).toScala)
 
     assertTrue(offsetsWithSnapshotFiles.isEmpty, s"Found offsets with producer state snapshot files: $offsetsWithSnapshotFiles while none were expected.")
     assertTrue(inMemorySnapshotFiles.isEmpty, s"Found in-memory producer state snapshot files: $inMemorySnapshotFiles while none were expected.")
@@ -1826,7 +1826,7 @@ class LogLoaderTest {
       segments,
       0L,
       0L,
-      leaderEpochCache.asJava,
+      leaderEpochCache.toJava,
       stateManager,
       new ConcurrentHashMap[String, Integer],
       isRemoteLogEnabled

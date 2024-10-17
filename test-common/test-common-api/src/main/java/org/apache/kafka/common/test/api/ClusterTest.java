@@ -30,6 +30,7 @@ import java.lang.annotation.Target;
 
 import static java.lang.annotation.ElementType.METHOD;
 import static java.lang.annotation.RetentionPolicy.RUNTIME;
+import static org.apache.kafka.common.test.TestKitNodes.DEFAULT_BROKER_LISTENER_NAME;
 
 @Documented
 @Target({METHOD})
@@ -43,8 +44,11 @@ public @interface ClusterTest {
     int controllers() default 0;
     int disksPerBroker() default 0;
     AutoStart autoStart() default AutoStart.DEFAULT;
-    SecurityProtocol securityProtocol() default SecurityProtocol.PLAINTEXT;
-    String listener() default "";
+    // The brokerListenerName and brokerSecurityProtocol configurations must
+    // be kept in sync with the default values in TestKitNodes, as many tests
+    // directly use TestKitNodes without relying on the ClusterTest annotation.
+    SecurityProtocol brokerSecurityProtocol() default SecurityProtocol.PLAINTEXT;
+    String brokerListener() default DEFAULT_BROKER_LISTENER_NAME;
     MetadataVersion metadataVersion() default MetadataVersion.IBP_4_0_IV3;
     ClusterConfigProperty[] serverProperties() default {};
     // users can add tags that they want to display in test

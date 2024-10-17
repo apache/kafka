@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.test.api;
 
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -35,6 +36,9 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.common.test.TestKitNodes.DEFAULT_BROKER_LISTENER_NAME;
+import static org.apache.kafka.common.test.TestKitNodes.DEFAULT_BROKER_SECURITY_PROTOCOL;
+
 /**
  * Represents an immutable requested configuration of a Kafka cluster for integration testing.
  */
@@ -45,8 +49,8 @@ public class ClusterConfig {
     private final int controllers;
     private final int disksPerBroker;
     private final boolean autoStart;
-    private final SecurityProtocol securityProtocol;
-    private final String listenerName;
+    private final SecurityProtocol brokerSecurityProtocol;
+    private final ListenerName brokerListenerName;
     private final File trustStoreFile;
     private final MetadataVersion metadataVersion;
 
@@ -62,7 +66,7 @@ public class ClusterConfig {
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     private ClusterConfig(Set<Type> types, int brokers, int controllers, int disksPerBroker, boolean autoStart,
-                  SecurityProtocol securityProtocol, String listenerName, File trustStoreFile,
+                  SecurityProtocol brokerSecurityProtocol, ListenerName brokerListenerName, File trustStoreFile,
                   MetadataVersion metadataVersion, Map<String, String> serverProperties, Map<String, String> producerProperties,
                   Map<String, String> consumerProperties, Map<String, String> adminClientProperties, Map<String, String> saslServerProperties,
                   Map<String, String> saslClientProperties, Map<Integer, Map<String, String>> perServerProperties, List<String> tags,
@@ -77,8 +81,8 @@ public class ClusterConfig {
         this.controllers = controllers;
         this.disksPerBroker = disksPerBroker;
         this.autoStart = autoStart;
-        this.securityProtocol = Objects.requireNonNull(securityProtocol);
-        this.listenerName = listenerName;
+        this.brokerSecurityProtocol = Objects.requireNonNull(brokerSecurityProtocol);
+        this.brokerListenerName = Objects.requireNonNull(brokerListenerName);
         this.trustStoreFile = trustStoreFile;
         this.metadataVersion = Objects.requireNonNull(metadataVersion);
         this.serverProperties = Objects.requireNonNull(serverProperties);
@@ -136,12 +140,12 @@ public class ClusterConfig {
         return saslClientProperties;
     }
 
-    public SecurityProtocol securityProtocol() {
-        return securityProtocol;
+    public SecurityProtocol brokerSecurityProtocol() {
+        return brokerSecurityProtocol;
     }
 
-    public Optional<String> listenerName() {
-        return Optional.ofNullable(listenerName);
+    public ListenerName brokerListenerName() {
+        return brokerListenerName;
     }
 
     public Optional<File> trustStoreFile() {
@@ -167,8 +171,8 @@ public class ClusterConfig {
     public Set<String> displayTags() {
         Set<String> displayTags = new LinkedHashSet<>(tags);
         displayTags.add("MetadataVersion=" + metadataVersion);
-        displayTags.add("Security=" + securityProtocol.name());
-        listenerName().ifPresent(listener -> displayTags.add("Listener=" + listener));
+        displayTags.add("BrokerSecurityProtocol=" + brokerSecurityProtocol.name());
+        displayTags.add("BrokerListenerName=" + brokerListenerName);
         return displayTags;
     }
 
@@ -179,7 +183,8 @@ public class ClusterConfig {
                 .setControllers(1)
                 .setDisksPerBroker(1)
                 .setAutoStart(true)
-                .setSecurityProtocol(SecurityProtocol.PLAINTEXT)
+                .setBrokerSecurityProtocol(DEFAULT_BROKER_SECURITY_PROTOCOL)
+                .setBrokerListenerName(ListenerName.normalised(DEFAULT_BROKER_LISTENER_NAME))
                 .setMetadataVersion(MetadataVersion.latestTesting());
     }
 
@@ -194,8 +199,8 @@ public class ClusterConfig {
                 .setControllers(clusterConfig.controllers)
                 .setDisksPerBroker(clusterConfig.disksPerBroker)
                 .setAutoStart(clusterConfig.autoStart)
-                .setSecurityProtocol(clusterConfig.securityProtocol)
-                .setListenerName(clusterConfig.listenerName)
+                .setBrokerSecurityProtocol(clusterConfig.brokerSecurityProtocol)
+                .setBrokerListenerName(clusterConfig.brokerListenerName)
                 .setTrustStoreFile(clusterConfig.trustStoreFile)
                 .setMetadataVersion(clusterConfig.metadataVersion)
                 .setServerProperties(clusterConfig.serverProperties)
@@ -215,8 +220,8 @@ public class ClusterConfig {
         private int controllers;
         private int disksPerBroker;
         private boolean autoStart;
-        private SecurityProtocol securityProtocol;
-        private String listenerName;
+        private SecurityProtocol brokerSecurityProtocol;
+        private ListenerName brokerListenerName;
         private File trustStoreFile;
         private MetadataVersion metadataVersion;
         private Map<String, String> serverProperties = Collections.emptyMap();
@@ -256,13 +261,13 @@ public class ClusterConfig {
             return this;
         }
 
-        public Builder setSecurityProtocol(SecurityProtocol securityProtocol) {
-            this.securityProtocol = securityProtocol;
+        public Builder setBrokerSecurityProtocol(SecurityProtocol securityProtocol) {
+            this.brokerSecurityProtocol = securityProtocol;
             return this;
         }
 
-        public Builder setListenerName(String listenerName) {
-            this.listenerName = listenerName;
+        public Builder setBrokerListenerName(ListenerName listenerName) {
+            this.brokerListenerName = listenerName;
             return this;
         }
 
@@ -324,7 +329,7 @@ public class ClusterConfig {
         }
 
         public ClusterConfig build() {
-            return new ClusterConfig(types, brokers, controllers, disksPerBroker, autoStart, securityProtocol, listenerName,
+            return new ClusterConfig(types, brokers, controllers, disksPerBroker, autoStart, brokerSecurityProtocol, brokerListenerName,
                     trustStoreFile, metadataVersion, serverProperties, producerProperties, consumerProperties,
                     adminClientProperties, saslServerProperties, saslClientProperties,
                     perServerProperties, tags, features);
