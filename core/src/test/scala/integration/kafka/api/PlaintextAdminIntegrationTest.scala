@@ -1525,15 +1525,21 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     val producer = createProducer()
     sendRecords(producer, 10, topicPartition)
-    assertEquals(0L, consumer.offsetsForTimes(Map(topicPartition -> JLong.valueOf(0L)).asJava).get(topicPartition).offset())
+    var returnedOffsets = consumer.offsetsForTimes(Map(topicPartition -> JLong.valueOf(0L)).asJava)
+    assertTrue(returnedOffsets.containsKey(topicPartition))
+    assertEquals(0L, returnedOffsets.get(topicPartition).offset())
 
     var result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(5L)).asJava)
     result.all.get
-    assertEquals(5L, consumer.offsetsForTimes(Map(topicPartition -> JLong.valueOf(0L)).asJava).get(topicPartition).offset())
+    returnedOffsets = consumer.offsetsForTimes(Map(topicPartition -> JLong.valueOf(0L)).asJava)
+    assertTrue(returnedOffsets.containsKey(topicPartition))
+    assertEquals(5L, returnedOffsets.get(topicPartition).offset())
 
     result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(DeleteRecordsRequest.HIGH_WATERMARK)).asJava)
     result.all.get
-    assertNull(consumer.offsetsForTimes(Map(topicPartition -> JLong.valueOf(0L)).asJava).get(topicPartition))
+    returnedOffsets = consumer.offsetsForTimes(Map(topicPartition -> JLong.valueOf(0L)).asJava)
+    assertTrue(returnedOffsets.containsKey(topicPartition))
+    assertNull(returnedOffsets.get(topicPartition))
   }
 
   @ParameterizedTest
