@@ -385,9 +385,6 @@ public class StreamsMetadataState {
                         activeStoresOnHost.addAll(getStoresOnHost(storeToSourceTopics, activePartitionsOnHost));
                     }
 
-                    // TODO KAFKA-13281: when we add support for global stores with named topologies we will
-                    //  need to add the global stores to the activeStoresOnHost set
-
                     final Set<TopicPartition> standbyPartitionsOnHost = new HashSet<>();
                     final Set<String> standbyStoresOnHost = new HashSet<>();
                     if (standbyPartitionHostMap.containsKey(hostInfo)) {
