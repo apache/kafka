@@ -14,16 +14,21 @@
 # limitations under the License.
 
 import argparse
+from collections import OrderedDict
 import dataclasses
 from functools import partial
 from glob import glob
 import logging
 import os
 import os.path
+import pathlib
+import re
 import sys
 from typing import Tuple, Optional, List, Iterable
 import xml.etree.ElementTree
 import html
+
+import yaml
 
 
 logger = logging.getLogger()
@@ -76,6 +81,60 @@ class TestSuite:
     failed_tests: List[TestCase]
     skipped_tests: List[TestCase]
     passed_tests: List[TestCase]
+
+
+# Java method names can start with alpha, "_", or "$". Following characters can also include digits
+method_matcher = re.compile(r"([a-zA-Z_$][a-zA-Z0-9_$]+).*")
+
+
+def clean_test_name(test_name: str) -> str:
+    cleaned = test_name.strip("\"").rstrip("()")
+    m = method_matcher.match(cleaned)
+    return m.group(1)
+
+
+class TestCatalogExporter:
+    def __init__(self):
+        self.all_tests = {}   # module -> class -> set of methods
+
+    def handle_suite(self, module: str, suite: TestSuite):
+        if module not in self.all_tests:
+            self.all_tests[module] = OrderedDict()
+
+        for test in suite.failed_tests:
+            if test.class_name not in self.all_tests[module]:
+                self.all_tests[module][test.class_name] = set()
+            self.all_tests[module][test.class_name].add(clean_test_name(test.test_name))
+        for test in suite.passed_tests:
+            if test.class_name not in self.all_tests[module]:
+                self.all_tests[module][test.class_name] = set()
+            self.all_tests[module][test.class_name].add(clean_test_name(test.test_name))
+
+    def export(self, out_dir: str):
+        if not os.path.exists(out_dir):
+            logger.debug(f"Creating output directory {out_dir} for test catalog export.")
+            os.makedirs(out_dir)
+
+        total_count = 0
+        for module, module_tests in self.all_tests.items():
+            module_path = os.path.join(out_dir, module)
+            if not os.path.exists(module_path):
+                os.makedirs(module_path)
+
+            sorted_tests = {}
+            count = 0
+            for test_class, methods in module_tests.items():
+                sorted_methods = sorted(methods)
+                count += len(sorted_methods)
+                sorted_tests[test_class] = sorted_methods
+
+            out_path = os.path.join(module_path, f"tests.yaml")
+            logger.debug(f"Writing {count} tests for {module} into {out_path}.")
+            total_count += count
+            with open(out_path, "w") as fp:
+                yaml.dump(sorted_tests, fp)
+
+        logger.debug(f"Wrote {total_count} tests into test catalog.")
 
 
 def parse_report(workspace_path, report_path, fp) -> Iterable[TestSuite]:
@@ -138,6 +197,20 @@ def pretty_time_duration(seconds: float) -> str:
     return time_fmt
 
 
+def module_path_from_report_path(base_path: str, report_path: str) -> str:
+    """
+    Parse a report XML and extract the module path. Test report paths look like:
+
+        build/junit-xml/module[/sub-module]/[suite]/TEST-class.method.xml
+
+    This method strips off a base path and assumes all path segments leading up to the suite name
+    are part of the module path.
+    """
+    rel_report_path = os.path.relpath(report_path, base_path)
+    path_segments = pathlib.Path(rel_report_path).parts
+    return os.path.join(*path_segments[0:-2])
+
+
 if __name__ == "__main__":
     """
     Parse JUnit XML reports and generate GitHub job summary in Markdown format.
@@ -150,8 +223,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Parse JUnit XML results.")
     parser.add_argument("--path",
                         required=False,
-                        default="build/junit-xml/**/*.xml",
-                        help="Path to XML files. Glob patterns are supported.")
+                        default="build/junit-xml",
+                        help="Base path of JUnit XML files. A glob of **/*.xml will be applied on top of this path.")
+    parser.add_argument("--export-test-catalog",
+                        required=False,
+                        default="",
+                        help="Optional path to dump all tests")
 
     if not os.getenv("GITHUB_WORKSPACE"):
         print("This script is intended to by run by GitHub Actions.")
@@ -159,7 +236,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    reports = glob(pathname=args.path, recursive=True)
+    glob_path = os.path.join(args.path, "**/*.xml")
+    reports = glob(pathname=glob_path, recursive=True)
     logger.info(f"Found {len(reports)} JUnit results")
     workspace_path = get_env("GITHUB_WORKSPACE") # e.g., /home/runner/work/apache/kafka
 
@@ -177,10 +255,13 @@ if __name__ == "__main__":
     flaky_table = []
     skipped_table = []
 
+    exporter = TestCatalogExporter()
+
     logger.debug(f"::group::Parsing {len(reports)} JUnit Report Files")
     for report in reports:
         with open(report, "r") as fp:
-            logger.debug(f"Parsing {report}")
+            module_path = module_path_from_report_path(args.path, report)
+            logger.debug(f"Parsing file: {report}, module: {module_path}")
             for suite in parse_report(workspace_path, report, fp):
                 total_skipped += suite.skipped
                 total_errors += suite.errors
@@ -216,7 +297,17 @@ if __name__ == "__main__":
                     simple_class_name = skipped_test.class_name.split(".")[-1]
                     logger.debug(f"Found skipped test: {skipped_test}")
                     skipped_table.append((simple_class_name, skipped_test.test_name))
+
+                if args.export_test_catalog:
+                    exporter.handle_suite(module_path, suite)
+
     logger.debug("::endgroup::")
+
+    if args.export_test_catalog:
+        logger.debug(f"::group::Generating Test Catalog Files")
+        exporter.export(args.export_test_catalog)
+        logger.debug("::endgroup::")
+
     duration = pretty_time_duration(total_time)
     logger.info(f"Finished processing {len(reports)} reports")
 
