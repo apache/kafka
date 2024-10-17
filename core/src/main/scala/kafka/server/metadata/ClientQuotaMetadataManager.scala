@@ -26,7 +26,7 @@ import org.apache.kafka.common.utils.Sanitizer
 
 import java.net.{InetAddress, UnknownHostException}
 import org.apache.kafka.image.{ClientQuotaDelta, ClientQuotasDelta}
-import org.apache.kafka.server.config.{QuotaConfigs, ZooKeeperInternals}
+import org.apache.kafka.server.config.{QuotaConfig, ZooKeeperInternals}
 
 import scala.jdk.OptionConverters.RichOptionalDouble
 
@@ -121,7 +121,7 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
       // The connection quota only understands the connection rate limit
       val quotaName = key
       val quotaValue = value
-      if (!quotaName.equals(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG)) {
+      if (!quotaName.equals(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG)) {
         warn(s"Ignoring unexpected quota key $quotaName for entity $ipEntity")
       } else {
         try {
@@ -135,10 +135,10 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
 
   private def handleUserClientQuotaChange(quotaEntity: QuotaEntity, key: String, newValue: Option[Double]): Unit = {
     val manager = key match {
-      case QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG => quotaManagers.fetch
-      case QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG => quotaManagers.produce
-      case QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG => quotaManagers.request
-      case QuotaConfigs.CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG => quotaManagers.controllerMutation
+      case QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG => quotaManagers.fetch
+      case QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG => quotaManagers.produce
+      case QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG => quotaManagers.request
+      case QuotaConfig.CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG => quotaManagers.controllerMutation
       case _ =>
         warn(s"Ignoring unexpected quota key $key for entity $quotaEntity")
         return
