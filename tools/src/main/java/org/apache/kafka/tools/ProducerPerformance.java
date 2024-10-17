@@ -21,6 +21,8 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
@@ -68,6 +70,18 @@ public class ProducerPerformance {
                 producer.initTransactions();
 
             /* setup perf test */
+            List<String> headersList = res.getList("headers");
+            List<Header> headers = new ArrayList<>();
+            if(null != headersList) {
+                for(String headerString : headersList) {
+                    String[] headerTokens = headerString.split("[\\s=]+", 2);
+                    if(headerTokens.length < 2) {
+                        throw new IllegalArgumentException("invalid headers provided");
+                    }
+                    headers.add(new RecordHeader(headerTokens[0], headerTokens[1].getBytes()));
+                }
+            }
+
             byte[] payload = null;
             if (config.recordSize != null) {
                 payload = new byte[config.recordSize];
@@ -91,7 +105,7 @@ public class ProducerPerformance {
                     transactionStartTime = System.currentTimeMillis();
                 }
 
-                record = new ProducerRecord<>(config.topicName, payload);
+                record = new ProducerRecord<>(config.topicName, null, null, null, payload, headers);
 
                 long sendStartMs = System.currentTimeMillis();
                 cb = new PerfCallback(sendStartMs, payload.length, stats);
@@ -234,6 +248,11 @@ public class ProducerPerformance {
                 .metavar("NUM-RECORDS")
                 .dest("numRecords")
                 .help("number of messages to produce");
+
+        parser.addArgument("--headers")
+                 .metavar("HEADER-NAME=HEADER-VALUE")
+                 .dest("headers")
+                 .help("Headers to be included with requests");
 
         payloadOptions.addArgument("--record-size")
                 .action(store())
