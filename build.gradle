@@ -292,6 +292,19 @@ subprojects {
     }
   }
 
+  if (project.path.startsWith(":core") || project.path.startsWith(":coordinator-common")
+          || project.path.startsWith(":generator") || project.path.startsWith("group-coordinator")
+          || project.path.startsWith(":metadata") || project.path.startsWith(":raft") || project.path.startsWith(":server")
+          || project.path.startsWith(":server-common") || project.path.startsWith(":share") || project.path.startsWith(":storage")
+          || project.path.startsWith(":share-coordinator") || project.path.startsWith(":test-common")
+          || project.path.startsWith(":tools") || project.path.startsWith(":transaction-coordinator")) {
+    java {
+      toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+      }
+    }
+  }
+
   tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
     options.compilerArgs << "-Xlint:all"
