@@ -24,7 +24,7 @@ import java.util.Optional;
 
 /**
  * This represents universally unique identifier with topic id for a topic partition. However, for this wrapper, we can
- * have a null topic id with a not null topic partition to account for the functionalities that don't have topic id incorporated yet.
+ * have an optional topic id with a not null topic partition to account for the functionalities that don't have topic id incorporated yet.
  */
 public class TopicOptionalIdPartition {
 
@@ -96,6 +96,6 @@ public class TopicOptionalIdPartition {
 
     @Override
     public String toString() {
-        return topicId.map(uuid -> uuid + ":" + topic() + "-" + partition()).orElseGet(() -> null + ":" + topic() + "-" + partition());
+        return topicId.map(uuid -> uuid + ":" + topic() + "-" + partition()).orElseGet(() -> "none" + ":" + topic() + "-" + partition());
     }
 }
