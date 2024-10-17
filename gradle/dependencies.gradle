@@ -46,16 +46,6 @@ if ( !versions.scala.contains('-') ) {
   versions["baseScala"] = versions.scala
 }
 
-// mockito >= 5.5 is required for Java 21 and mockito 5.x requires at least Java 11
-String mockitoVersion = "5.14.2"
-
-// mockito 4.x has two mocking strategies: subclass (mockito-core) and inline (mockito-inline).
-// mockito 5.x has two mocking strategies: inline (mockito-core) and subclass (mockito-subclass).
-// The default strategy (i.e. what `mockito-core` uses) changed to `inline` in 5.x because it works better with newer
-// Java versions.
-// We always use the `inline` strategy.
-String mockitoArtifactName = "mockito-core"
-
 // When adding, removing or updating dependencies, please also update the LICENSE-binary file accordingly.
 // See https://issues.apache.org/jira/browse/KAFKA-12622 for steps to verify the LICENSE-binary file is correct.
 versions += [
@@ -93,6 +83,7 @@ versions += [
   jopt: "5.0.4",
   jose4j: "0.9.4",
   junit: "5.10.2",
+  mockitoVersion: "5.14.2",
   jqwik: "1.8.3",
   kafka_0100: "0.10.0.1",
   kafka_0101: "0.10.1.1",
@@ -219,8 +210,8 @@ libs += [
   lz4: "org.lz4:lz4-java:$versions.lz4",
   metrics: "com.yammer.metrics:metrics-core:$versions.metrics",
   dropwizardMetrics: "io.dropwizard.metrics:metrics-core:$versions.dropwizardMetrics",
-  mockitoCore: "org.mockito:$mockitoArtifactName:$mockitoVersion",
-  mockitoJunitJupiter: "org.mockito:mockito-junit-jupiter:$mockitoVersion",
+  mockitoCore: "org.mockito:mockito-core:$versions.mockitoVersion",
+  mockitoJunitJupiter: "org.mockito:mockito-junit-jupiter:$versions.mockitoVersion",
   nettyHandler: "io.netty:netty-handler:$versions.netty",
   nettyTransportNativeEpoll: "io.netty:netty-transport-native-epoll:$versions.netty",
   pcollections: "org.pcollections:pcollections:$versions.pcollections",
