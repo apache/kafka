@@ -47,7 +47,7 @@ if ( !versions.scala.contains('-') ) {
 }
 
 // mockito >= 5.5 is required for Java 21 and mockito 5.x requires at least Java 11
-String mockitoVersion = "5.14.1"
+String mockitoVersion = "5.14.2"
 
 // mockito 4.x has two mocking strategies: subclass (mockito-core) and inline (mockito-inline).
 // mockito 5.x has two mocking strategies: inline (mockito-core) and subclass (mockito-subclass).
