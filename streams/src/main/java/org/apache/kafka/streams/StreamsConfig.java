@@ -1230,7 +1230,7 @@ public class StreamsConfig extends AbstractConfig {
     private static final Map<String, Object> ADMIN_CLIENT_OVERRIDES;
     static {
         final Map<String, Object> tempAdminClientDefaultOverrides = new HashMap<>();
-        tempAdminClientDefaultOverrides.put(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, "true");
+        tempAdminClientDefaultOverrides.put(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, true);
         ADMIN_CLIENT_OVERRIDES = Collections.unmodifiableMap(tempAdminClientDefaultOverrides);
     }
 

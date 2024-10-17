@@ -151,6 +151,7 @@ import org.apache.kafka.common.message.RemoveRaftVoterResponseData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.UnregisterBrokerResponseData;
 import org.apache.kafka.common.message.WriteTxnMarkersResponseData;
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
@@ -480,6 +481,17 @@ public class KafkaAdminClientTest {
         assertEquals(2, admin.metrics.reporters().size());
         //ClientTelemetryReporter always added after metrics reporters created with JmxReporter
         assertInstanceOf(ClientTelemetryReporter.class, admin.metrics.reporters().get(1));
+        admin.close();
+    }
+
+    @Test
+    public void testExplicitlyTelemetryReporterIsDisabled() {
+        Properties props = new Properties();
+        props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG, "org.apache.kafka.common.metrics.JmxReporter");
+        KafkaAdminClient admin = (KafkaAdminClient) AdminClient.create(props);
+        assertEquals(1, admin.metrics.reporters().size());
+        assertInstanceOf(JmxReporter.class, admin.metrics.reporters().get(0));
         admin.close();
     }
 
