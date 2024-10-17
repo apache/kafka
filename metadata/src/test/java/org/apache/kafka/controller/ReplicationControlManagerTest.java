@@ -448,6 +448,7 @@ public class ReplicationControlManagerTest {
 
         void unfenceBrokers(Integer... brokerIds) {
             for (int brokerId : brokerIds) {
+                clusterControl.trackBrokerHeartbeat(brokerId, defaultBrokerEpoch(brokerId));
                 ControllerResult<BrokerHeartbeatReply> result = replicationControl.
                     processBrokerHeartbeat(new BrokerHeartbeatRequestData().
                         setBrokerId(brokerId).setBrokerEpoch(defaultBrokerEpoch(brokerId)).
@@ -494,12 +495,11 @@ public class ReplicationControlManagerTest {
                 .collect(Collectors.toSet());
             unfenceBrokers(unfencedBrokerIds.toArray(new Integer[0]));
 
-            Optional<Integer> staleBroker = clusterControl.heartbeatManager().findOneStaleBroker();
-            while (staleBroker.isPresent()) {
-                ControllerResult<Void> fenceResult = replicationControl.maybeFenceOneStaleBroker();
+            ControllerResult<Boolean> fenceResult;
+            do {
+                fenceResult = replicationControl.maybeFenceOneStaleBroker();
                 replay(fenceResult.records());
-                staleBroker = clusterControl.heartbeatManager().findOneStaleBroker();
-            }
+            } while (fenceResult.response().booleanValue());
 
             assertEquals(brokerIds, clusterControl.fencedBrokerIds());
         }
@@ -2844,8 +2844,7 @@ public class ReplicationControlManagerTest {
                 filter(broker -> broker.id() == 0).findFirst();
         assertTrue(state.isPresent());
         assertEquals(0, state.get().id());
-        assertEquals(100000000L, state.get().lastContactNs);
-        assertEquals(123, state.get().metadataOffset);
+        assertEquals(123, state.get().metadataOffset());
     }
 
     @Test
