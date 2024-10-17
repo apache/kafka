@@ -110,4 +110,38 @@ public class ServerConnectionIdTest {
         assertEquals("127.0.0.1:9092-127.0.0.1:9093-0-0", ServerConnectionId.generateConnectionId(socket, 0, 0));
         assertEquals("127.0.0.1:9092-127.0.0.1:9093-1-2", ServerConnectionId.generateConnectionId(socket, 1, 2));
     }
+
+    @Test
+    public void testParseHostPort() {
+        Optional<BrokerEndPoint> brokerEndPoint = ServerConnectionId.parseHostPort("myhost:9092");
+        assertTrue(brokerEndPoint.isPresent());
+        assertEquals("myhost", brokerEndPoint.get().host());
+        assertEquals(9092, brokerEndPoint.get().port());
+
+        brokerEndPoint = ServerConnectionId.parseHostPort("127.0.0.1:9092");
+        assertTrue(brokerEndPoint.isPresent());
+        assertEquals("127.0.0.1", brokerEndPoint.get().host());
+        assertEquals(9092, brokerEndPoint.get().port());
+
+        // IPv6 endpoint
+        brokerEndPoint = ServerConnectionId.parseHostPort("[2001:db8::1]:9092");
+        assertTrue(brokerEndPoint.isPresent());
+        assertEquals("2001:db8::1", brokerEndPoint.get().host());
+        assertEquals(9092, brokerEndPoint.get().port());
+    }
+
+    @Test
+    public void testParseHostPortInvalid() {
+        // Invalid separator
+        Optional<BrokerEndPoint> brokerEndPoint = ServerConnectionId.parseHostPort("myhost-9092");
+        assertFalse(brokerEndPoint.isPresent());
+
+        // No separator
+        brokerEndPoint = ServerConnectionId.parseHostPort("myhost9092");
+        assertFalse(brokerEndPoint.isPresent());
+
+        // Invalid port
+        brokerEndPoint = ServerConnectionId.parseHostPort("myhost:abcd");
+        assertFalse(brokerEndPoint.isPresent());
+    }
 }

@@ -19,11 +19,18 @@ package org.apache.kafka.common.network;
 
 import java.net.Socket;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
- * ServerConnectionId is used to uniquely identify a connection between a client and a server.
+ * ServerConnectionId is used to uniquely identify a connection on server for the client. The
+ *  connection id is in the format of "localHost:localPort-remoteHost:remotePort-processorId-index".
+ *  The processorId is the id of the processor that will handle this connection and the index is
+ *  used to ensure uniqueness.
  */
 public class ServerConnectionId {
+
+    private static final Pattern URI_PARSE_EXP = Pattern.compile("\\[?([0-9a-zA-Z\\-%._:]*)]?:([0-9]+)");
 
     private final String localHost;
     private final int localPort;
@@ -94,9 +101,8 @@ public class ServerConnectionId {
         }
 
         try {
-            return BrokerEndPoint.parseHostPort(split[0])
-                .flatMap(localHost -> BrokerEndPoint.parseHostPort(split[1])
-                    .map(remoteHost -> new ServerConnectionId(localHost, remoteHost, Integer.parseInt(split[2]), Integer.parseInt(split[3]))));
+            return parseHostPort(split[0]).flatMap(localHost -> parseHostPort(split[1]).map(
+                remoteHost -> new ServerConnectionId(localHost, remoteHost, Integer.parseInt(split[2]), Integer.parseInt(split[3]))));
         } catch (NumberFormatException e) {
             return Optional.empty();
         }
@@ -116,5 +122,22 @@ public class ServerConnectionId {
         String remoteHost = socket.getInetAddress().getHostAddress();
         int remotePort = socket.getPort();
         return localHost + ":" + localPort + "-" + remoteHost + ":" + remotePort + "-" + processorId + "-" + connectionIndex;
+    }
+
+    /**
+     * BrokerEndPoint URI is host:port or [ipv6_host]:port
+     * Note that unlike EndPoint (or listener) this URI has no security information.
+     */
+    // Visible for testing
+    static Optional<BrokerEndPoint> parseHostPort(String connectionString) {
+        Matcher matcher = URI_PARSE_EXP.matcher(connectionString);
+        if (matcher.matches()) {
+            try {
+                return Optional.of(new BrokerEndPoint(-1, matcher.group(1), Integer.parseInt(matcher.group(2))));
+            } catch (NumberFormatException e) {
+                // Ignore
+            }
+        }
+        return Optional.empty();
     }
 }
