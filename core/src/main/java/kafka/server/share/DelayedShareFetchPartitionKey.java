@@ -29,7 +29,7 @@ public class DelayedShareFetchPartitionKey implements  DelayedShareFetchKey, Del
     private final Uuid topicId;
     private final int partition;
 
-    DelayedShareFetchPartitionKey(Uuid topicId, int partition) {
+    public DelayedShareFetchPartitionKey(Uuid topicId, int partition) {
         this.topicId = topicId;
         this.partition = partition;
     }
