@@ -425,7 +425,9 @@ public class MockLog implements ReplicatedLog {
                 buffer = batch.writeTo(buffer);
 
                 if (batchStartOffset == null) {
-                    batchStartOffset = batch.entries.get(0).logOffsetMetadata();
+                    // Return the queried startOffset to match KafkaMetadataLog behavior when
+                    // the startOffset is in the middle of a batch
+                    batchStartOffset = new LogOffsetMetadata(startOffset, batch.entries.get(0).logOffsetMetadata().metadata());
                 }
 
                 // Read on the mock log should return at most 2 batches. This is a simple solution
