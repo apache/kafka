@@ -109,6 +109,7 @@ public class ProcessorNodeTest {
         assertTrue(failedProcessingException.getCause() instanceof RuntimeException);
         assertEquals("Processing exception should be caught and handled by the processing exception handler.",
             failedProcessingException.getCause().getMessage());
+        assertEquals(NAME, failedProcessingException.failedProcessorNodeName());
     }
 
     @Test
@@ -160,6 +161,7 @@ public class ProcessorNodeTest {
 
         assertInstanceOf(RuntimeException.class, failedProcessingException.getCause());
         assertEquals("KABOOM!", failedProcessingException.getCause().getMessage());
+        assertEquals(NAME, failedProcessingException.failedProcessorNodeName());
     }
 
     private static class ExceptionalProcessor implements Processor<Object, Object, Object, Object> {
@@ -189,7 +191,7 @@ public class ProcessorNodeTest {
         @Override
         public void process(final Record<Object, Object> record) {
             if (record.key().equals("FailedProcessingException")) {
-                throw new FailedProcessingException(new RuntimeException("Fail processing"));
+                throw new FailedProcessingException(NAME, new RuntimeException("Fail processing"));
             }
 
             if (record.key().equals("TaskCorruptedException")) {
