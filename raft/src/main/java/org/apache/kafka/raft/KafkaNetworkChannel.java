@@ -37,6 +37,7 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchSnapshotRequest;
 import org.apache.kafka.common.requests.VoteRequest;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.raft.utils.ApiMessageUtils;
 import org.apache.kafka.server.util.InterBrokerSendThread;
 import org.apache.kafka.server.util.RequestAndCompletionHandler;
 
@@ -154,7 +155,7 @@ public class KafkaNetworkChannel implements NetworkChannel {
 
     private ApiMessage errorResponse(ApiMessage request, Errors error) {
         ApiKeys apiKey = ApiKeys.forId(request.apiKey());
-        return RaftUtil.errorResponse(apiKey, error);
+        return ApiMessageUtils.parseErrorResponse(apiKey, error);
     }
 
     @Override

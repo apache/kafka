@@ -28,9 +28,9 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.Endpoints;
 import org.apache.kafka.raft.LeaderState;
 import org.apache.kafka.raft.LogOffsetMetadata;
-import org.apache.kafka.raft.RaftUtil;
 import org.apache.kafka.raft.ReplicaKey;
 import org.apache.kafka.raft.VoterSet;
+import org.apache.kafka.raft.utils.VoteRpc;
 import org.apache.kafka.server.common.KRaftVersion;
 
 import org.slf4j.Logger;
@@ -92,7 +92,7 @@ public final class AddVoterHandler {
         // Check if there are any pending voter change requests
         if (leaderState.isOperationPending(currentTimeMs)) {
             return CompletableFuture.completedFuture(
-                RaftUtil.addVoterResponse(
+                VoteRpc.addVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
                     "Request timed out waiting for leader to handle previous voter change request"
                 )
@@ -103,7 +103,7 @@ public final class AddVoterHandler {
         Optional<Long> highWatermark = leaderState.highWatermark().map(LogOffsetMetadata::offset);
         if (!highWatermark.isPresent()) {
             return CompletableFuture.completedFuture(
-                RaftUtil.addVoterResponse(
+                VoteRpc.addVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
                     "Request timed out waiting for leader to establish HWM and fence previous voter changes"
                 )
@@ -114,7 +114,7 @@ public final class AddVoterHandler {
         KRaftVersion kraftVersion = partitionState.lastKraftVersion();
         if (!kraftVersion.isReconfigSupported()) {
             return CompletableFuture.completedFuture(
-                RaftUtil.addVoterResponse(
+                VoteRpc.addVoterResponse(
                     Errors.UNSUPPORTED_VERSION,
                     String.format(
                         "Cluster doesn't support adding voter because the %s feature is %s",
@@ -129,7 +129,7 @@ public final class AddVoterHandler {
         Optional<LogHistory.Entry<VoterSet>> votersEntry = partitionState.lastVoterSetEntry();
         if (!votersEntry.isPresent() || votersEntry.get().offset() >= highWatermark.get()) {
             return CompletableFuture.completedFuture(
-                RaftUtil.addVoterResponse(
+                VoteRpc.addVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
                     String.format(
                         "Request timed out waiting for voters to commit the latest voter change at %s with HWM %d",
@@ -144,7 +144,7 @@ public final class AddVoterHandler {
         VoterSet voters = votersEntry.get().value();
         if (voters.voterIds().contains(voterKey.id())) {
             return CompletableFuture.completedFuture(
-                RaftUtil.addVoterResponse(
+                VoteRpc.addVoterResponse(
                     Errors.DUPLICATE_VOTER,
                     String.format(
                         "The voter id for %s is already part of the set of voters %s.",
@@ -174,7 +174,7 @@ public final class AddVoterHandler {
         );
         if (!timeout.isPresent()) {
             return CompletableFuture.completedFuture(
-                RaftUtil.addVoterResponse(
+                VoteRpc.addVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
                     String.format("New voter %s is not ready to receive requests", voterKey)
                 )
