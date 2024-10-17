@@ -96,7 +96,7 @@ public class ServerConnectionId {
         try {
             return BrokerEndPoint.parseHostPort(split[0])
                 .flatMap(localHost -> BrokerEndPoint.parseHostPort(split[1])
-                    .flatMap(remoteHost -> Optional.of(new ServerConnectionId(localHost, remoteHost, Integer.parseInt(split[2]), Integer.parseInt(split[3])))));
+                    .map(remoteHost -> new ServerConnectionId(localHost, remoteHost, Integer.parseInt(split[2]), Integer.parseInt(split[3]))));
         } catch (NumberFormatException e) {
             return Optional.empty();
         }

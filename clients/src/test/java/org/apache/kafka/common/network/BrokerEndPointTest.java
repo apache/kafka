@@ -38,6 +38,12 @@ public class BrokerEndPointTest {
         assertTrue(brokerEndPoint.isPresent());
         assertEquals("127.0.0.1", brokerEndPoint.get().host());
         assertEquals(9092, brokerEndPoint.get().port());
+
+        // IPv6 endpoint
+        brokerEndPoint = BrokerEndPoint.parseHostPort("[2001:db8::1]:9092");
+        assertTrue(brokerEndPoint.isPresent());
+        assertEquals("2001:db8::1", brokerEndPoint.get().host());
+        assertEquals(9092, brokerEndPoint.get().port());
     }
 
     @Test

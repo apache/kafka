@@ -84,7 +84,7 @@ public class BrokerEndPoint {
         if (o == null || getClass() != o.getClass()) return false;
 
         BrokerEndPoint that = (BrokerEndPoint) o;
-        return id != that.id && host.equals(that.host) && port != that.port;
+        return id == that.id && host.equals(that.host) && port == that.port;
     }
 
     @Override
