@@ -349,8 +349,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     private volatile long fetchDeadlineClientInstanceId = -1;
     private volatile KafkaFutureImpl<Uuid> mainConsumerInstanceIdFuture = new KafkaFutureImpl<>();
     private volatile KafkaFutureImpl<Uuid> restoreConsumerInstanceIdFuture = new KafkaFutureImpl<>();
-    private volatile KafkaFutureImpl<Map<String, KafkaFuture<Uuid>>> producerInstanceIdFuture = new KafkaFutureImpl<>();
-    private volatile KafkaFutureImpl<Uuid> threadProducerInstanceIdFuture = new KafkaFutureImpl<>();
+    private volatile KafkaFutureImpl<Uuid> producerInstanceIdFuture = new KafkaFutureImpl<>();
 
     public static StreamThread create(final TopologyMetadata topologyMetadata,
                                       final StreamsConfig config,
@@ -806,46 +805,34 @@ public class StreamThread extends Thread implements ProcessingThread {
                 }
             }
 
-            if (!processingMode.equals(StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA) &&
-                    !threadProducerInstanceIdFuture.isDone()) {
-
+            if (!producerInstanceIdFuture.isDone()) {
                 if (fetchDeadlineClientInstanceId >= time.milliseconds()) {
                     try {
-                        threadProducerInstanceIdFuture.complete(
+                        producerInstanceIdFuture.complete(
                             taskManager.streamsProducer().kafkaProducer().clientInstanceId(Duration.ZERO)
                         );
                     } catch (final IllegalStateException disabledError) {
                         // if telemetry is disabled on a client, we swallow the error,
                         // to allow returning a partial result for all other clients
-                        threadProducerInstanceIdFuture.complete(null);
+                        producerInstanceIdFuture.complete(null);
                     } catch (final TimeoutException swallow) {
                         // swallow
                     } catch (final Exception error) {
-                        threadProducerInstanceIdFuture.completeExceptionally(error);
+                        producerInstanceIdFuture.completeExceptionally(error);
                     }
                 } else {
-                    threadProducerInstanceIdFuture.completeExceptionally(
+                    producerInstanceIdFuture.completeExceptionally(
                         new TimeoutException("Could not retrieve thread producer client instance id.")
                     );
                 }
             }
 
-            maybeResetFetchDeadline();
-        }
-    }
+            if (mainConsumerInstanceIdFuture.isDone()
+                && (!stateUpdaterEnabled && restoreConsumerInstanceIdFuture.isDone())
+                && producerInstanceIdFuture.isDone()) {
 
-    private void maybeResetFetchDeadline() {
-        boolean reset = mainConsumerInstanceIdFuture.isDone()
-            && (!stateUpdaterEnabled && restoreConsumerInstanceIdFuture.isDone());
-
-        if (processingMode.equals(StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA)) {
-            throw new UnsupportedOperationException("not implemented yet");
-        } else if (!threadProducerInstanceIdFuture.isDone()) {
-            reset = false;
-        }
-
-        if (reset) {
-            fetchDeadlineClientInstanceId = -1L;
+                fetchDeadlineClientInstanceId = -1L;
+            }
         }
     }
 
@@ -1610,7 +1597,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     }
 
     // this method is NOT thread-safe (we rely on the callee to be `synchronized`)
-    public Map<String, KafkaFuture<Uuid>> consumerClientInstanceIds(final Duration timeout) {
+    public Map<String, KafkaFuture<Uuid>> clientInstanceIds(final Duration timeout) {
         boolean setDeadline = false;
 
         final Map<String, KafkaFuture<Uuid>> result = new HashMap<>();
@@ -1639,17 +1626,6 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
         result.put(getName() + "-restore-consumer", restoreConsumerInstanceIdFuture);
 
-        if (setDeadline) {
-            fetchDeadlineClientInstanceId = time.milliseconds() + timeout.toMillis();
-        }
-
-        return result;
-    }
-
-    // this method is NOT thread-safe (we rely on the callee to be `synchronized`)
-    public KafkaFuture<Map<String, KafkaFuture<Uuid>>> producersClientInstanceIds(final Duration timeout) {
-        boolean setDeadline = false;
-
         if (producerInstanceIdFuture.isDone()) {
             if (producerInstanceIdFuture.isCompletedExceptionally()) {
                 producerInstanceIdFuture = new KafkaFutureImpl<>();
@@ -1658,26 +1634,13 @@ public class StreamThread extends Thread implements ProcessingThread {
         } else {
             setDeadline = true;
         }
+        result.put(getName() + "-producer", producerInstanceIdFuture);
 
-        if (processingMode.equals(StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA)) {
-            throw new UnsupportedOperationException("not yet implemented");
-        } else {
-            if (threadProducerInstanceIdFuture.isDone()) {
-                if (threadProducerInstanceIdFuture.isCompletedExceptionally()) {
-                    threadProducerInstanceIdFuture = new KafkaFutureImpl<>();
-                    setDeadline = true;
-                }
-            } else {
-                setDeadline = true;
-            }
-            producerInstanceIdFuture.complete(Collections.singletonMap(getName() + "-producer", threadProducerInstanceIdFuture));
-
-            if (setDeadline) {
-                fetchDeadlineClientInstanceId = time.milliseconds() + timeout.toMillis();
-            }
+        if (setDeadline) {
+            fetchDeadlineClientInstanceId = time.milliseconds() + timeout.toMillis();
         }
 
-        return producerInstanceIdFuture;
+        return result;
     }
 
     // the following are for testing only
