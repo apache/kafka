@@ -161,6 +161,10 @@ public class RequestContext implements AuthorizableRequestContext {
         return header.apiVersion();
     }
 
+    public String connectionId() {
+        return connectionId;
+    }
+
     @Override
     public String listenerName() {
         return listenerName.value();
