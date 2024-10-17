@@ -1846,6 +1846,11 @@ public class GroupMetadataManager {
                 member,
                 updatedMember,
                 subscriptionMetadata,
+                group.computeSubscriptionTopicPartitionRacks(
+                    subscribedTopicNamesMap,
+                    metadataImage.topics(),
+                    metadataImage.cluster()
+                ),
                 subscriptionType,
                 records
             );
@@ -2039,6 +2044,11 @@ public class GroupMetadataManager {
                 member,
                 updatedMember,
                 subscriptionMetadata,
+                group.computeSubscriptionTopicPartitionRacks(
+                    subscribedTopicNamesMap,
+                    metadataImage.topics(),
+                    metadataImage.cluster()
+                ),
                 subscriptionType,
                 records
             );
@@ -2295,7 +2305,7 @@ public class GroupMetadataManager {
      * @param useClassicProtocol    Whether the member uses the classic protocol.
      * @param records               The list to accumulate records created to replace
      *                              the previous static member.
-     *                              
+     *
      * @return The existing consumer group member or a new one.
      */
     private ConsumerGroupMember getOrMaybeSubscribeStaticConsumerGroupMember(
@@ -2547,13 +2557,14 @@ public class GroupMetadataManager {
     /**
      * Updates the target assignment according to the updated member and subscription metadata.
      *
-     * @param group                 The ConsumerGroup.
-     * @param groupEpoch            The group epoch.
-     * @param member                The existing member.
-     * @param updatedMember         The updated member.
-     * @param subscriptionMetadata  The subscription metadata.
-     * @param subscriptionType      The group subscription type.
-     * @param records               The list to accumulate any new records.
+     * @param group                            The ConsumerGroup.
+     * @param groupEpoch                       The group epoch.
+     * @param member                           The existing member.
+     * @param updatedMember                    The updated member.
+     * @param subscriptionMetadata             The subscription metadata.
+     * @param subscriptionTopicPartitionRacks  The subscription topic partition racks.
+     * @param subscriptionType                 The group subscription type.
+     * @param records                          The list to accumulate any new records.
      * @return The new target assignment.
      */
     private Assignment updateTargetAssignment(
@@ -2562,6 +2573,7 @@ public class GroupMetadataManager {
         ConsumerGroupMember member,
         ConsumerGroupMember updatedMember,
         Map<String, TopicMetadata> subscriptionMetadata,
+        Map<Uuid, Map<Integer, Set<String>>> subscriptionTopicPartitionRacks,
         SubscriptionType subscriptionType,
         List<CoordinatorRecord> records
     ) {
@@ -2575,6 +2587,7 @@ public class GroupMetadataManager {
                     .withMembers(group.members())
                     .withStaticMembers(group.staticMembers())
                     .withSubscriptionMetadata(subscriptionMetadata)
+                    .withSubscriptionTopicPartitionRacks(subscriptionTopicPartitionRacks)
                     .withSubscriptionType(subscriptionType)
                     .withTargetAssignment(group.targetAssignment())
                     .withInvertedTargetAssignment(group.invertedTargetAssignment())

@@ -115,6 +115,11 @@ public class TargetAssignmentBuilder<T extends ModernGroupMember> {
     private Map<String, TopicMetadata> subscriptionMetadata = Collections.emptyMap();
 
     /**
+     * The subscription topic partition racks.
+     */
+    private Map<Uuid, Map<Integer, Set<String>>> subscriptionTopicPartitionRacks = Collections.emptyMap();
+
+    /**
      * The subscription type of the consumer group.
      */
     private SubscriptionType subscriptionType;
@@ -220,6 +225,19 @@ public class TargetAssignmentBuilder<T extends ModernGroupMember> {
         Map<String, TopicMetadata> subscriptionMetadata
     ) {
         this.subscriptionMetadata = subscriptionMetadata;
+        return this;
+    }
+
+    /**
+     * Adds the subscription topic partition racks to use.
+     *
+     * @param subscriptionTopicPartitionRacks  The subscription metadata.
+     * @return This object.
+     */
+    public TargetAssignmentBuilder<T> withSubscriptionTopicPartitionRacks(
+            Map<Uuid, Map<Integer, Set<String>>> subscriptionTopicPartitionRacks
+    ) {
+        this.subscriptionTopicPartitionRacks = subscriptionTopicPartitionRacks;
         return this;
     }
 
@@ -377,7 +395,7 @@ public class TargetAssignmentBuilder<T extends ModernGroupMember> {
                 subscriptionType,
                 invertedTargetAssignment
             ),
-            new SubscribedTopicDescriberImpl(topicMetadataMap)
+            new SubscribedTopicDescriberImpl(topicMetadataMap, subscriptionTopicPartitionRacks)
         );
 
         // Compute delta from previous to new target assignment and create the
