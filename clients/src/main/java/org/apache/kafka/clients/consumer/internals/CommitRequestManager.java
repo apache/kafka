@@ -738,11 +738,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                         coordinatorRequestManager.markCoordinatorUnknown(error.message(), currentTimeMs);
                         future.completeExceptionally(error.exception());
                         return;
-                    } else if (error == Errors.FENCED_INSTANCE_ID) {
-                        String fencedError = "OffsetCommit failed due to group instance id fenced: " + groupInstanceId;
-                        log.error(fencedError);
-                        future.completeExceptionally(new CommitFailedException(fencedError));
-                        return;
                     } else if (error == Errors.OFFSET_METADATA_TOO_LARGE ||
                         error == Errors.INVALID_COMMIT_OFFSET_SIZE) {
                         future.completeExceptionally(error.exception());
