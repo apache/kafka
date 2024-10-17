@@ -78,7 +78,7 @@ public class ProducerPerformance {
             ProducerRecord<byte[], byte[]> record;
             if (config.warmupRecords > 0) {
                 // TODO: Keep this message? Maybe unnecessary
-                System.out.println("Warmup first " + config.warmupRecords + " records. Steady-state results will print after the complete-test summary.");
+                System.out.println("Warmup first " + config.warmupRecords + " records. Steady state results will print after the complete test summary.");
                 warmupStats = new Stats(config.warmupRecords, DEFAULT_REPORTING_INTERVAL_MS);
             } else {
                 stats = new Stats(config.numRecords, DEFAULT_REPORTING_INTERVAL_MS);
@@ -107,7 +107,7 @@ public class ProducerPerformance {
                     } else {
                         if (i == config.warmupRecords) {
                             // Create the steady-state 'stats' object here so its start time is correct
-                            stats = new Stats(config.numRecords - config.warmupRecords, DEFAULT_REPORTING_INTERVAL_MS, config.warmupRecords);
+                            stats = new Stats(config.numRecords - config.warmupRecords, DEFAULT_REPORTING_INTERVAL_MS, config.warmupRecords > 0);
                         }
                         cb = new PerfCallback(sendStartMs, payload.length, stats);
                     }
@@ -384,13 +384,13 @@ public class ProducerPerformance {
         private long windowTotalLatency;
         private long windowBytes;
         private long windowStart;
-        private long warmupRecords;
+        private final boolean isSteadyState;
 
         public Stats(long numRecords, int reportingInterval) {
-            this(numRecords, reportingInterval, 0);
+            this(numRecords, reportingInterval, false);
         }
 
-        public Stats(long numRecords, int reportingInterval, long warmupRecords) {
+        public Stats(long numRecords, int reportingInterval, boolean isSteadyState) {
             this.start = System.currentTimeMillis();
             this.windowStart = System.currentTimeMillis();
             this.iteration = 0;
@@ -404,7 +404,7 @@ public class ProducerPerformance {
             this.windowBytes = 0;
             this.totalLatency = 0;
             this.reportingInterval = reportingInterval;
-            this.warmupRecords = warmupRecords;
+            this.isSteadyState = isSteadyState;
         }
 
         Stats(Stats first, Stats second) {
@@ -412,14 +412,18 @@ public class ProducerPerformance {
             this.start = Math.min(first.start, second.start);
             this.iteration = first.iteration + second.iteration;
             this.sampling = first.sampling;
-            this.latencies = Arrays.copyOf(first.latencies, first.index + second.index);
+            this.index = first.index() + second.index();
+            this.latencies = Arrays.copyOf(first.latencies, this.index);
             System.arraycopy(second.latencies, 0, this.latencies, first.index(), second.index());
             this.maxLatency = Math.max(first.maxLatency, second.maxLatency);
             this.windowCount = first.windowCount + second.windowCount;
+            this.windowMaxLatency = 0;
+            this.windowTotalLatency = 0;
             this.totalLatency = first.totalLatency + second.totalLatency;
             this.reportingInterval = first.reportingInterval;
-            this.warmupRecords = 0;
+            this.isSteadyState = false; // false except in the steady-state case
             this.count = first.count + second.count;
+            this.bytes = first.bytes + second.bytes;
         }
 
         public void record(int latency, int bytes, long time) {
@@ -437,6 +441,9 @@ public class ProducerPerformance {
             }
             /* maybe report the recent perf */
             if (time - windowStart >= reportingInterval) {
+                if (this.isSteadyState && count == windowCount ){
+                    System.out.println("Beginning steady state.
+                }
                 printWindow();
                 newWindow();
             }
@@ -489,7 +496,7 @@ public class ProducerPerformance {
             int[] percs = percentiles(this.latencies, index, 0.5, 0.95, 0.99, 0.999);
             System.out.printf("%d%s records sent, %f records/sec (%.2f MB/sec), %.2f ms avg latency, %.2f ms max latency, %d ms 50th, %d ms 95th, %d ms 99th, %d ms 99.9th.%n",
                               count,
-                              this.warmupRecords > 0 ? " steady state" : "",
+                              this.isSteadyState ? " steady state" : "",
                               recsPerSec,
                               mbPerSec,
                               totalLatency / (double) count,
