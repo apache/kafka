@@ -381,6 +381,10 @@ class KRaftMetadataCache(
       flatMap(_.node(listenerName.value()).toScala).toSeq
   }
 
+  override def getBrokerNodes(listenerName: ListenerName): Seq[Node] = {
+    _currentImage.cluster().brokers().values().asScala.flatMap(_.node(listenerName.value()).asScala).toSeq
+  }
+
   // Does NOT include offline replica metadata
   override def getPartitionInfo(topicName: String, partitionId: Int): Option[UpdateMetadataPartitionState] = {
     Option(_currentImage.topics().getTopic(topicName)).
