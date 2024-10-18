@@ -116,7 +116,9 @@ public class Node {
     /**
      * Whether if this node is fenced
      */
-    public boolean isFenced() {return isFenced;}
+    public boolean isFenced() {
+        return isFenced;
+    }
 
     @Override
     public int hashCode() {

@@ -52,10 +52,10 @@ public class DescribeClusterRequest extends AbstractRequest {
     public DescribeClusterRequest(DescribeClusterRequestData data, short version) {
         super(ApiKeys.DESCRIBE_CLUSTER, version);
         this.data = data;
-        validate(version, data.includeFencedBrokers());
+        validateVersionForIncludingFencedBrokers(version, data.includeFencedBrokers());
     }
 
-    private void validate(short version, boolean includeFencedBrokers) {
+    private void validateVersionForIncludingFencedBrokers(short version, boolean includeFencedBrokers) {
         if (version < 2 && includeFencedBrokers) {
             throw new UnsupportedVersionException("Including fenced broker endpoints is not supported with version " + version);
         }
