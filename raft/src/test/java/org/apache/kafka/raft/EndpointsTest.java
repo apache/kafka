@@ -47,7 +47,7 @@ final class EndpointsTest {
     @Test
     void testAddressWithValidEndpoint() {
         Map<ListenerName, InetSocketAddress> endpointMap = Utils.mkMap(
-                Utils.mkEntry(testListener, testSocketAddress));
+                Map.entry(testListener, testSocketAddress));
         Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
 
         Optional<InetSocketAddress> address = endpoints.address(testListener);
@@ -67,7 +67,7 @@ final class EndpointsTest {
     @Test
     void testVotersRecordEndpointsWithEndpoint() {
         Map<ListenerName, InetSocketAddress> endpointMap = Utils.mkMap(
-                Utils.mkEntry(testListener, testSocketAddress));
+                Map.entry(testListener, testSocketAddress));
         Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
 
         VotersRecord.Endpoint endpoint = endpoints.votersRecordEndpoints().next();
@@ -85,7 +85,7 @@ final class EndpointsTest {
     @Test
     void testSize() {
         Map<ListenerName, InetSocketAddress> endpointMap = Utils.mkMap(
-                Utils.mkEntry(testListener, testSocketAddress));
+                Map.entry(testListener, testSocketAddress));
 
         assertEquals(1, Endpoints.fromInetSocketAddresses(endpointMap).size());
         assertEquals(0, Endpoints.empty().size());
@@ -94,7 +94,7 @@ final class EndpointsTest {
     @Test
     void testIsEmptyWithEndpoint() {
         Map<ListenerName, InetSocketAddress> endpointMap = Utils.mkMap(
-                Utils.mkEntry(testListener, testSocketAddress));
+                Map.entry(testListener, testSocketAddress));
 
         assertFalse(Endpoints.fromInetSocketAddresses(endpointMap).isEmpty());
     }
@@ -102,7 +102,7 @@ final class EndpointsTest {
     @Test
     void testEqualsAndHashCodeWithSameEndpoint() {
         Map<ListenerName, InetSocketAddress> endpointMap = Utils.mkMap(
-                Utils.mkEntry(testListener, testSocketAddress));
+                Map.entry(testListener, testSocketAddress));
 
         Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
         Endpoints sameEndpoints = Endpoints.fromInetSocketAddresses(endpointMap);
@@ -114,11 +114,11 @@ final class EndpointsTest {
     @Test
     void testEqualsAndHashCodeWithDifferentEndpoints() {
         Map<ListenerName, InetSocketAddress> endpointMap = Utils.mkMap(
-                Utils.mkEntry(testListener, testSocketAddress));
+                Map.entry(testListener, testSocketAddress));
         Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
 
         Map<ListenerName, InetSocketAddress> anotherEndpointMap = Utils.mkMap(
-                Utils.mkEntry(
+                Map.entry(
                         ListenerName.normalised("another"),
                         InetSocketAddress.createUnresolved("localhost", 9093)));
         Endpoints differentEndpoints = Endpoints.fromInetSocketAddresses(anotherEndpointMap);
@@ -130,7 +130,7 @@ final class EndpointsTest {
     @Test
     void testToBeginQuorumEpochRequestWithEndpoint() {
         Map<ListenerName, InetSocketAddress> endpointMap = Utils.mkMap(
-                Utils.mkEntry(testListener, testSocketAddress));
+                Map.entry(testListener, testSocketAddress));
         Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
 
         BeginQuorumEpochRequestData.LeaderEndpointCollection leaderEndpoints = endpoints.toBeginQuorumEpochRequest();
@@ -151,7 +151,7 @@ final class EndpointsTest {
     @Test
     void testFromInetSocketAddressesWithEndpoint() {
         Map<ListenerName, InetSocketAddress> endpointMap = Utils.mkMap(
-                Utils.mkEntry(testListener, testSocketAddress));
+                Map.entry(testListener, testSocketAddress));
 
         assertEquals(1, Endpoints.fromInetSocketAddresses(endpointMap).size());
     }
@@ -159,7 +159,7 @@ final class EndpointsTest {
     @Test
     void testFromVotersRecordEndpointsWithEndpoint() {
         Map<ListenerName, InetSocketAddress> endpointMap = Utils.mkMap(
-                Utils.mkEntry(testListener, testSocketAddress));
+                Map.entry(testListener, testSocketAddress));
         Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
 
         List<VotersRecord.Endpoint> votersEndpoints = new ArrayList<>();
@@ -184,7 +184,7 @@ final class EndpointsTest {
     @Test
     void testFromBeginQuorumEpochRequestWithEndpoint() {
         Map<ListenerName, InetSocketAddress> endpointMap = Utils.mkMap(
-                Utils.mkEntry(testListener, testSocketAddress));
+                Map.entry(testListener, testSocketAddress));
         Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
 
         BeginQuorumEpochRequestData.LeaderEndpointCollection leaderEndpoints = new BeginQuorumEpochRequestData.LeaderEndpointCollection();
@@ -211,7 +211,7 @@ final class EndpointsTest {
     @Test
     void testFromBeginQuorumEpochResponseWithEndpoint() {
         Map<ListenerName, InetSocketAddress> endpointMap = Utils.mkMap(
-                Utils.mkEntry(testListener, testSocketAddress));
+                Map.entry(testListener, testSocketAddress));
         Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
 
         BeginQuorumEpochResponseData.NodeEndpointCollection nodeEndpointCollection = new BeginQuorumEpochResponseData.NodeEndpointCollection();
@@ -239,7 +239,7 @@ final class EndpointsTest {
     @Test
     void testFromEndQuorumEpochRequestWithEndpoint() {
         Map<ListenerName, InetSocketAddress> endpointMap = Utils.mkMap(
-                Utils.mkEntry(testListener, testSocketAddress));
+                Map.entry(testListener, testSocketAddress));
         Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
 
         EndQuorumEpochRequestData.LeaderEndpointCollection leaderEndpoints = new EndQuorumEpochRequestData.LeaderEndpointCollection();
@@ -262,7 +262,7 @@ final class EndpointsTest {
     @Test
     void testFromEndQuorumEpochResponseWithEndpoint() {
         Map<ListenerName, InetSocketAddress> endpointMap = Utils.mkMap(
-                Utils.mkEntry(testListener, testSocketAddress));
+                Map.entry(testListener, testSocketAddress));
         Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
 
         EndQuorumEpochResponseData.NodeEndpointCollection nodeEndpointCollection = new EndQuorumEpochResponseData.NodeEndpointCollection();
@@ -288,7 +288,7 @@ final class EndpointsTest {
     @Test
     void testFromVoteResponseWithEndpoint() {
         Map<ListenerName, InetSocketAddress> endpointMap = Utils.mkMap(
-                Utils.mkEntry(testListener, testSocketAddress));
+                Map.entry(testListener, testSocketAddress));
         Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
 
         VoteResponseData.NodeEndpointCollection nodeEndpointCollection = new VoteResponseData.NodeEndpointCollection();
@@ -314,7 +314,7 @@ final class EndpointsTest {
     @Test
     void testFromFetchResponseWithEndpoint() {
         Map<ListenerName, InetSocketAddress> endpointMap = Utils.mkMap(
-                Utils.mkEntry(testListener, testSocketAddress));
+                Map.entry(testListener, testSocketAddress));
         Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
 
         FetchResponseData.NodeEndpointCollection nodeEndpointCollection = new FetchResponseData.NodeEndpointCollection();
@@ -338,7 +338,7 @@ final class EndpointsTest {
     @Test
     void testFromFetchSnapshotResponseWithEndpoint() {
         Map<ListenerName, InetSocketAddress> endpointMap = Utils.mkMap(
-                Utils.mkEntry(testListener, testSocketAddress));
+                Map.entry(testListener, testSocketAddress));
         Endpoints endpoints = Endpoints.fromInetSocketAddresses(endpointMap);
 
         FetchSnapshotResponseData.NodeEndpointCollection nodeEndpointCollection = new FetchSnapshotResponseData.NodeEndpointCollection();

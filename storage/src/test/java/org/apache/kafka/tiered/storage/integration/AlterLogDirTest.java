@@ -22,8 +22,8 @@ import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Map;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 
 public final class AlterLogDirTest extends TieredStorageTestHarness {
@@ -47,7 +47,7 @@ public final class AlterLogDirTest extends TieredStorageTestHarness {
         builder
                 // create topicB with 1 partition and 1 RF
                 .createTopic(topicB, partitionCount, replicationFactor, maxBatchCountPerSegment,
-                        mkMap(mkEntry(p0, Arrays.asList(broker1, broker0))), enableRemoteLogStorage)
+                        mkMap(Map.entry(p0, Arrays.asList(broker1, broker0))), enableRemoteLogStorage)
                 // send records to partition 0
                 .expectSegmentToBeOffloaded(broker1, topicB, p0, 0, new KeyValueSpec("k0", "v0"))
                 .expectSegmentToBeOffloaded(broker1, topicB, p0, 1, new KeyValueSpec("k1", "v1"))

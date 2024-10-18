@@ -34,9 +34,9 @@ import org.mockito.quality.Strictness;
 
 import java.io.File;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -69,7 +69,7 @@ public class KeyValueSegmentTest {
         final File directory = new File(directoryPath);
 
         final ProcessorContext mockContext = mock(ProcessorContext.class);
-        when(mockContext.appConfigs()).thenReturn(mkMap(mkEntry(METRICS_RECORDING_LEVEL_CONFIG, "INFO")));
+        when(mockContext.appConfigs()).thenReturn(mkMap(Map.entry(METRICS_RECORDING_LEVEL_CONFIG, "INFO")));
         when(mockContext.stateDir()).thenReturn(directory);
 
         segment.openDB(mockContext.appConfigs(), mockContext.stateDir());

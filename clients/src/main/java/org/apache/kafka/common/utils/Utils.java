@@ -57,7 +57,6 @@ import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -785,19 +784,6 @@ public final class Utils {
         for (T elem : elems)
             result.add(elem);
         return result;
-    }
-
-    /**
-     * Creates a map entry (for use with {@link Utils#mkMap(java.util.Map.Entry[])})
-     *
-     * @param k   The key
-     * @param v   The value
-     * @param <K> The key type
-     * @param <V> The value type
-     * @return An entry
-     */
-    public static <K, V> Map.Entry<K, V> mkEntry(final K k, final V v) {
-        return new AbstractMap.SimpleEntry<>(k, v);
     }
 
     /**
