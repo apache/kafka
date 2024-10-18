@@ -62,11 +62,6 @@ import scala.collection._
  *
  * For most use cases, this script communicates with a Kafka cluster (specified via the
  * `--bootstrap-server` option).
- *
- * This script no longer directly communicates with a ZooKeeper ensemble.
- *
- * Passwords and sensitive configurations should be securely managed using Kafka's internal security features
- * without the need for ZooKeeper.
  */
 object ConfigCommand extends Logging {
 

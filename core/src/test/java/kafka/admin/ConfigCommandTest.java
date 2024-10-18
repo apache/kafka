@@ -1205,25 +1205,6 @@ public class ConfigCommandTest {
         return new ConfigCommand.ConfigCommandOptions(toArray(optArray, nameArray, otherArgs));
     }
 
-    private void checkEntity(String entityType, Optional<String> entityName, String expectedEntityName, List<String> otherArgs) {
-        ConfigCommand.ConfigCommandOptions opts = createOpts(entityType, entityName, otherArgs);
-        opts.checkArgs();
-        ConfigCommand.ConfigEntity entity = ConfigCommand.parseEntity(opts);
-        assertEquals(entityType, entity.root().entityType());
-        assertEquals(expectedEntityName, entity.fullSanitizedName());
-    }
-
-    private void checkInvalidArgs(String entityType, Optional<String> entityName, List<String> otherArgs) {
-        ConfigCommand.ConfigCommandOptions opts = createOpts(entityType, entityName, otherArgs);
-        assertThrows(IllegalArgumentException.class, opts::checkArgs);
-    }
-
-    private void checkInvalidEntity(String entityType, Optional<String> entityName, List<String> otherArgs) {
-        ConfigCommand.ConfigCommandOptions opts = createOpts(entityType, entityName, otherArgs);
-        opts.checkArgs();
-        assertThrows(IllegalArgumentException.class, () -> ConfigCommand.parseEntity(opts));
-    }
-
     private void checkEntity(String expectedEntityType, String expectedEntityName, String...args) {
         ConfigCommand.ConfigCommandOptions opts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts, Arrays.asList(args)));
         opts.checkArgs();
