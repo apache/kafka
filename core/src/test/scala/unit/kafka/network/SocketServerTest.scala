@@ -40,7 +40,7 @@ import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.network.metrics.RequestMetrics
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
-import org.apache.kafka.server.config.QuotaConfigs
+import org.apache.kafka.server.config.QuotaConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.network.ConnectionDisconnectListener
 import org.apache.kafka.server.quota.{ThrottleCallback, ThrottledChannel}
@@ -970,7 +970,7 @@ class SocketServerTest {
     val defaultTimeoutMs = 2000
     val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
     overrideProps.remove(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG)
-    overrideProps.put(QuotaConfigs.NUM_QUOTA_SAMPLES_CONFIG, String.valueOf(2))
+    overrideProps.put(QuotaConfig.NUM_QUOTA_SAMPLES_CONFIG, String.valueOf(2))
     val connectionRate = 5
     val time = new MockTime()
     val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), new Metrics(),
@@ -1021,7 +1021,7 @@ class SocketServerTest {
   def testThrottledSocketsClosedOnShutdown(): Unit = {
     val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
     overrideProps.remove("max.connections.per.ip")
-    overrideProps.put(QuotaConfigs.NUM_QUOTA_SAMPLES_CONFIG, String.valueOf(2))
+    overrideProps.put(QuotaConfig.NUM_QUOTA_SAMPLES_CONFIG, String.valueOf(2))
     val connectionRate = 5
     val time = new MockTime()
     val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), new Metrics(),

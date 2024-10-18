@@ -63,7 +63,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
             TransactionStateManagerConfig.CONFIG_DEF,
             QuorumConfig.CONFIG_DEF,
             MetricConfigs.CONFIG_DEF,
-            QuotaConfigs.CONFIG_DEF,
+            QuotaConfig.CONFIG_DEF,
             BrokerSecurityConfigs.CONFIG_DEF,
             DelegationTokenManagerConfigs.CONFIG_DEF,
             PasswordEncoderConfigs.CONFIG_DEF

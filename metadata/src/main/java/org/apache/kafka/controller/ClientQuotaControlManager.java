@@ -27,7 +27,7 @@ import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.config.QuotaConfigs;
+import org.apache.kafka.server.config.QuotaConfig;
 import org.apache.kafka.server.mutable.BoundedList;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -232,13 +232,13 @@ public class ClientQuotaControlManager {
                     "not be combined with User or ClientId");
             } else {
                 if (isValidIpEntity(entity.get(ClientQuotaEntity.IP))) {
-                    configKeys = QuotaConfigs.ipConfigs().configKeys();
+                    configKeys = QuotaConfig.ipConfigs().configKeys();
                 } else {
                     return new ApiError(Errors.INVALID_REQUEST, entity.get(ClientQuotaEntity.IP) + " is not a valid IP or resolvable host.");
                 }
             }
         } else if (hasUser || hasClientId) {
-            configKeys = QuotaConfigs.userAndClientQuotaConfigs().configKeys();
+            configKeys = QuotaConfig.userAndClientQuotaConfigs().configKeys();
         } else {
             return new ApiError(Errors.INVALID_REQUEST, "Invalid empty client quota entity");
         }

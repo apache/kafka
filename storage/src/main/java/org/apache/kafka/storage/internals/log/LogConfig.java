@@ -34,7 +34,7 @@ import org.apache.kafka.common.utils.ConfigUtils;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.MetadataVersionValidator;
-import org.apache.kafka.server.config.QuotaConfigs;
+import org.apache.kafka.server.config.QuotaConfig;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms;
 import org.apache.kafka.server.record.BrokerCompressionType;
@@ -209,8 +209,8 @@ public class LogConfig extends AbstractConfig {
             TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG,
             TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG,
             TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG,
-            QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG,
-            QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG
+            QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG,
+            QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG
     );
 
     @SuppressWarnings("deprecation")
@@ -317,10 +317,10 @@ public class LogConfig extends AbstractConfig {
                         atLeast(0), MEDIUM, TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_DOC)
                 .define(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, LONG, ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_DEFAULT,
                         atLeast(0), MEDIUM, TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_DOC)
-                .define(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, LIST, QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_DEFAULT,
-                        ThrottledReplicaListValidator.INSTANCE, MEDIUM, QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_DOC)
-                .define(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, LIST, QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_DEFAULT,
-                        ThrottledReplicaListValidator.INSTANCE, MEDIUM, QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_DOC)
+                .define(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, LIST, QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_DEFAULT,
+                        ThrottledReplicaListValidator.INSTANCE, MEDIUM, QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_DOC)
+                .define(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, LIST, QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_DEFAULT,
+                        ThrottledReplicaListValidator.INSTANCE, MEDIUM, QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_DOC)
                 .define(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG, BOOLEAN, ServerLogConfigs.LOG_MESSAGE_DOWNCONVERSION_ENABLE_DEFAULT, LOW,
                         TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_DOC)
                 .define(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, BOOLEAN, DEFAULT_REMOTE_STORAGE_ENABLE, null,
@@ -423,8 +423,8 @@ public class LogConfig extends AbstractConfig {
         this.messageTimestampDifferenceMaxMs = getLong(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG);
         this.messageTimestampBeforeMaxMs = getMessageTimestampBeforeMaxMs();
         this.messageTimestampAfterMaxMs = getMessageTimestampAfterMaxMs();
-        this.leaderReplicationThrottledReplicas = Collections.unmodifiableList(getList(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG));
-        this.followerReplicationThrottledReplicas = Collections.unmodifiableList(getList(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG));
+        this.leaderReplicationThrottledReplicas = Collections.unmodifiableList(getList(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG));
+        this.followerReplicationThrottledReplicas = Collections.unmodifiableList(getList(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG));
         this.messageDownConversionEnable = getBoolean(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG);
 
         remoteLogConfig = new RemoteLogConfig(this);

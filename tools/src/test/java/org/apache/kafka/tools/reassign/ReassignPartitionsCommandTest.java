@@ -48,7 +48,7 @@ import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.server.config.QuotaConfigs;
+import org.apache.kafka.server.config.QuotaConfig;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.TerseException;
 
@@ -82,8 +82,8 @@ import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV0;
-import static org.apache.kafka.server.config.QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG;
-import static org.apache.kafka.server.config.QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG;
+import static org.apache.kafka.server.config.QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG;
+import static org.apache.kafka.server.config.QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG;
 import static org.apache.kafka.server.config.ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG;
 import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG;
 import static org.apache.kafka.server.config.ReplicationConfigs.REPLICA_FETCH_BACKOFF_MS_CONFIG;
@@ -191,7 +191,7 @@ public class ReassignPartitionsCommandTest {
             }, "Timeout for waiting offset");
         }
     }
-    
+
     @ClusterTest
     public void testGenerateAssignmentWithBootstrapServer() throws Exception {
         createTopics();
@@ -424,7 +424,7 @@ public class ReassignPartitionsCommandTest {
             admin.incrementalAlterConfigs(singletonMap(
                             new ConfigResource(ConfigResource.Type.BROKER, "0"),
                             singletonList(new AlterConfigOp(
-                                    new ConfigEntry(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, ""), AlterConfigOp.OpType.DELETE))))
+                                    new ConfigEntry(QuotaConfig.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, ""), AlterConfigOp.OpType.DELETE))))
                     .all().get();
             waitForBrokerLevelThrottles(admin, unthrottledBrokerConfigs);
 
@@ -566,17 +566,17 @@ public class ReassignPartitionsCommandTest {
 
     private void waitForLogDirThrottle(Admin admin, Set<Integer> throttledBrokers, Long logDirThrottle) {
         Map<String, Long> throttledConfigMap = new HashMap<>();
-        throttledConfigMap.put(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, -1L);
-        throttledConfigMap.put(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, -1L);
-        throttledConfigMap.put(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, logDirThrottle);
+        throttledConfigMap.put(QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, -1L);
+        throttledConfigMap.put(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, -1L);
+        throttledConfigMap.put(QuotaConfig.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, logDirThrottle);
         waitForBrokerThrottles(admin, throttledBrokers, throttledConfigMap);
     }
 
     private void waitForInterBrokerThrottle(Admin admin, List<Integer> throttledBrokers, Long interBrokerThrottle) {
         Map<String, Long> throttledConfigMap = new HashMap<>();
-        throttledConfigMap.put(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, interBrokerThrottle);
-        throttledConfigMap.put(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, interBrokerThrottle);
-        throttledConfigMap.put(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, -1L);
+        throttledConfigMap.put(QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, interBrokerThrottle);
+        throttledConfigMap.put(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, interBrokerThrottle);
+        throttledConfigMap.put(QuotaConfig.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, -1L);
         waitForBrokerThrottles(admin, throttledBrokers, throttledConfigMap);
     }
 
