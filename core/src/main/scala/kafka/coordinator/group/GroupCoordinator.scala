@@ -428,7 +428,7 @@ private[group] class GroupCoordinator(
             s"for pending member with memberId=$memberId")
         }
 
-        debug(s"Pending dynamic member with id $memberId joins group ${group.groupId} in " +
+        info(s"Pending dynamic member with id $memberId joins group ${group.groupId} in " +
           s"${group.currentState} state. Adding to the group now.")
         addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, memberId, None,
           clientId, clientHost, protocolType, protocols, group, responseCallback, reason)
