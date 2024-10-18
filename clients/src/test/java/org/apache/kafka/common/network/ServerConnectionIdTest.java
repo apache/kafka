@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Socket;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -113,35 +114,35 @@ public class ServerConnectionIdTest {
 
     @Test
     public void testParseHostPort() {
-        Optional<BrokerEndPoint> brokerEndPoint = ServerConnectionId.parseHostPort("myhost:9092");
-        assertTrue(brokerEndPoint.isPresent());
-        assertEquals("myhost", brokerEndPoint.get().host());
-        assertEquals(9092, brokerEndPoint.get().port());
+        Optional<Map.Entry<String, Integer>> hostPortEntry = ServerConnectionId.parseHostPort("myhost:9092");
+        assertTrue(hostPortEntry.isPresent());
+        assertEquals("myhost", hostPortEntry.get().getKey());
+        assertEquals(9092, hostPortEntry.get().getValue());
 
-        brokerEndPoint = ServerConnectionId.parseHostPort("127.0.0.1:9092");
-        assertTrue(brokerEndPoint.isPresent());
-        assertEquals("127.0.0.1", brokerEndPoint.get().host());
-        assertEquals(9092, brokerEndPoint.get().port());
+        hostPortEntry = ServerConnectionId.parseHostPort("127.0.0.1:9092");
+        assertTrue(hostPortEntry.isPresent());
+        assertEquals("127.0.0.1", hostPortEntry.get().getKey());
+        assertEquals(9092, hostPortEntry.get().getValue());
 
         // IPv6 endpoint
-        brokerEndPoint = ServerConnectionId.parseHostPort("[2001:db8::1]:9092");
-        assertTrue(brokerEndPoint.isPresent());
-        assertEquals("2001:db8::1", brokerEndPoint.get().host());
-        assertEquals(9092, brokerEndPoint.get().port());
+        hostPortEntry = ServerConnectionId.parseHostPort("[2001:db8::1]:9092");
+        assertTrue(hostPortEntry.isPresent());
+        assertEquals("2001:db8::1", hostPortEntry.get().getKey());
+        assertEquals(9092, hostPortEntry.get().getValue());
     }
 
     @Test
     public void testParseHostPortInvalid() {
         // Invalid separator
-        Optional<BrokerEndPoint> brokerEndPoint = ServerConnectionId.parseHostPort("myhost-9092");
-        assertFalse(brokerEndPoint.isPresent());
+        Optional<Map.Entry<String, Integer>> hostPortEntry = ServerConnectionId.parseHostPort("myhost-9092");
+        assertFalse(hostPortEntry.isPresent());
 
         // No separator
-        brokerEndPoint = ServerConnectionId.parseHostPort("myhost9092");
-        assertFalse(brokerEndPoint.isPresent());
+        hostPortEntry = ServerConnectionId.parseHostPort("myhost9092");
+        assertFalse(hostPortEntry.isPresent());
 
         // Invalid port
-        brokerEndPoint = ServerConnectionId.parseHostPort("myhost:abcd");
-        assertFalse(brokerEndPoint.isPresent());
+        hostPortEntry = ServerConnectionId.parseHostPort("myhost:abcd");
+        assertFalse(hostPortEntry.isPresent());
     }
 }

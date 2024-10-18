@@ -21,8 +21,9 @@ import java.nio.charset.StandardCharsets
 import kafka.zk.BrokerIdZNode
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
 import org.apache.kafka.common.feature.Features._
-import org.apache.kafka.common.network.{BrokerEndPoint, ListenerName}
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.server.network.BrokerEndPoint
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals}
 import org.junit.jupiter.api.Test
 

@@ -18,6 +18,7 @@
 package org.apache.kafka.common.network;
 
 import java.net.Socket;
+import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -40,15 +41,6 @@ public class ServerConnectionId {
     private final int index;
 
     public ServerConnectionId(
-        BrokerEndPoint localEndpoint,
-        BrokerEndPoint remoteEndpoint,
-        int processorId,
-        int index
-    ) {
-        this(localEndpoint.host(), localEndpoint.port(), remoteEndpoint.host(), remoteEndpoint.port(), processorId, index);
-    }
-
-    public ServerConnectionId(
         String localHost,
         int localPort,
         String remoteHost,
@@ -62,6 +54,15 @@ public class ServerConnectionId {
         this.remotePort = remotePort;
         this.processorId = processorId;
         this.index = index;
+    }
+
+    private ServerConnectionId(
+        Map.Entry<String, Integer> localEndpoint,
+        Map.Entry<String, Integer> remoteEndpoint,
+        int processorId,
+        int index
+    ) {
+        this(localEndpoint.getKey(), localEndpoint.getValue(), remoteEndpoint.getKey(), remoteEndpoint.getValue(), processorId, index);
     }
 
     public String localHost() {
@@ -125,15 +126,14 @@ public class ServerConnectionId {
     }
 
     /**
-     * BrokerEndPoint URI is host:port or [ipv6_host]:port
-     * Note that unlike EndPoint (or listener) this URI has no security information.
+     * Map entry consists of host:port or [ipv6_host]:port
      */
     // Visible for testing
-    static Optional<BrokerEndPoint> parseHostPort(String connectionString) {
+    static Optional<Map.Entry<String, Integer>> parseHostPort(String connectionString) {
         Matcher matcher = URI_PARSE_EXP.matcher(connectionString);
         if (matcher.matches()) {
             try {
-                return Optional.of(new BrokerEndPoint(-1, matcher.group(1), Integer.parseInt(matcher.group(2))));
+                return Optional.of(Map.entry(matcher.group(1), Integer.parseInt(matcher.group(2))));
             } catch (NumberFormatException e) {
                 // Ignore
             }
