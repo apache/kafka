@@ -1005,7 +1005,7 @@ public class Worker {
         if (topic != null && !topic.isEmpty()) {
             Map<String, Object> producerProps = baseProducerConfigs(id.connector(), "connector-dlq-producer-" + id, config, connConfig, connectorClass,
                                                                 connectorClientConfigOverridePolicy, kafkaClusterId);
-            Map<String, Object> adminProps = adminConfigs(id.connector(), "connector-dlq-adminclient-", config, connConfig, connectorClass, connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SINK);
+            Map<String, Object> adminProps = adminConfigs(id.connector(), "connector-dlq-adminclient-" + connConfig.get("connector.name"), config, connConfig, connectorClass, connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SINK);
             DeadLetterQueueReporter reporter = DeadLetterQueueReporter.createAndSetup(adminProps, id, connConfig, producerProps, errorHandlingMetrics);
 
             reporters.add(reporter);
