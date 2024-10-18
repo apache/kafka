@@ -677,15 +677,12 @@ public class StandaloneHerderTest {
         Callback<ConnectorInfo> connectorInfoCb = mock(Callback.class);
         Callback<Map<String, String>> connectorConfigCb = mock(Callback.class);
         Callback<List<TaskInfo>> taskConfigsCb = mock(Callback.class);
-        Callback<Map<ConnectorTaskId, Map<String, String>>> tasksConfigCb = mock(Callback.class);
 
         // Check accessors with empty worker
         doNothing().when(listConnectorsCb).onCompletion(null, Collections.EMPTY_SET);
         doNothing().when(connectorInfoCb).onCompletion(any(NotFoundException.class), isNull());
         doNothing().when(taskConfigsCb).onCompletion(any(NotFoundException.class), isNull());
-        doNothing().when(tasksConfigCb).onCompletion(any(NotFoundException.class), isNull());
         doNothing().when(connectorConfigCb).onCompletion(any(NotFoundException.class), isNull());
-
 
         expectAdd(SourceSink.SOURCE);
         expectConfigValidation(SourceSink.SOURCE, connConfig);
@@ -699,16 +696,11 @@ public class StandaloneHerderTest {
         TaskInfo taskInfo = new TaskInfo(new ConnectorTaskId(CONNECTOR_NAME, 0), taskConfig(SourceSink.SOURCE));
         doNothing().when(taskConfigsCb).onCompletion(null, singletonList(taskInfo));
 
-        Map<ConnectorTaskId, Map<String, String>> tasksConfig = Collections.singletonMap(new ConnectorTaskId(CONNECTOR_NAME, 0),
-            taskConfig(SourceSink.SOURCE));
-        doNothing().when(tasksConfigCb).onCompletion(null, tasksConfig);
-
         // All operations are synchronous for StandaloneHerder, so we don't need to actually wait after making each call
         herder.connectors(listConnectorsCb);
         herder.connectorInfo(CONNECTOR_NAME, connectorInfoCb);
         herder.connectorConfig(CONNECTOR_NAME, connectorConfigCb);
         herder.taskConfigs(CONNECTOR_NAME, taskConfigsCb);
-        herder.tasksConfig(CONNECTOR_NAME, tasksConfigCb);
 
         herder.putConnectorConfig(CONNECTOR_NAME, connConfig, false, createCallback);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
@@ -719,7 +711,6 @@ public class StandaloneHerderTest {
         herder.connectorInfo(CONNECTOR_NAME, connectorInfoCb);
         herder.connectorConfig(CONNECTOR_NAME, connectorConfigCb);
         herder.taskConfigs(CONNECTOR_NAME, taskConfigsCb);
-        herder.tasksConfig(CONNECTOR_NAME, tasksConfigCb);
         // Config transformation should not occur when requesting connector or task info
         verify(transformer, never()).transform(eq(CONNECTOR_NAME), any());
     }

@@ -486,7 +486,7 @@ public class ConnectorsResourceTest {
     }
 
     @Test
-    public void testGetTasksConfig() throws Throwable {
+    public void testGetTaskConfigs() throws Throwable {
         final ConnectorTaskId connectorTask0 = new ConnectorTaskId(CONNECTOR_NAME, 0);
         final Map<String, String> connectorTask0Configs = new HashMap<>();
         connectorTask0Configs.put("connector-task0-config0", "123");
@@ -498,31 +498,22 @@ public class ConnectorsResourceTest {
         final ConnectorTaskId connector2Task0 = new ConnectorTaskId(CONNECTOR2_NAME, 0);
         final Map<String, String> connector2Task0Configs = Collections.singletonMap("connector2-task0-config0", "789");
 
-        final Map<ConnectorTaskId, Map<String, String>> expectedTasksConnector = new HashMap<>();
-        expectedTasksConnector.put(connectorTask0, connectorTask0Configs);
-        expectedTasksConnector.put(connectorTask1, connectorTask1Configs);
-        final Map<ConnectorTaskId, Map<String, String>> expectedTasksConnector2 = new HashMap<>();
-        expectedTasksConnector2.put(connector2Task0, connector2Task0Configs);
+        final List<TaskInfo> expectedTasksConnector = new ArrayList<>();
+        expectedTasksConnector.add(new TaskInfo(connectorTask0, connectorTask0Configs));
+        expectedTasksConnector.add(new TaskInfo(connectorTask1, connectorTask1Configs));
 
-        final ArgumentCaptor<Callback<Map<ConnectorTaskId, Map<String, String>>>> cb1 = ArgumentCaptor.forClass(Callback.class);
-        expectAndCallbackResult(cb1, expectedTasksConnector).when(herder).tasksConfig(eq(CONNECTOR_NAME), cb1.capture());
-        final ArgumentCaptor<Callback<Map<ConnectorTaskId, Map<String, String>>>> cb2 = ArgumentCaptor.forClass(Callback.class);
-        expectAndCallbackResult(cb2, expectedTasksConnector2).when(herder).tasksConfig(eq(CONNECTOR2_NAME), cb2.capture());
+        final List<TaskInfo> expectedTasksConnector2 = new ArrayList<>();
+        expectedTasksConnector2.add(new TaskInfo(connector2Task0, connector2Task0Configs));
 
-        Map<ConnectorTaskId, Map<String, String>> tasksConfig = connectorsResource.getTasksConfig(CONNECTOR_NAME);
-        assertEquals(expectedTasksConnector, tasksConfig);
-        Map<ConnectorTaskId, Map<String, String>> tasksConfig2 = connectorsResource.getTasksConfig(CONNECTOR2_NAME);
-        assertEquals(expectedTasksConnector2, tasksConfig2);
-    }
+        final ArgumentCaptor<Callback<List<TaskInfo>>> cb1 = ArgumentCaptor.forClass(Callback.class);
+        expectAndCallbackResult(cb1, expectedTasksConnector).when(herder).taskConfigs(eq(CONNECTOR_NAME), cb1.capture());
+        final ArgumentCaptor<Callback<List<TaskInfo>>> cb2 = ArgumentCaptor.forClass(Callback.class);
+        expectAndCallbackResult(cb2, expectedTasksConnector2).when(herder).taskConfigs(eq(CONNECTOR2_NAME), cb2.capture());
 
-    @Test
-    public void testGetTasksConfigConnectorNotFound() {
-        final ArgumentCaptor<Callback<Map<ConnectorTaskId, Map<String, String>>>> cb = ArgumentCaptor.forClass(Callback.class);
-        expectAndCallbackException(cb, new NotFoundException("not found"))
-            .when(herder).tasksConfig(eq(CONNECTOR_NAME), cb.capture());
-
-        assertThrows(NotFoundException.class, () ->
-            connectorsResource.getTasksConfig(CONNECTOR_NAME));
+        List<TaskInfo> taskConfigs = connectorsResource.getTaskConfigs(CONNECTOR_NAME);
+        assertEquals(expectedTasksConnector, taskConfigs);
+        List<TaskInfo> taskConfigs2 = connectorsResource.getTaskConfigs(CONNECTOR2_NAME);
+        assertEquals(expectedTasksConnector2, taskConfigs2);
     }
 
     @Test

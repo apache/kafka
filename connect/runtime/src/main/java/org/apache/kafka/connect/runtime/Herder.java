@@ -103,13 +103,6 @@ public interface Herder {
     void connectorConfig(String connName, Callback<Map<String, String>> callback);
 
     /**
-     * Get the configuration for all tasks of a connector.
-     * @param connName name of the connector
-     * @param callback callback to invoke with the configuration
-     */
-    void tasksConfig(String connName, Callback<Map<ConnectorTaskId, Map<String, String>>> callback);
-
-    /**
      * Set the configuration for a connector. This supports creation and updating.
      * @param connName name of the connector
      * @param config the connector's configuration
