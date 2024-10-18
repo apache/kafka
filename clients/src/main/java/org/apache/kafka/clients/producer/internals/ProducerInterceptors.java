@@ -17,10 +17,13 @@
 package org.apache.kafka.clients.producer.internals;
 
 
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerInterceptor;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.internals.Plugin;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.RecordBatch;
 
 import org.slf4j.Logger;
@@ -35,10 +38,10 @@ import java.util.List;
  */
 public class ProducerInterceptors<K, V> implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(ProducerInterceptors.class);
-    private final List<ProducerInterceptor<K, V>> interceptors;
+    private final List<Plugin<ProducerInterceptor<K, V>>> interceptorPlugins;
 
-    public ProducerInterceptors(List<ProducerInterceptor<K, V>> interceptors) {
-        this.interceptors = interceptors;
+    public ProducerInterceptors(List<ProducerInterceptor<K, V>> interceptors, Metrics metrics) {
+        this.interceptorPlugins = Plugin.wrapInstances(interceptors, metrics, ProducerConfig.INTERCEPTOR_CLASSES_CONFIG);
     }
 
     /**
@@ -57,9 +60,9 @@ public class ProducerInterceptors<K, V> implements Closeable {
      */
     public ProducerRecord<K, V> onSend(ProducerRecord<K, V> record) {
         ProducerRecord<K, V> interceptRecord = record;
-        for (ProducerInterceptor<K, V> interceptor : this.interceptors) {
+        for (Plugin<ProducerInterceptor<K, V>> interceptorPlugin : this.interceptorPlugins) {
             try {
-                interceptRecord = interceptor.onSend(interceptRecord);
+                interceptRecord = interceptorPlugin.get().onSend(interceptRecord);
             } catch (Exception e) {
                 // do not propagate interceptor exception, log and continue calling other interceptors
                 // be careful not to throw exception from here
@@ -84,9 +87,9 @@ public class ProducerInterceptors<K, V> implements Closeable {
      * @param exception The exception thrown during processing of this record. Null if no error occurred.
      */
     public void onAcknowledgement(RecordMetadata metadata, Exception exception) {
-        for (ProducerInterceptor<K, V> interceptor : this.interceptors) {
+        for (Plugin<ProducerInterceptor<K, V>> interceptorPlugin : this.interceptorPlugins) {
             try {
-                interceptor.onAcknowledgement(metadata, exception);
+                interceptorPlugin.get().onAcknowledgement(metadata, exception);
             } catch (Exception e) {
                 // do not propagate interceptor exceptions, just log
                 log.warn("Error executing interceptor onAcknowledgement callback", e);
@@ -105,15 +108,15 @@ public class ProducerInterceptors<K, V> implements Closeable {
      * @param exception The exception thrown during processing of this record.
      */
     public void onSendError(ProducerRecord<K, V> record, TopicPartition interceptTopicPartition, Exception exception) {
-        for (ProducerInterceptor<K, V> interceptor : this.interceptors) {
+        for (Plugin<ProducerInterceptor<K, V>> interceptorPlugin : this.interceptorPlugins) {
             try {
                 if (record == null && interceptTopicPartition == null) {
-                    interceptor.onAcknowledgement(null, exception);
+                    interceptorPlugin.get().onAcknowledgement(null, exception);
                 } else {
                     if (interceptTopicPartition == null) {
                         interceptTopicPartition = extractTopicPartition(record);
                     }
-                    interceptor.onAcknowledgement(new RecordMetadata(interceptTopicPartition, -1, -1,
+                    interceptorPlugin.get().onAcknowledgement(new RecordMetadata(interceptTopicPartition, -1, -1,
                                     RecordBatch.NO_TIMESTAMP, -1, -1), exception);
                 }
             } catch (Exception e) {
@@ -132,9 +135,9 @@ public class ProducerInterceptors<K, V> implements Closeable {
      */
     @Override
     public void close() {
-        for (ProducerInterceptor<K, V> interceptor : this.interceptors) {
+        for (Plugin<ProducerInterceptor<K, V>> interceptorPlugin : this.interceptorPlugins) {
             try {
-                interceptor.close();
+                interceptorPlugin.close();
             } catch (Exception e) {
                 log.error("Failed to close producer interceptor ", e);
             }

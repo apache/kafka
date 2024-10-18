@@ -29,7 +29,8 @@ import java.util.Map;
  * A class that implements this interface is expected to have a constructor with no parameters.
  * <p>
  * Implement {@link org.apache.kafka.common.ClusterResourceListener} to receive cluster metadata once it's available. Please see the class documentation for ClusterResourceListener for more information.
- *
+ * Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the deserializer to register metrics. The following tags are automatically added to
+ * all metrics registered: <code>config</code> set to either <code>key.deserializer</code> or <code>value.deserializer</code>, and <code>class</code> set to the Deserializer class name.
  * @param <T> Type to be deserialized into.
  */
 public interface Deserializer<T> extends Closeable {

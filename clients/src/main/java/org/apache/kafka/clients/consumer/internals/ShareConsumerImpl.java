@@ -253,12 +253,12 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             this.clientTelemetryReporter.ifPresent(reporters::add);
             this.metrics = createMetrics(config, time, reporters);
 
-            this.deserializers = new Deserializers<>(config, keyDeserializer, valueDeserializer);
+            this.deserializers = new Deserializers<>(config, keyDeserializer, valueDeserializer, metrics);
             this.currentFetch = ShareFetch.empty();
             this.subscriptions = createSubscriptionState(config, logContext);
             ClusterResourceListeners clusterResourceListeners = ClientUtils.configureClusterResourceListeners(
                     metrics.reporters(),
-                    Arrays.asList(deserializers.keyDeserializer, deserializers.valueDeserializer));
+                    Arrays.asList(deserializers.keyDeserializer(), deserializers.valueDeserializer()));
             this.metadata = new ConsumerMetadata(config, subscriptions, logContext, clusterResourceListeners);
             final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
             metadata.bootstrap(addresses);
@@ -355,7 +355,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         this.time = time;
         this.metrics = new Metrics(time);
         this.clientTelemetryReporter = Optional.empty();
-        this.deserializers = new Deserializers<>(config, keyDeserializer, valueDeserializer);
+        this.deserializers = new Deserializers<>(config, keyDeserializer, valueDeserializer, metrics);
         this.currentFetch = ShareFetch.empty();
         this.subscriptions = subscriptions;
         this.metadata = metadata;
@@ -451,7 +451,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         this.metrics = metrics;
         this.metadata = metadata;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
-        this.deserializers = new Deserializers<>(keyDeserializer, valueDeserializer);
+        this.deserializers = new Deserializers<>(keyDeserializer, valueDeserializer, metrics);
         this.currentFetch = ShareFetch.empty();
         this.applicationEventHandler = applicationEventHandler;
         this.kafkaShareConsumerMetrics = new KafkaShareConsumerMetrics(metrics, CONSUMER_SHARE_METRIC_GROUP_PREFIX);

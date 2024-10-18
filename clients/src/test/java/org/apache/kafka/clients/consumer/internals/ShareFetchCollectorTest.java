@@ -236,8 +236,8 @@ public class ShareFetchCollectorTest {
 
         ConsumerConfig config = new ConsumerConfig(p);
 
-        deserializers = new Deserializers<>(new StringDeserializer(), new StringDeserializer());
         Metrics metrics = createMetrics(config, Time.SYSTEM);
+        deserializers = new Deserializers<>(new StringDeserializer(), new StringDeserializer(), metrics);
         ShareFetchMetricsManager shareFetchMetricsManager = createShareFetchMetricsManager(metrics);
         Set<TopicPartition> partitionSet = new HashSet<>();
         partitionSet.add(topicAPartition0.topicPartition());
