@@ -2646,7 +2646,7 @@ public class StreamTaskTest {
         final StreamsException streamsException = assertThrows(
             StreamsException.class,
             () -> task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, timestamp -> {
-                throw new FailedProcessingException(new RuntimeException("KABOOM!"));
+                throw new FailedProcessingException("name", new RuntimeException("KABOOM!"));
             })
         );
 

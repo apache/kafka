@@ -95,7 +95,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
                 () -> inputTopic.pipeKeyValueList(events, TIMESTAMP, Duration.ZERO));
 
             assertTrue(exception.getMessage().contains("Exception caught in process. "
-                + "taskId=0_0, processor=KSTREAM-SOURCE-0000000000, topic=TOPIC_NAME, "
+                + "taskId=0_0, processor=KSTREAM-PROCESSOR-0000000003, topic=TOPIC_NAME, "
                 + "partition=0, offset=1"));
             assertEquals(1, processor.theCapturedProcessor().processed().size());
             assertIterableEquals(expectedProcessedRecords, processor.theCapturedProcessor().processed());
@@ -183,7 +183,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
             isExecuted.set(false);
             final StreamsException e = assertThrows(StreamsException.class, () -> inputTopic.pipeInput(eventError.key, eventError.value, TIMESTAMP));
             assertTrue(e.getMessage().contains("Exception caught in process. "
-                + "taskId=0_0, processor=KSTREAM-SOURCE-0000000000, topic=TOPIC_NAME, "
+                + "taskId=0_0, processor=KSTREAM-PROCESSOR-0000000003, topic=TOPIC_NAME, "
                 + "partition=0, offset=1"));
             assertFalse(isExecuted.get());
         }

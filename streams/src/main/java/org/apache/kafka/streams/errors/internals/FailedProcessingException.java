@@ -24,13 +24,20 @@ import org.apache.kafka.streams.errors.StreamsException;
  */
 public class FailedProcessingException extends StreamsException {
     private static final long serialVersionUID = 1L;
+    private final String failedProcessorNodeName;
 
-    public FailedProcessingException(final String errorMessage, final Exception exception) {
+    public FailedProcessingException(final String errorMessage, final String failedProcessorNodeName, final Exception exception) {
         super(errorMessage, exception);
+        this.failedProcessorNodeName = failedProcessorNodeName;
     }
 
-    public FailedProcessingException(final Exception exception) {
+    public FailedProcessingException(final String failedProcessorNodeName, final Exception exception) {
         // we need to explicitly set `message` to `null` here
         super(null, exception);
+        this.failedProcessorNodeName = failedProcessorNodeName;
+    }
+
+    public String failedProcessorNodeName() {
+        return failedProcessorNodeName;
     }
 }
