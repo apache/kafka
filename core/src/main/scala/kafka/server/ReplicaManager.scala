@@ -17,7 +17,7 @@
 package kafka.server
 
 import com.yammer.metrics.core.Meter
-import kafka.cluster.{BrokerEndPoint, Partition, PartitionListener}
+import kafka.cluster.{Partition, PartitionListener}
 import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log.remote.RemoteLogManager
 import kafka.log.{LogManager, OffsetResultHolder, UnifiedLog}
@@ -59,6 +59,7 @@ import org.apache.kafka.server.common
 import org.apache.kafka.server.common.{DirectoryEventHandler, RequestLocal, TopicOptionalIdPartition}
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.storage.log.{FetchParams, FetchPartitionData}
 import org.apache.kafka.server.util.{Scheduler, ShutdownableThread}
 import org.apache.kafka.storage.internals.checkpoint.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
@@ -1262,7 +1263,7 @@ class ReplicaManager(val config: KafkaConfig,
             val futureLog = futureLocalLogOrException(topicPartition)
             logManager.abortAndPauseCleaning(topicPartition)
 
-            val initialFetchState = InitialFetchState(topicId, BrokerEndPoint(config.brokerId, "localhost", -1),
+            val initialFetchState = InitialFetchState(topicId, new BrokerEndPoint(config.brokerId, "localhost", -1),
               partition.getLeaderEpoch, futureLog.highWatermark)
             replicaAlterLogDirsManager.addFetcherForPartitions(Map(topicPartition -> initialFetchState))
           }
@@ -2316,7 +2317,7 @@ class ReplicaManager(val config: KafkaConfig,
       val topicPartition = partition.topicPartition
       logManager.getLog(topicPartition, isFuture = true).foreach { futureLog =>
         partition.log.foreach { _ =>
-          val leader = BrokerEndPoint(config.brokerId, "localhost", -1)
+          val leader = new BrokerEndPoint(config.brokerId, "localhost", -1)
 
           // Add future replica log to partition's map if it's not existed
           if (partition.maybeCreateFutureReplica(futureLog.parentDir, offsetCheckpoints, topicIds(partition.topic))) {

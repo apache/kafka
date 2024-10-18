@@ -16,7 +16,7 @@
   */
 package kafka.server
 
-import kafka.cluster.{BrokerEndPoint, Partition}
+import kafka.cluster.Partition
 import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.QuotaFactory.UnboundedQuota
@@ -39,6 +39,7 @@ import org.apache.kafka.server.BrokerFeatures
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
+import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.storage.internals.log.LogAppendInfo
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
