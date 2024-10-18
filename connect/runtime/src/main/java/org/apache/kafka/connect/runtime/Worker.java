@@ -75,6 +75,7 @@ import org.apache.kafka.connect.runtime.rest.entities.Message;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
+import org.apache.kafka.connect.reporter.ErrorRecordReporter;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
@@ -1023,6 +1024,14 @@ public class Worker {
         return reporters;
     }
 
+    private List<ErrorRecordReporter<SourceRecord>> sourceErrorRecordReporters(ConnectorConfig connConfig) {
+        return connConfig.errorRecordReporters();
+    }
+
+    private List<ErrorRecordReporter<ConsumerRecord<byte[], byte[]>>> sinkErrorRecordReporters(ConnectorConfig connConfig) {
+        return connConfig.errorRecordReporters();
+    }
+
     private WorkerErrantRecordReporter createWorkerErrantRecordReporter(
         SinkConnectorConfig connConfig,
         RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator,
@@ -1856,7 +1865,7 @@ public class Worker {
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, configState, metrics, keyConverter,
                     valueConverter, errorHandlingMetrics, headerConverter, transformationChain, consumer, classLoader, time,
                     retryWithToleranceOperator, workerErrantRecordReporter, herder.statusBackingStore(),
-                    () -> sinkTaskReporters(id, sinkConfig, errorHandlingMetrics, connectorClass));
+                    () -> sinkTaskReporters(id, sinkConfig, errorHandlingMetrics, connectorClass), () -> sinkErrorRecordReporters(connectorConfig));
         }
     }
 
@@ -1916,7 +1925,7 @@ public class Worker {
             return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter, valueConverter, errorHandlingMetrics,
                     headerConverter, transformationChain, producer, topicAdmin, topicCreationGroups,
                     offsetReader, offsetWriter, offsetStore, config, configState, metrics, classLoader, time,
-                    retryWithToleranceOperator, herder.statusBackingStore(), executor, () -> sourceTaskReporters(id, sourceConfig, errorHandlingMetrics));
+                    retryWithToleranceOperator, herder.statusBackingStore(), executor, () -> sourceTaskReporters(id, sourceConfig, errorHandlingMetrics), () -> sourceErrorRecordReporters(sourceConfig));
         }
     }
 
@@ -1981,7 +1990,7 @@ public class Worker {
                     headerConverter, transformationChain, producer, topicAdmin, topicCreationGroups,
                     offsetReader, offsetWriter, offsetStore, config, configState, metrics, errorHandlingMetrics, classLoader, time, retryWithToleranceOperator,
                     herder.statusBackingStore(), sourceConfig, executor, preProducerCheck, postProducerCheck,
-                    () -> sourceTaskReporters(id, sourceConfig, errorHandlingMetrics));
+                    () -> sourceTaskReporters(id, sourceConfig, errorHandlingMetrics), () -> sourceErrorRecordReporters(connectorConfig));
         }
     }
 
