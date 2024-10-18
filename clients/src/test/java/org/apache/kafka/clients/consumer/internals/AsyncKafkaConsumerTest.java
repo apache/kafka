@@ -282,8 +282,10 @@ public class AsyncKafkaConsumerTest {
         final ArgumentCaptor<AsyncCommitEvent> commitEventCaptor = ArgumentCaptor.forClass(AsyncCommitEvent.class);
         verify(applicationEventHandler).add(commitEventCaptor.capture());
         final AsyncCommitEvent commitEvent = commitEventCaptor.getValue();
-        assertEquals(offsets, commitEvent.offsets());
-        assertDoesNotThrow(() -> commitEvent.future().complete(null));
+        assertTrue(commitEvent.offsets().isPresent());
+        assertEquals(offsets, commitEvent.offsets().get());
+
+        commitEvent.future().complete(offsets);
         assertDoesNotThrow(() -> consumer.commitAsync(offsets, null));
 
         // Clean-up. Close the consumer here as we know it will cause a TimeoutException to be thrown.
@@ -596,8 +598,6 @@ public class AsyncKafkaConsumerTest {
 
         assertDoesNotThrow(() -> consumer.commitSync(topicPartitionOffsets));
 
-        verify(metadata).updateLastSeenEpochIfNewer(t0, 2);
-        verify(metadata).updateLastSeenEpochIfNewer(t1, 1);
         verify(applicationEventHandler).add(ArgumentMatchers.isA(SyncCommitEvent.class));
     }
 
@@ -632,8 +632,6 @@ public class AsyncKafkaConsumerTest {
         MockCommitCallback callback = new MockCommitCallback();
         assertDoesNotThrow(() -> consumer.commitAsync(topicPartitionOffsets, callback));
 
-        verify(metadata).updateLastSeenEpochIfNewer(t0, 2);
-        verify(metadata).updateLastSeenEpochIfNewer(t1, 1);
         verify(applicationEventHandler).add(ArgumentMatchers.isA(AsyncCommitEvent.class));
 
         // Clean-Up. Close the consumer here as we know it will cause a TimeoutException to be thrown.
