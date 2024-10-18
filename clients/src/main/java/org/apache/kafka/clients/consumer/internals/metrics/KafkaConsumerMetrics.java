@@ -37,6 +37,7 @@ public class KafkaConsumerMetrics implements AutoCloseable {
     private final Sensor commitSyncSensor;
     private long lastPollMs;
     private long pollStartMs;
+    private long pollEndMs;
     private long timeSinceLastPollMs;
 
     public KafkaConsumerMetrics(Metrics metrics, String metricGrpPrefix) {
@@ -91,6 +92,12 @@ public class KafkaConsumerMetrics implements AutoCloseable {
     }
 
     public void recordPollStart(long pollStartMs) {
+        if (this.pollEndMs != 0) {
+            long pollIntervalMs = pollStartMs - this.pollStartMs;
+            long pollTimeMs = this.pollEndMs - this.pollStartMs;
+            double pollIdleRatio = pollTimeMs * 1.0 / pollIntervalMs;
+            this.pollIdleSensor.record(pollIdleRatio);
+        }
         this.pollStartMs = pollStartMs;
         this.timeSinceLastPollMs = lastPollMs != 0L ? pollStartMs - lastPollMs : 0;
         this.timeBetweenPollSensor.record(timeSinceLastPollMs);
@@ -98,9 +105,7 @@ public class KafkaConsumerMetrics implements AutoCloseable {
     }
 
     public void recordPollEnd(long pollEndMs) {
-        long pollTimeMs = pollEndMs - pollStartMs;
-        double pollIdleRatio = pollTimeMs * 1.0 / (pollTimeMs + timeSinceLastPollMs);
-        this.pollIdleSensor.record(pollIdleRatio);
+        this.pollEndMs = pollEndMs;
     }
 
     public void recordCommitSync(long duration) {
