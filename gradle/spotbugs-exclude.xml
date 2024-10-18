@@ -41,6 +41,12 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <!-- Disable warnings about doProvileged, This has been deprecated
+            as of JDK 17 for removal, see https://openjdk.org/jeps/411 -->
+        <Bug pattern="DP_CREATE_CLASSLOADER_INSIDE_DO_PRIVILEGED"/>
+    </Match>
+
+    <Match>
         <!-- Disable warnings about the lack of equals() when compareTo() is implemented.
             EQ_COMPARETO_USE_OBJECT_EQUALS: This class defines a compareTo method but no equals() method -->
         <Bug pattern="EQ_COMPARETO_USE_OBJECT_EQUALS"/>
@@ -561,6 +567,12 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="org.apache.kafka.clients.Metadata$LeaderAndEpoch"/>
         </Or>
         <Bug pattern="SING_SINGLETON_HAS_NONPRIVATE_CONSTRUCTOR"/>
+    </Match>
+
+    <Match>
+        <!-- DateFormat is not used in more than one thread -->
+        <Class name="org.apache.kafka.tools.ReplicaVerificationTool$ReplicaBuffer"/>
+        <Bug pattern="STCAL_INVOKE_ON_STATIC_DATE_FORMAT_INSTANCE"/>
     </Match>
 
 </FindBugsFilter>
