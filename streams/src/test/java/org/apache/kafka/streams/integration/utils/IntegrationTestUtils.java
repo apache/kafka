@@ -1066,6 +1066,7 @@ public class IntegrationTestUtils {
         }
     }
 
+    @SuppressWarnings("deprecation")
     private static StateListener getStateListener(final KafkaStreams streams) {
         try {
             if (streams instanceof KafkaStreamsNamedTopologyWrapper) {

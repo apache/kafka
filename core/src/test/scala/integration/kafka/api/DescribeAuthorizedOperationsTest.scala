@@ -13,6 +13,7 @@
 package kafka.api
 
 import kafka.security.JaasTestUtils
+
 import java.util
 import java.util.Properties
 import kafka.security.authorizer.AclAuthorizer
@@ -30,8 +31,8 @@ import org.apache.kafka.server.config.{ServerConfigs, ZkConfigs}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNull}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
-import scala.compat.java8.OptionConverters
 import scala.jdk.CollectionConverters._
+import scala.jdk.javaapi.OptionConverters
 
 object DescribeAuthorizedOperationsTest {
   val Group1 = "group1"

@@ -20,6 +20,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
@@ -28,14 +29,16 @@ import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.assertAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.invertedTargetAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
@@ -57,6 +60,33 @@ public class UniformHeterogeneousAssignmentBuilderTest {
     private final String memberA = "A";
     private final String memberB = "B";
     private final String memberC = "C";
+
+    /**
+     * A GroupSpec implementation that returns members in sorted order, so that assignor output is
+     * deterministic.
+     */
+    private static class TestGroupSpecImpl extends GroupSpecImpl {
+        private final List<String> orderedMembers;
+
+        public TestGroupSpecImpl(
+            Map<String, MemberSubscriptionAndAssignmentImpl> members,
+            SubscriptionType subscriptionType,
+            Map<Uuid, Map<Integer, String>> invertedMemberAssignment
+        ) {
+            super(members, subscriptionType, invertedMemberAssignment);
+
+            this.orderedMembers = new ArrayList<>(members.keySet());
+            this.orderedMembers.sort(null);
+        }
+
+        /**
+         * {@inheritDoc}
+         */
+        @Override
+        public Collection<String> memberIds() {
+            return orderedMembers;
+        }
+    }
 
     @Test
     public void testTwoMembersNoTopicSubscription() {
@@ -85,7 +115,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new TestGroupSpecImpl(
             members,
             HETEROGENEOUS,
             Collections.emptyMap()
@@ -126,7 +156,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new TestGroupSpecImpl(
             members,
             HETEROGENEOUS,
             Collections.emptyMap()
@@ -156,7 +186,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            mkSet(topic1Uuid, topic3Uuid),
+            Set.of(topic1Uuid, topic3Uuid),
             Assignment.EMPTY
         ));
 
@@ -167,7 +197,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new TestGroupSpecImpl(
             members,
             HETEROGENEOUS,
             Collections.emptyMap()
@@ -182,10 +212,10 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
         expectedAssignment.put(memberA, mkAssignment(
             mkTopicAssignment(topic1Uuid, 0, 1, 2),
-            mkTopicAssignment(topic3Uuid, 3, 5)
+            mkTopicAssignment(topic3Uuid, 4)
         ));
         expectedAssignment.put(memberB, mkAssignment(
-            mkTopicAssignment(topic3Uuid, 0, 1, 2, 4)
+            mkTopicAssignment(topic3Uuid, 0, 1, 2, 3, 5)
         ));
 
         assertAssignment(expectedAssignment, computedAssignment);
@@ -228,7 +258,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new TestGroupSpecImpl(
             members,
             HETEROGENEOUS,
             Collections.emptyMap()
@@ -288,7 +318,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            mkSet(topic1Uuid, topic2Uuid),
+            Set.of(topic1Uuid, topic2Uuid),
             new Assignment(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 3),
                 mkTopicAssignment(topic2Uuid, 0)
@@ -298,7 +328,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            mkSet(topic1Uuid, topic2Uuid, topic3Uuid),
+            Set.of(topic1Uuid, topic2Uuid, topic3Uuid),
             new Assignment(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 4, 5),
                 mkTopicAssignment(topic2Uuid, 1, 2, 3),
@@ -306,7 +336,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             ))
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new TestGroupSpecImpl(
             members,
             HETEROGENEOUS,
             invertedTargetAssignment(members)
@@ -320,13 +350,14 @@ public class UniformHeterogeneousAssignmentBuilderTest {
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
         expectedAssignment.put(memberA, mkAssignment(
-            mkTopicAssignment(topic1Uuid, 0, 1, 2, 3, 4)
+            mkTopicAssignment(topic1Uuid, 0, 1, 2, 5)
         ));
         expectedAssignment.put(memberB, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 3),
             mkTopicAssignment(topic2Uuid, 0, 1, 2, 3)
         ));
         expectedAssignment.put(memberC, mkAssignment(
-            mkTopicAssignment(topic1Uuid, 5),
+            mkTopicAssignment(topic1Uuid, 4),
             mkTopicAssignment(topic3Uuid, 0, 1, 2, 3)
         ));
 
@@ -363,7 +394,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            mkSet(topic1Uuid, topic3Uuid),
+            Set.of(topic1Uuid, topic3Uuid),
             new Assignment(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 1, 2, 3),
                 mkTopicAssignment(topic3Uuid, 0, 1)
@@ -373,14 +404,14 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            mkSet(topic1Uuid, topic2Uuid, topic3Uuid, topic4Uuid),
+            Set.of(topic1Uuid, topic2Uuid, topic3Uuid, topic4Uuid),
             new Assignment(mkAssignment(
                 mkTopicAssignment(topic2Uuid, 0, 1, 2),
                 mkTopicAssignment(topic4Uuid, 0, 1, 2)
             ))
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new TestGroupSpecImpl(
             members,
             HETEROGENEOUS,
             invertedTargetAssignment(members)
@@ -435,7 +466,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            mkSet(topic1Uuid, topic2Uuid),
+            Set.of(topic1Uuid, topic2Uuid),
             new Assignment(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 1),
                 mkTopicAssignment(topic2Uuid, 1, 2)
@@ -446,11 +477,11 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            mkSet(topic1Uuid, topic2Uuid),
+            Set.of(topic1Uuid, topic2Uuid),
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new TestGroupSpecImpl(
             members,
             HETEROGENEOUS,
             invertedTargetAssignment(members)
@@ -468,10 +499,10 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         ));
         expectedAssignment.put(memberB, mkAssignment(
             mkTopicAssignment(topic1Uuid, 1),
-            mkTopicAssignment(topic2Uuid, 1, 2, 5)
+            mkTopicAssignment(topic2Uuid, 1, 2, 6)
         ));
         expectedAssignment.put(memberC, mkAssignment(
-            mkTopicAssignment(topic2Uuid, 0, 3, 4, 6)
+            mkTopicAssignment(topic2Uuid, 0, 3, 4, 5)
         ));
 
         assertAssignment(expectedAssignment, computedAssignment);
@@ -501,7 +532,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            mkSet(topic1Uuid, topic3Uuid),
+            Set.of(topic1Uuid, topic3Uuid),
             new Assignment(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 1, 2),
                 mkTopicAssignment(topic3Uuid, 0, 1)
@@ -519,7 +550,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
 
         // Member C was removed
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new TestGroupSpecImpl(
             members,
             HETEROGENEOUS,
             invertedTargetAssignment(members)
@@ -573,14 +604,14 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            mkSet(topic1Uuid, topic2Uuid),
+            Set.of(topic1Uuid, topic2Uuid),
             new Assignment(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 1),
                 mkTopicAssignment(topic2Uuid, 0, 2, 4)
             ))
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new TestGroupSpecImpl(
             members,
             HETEROGENEOUS,
             invertedTargetAssignment(members)
@@ -603,6 +634,76 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         assertAssignment(expectedAssignment, computedAssignment);
     }
 
+    /**
+     * Tests an edge case in the reassignment algorithm where we run out of topic partitions before
+     * the topic's subscribers are balanced, and the topic's least loaded subscribers start off with
+     * no partitions from the topic. The per-topic reassignment loop should break when it cannot
+     * find a partition to reassign.
+     */
+    @Test
+    public void testReassignmentWhenTopicPartitionsRunOutAndMembersHaveNoPartitions() {
+        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
+        topicMetadata.put(topic1Uuid, new TopicMetadata(
+            topic1Uuid,
+            topic1Name,
+            2
+        ));
+        topicMetadata.put(topic2Uuid, new TopicMetadata(
+            topic2Uuid,
+            topic2Name,
+            2
+        ));
+        topicMetadata.put(topic3Uuid, new TopicMetadata(
+            topic3Uuid,
+            topic3Name,
+            2
+        ));
+
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
+
+        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            Optional.empty(),
+            Set.of(topic1Uuid, topic2Uuid, topic3Uuid),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 0, 1),
+                mkTopicAssignment(topic2Uuid, 0, 1),
+                mkTopicAssignment(topic3Uuid, 0, 1)
+            ))
+        ));
+
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            Optional.empty(),
+            Set.of(topic1Uuid, topic2Uuid, topic3Uuid),
+            Assignment.EMPTY
+        ));
+
+        GroupSpec groupSpec = new TestGroupSpecImpl(
+            members,
+            HETEROGENEOUS,
+            invertedTargetAssignment(members)
+        );
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
+
+        GroupAssignment computedAssignment = assignor.assign(
+            groupSpec,
+            subscribedTopicMetadata
+        );
+
+        Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
+        expectedAssignment.put(memberA, mkAssignment(
+            mkTopicAssignment(topic2Uuid, 0),
+            mkTopicAssignment(topic3Uuid, 0, 1)
+        ));
+        expectedAssignment.put(memberB, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 0, 1),
+            mkTopicAssignment(topic2Uuid, 1)
+        ));
+
+        assertAssignment(expectedAssignment, computedAssignment);
+    }
+
     @Test
     public void testFirstAssignmentWithTwoMembersIncludingOneWithoutSubscriptions() {
         Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
@@ -617,7 +718,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            mkSet(topic1Uuid),
+            Set.of(topic1Uuid),
             Assignment.EMPTY
         ));
 
@@ -628,7 +729,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new TestGroupSpecImpl(
             members,
             HETEROGENEOUS,
             Collections.emptyMap()

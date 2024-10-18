@@ -45,13 +45,13 @@ import java.io.File;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.emptySet;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -274,7 +274,7 @@ public class ActiveTaskCreatorTest {
                     mkEntry(task01, Collections.singleton(new TopicPartition("topic", 1)))
                 )
             ).stream().map(Task::id).collect(Collectors.toSet()),
-            equalTo(mkSet(task00, task01))
+            equalTo(Set.of(task00, task01))
         );
     }
 
