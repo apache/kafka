@@ -44,6 +44,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -166,11 +167,11 @@ public class ProcessorStateManager implements StateManager {
 
     private static final String STATE_CHANGELOG_TOPIC_SUFFIX = "-changelog";
 
-    private final String logPrefix;
+    private String logPrefix;
 
     private final TaskId taskId;
     private final boolean eosEnabled;
-    private final ChangelogRegister changelogReader;
+    private ChangelogRegister changelogReader;
     private final Collection<TopicPartition> sourcePartitions;
     private final Map<String, String> storeToChangelogTopic;
 
@@ -220,6 +221,39 @@ public class ProcessorStateManager implements StateManager {
         this.checkpointFile = new OffsetCheckpoint(stateDirectory.checkpointFileFor(taskId));
 
         log.debug("Created state store manager for task {}", taskId);
+    }
+
+    /**
+     * Special constructor used by {@link StateDirectory} to partially initialize startup tasks for local state, before
+     * they're assigned to a thread. When the task is assigned to a thread, the initialization of this StateManager is
+     * completed in {@link #assignToStreamThread(LogContext, ChangelogRegister, Collection)}.
+     */
+    ProcessorStateManager(final TaskId taskId,
+                          final TaskType taskType,
+                          final boolean eosEnabled,
+                          final LogContext logContext,
+                          final StateDirectory stateDirectory,
+                          final Map<String, String> storeToChangelogTopic,
+                          final boolean stateUpdaterEnabled) {
+        this(taskId, taskType, eosEnabled, logContext, stateDirectory, null, storeToChangelogTopic, new HashSet<>(0), stateUpdaterEnabled);
+    }
+
+    /**
+     * Standby tasks initialized for local state on-startup are only partially initialized, because they are not yet
+     * assigned to a StreamThread. Once assigned to a StreamThread, we complete their initialization here using the
+     * assigned StreamThread's context.
+     */
+    void assignToStreamThread(final LogContext logContext,
+                              final ChangelogRegister changelogReader,
+                              final Collection<TopicPartition> sourcePartitions) {
+        if (this.changelogReader != null) {
+            throw new IllegalStateException("Attempted to replace an existing changelogReader on a StateManager without closing it.");
+        }
+        this.sourcePartitions.clear();
+        this.log = logContext.logger(ProcessorStateManager.class);
+        this.logPrefix = logContext.logPrefix();
+        this.changelogReader = changelogReader;
+        this.sourcePartitions.addAll(sourcePartitions);
     }
 
     void registerStateStores(final List<StateStore> allStores, final InternalProcessorContext processorContext) {
@@ -314,7 +348,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     private void maybeRegisterStoreWithChangelogReader(final String storeName) {
-        if (isLoggingEnabled(storeName)) {
+        if (isLoggingEnabled(storeName) && changelogReader != null) {
             changelogReader.register(getStorePartition(storeName), this);
         }
     }
@@ -569,7 +603,7 @@ public class ProcessorStateManager implements StateManager {
     public void close() throws ProcessorStateException {
         log.debug("Closing its state manager and all the registered state stores: {}", stores);
 
-        if (!stateUpdaterEnabled) {
+        if (!stateUpdaterEnabled && changelogReader != null) {
             changelogReader.unregister(getAllChangelogTopicPartitions());
         }
 
@@ -610,7 +644,7 @@ public class ProcessorStateManager implements StateManager {
     void recycle() {
         log.debug("Recycling state for {} task {}.", taskType, taskId);
 
-        if (!stateUpdaterEnabled) {
+        if (!stateUpdaterEnabled && changelogReader != null) {
             final List<TopicPartition> allChangelogs = getAllChangelogTopicPartitions();
             changelogReader.unregister(allChangelogs);
         }
