@@ -148,7 +148,8 @@ public class DelayedShareFetchTest {
         when(sp1.canAcquireRecords()).thenReturn(false);
         when(sp0.acquire(any(), any())).thenReturn(
             Collections.singletonList(new ShareFetchResponseData.AcquiredRecords().setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)));
-        doAnswer(invocation -> buildLogReadResult(Collections.singleton(tp0))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+        // Replica Manager fetch response size -> 1 bytes (>= minBytes)
+        doAnswer(invocation -> buildLogReadResult(Collections.singleton(tp0), 1)).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
         DelayedShareFetch delayedShareFetch = DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetchData)
@@ -235,7 +236,7 @@ public class DelayedShareFetchTest {
         when(sp1.canAcquireRecords()).thenReturn(false);
         when(sp0.acquire(any(), any())).thenReturn(
             Collections.singletonList(new ShareFetchResponseData.AcquiredRecords().setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)));
-        doAnswer(invocation -> buildLogReadResult(Collections.singleton(tp0))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+        doAnswer(invocation -> buildLogReadResult(Collections.singleton(tp0), 0)).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
         DelayedShareFetch delayedShareFetch = DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetchData)
             .withReplicaManager(replicaManager)
@@ -356,7 +357,7 @@ public class DelayedShareFetchTest {
                 1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
             new CompletableFuture<>(), partitionMaxBytes2);
 
-        doAnswer(invocation -> buildLogReadResult(Collections.singleton(tp1))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+        doAnswer(invocation -> buildLogReadResult(Collections.singleton(tp1), 0)).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
         Map<SharePartitionKey, SharePartition> partitionCacheMap = new ConcurrentHashMap<>();
         partitionCacheMap.put(new SharePartitionKey(groupId, tp0), sp0);
