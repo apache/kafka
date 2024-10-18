@@ -153,7 +153,8 @@ public class InternalTopologyBuilder {
 
     // The name of the topology this builder belongs to, or null if this is not a NamedTopology
     private final String topologyName;
-    // TODO KAFKA-13336: we can remove this reference once we make the Topology/NamedTopology class into an interface and implement it
+
+    @SuppressWarnings("deprecation")
     private NamedTopology namedTopology;
 
     // TODO KAFKA-13283: once we enforce all configs be passed in when constructing the topology builder then we can set
@@ -369,6 +370,7 @@ public class InternalTopologyBuilder {
         topologyConfigs = new TopologyConfig(applicationConfig);
     }
 
+    @SuppressWarnings("deprecation")
     public final synchronized void setNamedTopology(final NamedTopology namedTopology) {
         this.namedTopology = namedTopology;
     }
@@ -381,6 +383,7 @@ public class InternalTopologyBuilder {
         return topologyName;
     }
 
+    @SuppressWarnings("deprecation")
     public NamedTopology namedTopology() {
         return namedTopology;
     }

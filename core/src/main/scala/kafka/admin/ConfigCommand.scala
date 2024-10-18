@@ -93,7 +93,6 @@ object ConfigCommand extends Logging {
     }
   }
 
-
   def createPasswordEncoder(encoderConfigs: java.util.Map[String, String]): PasswordEncoder = {
     val encoderSecret = Optional.ofNullable(encoderConfigs.get(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG))
       .orElseThrow(() => new IllegalArgumentException("Password encoder secret not specified"))
@@ -129,7 +128,7 @@ object ConfigCommand extends Logging {
       configsToBeAdded.foreach(pair => props.setProperty(pair(0).trim, pair(1).replaceAll("\\[?\\]?", "").trim))
     }
     if (props.containsKey(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)) {
-      println(s"WARNING: The configuration ${TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG}=${props.getProperty(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)} is specified. " +
+      System.out.println(s"WARNING: The configuration ${TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG}=${props.getProperty(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)} is specified. " +
         "This configuration will be ignored if the version is newer than the inter.broker.protocol.version specified in the broker or " +
         "if the inter.broker.protocol.version is 3.0 or newer. This configuration is deprecated and it will be removed in Apache Kafka 4.0.")
     }
@@ -280,9 +279,9 @@ object ConfigCommand extends Logging {
     }
 
     if (entityNameHead.nonEmpty)
-      println(s"Completed updating config for ${entityTypeHead.dropRight(1)} $entityNameHead.")
+      System.out.println(s"Completed updating config for ${entityTypeHead.dropRight(1)} $entityNameHead.")
     else
-      println(s"Completed updating default config for $entityTypeHead in the cluster.")
+      System.out.println(s"Completed updating default config for $entityTypeHead in the cluster.")
   }
 
   private def alterUserScramCredentialConfigs(adminClient: Admin, user: String, scramConfigsToAddMap: Map[String, ConfigEntry], scramConfigsToDelete: Seq[String]) = {
@@ -377,14 +376,14 @@ object ConfigCommand extends Logging {
     entities.foreach { entity =>
       entity match {
         case BrokerDefaultEntityName =>
-          println(s"Default configs for $entityType in the cluster are:")
+          System.out.println(s"Default configs for $entityType in the cluster are:")
         case _ =>
           val configSourceStr = if (describeAll) "All" else "Dynamic"
-          println(s"$configSourceStr configs for ${entityType.dropRight(1)} $entity are:")
+          System.out.println(s"$configSourceStr configs for ${entityType.dropRight(1)} $entity are:")
       }
       getResourceConfig(adminClient, entityType, entity, includeSynonyms = true, describeAll).foreach { entry =>
         val synonyms = entry.synonyms.asScala.map(synonym => s"${synonym.source}:${synonym.name}=${synonym.value}").mkString(", ")
-        println(s"  ${entry.name}=${entry.value} sensitive=${entry.isSensitive} synonyms={$synonyms}")
+        System.out.println(s"  ${entry.name}=${entry.value} sensitive=${entry.isSensitive} synonyms={$synonyms}")
       }
     }
   }
@@ -471,7 +470,7 @@ object ConfigCommand extends Logging {
                        entitySubstr(ClientQuotaEntity.CLIENT_ID) ++
                        entitySubstr(ClientQuotaEntity.IP)).mkString(", ")
       val entriesStr = entries.asScala.map(e => s"${e._1}=${e._2}").mkString(", ")
-      println(s"Quota configs for $entityStr are $entriesStr")
+      System.out.println(s"Quota configs for $entityStr are $entriesStr")
     }
   }
 
@@ -485,9 +484,9 @@ object ConfigCommand extends Logging {
         try {
           val description = result.description(user).get(30, TimeUnit.SECONDS)
           val descriptionText = description.credentialInfos.asScala.map(info => s"${info.mechanism.mechanismName}=iterations=${info.iterations}").mkString(", ")
-          println(s"SCRAM credential configs for user-principal '$user' are $descriptionText")
+          System.out.println(s"SCRAM credential configs for user-principal '$user' are $descriptionText")
         } catch {
-          case e: Exception => println(s"Error retrieving SCRAM credential configs for user-principal '$user': ${e.getClass.getSimpleName}: ${e.getMessage}")
+          case e: Exception => System.out.println(s"Error retrieving SCRAM credential configs for user-principal '$user': ${e.getClass.getSimpleName}: ${e.getMessage}")
         }
       })
     }
