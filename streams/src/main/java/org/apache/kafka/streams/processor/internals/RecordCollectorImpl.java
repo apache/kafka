@@ -337,7 +337,11 @@ public class RecordCollectorImpl implements RecordCollector {
                 ),
                 serializationException
             );
-            throw new FailedProcessingException("Fatal user code error in production error callback", fatalUserException);
+            throw new FailedProcessingException(
+                "Fatal user code error in production error callback",
+                processorNodeId,
+                fatalUserException
+            );
         }
 
         if (maybeFailResponse(response) == ProductionExceptionHandlerResponse.FAIL) {
@@ -444,7 +448,12 @@ public class RecordCollectorImpl implements RecordCollector {
                     serializedRecord,
                     productionException
                 );
-                sendException.set(new FailedProcessingException("Fatal user code error in production error callback", fatalUserException));
+                sendException.set(new FailedProcessingException(
+                    "Fatal user code error in production error callback",
+                    processorNodeId,
+                    fatalUserException
+                    )
+                );
                 return;
             }
 
