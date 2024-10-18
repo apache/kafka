@@ -67,6 +67,8 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.Queue;
+import java.util.LinkedList;
 
 /**
  * The LocalLogManager is a test implementation that relies on the contents of memory.
@@ -453,6 +455,13 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         }
     }
 
+    private long lastOffset = -1;
+     /**
+     * A queue of prepared batches that have not been drained yet.
+     */
+    private final Queue<LocalBatch> preparedBatches = new LinkedList<>();
+
+
     private final Logger log;
 
     /**
@@ -509,6 +518,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         this.log = logContext.logger(LocalLogManager.class);
         this.nodeId = nodeId;
         this.shared = shared;
+        this.lastOffset = shared.prevOffset;
         this.maxReadOffset = shared.initialMaxReadOffset();
         this.eventQueue = new KafkaEventQueue(Time.SYSTEM, logContext,
                 threadNamePrefix, new ShutdownEvent());
@@ -732,12 +742,22 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         if (throwOnNextAppend.getAndSet(false)) {
             throw new BufferAllocationException("Test asked to fail the next prepareAppend");
         }
-
-        return shared.tryAppend(nodeId, epoch, batch);
+        long appendTimestamp = (shared.prevOffset + 1) * 10;
+        lastOffset += batch.size();
+        LocalRecordBatch recordBatch = new LocalRecordBatch(epoch, appendTimestamp, batch);
+        preparedBatches.add(recordBatch);
+        return lastOffset;
     }
 
     @Override
-    public void schedulePreparedAppend() { }
+    public void schedulePreparedAppend() {
+        LocalBatch batch = preparedBatches.poll();
+        if (batch == null) {
+            return;
+        }
+        shared.tryAppend(nodeId, batch.epoch(), batch);
+
+    }
 
     @Override
     public void resign(int epoch) {
