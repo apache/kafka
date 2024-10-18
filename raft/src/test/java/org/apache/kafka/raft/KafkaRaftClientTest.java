@@ -3241,7 +3241,7 @@ public class KafkaRaftClientTest {
         // The leader will report an error in the logs, but will not let the high watermark rewind
         context.time.sleep(100);
         followerFetchTime = context.time.milliseconds();
-        context.deliverRequest(context.fetchRequest(epoch, follower, fetchOffset - batch.size(), epoch, 0));
+        context.deliverRequest(context.fetchRequest(epoch, follower, fetchOffset - 1, epoch, 0));
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(expectedHW, epoch);
         context.time.sleep(100);
