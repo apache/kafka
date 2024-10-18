@@ -40,6 +40,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
@@ -419,7 +420,6 @@ public class EosIntegrationTest {
                 dataBeforeFailure,
                 "The uncommitted records before failure do not match what expected");
 
-            errorInjected.set(true);
             writeInputData(dataAfterFailure);
 
             waitForCondition(
@@ -1104,16 +1104,16 @@ public class EosIntegrationTest {
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), config);
 
-        streams.setUncaughtExceptionHandler((t, e) -> {
+        streams.setUncaughtExceptionHandler(e -> {
             if (uncaughtException != null ||
-                !(e instanceof StreamsException) ||
-                !e.getCause().getMessage().equals("Injected test exception.")) {
+                    !(e instanceof StreamsException) ||
+                    !e.getCause().getMessage().equals("Injected test exception.")) {
                 e.printStackTrace(System.err);
                 hasUnexpectedError = true;
             }
             uncaughtException = e;
+            return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
         });
-
         return streams;
     }
 
@@ -1191,7 +1191,7 @@ public class EosIntegrationTest {
             }
             if (tries >= maxTries) {
                 throw new AssertionError("No committed records in topic " + topic
-                    + ", partition " + partition + " after " + maxTries + " retries.");
+                        + ", partition " + partition + " after " + maxTries + " retries.");
             }
             final long now = System.currentTimeMillis();
             if (now > deadline) {
