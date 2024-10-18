@@ -51,6 +51,7 @@ import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
+import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
@@ -351,6 +352,19 @@ public interface Controller extends AclMutator, AutoCloseable {
         ControllerRequestContext context,
         Collection<ClientQuotaAlteration> quotaAlterations,
         boolean validateOnly
+    );
+
+    /**
+     * Describe current quotas setting
+     *
+     * @param context           The controller request context.
+     * @param quotaFilters      The list of quotas to filter
+     *
+     * @return                  A future yielding a map of quota entities to quota results.
+     */
+    CompletableFuture<Map<ClientQuotaEntity, Map<String, Double>>> describeClientQuotas(
+            ControllerRequestContext context,
+            ClientQuotaFilter quotaFilters
     );
 
     /**

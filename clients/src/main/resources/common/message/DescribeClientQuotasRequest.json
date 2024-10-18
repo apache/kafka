@@ -16,7 +16,7 @@
 {
   "apiKey": 48,
   "type": "request",
-  "listeners": ["zkBroker", "broker"],
+  "listeners": ["zkBroker", "broker", "controller"],
   "name": "DescribeClientQuotasRequest",
   // Version 1 enables flexible versions.
   "validVersions": "0-1",
