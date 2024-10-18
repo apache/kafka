@@ -48,7 +48,6 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
@@ -146,16 +145,16 @@ public class TaskAssignmentUtilsTest {
         );
         final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates = mkMap(
             mkStreamState(1, 2, Optional.empty(), Set.of(), Set.of(), mkMap(
-                mkEntry("az", "1")
+                Map.entry("az", "1")
             )),
             mkStreamState(2, 2, Optional.empty(), Set.of(), Set.of(), mkMap(
-                mkEntry("az", "1")
+                Map.entry("az", "1")
             )),
             mkStreamState(3, 2, Optional.empty(), Set.of(), Set.of(), mkMap(
-                mkEntry("az", "2")
+                Map.entry("az", "2")
             )),
             mkStreamState(4, 2, Optional.empty(), Set.of(), Set.of(), mkMap(
-                mkEntry("az", "3")
+                Map.entry("az", "3")
             ))
         );
         final ApplicationState applicationState = new TestApplicationState(
@@ -226,16 +225,16 @@ public class TaskAssignmentUtilsTest {
         );
         final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates = mkMap(
             mkStreamState(1, 2, Optional.of("r1"), Set.of(), Set.of(), mkMap(
-                mkEntry("az", "1")
+                Map.entry("az", "1")
             )),
             mkStreamState(2, 2, Optional.of("r1"), Set.of(), Set.of(), mkMap(
-                mkEntry("az", "2")
+                Map.entry("az", "2")
             )),
             mkStreamState(3, 2, Optional.of("r1"), Set.of(), Set.of(), mkMap(
-                mkEntry("az", "3")
+                Map.entry("az", "3")
             )),
             mkStreamState(4, 2, Optional.of("r1"), Set.of(), Set.of(), mkMap(
-                mkEntry("az", "2")
+                Map.entry("az", "2")
             ))
         );
         final ApplicationState applicationState = new TestApplicationState(
@@ -482,7 +481,7 @@ public class TaskAssignmentUtilsTest {
                                                                         final Set<TaskId> previousStandbyTasks,
                                                                         final Map<String, String> clientTags) {
         final ProcessId processId = processIdForInt(id);
-        return mkEntry(processId, new DefaultKafkaStreamsState(
+        return Map.entry(processId, new DefaultKafkaStreamsState(
             processId,
             numProcessingThreads,
             clientTags,
@@ -506,7 +505,7 @@ public class TaskAssignmentUtilsTest {
         final Set<AssignedTask> assignedTasks = Arrays.stream(taskIds)
                 .map(taskId -> new AssignedTask(taskId, taskType))
                 .collect(Collectors.toSet());
-        return mkEntry(
+        return Map.entry(
             processId,
             KafkaStreamsAssignment.of(
                 processId,
@@ -518,7 +517,7 @@ public class TaskAssignmentUtilsTest {
     public static Map.Entry<ProcessId, KafkaStreamsAssignment> mkAssignment(final int client,
                                                                             final AssignedTask... tasks) {
         final ProcessId processId = processId(client);
-        return mkEntry(
+        return Map.entry(
             processId,
             KafkaStreamsAssignment.of(
                 processId,
@@ -533,7 +532,7 @@ public class TaskAssignmentUtilsTest {
 
     public static Map.Entry<TaskId, TaskInfo> mkTaskInfo(final TaskId taskId, final boolean isStateful, final Set<String> rackIds) {
         if (!isStateful) {
-            return mkEntry(
+            return Map.entry(
                 taskId,
                 new DefaultTaskInfo(taskId, false, Set.of(), Set.of())
             );
@@ -552,7 +551,7 @@ public class TaskAssignmentUtilsTest {
                 });
             }
         ));
-        return mkEntry(
+        return Map.entry(
             taskId,
             new DefaultTaskInfo(
                 taskId,

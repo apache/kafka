@@ -25,7 +25,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 
 public final class ReassignReplicaShrinkTest extends TieredStorageTestHarness {
@@ -60,8 +59,8 @@ public final class ReassignReplicaShrinkTest extends TieredStorageTestHarness {
         final Integer maxBatchCountPerSegment = 1;
         final boolean enableRemoteLogStorage = true;
         final Map<Integer, List<Integer>> replicaAssignment = mkMap(
-                mkEntry(p0, Arrays.asList(broker0, broker1)),
-                mkEntry(p1, Arrays.asList(broker1, broker0))
+                Map.entry(p0, Arrays.asList(broker0, broker1)),
+                Map.entry(p1, Arrays.asList(broker1, broker0))
         );
 
         builder

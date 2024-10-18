@@ -55,10 +55,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.StreamsTestUtils.toList;
 import static org.apache.kafka.test.StreamsTestUtils.verifyKeyValueList;
@@ -171,11 +171,11 @@ public class CachingInMemorySessionStoreTest {
         cachingStore.flush();
 
         assertEquals(
-            Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 2L))))),
+            Position.fromMap(mkMap(Map.entry("", mkMap(Map.entry(0, 2L))))),
             cachingStore.getPosition()
         );
         assertEquals(
-            Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 2L))))),
+            Position.fromMap(mkMap(Map.entry("", mkMap(Map.entry(0, 2L))))),
             underlyingStore.getPosition()
         );
     }

@@ -25,7 +25,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
@@ -38,16 +37,16 @@ public class PositionTest {
     @Test
     public void shouldCreateFromMap() {
         final Map<String, Map<Integer, Long>> map = mkMap(
-            mkEntry("topic", mkMap(mkEntry(0, 5L))),
-            mkEntry("topic1", mkMap(
-                mkEntry(0, 5L),
-                mkEntry(7, 0L)
+            Map.entry("topic", mkMap(Map.entry(0, 5L))),
+            Map.entry("topic1", mkMap(
+                Map.entry(0, 5L),
+                Map.entry(7, 0L)
             ))
         );
 
         final Position position = Position.fromMap(map);
         assertThat(position.getTopics(), equalTo(Set.of("topic", "topic1")));
-        assertThat(position.getPartitionPositions("topic"), equalTo(mkMap(mkEntry(0, 5L))));
+        assertThat(position.getPartitionPositions("topic"), equalTo(mkMap(Map.entry(0, 5L))));
 
         // Should be a copy of the constructor map
 
@@ -55,8 +54,8 @@ public class PositionTest {
 
         // so the position is still the original one
         assertThat(position.getPartitionPositions("topic1"), equalTo(mkMap(
-            mkEntry(0, 5L),
-            mkEntry(7, 0L)
+            Map.entry(0, 5L),
+            Map.entry(7, 0L)
         )));
     }
 
@@ -69,29 +68,29 @@ public class PositionTest {
     @Test
     public void shouldMerge() {
         final Position position = Position.fromMap(mkMap(
-            mkEntry("topic", mkMap(mkEntry(0, 5L))),
-            mkEntry("topic1", mkMap(
-                mkEntry(0, 5L),
-                mkEntry(7, 0L)
+            Map.entry("topic", mkMap(Map.entry(0, 5L))),
+            Map.entry("topic1", mkMap(
+                Map.entry(0, 5L),
+                Map.entry(7, 0L)
             ))
         ));
 
         final Position position1 = Position.fromMap(mkMap(
-            mkEntry("topic", mkMap(mkEntry(0, 7L))), // update offset
-            mkEntry("topic1", mkMap(mkEntry(8, 1L))), // add partition
-            mkEntry("topic2", mkMap(mkEntry(9, 5L))) // add topic
+            Map.entry("topic", mkMap(Map.entry(0, 7L))), // update offset
+            Map.entry("topic1", mkMap(Map.entry(8, 1L))), // add partition
+            Map.entry("topic2", mkMap(Map.entry(9, 5L))) // add topic
         ));
 
         final Position merged = position.merge(position1);
 
         assertThat(merged.getTopics(), equalTo(Set.of("topic", "topic1", "topic2")));
-        assertThat(merged.getPartitionPositions("topic"), equalTo(mkMap(mkEntry(0, 7L))));
+        assertThat(merged.getPartitionPositions("topic"), equalTo(mkMap(Map.entry(0, 7L))));
         assertThat(merged.getPartitionPositions("topic1"), equalTo(mkMap(
-            mkEntry(0, 5L),
-            mkEntry(7, 0L),
-            mkEntry(8, 1L)
+            Map.entry(0, 5L),
+            Map.entry(7, 0L),
+            Map.entry(8, 1L)
         )));
-        assertThat(merged.getPartitionPositions("topic2"), equalTo(mkMap(mkEntry(9, 5L))));
+        assertThat(merged.getPartitionPositions("topic2"), equalTo(mkMap(Map.entry(9, 5L))));
     }
 
     @Test
@@ -107,10 +106,10 @@ public class PositionTest {
     @Test
     public void shouldCopy() {
         final Position position = Position.fromMap(mkMap(
-            mkEntry("topic", mkMap(mkEntry(0, 5L))),
-            mkEntry("topic1", mkMap(
-                mkEntry(0, 5L),
-                mkEntry(7, 0L)
+            Map.entry("topic", mkMap(Map.entry(0, 5L))),
+            Map.entry("topic1", mkMap(
+                Map.entry(0, 5L),
+                Map.entry(7, 0L)
             ))
         ));
 
@@ -123,40 +122,40 @@ public class PositionTest {
 
         // copy has not changed
         assertThat(copy.getTopics(), equalTo(Set.of("topic", "topic1")));
-        assertThat(copy.getPartitionPositions("topic"), equalTo(mkMap(mkEntry(0, 5L))));
+        assertThat(copy.getPartitionPositions("topic"), equalTo(mkMap(Map.entry(0, 5L))));
         assertThat(copy.getPartitionPositions("topic1"), equalTo(mkMap(
-            mkEntry(0, 5L),
-            mkEntry(7, 0L)
+            Map.entry(0, 5L),
+            Map.entry(7, 0L)
         )));
 
         // original has changed
         assertThat(position.getTopics(), equalTo(Set.of("topic", "topic1", "topic2")));
-        assertThat(position.getPartitionPositions("topic"), equalTo(mkMap(mkEntry(0, 6L))));
+        assertThat(position.getPartitionPositions("topic"), equalTo(mkMap(Map.entry(0, 6L))));
         assertThat(position.getPartitionPositions("topic1"), equalTo(mkMap(
-            mkEntry(0, 5L),
-            mkEntry(7, 0L),
-            mkEntry(8, 1L)
+            Map.entry(0, 5L),
+            Map.entry(7, 0L),
+            Map.entry(8, 1L)
         )));
-        assertThat(position.getPartitionPositions("topic2"), equalTo(mkMap(mkEntry(2, 4L))));
+        assertThat(position.getPartitionPositions("topic2"), equalTo(mkMap(Map.entry(2, 4L))));
     }
 
     @Test
     public void shouldMergeNull() {
         final Position position = Position.fromMap(mkMap(
-            mkEntry("topic", mkMap(mkEntry(0, 5L))),
-            mkEntry("topic1", mkMap(
-                mkEntry(0, 5L),
-                mkEntry(7, 0L)
+            Map.entry("topic", mkMap(Map.entry(0, 5L))),
+            Map.entry("topic1", mkMap(
+                Map.entry(0, 5L),
+                Map.entry(7, 0L)
             ))
         ));
 
         final Position merged = position.merge(null);
 
         assertThat(merged.getTopics(), equalTo(Set.of("topic", "topic1")));
-        assertThat(merged.getPartitionPositions("topic"), equalTo(mkMap(mkEntry(0, 5L))));
+        assertThat(merged.getPartitionPositions("topic"), equalTo(mkMap(Map.entry(0, 5L))));
         assertThat(merged.getPartitionPositions("topic1"), equalTo(mkMap(
-            mkEntry(0, 5L),
-            mkEntry(7, 0L)
+            Map.entry(0, 5L),
+            Map.entry(7, 0L)
         )));
     }
 

@@ -25,7 +25,6 @@ import org.mockito.MockedStatic;
 
 import java.util.Map;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -44,7 +43,7 @@ public class NamedCacheMetricsTest {
 
     private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
     private final Sensor expectedSensor = mock(Sensor.class);
-    private final Map<String, String> tagMap = mkMap(mkEntry("key", "value"));
+    private final Map<String, String> tagMap = mkMap(Map.entry("key", "value"));
 
     @Test
     public void shouldGetHitRatioSensorWithBuiltInMetricsVersionCurrent() {

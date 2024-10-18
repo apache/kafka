@@ -44,12 +44,12 @@ import org.junit.jupiter.api.Timeout;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
@@ -100,13 +100,13 @@ public class TaskMetadataIntegrationTest {
 
         properties  = mkObjectProperties(
                 mkMap(
-                        mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
-                        mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
-                        mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-                        mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2),
-                        mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
-                        mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
-                        mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1L)
+                        Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+                        Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
+                        Map.entry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
+                        Map.entry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2),
+                        Map.entry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
+                        Map.entry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
+                        Map.entry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1L)
                 )
         );
     }
