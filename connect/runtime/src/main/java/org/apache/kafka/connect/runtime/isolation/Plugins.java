@@ -317,16 +317,13 @@ public class Plugins {
                 throw new ConnectException(
                         "Failed to find any class that implements Connector and which name matches "
                                 + connectorClassOrAlias
-                                + ", available connectors are: "
-                                + connectors.stream().map(PluginDesc::toString).collect(Collectors.joining(", "))
                 );
             }
             if (matches.size() > 1) {
                 throw new ConnectException(
                         "More than one connector matches alias "
                                 + connectorClassOrAlias
-                                + ". Please use full package and class name instead. Classes found: "
-                                + connectors.stream().map(PluginDesc::toString).collect(Collectors.joining(", "))
+                                + ". Please use full package and class name instead."
                 );
             }
 
