@@ -81,6 +81,7 @@ import org.junit.jupiter.api.Timeout;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -1042,7 +1043,8 @@ public class SharePartitionManagerTest {
             .withTimer(mockTimer)
             .build();
 
-        doAnswer(invocation -> buildLogReadResult(partitionMaxBytes.keySet())).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+        // Replica Manager fetch response size -> 1 bytes (>= minBytes)
+        doAnswer(invocation -> buildLogReadResult(partitionMaxBytes.keySet(), 1)).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
         sharePartitionManager.fetchMessages(groupId, memberId1.toString(), fetchParams, partitionMaxBytes);
         Mockito.verify(replicaManager, times(1)).readFromLog(
@@ -1118,31 +1120,36 @@ public class SharePartitionManagerTest {
             assertEquals(4, sp1.nextFetchOffset());
             assertEquals(10, sp2.nextFetchOffset());
             assertEquals(20, sp3.nextFetchOffset());
-            return buildLogReadResult(partitionMaxBytes.keySet());
+            // Replica Manager fetch response size -> 1 bytes (>= minBytes)
+            return buildLogReadResult(partitionMaxBytes.keySet(), 1);
         }).doAnswer(invocation -> {
             assertEquals(15, sp0.nextFetchOffset());
             assertEquals(1, sp1.nextFetchOffset());
             assertEquals(25, sp2.nextFetchOffset());
             assertEquals(15, sp3.nextFetchOffset());
-            return buildLogReadResult(partitionMaxBytes.keySet());
+            // Replica Manager fetch response size -> 2 bytes (>= minBytes)
+            return buildLogReadResult(partitionMaxBytes.keySet(), 2);
         }).doAnswer(invocation -> {
             assertEquals(6, sp0.nextFetchOffset());
             assertEquals(18, sp1.nextFetchOffset());
             assertEquals(26, sp2.nextFetchOffset());
             assertEquals(23, sp3.nextFetchOffset());
-            return buildLogReadResult(partitionMaxBytes.keySet());
+            // Replica Manager fetch response size -> 1 bytes (>= minBytes)
+            return buildLogReadResult(partitionMaxBytes.keySet(), 1);
         }).doAnswer(invocation -> {
             assertEquals(30, sp0.nextFetchOffset());
             assertEquals(5, sp1.nextFetchOffset());
             assertEquals(26, sp2.nextFetchOffset());
             assertEquals(16, sp3.nextFetchOffset());
-            return buildLogReadResult(partitionMaxBytes.keySet());
+            // Replica Manager fetch response size -> 1 bytes (>= minBytes)
+            return buildLogReadResult(partitionMaxBytes.keySet(), 1);
         }).doAnswer(invocation -> {
             assertEquals(25, sp0.nextFetchOffset());
             assertEquals(5, sp1.nextFetchOffset());
             assertEquals(26, sp2.nextFetchOffset());
             assertEquals(16, sp3.nextFetchOffset());
-            return buildLogReadResult(partitionMaxBytes.keySet());
+            // Replica Manager fetch response size -> 3 bytes (>= minBytes)
+            return buildLogReadResult(partitionMaxBytes.keySet(), 3);
         }).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
         int threadCount = 100;
@@ -1230,7 +1237,8 @@ public class SharePartitionManagerTest {
             .withTimer(mockTimer)
             .build();
 
-        doAnswer(invocation -> buildLogReadResult(partitionMaxBytes.keySet())).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+        // Replica Manager fetch response size -> 1 bytes (>= minBytes)
+        doAnswer(invocation -> buildLogReadResult(partitionMaxBytes.keySet(), 1)).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
         sharePartitionManager.fetchMessages(groupId, memberId.toString(), fetchParams, partitionMaxBytes);
         // Since the nextFetchOffset does not point to endOffset + 1, i.e. some of the records in the cachedState are AVAILABLE,
@@ -1675,7 +1683,8 @@ public class SharePartitionManagerTest {
             .withTimer(mockTimer)
             .withFetchQueue(fetchQueue).build();
 
-        doAnswer(invocation -> buildLogReadResult(partitionMaxBytes.keySet())).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+        // Replica Manager fetch response size -> 1 bytes (>= minBytes)
+        doAnswer(invocation -> buildLogReadResult(partitionMaxBytes.keySet(), 1)).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
         sharePartitionManager.maybeProcessFetchQueue();
 
@@ -1753,7 +1762,8 @@ public class SharePartitionManagerTest {
         // Since acquisition lock for sp1 and sp2 cannot be acquired, we should have 2 watched keys.
         assertEquals(2, delayedShareFetchPurgatory.watched());
 
-        doAnswer(invocation -> buildLogReadResult(partitionMaxBytes.keySet())).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+        // Replica Manager fetch response size -> 1 bytes (>= minBytes)
+        doAnswer(invocation -> buildLogReadResult(partitionMaxBytes.keySet(), 1)).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
         Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgeTopics = new HashMap<>();
         acknowledgeTopics.put(tp1, Arrays.asList(
@@ -1943,7 +1953,8 @@ public class SharePartitionManagerTest {
         // Since acquisition lock for sp1 and sp2 cannot be acquired, we should have 2 watched keys.
         assertEquals(2, delayedShareFetchPurgatory.watched());
 
-        doAnswer(invocation -> buildLogReadResult(partitionMaxBytes.keySet())).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+        // Replica Manager fetch response size -> 2 bytes (>= minBytes)
+        doAnswer(invocation -> buildLogReadResult(partitionMaxBytes.keySet(), 2)).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
         assertEquals(2, delayedShareFetchPurgatory.watched());
 
@@ -2274,10 +2285,10 @@ public class SharePartitionManagerTest {
         assertEquals(expectedValidSet, actualValidPartitions);
     }
 
-    static Seq<Tuple2<TopicIdPartition, LogReadResult>> buildLogReadResult(Set<TopicIdPartition> topicIdPartitions) {
+    static Seq<Tuple2<TopicIdPartition, LogReadResult>> buildLogReadResult(Set<TopicIdPartition> topicIdPartitions, int bufferCapacity) {
         List<Tuple2<TopicIdPartition, LogReadResult>> logReadResults = new ArrayList<>();
         topicIdPartitions.forEach(topicIdPartition -> logReadResults.add(new Tuple2<>(topicIdPartition, new LogReadResult(
-            new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
+            new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.readableRecords(ByteBuffer.allocate(bufferCapacity))),
             Option.empty(),
             -1L,
             -1L,
