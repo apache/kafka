@@ -746,7 +746,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         lastOffset += batch.size();
         LocalRecordBatch recordBatch = new LocalRecordBatch(epoch, appendTimestamp, batch);
         preparedBatches.add(recordBatch);
-        return lastOffset;
+        return lastOffset + 1;
     }
 
     @Override
