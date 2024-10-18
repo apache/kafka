@@ -1209,7 +1209,7 @@ public class ValuesTest {
     }
 
     protected SchemaAndValue roundTrip(Schema desiredSchema, SchemaAndValue input) {
-        String serialized = Values.convertToString(input.schema(), input.value());
+        String serialized = input != null ? Values.convertToString(input.schema(), input.value()) : null;
         if (input != null && input.value() != null) {
             assertNotNull(serialized);
         }
