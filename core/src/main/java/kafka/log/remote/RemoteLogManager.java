@@ -331,6 +331,7 @@ public class RemoteLogManager implements Closeable {
           rlmConfig.remoteLogManagerFetchQuotaWindowSizeSeconds());
     }
 
+    @SuppressWarnings("unchecked")
     private <T> T createDelegate(ClassLoader classLoader, String className) {
         try {
             return (T) classLoader.loadClass(className)
