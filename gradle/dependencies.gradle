@@ -53,7 +53,7 @@ versions += [
   apacheda: "1.0.2",
   apacheds: "2.0.0-M24",
   argparse4j: "0.7.0",
-  bcpkix: "1.75",
+  bcpkix: "1.78.1",
   caffeine: "2.9.3", // 3.x supports JDK 11 and above
   // when updating checkstyle, check whether the exclusion of
   // CVE-2023-2976 and CVE-2020-8908 can be dropped from
@@ -70,7 +70,7 @@ versions += [
   jackson: "2.16.2",
   jacoco: "0.8.10",
   javassist: "3.29.2-GA",
-  jetty: "9.4.54.v20240208",
+  jetty: "9.4.56.v20240826",
   jersey: "2.39.1",
   jline: "3.25.1",
   jmh: "1.37",
@@ -83,7 +83,6 @@ versions += [
   jopt: "5.0.4",
   jose4j: "0.9.4",
   junit: "5.10.2",
-  mockitoVersion: "5.14.2",
   jqwik: "1.8.3",
   kafka_0100: "0.10.0.1",
   kafka_0101: "0.10.1.1",
@@ -113,6 +112,7 @@ versions += [
   lz4: "1.8.0",
   mavenArtifact: "3.9.6",
   metrics: "2.2.0",
+  mockito: "5.14.2",
   netty: "4.1.111.Final",
   opentelemetryProto: "1.0.0-alpha",
   protobuf: "3.25.5", // a dependency of opentelemetryProto
@@ -210,8 +210,8 @@ libs += [
   lz4: "org.lz4:lz4-java:$versions.lz4",
   metrics: "com.yammer.metrics:metrics-core:$versions.metrics",
   dropwizardMetrics: "io.dropwizard.metrics:metrics-core:$versions.dropwizardMetrics",
-  mockitoCore: "org.mockito:mockito-core:$versions.mockitoVersion",
-  mockitoJunitJupiter: "org.mockito:mockito-junit-jupiter:$versions.mockitoVersion",
+  mockitoCore: "org.mockito:mockito-core:$versions.mockito",
+  mockitoJunitJupiter: "org.mockito:mockito-junit-jupiter:$versions.mockito",
   nettyHandler: "io.netty:netty-handler:$versions.netty",
   nettyTransportNativeEpoll: "io.netty:netty-transport-native-epoll:$versions.netty",
   pcollections: "org.pcollections:pcollections:$versions.pcollections",
