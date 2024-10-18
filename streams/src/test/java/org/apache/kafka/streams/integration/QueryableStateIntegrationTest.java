@@ -1032,14 +1032,14 @@ public class QueryableStateIntegrationTest {
 
         final KeyValue<String, String> hello = KeyValue.pair("hello", "hello");
         IntegrationTestUtils.produceKeyValuesSynchronously(
-                streamThree,
-                Arrays.asList(hello, hello, hello, hello, hello, hello, hello, hello),
-                TestUtils.producerConfig(
-                        CLUSTER.bootstrapServers(),
-                        StringSerializer.class,
-                        StringSerializer.class,
-                        new Properties()),
-                mockTime);
+            streamThree,
+            Arrays.asList(hello, hello, hello, hello, hello, hello, hello, hello),
+            TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                StringSerializer.class,
+                StringSerializer.class,
+                new Properties()),
+            mockTime);
 
         final int maxWaitMs = 30000;
 
@@ -1102,53 +1102,53 @@ public class QueryableStateIntegrationTest {
         startApplicationAndWaitUntilRunning(kafkaStreams);
 
         IntegrationTestUtils.produceKeyValuesSynchronously(
-                streamOne,
-                Arrays.asList(
-                        KeyValue.pair("a", "1"),
-                        KeyValue.pair("a", "2"),
-                        KeyValue.pair("b", "3"),
-                        KeyValue.pair("b", "4")),
-                TestUtils.producerConfig(
-                        CLUSTER.bootstrapServers(),
-                        StringSerializer.class,
-                        StringSerializer.class,
-                        new Properties()),
-                mockTime);
+            streamOne,
+            Arrays.asList(
+                KeyValue.pair("a", "1"),
+                KeyValue.pair("a", "2"),
+                KeyValue.pair("b", "3"),
+                KeyValue.pair("b", "4")),
+            TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                StringSerializer.class,
+                StringSerializer.class,
+                new Properties()),
+            mockTime);
 
         final int maxWaitMs = 30000;
 
         final ReadOnlyKeyValueStore<String, String> store =
-                IntegrationTestUtils.getStore(storeName, kafkaStreams, keyValueStore());
+            IntegrationTestUtils.getStore(storeName, kafkaStreams, keyValueStore());
 
         TestUtils.waitForCondition(
-                () -> "12".equals(store.get("a")) && "34".equals(store.get("b")),
-                maxWaitMs,
-                "wait for agg to be <a,12> and <b,34>");
+            () -> "12".equals(store.get("a")) && "34".equals(store.get("b")),
+            maxWaitMs,
+            "wait for agg to be <a,12> and <b,34>");
 
         IntegrationTestUtils.produceKeyValuesSynchronously(
-                streamOne,
-                Collections.singleton(KeyValue.pair("a", "5")),
-                TestUtils.producerConfig(
-                        CLUSTER.bootstrapServers(),
-                        StringSerializer.class,
-                        StringSerializer.class,
-                        new Properties()),
-                mockTime);
+            streamOne,
+            Collections.singleton(KeyValue.pair("a", "5")),
+            TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                StringSerializer.class,
+                StringSerializer.class,
+                new Properties()),
+            mockTime);
 
         final ReadOnlyKeyValueStore<String, String> store2 =
-                IntegrationTestUtils.getStore(storeName, kafkaStreams, keyValueStore());
+            IntegrationTestUtils.getStore(storeName, kafkaStreams, keyValueStore());
 
         try {
             TestUtils.waitForCondition(
-                    () -> ("125".equals(store2.get("a"))
-                            || "1225".equals(store2.get("a"))
-                            || "12125".equals(store2.get("a")))
-                            &&
-                            ("34".equals(store2.get("b"))
-                                    || "344".equals(store2.get("b"))
-                                    || "3434".equals(store2.get("b"))),
-                    maxWaitMs,
-                    "wait for agg to be <a,125>||<a,1225>||<a,12125> and <b,34>||<b,344>||<b,3434>");
+                () -> ("125".equals(store2.get("a"))
+                    || "1225".equals(store2.get("a"))
+                    || "12125".equals(store2.get("a")))
+                    &&
+                    ("34".equals(store2.get("b"))
+                        || "344".equals(store2.get("b"))
+                        || "3434".equals(store2.get("b"))),
+                maxWaitMs,
+                "wait for agg to be <a,125>||<a,1225>||<a,12125> and <b,34>||<b,344>||<b,3434>");
         } catch (final Throwable t) {
             throw new RuntimeException("Store content is a: " + store2.get("a") + "; b: " + store2.get("b"), t);
         }
