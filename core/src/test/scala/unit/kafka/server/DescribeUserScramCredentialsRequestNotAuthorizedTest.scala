@@ -35,16 +35,12 @@ import java.util.Properties
 class DescribeUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTest {
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.put(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, "false")
-    if (isKRaftTest()) {
-      properties.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[StandardAuthorizer].getName)
-    } else {
-      properties.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[DescribeCredentialsTest.TestAuthorizer].getName)
-    }
+    properties.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[StandardAuthorizer].getName)
     properties.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[DescribeCredentialsTest.TestPrincipalBuilderReturningUnauthorized].getName)
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDescribeNotAuthorized(quorum: String): Unit = {
     val request = new DescribeUserScramCredentialsRequest.Builder(
       new DescribeUserScramCredentialsRequestData()).build()
