@@ -34,7 +34,7 @@ import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
-import org.apache.kafka.test.MockClientSupplier;
+import org.apache.kafka.test.MockClientInterceptor;
 import org.apache.kafka.test.MockInternalTopicManager;
 
 import org.hamcrest.BaseMatcher;
@@ -712,11 +712,11 @@ public final class AssignmentTestUtils {
     static InternalTopicManager mockInternalTopicManagerForRandomChangelog(final int nodeSize, final int tpSize, final int partitionSize) {
         final MockTime time = new MockTime();
         final StreamsConfig streamsConfig = new StreamsConfig(configProps(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC));
-        final MockClientSupplier mockClientSupplier = new MockClientSupplier();
+        final MockClientInterceptor mockClientInterceptor = new MockClientInterceptor();
         final MockInternalTopicManager mockInternalTopicManager = new MockInternalTopicManager(
             time,
             streamsConfig,
-            mockClientSupplier.restoreConsumer,
+            mockClientInterceptor.restoreConsumer,
             false
         );
 
@@ -896,11 +896,11 @@ public final class AssignmentTestUtils {
     static InternalTopicManager mockInternalTopicManagerForChangelog() {
         final MockTime time = new MockTime();
         final StreamsConfig streamsConfig = new StreamsConfig(configProps(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC));
-        final MockClientSupplier mockClientSupplier = new MockClientSupplier();
+        final MockClientInterceptor mockClientInterceptor = new MockClientInterceptor();
         final MockInternalTopicManager mockInternalTopicManager = new MockInternalTopicManager(
             time,
             streamsConfig,
-            mockClientSupplier.restoreConsumer,
+            mockClientInterceptor.restoreConsumer,
             false
         );
 

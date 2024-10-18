@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.integration;
 
+import kafka.Kafka;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -27,6 +28,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.server.util.MockTime;
+import org.apache.kafka.streams.KafkaClientInterceptor;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -120,11 +122,11 @@ public class RegexSourceIntegrationTest {
     private static final String PARTITIONED_TOPIC_1 = "partitioned-1";
     private static final String PARTITIONED_TOPIC_2 = "partitioned-2";
 
-    private static final String STRING_SERDE_CLASSNAME = Serdes.String().getClass().getName();
+    private static final String STRING_SERDE_CLASSNAME = Serdes.StringSerde.class.getName();
     private Properties streamsConfiguration;
     private static final String STREAM_TASKS_NOT_UPDATED = "Stream tasks not updated";
     private KafkaStreams streams;
-    private static volatile AtomicInteger topicSuffixGenerator = new AtomicInteger(0);
+    private static final AtomicInteger topicSuffixGenerator = new AtomicInteger(0);
     private String outputTopic;
 
     @BeforeEach
@@ -175,9 +177,9 @@ public class RegexSourceIntegrationTest {
 
             pattern1Stream.to(outputTopic, Produced.with(stringSerde, stringSerde));
             final List<String> assignedTopics = new CopyOnWriteArrayList<>();
-            streams = new KafkaStreams(builder.build(), streamsConfiguration, new DefaultKafkaClientSupplier() {
+            streams = new KafkaStreams(builder.build(), streamsConfiguration, new KafkaClientInterceptor() {
                 @Override
-                public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
+                public Consumer<byte[], byte[]> wrapMainConsumer(final KafkaConsumer<byte[], byte[]> consumer) {
                     return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
                         @Override
                         public void subscribe(final Pattern topics, final ConsumerRebalanceListener listener) {
@@ -211,7 +213,7 @@ public class RegexSourceIntegrationTest {
 
             final StreamsBuilder builder = new StreamsBuilder();
             final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("TEST-TOPIC-\\d"));
-            final KStream<String, String> otherStream = builder.stream(Pattern.compile("not-a-match"));
+            builder.stream(Pattern.compile("not-a-match"));
 
             pattern1Stream
                 .selectKey((k, v) -> k)
@@ -275,9 +277,9 @@ public class RegexSourceIntegrationTest {
 
             pattern1Stream.to(outputTopic, Produced.with(stringSerde, stringSerde));
 
-            streams = new KafkaStreams(builder.build(), streamsConfiguration, new DefaultKafkaClientSupplier() {
+            streams = new KafkaStreams(builder.build(), streamsConfiguration, new KafkaClientInterceptor() {
                 @Override
-                public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
+                public Consumer<byte[], byte[]> wrapMainConsumer(final KafkaConsumer<byte[], byte[]> consumer) {
                     return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
                         @Override
                         public void subscribe(final Pattern topics, final ConsumerRebalanceListener listener) {
@@ -388,9 +390,9 @@ public class RegexSourceIntegrationTest {
             final List<String> leaderAssignment = new CopyOnWriteArrayList<>();
             final List<String> followerAssignment = new CopyOnWriteArrayList<>();
 
-            partitionedStreamsLeader = new KafkaStreams(builderLeader.build(), streamsConfiguration, new DefaultKafkaClientSupplier() {
+            partitionedStreamsLeader = new KafkaStreams(builderLeader.build(), streamsConfiguration, new KafkaClientInterceptor() {
                 @Override
-                public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
+                public Consumer<byte[], byte[]> wrapMainConsumer(final KafkaConsumer<byte[], byte[]> consumer) {
                     return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
                         @Override
                         public void subscribe(final Pattern topics, final ConsumerRebalanceListener listener) {
@@ -400,9 +402,9 @@ public class RegexSourceIntegrationTest {
 
                 }
             });
-            partitionedStreamsFollower = new KafkaStreams(builderFollower.build(), streamsConfiguration, new DefaultKafkaClientSupplier() {
+            partitionedStreamsFollower = new KafkaStreams(builderFollower.build(), streamsConfiguration, new KafkaClientInterceptor() {
                 @Override
-                public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
+                public Consumer<byte[], byte[]> wrapMainConsumer(final KafkaConsumer<byte[], byte[]> consumer) {
                     return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
                         @Override
                         public void subscribe(final Pattern topics, final ConsumerRebalanceListener listener) {

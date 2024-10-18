@@ -18,6 +18,7 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.MemberToRemove;
 import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions;
@@ -30,6 +31,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -38,6 +40,7 @@ import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -178,6 +181,7 @@ public class KafkaStreams implements AutoCloseable {
     private final DelegatingStateRestoreListener delegatingStateRestoreListener;
     private final UUID processId;
     private final KafkaClientSupplier clientSupplier;
+    private final KafkaClientInterceptor interceptorSupplier;
     protected final TopologyMetadata topologyMetadata;
     private final QueryableStoreProvider queryableStoreProvider;
     private final DelegatingStandbyUpdateListener delegatingStandbyUpdateListener;
@@ -464,8 +468,8 @@ public class KafkaStreams implements AutoCloseable {
      * might be exceptions thrown by your code, for example a NullPointerException thrown from your processor logic.
      * The handler will execute on the thread that produced the exception.
      * In order to get the thread that threw the exception, use {@code Thread.currentThread()}.
-     * <p>
-     * Note, this handler must be thread safe, since it will be shared among all threads, and invoked from any
+     *
+     * <p> Note, this handler must be thread safe, since it will be shared among all threads, and invoked from any
      * thread that encounters such an exception.
      *
      * @param userStreamsUncaughtExceptionHandler the uncaught exception handler of type {@link StreamsUncaughtExceptionHandler} for all internal threads
@@ -849,7 +853,7 @@ public class KafkaStreams implements AutoCloseable {
      */
     public KafkaStreams(final Topology topology,
                         final Properties props) {
-        this(topology, new StreamsConfig(props));
+        this(topology, new StreamsConfig(props), (KafkaClientInterceptor) null, Time.SYSTEM);
     }
 
     /**
@@ -864,12 +868,19 @@ public class KafkaStreams implements AutoCloseable {
      *                       for the new {@code KafkaStreams} instance
      * @throws StreamsException if any fatal error occurs
      */
+    @Deprecated
     public KafkaStreams(final Topology topology,
                         final Properties props,
                         final KafkaClientSupplier clientSupplier) {
         this(topology, new StreamsConfig(props), clientSupplier, Time.SYSTEM);
     }
 
+    public KafkaStreams(final Topology topology,
+                        final Properties props,
+                        final KafkaClientInterceptor interceptorSupplier) {
+        this(topology, new StreamsConfig(props), interceptorSupplier, Time.SYSTEM);
+    }
+
     /**
      * Create a {@code KafkaStreams} instance.
      * <p>
@@ -884,7 +895,7 @@ public class KafkaStreams implements AutoCloseable {
     public KafkaStreams(final Topology topology,
                         final Properties props,
                         final Time time) {
-        this(topology, new StreamsConfig(props), time);
+        this(topology, new StreamsConfig(props), (KafkaClientInterceptor) null, time);
     }
 
     /**
@@ -900,11 +911,19 @@ public class KafkaStreams implements AutoCloseable {
      * @param time           {@code Time} implementation; cannot be null
      * @throws StreamsException if any fatal error occurs
      */
+    @Deprecated
     public KafkaStreams(final Topology topology,
                         final Properties props,
                         final KafkaClientSupplier clientSupplier,
                         final Time time) {
         this(topology, new StreamsConfig(props), clientSupplier, time);
+    }
+
+    public KafkaStreams(final Topology topology,
+                        final Properties props,
+                        final KafkaClientInterceptor interceptorSupplier,
+                        final Time time) {
+        this(topology, new StreamsConfig(props), interceptorSupplier, time);
     }
 
     /**
@@ -919,7 +938,7 @@ public class KafkaStreams implements AutoCloseable {
      */
     public KafkaStreams(final Topology topology,
                         final StreamsConfig applicationConfigs) {
-        this(topology, applicationConfigs, applicationConfigs.getKafkaClientSupplier());
+        this(topology, applicationConfigs, (KafkaClientInterceptor) null, Time.SYSTEM);
     }
 
     /**
@@ -934,10 +953,17 @@ public class KafkaStreams implements AutoCloseable {
      *                       for the new {@code KafkaStreams} instance
      * @throws StreamsException if any fatal error occurs
      */
+    @Deprecated
     public KafkaStreams(final Topology topology,
                         final StreamsConfig applicationConfigs,
                         final KafkaClientSupplier clientSupplier) {
-        this(new TopologyMetadata(topology.internalTopologyBuilder, applicationConfigs), applicationConfigs, clientSupplier);
+        this(new TopologyMetadata(topology.internalTopologyBuilder, applicationConfigs), applicationConfigs, clientSupplier, null, Time.SYSTEM);
+    }
+
+    public KafkaStreams(final Topology topology,
+                        final StreamsConfig applicationConfigs,
+                        final KafkaClientInterceptor interceptorSuppliern) {
+        this(new TopologyMetadata(topology.internalTopologyBuilder, applicationConfigs), applicationConfigs, null, interceptorSuppliern, Time.SYSTEM);
     }
 
     /**
@@ -954,26 +980,36 @@ public class KafkaStreams implements AutoCloseable {
     public KafkaStreams(final Topology topology,
                         final StreamsConfig applicationConfigs,
                         final Time time) {
-        this(new TopologyMetadata(topology.internalTopologyBuilder, applicationConfigs), applicationConfigs, applicationConfigs.getKafkaClientSupplier(), time);
+        this(new TopologyMetadata(topology.internalTopologyBuilder, applicationConfigs), applicationConfigs, null, null, time);
     }
 
+    // why was this not public ?
     private KafkaStreams(final Topology topology,
                          final StreamsConfig applicationConfigs,
                          final KafkaClientSupplier clientSupplier,
                          final Time time) throws StreamsException {
-        this(new TopologyMetadata(topology.internalTopologyBuilder, applicationConfigs), applicationConfigs, clientSupplier, time);
+        this(new TopologyMetadata(topology.internalTopologyBuilder, applicationConfigs), applicationConfigs, clientSupplier, null, time);
+    }
+
+    public KafkaStreams(final Topology topology,
+                        final StreamsConfig applicationConfigs,
+                        final KafkaClientInterceptor interceptorSupplier,
+                        final Time time) throws StreamsException {
+        this(new TopologyMetadata(topology.internalTopologyBuilder, applicationConfigs), applicationConfigs, null, interceptorSupplier, time);
     }
 
     protected KafkaStreams(final TopologyMetadata topologyMetadata,
                            final StreamsConfig applicationConfigs,
                            final KafkaClientSupplier clientSupplier) throws StreamsException {
-        this(topologyMetadata, applicationConfigs, clientSupplier, Time.SYSTEM);
+        // NameTopolgies are going to be deprecated -- no need to worry about client-interceptor -- does not need to work with KIP-1071
+        this(topologyMetadata, applicationConfigs, clientSupplier, null, Time.SYSTEM);
     }
 
-    @SuppressWarnings("this-escape")
+    @SuppressWarnings({"this-escape", "deprecation"})
     private KafkaStreams(final TopologyMetadata topologyMetadata,
                          final StreamsConfig applicationConfigs,
                          final KafkaClientSupplier clientSupplier,
+                         final KafkaClientInterceptor interceptorSupplier,
                          final Time time) throws StreamsException {
         this.applicationConfigs = applicationConfigs;
         this.time = time;
@@ -984,7 +1020,12 @@ public class KafkaStreams implements AutoCloseable {
         final boolean hasGlobalTopology = topologyMetadata.hasGlobalTopology();
 
         try {
-            stateDirectory = new StateDirectory(applicationConfigs, time, topologyMetadata.hasPersistentStores(), topologyMetadata.hasNamedTopologies());
+            stateDirectory = new StateDirectory(
+                applicationConfigs,
+                time,
+                topologyMetadata.hasPersistentStores(),
+                topologyMetadata.hasNamedTopologies()
+            );
             processId = stateDirectory.initializeProcessId();
         } catch (final ProcessorStateException fatal) {
             Utils.closeQuietly(stateDirectory, "streams state directory");
@@ -1003,9 +1044,41 @@ public class KafkaStreams implements AutoCloseable {
         this.log = logContext.logger(getClass());
         topologyMetadata.setLog(logContext);
 
+        if (clientSupplier != null) {
+            if (interceptorSupplier != null) {
+                throw new ConfigException("use only one of both");
+            }
+            this.clientSupplier = clientSupplier;
+        } else if (applicationConfigs.originals().containsKey(StreamsConfig.DEFAULT_CLIENT_SUPPLIER_CONFIG)) {
+            if (interceptorSupplier != null) {
+                throw new ConfigException("use only one of both");
+            }
+            this.clientSupplier = applicationConfigs.getKafkaClientSupplier();
+        } else {
+            this.clientSupplier = null;
+        }
+        // TODO: add config for interceptor supplier ?
+        this.interceptorSupplier = interceptorSupplier;
+        if (this.interceptorSupplier != null) {
+            this.interceptorSupplier.configure(applicationConfigs.originals());
+        }
+
         // use client id instead of thread client id since this admin client may be shared among threads
-        this.clientSupplier = clientSupplier;
-        adminClient = clientSupplier.getAdmin(applicationConfigs.getAdminConfigs(ClientUtils.adminClientId(clientId)));
+        if (this.clientSupplier != null) {
+            adminClient = this.clientSupplier.getAdmin(
+                applicationConfigs.getAdminConfigs(ClientUtils.adminClientId(clientId))
+            );
+        } else {
+            if (this.interceptorSupplier == null) {
+                adminClient = Admin.create(applicationConfigs.getAdminConfigs(ClientUtils.adminClientId(clientId)));
+            } else {
+                adminClient = this.interceptorSupplier.wrapAdminClient(
+                    (KafkaAdminClient) Admin.create(
+                        applicationConfigs.getAdminConfigs(ClientUtils.adminClientId(clientId))
+                    )
+                );
+            }
+        }
 
         log.info("Kafka Streams version: {}", ClientMetrics.version());
         log.info("Kafka Streams commit ID: {}", ClientMetrics.commitId());
@@ -1046,7 +1119,11 @@ public class KafkaStreams implements AutoCloseable {
             globalStreamThread = new GlobalStreamThread(
                 topologyMetadata.globalTaskTopology(),
                 applicationConfigs,
-                clientSupplier.getGlobalConsumer(applicationConfigs.getGlobalConsumerConfigs(clientId)),
+                this.clientSupplier != null ?
+                    this.clientSupplier.getGlobalConsumer(applicationConfigs.getGlobalConsumerConfigs(clientId)) :
+                    this.interceptorSupplier == null ?
+                        new KafkaConsumer<>(applicationConfigs.getGlobalConsumerConfigs(clientId), new ByteArrayDeserializer(), new ByteArrayDeserializer()) :
+                        this.interceptorSupplier.wrapGlobalConsumer(new KafkaConsumer<>(applicationConfigs.getGlobalConsumerConfigs(clientId), new ByteArrayDeserializer(), new ByteArrayDeserializer())),
                 stateDirectory,
                 cacheSizePerThread,
                 streamsMetrics,
@@ -1080,6 +1157,7 @@ public class KafkaStreams implements AutoCloseable {
             topologyMetadata,
             applicationConfigs,
             clientSupplier,
+            interceptorSupplier,
             adminClient,
             processId,
             clientId,

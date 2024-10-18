@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.utils.Time;
@@ -40,10 +41,16 @@ public class MockInternalTopicManager extends InternalTopicManager {
                                     final StreamsConfig streamsConfig,
                                     final MockConsumer<byte[], byte[]> restoreConsumer,
                                     final boolean mockCreateInternalTopics) {
-        super(time, new MockClientSupplier().getAdmin(streamsConfig.originals()), streamsConfig);
+        super(time, admin(streamsConfig.originals()), streamsConfig);
 
         this.restoreConsumer = restoreConsumer;
         this.mockCreateInternalTopics = mockCreateInternalTopics;
+    }
+
+    private static Admin admin(final Map<String, Object> config) {
+        final MockClientInterceptor clientInterceptor = new MockClientInterceptor();
+        clientInterceptor.configure(config);
+        return clientInterceptor.wrapAdminClient(null);
     }
 
     @Override

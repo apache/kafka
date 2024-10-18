@@ -49,6 +49,7 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread;
@@ -59,7 +60,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
-import org.apache.kafka.test.MockClientSupplier;
+import org.apache.kafka.test.MockClientInterceptor;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
@@ -143,7 +144,7 @@ public class KafkaStreamsTest {
     private static final String CLIENT_ID = "test-client";
     private static final Duration DEFAULT_DURATION = Duration.ofSeconds(30);
 
-    private MockClientSupplier supplier;
+    private MockClientInterceptor interceptor;
     private MockTime time;
     private Properties props;
     private MockAdminClient adminClient;
@@ -183,9 +184,9 @@ public class KafkaStreamsTest {
     @BeforeEach
     public void before(final TestInfo testInfo) throws Exception {
         time = new MockTime();
-        supplier = new MockClientSupplier();
-        supplier.setCluster(Cluster.bootstrap(singletonList(new InetSocketAddress("localhost", 9999))));
-        adminClient = (MockAdminClient) supplier.getAdmin(null);
+        interceptor= new MockClientInterceptor();
+        interceptor.setCluster(Cluster.bootstrap(singletonList(new InetSocketAddress("localhost", 9999))));
+        adminClient = (MockAdminClient) interceptor.wrapAdminClient(null);
         streamsStateListener = new StateListenerStub();
         props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID + safeUniqueTestName(testInfo));
@@ -247,6 +248,7 @@ public class KafkaStreamsTest {
                 any(TopologyMetadata.class),
                 any(StreamsConfig.class),
                 any(KafkaClientSupplier.class),
+                any(KafkaClientInterceptor.class),
                 any(Admin.class),
                 any(UUID.class),
                 any(String.class),
@@ -282,9 +284,9 @@ public class KafkaStreamsTest {
                         return null;
                     }).when(mock).start();
                     doAnswer(invocation -> {
-                        supplier.restoreConsumer.close();
+                        interceptor.restoreConsumer.close();
 
-                        for (final MockProducer<byte[], byte[]> producer : supplier.producers) {
+                        for (final MockProducer<byte[], byte[]> producer : interceptor.producers) {
                             producer.close();
                         }
                         globalThreadState.set(GlobalStreamThread.State.DEAD);
@@ -311,9 +313,9 @@ public class KafkaStreamsTest {
 
     private void prepareConsumer(final StreamThread thread, final AtomicReference<StreamThread.State> state) {
         doAnswer(invocation -> {
-            supplier.consumer.close();
-            supplier.restoreConsumer.close();
-            for (final MockProducer<byte[], byte[]> producer : supplier.producers) {
+            interceptor.consumer.close();
+            interceptor.restoreConsumer.close();
+            for (final MockProducer<byte[], byte[]> producer : interceptor.producers) {
                 producer.close();
             }
             state.set(StreamThread.State.DEAD);
@@ -359,7 +361,7 @@ public class KafkaStreamsTest {
         prepareStreams();
         prepareStreamThread(streamThreadOne, 1);
         prepareStreamThread(streamThreadTwo, 2);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             streams.close();
 
             assertEquals(KafkaStreams.State.NOT_RUNNING, streams.state());
@@ -373,7 +375,7 @@ public class KafkaStreamsTest {
         final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
         prepareThreadState(streamThreadOne, state1);
         prepareThreadState(streamThreadTwo, state2);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             streams.setStateListener(streamsStateListener);
 
             assertEquals(0, streamsStateListener.numChanges);
@@ -455,7 +457,7 @@ public class KafkaStreamsTest {
         builder.globalTable("anyTopic");
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KafkaStreams.class);
-            final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
+            final KafkaStreams streams = new KafkaStreams(builder.build(), props, interceptor, time)) {
             streams.close();
 
             waitForCondition(
@@ -465,9 +467,9 @@ public class KafkaStreamsTest {
             assertThat(appender.getMessages(), not(hasItem(containsString("ERROR"))));
         }
 
-        assertTrue(supplier.consumer.closed());
-        assertTrue(supplier.restoreConsumer.closed());
-        for (final MockProducer<byte[], byte[]> p : supplier.producers) {
+        assertTrue(interceptor.consumer.closed());
+        assertTrue(interceptor.restoreConsumer.closed());
+        for (final MockProducer<byte[], byte[]> p : interceptor.producers) {
             assertTrue(p.closed());
         }
     }
@@ -487,7 +489,7 @@ public class KafkaStreamsTest {
         final StreamsBuilder builder = getBuilderWithSource();
         builder.globalTable("anyTopic");
 
-        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, interceptor, time)) {
             assertEquals(NUM_THREADS, streams.threads.size());
             assertEquals(streams.state(), KafkaStreams.State.CREATED);
 
@@ -529,7 +531,7 @@ public class KafkaStreamsTest {
         builder.globalTable("anyTopic");
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KafkaStreams.class);
-            final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
+            final KafkaStreams streams = new KafkaStreams(builder.build(), props, interceptor, time)) {
             streams.start();
             waitForCondition(
                 () -> streams.state() == KafkaStreams.State.RUNNING,
@@ -564,7 +566,7 @@ public class KafkaStreamsTest {
         prepareThreadState(streamThreadTwo, state2);
         final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
 
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             final int newInitCount = MockMetricsReporter.INIT_COUNT.get();
             final int initDiff = newInitCount - oldInitCount;
             assertEquals(1, initDiff, "some reporters including MockMetricsReporter should be initialized by calling on construction");
@@ -582,7 +584,7 @@ public class KafkaStreamsTest {
         prepareStreams();
         prepareStreamThread(streamThreadOne, 1);
         prepareStreamThread(streamThreadTwo, 2);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             streams.close();
             final int closeCount = MockMetricsReporter.CLOSE_COUNT.get();
 
@@ -598,7 +600,7 @@ public class KafkaStreamsTest {
         final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
         prepareThreadState(streamThreadOne, state1);
         prepareThreadState(streamThreadTwo, state2);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             streams.start();
             streams.pause();
             assertTrue(streams.isPaused());
@@ -615,7 +617,7 @@ public class KafkaStreamsTest {
         prepareThreadState(streamThreadOne, state1);
         prepareThreadState(streamThreadTwo, state2);
         // This test shows that a KafkaStreams instance can be started "paused"
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             streams.pause();
             streams.start();
             assertTrue(streams.isPaused());
@@ -632,7 +634,7 @@ public class KafkaStreamsTest {
         prepareThreadState(streamThreadOne, state1);
         prepareThreadState(streamThreadTwo, state2);
         // This test shows that a KafkaStreams instance can be started "paused"
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             streams.start();
             streams.pause();
             assertTrue(streams.isPaused());
@@ -653,7 +655,7 @@ public class KafkaStreamsTest {
         prepareThreadState(streamThreadOne, state1);
         prepareThreadState(streamThreadTwo, state2);
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             streams.start();
             final int oldSize = streams.threads.size();
             waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L, "wait until running");
@@ -667,7 +669,7 @@ public class KafkaStreamsTest {
         prepareStreams();
         prepareStreamThread(streamThreadOne, 1);
         prepareStreamThread(streamThreadTwo, 2);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             final int oldSize = streams.threads.size();
             assertThat(streams.addStreamThread(), equalTo(Optional.empty()));
             assertThat(streams.threads.size(), equalTo(oldSize));
@@ -679,7 +681,7 @@ public class KafkaStreamsTest {
         prepareStreams();
         prepareStreamThread(streamThreadOne, 1);
         prepareStreamThread(streamThreadTwo, 2);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             final int oldSize = streams.threads.size();
             streams.close();
             assertThat(streams.addStreamThread(), equalTo(Optional.empty()));
@@ -697,7 +699,7 @@ public class KafkaStreamsTest {
         // make sure we have the global state thread running too
         final StreamsBuilder builder = getBuilderWithSource();
         builder.globalTable("anyTopic");
-        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, interceptor, time)) {
             final int oldSize = streams.threads.size();
             streams.start();
             streams.globalStreamThread.shutdown();
@@ -715,7 +717,7 @@ public class KafkaStreamsTest {
         prepareThreadState(streamThreadTwo, state2);
         prepareThreadLock(streamThreadOne);
         prepareThreadLock(streamThreadTwo);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             streams.start();
             streamThreadOne.shutdown();
             final Set<ThreadMetadata> threads = streams.metadataForLocalThreads();
@@ -735,7 +737,7 @@ public class KafkaStreamsTest {
         when(streamThreadOne.waitOnThreadState(isA(StreamThread.State.class), anyLong())).thenReturn(true);
         when(streamThreadOne.isThreadAlive()).thenReturn(true);
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             streams.start();
             final int oldSize = streams.threads.size();
             waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L,
@@ -751,7 +753,7 @@ public class KafkaStreamsTest {
         prepareStreamThread(streamThreadOne, 1);
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         try (final KafkaStreams streams =
-                     new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+                     new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             assertThat(streams.removeStreamThread(), equalTo(Optional.empty()));
             assertThat(streams.threads.size(), equalTo(1));
         }
@@ -764,7 +766,7 @@ public class KafkaStreamsTest {
         final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
         prepareThreadState(streamThreadOne, state1);
         prepareThreadState(streamThreadTwo, state2);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             streams.start();
             streams.close();
             try {
@@ -783,7 +785,7 @@ public class KafkaStreamsTest {
         final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
         prepareThreadState(streamThreadOne, state1);
         prepareThreadState(streamThreadTwo, state2);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             streams.start();
             try {
                 streams.setGlobalStateRestoreListener(null);
@@ -801,7 +803,7 @@ public class KafkaStreamsTest {
         final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
         prepareThreadState(streamThreadOne, state1);
         prepareThreadState(streamThreadTwo, state2);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             streams.start();
             assertThrows(IllegalStateException.class, () -> streams.setUncaughtExceptionHandler((StreamsUncaughtExceptionHandler) null));
         }
@@ -812,7 +814,7 @@ public class KafkaStreamsTest {
         prepareStreams();
         prepareStreamThread(streamThreadOne, 1);
         prepareStreamThread(streamThreadTwo, 2);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             streams.start();
             assertThrows(IllegalStateException.class, () -> streams.setUncaughtExceptionHandler((StreamsUncaughtExceptionHandler) null));
         }
@@ -823,7 +825,7 @@ public class KafkaStreamsTest {
         prepareStreams();
         prepareStreamThread(streamThreadOne, 1);
         prepareStreamThread(streamThreadTwo, 2);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             assertThrows(NullPointerException.class, () -> streams.setUncaughtExceptionHandler((StreamsUncaughtExceptionHandler) null));
         }
     }
@@ -833,7 +835,7 @@ public class KafkaStreamsTest {
         prepareStreams();
         prepareStreamThread(streamThreadOne, 1);
         prepareStreamThread(streamThreadTwo, 2);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             streams.start();
             try {
                 streams.setStateListener(null);
@@ -849,7 +851,7 @@ public class KafkaStreamsTest {
         prepareStreams();
         prepareStreamThread(streamThreadOne, 1);
         prepareStreamThread(streamThreadTwo, 2);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             try {
                 streams.cleanUp();
                 streams.start();
@@ -867,7 +869,7 @@ public class KafkaStreamsTest {
         final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
         prepareThreadState(streamThreadOne, state1);
         prepareThreadState(streamThreadTwo, state2);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             streams.start();
             waitForCondition(
                 () -> streams.state() == KafkaStreams.State.RUNNING,
@@ -889,7 +891,7 @@ public class KafkaStreamsTest {
         final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
         prepareThreadState(streamThreadOne, state1);
         prepareThreadState(streamThreadTwo, state2);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             streams.start();
             waitForCondition(
                 () -> streams.state() == KafkaStreams.State.RUNNING,
@@ -912,7 +914,7 @@ public class KafkaStreamsTest {
         prepareThreadState(streamThreadOne, state1);
         prepareThreadState(streamThreadTwo, state2);
         prepareTerminableThread(streamThreadOne);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             streams.start();
             waitForCondition(
                 () -> streams.state() == KafkaStreams.State.RUNNING,
@@ -933,11 +935,11 @@ public class KafkaStreamsTest {
         prepareThreadState(streamThreadOne, state1);
         prepareThreadState(streamThreadTwo, state2);
         prepareTerminableThread(streamThreadOne);
-        final MockClientSupplier mockClientSupplier = spy(MockClientSupplier.class);
+        final MockClientInterceptor mockClientInterceptor = spy(MockClientInterceptor.class);
 
-        when(mockClientSupplier.getAdmin(any())).thenReturn(adminClient);
+        when(mockClientInterceptor.wrapAdminClient(any())).thenReturn(adminClient);
 
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, mockClientSupplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, mockClientInterceptor, time)) {
             streams.start();
             waitForCondition(
                 () -> streams.state() == KafkaStreams.State.RUNNING,
@@ -962,7 +964,7 @@ public class KafkaStreamsTest {
         prepareThreadState(streamThreadOne, state1);
         prepareThreadState(streamThreadTwo, state2);
         prepareTerminableThread(streamThreadOne);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             streams.start();
             waitForCondition(
                 () -> streams.state() == KafkaStreams.State.RUNNING,
@@ -985,7 +987,7 @@ public class KafkaStreamsTest {
         final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
         prepareThreadState(streamThreadOne, state1);
         prepareThreadState(streamThreadTwo, state2);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             assertThrows(StreamsNotStartedException.class, streams::metadataForAllStreamsClients);
             streams.start();
             waitForApplicationState(Collections.singletonList(streams), KafkaStreams.State.RUNNING, DEFAULT_DURATION);
@@ -1002,7 +1004,7 @@ public class KafkaStreamsTest {
         final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
         prepareThreadState(streamThreadOne, state1);
         prepareThreadState(streamThreadTwo, state2);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             assertThrows(StreamsNotStartedException.class, () -> streams.streamsMetadataForStore("store"));
             streams.start();
             waitForApplicationState(Collections.singletonList(streams), KafkaStreams.State.RUNNING, DEFAULT_DURATION);
@@ -1019,7 +1021,7 @@ public class KafkaStreamsTest {
         final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
         prepareThreadState(streamThreadOne, state1);
         prepareThreadState(streamThreadTwo, state2);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             assertThrows(StreamsNotStartedException.class, () -> streams.queryMetadataForKey("store", "key", new StringSerializer()));
             streams.start();
             waitForApplicationState(Collections.singletonList(streams), KafkaStreams.State.RUNNING, DEFAULT_DURATION);
@@ -1035,7 +1037,7 @@ public class KafkaStreamsTest {
         prepareStreamThread(streamThreadOne, 1);
         prepareStreamThread(streamThreadTwo, 2);
 
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             streams.start();
             assertEquals(KeyQueryMetadata.NOT_AVAILABLE, streams.queryMetadataForKey("store", "key", new StringSerializer()));
         }
@@ -1048,7 +1050,7 @@ public class KafkaStreamsTest {
         final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
         prepareThreadState(streamThreadOne, state1);
         prepareThreadState(streamThreadTwo, state2);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             assertThrows(StreamsNotStartedException.class, () -> streams.queryMetadataForKey("store", "key", (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(0))));
             streams.start();
             waitForApplicationState(Collections.singletonList(streams), KafkaStreams.State.RUNNING, DEFAULT_DURATION);
@@ -1065,7 +1067,7 @@ public class KafkaStreamsTest {
         final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
         prepareThreadState(streamThreadOne, state1);
         prepareThreadState(streamThreadTwo, state2);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             streams.start();
             waitForApplicationState(Collections.singletonList(streams), KafkaStreams.State.RUNNING, DEFAULT_DURATION);
             assertThrows(UnknownStateStoreException.class, () -> streams.store(StoreQueryParameters.fromNameAndType("unknown-store", keyValueStore())));
@@ -1079,7 +1081,7 @@ public class KafkaStreamsTest {
         final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
         prepareThreadState(streamThreadOne, state1);
         prepareThreadState(streamThreadTwo, state2);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             assertThrows(StreamsNotStartedException.class, () -> streams.store(StoreQueryParameters.fromNameAndType("store", keyValueStore())));
             streams.start();
             waitForApplicationState(Collections.singletonList(streams), KafkaStreams.State.RUNNING, DEFAULT_DURATION);
@@ -1102,10 +1104,10 @@ public class KafkaStreamsTest {
         allFuture.complete(Collections.emptyMap());
 
         final MockAdminClient mockAdminClient = spy(MockAdminClient.class);
-        final MockClientSupplier mockClientSupplier = spy(MockClientSupplier.class);
-        when(mockClientSupplier.getAdmin(any())).thenReturn(mockAdminClient);
+        final MockClientInterceptor mockClientInterceptor = spy(MockClientInterceptor.class);
+        when(mockClientInterceptor.wrapAdminClient(any())).thenReturn(mockAdminClient);
 
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, mockClientSupplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, mockClientInterceptor, time)) {
             streams.start();
             assertEquals(0, streams.allLocalStorePartitionLags().size());
         }
@@ -1119,7 +1121,7 @@ public class KafkaStreamsTest {
         prepareTerminableThread(streamThreadOne);
 
         // do not use mock time so that it can really elapse
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor)) {
             assertFalse(streams.close(Duration.ofMillis(10L)));
         }
     }
@@ -1131,7 +1133,7 @@ public class KafkaStreamsTest {
         prepareStreamThread(streamThreadTwo, 2);
         prepareTerminableThread(streamThreadOne);
 
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             assertThrows(IllegalArgumentException.class, () -> streams.close(Duration.ofMillis(-1L)));
         }
     }
@@ -1143,7 +1145,7 @@ public class KafkaStreamsTest {
         prepareStreamThread(streamThreadTwo, 2);
         prepareTerminableThread(streamThreadOne);
 
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             // with mock time that does not elapse, close would not return if it ever waits on the state transition
             assertFalse(streams.close(Duration.ZERO));
         }
@@ -1158,7 +1160,7 @@ public class KafkaStreamsTest {
 
         final KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
         closeOptions.timeout(Duration.ofMillis(10L));
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor)) {
             assertFalse(streams.close(closeOptions));
         }
     }
@@ -1172,7 +1174,7 @@ public class KafkaStreamsTest {
 
         final KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
         closeOptions.timeout(Duration.ofMillis(-1L));
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             assertThrows(IllegalArgumentException.class, () -> streams.close(closeOptions));
         }
     }
@@ -1186,7 +1188,7 @@ public class KafkaStreamsTest {
 
         final KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
         closeOptions.timeout(Duration.ZERO);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor)) {
             assertFalse(streams.close(closeOptions));
         }
     }
@@ -1198,14 +1200,14 @@ public class KafkaStreamsTest {
         prepareStreamThread(streamThreadTwo, 2);
         prepareTerminableThread(streamThreadOne);
 
-        final MockClientSupplier mockClientSupplier = spy(MockClientSupplier.class);
+        final MockClientInterceptor mockClientInterceptor = spy(MockClientInterceptor.class);
 
-        when(mockClientSupplier.getAdmin(any())).thenReturn(adminClient);
+        when(mockClientInterceptor.wrapAdminClient(any())).thenReturn(adminClient);
 
         final KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
         closeOptions.timeout(Duration.ofMillis(10L));
         closeOptions.leaveGroup(true);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, mockClientSupplier)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, mockClientInterceptor)) {
             assertFalse(streams.close(closeOptions));
         }
     }
@@ -1217,13 +1219,13 @@ public class KafkaStreamsTest {
         prepareStreamThread(streamThreadTwo, 2);
         prepareTerminableThread(streamThreadOne);
 
-        final MockClientSupplier mockClientSupplier = spy(MockClientSupplier.class);
-        when(mockClientSupplier.getAdmin(any())).thenReturn(adminClient);
+        final MockClientInterceptor mockClientInterceptor = spy(MockClientInterceptor.class);
+        when(mockClientInterceptor.wrapAdminClient(any())).thenReturn(adminClient);
 
         final KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
         closeOptions.timeout(Duration.ofMillis(-1L));
         closeOptions.leaveGroup(true);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, mockClientSupplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, mockClientInterceptor, time)) {
             assertThrows(IllegalArgumentException.class, () -> streams.close(closeOptions));
         }
     }
@@ -1235,14 +1237,14 @@ public class KafkaStreamsTest {
         prepareStreamThread(streamThreadTwo, 2);
         prepareTerminableThread(streamThreadOne);
 
-        final MockClientSupplier mockClientSupplier = spy(MockClientSupplier.class);
+        final MockClientInterceptor mockClientInterceptor = spy(MockClientInterceptor.class);
 
-        when(mockClientSupplier.getAdmin(any())).thenReturn(adminClient);
+        when(mockClientInterceptor.wrapAdminClient(any())).thenReturn(adminClient);
 
         final KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
         closeOptions.timeout(Duration.ZERO);
         closeOptions.leaveGroup(true);
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, mockClientSupplier)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, mockClientInterceptor)) {
             assertFalse(streams.close(closeOptions));
         }
     }
@@ -1265,7 +1267,7 @@ public class KafkaStreamsTest {
             builder.table("topic", Materialized.as("store"));
             props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, RecordingLevel.DEBUG.name());
 
-            try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
                 streams.start();
             }
 
@@ -1277,6 +1279,7 @@ public class KafkaStreamsTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldGetClientSupplierFromConfigForConstructor() throws Exception {
         prepareStreams();
@@ -1287,7 +1290,7 @@ public class KafkaStreamsTest {
 
         final StreamsConfig config = new StreamsConfig(props);
         final StreamsConfig mockConfig = spy(config);
-        when(mockConfig.getKafkaClientSupplier()).thenReturn(supplier);
+        when(mockConfig.getKafkaClientSupplier()).thenReturn(new DefaultKafkaClientSupplier());
 
         try (final KafkaStreams ignored = new KafkaStreams(getBuilderWithSource().build(), mockConfig)) {
             // no-op
@@ -1296,6 +1299,7 @@ public class KafkaStreamsTest {
         verify(mockConfig, times(2)).getKafkaClientSupplier();
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldGetClientSupplierFromConfigForConstructorWithTime() throws Exception {
         prepareStreams();
@@ -1306,7 +1310,7 @@ public class KafkaStreamsTest {
 
         final StreamsConfig config = new StreamsConfig(props);
         final StreamsConfig mockConfig = spy(config);
-        when(mockConfig.getKafkaClientSupplier()).thenReturn(supplier);
+        when(mockConfig.getKafkaClientSupplier()).thenReturn(new DefaultKafkaClientSupplier());
 
         try (final KafkaStreams ignored = new KafkaStreams(getBuilderWithSource().build(), mockConfig, time)) {
             // no-op
@@ -1315,6 +1319,7 @@ public class KafkaStreamsTest {
         verify(mockConfig, times(2)).getKafkaClientSupplier();
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldUseProvidedClientSupplier() throws Exception {
         prepareStreams();
@@ -1326,7 +1331,7 @@ public class KafkaStreamsTest {
         final StreamsConfig config = new StreamsConfig(props);
         final StreamsConfig mockConfig = spy(config);
 
-        try (final KafkaStreams ignored = new KafkaStreams(getBuilderWithSource().build(), mockConfig, supplier)) {
+        try (final KafkaStreams ignored = new KafkaStreams(getBuilderWithSource().build(), mockConfig, interceptor)) {
             // no-op
         }
         // It's called once in above when mock
@@ -1348,7 +1353,7 @@ public class KafkaStreamsTest {
             builder.table("topic", Materialized.as("store"));
             props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, RecordingLevel.INFO.name());
 
-            try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
                 streams.start();
             }
             executorsMockedStatic.verify(() -> Executors.newSingleThreadScheduledExecutor(any(ThreadFactory.class)));
@@ -1373,7 +1378,7 @@ public class KafkaStreamsTest {
                 final StreamsBuilder builder = new StreamsBuilder();
                 builder.table("topic", Materialized.as("store"));
 
-                try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
+                try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, interceptor, time)) {
                     streams.start();
                 }
             }
@@ -1448,7 +1453,7 @@ public class KafkaStreamsTest {
     @Test
     public void shouldThrowTopologyExceptionOnEmptyTopology() {
         prepareStreams();
-        try (final KafkaStreams ignored = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time)) {
+        try (final KafkaStreams ignored = new KafkaStreams(new StreamsBuilder().build(), props, interceptor, time)) {
             fail("Should have thrown TopologyException");
         } catch (final TopologyException e) {
             assertThat(
@@ -1463,7 +1468,7 @@ public class KafkaStreamsTest {
         prepareStreams();
         final StreamsBuilder builder = new StreamsBuilder();
         builder.globalTable("anyTopic");
-        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, interceptor, time)) {
             assertThat(streams.threads.size(), equalTo(0));
         }
     }
@@ -1473,7 +1478,7 @@ public class KafkaStreamsTest {
         prepareStreams();
         final StreamsBuilder builder = new StreamsBuilder();
         builder.globalTable("anyTopic");
-        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, interceptor, time)) {
 
             assertThat(streams.threads.size(), equalTo(0));
             assertEquals(streams.state(), KafkaStreams.State.CREATED);
@@ -1497,7 +1502,7 @@ public class KafkaStreamsTest {
         prepareStreamThread(streamThreadOne, 1);
         prepareStreamThread(streamThreadTwo, 2);
 
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             final IllegalArgumentException error = assertThrows(
                 IllegalArgumentException.class,
                 () -> streams.clientInstanceIds(Duration.ofMillis(-1L))
@@ -1515,7 +1520,7 @@ public class KafkaStreamsTest {
         prepareStreamThread(streamThreadOne, 1);
         prepareStreamThread(streamThreadTwo, 2);
 
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             final IllegalStateException error = assertThrows(
                 IllegalStateException.class,
                 () -> streams.clientInstanceIds(Duration.ZERO)
@@ -1533,7 +1538,7 @@ public class KafkaStreamsTest {
         prepareStreamThread(streamThreadOne, 1);
         prepareStreamThread(streamThreadTwo, 2);
 
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             streams.close();
 
             final IllegalStateException error = assertThrows(
@@ -1553,7 +1558,7 @@ public class KafkaStreamsTest {
         prepareStreamThread(streamThreadOne, 1);
         prepareStreamThread(streamThreadTwo, 2);
 
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             streams.start();
 
             final StreamsException error = assertThrows(
@@ -1581,7 +1586,7 @@ public class KafkaStreamsTest {
         // set threads to zero to simplify set setup
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 0);
 
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             streams.start();
 
             final ClientInstanceIds clientInstanceIds = streams.clientInstanceIds(Duration.ZERO);
@@ -1606,7 +1611,7 @@ public class KafkaStreamsTest {
         adminClient.setClientInstanceId(Uuid.randomUuid());
         adminClient.injectTimeoutException(1);
 
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             streams.start();
 
             assertThrows(
@@ -1624,7 +1629,7 @@ public class KafkaStreamsTest {
         // set threads to zero to simplify set setup
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 0);
 
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             streams.start();
 
             assertThat(
@@ -1644,7 +1649,7 @@ public class KafkaStreamsTest {
             .thenReturn(Collections.singletonMap("consumer", new KafkaFutureImpl<>()));
         adminClient.setClientInstanceId(Uuid.randomUuid());
 
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             streams.start();
             final TimeoutException timeoutException = assertThrows(
                 TimeoutException.class,
@@ -1670,7 +1675,7 @@ public class KafkaStreamsTest {
 
         final StreamsBuilder builder = getBuilderWithSource();
         builder.globalTable("anyTopic");
-        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, interceptor, time)) {
             streams.start();
 
             when(globalStreamThreadMockedConstruction.constructed().get(0).globalConsumerInstanceId(any()))
@@ -1694,7 +1699,7 @@ public class KafkaStreamsTest {
         when(streamThreadOne.producersClientInstanceIds(any())).thenReturn(new KafkaFutureImpl<>());
         adminClient.setClientInstanceId(Uuid.randomUuid());
 
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, interceptor, time)) {
             streams.start();
 
             final TimeoutException timeoutException = assertThrows(
@@ -1794,7 +1799,7 @@ public class KafkaStreamsTest {
         final StreamsBuilder builder = getBuilderWithSource();
         builder.globalTable("anyTopic");
 
-        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, interceptor, time)) {
             streams.start();
 
             when(globalStreamThreadMockedConstruction.constructed().get(0).globalConsumerInstanceId(any()))
@@ -1883,7 +1888,7 @@ public class KafkaStreamsTest {
                 assertEquals(shouldFilesExist, context.arguments().get(2));
             })) {
 
-            try (final KafkaStreams ignored = new KafkaStreams(topology, props, supplier, time)) {
+            try (final KafkaStreams ignored = new KafkaStreams(topology, props, interceptor, time)) {
                 // verify that stateDirectory constructor was called
                 assertFalse(stateDirectoryMockedConstruction.constructed().isEmpty());
             }

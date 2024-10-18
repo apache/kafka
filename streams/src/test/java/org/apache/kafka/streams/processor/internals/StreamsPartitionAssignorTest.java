@@ -72,7 +72,7 @@ import org.apache.kafka.streams.processor.internals.assignment.ReferenceContaine
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.test.MockApiProcessorSupplier;
-import org.apache.kafka.test.MockClientSupplier;
+import org.apache.kafka.test.MockClientInterceptor;
 import org.apache.kafka.test.MockInternalTopicManager;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
 
@@ -221,7 +221,7 @@ public class StreamsPartitionAssignorTest {
     );
 
     private final StreamsPartitionAssignor partitionAssignor = new StreamsPartitionAssignor();
-    private final MockClientSupplier mockClientSupplier = new MockClientSupplier();
+    private final MockClientInterceptor mockClientInterceptor = new MockClientInterceptor();
     private static final String USER_END_POINT = "localhost:8080";
     private static final String OTHER_END_POINT = "other:9090";
     private static final String APPLICATION_ID = "stream-partition-assignor-test";
@@ -312,7 +312,7 @@ public class StreamsPartitionAssignorTest {
         final MockInternalTopicManager mockInternalTopicManager = spy(new MockInternalTopicManager(
             time,
             new StreamsConfig(configProps(parameterizedConfig)),
-            mockClientSupplier.restoreConsumer,
+            mockClientInterceptor.restoreConsumer,
             mockCreateInternalTopics
         ));
 
@@ -1696,7 +1696,7 @@ public class StreamsPartitionAssignorTest {
         final MockInternalTopicManager mockInternalTopicManager = new MockInternalTopicManager(
             time,
             new StreamsConfig(configProps(parameterizedConfig)),
-            mockClientSupplier.restoreConsumer,
+            mockClientInterceptor.restoreConsumer,
             false
         ) {
             @Override
@@ -1735,7 +1735,7 @@ public class StreamsPartitionAssignorTest {
         final MockInternalTopicManager mockInternalTopicManager =  new MockInternalTopicManager(
             time,
             config,
-            mockClientSupplier.restoreConsumer,
+            mockClientInterceptor.restoreConsumer,
             false
         ) {
             @Override

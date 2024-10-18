@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
@@ -83,7 +84,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockApiProcessor;
-import org.apache.kafka.test.MockClientSupplier;
+import org.apache.kafka.test.MockClientInterceptor;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.apache.kafka.test.MockStandbyUpdateListener;
 import org.apache.kafka.test.MockStateRestoreListener;
@@ -184,7 +185,7 @@ public class StreamThreadTest {
     private final Metrics metrics = new Metrics();
     private final MockTime mockTime = new MockTime();
     private final String stateDir = TestUtils.tempDirectory().getPath();
-    private final MockClientSupplier clientSupplier = new MockClientSupplier();
+    private final MockClientInterceptor clientInterceptor = new MockClientInterceptor();
     private final ConsumedInternal<Object, Object> consumed = new ConsumedInternal<>();
     private final ChangelogReader changelogReader = new MockChangelogReader();
     private StateDirectory stateDirectory = null;
@@ -296,11 +297,7 @@ public class StreamThreadTest {
     private StreamThread createStreamThread(@SuppressWarnings("SameParameterValue") final String clientId,
                                             final StreamsConfig config,
                                             final Time time) {
-        if (!StreamsConfig.AT_LEAST_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
-            clientSupplier.setApplicationIdForProducer(APPLICATION_ID);
-        }
-
-        clientSupplier.setCluster(createCluster());
+        clientInterceptor.setCluster(createCluster());
 
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
@@ -320,8 +317,9 @@ public class StreamThreadTest {
         return StreamThread.create(
             topologyMetadata,
             config,
-            clientSupplier,
-            clientSupplier.getAdmin(config.getAdminConfigs(clientId)),
+            null,
+            clientInterceptor,
+            clientInterceptor.wrapAdminClient(null),
             PROCESS_ID,
             clientId,
             streamsMetrics,
@@ -719,8 +717,9 @@ public class StreamThreadTest {
         lenient().when(consumer.poll(any())).thenReturn(ConsumerRecords.empty());
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
-        final MockConsumerClientSupplier mockClientSupplier = new MockConsumerClientSupplier(consumer);
-        mockClientSupplier.setCluster(createCluster());
+        final MockConsumerClientInterceptor mockClientInterceptor= new MockConsumerClientInterceptor(consumer);
+        mockClientInterceptor.configure(config.originals());
+        mockClientInterceptor.setCluster(createCluster());
 
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
@@ -735,8 +734,9 @@ public class StreamThreadTest {
         thread = StreamThread.create(
             topologyMetadata,
             config,
-            mockClientSupplier,
-            mockClientSupplier.getAdmin(config.getAdminConfigs(CLIENT_ID)),
+            null,
+            mockClientInterceptor,
+            clientInterceptor.wrapAdminClient(null),
             PROCESS_ID,
             CLIENT_ID,
             streamsMetrics,
@@ -751,7 +751,7 @@ public class StreamThreadTest {
             mockExceptionHandler
         );
 
-        mockClientSupplier.nextRebalanceMs().set(mockTime.milliseconds() - 1L);
+        mockClientInterceptor.nextRebalanceMs().set(mockTime.milliseconds() - 1L);
 
         thread.start();
         TestUtils.waitForCondition(
@@ -783,8 +783,9 @@ public class StreamThreadTest {
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
-        final MockConsumerClientSupplier mockClientSupplier = new MockConsumerClientSupplier(consumer);
-        mockClientSupplier.setCluster(createCluster());
+        final MockConsumerClientInterceptor mockClientInterceptor = new MockConsumerClientInterceptor(consumer);
+        mockClientInterceptor.configure(config.originals());
+        mockClientInterceptor.setCluster(createCluster());
 
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
@@ -797,8 +798,9 @@ public class StreamThreadTest {
         thread = StreamThread.create(
             topologyMetadata,
             config,
-            mockClientSupplier,
-            mockClientSupplier.getAdmin(config.getAdminConfigs(CLIENT_ID)),
+            null,
+            mockClientInterceptor,
+            clientInterceptor.wrapAdminClient(null),
             PROCESS_ID,
             CLIENT_ID,
             streamsMetrics,
@@ -813,7 +815,7 @@ public class StreamThreadTest {
             null
         );
 
-        mockClientSupplier.nextRebalanceMs().set(mockTime.milliseconds() - 1L);
+        mockClientInterceptor.nextRebalanceMs().set(mockTime.milliseconds() - 1L);
         thread.taskManager().handleRebalanceStart(emptySet());
 
         thread.start();
@@ -831,7 +833,7 @@ public class StreamThreadTest {
         // Validate that the scheduled rebalance wasn't reset then set to MAX_VALUE so we
         // don't trigger one before we can shut down, since the rebalance must be ended
         // for the thread to fully shut down
-        assertThat(mockClientSupplier.nextRebalanceMs().get(), not(0L));
+        assertThat(mockClientInterceptor.nextRebalanceMs().get(), not(0L));
 
         thread.taskManager().handleRebalanceComplete();
 
@@ -842,22 +844,20 @@ public class StreamThreadTest {
 
     }
 
-    private static class MockConsumerClientSupplier extends MockClientSupplier {
+    private static class MockConsumerClientInterceptor extends MockClientInterceptor {
         final Consumer<byte[], byte[]> mockConsumer;
-        final Map<String, Object> consumerConfigs = new HashMap<>();
 
-        MockConsumerClientSupplier(final Consumer<byte[], byte[]> mockConsumer) {
+        MockConsumerClientInterceptor(final Consumer<byte[], byte[]> mockConsumer) {
             this.mockConsumer = mockConsumer;
         }
 
         @Override
-        public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
-            consumerConfigs.putAll(config);
+        public Consumer<byte[], byte[]> wrapMainConsumer(final KafkaConsumer<byte[], byte[]> consumer) {
             return mockConsumer;
         }
 
         AtomicLong nextRebalanceMs() {
-            return ((ReferenceContainer) consumerConfigs.get(
+            return ((ReferenceContainer) config.get(
                     StreamsConfig.InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR)
                 ).nextScheduledRebalanceMs;
         }
@@ -1253,13 +1253,13 @@ public class StreamThreadTest {
         mockConsumer.updateBeginningOffsets(beginOffsets);
         thread.rebalanceListener().onPartitionsAssigned(new HashSet<>(assignedPartitions));
 
-        assertEquals(1, clientSupplier.producers.size());
-        final Producer<byte[], byte[]> globalProducer = clientSupplier.producers.get(0);
+        assertEquals(1, clientInterceptor.producers.size());
+        final Producer<byte[], byte[]> globalProducer = clientInterceptor.producers.get(0);
         for (final Task task : thread.readOnlyActiveTasks()) {
             assertSame(globalProducer, ((RecordCollectorImpl) ((StreamTask) task).recordCollector()).producer());
         }
-        assertSame(clientSupplier.consumer, thread.mainConsumer());
-        assertSame(clientSupplier.restoreConsumer, thread.restoreConsumer());
+        assertSame(clientInterceptor.consumer, thread.mainConsumer());
+        assertSame(clientInterceptor.restoreConsumer, thread.restoreConsumer());
     }
 
     @ParameterizedTest
@@ -1294,9 +1294,9 @@ public class StreamThreadTest {
 
         runOnce(processingThreadsEnabled);
 
-        assertThat(clientSupplier.producers.size(), is(1));
-        assertSame(clientSupplier.consumer, thread.mainConsumer());
-        assertSame(clientSupplier.restoreConsumer, thread.restoreConsumer());
+        assertThat(clientInterceptor.producers.size(), is(1));
+        assertSame(clientInterceptor.consumer, thread.mainConsumer());
+        assertSame(clientInterceptor.restoreConsumer, thread.restoreConsumer());
     }
 
     @ParameterizedTest
@@ -1526,7 +1526,7 @@ public class StreamThreadTest {
         final StreamsConfig config = new StreamsConfig(configProps(true, stateUpdaterEnabled, processingThreadsEnabled));
         thread = createStreamThread(CLIENT_ID, config);
 
-        final MockConsumer<byte[], byte[]> consumer = clientSupplier.consumer;
+        final MockConsumer<byte[], byte[]> consumer = clientInterceptor.consumer;
 
         consumer.updatePartitions(topic1, Collections.singletonList(new PartitionInfo(topic1, 1, null, null, null)));
 
@@ -1549,7 +1549,7 @@ public class StreamThreadTest {
 
         runOnce(processingThreadsEnabled);
         assertThat(thread.readOnlyActiveTasks().size(), equalTo(1));
-        final MockProducer<byte[], byte[]> producer = clientSupplier.producers.get(0);
+        final MockProducer<byte[], byte[]> producer = clientInterceptor.producers.get(0);
 
         // change consumer subscription from "pattern" to "manual" to be able to call .addRecords()
         consumer.updateBeginningOffsets(Collections.singletonMap(assignedPartitions.iterator().next(), 0L));
@@ -1618,7 +1618,7 @@ public class StreamThreadTest {
 
         // need to process a record to enable committing
         addRecord(mockConsumer, 0L);
-        final MockProducer<byte[], byte[]> producer = clientSupplier.producers.get(0);
+        final MockProducer<byte[], byte[]> producer = clientInterceptor.producers.get(0);
         runOnce(processingThreadsEnabled);
         if (processingThreadsEnabled) {
             TestUtils.waitForCondition(() -> !producer.uncommittedRecords().isEmpty(), "Processing threads to process record");
@@ -1767,7 +1767,7 @@ public class StreamThreadTest {
         final StreamsConfig config = new StreamsConfig(configProps(true, stateUpdaterEnabled, processingThreadsEnabled));
         thread = createStreamThread(CLIENT_ID, config);
 
-        final MockConsumer<byte[], byte[]> consumer = clientSupplier.consumer;
+        final MockConsumer<byte[], byte[]> consumer = clientInterceptor.consumer;
 
         consumer.updatePartitions(topic1, Collections.singletonList(new PartitionInfo(topic1, 1, null, null, null)));
 
@@ -1790,7 +1790,7 @@ public class StreamThreadTest {
 
         runOnce(processingThreadsEnabled);
         assertThat(thread.readOnlyActiveTasks().size(), equalTo(1));
-        final MockProducer<byte[], byte[]> producer = clientSupplier.producers.get(0);
+        final MockProducer<byte[], byte[]> producer = clientInterceptor.producers.get(0);
 
         producer.commitTransactionException = e;
         mockTime.sleep(config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG) + 1L);
@@ -1808,9 +1808,9 @@ public class StreamThreadTest {
 
         assertThat(producer.commitCount(), equalTo(0L));
 
-        assertTrue(clientSupplier.producers.get(0).transactionInFlight());
-        assertFalse(clientSupplier.producers.get(0).transactionCommitted());
-        assertFalse(clientSupplier.producers.get(0).closed());
+        assertTrue(clientInterceptor.producers.get(0).transactionInFlight());
+        assertFalse(clientInterceptor.producers.get(0).transactionCommitted());
+        assertFalse(clientInterceptor.producers.get(0).closed());
         assertEquals(1, thread.readOnlyActiveTasks().size());
     }
 
@@ -1858,7 +1858,7 @@ public class StreamThreadTest {
 
         // need to process a record to enable committing
         addRecord(mockConsumer, 0L);
-        final MockProducer<byte[], byte[]> producer = clientSupplier.producers.get(0);
+        final MockProducer<byte[], byte[]> producer = clientInterceptor.producers.get(0);
 
         if (processingThreadsEnabled) {
             assertTrue(runUntilTimeoutOrCondition(() -> runOnce(processingThreadsEnabled), () -> !producer.history().isEmpty()));
@@ -1879,7 +1879,7 @@ public class StreamThreadTest {
         final StreamsConfig config = new StreamsConfig(configProps(false, stateUpdaterEnabled, processingThreadsEnabled));
         internalTopologyBuilder.addSource(null, "source", null, null, null, topic1);
 
-        clientSupplier.setCluster(createCluster());
+        clientInterceptor.setCluster(createCluster());
 
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
@@ -1899,8 +1899,9 @@ public class StreamThreadTest {
         thread = StreamThread.create(
             topologyMetadata,
             config,
-            clientSupplier,
-            clientSupplier.getAdmin(config.getAdminConfigs(CLIENT_ID)),
+            null,
+            clientInterceptor,
+            clientInterceptor.wrapAdminClient(null),
             PROCESS_ID,
             CLIENT_ID,
             streamsMetrics,
@@ -1958,7 +1959,7 @@ public class StreamThreadTest {
 
         internalStreamsBuilder.buildAndOptimizeTopology();
         thread = createStreamThread(CLIENT_ID, config, new MockTime(1));
-        final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
+        final MockConsumer<byte[], byte[]> restoreConsumer = clientInterceptor.restoreConsumer;
         restoreConsumer.updatePartitions(
             STREAM_THREAD_TEST_COUNT_ONE_CHANGELOG,
             Collections.singletonList(
@@ -2009,7 +2010,7 @@ public class StreamThreadTest {
         final Properties props = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
         final StreamsConfig config = new StreamsConfig(props);
         thread = createStreamThread(CLIENT_ID, config);
-        final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
+        final MockConsumer<byte[], byte[]> restoreConsumer = clientInterceptor.restoreConsumer;
 
         setupThread(storeName1, storeName2, changelogName1, changelogName2, restoreConsumer, false);
 
@@ -2132,7 +2133,7 @@ public class StreamThreadTest {
         final String changelogName1 = APPLICATION_ID + "-" + storeName1 + "-changelog";
         final String changelogName2 = APPLICATION_ID + "-" + storeName2 + "-changelog";
         thread = createStreamThread(CLIENT_ID, config);
-        final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
+        final MockConsumer<byte[], byte[]> restoreConsumer = clientInterceptor.restoreConsumer;
 
         setupThread(storeName1, storeName2, changelogName1, changelogName2, restoreConsumer, true);
 
@@ -2250,8 +2251,8 @@ public class StreamThreadTest {
 
         thread.taskManager().handleAssignment(activeTasks, emptyMap());
 
-        clientSupplier.consumer.assign(assignedPartitions);
-        clientSupplier.consumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
+        clientInterceptor.consumer.assign(assignedPartitions);
+        clientInterceptor.consumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
         thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
 
         runOnce(processingThreadsEnabled);
@@ -2260,7 +2261,7 @@ public class StreamThreadTest {
         assertEquals(0, punctuatedWallClockTime.size());
 
         mockTime.sleep(100L);
-        clientSupplier.consumer.addRecord(new ConsumerRecord<>(
+        clientInterceptor.consumer.addRecord(new ConsumerRecord<>(
             topic1,
             1,
             100L,
@@ -2334,8 +2335,8 @@ public class StreamThreadTest {
 
         thread.taskManager().handleAssignment(activeTasks, emptyMap());
 
-        clientSupplier.consumer.assign(assignedPartitions);
-        clientSupplier.consumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
+        clientInterceptor.consumer.assign(assignedPartitions);
+        clientInterceptor.consumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
         thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
 
         runOnce(processingThreadsEnabled);
@@ -2347,7 +2348,7 @@ public class StreamThreadTest {
         assertEquals(1, peekedContextTime.size());
         assertEquals(currTime + 100L, peekedContextTime.get(0).longValue());
 
-        clientSupplier.consumer.addRecord(new ConsumerRecord<>(
+        clientInterceptor.consumer.addRecord(new ConsumerRecord<>(
             topic1,
             1,
             110L,
@@ -3321,14 +3322,14 @@ public class StreamThreadTest {
 
     private void getMainAndRestoreConsumerInstanceId(final boolean injectTimeException, final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
         final Uuid consumerInstanceId = Uuid.randomUuid();
-        clientSupplier.consumer.setClientInstanceId(consumerInstanceId);
+        clientInterceptor.consumer.setClientInstanceId(consumerInstanceId);
         if (injectTimeException) {
-            clientSupplier.consumer.injectTimeoutException(1);
+            clientInterceptor.consumer.injectTimeoutException(1);
         }
         final Uuid restoreInstanceId = Uuid.randomUuid();
-        clientSupplier.restoreConsumer.setClientInstanceId(restoreInstanceId);
+        clientInterceptor.restoreConsumer.setClientInstanceId(restoreInstanceId);
         if (injectTimeException) {
-            clientSupplier.restoreConsumer.injectTimeoutException(1);
+            clientInterceptor.restoreConsumer.injectTimeoutException(1);
         }
 
         thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
@@ -3367,7 +3368,7 @@ public class StreamThreadTest {
         if (injectTimeException) {
             producer.injectTimeoutException(1);
         }
-        clientSupplier.prepareProducer(producer);
+        clientInterceptor.prepareProducer(producer);
 
         thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
         thread.setState(State.STARTING);
@@ -3434,7 +3435,7 @@ public class StreamThreadTest {
     @ParameterizedTest
     @MethodSource("data")        
     public void shouldReturnNullIfMainConsumerTelemetryDisabled(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
-        clientSupplier.consumer.disableTelemetry();
+        clientInterceptor.consumer.disableTelemetry();
         thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
         thread.setState(State.STARTING);
 
@@ -3450,7 +3451,7 @@ public class StreamThreadTest {
     @ParameterizedTest
     @MethodSource("data")        
     public void shouldReturnNullIfRestoreConsumerTelemetryDisabled(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
-        clientSupplier.restoreConsumer.disableTelemetry();
+        clientInterceptor.restoreConsumer.disableTelemetry();
 
         thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
         thread.setState(State.STARTING);
@@ -3469,7 +3470,7 @@ public class StreamThreadTest {
     public void shouldReturnNullIfProducerTelemetryDisabled(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
         final MockProducer<byte[], byte[]> producer = new MockProducer<>();
         producer.disableTelemetry();
-        clientSupplier.prepareProducer(producer);
+        clientInterceptor.prepareProducer(producer);
 
         thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
         thread.setState(State.STARTING);
@@ -3486,8 +3487,8 @@ public class StreamThreadTest {
     @ParameterizedTest
     @MethodSource("data")        
     public void shouldTimeOutOnMainConsumerInstanceId(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        clientSupplier.consumer.setClientInstanceId(Uuid.randomUuid());
-        clientSupplier.consumer.injectTimeoutException(-1);
+        clientInterceptor.consumer.setClientInstanceId(Uuid.randomUuid());
+        clientInterceptor.consumer.injectTimeoutException(-1);
         thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
         thread.setState(State.STARTING);
 
@@ -3510,8 +3511,8 @@ public class StreamThreadTest {
     @ParameterizedTest
     @MethodSource("data")        
     public void shouldTimeOutOnRestoreConsumerInstanceId(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        clientSupplier.restoreConsumer.setClientInstanceId(Uuid.randomUuid());
-        clientSupplier.restoreConsumer.injectTimeoutException(-1);
+        clientInterceptor.restoreConsumer.setClientInstanceId(Uuid.randomUuid());
+        clientInterceptor.restoreConsumer.injectTimeoutException(-1);
         thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
         thread.setState(State.STARTING);
 
@@ -3537,7 +3538,7 @@ public class StreamThreadTest {
         final MockProducer<byte[], byte[]> producer = new MockProducer<>();
         producer.setClientInstanceId(Uuid.randomUuid());
         producer.injectTimeoutException(-1);
-        clientSupplier.prepareProducer(producer);
+        clientInterceptor.prepareProducer(producer);
 
         thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
         thread.setState(State.STARTING);

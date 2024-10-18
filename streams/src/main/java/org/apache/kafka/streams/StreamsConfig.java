@@ -1931,7 +1931,14 @@ public class StreamsConfig extends AbstractConfig {
      * Return configured KafkaClientSupplier
      * @return Configured KafkaClientSupplier
      */
+    @Deprecated
     public KafkaClientSupplier getKafkaClientSupplier() {
+        if (originals().containsKey(StreamsConfig.DEFAULT_CLIENT_SUPPLIER_CONFIG)) {
+            if (originals().containsKey("enable.kip1071")) {
+                throw new ConfigException("not compatible");
+            }
+            log.warn("Deprecated");
+        }
         return getConfiguredInstance(StreamsConfig.DEFAULT_CLIENT_SUPPLIER_CONFIG,
             KafkaClientSupplier.class);
     }

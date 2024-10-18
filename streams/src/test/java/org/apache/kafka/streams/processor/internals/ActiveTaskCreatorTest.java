@@ -259,6 +259,7 @@ public class ActiveTaskCreatorTest {
             new ThreadCache(new LogContext(), 0L, streamsMetrics),
             new MockTime(),
             mockClientSupplier,
+            null,
             "clientId-StreamThread-0",
             0,
             uuid,

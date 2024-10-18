@@ -36,7 +36,7 @@ import org.apache.kafka.streams.processor.internals.assignment.LegacyStickyTaskA
 import org.apache.kafka.streams.processor.internals.assignment.LegacyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.test.MockApiProcessorSupplier;
-import org.apache.kafka.test.MockClientSupplier;
+import org.apache.kafka.test.MockClientInterceptor;
 import org.apache.kafka.test.MockInternalTopicManager;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
 
@@ -219,7 +219,7 @@ public class StreamsAssignmentScaleTest {
         final MockInternalTopicManager mockInternalTopicManager = spy(new MockInternalTopicManager(
             new MockTime(),
             new StreamsConfig(configMap),
-            new MockClientSupplier().restoreConsumer,
+            new MockClientInterceptor().restoreConsumer,
             false
         ));
 
