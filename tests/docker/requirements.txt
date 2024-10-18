@@ -1,0 +1,10 @@
+cffi 
+virtualenv 
+pyasn1 
+boto3 
+pycrypto 
+pywinrm 
+ipaddress 
+debugpy 
+psutil
+ducktape==0.12.0
