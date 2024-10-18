@@ -1507,7 +1507,7 @@ public class KafkaAdminClientTest {
             String topicName0 = "test-0";
             Uuid topicId =  Uuid.randomUuid();
 
-            int authorisedOperations = Utils.to32BitField(Utils.mkSet(AclOperation.DESCRIBE.code(), AclOperation.ALTER.code()));
+            int authorisedOperations = Utils.to32BitField(Set.of(AclOperation.DESCRIBE.code(), AclOperation.ALTER.code()));
             env.kafkaClient().prepareResponse(
                     prepareDescribeClusterResponse(0,
                             env.cluster().nodes(),
@@ -1543,7 +1543,7 @@ public class KafkaAdminClientTest {
             String topicName0 = "test-0";
             Uuid topicId =  Uuid.randomUuid();
 
-            int authorisedOperations = Utils.to32BitField(Utils.mkSet(AclOperation.DESCRIBE.code(), AclOperation.ALTER.code()));
+            int authorisedOperations = Utils.to32BitField(Set.of(AclOperation.DESCRIBE.code(), AclOperation.ALTER.code()));
             env.kafkaClient().prepareResponse(
                     prepareDescribeClusterResponse(0,
                             env.cluster().nodes(),
@@ -2407,7 +2407,7 @@ public class KafkaAdminClientTest {
             DescribeReplicaLogDirsResult result = env.adminClient().describeReplicaLogDirs(asList(tpr1, tpr2));
 
             Map<TopicPartitionReplica, KafkaFuture<DescribeReplicaLogDirsResult.ReplicaLogDirInfo>> values = result.values();
-            assertEquals(TestUtils.toSet(asList(tpr1, tpr2)), values.keySet());
+            assertEquals(Set.of(tpr1, tpr2), values.keySet());
 
             assertNotNull(values.get(tpr1));
             assertEquals(broker1log0, values.get(tpr1).get().getCurrentReplicaLogDir());
@@ -2453,7 +2453,7 @@ public class KafkaAdminClientTest {
             DescribeReplicaLogDirsResult result = env.adminClient().describeReplicaLogDirs(singletonList(expected));
 
             Map<TopicPartitionReplica, KafkaFuture<DescribeReplicaLogDirsResult.ReplicaLogDirInfo>> values = result.values();
-            assertEquals(TestUtils.toSet(singletonList(expected)), values.keySet());
+            assertEquals(Set.of(expected), values.keySet());
 
             assertNotNull(values.get(expected));
             assertEquals(broker1log0, values.get(expected).get().getCurrentReplicaLogDir());
@@ -3038,7 +3038,7 @@ public class KafkaAdminClientTest {
                 assertTrue(listing.state().isPresent());
             }
 
-            assertEquals(Utils.mkSet("group-1", "group-2", "group-3"), groupIds);
+            assertEquals(Set.of("group-1", "group-2", "group-3"), groupIds);
             assertEquals(1, result.errors().get().size());
         }
     }
@@ -4939,7 +4939,7 @@ public class KafkaAdminClientTest {
                 assertTrue(listing.state().isPresent());
             }
 
-            assertEquals(Utils.mkSet("share-group-1", "share-group-2", "share-group-3", "share-group-4"), groupIds);
+            assertEquals(Set.of("share-group-1", "share-group-2", "share-group-3", "share-group-4"), groupIds);
             assertEquals(1, result.errors().get().size());
         }
     }
@@ -6351,14 +6351,14 @@ public class KafkaAdminClientTest {
     public void testUpdateFeaturesDuringSuccess(short version) throws Exception {
         final Map<String, FeatureUpdate> updates = makeTestFeatureUpdates();
         // Only v1 and below specifies error codes per feature for NONE error.
-        Set<String> features = version <= 1 ? updates.keySet() : Utils.mkSet();
+        Set<String> features = version <= 1 ? updates.keySet() : Set.of();
         testUpdateFeatures(updates, ApiError.NONE, features);
     }
 
     @Test
     public void testUpdateFeaturesTopLevelError() throws Exception {
         final Map<String, FeatureUpdate> updates = makeTestFeatureUpdates();
-        testUpdateFeatures(updates, new ApiError(Errors.INVALID_REQUEST), Utils.mkSet());
+        testUpdateFeatures(updates, new ApiError(Errors.INVALID_REQUEST), Set.of());
     }
 
     @ParameterizedTest
@@ -6369,7 +6369,7 @@ public class KafkaAdminClientTest {
                 request -> request instanceof UpdateFeaturesRequest,
                 UpdateFeaturesResponse.createWithErrors(
                     new ApiError(Errors.NOT_CONTROLLER),
-                    Utils.mkSet(),
+                    Set.of(),
                     0),
                 env.cluster().nodeById(0));
             final int controllerId = 1;
@@ -6378,7 +6378,7 @@ public class KafkaAdminClientTest {
                 controllerId,
                 Collections.emptyList()));
             // Only v1 and below specifies error codes per feature for NONE error.
-            Set<String> features = version <= 1 ? Utils.mkSet("test_feature_1", "test_feature_2") : Utils.mkSet();
+            Set<String> features = version <= 1 ? Set.of("test_feature_1", "test_feature_2") : Set.of();
             env.kafkaClient().prepareResponseFrom(
                 request -> request instanceof UpdateFeaturesRequest,
                 UpdateFeaturesResponse.createWithErrors(
@@ -7842,7 +7842,7 @@ public class KafkaAdminClientTest {
                 new TransactionListing("bar", 98765L, TransactionState.PREPARE_ABORT),
                 new TransactionListing("baz", 13579L, TransactionState.COMPLETE_COMMIT)
             );
-            assertEquals(Utils.mkSet(0, 1, 2), env.cluster().nodes().stream().map(Node::id)
+            assertEquals(Set.of(0, 1, 2), env.cluster().nodes().stream().map(Node::id)
                 .collect(Collectors.toSet()));
 
             env.cluster().nodes().forEach(node -> {
@@ -8073,7 +8073,7 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testClientInstanceId() {
-        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+        try (AdminClientUnitTestEnv env = mockClientEnv(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, "true")) {
             Uuid expected = Uuid.randomUuid();
 
             GetTelemetrySubscriptionsResponseData responseData =

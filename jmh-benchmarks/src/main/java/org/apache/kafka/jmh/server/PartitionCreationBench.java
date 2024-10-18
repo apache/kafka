@@ -69,7 +69,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import scala.Option;
-import scala.collection.JavaConverters;
+import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.server.common.KRaftVersion.KRAFT_VERSION_1;
 
@@ -100,7 +100,6 @@ public class PartitionCreationBench {
     private AlterPartitionManager alterPartitionManager;
     private List<TopicPartition> topicPartitions;
 
-    @SuppressWarnings("deprecation")
     @Setup(Level.Invocation)
     public void setup() {
         if (useTopicIds)
@@ -118,7 +117,7 @@ public class PartitionCreationBench {
         this.failureChannel = new LogDirFailureChannel(brokerProperties.logDirs().size());
         final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
         final List<File> files =
-                JavaConverters.seqAsJavaList(brokerProperties.logDirs()).stream().map(File::new).collect(Collectors.toList());
+                CollectionConverters.asJava(brokerProperties.logDirs()).stream().map(File::new).collect(Collectors.toList());
         CleanerConfig cleanerConfig = new CleanerConfig(1,
                 4 * 1024 * 1024L, 0.9d,
                 1024 * 1024, 32 * 1024 * 1024,
@@ -170,7 +169,7 @@ public class PartitionCreationBench {
         this.metrics.close();
         this.scheduler.shutdown();
         this.quotaManagers.shutdown();
-        for (File dir : JavaConverters.asJavaCollection(logManager.liveLogDirs())) {
+        for (File dir : CollectionConverters.asJava(logManager.liveLogDirs())) {
             Utils.delete(dir);
         }
     }

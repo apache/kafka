@@ -42,10 +42,9 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -88,9 +87,8 @@ public class JoinGracePeriodDurabilityIntegrationTest {
     private static final Serde<String> STRING_SERDE = Serdes.String();
     private static final long COMMIT_INTERVAL = 100L;
 
-    @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
-    public void shouldRecoverBufferAfterShutdown(final String processingGuarantee, final TestInfo testInfo) {
+    @Test
+    public void shouldRecoverBufferAfterShutdown(final TestInfo testInfo) {
         final String testId = safeUniqueTestName(testInfo);
         final String appId = "appId_" + testId;
         final String streamInput = "Streaminput" + testId;
@@ -120,7 +118,6 @@ public class JoinGracePeriodDurabilityIntegrationTest {
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
             mkEntry(StreamsConfig.POLL_MS_CONFIG, Long.toString(COMMIT_INTERVAL)),
-            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuarantee),
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
             mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
             mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class)

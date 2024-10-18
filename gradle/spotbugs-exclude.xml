@@ -547,5 +547,20 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         </Or>
         <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
     </Match>
+    <Match>
+        <!-- Suppress warning about using static DateFormat in a multithreaded context -->
+        <Class name="org.apache.kafka.tools.ReplicaVerificationTool$ReplicaBuffer"/>
+        <Bug pattern="STCAL_INVOKE_ON_STATIC_DATE_FORMAT_INSTANCE"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress warning about SING_SINGLETON_HAS_NONPRIVATE_CONSTRUCTOR in multiple class -->
+        <Or>
+            <Class name="org.apache.kafka.common.Node"/>
+            <Class name="org.apache.kafka.common.record.UnalignedMemoryRecords"/>
+            <Class name="org.apache.kafka.clients.Metadata$LeaderAndEpoch"/>
+        </Or>
+        <Bug pattern="SING_SINGLETON_HAS_NONPRIVATE_CONSTRUCTOR"/>
+    </Match>
 
 </FindBugsFilter>
