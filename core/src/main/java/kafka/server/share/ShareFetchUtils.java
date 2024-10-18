@@ -20,10 +20,10 @@ import kafka.server.ReplicaManager;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.message.ShareFetchResponseData;
-import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
+import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
 import org.apache.kafka.server.share.fetch.ShareFetchData;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
 
@@ -32,7 +32,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -55,12 +54,17 @@ public class ShareFetchUtils {
             ReplicaManager replicaManager
     ) {
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> response = new HashMap<>();
-        responseData.forEach((topicIdPartition, fetchPartitionData) -> {
+
+        // Acquired records count for the share fetch request.
+        int acquiredRecordsCount = 0;
+        for (Map.Entry<TopicIdPartition, FetchPartitionData> entry : responseData.entrySet()) {
+            TopicIdPartition topicIdPartition = entry.getKey();
+            FetchPartitionData fetchPartitionData = entry.getValue();
 
             SharePartition sharePartition = sharePartitionManager.sharePartition(shareFetchData.groupId(), topicIdPartition);
             if (sharePartition == null) {
                 log.error("Encountered null share partition for groupId={}, topicIdPartition={}. Skipping it.", shareFetchData.groupId(), topicIdPartition);
-                return;
+                continue;
             }
             ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
                 .setPartitionIndex(topicIdPartition.partition());
@@ -84,24 +88,31 @@ public class ShareFetchUtils {
                     partitionData.setErrorMessage(Errors.NONE.message());
                 }
             } else {
-                List<AcquiredRecords> acquiredRecords = sharePartition.acquire(shareFetchData.memberId(), fetchPartitionData);
+                ShareAcquiredRecords shareAcquiredRecords = sharePartition.acquire(shareFetchData.memberId(), shareFetchData.maxFetchRecords() - acquiredRecordsCount, fetchPartitionData);
                 log.trace("Acquired records for topicIdPartition: {} with share fetch data: {}, records: {}",
-                    topicIdPartition, shareFetchData, acquiredRecords);
+                    topicIdPartition, shareFetchData, shareAcquiredRecords);
                 // Maybe, in the future, check if no records are acquired, and we want to retry
                 // replica manager fetch. Depends on the share partition manager implementation,
                 // if we want parallel requests for the same share partition or not.
-                if (acquiredRecords.isEmpty()) {
+                if (shareAcquiredRecords.acquiredRecords().isEmpty()) {
                     partitionData
                         .setRecords(null)
                         .setAcquiredRecords(Collections.emptyList());
                 } else {
                     partitionData
+                        // We set the records to the fetchPartitionData records. We do not alter the records
+                        // fetched from the replica manager as they follow zero copy buffer. The acquired records
+                        // might be a subset of the records fetched from the replica manager, depending
+                        // on the max fetch records or available records in the share partition. The client
+                        // sends the max bytes in request which should limit the bytes sent to the client
+                        // in the response.
                         .setRecords(fetchPartitionData.records)
-                        .setAcquiredRecords(acquiredRecords);
+                        .setAcquiredRecords(shareAcquiredRecords.acquiredRecords());
+                    acquiredRecordsCount += shareAcquiredRecords.count();
                 }
             }
             response.put(topicIdPartition, partitionData);
-        });
+        }
         return response;
     }
 
