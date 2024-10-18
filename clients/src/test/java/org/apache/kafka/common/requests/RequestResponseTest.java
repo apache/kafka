@@ -326,6 +326,7 @@ import static org.apache.kafka.common.protocol.ApiKeys.STOP_REPLICA;
 import static org.apache.kafka.common.protocol.ApiKeys.SYNC_GROUP;
 import static org.apache.kafka.common.protocol.ApiKeys.UPDATE_METADATA;
 import static org.apache.kafka.common.protocol.ApiKeys.WRITE_TXN_MARKERS;
+import static org.apache.kafka.common.requests.EndTxnRequest.LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -3062,12 +3063,14 @@ public class RequestResponseTest {
     }
 
     private EndTxnRequest createEndTxnRequest(short version) {
+        boolean isTransactionV2Enabled = version > LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2;
         return new EndTxnRequest.Builder(
             new EndTxnRequestData()
                 .setTransactionalId("tid")
                 .setProducerId(21L)
                 .setProducerEpoch((short) 42)
-                .setCommitted(TransactionResult.COMMIT.id)
+                .setCommitted(TransactionResult.COMMIT.id),
+            isTransactionV2Enabled
             ).build(version);
     }
 
