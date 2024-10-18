@@ -26,7 +26,6 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.FencedStateEpochException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
@@ -1253,44 +1252,6 @@ public class SharePartitionManagerTest {
         // Verify that the timer object in sharePartitionManager is closed by checking the calls to timer.close() and persister.stop().
         Mockito.verify(timer, times(1)).close();
         Mockito.verify(persister, times(1)).stop();
-    }
-
-    @Test
-    public void testCloseShouldCompletePendingFetchRequests() throws Exception {
-        String groupId = "grp";
-        Uuid memberId = Uuid.randomUuid();
-        FetchParams fetchParams = new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, DELAYED_SHARE_FETCH_MAX_WAIT_MS,
-            1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty());
-        Uuid fooId = Uuid.randomUuid();
-        TopicIdPartition tp0 = new TopicIdPartition(fooId, new TopicPartition("foo", 0));
-        Map<TopicIdPartition, Integer> partitionMaxBytes = Collections.singletonMap(tp0, PARTITION_MAX_BYTES);
-
-        SharePartition sp0 = mock(SharePartition.class);
-        when(sp0.maybeInitialize()).thenReturn(CompletableFuture.completedFuture(null));
-        when(sp0.maybeAcquireFetchLock()).thenReturn(false);
-
-        Map<SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
-        partitionCacheMap.put(new SharePartitionKey(groupId, tp0), sp0);
-        ReplicaManager replicaManager = mock(ReplicaManager.class);
-        DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
-            "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
-            DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
-
-        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
-            .withPartitionCacheMap(partitionCacheMap)
-            .withDelayedShareFetchPurgatory(delayedShareFetchPurgatory)
-            .build();
-
-        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
-            sharePartitionManager.fetchMessages(groupId, memberId.toString(), fetchParams, partitionMaxBytes);
-        // Verify that the fetch request is not completed.
-        assertFalse(future.isDone());
-
-        // Closing the sharePartitionManager closes pending fetch requests in the fetch queue.
-        sharePartitionManager.close();
-        // Verify that the fetch request is now completed.
-        assertTrue(future.isDone());
-        assertFutureThrows(future, BrokerNotAvailableException.class);
     }
 
     @Test

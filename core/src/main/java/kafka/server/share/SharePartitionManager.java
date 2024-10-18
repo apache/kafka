@@ -249,7 +249,7 @@ public class SharePartitionManager implements AutoCloseable {
                     shareFetchData.groupId(),
                     topicIdPartition
                 );
-                SharePartition sharePartition = fetchSharePartition(sharePartitionKey);
+                SharePartition sharePartition = getOrCreateSharePartition(sharePartitionKey);
 
                 // The share partition is initialized asynchronously, so we need to wait for it to be initialized.
                 // But if the share partition is already initialized, then the future will be completed immediately.
@@ -263,15 +263,21 @@ public class SharePartitionManager implements AutoCloseable {
                 });
             });
 
-            Set<Object> delayedShareFetchWatchKeys = new HashSet<>();
+            Set<DelayedShareFetchKey> delayedShareFetchWatchKeys = new HashSet<>();
             shareFetchData.partitionMaxBytes().keySet().forEach(
                 topicIdPartition -> {
-                    delayedShareFetchWatchKeys.add(new DelayedShareFetchKey(shareFetchData.groupId(), topicIdPartition));
-                    delayedShareFetchWatchKeys.add(topicIdPartition);
+                    // We add a key corresponding to each share partition in the request in the group so that when there are
+                    // acknowledgements/acquisition lock timeout etc, we have a way to perform checkAndComplete for all
+                    // such requests which are delayed because of lack of data to acquire for the share partition.
+                    delayedShareFetchWatchKeys.add(new DelayedShareFetchGroupKey(shareFetchData.groupId(), topicIdPartition.topicId(), topicIdPartition.partition()));
+                    // We add a key corresponding to each topic partition in the request so that when the HWM is updated
+                    // for any topic partition, we have a way to perform checkAndComplete for all such requests which are
+                    // delayed because of lack of data to acquire for the topic partition.
+                    delayedShareFetchWatchKeys.add(new DelayedShareFetchPartitionKey(topicIdPartition.topicId(), topicIdPartition.partition()));
                 });
 
             // Add the share fetch to the delayed share fetch purgatory to process the fetch request.
-            addDelayedShareFetch(new DelayedShareFetch(shareFetchData, replicaManager, partitionCacheMap, delayedActionsQueue, delayedShareFetchPurgatory),
+            addDelayedShareFetch(new DelayedShareFetch(shareFetchData, replicaManager, this),
                 delayedShareFetchWatchKeys);
         } catch (Exception e) {
             // In case exception occurs then release the locks so queue can be further processed.
@@ -561,87 +567,6 @@ public class SharePartitionManager implements AutoCloseable {
 
     private static String partitionsToLogString(Collection<TopicIdPartition> partitions) {
         return ShareSession.partitionsToLogString(partitions, log.isTraceEnabled());
-    }
-
-    /**
-     * Recursive function to process all the fetch requests present inside the fetch queue
-     */
-    // Visible for testing.
-    void maybeProcessFetchQueue() {
-        if (!acquireProcessFetchQueueLock()) {
-            // The queue is already being processed hence avoid re-triggering.
-            return;
-        }
-
-        ShareFetchData shareFetchData = fetchQueue.poll();
-        if (shareFetchData == null) {
-            // No more requests to process, so release the lock. Though we should not reach here as the lock
-            // is acquired only when there are requests in the queue. But still, it's safe to release the lock.
-            releaseProcessFetchQueueLock();
-            return;
-        }
-
-        if (shareFetchData.partitionMaxBytes().isEmpty()) {
-            // If there are no partitions to fetch then complete the future with an empty map.
-            shareFetchData.future().complete(Collections.emptyMap());
-            // Release the lock so that other threads can process the queue.
-            releaseProcessFetchQueueLock();
-            if (!fetchQueue.isEmpty())
-                maybeProcessFetchQueue();
-            return;
-        }
-
-        try {
-            shareFetchData.partitionMaxBytes().keySet().forEach(topicIdPartition -> {
-                SharePartitionKey sharePartitionKey = sharePartitionKey(
-                    shareFetchData.groupId(),
-                    topicIdPartition
-                );
-                SharePartition sharePartition = getOrCreateSharePartition(sharePartitionKey);
-
-                // The share partition is initialized asynchronously, so we need to wait for it to be initialized.
-                // But if the share partition is already initialized, then the future will be completed immediately.
-                // Hence, it's safe to call the maybeInitialize method and then wait for the future to be completed.
-                // TopicPartitionData list will be populated only if the share partition is already initialized.
-                sharePartition.maybeInitialize().whenComplete((result, throwable) -> {
-                    if (throwable != null) {
-                        maybeCompleteInitializationWithException(sharePartitionKey, shareFetchData.future(), throwable);
-                        return;
-                    }
-                });
-            });
-
-            Set<DelayedShareFetchKey> delayedShareFetchWatchKeys = new HashSet<>();
-            shareFetchData.partitionMaxBytes().keySet().forEach(
-                topicIdPartition -> {
-                    // We add a key corresponding to each share partition in the request in the group so that when there are
-                    // acknowledgements/acquisition lock timeout etc, we have a way to perform checkAndComplete for all
-                    // such requests which are delayed because of lack of data to acquire for the share partition.
-                    delayedShareFetchWatchKeys.add(new DelayedShareFetchGroupKey(shareFetchData.groupId(), topicIdPartition.topicId(), topicIdPartition.partition()));
-                    // We add a key corresponding to each topic partition in the request so that when the HWM is updated
-                    // for any topic partition, we have a way to perform checkAndComplete for all such requests which are
-                    // delayed because of lack of data to acquire for the topic partition.
-                    delayedShareFetchWatchKeys.add(new DelayedShareFetchPartitionKey(topicIdPartition.topicId(), topicIdPartition.partition()));
-                });
-
-            // Add the share fetch to the delayed share fetch purgatory to process the fetch request.
-            addDelayedShareFetch(new DelayedShareFetch(shareFetchData, replicaManager, this),
-                delayedShareFetchWatchKeys);
-
-            // Release the lock so that other threads can process the queue.
-            releaseProcessFetchQueueLock();
-            // If there are more requests in the queue, then process them.
-            if (!fetchQueue.isEmpty())
-                maybeProcessFetchQueue();
-
-        } catch (Exception e) {
-            // In case exception occurs then release the locks so queue can be further processed.
-            log.error("Error processing fetch queue for share partitions", e);
-            releaseProcessFetchQueueLock();
-            // If there are more requests in the queue, then process them.
-            if (!fetchQueue.isEmpty())
-                maybeProcessFetchQueue();
-        }
     }
 
     private SharePartition getOrCreateSharePartition(SharePartitionKey sharePartitionKey) {
