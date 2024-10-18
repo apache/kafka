@@ -126,7 +126,7 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
             new KeyValue<>("ID123-4", "ID123-A4")
         );
 
-        final List<KeyValue<String, String>> table2 = asList(
+        final List<KeyValue<String, String>> table2 = Collections.singletonList(
             new KeyValue<>("ID123", "BBB")
         );
 

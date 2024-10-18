@@ -82,8 +82,7 @@ public abstract class InternalTopicConfig {
 
     public void setNumberOfPartitions(final int numberOfPartitions) {
         if (hasEnforcedNumberOfPartitions()) {
-            throw new UnsupportedOperationException("number of partitions are enforced on topic " +
-                                                    "" + name() + " and can't be altered.");
+            throw new UnsupportedOperationException("number of partitions are enforced on topic " + name() + " and can't be altered.");
         }
 
         validateNumberOfPartitions(numberOfPartitions);

@@ -135,7 +135,7 @@ public class SelfJoinUpgradeIntegrationTest {
             "1",
             "A",
             currentTime + 42L,
-            asList(new KeyValueTimestamp<>("1", "AA", currentTime + 42L))
+            singletonList(new KeyValueTimestamp<>("1", "AA", currentTime + 42L))
         );
 
         processKeyValueAndVerifyCount(
@@ -200,7 +200,7 @@ public class SelfJoinUpgradeIntegrationTest {
             "1",
             "A",
             currentTime + 42L,
-            asList(new KeyValueTimestamp<>("1", "AA", currentTime + 42L))
+            singletonList(new KeyValueTimestamp<>("1", "AA", currentTime + 42L))
         );
 
         processKeyValueAndVerifyCount(

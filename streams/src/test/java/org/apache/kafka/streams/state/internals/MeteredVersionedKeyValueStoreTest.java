@@ -103,7 +103,7 @@ public class MeteredVersionedKeyValueStoreTest {
     private final Metrics metrics = new Metrics();
     private final Time mockTime = new MockTime();
     private final String threadId = Thread.currentThread().getName();
-    private InternalProcessorContext context = mock(InternalProcessorContext.class);
+    private final InternalProcessorContext context = mock(InternalProcessorContext.class);
     private Map<String, String> tags;
 
     private MeteredVersionedKeyValueStore<String, String> store;

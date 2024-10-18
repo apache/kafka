@@ -38,12 +38,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class WindowedStreamPartitionerTest {
 
-    private String topicName = "topic";
+    private final String topicName = "topic";
 
-    private IntegerSerializer intSerializer = new IntegerSerializer();
-    private StringSerializer stringSerializer = new StringSerializer();
+    private final IntegerSerializer intSerializer = new IntegerSerializer();
+    private final StringSerializer stringSerializer = new StringSerializer();
 
-    private List<PartitionInfo> infos = Arrays.asList(
+    private final List<PartitionInfo> infos = Arrays.asList(
             new PartitionInfo(topicName, 0, Node.noNode(), new Node[0], new Node[0]),
             new PartitionInfo(topicName, 1, Node.noNode(), new Node[0], new Node[0]),
             new PartitionInfo(topicName, 2, Node.noNode(), new Node[0], new Node[0]),
@@ -52,7 +52,7 @@ public class WindowedStreamPartitionerTest {
             new PartitionInfo(topicName, 5, Node.noNode(), new Node[0], new Node[0])
     );
 
-    private Cluster cluster = new Cluster("cluster", Collections.singletonList(Node.noNode()), infos,
+    private final Cluster cluster = new Cluster("cluster", Collections.singletonList(Node.noNode()), infos,
             Collections.emptySet(), Collections.emptySet());
 
     @Test
