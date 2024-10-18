@@ -1814,6 +1814,9 @@ public class TaskManager {
             }
 
             activeTask.addRecords(partition, records.records(partition));
+
+            if (activeTask instanceof StreamTask)
+                ((StreamTask) activeTask).updateNextOffsets(partition, records.nextOffsets().get(partition));
         }
     }
 

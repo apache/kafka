@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -33,6 +34,8 @@ public class Fetch<K, V> {
     private final Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
     private boolean positionAdvanced;
     private int numRecords;
+    private Map<TopicPartition, Long> nextFetchOffsets;
+    private Map<TopicPartition, Optional<Integer>> lastEpochs;
 
     public static <K, V> Fetch<K, V> empty() {
         return new Fetch<>(new HashMap<>(), false, 0);
@@ -49,6 +52,21 @@ public class Fetch<K, V> {
         return new Fetch<>(recordsMap, positionAdvanced, records.size());
     }
 
+    public static <K, V> Fetch<K, V> forPartition(
+            TopicPartition partition,
+            List<ConsumerRecord<K, V>> records,
+            boolean positionAdvanced,
+            long nextFetchOffset,
+            Optional<Integer> lastEpoch
+    ) {
+        Map<TopicPartition, List<ConsumerRecord<K, V>>> recordsMap = records.isEmpty()
+                ? new HashMap<>()
+                : mkMap(mkEntry(partition, records));
+        Map<TopicPartition, Long> nextFetchOffsets = mkMap(mkEntry(partition, nextFetchOffset));
+        Map<TopicPartition, Optional<Integer>> lastEpochs = mkMap(mkEntry(partition, lastEpoch));
+        return new Fetch<>(recordsMap, positionAdvanced, records.size(), nextFetchOffsets, lastEpochs);
+    }
+
     private Fetch(
             Map<TopicPartition, List<ConsumerRecord<K, V>>> records,
             boolean positionAdvanced,
@@ -57,6 +75,22 @@ public class Fetch<K, V> {
         this.records = records;
         this.positionAdvanced = positionAdvanced;
         this.numRecords = numRecords;
+        this.nextFetchOffsets = new HashMap<>();
+        this.lastEpochs = new HashMap<>();
+    }
+
+    private Fetch(
+            Map<TopicPartition, List<ConsumerRecord<K, V>>> records,
+            boolean positionAdvanced,
+            int numRecords,
+            Map<TopicPartition, Long> nextFetchOffsets,
+            Map<TopicPartition, Optional<Integer>> lastEpochs
+    ) {
+        this.records = records;
+        this.positionAdvanced = positionAdvanced;
+        this.numRecords = numRecords;
+        this.nextFetchOffsets = nextFetchOffsets;
+        this.lastEpochs = lastEpochs;
     }
 
     /**
@@ -70,6 +104,8 @@ public class Fetch<K, V> {
         Objects.requireNonNull(fetch);
         addRecords(fetch.records);
         this.positionAdvanced |= fetch.positionAdvanced;
+        nextFetchOffsets.putAll(fetch.nextFetchOffsets);
+        lastEpochs.putAll(fetch.lastEpochs);
     }
 
     /**
@@ -93,6 +129,21 @@ public class Fetch<K, V> {
      */
     public int numRecords() {
         return numRecords;
+    }
+
+    /**
+     * @return the next offset per partition for this fetch
+     */
+    public Map<TopicPartition, Long> nextFetchOffsets() {
+        return nextFetchOffsets;
+    }
+
+
+    /**
+     * @return the last epochs per partition for this fetch
+     */
+    public Map<TopicPartition, Optional<Integer>> lastEpochs() {
+        return lastEpochs;
     }
 
     /**
