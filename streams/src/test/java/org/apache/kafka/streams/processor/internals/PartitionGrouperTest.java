@@ -32,7 +32,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_1;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -61,14 +60,14 @@ public class PartitionGrouperTest {
         final Map<TaskId, Set<TopicPartition>> expectedPartitionsForTask = new HashMap<>();
         final Map<Subtopology, Set<String>> topicGroups = new HashMap<>();
 
-        topicGroups.put(SUBTOPOLOGY_0, mkSet("topic1"));
-        expectedPartitionsForTask.put(new TaskId(SUBTOPOLOGY_0.nodeGroupId, 0, SUBTOPOLOGY_0.namedTopology), mkSet(new TopicPartition("topic1", 0)));
-        expectedPartitionsForTask.put(new TaskId(SUBTOPOLOGY_0.nodeGroupId, 1, SUBTOPOLOGY_0.namedTopology), mkSet(new TopicPartition("topic1", 1)));
-        expectedPartitionsForTask.put(new TaskId(SUBTOPOLOGY_0.nodeGroupId, 2, SUBTOPOLOGY_0.namedTopology), mkSet(new TopicPartition("topic1", 2)));
+        topicGroups.put(SUBTOPOLOGY_0, Set.of("topic1"));
+        expectedPartitionsForTask.put(new TaskId(SUBTOPOLOGY_0.nodeGroupId, 0, SUBTOPOLOGY_0.namedTopology), Set.of(new TopicPartition("topic1", 0)));
+        expectedPartitionsForTask.put(new TaskId(SUBTOPOLOGY_0.nodeGroupId, 1, SUBTOPOLOGY_0.namedTopology), Set.of(new TopicPartition("topic1", 1)));
+        expectedPartitionsForTask.put(new TaskId(SUBTOPOLOGY_0.nodeGroupId, 2, SUBTOPOLOGY_0.namedTopology), Set.of(new TopicPartition("topic1", 2)));
 
-        topicGroups.put(SUBTOPOLOGY_1, mkSet("topic2"));
-        expectedPartitionsForTask.put(new TaskId(SUBTOPOLOGY_1.nodeGroupId, 0, SUBTOPOLOGY_1.namedTopology), mkSet(new TopicPartition("topic2", 0)));
-        expectedPartitionsForTask.put(new TaskId(SUBTOPOLOGY_1.nodeGroupId, 1, SUBTOPOLOGY_1.namedTopology), mkSet(new TopicPartition("topic2", 1)));
+        topicGroups.put(SUBTOPOLOGY_1, Set.of("topic2"));
+        expectedPartitionsForTask.put(new TaskId(SUBTOPOLOGY_1.nodeGroupId, 0, SUBTOPOLOGY_1.namedTopology), Set.of(new TopicPartition("topic2", 0)));
+        expectedPartitionsForTask.put(new TaskId(SUBTOPOLOGY_1.nodeGroupId, 1, SUBTOPOLOGY_1.namedTopology), Set.of(new TopicPartition("topic2", 1)));
 
         assertEquals(expectedPartitionsForTask, grouper.partitionGroups(topicGroups, metadata));
     }
@@ -79,16 +78,16 @@ public class PartitionGrouperTest {
         final Map<TaskId, Set<TopicPartition>> expectedPartitionsForTask = new HashMap<>();
         final Map<Subtopology, Set<String>> topicGroups = new HashMap<>();
 
-        topicGroups.put(SUBTOPOLOGY_0, mkSet("topic1", "topic2"));
+        topicGroups.put(SUBTOPOLOGY_0, Set.of("topic1", "topic2"));
         expectedPartitionsForTask.put(
             new TaskId(SUBTOPOLOGY_0.nodeGroupId, 0, SUBTOPOLOGY_0.namedTopology),
-            mkSet(new TopicPartition("topic1", 0), new TopicPartition("topic2", 0)));
+            Set.of(new TopicPartition("topic1", 0), new TopicPartition("topic2", 0)));
         expectedPartitionsForTask.put(
             new TaskId(SUBTOPOLOGY_0.nodeGroupId, 1,  SUBTOPOLOGY_0.namedTopology),
-            mkSet(new TopicPartition("topic1", 1), new TopicPartition("topic2", 1)));
+            Set.of(new TopicPartition("topic1", 1), new TopicPartition("topic2", 1)));
         expectedPartitionsForTask.put(
                 new TaskId(SUBTOPOLOGY_0.nodeGroupId, 2,  SUBTOPOLOGY_0.namedTopology),
-            mkSet(new TopicPartition("topic1", 2)));
+            Set.of(new TopicPartition("topic1", 2)));
 
         assertEquals(expectedPartitionsForTask, grouper.partitionGroups(topicGroups, metadata));
     }
@@ -98,7 +97,7 @@ public class PartitionGrouperTest {
         final PartitionGrouper grouper = new PartitionGrouper();
         final Map<Subtopology, Set<String>> topicGroups = new HashMap<>();
     
-        topicGroups.put(SUBTOPOLOGY_0, mkSet("topic1", "unknownTopic", "topic2"));
+        topicGroups.put(SUBTOPOLOGY_0, Set.of("topic1", "unknownTopic", "topic2"));
         assertThrows(RuntimeException.class, () -> grouper.partitionGroups(topicGroups, metadata));
     }
 }

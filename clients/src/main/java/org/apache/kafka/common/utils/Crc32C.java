@@ -26,7 +26,7 @@ import java.util.zip.Checksum;
 /**
  * A class that can be used to compute the CRC32C (Castagnoli) of a ByteBuffer or array of bytes.
  *
- * We use java.util.zip.CRC32C (introduced in Java 9) if it is available and fallback to PureJavaCrc32C, otherwise.
+ * We use java.util.zip.CRC32C (introduced in Java 9).
  * java.util.zip.CRC32C is significantly faster on reasonably modern CPUs as it uses the CRC32 instruction introduced
  * in SSE4.2.
  *
@@ -34,13 +34,16 @@ import java.util.zip.Checksum;
  */
 public final class Crc32C {
 
-    private static final ChecksumFactory CHECKSUM_FACTORY;
+    private static final MethodHandle CRC32C_CONSTRUCTOR;
 
     static {
-        if (Java.IS_JAVA9_COMPATIBLE)
-            CHECKSUM_FACTORY = new Java9ChecksumFactory();
-        else
-            CHECKSUM_FACTORY = new PureJavaChecksumFactory();
+        try {
+            Class<?> cls = Class.forName("java.util.zip.CRC32C");
+            CRC32C_CONSTRUCTOR = MethodHandles.publicLookup().findConstructor(cls, MethodType.methodType(void.class));
+        } catch (ReflectiveOperationException e) {
+            // Should never happen
+            throw new RuntimeException(e);
+        }
     }
 
     private Crc32C() {}
@@ -74,41 +77,11 @@ public final class Crc32C {
     }
 
     public static Checksum create() {
-        return CHECKSUM_FACTORY.create();
-    }
-
-    private interface ChecksumFactory {
-        Checksum create();
-    }
-
-    private static class Java9ChecksumFactory implements ChecksumFactory {
-        private static final MethodHandle CONSTRUCTOR;
-
-        static {
-            try {
-                Class<?> cls = Class.forName("java.util.zip.CRC32C");
-                CONSTRUCTOR = MethodHandles.publicLookup().findConstructor(cls, MethodType.methodType(void.class));
-            } catch (ReflectiveOperationException e) {
-                // Should never happen
-                throw new RuntimeException(e);
-            }
-        }
-
-        @Override
-        public Checksum create() {
-            try {
-                return (Checksum) CONSTRUCTOR.invoke();
-            } catch (Throwable throwable) {
-                // Should never happen
-                throw new RuntimeException(throwable);
-            }
-        }
-    }
-
-    private static class PureJavaChecksumFactory implements ChecksumFactory {
-        @Override
-        public Checksum create() {
-            return new PureJavaCrc32C();
+        try {
+            return (Checksum) CRC32C_CONSTRUCTOR.invoke();
+        } catch (Throwable throwable) {
+            // Should never happen
+            throw new RuntimeException(throwable);
         }
     }
 }

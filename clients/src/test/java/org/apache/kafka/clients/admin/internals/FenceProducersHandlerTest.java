@@ -34,7 +34,6 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
@@ -47,7 +46,7 @@ public class FenceProducersHandlerTest {
     @Test
     public void testBuildRequest() {
         FenceProducersHandler handler = new FenceProducersHandler(options, logContext, requestTimeoutMs);
-        mkSet("foo", "bar", "baz").forEach(transactionalId -> assertLookup(handler, transactionalId, requestTimeoutMs));
+        Set.of("foo", "bar", "baz").forEach(transactionalId -> assertLookup(handler, transactionalId, requestTimeoutMs));
     }
 
     @Test
@@ -55,7 +54,7 @@ public class FenceProducersHandlerTest {
         final int optionsTimeoutMs = 50000;
         options.timeoutMs(optionsTimeoutMs);
         FenceProducersHandler handler = new FenceProducersHandler(options, logContext, requestTimeoutMs);
-        mkSet("foo", "bar", "baz").forEach(transactionalId -> assertLookup(handler, transactionalId, optionsTimeoutMs));
+        Set.of("foo", "bar", "baz").forEach(transactionalId -> assertLookup(handler, transactionalId, optionsTimeoutMs));
     }
 
     @Test
@@ -106,7 +105,7 @@ public class FenceProducersHandlerTest {
         CoordinatorKey key = CoordinatorKey.byTransactionalId(transactionalId);
         ApiResult<CoordinatorKey, ProducerIdAndEpoch> result = handleResponseError(handler, transactionalId, error);
         assertEquals(emptyList(), result.unmappedKeys);
-        assertEquals(mkSet(key), result.failedKeys.keySet());
+        assertEquals(Set.of(key), result.failedKeys.keySet());
 
         Throwable throwable = result.failedKeys.get(key);
         assertInstanceOf(error.exception().getClass(), throwable);
@@ -139,7 +138,7 @@ public class FenceProducersHandlerTest {
         Errors error
     ) {
         CoordinatorKey key = CoordinatorKey.byTransactionalId(transactionalId);
-        Set<CoordinatorKey> keys = mkSet(key);
+        Set<CoordinatorKey> keys = Set.of(key);
 
         InitProducerIdResponse response = new InitProducerIdResponse(new InitProducerIdResponseData()
             .setErrorCode(error.code()));

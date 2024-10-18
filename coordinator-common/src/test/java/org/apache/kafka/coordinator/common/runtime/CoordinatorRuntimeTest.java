@@ -76,7 +76,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.CoordinatorState.ACTIVE;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.CoordinatorState.CLOSED;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.CoordinatorState.FAILED;
@@ -1099,7 +1098,7 @@ public class CoordinatorRuntimeTest {
         // A new snapshot is created.
         assertEquals(Arrays.asList(0L, 2L), ctx.coordinator.snapshotRegistry().epochsList());
         // Records have been replayed to the coordinator.
-        assertEquals(mkSet("record1", "record2"), ctx.coordinator.coordinator().records());
+        assertEquals(Set.of("record1", "record2"), ctx.coordinator.coordinator().records());
         // Records have been written to the log.
         assertEquals(Collections.singletonList(
             records(timer.time().milliseconds(), "record1", "record2")
@@ -1119,7 +1118,7 @@ public class CoordinatorRuntimeTest {
         // A new snapshot is created.
         assertEquals(Arrays.asList(0L, 2L, 3L), ctx.coordinator.snapshotRegistry().epochsList());
         // Records have been replayed to the coordinator.
-        assertEquals(mkSet("record1", "record2", "record3"), ctx.coordinator.coordinator().records());
+        assertEquals(Set.of("record1", "record2", "record3"), ctx.coordinator.coordinator().records());
         // Records have been written to the log.
         assertEquals(Arrays.asList(
             records(timer.time().milliseconds(), "record1", "record2"),
@@ -1137,7 +1136,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(3L, ctx.coordinator.lastWrittenOffset());
         assertEquals(0L, ctx.coordinator.lastCommittedOffset());
         assertEquals(Arrays.asList(0L, 2L, 3L), ctx.coordinator.snapshotRegistry().epochsList());
-        assertEquals(mkSet("record1", "record2", "record3"), ctx.coordinator.coordinator().records());
+        assertEquals(Set.of("record1", "record2", "record3"), ctx.coordinator.coordinator().records());
         assertEquals(Arrays.asList(
             records(timer.time().milliseconds(), "record1", "record2"),
             records(timer.time().milliseconds(), "record3")
@@ -1325,7 +1324,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(2L, ctx.coordinator.lastWrittenOffset());
         assertEquals(0L, ctx.coordinator.lastCommittedOffset());
         assertEquals(Arrays.asList(0L, 2L), ctx.coordinator.snapshotRegistry().epochsList());
-        assertEquals(mkSet("record1", "record2"), ctx.coordinator.coordinator().records());
+        assertEquals(Set.of("record1", "record2"), ctx.coordinator.coordinator().records());
 
         // Write #2. It should fail because the writer is configured to only
         // accept 1 write.
@@ -1337,7 +1336,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(2L, ctx.coordinator.lastWrittenOffset());
         assertEquals(0L, ctx.coordinator.lastCommittedOffset());
         assertEquals(Arrays.asList(0L, 2L), ctx.coordinator.snapshotRegistry().epochsList());
-        assertEquals(mkSet("record1", "record2"), ctx.coordinator.coordinator().records());
+        assertEquals(Set.of("record1", "record2"), ctx.coordinator.coordinator().records());
     }
 
     @Test
@@ -1651,7 +1650,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(Arrays.asList(0L, 2L), ctx.coordinator.snapshotRegistry().epochsList());
         // Records have been replayed to the coordinator. They are stored in
         // the pending set for now.
-        assertEquals(mkSet("record1", "record2"), ctx.coordinator.coordinator().pendingRecords(
+        assertEquals(Set.of("record1", "record2"), ctx.coordinator.coordinator().pendingRecords(
             100L
         ));
         // Records have been written to the log.
@@ -1683,7 +1682,7 @@ public class CoordinatorRuntimeTest {
         ControlRecordType expectedType;
         if (result == TransactionResult.COMMIT) {
             // They are now in the records set if committed.
-            assertEquals(mkSet("record1", "record2"), ctx.coordinator.coordinator().records());
+            assertEquals(Set.of("record1", "record2"), ctx.coordinator.coordinator().records());
             expectedType = ControlRecordType.COMMIT;
         } else {
             // Or they are gone if aborted.
@@ -1813,7 +1812,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(2L, ctx.coordinator.lastWrittenOffset());
         assertEquals(0L, ctx.coordinator.lastCommittedOffset());
         assertEquals(Arrays.asList(0L, 2L), ctx.coordinator.snapshotRegistry().epochsList());
-        assertEquals(mkSet("record1", "record2"), ctx.coordinator.coordinator().pendingRecords(100L));
+        assertEquals(Set.of("record1", "record2"), ctx.coordinator.coordinator().pendingRecords(100L));
         assertEquals(Collections.emptySet(), ctx.coordinator.coordinator().records());
 
         // Complete transaction #1. It should fail.
@@ -1832,7 +1831,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(2L, ctx.coordinator.lastWrittenOffset());
         assertEquals(0L, ctx.coordinator.lastCommittedOffset());
         assertEquals(Arrays.asList(0L, 2L), ctx.coordinator.snapshotRegistry().epochsList());
-        assertEquals(mkSet("record1", "record2"), ctx.coordinator.coordinator().pendingRecords(100L));
+        assertEquals(Set.of("record1", "record2"), ctx.coordinator.coordinator().pendingRecords(100L));
         assertEquals(Collections.emptySet(), ctx.coordinator.coordinator().records());
     }
 
@@ -1898,7 +1897,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(2L, ctx.coordinator.lastWrittenOffset());
         assertEquals(0L, ctx.coordinator.lastCommittedOffset());
         assertEquals(Arrays.asList(0L, 2L), ctx.coordinator.snapshotRegistry().epochsList());
-        assertEquals(mkSet("record1", "record2"), ctx.coordinator.coordinator().pendingRecords(100L));
+        assertEquals(Set.of("record1", "record2"), ctx.coordinator.coordinator().pendingRecords(100L));
         assertEquals(Collections.emptySet(), ctx.coordinator.coordinator().records());
         assertEquals(Collections.singletonList(
             transactionalRecords(100L, (short) 5, timer.time().milliseconds(), "record1", "record2")
@@ -1920,7 +1919,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(2L, ctx.coordinator.lastWrittenOffset());
         assertEquals(0L, ctx.coordinator.lastCommittedOffset());
         assertEquals(Arrays.asList(0L, 2L), ctx.coordinator.snapshotRegistry().epochsList());
-        assertEquals(mkSet("record1", "record2"), ctx.coordinator.coordinator().pendingRecords(100L));
+        assertEquals(Set.of("record1", "record2"), ctx.coordinator.coordinator().pendingRecords(100L));
         assertEquals(Collections.emptySet(), ctx.coordinator.coordinator().records());
         assertEquals(Collections.singletonList(
             transactionalRecords(100L, (short) 5, timer.time().milliseconds(), "record1", "record2")
@@ -2285,14 +2284,14 @@ public class CoordinatorRuntimeTest {
         timer.advanceClock(10 + 1);
 
         // Verify that the operation was executed.
-        assertEquals(mkSet("record1", "record2"), ctx.coordinator.coordinator().records());
+        assertEquals(Set.of("record1", "record2"), ctx.coordinator.coordinator().records());
         assertEquals(1, ctx.timer.size());
 
         // Advance time to fire timer #2,
         timer.advanceClock(10 + 1);
 
         // Verify that the operation was executed.
-        assertEquals(mkSet("record1", "record2", "record3", "record4"), ctx.coordinator.coordinator().records());
+        assertEquals(Set.of("record1", "record2", "record3", "record4"), ctx.coordinator.coordinator().records());
         assertEquals(0, ctx.timer.size());
     }
 
@@ -2367,7 +2366,7 @@ public class CoordinatorRuntimeTest {
 
         // Verify that the correct operation was executed. Only the third
         // instance should have been executed here.
-        assertEquals(mkSet("record3"), ctx.coordinator.coordinator().records());
+        assertEquals(Set.of("record3"), ctx.coordinator.coordinator().records());
         assertEquals(0, ctx.timer.size());
     }
 
@@ -3584,7 +3583,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(0L, ctx.coordinator.lastCommittedOffset());
         assertEquals(Collections.singletonList(0L), ctx.coordinator.snapshotRegistry().epochsList());
         assertEquals(Collections.emptySet(), ctx.coordinator.coordinator().pendingRecords(100L));
-        assertEquals(mkSet("record#1"), ctx.coordinator.coordinator().records());
+        assertEquals(Set.of("record#1"), ctx.coordinator.coordinator().records());
         assertEquals(Collections.emptyList(), writer.entries(TP));
 
         // Transactional write #2 with one record. This will flush the current batch.
@@ -3607,8 +3606,8 @@ public class CoordinatorRuntimeTest {
         assertEquals(2L, ctx.coordinator.lastWrittenOffset());
         assertEquals(0L, ctx.coordinator.lastCommittedOffset());
         assertEquals(Arrays.asList(0L, 1L, 2L), ctx.coordinator.snapshotRegistry().epochsList());
-        assertEquals(mkSet("record#2"), ctx.coordinator.coordinator().pendingRecords(100L));
-        assertEquals(mkSet("record#1"), ctx.coordinator.coordinator().records());
+        assertEquals(Set.of("record#2"), ctx.coordinator.coordinator().pendingRecords(100L));
+        assertEquals(Set.of("record#1"), ctx.coordinator.coordinator().records());
         assertEquals(Arrays.asList(
             records(timer.time().milliseconds(), "record#1"),
             transactionalRecords(100L, (short) 50, timer.time().milliseconds(), "record#2")
@@ -3626,8 +3625,8 @@ public class CoordinatorRuntimeTest {
         assertEquals(2L, ctx.coordinator.lastWrittenOffset());
         assertEquals(0L, ctx.coordinator.lastCommittedOffset());
         assertEquals(Arrays.asList(0L, 1L, 2L), ctx.coordinator.snapshotRegistry().epochsList());
-        assertEquals(mkSet("record#2"), ctx.coordinator.coordinator().pendingRecords(100L));
-        assertEquals(mkSet("record#1", "record#3"), ctx.coordinator.coordinator().records());
+        assertEquals(Set.of("record#2"), ctx.coordinator.coordinator().pendingRecords(100L));
+        assertEquals(Set.of("record#1", "record#3"), ctx.coordinator.coordinator().records());
         assertEquals(Arrays.asList(
             records(timer.time().milliseconds(), "record#1"),
             transactionalRecords(100L, (short) 50, timer.time().milliseconds(), "record#2")
@@ -3652,7 +3651,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(0L, ctx.coordinator.lastCommittedOffset());
         assertEquals(Arrays.asList(0L, 1L, 2L, 3L, 4L), ctx.coordinator.snapshotRegistry().epochsList());
         assertEquals(Collections.emptySet(), ctx.coordinator.coordinator().pendingRecords(100L));
-        assertEquals(mkSet("record#1", "record#2", "record#3"), ctx.coordinator.coordinator().records());
+        assertEquals(Set.of("record#1", "record#2", "record#3"), ctx.coordinator.coordinator().records());
         assertEquals(Arrays.asList(
             records(timer.time().milliseconds(), "record#1"),
             transactionalRecords(100L, (short) 50, timer.time().milliseconds(), "record#2"),

@@ -105,6 +105,7 @@ public class MirrorSourceConnector extends SourceConnector {
     private int replicationFactor;
     private Admin sourceAdminClient;
     private Admin targetAdminClient;
+    private boolean heartbeatsReplicationEnabled;
 
     public MirrorSourceConnector() {
         // nop
@@ -119,10 +120,17 @@ public class MirrorSourceConnector extends SourceConnector {
     // visible for testing
     MirrorSourceConnector(SourceAndTarget sourceAndTarget, ReplicationPolicy replicationPolicy,
             TopicFilter topicFilter, ConfigPropertyFilter configPropertyFilter) {
+        this(sourceAndTarget, replicationPolicy, topicFilter, configPropertyFilter, true);
+    }
+
+    // visible for testing
+    MirrorSourceConnector(SourceAndTarget sourceAndTarget, ReplicationPolicy replicationPolicy,
+            TopicFilter topicFilter, ConfigPropertyFilter configPropertyFilter, boolean heartbeatsReplicationEnabled) {
         this.sourceAndTarget = sourceAndTarget;
         this.replicationPolicy = replicationPolicy;
         this.topicFilter = topicFilter;
         this.configPropertyFilter = configPropertyFilter;
+        this.heartbeatsReplicationEnabled = heartbeatsReplicationEnabled;
     }
 
     // visible for testing
@@ -147,6 +155,7 @@ public class MirrorSourceConnector extends SourceConnector {
         replicationFactor = config.replicationFactor();
         sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig("replication-source-admin"));
         targetAdminClient = config.forwardingAdmin(config.targetAdminConfig("replication-target-admin"));
+        heartbeatsReplicationEnabled = config.heartbeatsReplicationEnabled();
 
         scheduler = new Scheduler(getClass(), config.entityLabel(), config.adminTimeout());
         scheduler.execute(this::createOffsetSyncsTopic, "creating upstream offset-syncs topic");
@@ -687,7 +696,8 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     boolean shouldReplicateTopic(String topic) {
-        return (topicFilter.shouldReplicateTopic(topic) || replicationPolicy.isHeartbeatsTopic(topic))
+        return (topicFilter.shouldReplicateTopic(topic)
+                || (heartbeatsReplicationEnabled && replicationPolicy.isHeartbeatsTopic(topic)))
             && !replicationPolicy.isInternalTopic(topic) && !isCycle(topic);
     }
 
