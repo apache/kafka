@@ -47,6 +47,7 @@ public abstract class ApplicationEvent {
      * {@link #equals(Object)} and can be used in log messages when debugging.
      */
     private final Uuid id;
+    private long enqueuedMs;
 
     protected ApplicationEvent(Type type) {
         this.type = Objects.requireNonNull(type);
@@ -59,6 +60,14 @@ public abstract class ApplicationEvent {
 
     public Uuid id() {
         return id;
+    }
+
+    public void setEnqueuedMs(long enqueuedMs) {
+        this.enqueuedMs = enqueuedMs;
+    }
+
+    public long enqueuedMs() {
+        return enqueuedMs;
     }
 
     @Override
