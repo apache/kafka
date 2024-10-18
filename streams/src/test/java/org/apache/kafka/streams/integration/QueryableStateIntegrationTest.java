@@ -1085,17 +1085,17 @@ public class QueryableStateIntegrationTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> input = builder.stream(streamOne);
         input
-                .groupByKey()
-                .reduce((value1, value2) -> {
-                    if (value1.length() > 1) {
-                        if (beforeFailure.compareAndSet(true, false)) {
-                            throw new RuntimeException("Injected test exception");
-                        }
+            .groupByKey()
+            .reduce((value1, value2) -> {
+                if (value1.length() > 1) {
+                    if (beforeFailure.compareAndSet(true, false)) {
+                        throw new RuntimeException("Injected test exception");
                     }
-                    return value1 + value2;
-                }, Materialized.as(storeName))
-                .toStream()
-                .to(outputTopic);
+                }
+                return value1 + value2;
+            }, Materialized.as(storeName))
+            .toStream()
+            .to(outputTopic);
 
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);

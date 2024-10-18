@@ -443,8 +443,8 @@ public class EosIntegrationTest {
             writeInputData(dataAfterFailure);
 
             waitForCondition(
-                    () -> uncaughtException != null, MAX_WAIT_TIME_MS,
-                    "Should receive uncaught exception from one StreamThread.");
+                () -> uncaughtException != null, MAX_WAIT_TIME_MS,
+                "Should receive uncaught exception from one StreamThread.");
 
             // expected end state per output partition (C == COMMIT; A == ABORT; ---> indicate the changes):
             //
@@ -566,8 +566,8 @@ public class EosIntegrationTest {
             writeInputData(dataAfterFailure);
 
             waitForCondition(
-                    () -> uncaughtException != null, MAX_WAIT_TIME_MS,
-                    "Should receive uncaught exception from one StreamThread.");
+                () -> uncaughtException != null, MAX_WAIT_TIME_MS,
+                "Should receive uncaught exception from one StreamThread.");
 
             // expected end state per output partition (C == COMMIT; A == ABORT; ---> indicate the changes):
             //
