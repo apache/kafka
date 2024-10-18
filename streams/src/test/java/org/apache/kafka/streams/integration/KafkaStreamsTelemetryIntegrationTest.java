@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Uuid;
@@ -34,16 +35,19 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.telemetry.ClientTelemetry;
 import org.apache.kafka.server.telemetry.ClientTelemetryPayload;
 import org.apache.kafka.server.telemetry.ClientTelemetryReceiver;
-import org.apache.kafka.shaded.io.opentelemetry.proto.metrics.v1.MetricsData;
 import org.apache.kafka.streams.ClientInstanceIds;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
@@ -66,8 +70,6 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -108,8 +110,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
     private static final int NUM_BROKERS = 3;
     private static final int FIRST_INSTANCE_CONSUMER = 0;
     private static final int SECOND_INSTANCE_CONSUMER = 1;
-    private static final List<String> SUBSCRIBED_METRICS = new ArrayList<>();
-    private static final Logger log = LoggerFactory.getLogger(KafkaStreamsTelemetryIntegrationTest.class);
+    public static final Map<Uuid, Integer> SUBSCRIBED_CLIENT_METRIC_DATA_COUNT = new HashMap<>();
 
     @BeforeAll
     public static void startCluster() throws IOException {
@@ -167,11 +168,11 @@ public class KafkaStreamsTelemetryIntegrationTest {
     @DisplayName("End-to-end test validating metrics pushed to broker")
     public void shouldPushMetricsToBroker() throws Exception {
         final Properties properties = props(true);
-        final Properties singleValueProps = new Properties();
-        singleValueProps.put("bootstrap.servers", cluster.bootstrapServers());
+        final Properties clientProps = new Properties();
+        clientProps.put("bootstrap.servers", cluster.bootstrapServers());
         final Topology topology = complexTopology();
         try (final KafkaStreams streams = new KafkaStreams(topology, properties);
-             final ClientMetricsCommand.ClientMetricsService clientMetricsService = new ClientMetricsCommand.ClientMetricsService(singleValueProps)) {
+             final ClientMetricsCommand.ClientMetricsService clientMetricsService = new ClientMetricsCommand.ClientMetricsService(clientProps)) {
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
             final ClientInstanceIds clientInstanceIds = streams.clientInstanceIds(Duration.ofSeconds(60));
@@ -183,22 +184,29 @@ public class KafkaStreamsTelemetryIntegrationTest {
             assertNotNull(adminInstanceId);
             assertNotNull(mainConsumerInstanceId);
 
-            final String[] subscribeCommands = new String[] {
-                    "--bootstrap-server",
-                    cluster.bootstrapServers(),
-                    "--metrics",
-                    "org.apache.kafka.stream",
-                    "--alter",
-                    "--name",
-                    mainConsumerInstanceId.toString(),
-                    "--interval",
-                    "1000"
-            };
-            final ClientMetricsCommand.ClientMetricsCommandOptions commandOptions = new ClientMetricsCommand.ClientMetricsCommandOptions(subscribeCommands);
+            final String[] metricsSubscriptionParameters = new String[]{"--bootstrap-server", cluster.bootstrapServers(),  "--metrics", "org.apache.kafka.stream",
+                                                                        "--alter", "--name", mainConsumerInstanceId.toString(), "--interval", "1000"};
+            final ClientMetricsCommand.ClientMetricsCommandOptions commandOptions = new ClientMetricsCommand.ClientMetricsCommandOptions(metricsSubscriptionParameters);
             clientMetricsService.alterClientMetrics(commandOptions);
-            TestUtils.waitForCondition(() -> !SUBSCRIBED_METRICS.isEmpty(),
-                    60_000,
-                    "Never subscribed metrics");
+            final List<String> words = Arrays.asList("foo", "bar", "baz", "all", "streams", "lead", "to", "kafka");
+            clientProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
+            clientProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+
+            IntegrationTestUtils.produceValuesSynchronously(inputTopicTwoPartitions,
+                    words,
+                    clientProps,
+                     cluster.time);
+
+            clientProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+            clientProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
+            clientProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-consumer-group");
+
+            final List<KeyValue<String, Long>> actualKeyValues =  IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(clientProps, outputTopicTwoPartitions, words.size());
+            assertEquals(words.size(), actualKeyValues.size());
+
+            TestUtils.waitForCondition(() -> SUBSCRIBED_CLIENT_METRIC_DATA_COUNT.get(mainConsumerInstanceId) >= 10_000,
+                    30_000 * 10, //Temporary until a workaround for getting past the initial push interval of 5 minutes then set at 30 seconds
+                    "Never received subscribed metrics");
         }
     }
 
@@ -512,14 +520,12 @@ public class KafkaStreamsTelemetryIntegrationTest {
         @Override
         public void exportMetrics(final AuthorizableRequestContext context, final ClientTelemetryPayload payload) {
             try {
-                MetricsData data = MetricsData.parseFrom(payload.data());
-                List<String> names = data.getResourceMetricsList()
-                        .stream()
-                        .map(rm -> rm.getScopeMetricsList().get(0).getMetrics(0).getName())
-                        .collect(Collectors.toList());
-                log.info("Found metrics {}", names);
-                SUBSCRIBED_METRICS.addAll(names);
-            } catch (Exception e) {
+                final Uuid clientId = payload.clientInstanceId();
+                //Temporary until a solution is found for getting shaded MetricData visible to gradle
+                final int dataSize = payload.data().array().length;
+                SUBSCRIBED_CLIENT_METRIC_DATA_COUNT.put(clientId, dataSize);
+
+            } catch (final Exception e) {
                 e.printStackTrace(System.out);
             }
         }
