@@ -16,12 +16,12 @@
  */
 package kafka.log.remote;
 
-import kafka.cluster.EndPoint;
 import kafka.cluster.Partition;
 import kafka.log.UnifiedLog;
 import kafka.server.KafkaConfig;
 import kafka.server.StopPartition;
 
+import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
@@ -30,7 +30,6 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
@@ -375,10 +374,9 @@ public class RemoteLogManagerTest {
     @Test
     void testRemoteLogMetadataManagerWithEndpointConfig() {
         String host = "localhost";
-        String port = "1234";
+        int port = 1234;
         String securityProtocol = "PLAINTEXT";
-        EndPoint endPoint = new EndPoint(host, Integer.parseInt(port), new ListenerName(securityProtocol),
-                SecurityProtocol.PLAINTEXT);
+        Endpoint endPoint = new Endpoint(securityProtocol, SecurityProtocol.PLAINTEXT, host, port);
         remoteLogManager.onEndPointCreated(endPoint);
         remoteLogManager.startup();
 
@@ -417,11 +415,10 @@ public class RemoteLogManagerTest {
         }) {
 
             String host = "localhost";
-            String port = "1234";
+            int port = 1234;
             String securityProtocol = "PLAINTEXT";
-            EndPoint endPoint = new EndPoint(host, Integer.parseInt(port), new ListenerName(securityProtocol),
-                    SecurityProtocol.PLAINTEXT);
-            remoteLogManager.onEndPointCreated(endPoint);
+            Endpoint endpoint = new Endpoint(securityProtocol, SecurityProtocol.PLAINTEXT, host, port);
+            remoteLogManager.onEndPointCreated(endpoint);
             remoteLogManager.startup();
 
             ArgumentCaptor<Map<String, Object>> capture = ArgumentCaptor.forClass(Map.class);
@@ -1365,16 +1362,16 @@ public class RemoteLogManagerTest {
     }
 
     private void verifyInCache(TopicIdPartition... topicIdPartitions) {
-        Arrays.stream(topicIdPartitions).forEach(topicIdPartition -> {
-            assertDoesNotThrow(() -> remoteLogManager.fetchRemoteLogSegmentMetadata(topicIdPartition.topicPartition(), 0, 0L));
-        });
+        Arrays.stream(topicIdPartitions).forEach(topicIdPartition ->
+            assertDoesNotThrow(() -> remoteLogManager.fetchRemoteLogSegmentMetadata(topicIdPartition.topicPartition(), 0, 0L))
+        );
     }
 
     private void verifyNotInCache(TopicIdPartition... topicIdPartitions) {
-        Arrays.stream(topicIdPartitions).forEach(topicIdPartition -> {
+        Arrays.stream(topicIdPartitions).forEach(topicIdPartition ->
             assertThrows(KafkaException.class, () ->
-                remoteLogManager.fetchRemoteLogSegmentMetadata(topicIdPartition.topicPartition(), 0, 0L));
-        });
+                remoteLogManager.fetchRemoteLogSegmentMetadata(topicIdPartition.topicPartition(), 0, 0L))
+        );
     }
 
     @Test
@@ -1693,10 +1690,10 @@ public class RemoteLogManagerTest {
 
     @Test
     public void testRemoveMetricsOnClose() throws IOException {
-        MockedConstruction<KafkaMetricsGroup> mockMetricsGroupCtor = mockConstruction(KafkaMetricsGroup.class);
-        try {
+        try (MockedConstruction<KafkaMetricsGroup> mockMetricsGroupCtor = mockConstruction(KafkaMetricsGroup.class)) {
             RemoteLogManager remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId,
-                time, tp -> Optional.of(mockLog), (topicPartition, offset) -> { }, brokerTopicStats, metrics) {
+                    time, tp -> Optional.of(mockLog), (topicPartition, offset) -> {
+            }, brokerTopicStats, metrics) {
                 public RemoteStorageManager createRemoteStorageManager() {
                     return remoteStorageManager;
                 }
@@ -1727,8 +1724,6 @@ public class RemoteLogManagerTest {
 
             verifyNoMoreInteractions(mockRlmMetricsGroup);
             verifyNoMoreInteractions(mockThreadPoolMetricsGroup);
-        } finally {
-            mockMetricsGroupCtor.close();
         }
     }
 
@@ -3380,8 +3375,7 @@ public class RemoteLogManagerTest {
         when(rlmCopyQuotaManager.getThrottleTimeMs()).thenReturn(quotaExceeded ? 1000L : 0L);
         doNothing().when(rlmCopyQuotaManager).record(anyInt());
 
-        RemoteLogManager.RLMCopyTask task = remoteLogManager.new RLMCopyTask(leaderTopicIdPartition, 128);
-        return task;
+        return remoteLogManager.new RLMCopyTask(leaderTopicIdPartition, 128);
     }
 
     @Test
