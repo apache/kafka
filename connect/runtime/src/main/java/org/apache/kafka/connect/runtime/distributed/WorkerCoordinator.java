@@ -145,7 +145,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
                     final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;
                     if (localAssignmentSnapshot != null && !localAssignmentSnapshot.failed()) {
                         log.info("Broker coordinator was unreachable for {}ms. Revoking previous assignment {} to " +
-                                "avoid running tasks while not being a member the group", coordinatorDiscoveryTimeoutMs, localAssignmentSnapshot);
+                                "avoid running tasks while not being a member of the group", coordinatorDiscoveryTimeoutMs, localAssignmentSnapshot);
                         listener.onRevoked(localAssignmentSnapshot.leader(), localAssignmentSnapshot.connectors(), localAssignmentSnapshot.tasks());
                         assignmentSnapshot = null;
                     }
@@ -271,6 +271,13 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     @Override
     protected void handlePollTimeoutExpiry() {
         listener.onPollTimeoutExpiry();
+        final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;
+        if (localAssignmentSnapshot != null && !localAssignmentSnapshot.failed()) {
+            log.info("Revoking previous assignment {} to " +
+                "avoid running tasks while not being a member of the group", localAssignmentSnapshot);
+            listener.onRevoked(localAssignmentSnapshot.leader(), localAssignmentSnapshot.connectors(), localAssignmentSnapshot.tasks());
+            assignmentSnapshot = null;
+        }
         maybeLeaveGroup("worker poll timeout has expired.");
     }
 

@@ -929,7 +929,11 @@ public class ConnectWorkerIntegrationTest {
         );
 
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(DistributedHerder.class)) {
-            connect.restartTask(CONNECTOR_NAME, 0);
+            try {
+                connect.restartTask(CONNECTOR_NAME, 0);
+            } catch (Exception e) {
+                log.error("Exception while restarting task", e);
+            }
             TestUtils.waitForCondition(() -> logCaptureAppender.getEvents().stream().anyMatch(e -> e.getLevel().equals("WARN")) &&
                     logCaptureAppender.getEvents().stream().anyMatch(e ->
                         // Ensure that the tick thread is blocked on the stage which we expect it to be, i.e restarting the task.
