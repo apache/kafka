@@ -22,7 +22,6 @@ import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.JRE;
 
 import java.io.File;
 import java.io.IOException;
