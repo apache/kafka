@@ -142,10 +142,10 @@ public class SuppressionDurabilityIntegrationTest {
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
         final Properties streamsConfig = mkProperties(mkMap(
-    Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
-            Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
-            Map.entry(StreamsConfig.POLL_MS_CONFIG, Long.toString(COMMIT_INTERVAL)),
-            Map.entry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
+                Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
+                Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+                Map.entry(StreamsConfig.POLL_MS_CONFIG, Long.toString(COMMIT_INTERVAL)),
+                Map.entry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
         ));
 
         streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL);
