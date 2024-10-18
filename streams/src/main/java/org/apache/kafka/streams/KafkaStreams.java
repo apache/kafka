@@ -472,10 +472,6 @@ public class KafkaStreams implements AutoCloseable {
         }
     }
 
-    private void defaultStreamsUncaughtExceptionHandler(final Throwable throwable, final boolean skipThreadReplacement) {
-        handleStreamsUncaughtException(throwable, t -> SHUTDOWN_CLIENT, skipThreadReplacement);
-    }
-
     private void replaceStreamThread(final Throwable throwable) {
         if (globalStreamThread != null && Thread.currentThread().getName().equals(globalStreamThread.getName())) {
             log.warn("The global thread cannot be replaced. Reverting to shutting down the client.");
@@ -989,7 +985,7 @@ public class KafkaStreams implements AutoCloseable {
             parseHostInfo(applicationConfigs.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)),
             logContext
         );
-        streamsUncaughtExceptionHandler = this::defaultStreamsUncaughtExceptionHandler;
+        streamsUncaughtExceptionHandler = (throwable, skipThreadReplacement) -> handleStreamsUncaughtException(throwable, t -> SHUTDOWN_CLIENT, skipThreadReplacement);
         delegatingStateRestoreListener = new DelegatingStateRestoreListener();
         delegatingStandbyUpdateListener = new DelegatingStandbyUpdateListener();
 
@@ -1010,7 +1006,7 @@ public class KafkaStreams implements AutoCloseable {
                 time,
                 globalThreadId,
                 delegatingStateRestoreListener,
-                exception -> defaultStreamsUncaughtExceptionHandler(exception, false)
+                exception -> handleStreamsUncaughtException(exception, t -> SHUTDOWN_CLIENT, false)
             );
             globalThreadState = globalStreamThread.state();
         }
