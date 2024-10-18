@@ -31,7 +31,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
 import javax.security.auth.login.Configuration;
-import javax.ws.rs.core.Configurable;
+
+import jakarta.ws.rs.core.Configurable;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
