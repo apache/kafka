@@ -111,22 +111,26 @@ public class ShareFetchRequest extends AbstractRequest {
 
             // And finally, forget the topic-partitions that are no longer in the session
             if (!forget.isEmpty()) {
-                Map<Uuid, List<Integer>> forgetMap = new HashMap<>();
-                for (TopicIdPartition tip : forget) {
-                    List<Integer> partList = forgetMap.computeIfAbsent(tip.topicId(), k -> new ArrayList<>());
-                    partList.add(tip.partition());
-                }
                 data.setForgottenTopicsData(new ArrayList<>());
-                forgetMap.forEach((topicId, partList) -> {
-                    ShareFetchRequestData.ForgottenTopic forgetTopic = new ShareFetchRequestData.ForgottenTopic()
-                            .setTopicId(topicId)
-                            .setPartitions(new ArrayList<>());
-                    partList.forEach(index -> forgetTopic.partitions().add(index));
-                    data.forgottenTopicsData().add(forgetTopic);
-                });
+                updateForgottenData(forget, data);
             }
 
             return new Builder(data, true);
+        }
+
+        public static void updateForgottenData(List<TopicIdPartition> forget, ShareFetchRequestData data) {
+            Map<Uuid, List<Integer>> forgetMap = new HashMap<>();
+            for (TopicIdPartition tip : forget) {
+                List<Integer> partList = forgetMap.computeIfAbsent(tip.topicId(), k -> new ArrayList<>());
+                partList.add(tip.partition());
+            }
+            forgetMap.forEach((topicId, partList) -> {
+                ShareFetchRequestData.ForgottenTopic forgetTopic = new ShareFetchRequestData.ForgottenTopic()
+                        .setTopicId(topicId)
+                        .setPartitions(new ArrayList<>());
+                partList.forEach(index -> forgetTopic.partitions().add(index));
+                data.forgottenTopicsData().add(forgetTopic);
+            });
         }
 
         public ShareFetchRequestData data() {
