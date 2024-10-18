@@ -110,7 +110,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
     private static final int NUM_BROKERS = 3;
     private static final int FIRST_INSTANCE_CONSUMER = 0;
     private static final int SECOND_INSTANCE_CONSUMER = 1;
-    public static final Map<Uuid, Integer> SUBSCRIBED_CLIENT_METRIC_DATA_COUNT = new HashMap<>();
+    public static final Map<Uuid, Integer> SUBSCRIBED_CLIENT_METRICS_BYTES_AMOUNT = new HashMap<>();
 
     @BeforeAll
     public static void startCluster() throws IOException {
@@ -204,7 +204,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
             final List<KeyValue<String, Long>> actualKeyValues =  IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(clientProps, outputTopicTwoPartitions, words.size());
             assertEquals(words.size(), actualKeyValues.size());
 
-            TestUtils.waitForCondition(() -> SUBSCRIBED_CLIENT_METRIC_DATA_COUNT.get(mainConsumerInstanceId) >= 10_000,
+            TestUtils.waitForCondition(() -> SUBSCRIBED_CLIENT_METRICS_BYTES_AMOUNT.get(mainConsumerInstanceId) >= 10_000,
                     30_000 * 10, //Temporary until a workaround for getting past the initial push interval of 5 minutes then set at 30 seconds
                     "Never received subscribed metrics");
         }
@@ -523,7 +523,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
                 final Uuid clientId = payload.clientInstanceId();
                 //Temporary until a solution is found for getting shaded MetricData visible to gradle
                 final int dataSize = payload.data().array().length;
-                SUBSCRIBED_CLIENT_METRIC_DATA_COUNT.put(clientId, dataSize);
+                SUBSCRIBED_CLIENT_METRICS_BYTES_AMOUNT.put(clientId, dataSize);
 
             } catch (final Exception e) {
                 e.printStackTrace(System.out);
