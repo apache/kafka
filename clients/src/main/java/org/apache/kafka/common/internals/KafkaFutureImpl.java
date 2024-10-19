@@ -152,7 +152,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
      */
     private void maybeThrowCancellationException(Throwable cause) {
         if (cause instanceof CancellationException) {
-            throw (CancellationException) cause;
+            throw new CancellationException(null);
         }
     }
 
@@ -165,7 +165,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
             return completableFuture.get();
         } catch (ExecutionException e) {
             maybeThrowCancellationException(e.getCause());
-            throw e;
+            throw new ExecutionException(null, e);
         }
     }
 
@@ -180,7 +180,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
             return completableFuture.get(timeout, unit);
         } catch (ExecutionException e) {
             maybeThrowCancellationException(e.getCause());
-            throw e;
+            throw new ExecutionException(null, e);
         }
     }
 
@@ -251,6 +251,9 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
             exception = e.getCause();
         } catch (Exception e) {
             exception = e;
+        }
+        if (exception instanceof CancellationException) {
+            exception = new CancellationException();
         }
         return String.format("KafkaFuture{value=%s,exception=%s,done=%b}", value, exception, exception != null || value != null);
     }
