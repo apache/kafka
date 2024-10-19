@@ -16,7 +16,6 @@
  */
 package kafka.coordinator.group
 
-import kafka.common.OffsetAndMetadata
 import kafka.server.{KafkaConfig, ReplicaManager}
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.message.{ConsumerGroupDescribeResponseData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchRequestData, OffsetFetchResponseData, ShareGroupDescribeResponseData, ShareGroupHeartbeatRequestData, ShareGroupHeartbeatResponseData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
@@ -26,13 +25,14 @@ import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{OffsetCommitRequest, RequestContext, TransactionResult}
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.coordinator.group
+import org.apache.kafka.coordinator.group.OffsetAndMetadata
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.util.FutureUtils
 
 import java.time.Duration
 import java.util
-import java.util.{Optional, OptionalInt, Properties}
+import java.util.{Optional, OptionalInt, OptionalLong, Properties}
 import java.util.concurrent.CompletableFuture
 import java.util.function.IntSupplier
 import scala.collection.{immutable, mutable}
@@ -504,20 +504,23 @@ private[group] class GroupCoordinatorAdapter(
     expireTimestamp: Option[Long]
   ): OffsetAndMetadata = {
     new OffsetAndMetadata(
-      offset = offset,
-      leaderEpoch = leaderEpoch match {
-        case RecordBatch.NO_PARTITION_LEADER_EPOCH => Optional.empty[Integer]
-        case committedLeaderEpoch => Optional.of[Integer](committedLeaderEpoch)
+      offset,
+      leaderEpoch match {
+        case RecordBatch.NO_PARTITION_LEADER_EPOCH => OptionalInt.empty
+        case committedLeaderEpoch => OptionalInt.of(committedLeaderEpoch)
       },
-      metadata = metadata match {
-        case null => OffsetAndMetadata.NoMetadata
+      metadata match {
+        case null => OffsetAndMetadata.NO_METADATA
         case metadata => metadata
       },
-      commitTimestamp = commitTimestamp match {
+      commitTimestamp match {
         case OffsetCommitRequest.DEFAULT_TIMESTAMP => currentTimeMs
         case customTimestamp => customTimestamp
       },
-      expireTimestamp = expireTimestamp
+      expireTimestamp match {
+        case Some(timestamp) => OptionalLong.of(timestamp)
+        case None => OptionalLong.empty()
+      }
     )
   }
 

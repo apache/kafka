@@ -16,7 +16,6 @@
  */
 package kafka.coordinator.group
 
-import kafka.common.OffsetAndMetadata
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.{JoinGroupCallback, SyncGroupCallback}
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.errors.{InvalidGroupIdException, UnsupportedVersionException}
@@ -31,6 +30,7 @@ import org.apache.kafka.common.requests.{OffsetFetchResponse, RequestContext, Re
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
+import org.apache.kafka.coordinator.group.OffsetAndMetadata
 import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.test.TestUtils.assertFutureThrows
@@ -41,7 +41,7 @@ import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.Mockito.{mock, verify, when}
 
 import java.net.InetAddress
-import java.util.Optional
+import java.util.{Optional, OptionalInt, OptionalLong}
 import scala.jdk.CollectionConverters._
 
 class GroupCoordinatorAdapterTest {
@@ -696,11 +696,11 @@ class GroupCoordinatorAdapterTest {
       ArgumentMatchers.eq(data.generationIdOrMemberEpoch),
       ArgumentMatchers.eq(Map(
         new TopicIdPartition(Uuid.ZERO_UUID, 0 , "foo") -> new OffsetAndMetadata(
-          offset = 100,
-          leaderEpoch = Optional.of[Integer](1),
-          metadata = "",
-          commitTimestamp = now,
-          expireTimestamp = Some(now + 1000L)
+          100,
+          OptionalInt.of(1),
+          "",
+          now,
+          OptionalLong.of(now + 1000L)
         )
       )),
       capturedCallback.capture(),
@@ -769,11 +769,11 @@ class GroupCoordinatorAdapterTest {
       ArgumentMatchers.eq(data.generationId),
       ArgumentMatchers.eq(Map(
         new TopicIdPartition(Uuid.ZERO_UUID, 0 , "foo") -> new OffsetAndMetadata(
-          offset = 100,
-          leaderEpoch = Optional.of[Integer](1),
-          metadata = "",
-          commitTimestamp = now,
-          expireTimestamp = None
+          100,
+          OptionalInt.of(1),
+          "",
+          now,
+          OptionalLong.empty()
         )
       )),
       capturedCallback.capture(),
