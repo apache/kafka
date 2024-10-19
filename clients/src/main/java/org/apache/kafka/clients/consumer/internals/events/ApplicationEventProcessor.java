@@ -124,6 +124,10 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 process((CommitOnCloseEvent) event);
                 return;
 
+            case CREATE_FETCH_REQUESTS:
+                process((CreateFetchRequestsEvent) event);
+                return;
+
             case SHARE_FETCH:
                 process((ShareFetchEvent) event);
                 return;
@@ -174,6 +178,11 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 hrm.resetPollTimer(event.pollTimeMs());
             });
         }
+    }
+
+    private void process(final CreateFetchRequestsEvent event) {
+        CompletableFuture<Void> future = requestManagers.fetchRequestManager.createFetchRequests();
+        future.whenComplete(complete(event.future()));
     }
 
     private void process(final AsyncCommitEvent event) {
