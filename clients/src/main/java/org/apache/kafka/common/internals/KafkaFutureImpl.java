@@ -17,6 +17,7 @@
 package org.apache.kafka.common.internals;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.utils.Java;
 
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -193,7 +194,13 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
         try {
             return completableFuture.getNow(valueIfAbsent);
         } catch (CancellationException e) {
-            throw new CancellationException(e.getMessage());
+            // In Java 23, When a CompletableFuture is cancelled, getNow() will throw a CompletionException wrapping a 
+            // CancellationException. whereas in Java < 23, it throws a CompletionException directly.
+            if (e.getCause() instanceof CancellationException) {
+                throw (CancellationException) e.getCause();
+            } else {
+                throw new CancellationException(e.getMessage());
+            }
         } catch (CompletionException e) {
             maybeThrowCancellationException(e.getCause());
             // Note, unlike CompletableFuture#get() which throws ExecutionException, CompletableFuture#getNow()
@@ -250,6 +257,8 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
         try {
             value = completableFuture.getNow(null);
         } catch (CancellationException e) {
+            // In Java 23, When a CompletableFuture is cancelled, getNow() will throw a CompletionException wrapping a 
+            // CancellationException. whereas in Java < 23, it throws a CompletionException directly.
             if (e.getCause() instanceof CancellationException) {
                 exception = e.getCause();
             } else { 
