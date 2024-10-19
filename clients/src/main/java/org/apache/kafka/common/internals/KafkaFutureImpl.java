@@ -152,7 +152,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
      */
     private void maybeThrowCancellationException(Throwable cause) {
         if (cause instanceof CancellationException) {
-            throw new CancellationException(null);
+            throw (CancellationException) cause;
         }
     }
 
@@ -163,9 +163,9 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
     public T get() throws InterruptedException, ExecutionException {
         try {
             return completableFuture.get();
-        } catch (ExecutionException e) {
+        } catch (ExecutionException | CancellationException e) {
             maybeThrowCancellationException(e.getCause());
-            throw new ExecutionException(null, e);
+            throw e;
         }
     }
 
@@ -178,9 +178,9 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
             TimeoutException {
         try {
             return completableFuture.get(timeout, unit);
-        } catch (ExecutionException e) {
+        } catch (ExecutionException | CancellationException e) {
             maybeThrowCancellationException(e.getCause());
-            throw new ExecutionException(null, e);
+            throw e;
         }
     }
 
@@ -192,6 +192,8 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
     public T getNow(T valueIfAbsent) throws ExecutionException {
         try {
             return completableFuture.getNow(valueIfAbsent);
+        } catch (CancellationException e) {
+            throw new CancellationException(e.getMessage());
         } catch (CompletionException e) {
             maybeThrowCancellationException(e.getCause());
             // Note, unlike CompletableFuture#get() which throws ExecutionException, CompletableFuture#getNow()
@@ -247,13 +249,16 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
         Throwable exception = null;
         try {
             value = completableFuture.getNow(null);
+        } catch (CancellationException e) {
+            if (e.getCause() instanceof CancellationException) {
+                exception = e.getCause();
+            } else { 
+                exception = e;
+            }
         } catch (CompletionException e) {
             exception = e.getCause();
         } catch (Exception e) {
             exception = e;
-        }
-        if (exception instanceof CancellationException) {
-            exception = new CancellationException();
         }
         return String.format("KafkaFuture{value=%s,exception=%s,done=%b}", value, exception, exception != null || value != null);
     }
