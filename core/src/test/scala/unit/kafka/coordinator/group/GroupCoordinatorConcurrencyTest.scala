@@ -17,10 +17,9 @@
 
 package kafka.coordinator.group
 
-import java.util.Properties
+import java.util.{OptionalInt, OptionalLong, Properties}
 import java.util.concurrent.locks.{Lock, ReentrantLock}
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
-import kafka.common.OffsetAndMetadata
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest._
@@ -33,7 +32,7 @@ import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetFetchResponse}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.coordinator.group.{GroupCoordinatorConfig, OffsetAndMetadata}
 import org.apache.kafka.server.common.RequestLocal
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -105,7 +104,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
 
   def createGroupMembers(groupPrefix: String): Set[GroupMember] = {
     (0 until nGroups).flatMap { i =>
-      new Group(s"$groupPrefix$i", nMembersPerGroup, groupCoordinator, replicaManager).members
+      new Group(s"$groupPrefix$i", nMembersPerGroup, groupCoordinator).members
     }.toSet
   }
 
@@ -159,7 +158,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.groupCoordinatorConfig.offsetsTopicPartitions),
       enableMetadataExpiration = false)
 
-    val members = new Group(s"group", nMembersPerGroup, groupCoordinator, replicaManager)
+    val members = new Group(s"group", nMembersPerGroup, groupCoordinator)
       .members
     val joinOp = new JoinGroupOperation()
 
@@ -210,7 +209,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
 
   class JoinGroupOperation extends GroupOperation[JoinGroupCallbackParams, JoinGroupCallback] {
     override def responseCallback(responsePromise: Promise[JoinGroupCallbackParams]): JoinGroupCallback = {
-      val callback: JoinGroupCallback = responsePromise.success(_)
+      val callback: JoinGroupCallback = responsePromise.success
       callback
     }
     override def runWithCallback(member: GroupMember, responseCallback: JoinGroupCallback): Unit = {
@@ -291,7 +290,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     }
     override def runWithCallback(member: GroupMember, responseCallback: CommitOffsetCallback): Unit = {
       val tip = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
-      val offsets = immutable.Map(tip -> OffsetAndMetadata(1, "", Time.SYSTEM.milliseconds()))
+      val offsets = immutable.Map(tip -> new OffsetAndMetadata(1, OptionalInt.empty(), "", Time.SYSTEM.milliseconds(), OptionalLong.empty()))
       groupCoordinator.handleCommitOffsets(member.groupId, member.memberId,
         member.groupInstanceId, member.generationId, offsets, responseCallback)
       replicaManager.tryCompleteActions()
@@ -304,7 +303,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
 
   class CommitTxnOffsetsOperation(lock: Option[Lock] = None) extends CommitOffsetsOperation {
     override def runWithCallback(member: GroupMember, responseCallback: CommitOffsetCallback): Unit = {
-      val offsets = immutable.Map(new TopicIdPartition(Uuid.randomUuid(), 0, "topic") -> OffsetAndMetadata(1, "", Time.SYSTEM.milliseconds()))
+      val offsets = immutable.Map(new TopicIdPartition(Uuid.randomUuid(), 0, "topic") -> new OffsetAndMetadata(1, OptionalInt.empty(), "", Time.SYSTEM.milliseconds(), OptionalLong.empty()))
       val producerId = 1000L
       val producerEpoch : Short = 2
       // When transaction offsets are appended to the log, transactions may be scheduled for
@@ -393,11 +392,10 @@ object GroupCoordinatorConcurrencyTest {
   private val DefaultSessionTimeout = 60 * 1000
   private val GroupInitialRebalanceDelay = 50
 
-  class Group(val groupId: String, nMembers: Int,
-      groupCoordinator: GroupCoordinator, replicaManager: TestReplicaManager) {
-    val groupPartitionId = groupCoordinator.partitionFor(groupId)
+  class Group(val groupId: String, nMembers: Int, groupCoordinator: GroupCoordinator) {
+    val groupPartitionId: Int = groupCoordinator.partitionFor(groupId)
     groupCoordinator.groupManager.addOwnedPartition(groupPartitionId)
-    val members = (0 until nMembers).map { i =>
+    val members: Seq[GroupMember] = (0 until nMembers).map { i =>
       new GroupMember(this, groupPartitionId, i == 0)
     }
     def assignment: Map[String, Array[Byte]] = members.map { m => (m.memberId, Array[Byte]()) }.toMap
