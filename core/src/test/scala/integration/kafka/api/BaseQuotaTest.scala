@@ -33,7 +33,7 @@ import org.apache.kafka.common.quota.ClientQuotaAlteration
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
-import org.apache.kafka.server.config.{QuotaConfigs, ServerConfigs}
+import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.quota.QuotaType
 import org.junit.jupiter.api.Assertions._
@@ -106,8 +106,8 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
   def testProducerConsumerOverrideUnthrottled(quorum: String): Unit = {
     // Give effectively unlimited quota for producer and consumer
     val props = new Properties()
-    props.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, Long.MaxValue.toString)
-    props.put(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, Long.MaxValue.toString)
+    props.put(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, Long.MaxValue.toString)
+    props.put(QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, Long.MaxValue.toString)
 
     quotaTestClients.overrideQuotas(Long.MaxValue, Long.MaxValue, Long.MaxValue.toDouble)
     quotaTestClients.waitForQuotaUpdate(Long.MaxValue, Long.MaxValue, Long.MaxValue.toDouble)
@@ -185,7 +185,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
 
     assertTrue(throttled, "Should have been throttled")
     quotaTestClients.verifyConsumerClientThrottleTimeMetric(expectThrottle = true,
-      Some(QuotaConfigs.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT * 1000.0))
+      Some(QuotaConfig.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT * 1000.0))
 
     val exemptMetric = quotaTestClients.exemptRequestMetric
     assertNotNull(exemptMetric, "Exempt requests not recorded")
@@ -367,9 +367,9 @@ abstract class QuotaTestClients(topic: String,
     def addOp(key: String, value: Option[Double]): Unit = {
       ops = ops ++ Seq(new ClientQuotaAlteration.Op(key, value.map(Double.box).orNull))
     }
-    addOp(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, producerQuota.map(_.toDouble))
-    addOp(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, consumerQuota.map(_.toDouble))
-    addOp(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, requestQuota)
+    addOp(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, producerQuota.map(_.toDouble))
+    addOp(QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, consumerQuota.map(_.toDouble))
+    addOp(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, requestQuota)
     new ClientQuotaAlteration(quotaEntity, ops.asJava)
   }
 

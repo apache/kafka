@@ -35,7 +35,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol.PLAINTEXT
 import org.apache.kafka.controller.ControllerRequestContextUtil
 import org.apache.kafka.server.common.{Features, MetadataVersion}
-import org.apache.kafka.server.config.QuotaConfigs
+import org.apache.kafka.server.config.QuotaConfig
 import org.apache.kafka.server.quota.QuotaType
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.AfterEach
@@ -126,23 +126,23 @@ class ReplicationQuotasTest extends QuorumTestHarness {
           controllerServer.controller.incrementalAlterConfigs(
             ControllerRequestContextUtil.ANONYMOUS_CONTEXT,
             Map(new ConfigResource(BROKER, String.valueOf(brokerId)) -> Map(
-              QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG -> entry,
-              QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG -> entry).asJava).asJava,
+              QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG -> entry,
+              QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG -> entry).asJava).asJava,
             false
           ).get()
         } else {
           adminZkClient.changeBrokerConfig(Seq(brokerId),
             propsWith(
-              (QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, throttle.toString),
-              (QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, throttle.toString)
+              (QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, throttle.toString),
+              (QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, throttle.toString)
             ))
         }
       }
       //Either throttle the six leaders or the two followers
       val configEntry = if (leaderThrottle)
-        new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:100,1:101,2:102,3:103,4:104,5:105")
+        new ConfigEntry(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:100,1:101,2:102,3:103,4:104,5:105")
       else
-        new ConfigEntry(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:106,1:106,2:106,3:107,4:107,5:107")
+        new ConfigEntry(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:106,1:106,2:106,3:107,4:107,5:107")
 
       admin.incrementalAlterConfigs(
         Map(new ConfigResource(TOPIC, topic) -> Seq(new AlterConfigOp(configEntry, SET)).asJavaCollection).asJava
@@ -233,9 +233,9 @@ class ReplicationQuotasTest extends QuorumTestHarness {
       //Set the throttle to only limit leader
       val configs = Map(
         new ConfigResource(BROKER, "100") ->
-          Seq(new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, throttle.toString), SET)).asJavaCollection,
+          Seq(new AlterConfigOp(new ConfigEntry(QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, throttle.toString), SET)).asJavaCollection,
         new ConfigResource(TOPIC, topic) ->
-          Seq(new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:100"), SET)).asJavaCollection
+          Seq(new AlterConfigOp(new ConfigEntry(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:100"), SET)).asJavaCollection
       ).asJava
       admin.incrementalAlterConfigs(configs).all().get()
     }
