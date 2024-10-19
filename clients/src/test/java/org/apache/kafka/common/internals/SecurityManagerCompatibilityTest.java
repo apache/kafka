@@ -34,7 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class SecurityManagerCompatibilityTest {
 
-    @EnabledForJreRange(min = JRE.JAVA_8, max = JRE.JAVA_22)
+    @EnabledForJreRange(max = JRE.JAVA_22)
     @Test
     public void testLegacyStrategyLoadable() throws ClassNotFoundException, NoSuchMethodException {
         new LegacyStrategy(ReflectiveStrategy.Loader.forName());
