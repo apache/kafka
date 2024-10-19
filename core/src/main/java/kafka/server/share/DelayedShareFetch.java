@@ -235,14 +235,13 @@ public class DelayedShareFetch extends DelayedOperation {
                 releasePartitionLocks(shareFetchData.groupId(), topicPartitionData.keySet());
             }
         }
-        // This call is coming from onComplete, hence we return the response data irrespective of whether minBytes is
+        // We can return the replica manager fetch response for the following 2 cases -
+        // 1. This call is coming from onComplete, hence we return the response data irrespective of whether minBytes is
         // satisfied or not.
-        if (hasRequestTimedOut)
+        // 2. Return the response if minBytes criteria is satisfied (request is coming from tryComplete).
+        if (hasRequestTimedOut || minBytesSatisfied)
             return responseData;
-        // Since the request is coming from tryComplete, return either an empty map if replica manager fetch does not
-        // satisfy minBytes OR response map if it satisfies the minBytes criteria.
-        if (minBytesSatisfied)
-            return responseData;
+        // Return an empty map if replica manager fetch does not satisfy minBytes (request is coming from tryComplete).
         return Collections.emptyMap();
     }
 
