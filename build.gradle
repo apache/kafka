@@ -767,6 +767,8 @@ subprojects {
     scalaCompileOptions.additionalParameters += ["-opt-warnings", "-Xlint:strict-unsealed-patmat"]
     // Scala 2.13.2 introduces compiler warnings suppression, which is a pre-requisite for -Xfatal-warnings
     scalaCompileOptions.additionalParameters += ["-Xfatal-warnings"]
+
+    scalaCompileOptions.additionalParameters += ["-release", String.valueOf(minJavaVersion)]
     sourceCompatibility = minJavaVersion
     targetCompatibility = minJavaVersion
     addParametersForTests(name, options)
