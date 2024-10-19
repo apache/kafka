@@ -17,13 +17,13 @@
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
 
+import org.apache.kafka.common.hash.Murmur3;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.state.internals.Murmur3;
 import org.apache.kafka.test.MockInternalNewProcessorContext;
 
 import org.junit.jupiter.api.Test;
