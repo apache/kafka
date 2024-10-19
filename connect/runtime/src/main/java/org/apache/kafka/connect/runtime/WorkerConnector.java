@@ -308,15 +308,16 @@ public class WorkerConnector implements Runnable {
                                     + " as the connector has been scheduled for shutdown"),
                         null);
             }
-            if (state == State.STARTED)
+            // Call stop() when the connector has failed, for the connector
+            // to release its resources.
+            if (state == State.STARTED || state == State.FAILED)
                 connector.stop();
             this.state = State.STOPPED;
             statusListener.onShutdown(connName);
             log.info("Completed shutdown for {}", this);
         } catch (Throwable t) {
             log.error("{} Error while shutting down connector", this, t);
-            state = State.FAILED;
-            statusListener.onFailure(connName, t);
+            onFailure(t);
         } finally {
             Utils.closeQuietly(ctx, "connector context for " + connName);
             Utils.closeQuietly(metrics, "connector metrics for " + connName);

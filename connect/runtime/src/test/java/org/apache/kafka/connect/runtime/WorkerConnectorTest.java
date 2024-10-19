@@ -134,7 +134,31 @@ public class WorkerConnectorTest {
 
         verifyInitialize();
         verify(listener).onFailure(CONNECTOR, exception);
-        verifyCleanShutdown(false);
+        verifyCleanShutdown(true);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
+    public void testInitializeAndStopFailure(ConnectorType connectorType) {
+        setup(connectorType);
+        RuntimeException exception1 = new RuntimeException();
+        RuntimeException exception2 = new RuntimeException();
+
+        when(connector.version()).thenReturn(VERSION);
+        doThrow(exception1).when(connector).initialize(any());
+        doThrow(exception2).when(connector).stop();
+
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, offsetStore, classLoader);
+
+        workerConnector.initialize();
+        assertFailedMetric(workerConnector);
+        workerConnector.shutdown();
+        workerConnector.doShutdown();
+        assertFailedMetric(workerConnector);
+
+        verifyInitialize();
+        verify(listener).onFailure(CONNECTOR, exception1);
+        verifyShutdown(false, true);
     }
 
     @ParameterizedTest
@@ -160,7 +184,7 @@ public class WorkerConnectorTest {
         verifyInitialize();
         verify(listener).onFailure(CONNECTOR, exception);
         // expect no call to onStartup() after failure
-        verifyCleanShutdown(false);
+        verifyCleanShutdown(true);
 
         verify(onStateChange).onCompletion(any(Exception.class), isNull());
         verifyNoMoreInteractions(onStateChange);
@@ -362,7 +386,38 @@ public class WorkerConnectorTest {
         verifyInitialize();
         verify(connector).start(CONFIG);
         verify(listener).onFailure(CONNECTOR, exception);
-        verifyCleanShutdown(false);
+        verifyCleanShutdown(true);
+
+        verify(onStateChange).onCompletion(any(Exception.class), isNull());
+        verifyNoMoreInteractions(onStateChange);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
+    public void testStartupAndStopFailure(ConnectorType connectorType) {
+        setup(connectorType);
+        RuntimeException exception1 = new RuntimeException();
+        RuntimeException exception2 = new RuntimeException();
+
+        when(connector.version()).thenReturn(VERSION);
+        doThrow(exception1).when(connector).start(CONFIG);
+        doThrow(exception2).when(connector).stop();
+
+        Callback<TargetState> onStateChange = mockCallback();
+        WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, offsetStore, classLoader);
+
+        workerConnector.initialize();
+        assertInitializedMetric(workerConnector);
+        workerConnector.doTransitionTo(TargetState.STARTED, onStateChange);
+        assertFailedMetric(workerConnector);
+        workerConnector.shutdown();
+        workerConnector.doShutdown();
+        assertFailedMetric(workerConnector);
+
+        verifyInitialize();
+        verify(connector).start(CONFIG);
+        verify(listener).onFailure(CONNECTOR, exception1);
+        verifyShutdown(false, true);
 
         verify(onStateChange).onCompletion(any(Exception.class), isNull());
         verifyNoMoreInteractions(onStateChange);
@@ -641,15 +696,15 @@ public class WorkerConnectorTest {
         }
     }
 
-    private void verifyCleanShutdown(boolean started) {
-        verifyShutdown(true, started);
+    private void verifyCleanShutdown(boolean startedOrFailed) {
+        verifyShutdown(true, startedOrFailed);
     }
 
-    private void verifyShutdown(boolean clean, boolean started) {
-        verifyShutdown(1, clean, started);
+    private void verifyShutdown(boolean clean, boolean startedOrFailed) {
+        verifyShutdown(1, clean, startedOrFailed);
     }
 
-    private void verifyShutdown(int connectorStops, boolean clean, boolean started) {
+    private void verifyShutdown(int connectorStops, boolean clean, boolean startedOrFailed) {
         verify(ctx).close();
         if (connectorType == ConnectorType.SOURCE) {
             verify(offsetStorageReader).close();
@@ -658,7 +713,7 @@ public class WorkerConnectorTest {
         if (clean) {
             verify(listener).onShutdown(CONNECTOR);
         }
-        if (started) {
+        if (startedOrFailed) {
             verify(connector, times(connectorStops)).stop();
         }
     }
