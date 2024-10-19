@@ -139,10 +139,14 @@ public class DelayedShareFetch extends DelayedOperation {
             replicaManagerFetchDataFromTryComplete = replicaManagerFetchData(topicPartitionData, false);
             if (!replicaManagerFetchDataFromTryComplete.isEmpty())
                 return forceComplete();
+            log.info("minBytes is not satisfied for the share fetch request for group {}, member {}, " +
+                "topic partitions {}", shareFetchData.groupId(), shareFetchData.memberId(),
+                shareFetchData.partitionMaxBytes().keySet());
+        } else {
+            log.info("Can't acquire records for any partition in the share fetch request for group {}, member {}, " +
+                "topic partitions {}", shareFetchData.groupId(), shareFetchData.memberId(),
+                shareFetchData.partitionMaxBytes().keySet());
         }
-        log.info("Can't acquire records for any partition in the share fetch request for group {}, member {}, " +
-                "topic partitions {}", shareFetchData.groupId(),
-                shareFetchData.memberId(), shareFetchData.partitionMaxBytes().keySet());
         return false;
     }
 
@@ -194,7 +198,7 @@ public class DelayedShareFetch extends DelayedOperation {
                                                                       boolean hasRequestTimedOut) {
         log.trace("Fetchable share partitions data: {} with groupId: {} fetch params: {}", topicPartitionData,
             shareFetchData.groupId(), shareFetchData.fetchParams());
-        Map<TopicIdPartition, FetchPartitionData> replicaManagerFetchSatisfyingMinBytes = new HashMap<>();
+        boolean minBytesSatisfied = false;
         Map<TopicIdPartition, FetchPartitionData> responseData = new HashMap<>();
         try {
             Seq<Tuple2<TopicIdPartition, LogReadResult>> responseLogResult = replicaManager.readFromLog(
@@ -219,14 +223,14 @@ public class DelayedShareFetch extends DelayedOperation {
             log.trace("Data successfully retrieved by replica manager: {}", responseData);
 
             if (accumulatedBytes.get() >= shareFetchData.fetchParams().minBytes)
-                replicaManagerFetchSatisfyingMinBytes = responseData;
+                minBytesSatisfied = true;
         } catch (Exception e) {
             log.error("Error processing delayed share fetch request", e);
         } finally {
             // The case when we cannot satisfy the share fetch requests because the response has lesser data than minBytes
             // and the call is coming from tryComplete, hence we want to release partitions lock so that the next
             // tryComplete/onComplete call complete successfully.
-            if (replicaManagerFetchSatisfyingMinBytes.isEmpty() && !hasRequestTimedOut) {
+            if (!minBytesSatisfied && !hasRequestTimedOut) {
                 // Releasing the lock to move ahead with the next request in queue.
                 releasePartitionLocks(shareFetchData.groupId(), topicPartitionData.keySet());
             }
@@ -235,11 +239,15 @@ public class DelayedShareFetch extends DelayedOperation {
         // satisfied or not.
         if (hasRequestTimedOut)
             return responseData;
-        // Return either empty map if replica manager fetch does not satisfy minBytes OR fetch response map if it satisfies the minBytes criteria.
-        return replicaManagerFetchSatisfyingMinBytes;
+        // Since the request is coming from tryComplete, return either an empty map if replica manager fetch does not
+        // satisfy minBytes OR response map if it satisfies the minBytes criteria.
+        if (minBytesSatisfied)
+            return responseData;
+        return Collections.emptyMap();
     }
 
-    private void releasePartitionLocks(String groupId, Set<TopicIdPartition> topicIdPartitions) {
+    // Visible for testing.
+    void releasePartitionLocks(String groupId, Set<TopicIdPartition> topicIdPartitions) {
         topicIdPartitions.forEach(tp -> {
             SharePartition sharePartition = sharePartitionManager.sharePartition(groupId, tp);
             if (sharePartition == null) {

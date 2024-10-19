@@ -108,14 +108,15 @@ public class DelayedShareFetchTest {
 
         when(sp0.canAcquireRecords()).thenReturn(false);
         when(sp1.canAcquireRecords()).thenReturn(false);
-        DelayedShareFetch delayedShareFetch = DelayedShareFetchBuilder.builder()
+        DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetchData)
             .withSharePartitionManager(sharePartitionManager)
-            .build();
+            .build());
 
         // Since there is no partition that can be acquired, tryComplete should return false.
         assertFalse(delayedShareFetch.tryComplete());
         assertFalse(delayedShareFetch.isCompleted());
+        Mockito.verify(delayedShareFetch, times(0)).releasePartitionLocks(any(), any());
     }
 
     @Test
@@ -151,16 +152,17 @@ public class DelayedShareFetchTest {
         // Replica Manager fetch response size -> 0 bytes (< minBytes)
         doAnswer(invocation -> buildLogReadResult(Collections.singleton(tp0), 0)).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
-        DelayedShareFetch delayedShareFetch = DelayedShareFetchBuilder.builder()
+        DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetchData)
             .withSharePartitionManager(sharePartitionManager)
             .withReplicaManager(replicaManager)
-            .build();
+            .build());
         assertFalse(delayedShareFetch.isCompleted());
 
         // Since sp1 can be acquired, tryComplete should return true.
         assertFalse(delayedShareFetch.tryComplete());
         assertFalse(delayedShareFetch.isCompleted());
+        Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(any(), any());
     }
 
     @Test
@@ -196,16 +198,17 @@ public class DelayedShareFetchTest {
         // Replica Manager fetch response size -> 1 bytes (>= minBytes)
         doAnswer(invocation -> buildLogReadResult(Collections.singleton(tp0), 1)).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
-        DelayedShareFetch delayedShareFetch = DelayedShareFetchBuilder.builder()
+        DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetchData)
             .withSharePartitionManager(sharePartitionManager)
             .withReplicaManager(replicaManager)
-            .build();
+            .build());
         assertFalse(delayedShareFetch.isCompleted());
 
         // Since sp1 can be acquired, tryComplete should return true.
         assertTrue(delayedShareFetch.tryComplete());
         assertTrue(delayedShareFetch.isCompleted());
+        Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(any(), any());
     }
 
     @Test
@@ -236,11 +239,11 @@ public class DelayedShareFetchTest {
 
         when(sp0.canAcquireRecords()).thenReturn(false);
         when(sp1.canAcquireRecords()).thenReturn(false);
-        DelayedShareFetch delayedShareFetch = DelayedShareFetchBuilder.builder()
+        DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetchData)
             .withReplicaManager(replicaManager)
             .withSharePartitionManager(sharePartitionManager)
-            .build();
+            .build());
         assertFalse(delayedShareFetch.isCompleted());
         delayedShareFetch.forceComplete();
 
@@ -249,6 +252,7 @@ public class DelayedShareFetchTest {
         Mockito.verify(replicaManager, times(0)).readFromLog(
                 any(), any(), any(ReplicaQuota.class), anyBoolean());
         assertTrue(delayedShareFetch.isCompleted());
+        Mockito.verify(delayedShareFetch, times(0)).releasePartitionLocks(any(), any());
     }
 
     @Test
@@ -282,11 +286,11 @@ public class DelayedShareFetchTest {
         when(sp0.acquire(any(), any())).thenReturn(
             Collections.singletonList(new ShareFetchResponseData.AcquiredRecords().setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)));
         doAnswer(invocation -> buildLogReadResult(Collections.singleton(tp0), 0)).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
-        DelayedShareFetch delayedShareFetch = DelayedShareFetchBuilder.builder()
+        DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetchData)
             .withReplicaManager(replicaManager)
             .withSharePartitionManager(sharePartitionManager)
-            .build();
+            .build());
         assertFalse(delayedShareFetch.isCompleted());
         delayedShareFetch.forceComplete();
 
@@ -297,6 +301,7 @@ public class DelayedShareFetchTest {
         Mockito.verify(sp1, times(0)).nextFetchOffset();
         assertTrue(delayedShareFetch.isCompleted());
         assertTrue(shareFetchData.future().isDone());
+        Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(any(), any());
     }
 
     @Test
@@ -342,6 +347,7 @@ public class DelayedShareFetchTest {
         assertTrue(delayedShareFetch.isCompleted());
         // Verifying that the second forceComplete does not call acquirablePartitions method in DelayedShareFetch.
         Mockito.verify(delayedShareFetch, times(1)).acquirablePartitions();
+        Mockito.verify(delayedShareFetch, times(0)).releasePartitionLocks(any(), any());
     }
 
     @Test
@@ -414,11 +420,11 @@ public class DelayedShareFetchTest {
             .withPartitionCacheMap(partitionCacheMap)
             .build();
 
-        DelayedShareFetch delayedShareFetch2 = DelayedShareFetchBuilder.builder()
+        DelayedShareFetch delayedShareFetch2 = spy(DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetchData2)
             .withReplicaManager(replicaManager)
             .withSharePartitionManager(sharePartitionManager2)
-            .build();
+            .build());
 
         // sp1 can be acquired now
         when(sp1.maybeAcquireFetchLock()).thenReturn(true);
@@ -436,6 +442,7 @@ public class DelayedShareFetchTest {
         assertFalse(delayedShareFetch1.isCompleted());
         Mockito.verify(replicaManager, times(1)).addToActionQueue(any());
         Mockito.verify(replicaManager, times(0)).tryCompleteActions();
+        Mockito.verify(delayedShareFetch2, times(1)).releasePartitionLocks(any(), any());
     }
 
     static class DelayedShareFetchBuilder {
