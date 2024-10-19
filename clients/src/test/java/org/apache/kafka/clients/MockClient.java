@@ -71,6 +71,7 @@ public class MockClient implements KafkaClient {
 
     private int correlation;
     private Runnable wakeupHook;
+    private boolean advanceTimeDuringPoll;
     private final Time time;
     private final MockMetadataUpdater metadataUpdater;
     private final Map<String, ConnectionState> connections = new HashMap<>();
@@ -139,6 +140,10 @@ public class MockClient implements KafkaClient {
     @Override
     public long pollDelayMs(Node node, long now) {
         return connectionState(node.idString()).pollDelayMs(now);
+    }
+
+    public void setAdvanceTimeDuringPoll(boolean advanceTimeDuringPoll) {
+        this.advanceTimeDuringPoll = advanceTimeDuringPoll;
     }
 
     public void backoff(Node node, long durationMs) {
@@ -336,9 +341,9 @@ public class MockClient implements KafkaClient {
             copy.add(response);
         }
 
-        if (copy.isEmpty()) {
-            // Simulate time advancing. If no responses are received, then we know that
-            // we waited for the whole timeoutMs.
+        // In real life, if poll() is called and we get to the end with no responses,
+        // time equal to timeoutMs would have passed.
+        if (advanceTimeDuringPoll) {
             time.sleep(timeoutMs);
         }
 

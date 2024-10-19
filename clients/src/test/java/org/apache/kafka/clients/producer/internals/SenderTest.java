@@ -568,7 +568,10 @@ public class SenderTest {
     }
 
     @Test
-    public void senderThreadShouldNotBlockWhenBackingOffAndAddingPartitionsToTxn() {
+    public void senderThreadShouldNotGetStuckWhenThrottledAndAddingPartitionsToTxn() {
+        // We want MockClient#poll() to advance time so that eventually the backoff expires.
+        client.setAdvanceTimeDuringPoll(true);
+
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
         apiVersions.update("0", NodeApiVersions.create(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 3));
         TransactionManager txnManager = new TransactionManager(logContext, "testUnresolvedSeq", 60000, 100, apiVersions);
@@ -576,16 +579,16 @@ public class SenderTest {
         setupWithTransactionState(txnManager);
         doInitTransactions(txnManager, producerIdAndEpoch);
 
-        int backoffTimeMs = 10;
+        int throttleTimeMs = 1000;
         long startTime = time.milliseconds();
         Node nodeToThrottle = metadata.fetch().nodeById(0);
-        client.throttle(nodeToThrottle, backoffTimeMs);
+        client.throttle(nodeToThrottle, throttleTimeMs);
 
-        // Verify node is throttled about 10ms. In real-life Apache Kafka, we observe that this can happen
+        // Verify node is throttled a little bit. In real-life Apache Kafka, we observe that this can happen
         // as done above by throttling or with a disconnect / backoff.
         long currentPollDelay = client.pollDelayMs(nodeToThrottle, startTime);
         assertTrue(currentPollDelay > 0);
-        assertTrue(currentPollDelay <= backoffTimeMs);
+        assertTrue(currentPollDelay <= throttleTimeMs);
 
         txnManager.beginTransaction();
         txnManager.maybeAddPartition(tp0);
@@ -598,6 +601,8 @@ public class SenderTest {
 
         // It should have blocked roughly only the backoffTimeMs and some change.
         assertTrue(totalTimeToRunOnce < REQUEST_TIMEOUT);
+
+        client.setAdvanceTimeDuringPoll(false);
     }
 
     @Test
