@@ -622,6 +622,9 @@ public class SharePartitionManager implements AutoCloseable {
             // In case exception occurs then release the locks so queue can be further processed.
             log.error("Error processing fetch queue for share partitions", e);
             releaseProcessFetchQueueLock();
+            if (!shareFetchData.future().isDone()) {
+                shareFetchData.future().completeExceptionally(e);
+            }
             // If there are more requests in the queue, then process them.
             if (!fetchQueue.isEmpty())
                 maybeProcessFetchQueue();
