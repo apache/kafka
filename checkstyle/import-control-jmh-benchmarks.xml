@@ -31,6 +31,7 @@
     <allow pkg="javax.security"/>
     <allow pkg="com.yammer.metrics.core"/>
     <allow pkg="org.apache.kafka.common"/>
+    <allow pkg="org.apache.commons"/>
     <allow pkg="org.apache.kafka.clients.producer"/>
     <allow pkg="kafka.cluster"/>
     <allow pkg="kafka.log"/>
