@@ -446,7 +446,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldRemoveUnusedFailedActiveTaskFromStateUpdaterAndCloseDirty() {
+    public void shouldRemoveUnusedFailedActiveTaskFromStateUpdaterAndCloseClean() {
         final StreamTask activeTaskToClose = statefulTask(taskId03, taskId03ChangelogPartitions)
             .inState(State.RESTORING)
             .withInputPartitions(taskId03Partitions).build();
@@ -459,9 +459,8 @@ public class TaskManagerTest {
 
         taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap());
 
-        verify(activeTaskToClose).prepareCommit();
         verify(activeTaskToClose).suspend();
-        verify(activeTaskToClose).closeDirty();
+        verify(activeTaskToClose).closeClean();
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
         verify(standbyTaskCreator).createTasks(Collections.emptyMap());
     }
@@ -500,9 +499,8 @@ public class TaskManagerTest {
 
         taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap());
 
-        verify(standbyTaskToClose).prepareCommit();
         verify(standbyTaskToClose).suspend();
-        verify(standbyTaskToClose).closeDirty();
+        verify(standbyTaskToClose).closeClean();
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
         verify(standbyTaskCreator).createTasks(Collections.emptyMap());
     }
@@ -1469,7 +1467,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldCloseCleanWhenRemoveAllActiveTasksFromStateUpdaterOnPartitionLost() {
+    public void shouldCloseDirtyWhenRemoveAllActiveTasksFromStateUpdaterOnPartitionLost() {
         final StreamTask task1 = statefulTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RESTORING)
             .withInputPartitions(taskId00Partitions).build();
@@ -1491,9 +1489,9 @@ public class TaskManagerTest {
         taskManager.handleLostAll();
 
         verify(task1).suspend();
-        verify(task1).closeClean();
+        verify(task1).closeDirty();
         verify(task3).suspend();
-        verify(task3).closeClean();
+        verify(task3).closeDirty();
         verify(stateUpdater, never()).remove(task2.id());
     }
 
@@ -1569,11 +1567,10 @@ public class TaskManagerTest {
 
         verify(task1).suspend();
         verify(task1).closeClean();
-        verify(task2).prepareCommit();
         verify(task2).suspend();
         verify(task2).closeDirty();
         verify(task3).suspend();
-        verify(task3).closeClean();
+        verify(task3).closeDirty();
     }
 
     private TaskManager setupForRevocationAndLost(final Set<Task> tasksInStateUpdater,
@@ -3511,7 +3508,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldShutDownStateUpdaterAndCloseDirtyTasksFailedDuringRemoval() {
+    public void shouldShutDownStateUpdaterAndCloseCleanTasksFailedDuringRemoval() {
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final StreamTask removedStatefulTask = statefulTask(taskId01, taskId01ChangelogPartitions)
             .inState(State.RESTORING).build();
@@ -3569,18 +3566,14 @@ public class TaskManagerTest {
         verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
         verify(tasks).addTask(removedStatefulTask);
         verify(tasks).addTask(removedStandbyTask);
-        verify(removedFailedStatefulTask).prepareCommit();
         verify(removedFailedStatefulTask).suspend();
-        verify(removedFailedStatefulTask).closeDirty();
-        verify(removedFailedStandbyTask).prepareCommit();
+        verify(removedFailedStatefulTask).closeClean();
         verify(removedFailedStandbyTask).suspend();
-        verify(removedFailedStandbyTask).closeDirty();
-        verify(removedFailedStatefulTaskDuringRemoval).prepareCommit();
+        verify(removedFailedStandbyTask).closeClean();
         verify(removedFailedStatefulTaskDuringRemoval).suspend();
-        verify(removedFailedStatefulTaskDuringRemoval).closeDirty();
-        verify(removedFailedStandbyTaskDuringRemoval).prepareCommit();
+        verify(removedFailedStatefulTaskDuringRemoval).closeClean();
         verify(removedFailedStandbyTaskDuringRemoval).suspend();
-        verify(removedFailedStandbyTaskDuringRemoval).closeDirty();
+        verify(removedFailedStandbyTaskDuringRemoval).closeClean();
     }
 
     @Test
