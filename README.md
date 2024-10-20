@@ -4,12 +4,10 @@ See our [web site](https://kafka.apache.org) for details on the project.
 
 You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
-We build and test Apache Kafka with Java 8, 11, 17 and 21. We set the `release` parameter in javac and scalac
-to `8` to ensure the generated binaries are compatible with Java 8 or higher (independently of the Java version
-used for compilation). Java 8 support project-wide has been deprecated since Apache Kafka 3.0, Java 11 support for
-the broker and tools has been deprecated since Apache Kafka 3.7 and removal of both is planned for Apache Kafka 4.0 (
-see [KIP-750](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308223) and
-[KIP-1013](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=284789510) for more details).
+We build and test Apache Kafka with 11, 17 and 21. We set the `release` parameter in javac and scalac
+to `11` to ensure the generated binaries are compatible with Java 11 or higher (independently of the Java version
+used for compilation). Java 11 support for the broker and tools has been deprecated since Apache Kafka 3.7 and removal 
+of both is planned for Apache Kafka 4.0.([KIP-1013](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=284789510) for more details).
 
 Scala 2.13 is the only supported version in Apache Kafka.
 
@@ -182,14 +180,10 @@ You can run checkstyle using:
 The checkstyle warnings will be found in `reports/checkstyle/reports/main.html` and `reports/checkstyle/reports/test.html` files in the
 subproject build directories. They are also printed to the console. The build will fail if Checkstyle fails.
 
-**Please note that `./gradlew spotlessCheck` currently has an issue with Java 21 (see https://github.com/diffplug/spotless/pull/1920), so make sure to run this with JDK 11 or 17**
-
 #### Spotless ####
-The import order is a part of static check. please call `spotlessApply` (require JDK 11+) to optimize the imports of Java codes before filing pull request.
+The import order is a part of static check. please call `spotlessApply` to optimize the imports of Java codes before filing pull request.
 
     ./gradlew spotlessApply
-
-**Please note that `./gradlew spotlessApply` currently has an issue with Java 21 (see https://github.com/diffplug/spotless/pull/1920), so make sure to run this with JDK 11 or 17**
 
 #### Spotbugs ####
 Spotbugs uses static analysis to look for bugs in the code.
