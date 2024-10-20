@@ -165,6 +165,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
             return completableFuture.get();
             // In Java 23, When a CompletableFuture is cancelled, get() will throw a CancellationException wrapping a
             // CancellationException, thus we need to unwrap it to maintain the KafkaFuture behaviour. 
+            // see https://bugs.openjdk.org/browse/JDK-8331987
         } catch (ExecutionException | CancellationException e) {
             maybeThrowCancellationException(e.getCause());
             throw e;
@@ -182,6 +183,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
             return completableFuture.get(timeout, unit);
             // In Java 23, When a CompletableFuture is cancelled, get() will throw a CancellationException wrapping a
             // CancellationException, thus we need to unwrap it to maintain the KafkaFuture behaviour. 
+            // see https://bugs.openjdk.org/browse/JDK-8331987
         } catch (ExecutionException | CancellationException e) {
             maybeThrowCancellationException(e.getCause());
             throw e;
@@ -199,6 +201,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
         } catch (CancellationException e) {
             // In Java 23, When a CompletableFuture is cancelled, getNow() will throw a CancellationException wrapping a 
             // CancellationException. whereas in Java < 23, it throws a CompletionException directly.
+            // see https://bugs.openjdk.org/browse/JDK-8331987
             if (e.getCause() instanceof CancellationException) {
                 throw (CancellationException) e.getCause();
             } else {
@@ -262,6 +265,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
         } catch (CancellationException e) {
             // In Java 23, When a CompletableFuture is cancelled, getNow() will throw a CancellationException wrapping a 
             // CancellationException. whereas in Java < 23, it throws a CompletionException directly.
+            // see https://bugs.openjdk.org/browse/JDK-8331987
             if (e.getCause() instanceof CancellationException) {
                 exception = e.getCause();
             } else { 
