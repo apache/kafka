@@ -17,15 +17,20 @@
 package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataValue;
 
+import java.io.Serializable;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 /**
  * Immutable topic metadata.
  */
-public class TopicMetadata {
+public class TopicMetadata implements Serializable {
+    private static final long serialVersionUID = 1L;
     /**
      * The topic id.
      */
@@ -41,10 +46,25 @@ public class TopicMetadata {
      */
     private final int numPartitions;
 
+    /**
+     * Map of every partition Id to a set of its rack Ids, if they exist.
+     * If rack information is unavailable for all partitions, this is an empty map.
+     */
+    private final Map<Integer, Set<String>> partitionRacks;
+
     public TopicMetadata(
         Uuid id,
         String name,
         int numPartitions
+    ) {
+        this(id, name, numPartitions, Map.of());
+    }
+
+    public TopicMetadata(
+        Uuid id,
+        String name,
+        int numPartitions,
+        Map<Integer, Set<String>> partitionRacks
     ) {
         this.id = Objects.requireNonNull(id);
         if (Uuid.ZERO_UUID.equals(id)) {
@@ -58,6 +78,13 @@ public class TopicMetadata {
         if (numPartitions < 0) {
             throw new IllegalArgumentException("Number of partitions cannot be negative.");
         }
+        this.partitionRacks = partitionRacks.entrySet().stream()
+            .collect(Collectors.toMap(
+                Map.Entry::getKey,
+                e -> new TreeSet<>(e.getValue()),
+                (e1, e2) -> e1,
+                TreeMap::new
+            ));
     }
 
     /**
@@ -79,6 +106,14 @@ public class TopicMetadata {
      */
     public int numPartitions() {
         return this.numPartitions;
+    }
+
+    /**
+     * @return Every partition mapped to the set of corresponding available rack Ids of its replicas.
+     *         An empty map is returned if rack information is unavailable for all partitions.
+     */
+    public Map<Integer, Set<String>> partitionRacks() {
+        return this.partitionRacks;
     }
 
     @Override
@@ -107,26 +142,7 @@ public class TopicMetadata {
             "id=" + id +
             ", name=" + name +
             ", numPartitions=" + numPartitions +
+            ", partitionRacks=" + partitionRacks +
             ')';
-    }
-
-    public static TopicMetadata fromRecord(
-        ConsumerGroupPartitionMetadataValue.TopicMetadata record
-    ) {
-        return new TopicMetadata(
-            record.topicId(),
-            record.topicName(),
-            record.numPartitions()
-        );
-    }
-
-    public static TopicMetadata fromRecord(
-        ShareGroupPartitionMetadataValue.TopicMetadata record
-    ) {
-        return new TopicMetadata(
-            record.topicId(),
-            record.topicName(),
-            record.numPartitions()
-        );
     }
 }

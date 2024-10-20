@@ -1483,7 +1483,6 @@ public class ConsumerGroupTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord(groupId),
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId1),
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, newMemberId2),
-            GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord(groupId),
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord(groupId)
         );
         assertEquals(expectedRecords.size(), records.size());
@@ -1491,7 +1490,7 @@ public class ConsumerGroupTest {
         assertUnorderedListEquals(expectedRecords.subList(2, 4), records.subList(2, 4));
         assertRecordEquals(expectedRecords.get(4), records.get(4));
         assertUnorderedListEquals(expectedRecords.subList(5, 7), records.subList(5, 7));
-        assertRecordsEquals(expectedRecords.subList(7, 9), records.subList(7, 9));
+        assertRecordsEquals(expectedRecords.subList(7, 8), records.subList(7, 8));
     }
 
     @Test

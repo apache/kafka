@@ -73,7 +73,7 @@ public class GroupCoordinatorRecordSerdeTest {
                 (short) 3
             ),
             new ApiMessageAndVersion(
-                new ConsumerGroupMetadataValue().setEpoch(10),
+                new ConsumerGroupMetadataValue().setEpoch(10).setSubscriptionMetadataHash(10),
                 (short) 0
             )
         );
@@ -93,7 +93,7 @@ public class GroupCoordinatorRecordSerdeTest {
                 (short) 3
             ),
             new ApiMessageAndVersion(
-                new ConsumerGroupMetadataValue().setEpoch(10),
+                new ConsumerGroupMetadataValue().setEpoch(10).setSubscriptionMetadataHash(10),
                 (short) 0
             )
         );
@@ -129,7 +129,7 @@ public class GroupCoordinatorRecordSerdeTest {
         ByteBuffer keyBuffer = MessageUtil.toVersionPrefixedByteBuffer(key.version(), key.message());
 
         ApiMessageAndVersion value = new ApiMessageAndVersion(
-            new ConsumerGroupMetadataValue().setEpoch(10),
+            new ConsumerGroupMetadataValue().setEpoch(10).setSubscriptionMetadataHash(10),
             (short) 0
         );
         ByteBuffer valueBuffer = MessageUtil.toVersionPrefixedByteBuffer(value.version(), value.message());

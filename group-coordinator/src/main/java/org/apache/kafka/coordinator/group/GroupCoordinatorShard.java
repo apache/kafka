@@ -61,8 +61,6 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataK
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
@@ -77,8 +75,6 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataKey;
@@ -795,13 +791,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 );
                 break;
 
-            case 4:
-                groupMetadataManager.replay(
-                    (ConsumerGroupPartitionMetadataKey) key.message(),
-                    (ConsumerGroupPartitionMetadataValue) Utils.messageOrNull(value)
-                );
-                break;
-
             case 5:
                 groupMetadataManager.replay(
                     (ConsumerGroupMemberMetadataKey) key.message(),
@@ -827,13 +816,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 groupMetadataManager.replay(
                     (ConsumerGroupCurrentMemberAssignmentKey) key.message(),
                     (ConsumerGroupCurrentMemberAssignmentValue) Utils.messageOrNull(value)
-                );
-                break;
-
-            case 9:
-                groupMetadataManager.replay(
-                    (ShareGroupPartitionMetadataKey) key.message(),
-                    (ShareGroupPartitionMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 

@@ -524,7 +524,6 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId(), memberId))
         );
 
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord(groupId()));
         records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord(groupId()));
     }
 
@@ -558,7 +557,6 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId(), removedMemberId));
         });
 
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord(groupId()));
         records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord(groupId()));
     }
 
@@ -902,7 +900,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId(), consumerGroupMember))
         );
 
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId(), groupEpoch()));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId(), groupEpoch(), 0));
 
         members().forEach((consumerGroupMemberId, consumerGroupMember) ->
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(
