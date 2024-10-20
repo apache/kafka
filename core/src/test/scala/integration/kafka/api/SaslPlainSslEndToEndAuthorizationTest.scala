@@ -23,6 +23,7 @@ import kafka.utils.TestUtils.isAclSecure
 import kafka.zk.ZkData
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
+import org.apache.kafka.common.internals.SecurityManagerCompatibility
 import org.apache.kafka.common.network.ConnectionMode
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
@@ -31,9 +32,7 @@ import org.apache.kafka.test.TestSslUtils
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
 
-import java.security.AccessController
 import java.util.{Collections, Optional, Properties}
-import javax.security.auth.Subject
 import javax.security.auth.callback._
 import javax.security.auth.login.AppConfigurationEntry
 import scala.collection.Seq
@@ -89,7 +88,7 @@ object SaslPlainSslEndToEndAuthorizationTest {
   class TestClientCallbackHandler extends AuthenticateCallbackHandler {
     def configure(configs: java.util.Map[String, _], saslMechanism: String, jaasConfigEntries: java.util.List[AppConfigurationEntry]): Unit = {}
     def handle(callbacks: Array[Callback]): Unit = {
-      val subject = Subject.getSubject(AccessController.getContext)
+      val subject = SecurityManagerCompatibility.get().current()
       val username = subject.getPublicCredentials(classOf[String]).iterator().next()
       for (callback <- callbacks) {
         callback match {

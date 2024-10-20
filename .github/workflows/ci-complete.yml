@@ -43,7 +43,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java: [ 21, 11 ]
+        java: [ 23, 11 ]
     steps:
       - name: Env
         run: printenv
