@@ -163,6 +163,8 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
     public T get() throws InterruptedException, ExecutionException {
         try {
             return completableFuture.get();
+            // In Java 23, When a CompletableFuture is cancelled, get() will throw a CancellationException wrapping a
+            // CancellationException, thus we need to unwrap it to maintain the KafkaFuture behaviour. 
         } catch (ExecutionException | CancellationException e) {
             maybeThrowCancellationException(e.getCause());
             throw e;
@@ -178,6 +180,8 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
             TimeoutException {
         try {
             return completableFuture.get(timeout, unit);
+            // In Java 23, When a CompletableFuture is cancelled, get() will throw a CancellationException wrapping a
+            // CancellationException, thus we need to unwrap it to maintain the KafkaFuture behaviour. 
         } catch (ExecutionException | CancellationException e) {
             maybeThrowCancellationException(e.getCause());
             throw e;
@@ -193,12 +197,12 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
         try {
             return completableFuture.getNow(valueIfAbsent);
         } catch (CancellationException e) {
-            // In Java 23, When a CompletableFuture is cancelled, getNow() will throw a CompletionException wrapping a 
+            // In Java 23, When a CompletableFuture is cancelled, getNow() will throw a CancellationException wrapping a 
             // CancellationException. whereas in Java < 23, it throws a CompletionException directly.
             if (e.getCause() instanceof CancellationException) {
                 throw (CancellationException) e.getCause();
             } else {
-                throw new CancellationException(e.getMessage());
+                throw e;
             }
         } catch (CompletionException e) {
             maybeThrowCancellationException(e.getCause());
@@ -256,7 +260,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
         try {
             value = completableFuture.getNow(null);
         } catch (CancellationException e) {
-            // In Java 23, When a CompletableFuture is cancelled, getNow() will throw a CompletionException wrapping a 
+            // In Java 23, When a CompletableFuture is cancelled, getNow() will throw a CancellationException wrapping a 
             // CancellationException. whereas in Java < 23, it throws a CompletionException directly.
             if (e.getCause() instanceof CancellationException) {
                 exception = e.getCause();
