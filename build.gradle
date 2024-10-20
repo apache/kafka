@@ -116,18 +116,21 @@ ext {
 
   commitId = determineCommitId()
 
-  addParametersForTests = { name, options ->
+  configureJavaCompiler = { name, options ->
     // -parameters generates arguments with parameter names in TestInfo#getDisplayName.
     // ref: https://github.com/junit-team/junit5/blob/4c0dddad1b96d4a20e92a2cd583954643ac56ac0/junit-jupiter-params/src/main/java/org/junit/jupiter/params/ParameterizedTest.java#L161-L164
     if (name == "compileTestJava" || name == "compileTestScala") {
       options.compilerArgs << "-parameters"
-    } else if (name == "compileScala") {
+    } else if (name == "compileJava" || name == "compileScala") {
       options.compilerArgs << "-Xlint:all"
+      if (!project.path.startsWith(":connect") && !project.path.startsWith(":storage"))
+        options.compilerArgs << "-Xlint:-rawtypes"
       options.compilerArgs << "-encoding" << "UTF-8"
       options.compilerArgs << "-Xlint:-rawtypes"
       options.compilerArgs << "-Xlint:-serial"
       options.compilerArgs << "-Xlint:-try"
       options.compilerArgs << "-Werror"
+      options.compilerArgs += ["--release", String.valueOf(minJavaVersion)]
     }
   }
 
@@ -312,8 +315,7 @@ subprojects {
     options.compilerArgs << "-Xlint:-serial"
     options.compilerArgs << "-Xlint:-try"
     options.compilerArgs << "-Werror"
-    options.release = minJavaVersion
-    addParametersForTests(name, options)
+    configureJavaCompiler(name, options)
   }
 
   if (shouldPublish) {
@@ -764,7 +766,7 @@ subprojects {
 
     scalaCompileOptions.additionalParameters += ["-release", String.valueOf(minJavaVersion)]
 
-    addParametersForTests(name, options)
+    configureJavaCompiler(name, options)
 
     configure(scalaCompileOptions.forkOptions) {
       memoryMaximumSize = defaultMaxHeapSize
