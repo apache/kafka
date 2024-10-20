@@ -41,10 +41,6 @@ import java.nio.ByteBuffer;
 import java.security.SecureRandom;
 import java.util.concurrent.TimeUnit;
 
-@OutputTimeUnit(TimeUnit.SECONDS)
-@Fork(3)
-@Warmup(iterations = 3, time = 1)
-@Measurement(iterations = 5, time = 1)
 /**
  * This benchmark calculates the empirical evidence of different implementation for encoding/decoding a protobuf
  * <a href="https://protobuf.dev/programming-guides/encoding/#varints">VarInt</a> and VarLong.
@@ -52,6 +48,10 @@ import java.util.concurrent.TimeUnit;
  * The benchmark uses JMH and calculates results for different sizes of variable length integer. We expect most of the
  * usage in Kafka code base to be 1 or 2 byte integers.
  */
+@OutputTimeUnit(TimeUnit.SECONDS)
+@Fork(3)
+@Warmup(iterations = 3, time = 1)
+@Measurement(iterations = 5, time = 1)
 public class ByteUtilsBenchmark {
     private static final int DATA_SET_SAMPLE_SIZE = 16384;
 
