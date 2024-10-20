@@ -12,7 +12,6 @@
  */
 package kafka.api
 
-import kafka.security.authorizer.AclAuthorizer
 import kafka.server.BaseRequestTest
 import org.apache.kafka.security.authorizer.AclEntry.WILDCARD_HOST
 import org.apache.kafka.clients.consumer.ConsumerConfig
@@ -105,12 +104,8 @@ class AbstractAuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def addNodeProperties(properties: Properties): Unit = {
-    if (isKRaftTest()) {
-      properties.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[StandardAuthorizer].getName)
-      properties.put(StandardAuthorizer.SUPER_USERS_CONFIG, BrokerPrincipal.toString)
-    } else {
-      properties.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[AclAuthorizer].getName)
-    }
+    properties.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[StandardAuthorizer].getName)
+    properties.put(StandardAuthorizer.SUPER_USERS_CONFIG, BrokerPrincipal.toString)
 
     properties.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1")
     properties.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1")
