@@ -172,8 +172,7 @@ public class SharePartitionManager implements AutoCloseable {
         GroupConfigManager groupConfigManager,
         Metrics metrics
     ) {
-        this(
-            replicaManager,
+        this(replicaManager,
             time,
             cache,
             partitionCacheMap,
@@ -545,7 +544,6 @@ public class SharePartitionManager implements AutoCloseable {
                 sharePartition.maybeInitialize().whenComplete((result, throwable) -> {
                     if (throwable != null) {
                         maybeCompleteInitializationWithException(sharePartitionKey, shareFetchData.future(), throwable);
-                        return;
                     }
                 });
             });
