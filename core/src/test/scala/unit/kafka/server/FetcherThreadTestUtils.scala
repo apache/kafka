@@ -17,11 +17,10 @@
 
 package kafka.server
 
-import kafka.cluster.BrokerEndPoint
-import kafka.server.InitialFetchState
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, SimpleRecord}
+import org.apache.kafka.server.network.BrokerEndPoint
 
 import scala.jdk.CollectionConverters._
 
