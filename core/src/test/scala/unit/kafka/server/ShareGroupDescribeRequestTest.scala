@@ -16,9 +16,9 @@
  */
 package kafka.server
 
-import kafka.test.ClusterInstance
-import kafka.test.annotation._
-import kafka.test.junit.ClusterTestExtensions
+import org.apache.kafka.common.test.api.ClusterInstance
+import org.apache.kafka.common.test.api._
+import org.apache.kafka.common.test.api.ClusterTestExtensions
 import kafka.utils.TestUtils
 import org.apache.kafka.common.ShareGroupState
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData.DescribedGroup
@@ -28,8 +28,9 @@ import org.apache.kafka.common.requests.{ShareGroupDescribeRequest, ShareGroupDe
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.security.authorizer.AclEntry
-import org.apache.kafka.server.config.{ServerConfigs, ShareGroupConfig}
+import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith

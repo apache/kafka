@@ -85,13 +85,13 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
@@ -349,7 +349,7 @@ public class PositionRestartIntegrationTest {
     @AfterEach
     public void afterTest() {
         if (kafkaStreams != null) {
-            kafkaStreams.close();
+            kafkaStreams.close(Duration.ofSeconds(60));
             kafkaStreams.cleanUp();
         }
     }
@@ -393,7 +393,7 @@ public class PositionRestartIntegrationTest {
         final StateQueryRequest<?> request =
             inStore(STORE_NAME)
                 .withQuery(query)
-                .withPartitions(mkSet(0, 1))
+                .withPartitions(Set.of(0, 1))
                 .withPositionBound(PositionBound.at(INPUT_POSITION));
 
         final StateQueryResult<?> result =

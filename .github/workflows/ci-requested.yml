@@ -21,6 +21,8 @@ on:
     types:
       - requested
 
+run-name: CI Requested for ${{ github.event.workflow_run.display_title}}
+
 jobs:
   check-pr-labels:
     # Even though job conditionals are difficult to debug, this will reduce the number of unnecessary runs
@@ -43,6 +45,7 @@ jobs:
       - name: Check PR Labels
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
           RUN_ID: ${{ github.event.workflow_run.id }}
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
           HEAD_REPO: ${{ github.event.workflow_run.head_repository.owner.login }}
@@ -56,7 +59,7 @@ jobs:
           PR_NUMBER=$(gh api \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            /repos/${{ github.repository }}/pulls?head=$HEAD_REPO:$HEAD_BRANCH \
+            /repos/$REPO/pulls?head=$HEAD_REPO:$HEAD_BRANCH \
             --jq '.[0].number')
           if [ -z "$PR_NUMBER" ]; then
             echo "Could not find the PR that triggered this workflow request";

@@ -37,7 +37,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedListEquals;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
@@ -161,6 +160,7 @@ public class TargetAssignmentBuilderTest {
 
         public TargetAssignmentBuilder.TargetAssignmentResult build() {
             TopicsImage topicsImage = topicsImageBuilder.build().topics();
+            TopicIds.TopicResolver topicResolver = new TopicIds.CachedTopicResolver(topicsImage);
             // Prepare expected member specs.
             Map<String, MemberSubscriptionAndAssignmentImpl> memberSubscriptions = new HashMap<>();
 
@@ -169,7 +169,7 @@ public class TargetAssignmentBuilderTest {
                 memberSubscriptions.put(memberId, createMemberSubscriptionAndAssignment(
                     member,
                     targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
-                    topicsImage
+                    topicResolver
                 ))
             );
 
@@ -192,7 +192,7 @@ public class TargetAssignmentBuilderTest {
                     memberSubscriptions.put(memberId, createMemberSubscriptionAndAssignment(
                         updatedMemberOrNull,
                         assignment,
-                        topicsImage
+                        topicResolver
                     ));
                 }
             });
@@ -263,6 +263,7 @@ public class TargetAssignmentBuilderTest {
             .addTopic(barTopicId, "bar", 5)
             .build()
             .topics();
+        TopicIds.TopicResolver topicResolver = new TopicIds.DefaultTopicResolver(topicsImage);
 
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
             .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
@@ -278,13 +279,13 @@ public class TargetAssignmentBuilderTest {
         MemberSubscription subscriptionSpec = createMemberSubscriptionAndAssignment(
             member,
             assignment,
-            topicsImage
+            topicResolver
         );
 
         assertEquals(new MemberSubscriptionAndAssignmentImpl(
             Optional.of("rackId"),
             Optional.of("instanceId"),
-            new TopicIds(mkSet("bar", "foo", "zar"), topicsImage),
+            new TopicIds(Set.of("bar", "foo", "zar"), topicsImage),
             assignment
         ), subscriptionSpec);
     }

@@ -541,7 +541,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
                             indent("\t\t", events.getOrDefault("cnt", emptyMap()).getOrDefault(key, new LinkedList<>())),
                             indent("\t\t", events.getOrDefault("tagg", emptyMap()).getOrDefault(key, new LinkedList<>())));
 
-                        if (!Utils.mkSet("echo", "max", "min", "dif", "cnt", "tagg").contains(topic))
+                        if (!Set.of("echo", "max", "min", "dif", "cnt", "tagg").contains(topic))
                             resultStream.printf("%sEvents=%n%s%n", topic, indent("\t\t", entry.getValue()));
                     }
 

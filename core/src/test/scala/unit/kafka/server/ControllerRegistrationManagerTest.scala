@@ -75,7 +75,6 @@ class ControllerRegistrationManagerTest {
       Time.SYSTEM,
       "controller-registration-manager-test-",
       createSupportedFeatures(MetadataVersion.IBP_3_7_IV0),
-      false,
       RecordTestUtils.createTestControllerRegistration(1, false).incarnationId(),
       ListenerInfo.create(context.config.controllerListeners.map(_.toJava).asJava),
       new ExponentialBackoff(1, 2, 100, 0.02))
@@ -118,7 +117,7 @@ class ControllerRegistrationManagerTest {
         }
       }
     }
-    val provenance = new MetadataProvenance(100, 200, 300)
+    val provenance = new MetadataProvenance(100, 200, 300, true)
     val newImage = delta.apply(provenance)
     val manifest = if (!prevImage.features().metadataVersion().equals(metadataVersion)) {
       new SnapshotManifest(provenance, 1000)

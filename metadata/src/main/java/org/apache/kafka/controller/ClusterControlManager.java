@@ -91,7 +91,6 @@ public class ClusterControlManager {
         private long sessionTimeoutNs = DEFAULT_SESSION_TIMEOUT_NS;
         private ReplicaPlacer replicaPlacer = null;
         private FeatureControlManager featureControl = null;
-        private boolean zkMigrationEnabled = false;
         private BrokerUncleanShutdownHandler brokerUncleanShutdownHandler = null;
         private String interBrokerListenerName = "PLAINTEXT";
 
@@ -127,11 +126,6 @@ public class ClusterControlManager {
 
         Builder setFeatureControlManager(FeatureControlManager featureControl) {
             this.featureControl = featureControl;
-            return this;
-        }
-
-        Builder setZkMigrationEnabled(boolean zkMigrationEnabled) {
-            this.zkMigrationEnabled = zkMigrationEnabled;
             return this;
         }
 
@@ -171,7 +165,6 @@ public class ClusterControlManager {
                 sessionTimeoutNs,
                 replicaPlacer,
                 featureControl,
-                zkMigrationEnabled,
                 brokerUncleanShutdownHandler,
                 interBrokerListenerName
             );
@@ -260,11 +253,6 @@ public class ClusterControlManager {
      */
     private final FeatureControlManager featureControl;
 
-    /**
-     * True if migration from ZK is enabled.
-     */
-    private final boolean zkMigrationEnabled;
-
     private final BrokerUncleanShutdownHandler brokerUncleanShutdownHandler;
 
     /**
@@ -290,7 +278,6 @@ public class ClusterControlManager {
         long sessionTimeoutNs,
         ReplicaPlacer replicaPlacer,
         FeatureControlManager featureControl,
-        boolean zkMigrationEnabled,
         BrokerUncleanShutdownHandler brokerUncleanShutdownHandler,
         String interBrokerListenerName
     ) {
@@ -305,7 +292,6 @@ public class ClusterControlManager {
         this.heartbeatManager = null;
         this.readyBrokersFuture = Optional.empty();
         this.featureControl = featureControl;
-        this.zkMigrationEnabled = zkMigrationEnabled;
         this.controllerRegistrations = new TimelineHashMap<>(snapshotRegistry, 0);
         this.directoryToBroker = new TimelineHashMap<>(snapshotRegistry, 0);
         this.brokerUncleanShutdownHandler = brokerUncleanShutdownHandler;
@@ -349,10 +335,6 @@ public class ClusterControlManager {
             .collect(Collectors.toSet());
     }
 
-    boolean zkRegistrationAllowed() {
-        return zkMigrationEnabled && featureControl.metadataVersion().isMigrationSupported();
-    }
-
     /**
      * Process an incoming broker registration request.
      */
@@ -382,20 +364,8 @@ public class ClusterControlManager {
             }
         }
 
-        if (request.isMigratingZkBroker() && !zkRegistrationAllowed()) {
-            throw new BrokerIdNotRegisteredException("Controller does not support registering ZK brokers.");
-        }
-
-        if (!request.isMigratingZkBroker() && featureControl.inPreMigrationMode()) {
-            throw new BrokerIdNotRegisteredException("Controller is in pre-migration mode and cannot register KRaft " +
-                "brokers until the metadata migration is complete.");
-        }
-
         if (request.isMigratingZkBroker()) {
-            if (request.listeners().find(interBrokerListenerName) == null) {
-                throw new InvalidRegistrationException("Broker does not have the current inter.broker.listener " +
-                        interBrokerListenerName);
-            }
+            throw new BrokerIdNotRegisteredException("Controller does not support registering ZK brokers.");
         }
 
         if (featureControl.metadataVersion().isDirectoryAssignmentSupported()) {
@@ -510,7 +480,7 @@ public class ClusterControlManager {
         records.add(new ApiMessageAndVersion(new RegisterControllerRecord().
             setControllerId(request.controllerId()).
             setIncarnationId(request.incarnationId()).
-            setZkMigrationReady(request.zkMigrationReady()).
+            setZkMigrationReady(false).
             setEndPoints(listenerInfo.toControllerRegistrationRecord()).
             setFeatures(features),
                 (short) 0));

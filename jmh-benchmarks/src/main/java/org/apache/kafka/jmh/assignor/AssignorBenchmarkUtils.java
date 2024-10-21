@@ -159,13 +159,13 @@ public class AssignorBenchmarkUtils {
      *
      * @param members               The ConsumerGroupMembers.
      * @param subscriptionType      The group's subscription type.
-     * @param topicsImage           The TopicsImage to use.
+     * @param topicResolver         The TopicResolver to use.
      * @return The new GroupSpec.
      */
     public static GroupSpec createGroupSpec(
         Map<String, ConsumerGroupMember> members,
         SubscriptionType subscriptionType,
-        TopicsImage topicsImage
+        TopicIds.TopicResolver topicResolver
     ) {
         Map<String, MemberSubscriptionAndAssignmentImpl> memberSpecs = new HashMap<>();
 
@@ -177,7 +177,7 @@ public class AssignorBenchmarkUtils {
             memberSpecs.put(memberId, new MemberSubscriptionAndAssignmentImpl(
                 Optional.ofNullable(member.rackId()),
                 Optional.ofNullable(member.instanceId()),
-                new TopicIds(member.subscribedTopicNames(), topicsImage),
+                new TopicIds(member.subscribedTopicNames(), topicResolver),
                 new Assignment(member.assignedPartitions())
             ));
         }

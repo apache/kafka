@@ -55,6 +55,7 @@ import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
+import org.apache.kafka.clients.consumer.internals.events.ResetOffsetEvent;
 import org.apache.kafka.clients.consumer.internals.events.SeekUnvalidatedEvent;
 import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
@@ -77,6 +78,7 @@ import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.requests.JoinGroupRequest;
@@ -642,6 +644,16 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         );
     }
 
+    @Override
+    public void registerMetricForSubscription(KafkaMetric metric) {
+        throw new UnsupportedOperationException("not implemented");
+    }
+
+    @Override
+    public void unregisterMetricFromSubscription(KafkaMetric metric) {
+        throw new UnsupportedOperationException("not implemented");
+    }
+
     /**
      * poll implementation using {@link ApplicationEventHandler}.
      *  1. Poll for background events. If there's a fetch response event, process the record and return it. If it is
@@ -825,27 +837,23 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public void seekToBeginning(Collection<TopicPartition> partitions) {
-        if (partitions == null)
-            throw new IllegalArgumentException("Partitions collection cannot be null");
-
-        acquireAndEnsureOpen();
-        try {
-            Collection<TopicPartition> parts = partitions.isEmpty() ? subscriptions.assignedPartitions() : partitions;
-            subscriptions.requestOffsetReset(parts, OffsetResetStrategy.EARLIEST);
-        } finally {
-            release();
-        }
+        seek(partitions, OffsetResetStrategy.EARLIEST);
     }
 
     @Override
     public void seekToEnd(Collection<TopicPartition> partitions) {
+        seek(partitions, OffsetResetStrategy.LATEST);
+    }
+
+    private void seek(Collection<TopicPartition> partitions, OffsetResetStrategy offsetResetStrategy) {
         if (partitions == null)
             throw new IllegalArgumentException("Partitions collection cannot be null");
 
         acquireAndEnsureOpen();
         try {
-            Collection<TopicPartition> parts = partitions.isEmpty() ? subscriptions.assignedPartitions() : partitions;
-            subscriptions.requestOffsetReset(parts, OffsetResetStrategy.LATEST);
+            Timer timer = time.timer(defaultApiTimeoutMs);
+            ResetOffsetEvent event = new ResetOffsetEvent(partitions, offsetResetStrategy, calculateDeadlineMs(timer));
+            applicationEventHandler.addAndGet(event);
         } finally {
             release();
         }
@@ -879,18 +887,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         } finally {
             release();
         }
-    }
-
-    @Override
-    @Deprecated
-    public OffsetAndMetadata committed(TopicPartition partition) {
-        return committed(partition, Duration.ofMillis(defaultApiTimeoutMs));
-    }
-
-    @Override
-    @Deprecated
-    public OffsetAndMetadata committed(TopicPartition partition, Duration timeout) {
-        return committed(Collections.singleton(partition), timeout).get(partition);
     }
 
     @Override
@@ -1229,7 +1225,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         wakeupTrigger.disableWakeups();
 
         final Timer closeTimer = time.timer(timeout);
-        clientTelemetryReporter.ifPresent(reporter -> reporter.initiateClose(timeout.toMillis()));
+        clientTelemetryReporter.ifPresent(ClientTelemetryReporter::initiateClose);
         closeTimer.update();
         // Prepare shutting down the network thread
         swallow(log, Level.ERROR, "Failed to release assignment before closing consumer",
@@ -1506,13 +1502,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     oldGroupMetadata.groupInstanceId()
                 ))
         );
-    }
-
-    @Override
-    @Deprecated
-    public ConsumerRecords<K, V> poll(final long timeoutMs) {
-        throw new UnsupportedOperationException("Consumer.poll(long) is not supported when \"group.protocol\" is \"consumer\". " +
-             "This method is deprecated and will be removed in the next major release.");
     }
 
     // Visible for testing
