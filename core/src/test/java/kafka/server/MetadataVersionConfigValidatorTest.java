@@ -47,7 +47,7 @@ public class MetadataVersionConfigValidatorTest {
             .numBytes(88)
             .build();
     public static final MetadataProvenance TEST_PROVENANCE =
-            new MetadataProvenance(50, 3, 8000);
+            new MetadataProvenance(50, 3, 8000, true);
 
     void testWith(MetadataVersion metadataVersion, KafkaConfig config, FaultHandler faultHandler) throws Exception {
         try (MetadataVersionConfigValidator validator = new MetadataVersionConfigValidator(config, faultHandler)) {

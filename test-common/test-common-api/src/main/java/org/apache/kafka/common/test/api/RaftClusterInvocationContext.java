@@ -54,7 +54,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import scala.compat.java8.OptionConverters;
+import scala.jdk.javaapi.OptionConverters;
+
 
 /**
  * Wraps a {@link KafkaClusterTestKit} inside lifecycle methods for a test invocation. Each instance of this
@@ -108,10 +109,12 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         private final ConcurrentLinkedQueue<Admin> admins = new ConcurrentLinkedQueue<>();
         private KafkaClusterTestKit clusterTestKit;
         private final boolean isCombined;
+        private final ListenerName listenerName;
 
         RaftClusterInstance(ClusterConfig clusterConfig, boolean isCombined) {
             this.clusterConfig = clusterConfig;
             this.isCombined = isCombined;
+            this.listenerName = clusterConfig.brokerListenerName();
         }
 
         @Override
@@ -126,7 +129,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
         @Override
         public ListenerName clientListener() {
-            return ListenerName.normalised("EXTERNAL");
+            return listenerName;
         }
 
         @Override
@@ -281,7 +284,10 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                         .setNumBrokerNodes(clusterConfig.numBrokers())
                         .setNumDisksPerBroker(clusterConfig.numDisksPerBroker())
                         .setPerServerProperties(clusterConfig.perServerOverrideProperties())
-                        .setNumControllerNodes(clusterConfig.numControllers()).build();
+                        .setNumControllerNodes(clusterConfig.numControllers())
+                        .setBrokerListenerName(listenerName)
+                        .setBrokerSecurityProtocol(clusterConfig.brokerSecurityProtocol())
+                        .build();
                 KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(nodes);
                 // Copy properties into the TestKit builder
                 clusterConfig.serverProperties().forEach(builder::setConfigProp);

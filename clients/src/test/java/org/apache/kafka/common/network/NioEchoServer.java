@@ -278,7 +278,7 @@ public class NioEchoServer extends Thread {
     }
 
     private String id(SocketChannel channel) {
-        String connectionId = Selector.generateConnectionId(channel.socket(), nextConnectionIndex);
+        String connectionId = Selector.generateConnectionId(channel.socket(), 0, nextConnectionIndex);
         if (nextConnectionIndex == Integer.MAX_VALUE)
             nextConnectionIndex = 0;
         else

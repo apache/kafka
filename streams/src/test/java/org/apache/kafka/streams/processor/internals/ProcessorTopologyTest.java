@@ -68,7 +68,6 @@ import java.util.function.Supplier;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
@@ -172,7 +171,7 @@ public class ProcessorTopologyTest {
 
         final ProcessorTopology processorTopology = topology.getInternalBuilder("X").buildTopology();
 
-        assertThat(processorTopology.terminalNodes(), equalTo(mkSet("processor-2", "sink-1")));
+        assertThat(processorTopology.terminalNodes(), equalTo(Set.of("processor-2", "sink-1")));
     }
 
     @Test

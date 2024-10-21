@@ -64,7 +64,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import scala.Option;
-import scala.compat.java8.OptionConverters;
+import scala.jdk.javaapi.OptionConverters;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -139,7 +139,7 @@ public class UpdateFollowerFetchStateBenchmark {
     // avoid mocked DelayedOperations to avoid mocked class affecting benchmark results
     private class DelayedOperationsMock extends DelayedOperations {
         DelayedOperationsMock() {
-            super(topicPartition, null, null, null);
+            super(topicId, topicPartition, null, null, null, null);
         }
 
         @Override
