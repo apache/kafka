@@ -17,13 +17,13 @@ import java.util.concurrent.ExecutionException
 import kafka.api.GroupAuthorizerIntegrationTest._
 import kafka.security.authorizer.AclAuthorizer
 import kafka.server.BaseRequestTest
-import kafka.utils.TestUtils
+import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.acl.{AccessControlEntry, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
-import org.apache.kafka.common.errors.TopicAuthorizationException
+import org.apache.kafka.common.errors.{GroupAuthorizationException, TopicAuthorizationException}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal}
@@ -34,10 +34,12 @@ import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.security.authorizer.AclEntry.WILDCARD_HOST
 import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{Arguments, MethodSource, ValueSource}
 
+import java.util.stream.Stream
 import scala.jdk.CollectionConverters._
 
 object GroupAuthorizerIntegrationTest {
@@ -57,6 +59,9 @@ object GroupAuthorizerIntegrationTest {
       }
     }
   }
+
+  def getTestQuorumAndGroupProtocolParametersAll: Stream[Arguments] =
+    BaseConsumerTest.getTestQuorumAndGroupProtocolParametersAll()
 }
 
 class GroupAuthorizerIntegrationTest extends BaseRequestTest {
@@ -118,9 +123,8 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
-  def testUnauthorizedProduceAndConsume(quorum: String): Unit = {
+  def testUnauthorizedProduce(quorum: String): Unit = {
     val topic = "topic"
-    val topicPartition = new TopicPartition("topic", 0)
 
     createTopic(topic, listenerName = interBrokerListenerName)
 
@@ -129,12 +133,56 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
       () => producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "message".getBytes)).get()).getCause
     assertTrue(produceException.isInstanceOf[TopicAuthorizationException])
     assertEquals(Set(topic), produceException.asInstanceOf[TopicAuthorizationException].unauthorizedTopics.asScala)
+  }
 
-    val consumer = createConsumer(configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testUnauthorizedConsumeUnsubscribe(quorum: String, groupProtocol: String): Unit = {
+    val topic = "topic"
+    val topicPartition = new TopicPartition(topic, 0)
+
+    createTopic(topic, listenerName = interBrokerListenerName)
+
+    val consumer = createConsumer()
     consumer.assign(List(topicPartition).asJava)
     val consumeException = assertThrows(classOf[TopicAuthorizationException],
       () => TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords = 1))
     assertEquals(Set(topic), consumeException.unauthorizedTopics.asScala)
+
+    assertThrows(classOf[GroupAuthorizationException],
+      () => TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords = 1))
+
+    // TODO: use background-event-queue-size metric to check there is background event
+    Thread.sleep(3000)
+
+    assertDoesNotThrow(new Executable {
+      override def execute(): Unit = consumer.unsubscribe()
+    })
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testUnauthorizedConsumeClose(quorum: String, groupProtocol: String): Unit = {
+    val topic = "topic"
+    val topicPartition = new TopicPartition(topic, 0)
+
+    createTopic(topic, listenerName = interBrokerListenerName)
+
+    val consumer = createConsumer()
+    consumer.assign(List(topicPartition).asJava)
+    val consumeException = assertThrows(classOf[TopicAuthorizationException],
+      () => TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords = 1))
+    assertEquals(Set(topic), consumeException.unauthorizedTopics.asScala)
+
+    assertThrows(classOf[GroupAuthorizationException],
+      () => TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords = 1))
+
+    // TODO: use background-event-queue-size metric to check there is background event
+    Thread.sleep(3000)
+
+    assertDoesNotThrow(new Executable {
+      override def execute(): Unit = consumer.close()
+    })
   }
 
   @ParameterizedTest
