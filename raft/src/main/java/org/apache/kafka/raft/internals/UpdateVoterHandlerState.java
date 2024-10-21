@@ -22,7 +22,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.raft.Endpoints;
 import org.apache.kafka.raft.LeaderAndEpoch;
-import org.apache.kafka.raft.RaftUtil;
+import org.apache.kafka.raft.utils.VoteRpc;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -57,7 +57,7 @@ public final class UpdateVoterHandlerState {
         Endpoints leaderEndpoints
     ) {
         future.complete(
-            RaftUtil.updateVoterResponse(
+            VoteRpc.updateVoterResponse(
                 error,
                 requestListenerName,
                 leaderAndEpoch,

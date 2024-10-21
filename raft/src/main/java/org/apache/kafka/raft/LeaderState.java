@@ -30,6 +30,7 @@ import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.raft.internals.AddVoterHandlerState;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.RemoveVoterHandlerState;
+import org.apache.kafka.raft.utils.VoteRpc;
 import org.apache.kafka.server.common.KRaftVersion;
 
 import org.slf4j.Logger;
@@ -215,7 +216,7 @@ public class LeaderState<T> implements EpochState {
         addVoterHandlerState.ifPresent(
             handlerState -> handlerState
                 .future()
-                .complete(RaftUtil.addVoterResponse(error, message))
+                .complete(VoteRpc.addVoterResponse(error, message))
         );
         addVoterHandlerState = state;
     }
@@ -232,7 +233,7 @@ public class LeaderState<T> implements EpochState {
         removeVoterHandlerState.ifPresent(
             handlerState -> handlerState
                 .future()
-                .complete(RaftUtil.removeVoterResponse(error, message))
+                .complete(VoteRpc.removeVoterResponse(error, message))
         );
         removeVoterHandlerState = state;
     }
@@ -370,6 +371,7 @@ public class LeaderState<T> implements EpochState {
                 return builder.build();
             }
         });
+        accumulator.forceDrain();
     }
 
     public long appendVotersRecord(VoterSet voters, long currentTimeMs) {
