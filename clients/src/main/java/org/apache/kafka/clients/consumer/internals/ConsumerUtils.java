@@ -258,4 +258,11 @@ public final class ConsumerUtils {
         else
             return new KafkaException(message, t);
     }
+
+    public static void maybeUpdateLastSeenEpochIfNewer(ConsumerMetadata metadata, final Map<TopicPartition, OffsetAndMetadata> offsets) {
+        offsets.forEach((topicPartition, offsetAndMetadata) -> {
+            if (offsetAndMetadata != null)
+                offsetAndMetadata.leaderEpoch().ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(topicPartition, epoch));
+        });
+    }
 }
