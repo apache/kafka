@@ -137,8 +137,7 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
         """
         producer = self.setup_producer(self.TOPIC)
         consumer = self.setup_consumer(self.TOPIC, group_protocol=consumer_group.classic_group_protocol,
-                                       version=consumer_version, assignment_strategy=assignment_strategy,
-                                       enable_autocommit=True)
+                                       assignment_strategy=assignment_strategy, enable_autocommit=True)
 
         kafka_version = KafkaVersion(consumer_version)
         if kafka_version == LATEST_2_3 or kafka_version == LATEST_2_4 or (static_membership and kafka_version > LATEST_2_4):
@@ -148,6 +147,7 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
         producer.start()
         self.await_produced_messages(producer)
 
+        self.set_consumer_version(consumer, kafka_version)
         consumer.start()
         self.await_all_members(consumer)
         self.await_consumed_messages(consumer)
@@ -205,8 +205,7 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
         """
         producer = self.setup_producer(self.TOPIC)
         consumer = self.setup_consumer(self.TOPIC, group_protocol=consumer_group.classic_group_protocol,
-                                       version=consumer_version, assignment_strategy=assignment_strategy,
-                                       enable_autocommit=True)
+                                       assignment_strategy=assignment_strategy, enable_autocommit=True)
 
         kafka_version = KafkaVersion(consumer_version)
         if kafka_version == LATEST_2_3 or kafka_version == LATEST_2_4 or (static_membership and kafka_version > LATEST_2_4):
@@ -267,8 +266,7 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
         """
         producer = self.setup_producer(self.TOPIC)
         consumer = self.setup_consumer(self.TOPIC, group_protocol=consumer_group.consumer_group_protocol,
-                                       assignment_strategy=assignment_strategy,
-                                       enable_autocommit=True)
+                                       assignment_strategy=assignment_strategy, enable_autocommit=True)
 
         kafka_version = KafkaVersion(consumer_version)
         if kafka_version == LATEST_2_3 or kafka_version == LATEST_2_4 or (static_membership and kafka_version > LATEST_2_4):
