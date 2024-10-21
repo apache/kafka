@@ -55,6 +55,7 @@ public class DelayedShareFetch extends DelayedOperation {
     private final ShareFetchData shareFetchData;
     private final ReplicaManager replicaManager;
     private final SharePartitionManager sharePartitionManager;
+    private Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionDataFromTryComplete;
     private Map<TopicIdPartition, FetchPartitionData> replicaManagerFetchDataFromTryComplete;
 
     DelayedShareFetch(
@@ -65,7 +66,8 @@ public class DelayedShareFetch extends DelayedOperation {
         this.shareFetchData = shareFetchData;
         this.replicaManager = replicaManager;
         this.sharePartitionManager = sharePartitionManager;
-        this.replicaManagerFetchDataFromTryComplete = new HashMap<>();
+        this.topicPartitionDataFromTryComplete = new LinkedHashMap<>();
+        this.replicaManagerFetchDataFromTryComplete = new LinkedHashMap<>();
     }
 
     @Override
@@ -86,10 +88,11 @@ public class DelayedShareFetch extends DelayedOperation {
         if (shareFetchData.future().isDone())
             return;
 
+        Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData;
         Map<TopicIdPartition, FetchPartitionData> fetchResponseData;
         // tryComplete did not invoke forceComplete, so we need to get replica manager response data.
         if (replicaManagerFetchDataFromTryComplete.isEmpty()) {
-            Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData = acquirablePartitions();
+            topicPartitionData = acquirablePartitions();
             if (topicPartitionData.isEmpty()) {
                 // No locks for share partitions could be acquired, so we complete the request with an empty response.
                 shareFetchData.future().complete(Collections.emptyMap());
@@ -97,7 +100,8 @@ public class DelayedShareFetch extends DelayedOperation {
             }
             fetchResponseData = replicaManagerFetchData(topicPartitionData, true);
         } else {
-            // tryComplete invoked forceComplete, so we can use the replica manager response data from tryComplete.
+            // tryComplete invoked forceComplete, so we can use the topic partitions data and replica manager response data from tryComplete.
+            topicPartitionData = topicPartitionDataFromTryComplete;
             fetchResponseData = replicaManagerFetchDataFromTryComplete;
         }
 
@@ -110,7 +114,7 @@ public class DelayedShareFetch extends DelayedOperation {
             shareFetchData.future().completeExceptionally(e);
         } finally {
             // Releasing the lock to move ahead with the next request in queue.
-            releasePartitionLocks(shareFetchData.groupId(), fetchResponseData.keySet());
+            releasePartitionLocks(shareFetchData.groupId(), topicPartitionData.keySet());
             // If we have a fetch request completed for a topic-partition, we release the locks for that partition,
             // then we should check if there is a pending share fetch request for the topic-partition and complete it.
             // We add the action to delayed actions queue to avoid an infinite call stack, which could happen if
@@ -137,8 +141,10 @@ public class DelayedShareFetch extends DelayedOperation {
 
         if (!topicPartitionData.isEmpty()) {
             replicaManagerFetchDataFromTryComplete = replicaManagerFetchData(topicPartitionData, false);
-            if (!replicaManagerFetchDataFromTryComplete.isEmpty())
+            if (!replicaManagerFetchDataFromTryComplete.isEmpty()) {
+                topicPartitionDataFromTryComplete = topicPartitionData;
                 return forceComplete();
+            }
             log.debug("minBytes is not satisfied for the share fetch request for group {}, member {}, " +
                 "topic partitions {}", shareFetchData.groupId(), shareFetchData.memberId(),
                 shareFetchData.partitionMaxBytes().keySet());
