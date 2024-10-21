@@ -48,17 +48,42 @@ public class ServerConnectionIdTest {
         assertEquals(1, serverConnectionId.processorId());
         assertEquals(2, serverConnectionId.index());
 
-        connectionIdString = "localhost:9092-127.0.1:9093-0-0";
+        connectionIdString = "localhost:9092-127.0.0.1:9093-0-0";
         serverConnectionIdOptional = ServerConnectionId.fromString(connectionIdString);
         assertTrue(serverConnectionIdOptional.isPresent());
         serverConnectionId = serverConnectionIdOptional.get();
 
         assertEquals("localhost", serverConnectionId.localHost());
         assertEquals(9092, serverConnectionId.localPort());
-        assertEquals("127.0.1", serverConnectionId.remoteHost());
+        assertEquals("127.0.0.1", serverConnectionId.remoteHost());
         assertEquals(9093, serverConnectionId.remotePort());
         assertEquals(0, serverConnectionId.processorId());
         assertEquals(0, serverConnectionId.index());
+
+        // IPv6 endpoints
+        connectionIdString = "[2001:db8:0:0:0:0:0:1]:9092-127.0.0.1:9093-1-2";
+        serverConnectionIdOptional = ServerConnectionId.fromString(connectionIdString);
+        assertTrue(serverConnectionIdOptional.isPresent());
+        serverConnectionId = serverConnectionIdOptional.get();
+
+        assertEquals("2001:db8:0:0:0:0:0:1", serverConnectionId.localHost());
+        assertEquals(9092, serverConnectionId.localPort());
+        assertEquals("127.0.0.1", serverConnectionId.remoteHost());
+        assertEquals(9093, serverConnectionId.remotePort());
+        assertEquals(1, serverConnectionId.processorId());
+        assertEquals(2, serverConnectionId.index());
+
+        connectionIdString = "2002:db9:1:0:0:0:0:1:9092-2001:db8::1:9093-0-1";
+        serverConnectionIdOptional = ServerConnectionId.fromString(connectionIdString);
+        assertTrue(serverConnectionIdOptional.isPresent());
+        serverConnectionId = serverConnectionIdOptional.get();
+
+        assertEquals("2002:db9:1:0:0:0:0:1", serverConnectionId.localHost());
+        assertEquals(9092, serverConnectionId.localPort());
+        assertEquals("2001:db8::1", serverConnectionId.remoteHost());
+        assertEquals(9093, serverConnectionId.remotePort());
+        assertEquals(0, serverConnectionId.processorId());
+        assertEquals(1, serverConnectionId.index());
     }
 
     @Test
@@ -110,6 +135,32 @@ public class ServerConnectionIdTest {
 
         assertEquals("127.0.0.1:9092-127.0.0.1:9093-0-0", ServerConnectionId.generateConnectionId(socket, 0, 0));
         assertEquals("127.0.0.1:9092-127.0.0.1:9093-1-2", ServerConnectionId.generateConnectionId(socket, 1, 2));
+    }
+
+    @Test
+    public void testGenerateConnectionIdIpV6() throws IOException {
+        Socket socket = mock(Socket.class);
+        when(socket.getLocalAddress()).thenReturn(InetAddress.getByName("[2001:db8::1]"));
+        when(socket.getLocalPort()).thenReturn(9092);
+        when(socket.getInetAddress()).thenReturn(InetAddress.getByName("127.0.0.1"));
+        when(socket.getPort()).thenReturn(9093);
+
+        assertEquals("2001:db8:0:0:0:0:0:1:9092-127.0.0.1:9093-1-2", ServerConnectionId.generateConnectionId(socket, 1, 2));
+
+        when(socket.getLocalAddress()).thenReturn(InetAddress.getByName("[2002:db9:1::1]"));
+        when(socket.getLocalPort()).thenReturn(9092);
+        when(socket.getInetAddress()).thenReturn(InetAddress.getByName("[2001:db8::1]"));
+        when(socket.getPort()).thenReturn(9093);
+
+        assertEquals("2002:db9:1:0:0:0:0:1:9092-2001:db8:0:0:0:0:0:1:9093-1-2", ServerConnectionId.generateConnectionId(socket, 1, 2));
+
+        // Without brackets
+        when(socket.getLocalAddress()).thenReturn(InetAddress.getByName("2002:db9:1::1"));
+        when(socket.getLocalPort()).thenReturn(9092);
+        when(socket.getInetAddress()).thenReturn(InetAddress.getByName("2001:db8::1"));
+        when(socket.getPort()).thenReturn(9093);
+
+        assertEquals("2002:db9:1:0:0:0:0:1:9092-2001:db8:0:0:0:0:0:1:9093-1-2", ServerConnectionId.generateConnectionId(socket, 1, 2));
     }
 
     @Test
