@@ -202,9 +202,13 @@ public class Formatter {
         return this;
     }
 
-    public Formatter setInitialVoters(DynamicVoters initialControllers) {
+    public Formatter setInitialControllers(DynamicVoters initialControllers) {
         this.initialControllers = Optional.of(initialControllers);
         return this;
+    }
+
+    public Optional<DynamicVoters> initialVoters() {
+        return initialControllers;
     }
 
     boolean hasDynamicQuorum() {
