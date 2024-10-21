@@ -23,6 +23,8 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 
+import org.apache.kafka.connect.reporter.ErrorContext;
+import org.apache.kafka.connect.reporter.ErrorRecordReporter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -85,6 +87,7 @@ public class RetryWithToleranceOperator<T> implements AutoCloseable {
     private final CountDownLatch stopRequestedLatch;
     private volatile boolean stopping;   // indicates whether the operator has been asked to stop retrying
     private List<ErrorReporter<T>> reporters;
+    private List<ErrorRecordReporter<T>> errorRecordReporters;
 
     public RetryWithToleranceOperator(long errorRetryTimeout, long errorMaxDelayInMillis,
                                       ToleranceType toleranceType, Time time, ErrorHandlingMetrics errorHandlingMetrics) {
@@ -139,6 +142,8 @@ public class RetryWithToleranceOperator<T> implements AutoCloseable {
         if (reporters.size() == 1) {
             return new WorkerErrantRecordReporter.ErrantRecordFuture(Collections.singletonList(reporters.iterator().next().report(context)));
         }
+        errorRecordReporters
+                .forEach(reporter -> reporter.report(new ErrorContext<>(context.stage().name(), context.executingClass().getName(), context.original(), context.error())));
         List<Future<RecordMetadata>> futures = reporters.stream()
                 .map(r -> r.report(context))
                 .filter(f -> !f.isDone())
@@ -334,6 +339,10 @@ public class RetryWithToleranceOperator<T> implements AutoCloseable {
      */
     public synchronized void reporters(List<ErrorReporter<T>> reporters) {
         this.reporters = Objects.requireNonNull(reporters, "reporters");
+    }
+
+    public synchronized void errorRecordReporters(List<ErrorRecordReporter<T>> errorRecordReporters) {
+        this.errorRecordReporters = Objects.requireNonNull(errorRecordReporters, "errorRecordReporters");
     }
 
     /**

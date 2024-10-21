@@ -86,6 +86,7 @@ public class ReflectionScanner extends PluginScanner {
                   getPluginDesc(classGraph, PluginType.SOURCE, source),
                   getPluginDesc(classGraph, PluginType.CONVERTER, source),
                   getPluginDesc(classGraph, PluginType.HEADER_CONVERTER, source),
+                  getPluginDesc(classGraph, PluginType.ERROR_RECORD_REPORTER, source),
                   getTransformationPluginDesc(source, classGraph),
                   getPredicatePluginDesc(source, classGraph),
                   getServiceLoaderPluginDesc(PluginType.CONFIGPROVIDER, source),

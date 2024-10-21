@@ -31,6 +31,7 @@ import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
 import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
+import org.apache.kafka.connect.reporter.ErrorRecordReporter;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.source.SourceTask.TransactionBoundary;
@@ -100,11 +101,12 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
                                        Executor closeExecutor,
                                        Runnable preProducerCheck,
                                        Runnable postProducerCheck,
-                                       Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier) {
+                                       Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier,
+                                       Supplier<List<ErrorRecordReporter<SourceRecord>>> errorRecordReportersSupplier) {
         super(id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter, transformationChain,
                 new WorkerSourceTaskContext(offsetReader, id, configState, buildTransactionContext(sourceConfig)),
                 producer, admin, topicGroups, offsetReader, offsetWriter, offsetStore, workerConfig, connectMetrics, errorMetrics,
-                loader, time, retryWithToleranceOperator, statusBackingStore, closeExecutor, errorReportersSupplier);
+                loader, time, retryWithToleranceOperator, statusBackingStore, closeExecutor, errorReportersSupplier, errorRecordReportersSupplier);
 
         this.transactionOpen = false;
         this.committableRecords = new LinkedHashMap<>();

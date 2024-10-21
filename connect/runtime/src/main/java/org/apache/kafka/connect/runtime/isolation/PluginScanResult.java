@@ -20,6 +20,7 @@ import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.sink.SinkConnector;
+import org.apache.kafka.connect.reporter.ErrorRecordReporter;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
@@ -38,6 +39,7 @@ public class PluginScanResult {
     private final SortedSet<PluginDesc<SourceConnector>> sourceConnectors;
     private final SortedSet<PluginDesc<Converter>> converters;
     private final SortedSet<PluginDesc<HeaderConverter>> headerConverters;
+    private final SortedSet<PluginDesc<ErrorRecordReporter<?>>> errorRecordReporters;
     private final SortedSet<PluginDesc<Transformation<?>>> transformations;
     private final SortedSet<PluginDesc<Predicate<?>>> predicates;
     private final SortedSet<PluginDesc<ConfigProvider>> configProviders;
@@ -51,6 +53,7 @@ public class PluginScanResult {
             SortedSet<PluginDesc<SourceConnector>> sourceConnectors,
             SortedSet<PluginDesc<Converter>> converters,
             SortedSet<PluginDesc<HeaderConverter>> headerConverters,
+            SortedSet<PluginDesc<ErrorRecordReporter<?>>> errorRecordReporters,
             SortedSet<PluginDesc<Transformation<?>>> transformations,
             SortedSet<PluginDesc<Predicate<?>>> predicates,
             SortedSet<PluginDesc<ConfigProvider>> configProviders,
@@ -61,6 +64,7 @@ public class PluginScanResult {
         this.sourceConnectors = sourceConnectors;
         this.converters = converters;
         this.headerConverters = headerConverters;
+        this.errorRecordReporters = errorRecordReporters;
         this.transformations = transformations;
         this.predicates = predicates;
         this.configProviders = configProviders;
@@ -80,6 +84,7 @@ public class PluginScanResult {
                 merge(results, PluginScanResult::sourceConnectors),
                 merge(results, PluginScanResult::converters),
                 merge(results, PluginScanResult::headerConverters),
+                merge(results, PluginScanResult::errorRecordReporters),
                 merge(results, PluginScanResult::transformations),
                 merge(results, PluginScanResult::predicates),
                 merge(results, PluginScanResult::configProviders),
@@ -110,6 +115,10 @@ public class PluginScanResult {
 
     public SortedSet<PluginDesc<HeaderConverter>> headerConverters() {
         return headerConverters;
+    }
+
+    public SortedSet<PluginDesc<ErrorRecordReporter<?>>> errorRecordReporters() {
+        return errorRecordReporters;
     }
 
     public SortedSet<PluginDesc<Transformation<?>>> transformations() {
