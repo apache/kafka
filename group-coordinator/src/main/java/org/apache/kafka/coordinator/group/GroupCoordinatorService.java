@@ -1232,7 +1232,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
     /**
      * This is the handler used by offset fetch operations to convert errors to coordinator errors.
-     * The handler also handles and log unexpected errors.
+     * The handler also handles and logs unexpected errors.
      *
      * @param operationName     The name of the operation.
      * @param request           The OffsetFetchRequestGroup request.

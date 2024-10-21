@@ -117,7 +117,6 @@ import static org.apache.kafka.common.protocol.Errors.NOT_COORDINATOR;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.coordinator.group.Assertions.assertRecordEquals;
 import static org.apache.kafka.coordinator.group.Assertions.assertRecordsEquals;
 import static org.apache.kafka.coordinator.group.Assertions.assertResponseEquals;
@@ -126,6 +125,8 @@ import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupConfig.SHARE_HEARTBEAT_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupConfig.SHARE_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESULT;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.appendGroupMetadataErrorToResponseError;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupHeartbeatKey;
@@ -2825,8 +2826,8 @@ public class GroupMetadataManagerTest {
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                 .build()));
 
-        assertEquals(mkSet(groupId1), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
-        assertEquals(mkSet(groupId1), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+        assertEquals(Set.of(groupId1), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
+        assertEquals(Set.of(groupId1), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
         assertEquals(Collections.emptySet(), context.groupMetadataManager.groupsSubscribedToTopic("zar"));
 
         // M1 in group 2 subscribes to foo, bar and zar.
@@ -2835,9 +2836,9 @@ public class GroupMetadataManagerTest {
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
                 .build()));
 
-        assertEquals(mkSet(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
-        assertEquals(mkSet(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
-        assertEquals(mkSet(groupId2), context.groupMetadataManager.groupsSubscribedToTopic("zar"));
+        assertEquals(Set.of(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
+        assertEquals(Set.of(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+        assertEquals(Set.of(groupId2), context.groupMetadataManager.groupsSubscribedToTopic("zar"));
 
         // M2 in group 1 subscribes to bar and zar.
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId1,
@@ -2845,9 +2846,9 @@ public class GroupMetadataManagerTest {
                 .setSubscribedTopicNames(Arrays.asList("bar", "zar"))
                 .build()));
 
-        assertEquals(mkSet(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
-        assertEquals(mkSet(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
-        assertEquals(mkSet(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("zar"));
+        assertEquals(Set.of(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
+        assertEquals(Set.of(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+        assertEquals(Set.of(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("zar"));
 
         // M2 in group 2 subscribes to foo and bar.
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId2,
@@ -2855,17 +2856,17 @@ public class GroupMetadataManagerTest {
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                 .build()));
 
-        assertEquals(mkSet(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
-        assertEquals(mkSet(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
-        assertEquals(mkSet(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("zar"));
+        assertEquals(Set.of(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
+        assertEquals(Set.of(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+        assertEquals(Set.of(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("zar"));
 
         // M1 in group 1 is removed.
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId1, "group1-m1"));
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId1, "group1-m1"));
 
-        assertEquals(mkSet(groupId2), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
-        assertEquals(mkSet(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
-        assertEquals(mkSet(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("zar"));
+        assertEquals(Set.of(groupId2), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
+        assertEquals(Set.of(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+        assertEquals(Set.of(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("zar"));
 
         // M1 in group 2 subscribes to nothing.
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId2,
@@ -2873,9 +2874,9 @@ public class GroupMetadataManagerTest {
                 .setSubscribedTopicNames(Collections.emptyList())
                 .build()));
 
-        assertEquals(mkSet(groupId2), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
-        assertEquals(mkSet(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
-        assertEquals(mkSet(groupId1), context.groupMetadataManager.groupsSubscribedToTopic("zar"));
+        assertEquals(Set.of(groupId2), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
+        assertEquals(Set.of(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+        assertEquals(Set.of(groupId1), context.groupMetadataManager.groupsSubscribedToTopic("zar"));
 
         // M2 in group 2 subscribes to foo.
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId2,
@@ -2883,9 +2884,9 @@ public class GroupMetadataManagerTest {
                 .setSubscribedTopicNames(Collections.singletonList("foo"))
                 .build()));
 
-        assertEquals(mkSet(groupId2), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
-        assertEquals(mkSet(groupId1), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
-        assertEquals(mkSet(groupId1), context.groupMetadataManager.groupsSubscribedToTopic("zar"));
+        assertEquals(Set.of(groupId2), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
+        assertEquals(Set.of(groupId1), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+        assertEquals(Set.of(groupId1), context.groupMetadataManager.groupsSubscribedToTopic("zar"));
 
         // M2 in group 2 subscribes to nothing.
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId2,
@@ -2894,8 +2895,8 @@ public class GroupMetadataManagerTest {
                 .build()));
 
         assertEquals(Collections.emptySet(), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
-        assertEquals(mkSet(groupId1), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
-        assertEquals(mkSet(groupId1), context.groupMetadataManager.groupsSubscribedToTopic("zar"));
+        assertEquals(Set.of(groupId1), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+        assertEquals(Set.of(groupId1), context.groupMetadataManager.groupsSubscribedToTopic("zar"));
 
         // M2 in group 1 subscribes to nothing.
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId1,
@@ -5708,7 +5709,7 @@ public class GroupMetadataManagerTest {
             leaderJoinResult.joinFuture.get(),
             group,
             COMPLETING_REBALANCE,
-            mkSet("leader-instance-id", "follower-instance-id")
+            Set.of("leader-instance-id", "follower-instance-id")
         );
 
         assertEquals(rebalanceResult.leaderId, leaderJoinResult.joinFuture.get().memberId());
@@ -5838,7 +5839,7 @@ public class GroupMetadataManagerTest {
             leaderJoinResult.joinFuture.get(),
             group,
             COMPLETING_REBALANCE,
-            mkSet("leader-instance-id", "follower-instance-id")
+            Set.of("leader-instance-id", "follower-instance-id")
         );
 
         assertTrue(duplicateFollowerJoinResult.joinFuture.isDone());
@@ -5984,7 +5985,7 @@ public class GroupMetadataManagerTest {
             joinResult.joinFuture.get(),
             group,
             STABLE,
-            supportSkippingAssignment ? mkSet("leader-instance-id", "follower-instance-id") : Collections.emptySet()
+            supportSkippingAssignment ? Set.of("leader-instance-id", "follower-instance-id") : Collections.emptySet()
         );
 
         GroupMetadataManagerTestContext.JoinResult oldLeaderJoinResult = context.sendClassicGroupJoin(
@@ -6174,7 +6175,7 @@ public class GroupMetadataManagerTest {
             joinResult.joinFuture.get(),
             group,
             COMPLETING_REBALANCE,
-            mkSet("leader-instance-id", "follower-instance-id")
+            Set.of("leader-instance-id", "follower-instance-id")
         );
     }
 
@@ -6236,7 +6237,7 @@ public class GroupMetadataManagerTest {
             joinResult.joinFuture.get(),
             group,
             COMPLETING_REBALANCE,
-            mkSet("leader-instance-id", "follower-instance-id")
+            Set.of("leader-instance-id", "follower-instance-id")
         );
     }
 
@@ -6497,7 +6498,7 @@ public class GroupMetadataManagerTest {
             leaderJoinResult.joinFuture.get(),
             group,
             COMPLETING_REBALANCE,
-            mkSet("leader-instance-id", "follower-instance-id")
+            Set.of("leader-instance-id", "follower-instance-id")
         );
 
         JoinGroupResponseData expectedFollowerResponse = new JoinGroupResponseData()
@@ -6939,7 +6940,7 @@ public class GroupMetadataManagerTest {
             leaderJoinResult.joinFuture.get(),
             group,
             COMPLETING_REBALANCE,
-            mkSet("leader-instance-id", "follower-instance-id", newMemberInstanceId)
+            Set.of("leader-instance-id", "follower-instance-id", newMemberInstanceId)
         );
 
         JoinGroupResponseData expectedNewMemberResponse = new JoinGroupResponseData()
@@ -7035,7 +7036,7 @@ public class GroupMetadataManagerTest {
             newLeaderResponse,
             group,
             COMPLETING_REBALANCE,
-            mkSet("leader-instance-id", "follower-instance-id", newMemberInstanceId)
+            Set.of("leader-instance-id", "follower-instance-id", newMemberInstanceId)
         );
 
         JoinGroupResponseData expectedNewMemberResponse = new JoinGroupResponseData()
@@ -8902,15 +8903,15 @@ public class GroupMetadataManagerTest {
         assertTrue(group.isInState(COMPLETING_REBALANCE));
 
         assertEquals(
-            mkSet(rebalanceResult.leaderId, rebalanceResult.followerId, joinResult.joinFuture.get().memberId()),
+            Set.of(rebalanceResult.leaderId, rebalanceResult.followerId, joinResult.joinFuture.get().memberId()),
             group.allMemberIds()
         );
         assertEquals(
-            mkSet(rebalanceResult.leaderId, rebalanceResult.followerId),
+            Set.of(rebalanceResult.leaderId, rebalanceResult.followerId),
             group.allStaticMemberIds()
         );
         assertEquals(
-            mkSet(joinResult.joinFuture.get().memberId()),
+            Set.of(joinResult.joinFuture.get().memberId()),
             group.allDynamicMemberIds()
         );
 
@@ -14513,6 +14514,91 @@ public class GroupMetadataManagerTest {
         // Session timer is cancelled on leave.
         result = context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH));
+        assertEquals(LEAVE_GROUP_MEMBER_EPOCH, result.response().memberEpoch());
+
+        // Verify that there are no timers.
+        context.assertNoSessionTimeout(groupId, memberId);
+        context.assertNoRebalanceTimeout(groupId, memberId);
+    }
+
+    @Test
+    public void testShareGroupDynamicConfigs() {
+        String groupId = "fooup";
+        // Use a static member id as it makes the test easier.
+        String memberId = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("simple");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 6)
+                .addRacks()
+                .build())
+            .build();
+
+        assignor.prepareGroupAssignment(new GroupAssignment(
+            Collections.singletonMap(memberId, new MemberAssignmentImpl(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)
+            )))
+        ));
+
+        // Session timer is scheduled on first heartbeat.
+        CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> result =
+            context.shareGroupHeartbeat(
+                new ShareGroupHeartbeatRequestData()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId)
+                    .setMemberEpoch(0)
+                    .setSubscribedTopicNames(Collections.singletonList("foo")));
+        assertEquals(1, result.response().memberEpoch());
+
+        // Verify heartbeat interval
+        assertEquals(5000, result.response().heartbeatIntervalMs());
+
+        // Verify that there is a session time.
+        context.assertSessionTimeout(groupId, memberId, 45000);
+
+        // Advance time.
+        assertEquals(
+            Collections.emptyList(),
+            context.sleep(result.response().heartbeatIntervalMs())
+        );
+
+        // Dynamic update group config
+        Properties newGroupConfig = new Properties();
+        newGroupConfig.put(SHARE_SESSION_TIMEOUT_MS_CONFIG, 50000);
+        newGroupConfig.put(SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, 10000);
+        context.updateGroupConfig(groupId, newGroupConfig);
+
+        // Session timer is rescheduled on second heartbeat.
+        result = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(result.response().memberEpoch()));
+        assertEquals(1, result.response().memberEpoch());
+
+        // Verify heartbeat interval
+        assertEquals(10000, result.response().heartbeatIntervalMs());
+
+        // Verify that there is a session time.
+        context.assertSessionTimeout(groupId, memberId, 50000);
+
+        // Advance time.
+        assertEquals(
+            Collections.emptyList(),
+            context.sleep(result.response().heartbeatIntervalMs())
+        );
+
+        // Session timer is cancelled on leave.
+        result = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId)
                 .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH));

@@ -36,8 +36,8 @@ import java.util
 import java.util.concurrent.CompletableFuture
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOptional
 
 /**
  * Logic to handle ACL requests.
@@ -112,7 +112,7 @@ class AclApis(authHelper: AuthHelper,
           val aclCreationResults = allBindings.map { acl =>
             val result = errorResults.getOrElse(acl, createResults(validBindings.indexOf(acl)).get)
             val creationResult = new AclCreationResult()
-            result.exception.asScala.foreach { throwable =>
+            result.exception.toScala.foreach { throwable =>
               val apiError = ApiError.fromThrowable(throwable)
               creationResult
                 .setErrorCode(apiError.error.code)

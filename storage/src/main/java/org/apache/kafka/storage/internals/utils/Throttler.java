@@ -62,7 +62,8 @@ public class Throttler {
                      Time time) {
         this.desiredRatePerSec = desiredRatePerSec;
         this.checkIntervalNs = TimeUnit.MILLISECONDS.toNanos(checkIntervalMs);
-        this.meter = new KafkaMetricsGroup(Throttler.class).newMeter(metricName, units, TimeUnit.SECONDS);
+        // For compatibility - this metrics group was previously defined within a Scala class named `kafka.utils.Throttler`
+        this.meter = new KafkaMetricsGroup("kafka.utils", "Throttler").newMeter(metricName, units, TimeUnit.SECONDS);
         this.time = time;
         this.periodStartNs = time.nanoseconds();
     }

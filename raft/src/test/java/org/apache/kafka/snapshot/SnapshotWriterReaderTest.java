@@ -23,7 +23,6 @@ import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.BufferSupplier.GrowableBufferSupplier;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.ControlRecord;
 import org.apache.kafka.raft.OffsetAndEpoch;
@@ -209,7 +208,7 @@ public final class SnapshotWriterReaderTest {
 
         int countRecords = 0;
 
-        Iterator<RecordBatch> recordBatches = Utils.covariantCast(snapshot.records().batchIterator());
+        var recordBatches = snapshot.records().batchIterator();
 
         assertTrue(recordBatches.hasNext());
         RecordBatch batch = recordBatches.next();
