@@ -4321,7 +4321,7 @@ public class GroupMetadataManager {
                     groupInstanceId + " for pending member with memberId=" + memberId);
             }
 
-            log.debug("Pending dynamic member with id {} joins group {} in {} state. Adding to the group now.",
+            log.info("Pending dynamic member with id {} joins group {} in {} state. Adding to the group now.",
                 memberId, group.groupId(), group.currentState());
 
             return addMemberThenRebalanceOrCompleteJoin(
