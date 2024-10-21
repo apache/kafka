@@ -232,7 +232,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-b", null, 15L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-c", null, 15L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L)),
-            Arrays.asList(
+            Collections.singletonList(
                 new TestRecord<>(null, "E-null", null, 16L)),
             null
         );
@@ -285,7 +285,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-b", null, 15L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-c", null, 15L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L)),
-            Arrays.asList(
+            Collections.singletonList(
                 new TestRecord<>(null, "E-null", null, 16L)),
             null
         );
@@ -340,9 +340,9 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-b", null, 15L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-c", null, 15L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L)),
-            Arrays.asList(
+            Collections.singletonList(
                 new TestRecord<>(null, "E-null", null, 16L)),
-            Arrays.asList(
+            Collections.singletonList(
                 new TestRecord<>(null, "null-e", null, 17L))
         );
 
@@ -394,9 +394,9 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-b", null, 15L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-c", null, 15L),
                 new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L)),
-            Arrays.asList(
+            Collections.singletonList(
                 new TestRecord<>(null, "E-null", null, 16L)),
-            Arrays.asList(
+            Collections.singletonList(
                 new TestRecord<>(null, "null-e", null, 17L))
         );
 
