@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.hash.Murmur3;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;

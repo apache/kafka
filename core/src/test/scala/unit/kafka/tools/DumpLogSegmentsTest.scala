@@ -669,7 +669,7 @@ class DumpLogSegmentsTest {
     assertEquals(
       (
         Some("{\"type\":\"3\",\"data\":{\"groupId\":\"group\"}}"),
-        Some("{\"version\":\"0\",\"data\":{\"epoch\":10}}")
+        Some("{\"version\":\"0\",\"data\":{\"epoch\":10,\"subscriptionMetadataHash\":10}}")
       ),
       parser.parse(serializedRecord(
         new ApiMessageAndVersion(
@@ -679,7 +679,8 @@ class DumpLogSegmentsTest {
         ),
         new ApiMessageAndVersion(
           new ConsumerGroupMetadataValue()
-            .setEpoch(10),
+            .setEpoch(10)
+            .setSubscriptionMetadataHash(10),
           0.toShort
         )
       ))
@@ -812,8 +813,7 @@ class DumpLogSegmentsTest {
     assertEquals(
       (
         Some(
-          "Error at offset 0, skipping. Could not read record with version 0 from value's buffer due to: " +
-            "Error reading byte array of 536870911 byte(s): only 1 byte(s) available."
+          "Error at offset 0, skipping. Could not read record with version 0 from value's buffer due to: null."
         ),
         None
       ),
