@@ -454,14 +454,14 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
          */
         protected KeyStore load(boolean isKeyStore) {
             try (InputStream in = Files.newInputStream(Paths.get(path))) {
-                    KeyStore ks = KeyStore.getInstance(type);
-                    // If a password is not set access to the truststore is still available, but integrity checking is disabled.
-                    char[] passwordChars = password != null ? password.value().toCharArray() : null;
-                    ks.load(in, passwordChars);
-                    return ks;
-                } catch (GeneralSecurityException | IOException e) {
-                    throw new KafkaException("Failed to load SSL keystore " + path + " of type " + type, e);
-                }
+                KeyStore ks = KeyStore.getInstance(type);
+                // If a password is not set access to the truststore is still available, but integrity checking is disabled.
+                char[] passwordChars = password != null ? password.value().toCharArray() : null;
+                ks.load(in, passwordChars);
+                return ks;
+            } catch (GeneralSecurityException | IOException e) {
+                throw new KafkaException("Failed to load SSL keystore " + path + " of type " + type, e);
+            }
         }
 
         private Long lastModifiedMs(String path) {
