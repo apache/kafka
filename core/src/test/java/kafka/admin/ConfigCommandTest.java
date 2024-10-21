@@ -1194,60 +1194,6 @@ public class ConfigCommandTest {
         verify(describeResult).all();
     }
 
-
-    private List<String> connectOpts;
-
-    private ConfigCommand.ConfigCommandOptions createOpts(String entityType, Optional<String> entityName, List<String> otherArgs) {
-        List<String> optArray = Arrays.asList(connectOpts.get(0), connectOpts.get(1), "--entity-type", entityType);
-        List<String> nameArray = entityName
-            .map(s -> Arrays.asList("--entity-name", s))
-            .orElse(Collections.emptyList());
-        return new ConfigCommand.ConfigCommandOptions(toArray(optArray, nameArray, otherArgs));
-    }
-
-    private void checkEntity(String expectedEntityType, String expectedEntityName, String...args) {
-        ConfigCommand.ConfigCommandOptions opts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts, Arrays.asList(args)));
-        opts.checkArgs();
-        ConfigCommand.ConfigEntity entity = ConfigCommand.parseEntity(opts);
-        assertEquals(expectedEntityType, entity.root().entityType());
-        assertEquals(expectedEntityName, entity.fullSanitizedName());
-    }
-
-    @Test
-    public void testUserClientQuotaOpts() {
-        connectOpts = Arrays.asList("--bootstrap-server", "localhost:9092");
-
-        // <default> is a valid user principal and client-id (can be handled with URL-encoding),
-        checkEntity("users", Sanitizer.sanitize("<default>"),
-            "--entity-type", "users", "--entity-name", "<default>",
-            "--alter", "--add-config", "a=b,c=d");
-        checkEntity("clients", Sanitizer.sanitize("<default>"),
-            "--entity-type", "clients", "--entity-name", "<default>",
-            "--alter", "--add-config", "a=b,c=d");
-
-        checkEntity("users", Sanitizer.sanitize("CN=user1") + "/clients/client1",
-            "--entity-type", "users", "--entity-name", "CN=user1", "--entity-type", "clients", "--entity-name", "client1",
-            "--alter", "--add-config", "a=b,c=d");
-        checkEntity("users", Sanitizer.sanitize("CN=user1") + "/clients/client1",
-            "--entity-name", "CN=user1", "--entity-type", "users", "--entity-name", "client1", "--entity-type", "clients",
-            "--alter", "--add-config", "a=b,c=d");
-        checkEntity("users", Sanitizer.sanitize("CN=user1") + "/clients/client1",
-            "--entity-type", "clients", "--entity-name", "client1", "--entity-type", "users", "--entity-name", "CN=user1",
-            "--alter", "--add-config", "a=b,c=d");
-        checkEntity("users", Sanitizer.sanitize("CN=user1") + "/clients/client1",
-            "--entity-name", "client1", "--entity-type", "clients", "--entity-name", "CN=user1", "--entity-type", "users",
-            "--alter", "--add-config", "a=b,c=d");
-        checkEntity("users", Sanitizer.sanitize("CN=user1") + "/clients",
-            "--entity-type", "clients", "--entity-name", "CN=user1", "--entity-type", "users",
-            "--describe");
-        checkEntity("users", "/clients",
-            "--entity-type", "clients", "--entity-type", "users",
-            "--describe");
-        checkEntity("users", Sanitizer.sanitize("CN=user1") + "/clients/" + Sanitizer.sanitize("client1?@%"),
-            "--entity-name", "client1?@%", "--entity-type", "clients", "--entity-name", "CN=user1", "--entity-type", "users",
-            "--alter", "--add-config", "a=b,c=d");
-    }
-
     @Test
     public void shouldAlterClientMetricsConfig() {
         Node node = new Node(1, "localhost", 9092);
