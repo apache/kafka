@@ -99,12 +99,6 @@ public class SslConfigs {
         + "This is optional for client and only needed if 'ssl.keystore.location' is configured. "
         + "Key store password is not supported for PEM format.";
 
-    public static final String SSL_KEYSTORE_AS_STRING = "ssl.keystore.as.string";
-    public static final String SSL_KEYSTORE_AS_STRING_DOC = "True when using a base64 encoded keystore string";
-
-    public static final String SSL_TRUSTSTORE_AS_STRING = "ssl.truststore.as.string";
-    public static final String SSL_TRUSTSTORE_AS_STRING_DOC = "True when using a base64 encoded truststore string";
-
     public static final String SSL_KEY_PASSWORD_CONFIG = "ssl.key.password";
     public static final String SSL_KEY_PASSWORD_DOC = "The password of the private key in the key store file or "
         + "the PEM key specified in 'ssl.keystore.key'.";
@@ -166,9 +160,7 @@ public class SslConfigs {
                 .define(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, ConfigDef.Type.STRING, SslConfigs.DEFAULT_SSL_TRUSTMANAGER_ALGORITHM, ConfigDef.Importance.LOW, SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_DOC)
                 .define(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, ConfigDef.Type.STRING, SslConfigs.DEFAULT_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM, ConfigDef.Importance.LOW, SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC)
                 .define(SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG, ConfigDef.Type.STRING, null, ConfigDef.Importance.LOW, SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_DOC)
-                .define(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, ConfigDef.Type.CLASS, null, ConfigDef.Importance.LOW, SslConfigs.SSL_ENGINE_FACTORY_CLASS_DOC)
-                .define(SslConfigs.SSL_KEYSTORE_AS_STRING, ConfigDef.Type.STRING, null, ConfigDef.Importance.LOW,SslConfigs.SSL_KEYSTORE_AS_STRING_DOC)
-                .define(SslConfigs.SSL_TRUSTSTORE_AS_STRING, ConfigDef.Type.STRING, null, ConfigDef.Importance.LOW,SslConfigs.SSL_TRUSTSTORE_AS_STRING_DOC);
+                .define(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, ConfigDef.Type.CLASS, null, ConfigDef.Importance.LOW, SslConfigs.SSL_ENGINE_FACTORY_CLASS_DOC);
     }
 
     public static final Set<String> RECONFIGURABLE_CONFIGS = Utils.mkSet(

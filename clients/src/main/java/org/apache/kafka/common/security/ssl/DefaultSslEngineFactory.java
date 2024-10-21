@@ -190,14 +190,12 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
                 (Password) configs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG),
                 (Password) configs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG),
                 (Password) configs.get(SslConfigs.SSL_KEYSTORE_KEY_CONFIG),
-                (Password) configs.get(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG)),
-                Boolean.parseBoolean((String) configs.get(SslConfigs.SSL_KEYSTORE_AS_STRING)));
+                (Password) configs.get(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG));
 
         this.truststore = createTruststore((String) configs.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG),
                 (String) configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
                 (Password) configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG),
-                (Password) configs.get(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG)),
-                Boolean.parseBoolean((String) configs.get(SslConfigs.SSL_TRUSTSTORE_AS_STRING)));
+                (Password) configs.get(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG));
 
         this.sslContext = createSSLContext(keystore, truststore, configs);
     }
@@ -360,7 +358,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
     }
 
     // Visibility to override for testing
-    protected SecurityStore createKeystore(String type, String path, Password password, Password keyPassword, Password privateKey, Password certificateChain, boolean pathAsBase64EncodedString) {
+    protected SecurityStore createKeystore(String type, String path, Password password, Password keyPassword, Password privateKey, Password certificateChain) {
         if (privateKey != null) {
             if (!PEM_TYPE.equals(type))
                 throw new InvalidConfigurationException("SSL private key can be specified only for PEM, but key store type is " + type + ".");
@@ -384,12 +382,12 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
         } else if (path != null && password == null) {
             throw new InvalidConfigurationException("SSL key store is specified, but key store password is not specified.");
         } else if (path != null && password != null) {
-            return new FileBasedStore(type, path, password, keyPassword, true, pathAsBase64EncodedString);
+            return new FileBasedStore(type, path, password, keyPassword, true);
         } else
             return null; // path == null, clients may use this path with brokers that don't require client auth
     }
 
-    private static SecurityStore createTruststore(String type, String path, Password password, Password trustStoreCerts, boolean pathAsBase64EncodedString) {
+    private static SecurityStore createTruststore(String type, String path, Password password, Password trustStoreCerts) {
         if (trustStoreCerts != null) {
             if (!PEM_TYPE.equals(type))
                 throw new InvalidConfigurationException("SSL trust store certs can be specified only for PEM, but trust store type is " + type + ".");
@@ -407,7 +405,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
         } else if (path == null && password != null) {
             throw new InvalidConfigurationException("SSL trust store is not specified, but trust store password is specified.");
         } else if (path != null) {
-            return new FileBasedStore(type, path, password, null, false, pathAsBase64EncodedString);
+            return new FileBasedStore(type, path, password, null, false);
         } else
             return null;
     }
@@ -428,7 +426,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
         private final KeyStore keyStore;
         private final boolean pathAsBase64EncodedString;
 
-        FileBasedStore(String type, String path, Password password, Password keyPassword, boolean isKeyStore, boolean pathAsBase64EncodedString) {
+        FileBasedStore(String type, String path, Password password, Password keyPassword, boolean isKeyStore) {
             Objects.requireNonNull(type, "type must not be null");
             this.type = type;
             this.path = path;
@@ -436,7 +434,6 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
             this.keyPassword = keyPassword;
             fileLastModifiedMs = lastModifiedMs(path);
             this.keyStore = load(isKeyStore);
-            this.pathAsBase64EncodedString = pathAsBase64EncodedString;
         }
 
         @Override
@@ -457,28 +454,15 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
          *   using the specified configs (e.g. if the password or keystore type is invalid)
          */
         protected KeyStore load(boolean isKeyStore) {
-            if (path == null) {
-                throw new KafkaException("Failed to load SSL keystore: path was null");
-            }
-            InputStream in;
-            try {
-                if (pathAsBase64EncodedString) {
-                    String encodedKeyStore = System.getenv(path);
-                    in = new ByteArrayInputStream(Base64.decoder().decode(encodedKeyStore));
-                } else if (type.equalsIgnoreCase(TruststoreUtility.CRT)) {
-                    return TruststoreUtility.createTrustStore(path, password.value());
-                } else {
-                    in = new FileInputStream(path);
+            try (InputStream in = Files.newInputStream(Paths.get(path))) {
+                    KeyStore ks = KeyStore.getInstance(type);
+                    // If a password is not set access to the truststore is still available, but integrity checking is disabled.
+                    char[] passwordChars = password != null ? password.value().toCharArray() : null;
+                    ks.load(in, passwordChars);
+                    return ks;
+                } catch (GeneralSecurityException | IOException e) {
+                    throw new KafkaException("Failed to load SSL keystore " + path + " of type " + type, e);
                 }
-                KeyStore ks = KeyStore.getInstance(type);
-                // If a password is not set access to the truststore is still available, but integrity checking is disabled.
-                char[] passwordChars = password != null ? password.value().toCharArray() : null;
-                ks.load(in, passwordChars);
-                in.close();
-                return ks;
-            } catch (GeneralSecurityException | IOException e) {
-                throw new KafkaException("Failed to load SSL keystore " + path + " of type " + type, e);
-            }
         }
 
         private Long lastModifiedMs(String path) {

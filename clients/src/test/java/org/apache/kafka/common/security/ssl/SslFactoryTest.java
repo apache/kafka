@@ -591,8 +591,7 @@ public abstract class SslFactoryTest {
                     (String) sslConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG),
                     (Password) sslConfig.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG),
                     (Password) sslConfig.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG),
-                    true,
-                    Boolean.parseBoolean((String) sslConfig.get(SslConfigs.SSL_KEYSTORE_AS_STRING))
+                    true
             );
         } else {
             store = new PemStore(
