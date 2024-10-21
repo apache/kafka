@@ -25,6 +25,7 @@ import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.ReplicaManager.{AtMinIsrPartitionCountMetricName, FailedIsrUpdatesPerSecMetricName, IsrExpandsPerSecMetricName, IsrShrinksPerSecMetricName, LeaderCountMetricName, OfflineReplicaCountMetricName, PartitionCountMetricName, PartitionsWithLateTransactionsCountMetricName, ProducerIdCountMetricName, ReassigningPartitionsMetricName, UnderMinIsrPartitionCountMetricName, UnderReplicatedPartitionsMetricName, createLogReadResult, isListOffsetsTimestampUnsupported}
 import kafka.server.metadata.ZkMetadataCache
+import kafka.server.share.{DelayedShareFetch, DelayedShareFetchKey, DelayedShareFetchPartitionKey}
 import kafka.utils._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.errors._
@@ -55,7 +56,7 @@ import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 import org.apache.kafka.metadata.LeaderAndIsr
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.server.common
-import org.apache.kafka.server.common.{DirectoryEventHandler, RequestLocal}
+import org.apache.kafka.server.common.{DirectoryEventHandler, RequestLocal, TopicOptionalIdPartition}
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.storage.log.{FetchParams, FetchPartitionData}
@@ -286,6 +287,7 @@ class ReplicaManager(val config: KafkaConfig,
                      delayedElectLeaderPurgatoryParam: Option[DelayedOperationPurgatory[DelayedElectLeader]] = None,
                      delayedRemoteFetchPurgatoryParam: Option[DelayedOperationPurgatory[DelayedRemoteFetch]] = None,
                      delayedRemoteListOffsetsPurgatoryParam: Option[DelayedOperationPurgatory[DelayedRemoteListOffsets]] = None,
+                     delayedShareFetchPurgatoryParam: Option[DelayedOperationPurgatory[DelayedShareFetch]] = None,
                      threadNamePrefix: Option[String] = None,
                      val brokerEpochSupplier: () => Long = () => -1,
                      addPartitionsToTxnManager: Option[AddPartitionsToTxnManager] = None,
@@ -315,6 +317,10 @@ class ReplicaManager(val config: KafkaConfig,
   val delayedRemoteListOffsetsPurgatory = delayedRemoteListOffsetsPurgatoryParam.getOrElse(
     DelayedOperationPurgatory[DelayedRemoteListOffsets](
       purgatoryName = "RemoteListOffsets", brokerId = config.brokerId))
+  val delayedShareFetchPurgatory = delayedShareFetchPurgatoryParam.getOrElse(
+    DelayedOperationPurgatory[DelayedShareFetch](
+      purgatoryName = "ShareFetch", brokerId = config.brokerId,
+      purgeInterval = config.shareGroupConfig.shareFetchPurgatoryPurgeIntervalRequests))
 
   /* epoch of the controller that last changed the leader */
   @volatile private[server] var controllerEpoch: Int = KafkaController.InitialControllerEpoch
@@ -463,12 +469,14 @@ class ReplicaManager(val config: KafkaConfig,
     })
   }
 
-  private def completeDelayedOperationsWhenNotPartitionLeader(topicPartition: TopicPartition): Unit = {
+  private def completeDelayedOperationsWhenNotPartitionLeader(topicPartition: TopicPartition, topicId: Option[Uuid]): Unit = {
     val topicPartitionOperationKey = TopicPartitionOperationKey(topicPartition)
     delayedProducePurgatory.checkAndComplete(topicPartitionOperationKey)
     delayedFetchPurgatory.checkAndComplete(topicPartitionOperationKey)
     delayedRemoteFetchPurgatory.checkAndComplete(topicPartitionOperationKey)
     delayedRemoteListOffsetsPurgatory.checkAndComplete(topicPartitionOperationKey)
+    if (topicId.isDefined) delayedShareFetchPurgatory.checkAndComplete(
+      new DelayedShareFetchPartitionKey(topicId.get, topicPartition.partition()))
   }
 
   /**
@@ -478,6 +486,27 @@ class ReplicaManager(val config: KafkaConfig,
    */
   private[server] def completeDelayedFetchRequests(topicPartitions: Seq[TopicPartition]): Unit = {
     topicPartitions.foreach(tp => delayedFetchPurgatory.checkAndComplete(TopicPartitionOperationKey(tp)))
+  }
+
+  /**
+   * Complete any delayed share fetch requests that have been unblocked since new data is available from the leader
+   * for one of the partitions. This could happen due to acknowledgements, acquisition lock timeout of records, partition
+   * locks getting freed and release of acquired records due to share session close.
+   * @param delayedShareFetchKey The key corresponding to which the share fetch request has been stored in the purgatory
+   */
+  private[server] def completeDelayedShareFetchRequest(delayedShareFetchKey: DelayedShareFetchKey): Unit = {
+    delayedShareFetchPurgatory.checkAndComplete(delayedShareFetchKey)
+  }
+
+  /**
+   * Add and watch a share fetch request in the delayed share fetch purgatory corresponding to a set of keys in case it cannot be
+   * completed instantaneously, otherwise complete it.
+   * @param delayedShareFetch Refers to the DelayedOperation over share fetch request
+   * @param delayedShareFetchKeys The keys corresponding to which the delayed share fetch request will be stored in the purgatory
+   */
+  private[server] def addDelayedShareFetchRequest(delayedShareFetch: DelayedShareFetch,
+                                                  delayedShareFetchKeys : Seq[DelayedShareFetchKey]): Unit = {
+    delayedShareFetchPurgatory.tryCompleteElseWatch(delayedShareFetch, delayedShareFetchKeys)
   }
 
   /**
@@ -610,6 +639,7 @@ class ReplicaManager(val config: KafkaConfig,
     val partitionsToDelete = mutable.Set.empty[TopicPartition]
     partitionsToStop.foreach { stopPartition =>
       val topicPartition = stopPartition.topicPartition
+      var topicId: Option[Uuid] = None
       if (stopPartition.deleteLocalLog) {
         getPartition(topicPartition) match {
           case hostedPartition: HostedPartition.Online =>
@@ -618,6 +648,7 @@ class ReplicaManager(val config: KafkaConfig,
               // Logs are not deleted here. They are deleted in a single batch later on.
               // This is done to avoid having to checkpoint for every deletions.
               hostedPartition.partition.delete()
+              topicId = hostedPartition.partition.topicId
             }
 
           case _ =>
@@ -626,7 +657,7 @@ class ReplicaManager(val config: KafkaConfig,
       }
       // If we were the leader, we may have some operations still waiting for completion.
       // We force completion to prevent them from timing out.
-      completeDelayedOperationsWhenNotPartitionLeader(topicPartition)
+      completeDelayedOperationsWhenNotPartitionLeader(topicPartition, topicId)
     }
 
     // Third delete the logs and checkpoint.
@@ -744,6 +775,8 @@ class ReplicaManager(val config: KafkaConfig,
 
   def tryCompleteActions(): Unit = defaultActionQueue.tryCompleteActions()
 
+  def addToActionQueue(action: () => Unit): Unit = defaultActionQueue.add(action)
+
   /**
    * Append messages to leader replicas of the partition, and wait for them to be replicated to other replicas;
    * the callback function will be triggered either when timeout or the required acks are satisfied;
@@ -783,13 +816,15 @@ class ReplicaManager(val config: KafkaConfig,
     }
 
     val sTime = time.milliseconds
-    val localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
+    val localProduceResultsWithTopicId = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
       origin, entriesPerPartition, requiredAcks, requestLocal, verificationGuards.toMap)
     debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
+    val localProduceResults : Map[TopicPartition, LogAppendResult] = localProduceResultsWithTopicId.map {
+      case(k, v) => (k.topicPartition, v)}
 
     val produceStatus = buildProducePartitionStatus(localProduceResults)
 
-    addCompletePurgatoryAction(actionQueue, localProduceResults)
+    addCompletePurgatoryAction(actionQueue, localProduceResultsWithTopicId)
     recordValidationStatsCallback(localProduceResults.map { case (k, v) =>
       k -> v.info.recordValidationStats
     })
@@ -940,17 +975,19 @@ class ReplicaManager(val config: KafkaConfig,
 
   private def addCompletePurgatoryAction(
     actionQueue: ActionQueue,
-    appendResults: Map[TopicPartition, LogAppendResult]
+    appendResults: Map[TopicOptionalIdPartition, LogAppendResult]
   ): Unit = {
     actionQueue.add {
-      () => appendResults.foreach { case (topicPartition, result) =>
-        val requestKey = TopicPartitionOperationKey(topicPartition)
+      () => appendResults.foreach { case (topicOptionalIdPartition, result) =>
+        val requestKey = TopicPartitionOperationKey(topicOptionalIdPartition.topicPartition)
         result.info.leaderHwChange match {
           case LeaderHwChange.INCREASED =>
             // some delayed operations may be unblocked after HW changed
             delayedProducePurgatory.checkAndComplete(requestKey)
             delayedFetchPurgatory.checkAndComplete(requestKey)
             delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
+            if (topicOptionalIdPartition.topicId.isPresent) delayedShareFetchPurgatory.checkAndComplete(new DelayedShareFetchPartitionKey(
+              topicOptionalIdPartition.topicId.get, topicOptionalIdPartition.partition))
           case LeaderHwChange.SAME =>
             // probably unblock some follower fetch requests since log end offset has been updated
             delayedFetchPurgatory.checkAndComplete(requestKey)
@@ -1392,7 +1429,8 @@ class ReplicaManager(val config: KafkaConfig,
                                entriesPerPartition: Map[TopicPartition, MemoryRecords],
                                requiredAcks: Short,
                                requestLocal: RequestLocal,
-                               verificationGuards: Map[TopicPartition, VerificationGuard]): Map[TopicPartition, LogAppendResult] = {
+                               verificationGuards: Map[TopicPartition, VerificationGuard]):
+  Map[TopicOptionalIdPartition, LogAppendResult] = {
     val traceEnabled = isTraceEnabled
     def processFailedRecord(topicPartition: TopicPartition, t: Throwable) = {
       val logStartOffset = onlinePartition(topicPartition).map(_.logStartOffset).getOrElse(-1L)
@@ -1417,7 +1455,7 @@ class ReplicaManager(val config: KafkaConfig,
 
       // reject appending to internal topics if it is not allowed
       if (Topic.isInternal(topicPartition.topic) && !internalTopicsAllowed) {
-        (topicPartition, LogAppendResult(
+        (new TopicOptionalIdPartition(Optional.empty(), topicPartition), LogAppendResult(
           LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
           Some(new InvalidTopicException(s"Cannot append to internal topic ${topicPartition.topic}")),
           hasCustomErrorMessage = false))
@@ -1438,7 +1476,10 @@ class ReplicaManager(val config: KafkaConfig,
             trace(s"${records.sizeInBytes} written to log $topicPartition beginning at offset " +
               s"${info.firstOffset} and ending at offset ${info.lastOffset}")
 
-          (topicPartition, LogAppendResult(info, exception = None, hasCustomErrorMessage = false))
+          var topicId: Optional[Uuid] = Optional.empty()
+          if (partition.topicId.isDefined) topicId = Optional.of(partition.topicId.get)
+
+          (new TopicOptionalIdPartition(topicId, topicPartition), LogAppendResult(info, exception = None, hasCustomErrorMessage = false))
         } catch {
           // NOTE: Failed produce requests metric is not incremented for known exceptions
           // it is supposed to indicate un-expected failures of a broker in handling a produce request
@@ -1448,15 +1489,15 @@ class ReplicaManager(val config: KafkaConfig,
                    _: RecordBatchTooLargeException |
                    _: CorruptRecordException |
                    _: KafkaStorageException) =>
-            (topicPartition, LogAppendResult(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO, Some(e), hasCustomErrorMessage = false))
+            (new TopicOptionalIdPartition(Optional.empty(), topicPartition), LogAppendResult(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO, Some(e), hasCustomErrorMessage = false))
           case rve: RecordValidationException =>
             val logStartOffset = processFailedRecord(topicPartition, rve.invalidException)
             val recordErrors = rve.recordErrors
-            (topicPartition, LogAppendResult(LogAppendInfo.unknownLogAppendInfoWithAdditionalInfo(logStartOffset, recordErrors),
+            (new TopicOptionalIdPartition(Optional.empty(), topicPartition), LogAppendResult(LogAppendInfo.unknownLogAppendInfoWithAdditionalInfo(logStartOffset, recordErrors),
               Some(rve.invalidException), hasCustomErrorMessage = true))
           case t: Throwable =>
             val logStartOffset = processFailedRecord(topicPartition, t)
-            (topicPartition, LogAppendResult(LogAppendInfo.unknownLogAppendInfoWithLogStartOffset(logStartOffset),
+            (new TopicOptionalIdPartition(Optional.empty(), topicPartition), LogAppendResult(LogAppendInfo.unknownLogAppendInfoWithLogStartOffset(logStartOffset),
               Some(t), hasCustomErrorMessage = false))
         }
       }
@@ -2452,7 +2493,7 @@ class ReplicaManager(val config: KafkaConfig,
         s"epoch $controllerEpoch with correlation id $correlationId for ${partitionsToMakeFollower.size} partitions")
 
       partitionsToMakeFollower.foreach { partition =>
-        completeDelayedOperationsWhenNotPartitionLeader(partition.topicPartition)
+        completeDelayedOperationsWhenNotPartitionLeader(partition.topicPartition, partition.topicId)
       }
 
       if (isShuttingDown.get()) {
@@ -2676,6 +2717,7 @@ class ReplicaManager(val config: KafkaConfig,
     delayedProducePurgatory.shutdown()
     delayedDeleteRecordsPurgatory.shutdown()
     delayedElectLeaderPurgatory.shutdown()
+    delayedShareFetchPurgatory.shutdown()
     if (checkpointHW)
       checkpointHighWatermarks()
     replicaSelectorOpt.foreach(_.close)
@@ -3029,7 +3071,8 @@ class ReplicaManager(val config: KafkaConfig,
       replicaFetcherManager.addFetcherForPartitions(partitionAndOffsets)
       stateChangeLogger.info(s"Started fetchers as part of become-follower for ${partitionsToStartFetching.size} partitions")
 
-      partitionsToStartFetching.keySet.foreach(completeDelayedOperationsWhenNotPartitionLeader)
+      partitionsToStartFetching.foreach{ case (topicPartition, partition) =>
+        completeDelayedOperationsWhenNotPartitionLeader(topicPartition, partition.topicId)}
 
       updateLeaderAndFollowerMetrics(followerTopicSet)
     }

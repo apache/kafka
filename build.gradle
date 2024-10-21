@@ -769,6 +769,7 @@ subprojects {
     scalaCompileOptions.additionalParameters += ["-Xfatal-warnings"]
 
     scalaCompileOptions.additionalParameters += ["-release", String.valueOf(minJavaVersion)]
+    options.compilerArgs += ["--release", String.valueOf(minJavaVersion)]
 
     addParametersForTests(name, options)
 
@@ -1612,9 +1613,12 @@ project(':test-common:test-common-api') {
     implementation project(':server')
     implementation project(':server-common')
     implementation project(':test-common')
-    implementation libs.junitJupiter
+    implementation libs.junitJupiterApi
+
+    testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    testRuntimeOnly libs.junitPlatformLanucher
+
+    testRuntimeOnly runtimeTestLibs
   }
 
   sourceSets {

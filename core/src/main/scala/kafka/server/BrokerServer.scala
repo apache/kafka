@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import kafka.cluster.EndPoint
 import kafka.coordinator.group.{CoordinatorLoaderImpl, CoordinatorPartitionWriter, GroupCoordinatorAdapter}
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
 import kafka.log.LogManager
@@ -261,10 +260,11 @@ class BrokerServer(
         Some(clientMetricsManager)
       )
 
+      val connectionDisconnectListeners = Seq(clientMetricsManager.connectionDisconnectListener())
       // Create and start the socket server acceptor threads so that the bound port is known.
       // Delay starting processors until the end of the initialization sequence to ensure
       // that credentials have been loaded before processing authentications.
-      socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
+      socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager, connectionDisconnectListeners)
 
       clientQuotaMetadataManager = new ClientQuotaMetadataManager(quotaManagers, socketServer.connectionQuotas)
 
@@ -432,9 +432,7 @@ class BrokerServer(
         config.shareGroupConfig.shareGroupRecordLockDurationMs,
         config.shareGroupConfig.shareGroupDeliveryCountLimit,
         config.shareGroupConfig.shareGroupPartitionMaxRecordLocks,
-        config.shareGroupConfig.shareFetchPurgatoryPurgeIntervalRequests,
         persister,
-        defaultActionQueue,
         groupConfigManager,
         new Metrics()
       )
@@ -482,7 +480,7 @@ class BrokerServer(
             .findFirst()
             .orElseThrow(() => new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
               listenerName, "Should be set as a listener name within valid broker listener name list: " + listenerInfo.listeners().values()))
-          rlm.onEndPointCreated(EndPoint.fromJava(endpoint))
+          rlm.onEndPointCreated(endpoint)
         }
         rlm.startup()
       }
