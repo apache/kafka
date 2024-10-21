@@ -68,6 +68,7 @@ import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.apache.kafka.test.{TestUtils => JTestUtils}
+import org.apache.log4j.PropertyConfigurator
 import org.apache.zookeeper.KeeperException.SessionExpiredException
 import org.apache.zookeeper.ZooDefs._
 import org.apache.zookeeper.data.ACL
@@ -1863,6 +1864,19 @@ object TestUtils extends Logging {
 
     override def onTimeout(): Unit = {
       timedOut.set(true)
+    }
+  }
+
+  /**
+   * Resets the logging configuration after the test.
+   */
+  def resetLogging[T] = {
+    org.apache.log4j.LogManager.resetConfiguration()
+    val stream = this.getClass.getResourceAsStream("/log4j.properties")
+    try {
+      PropertyConfigurator.configure(stream)
+    } finally {
+      stream.close()
     }
   }
 }
