@@ -202,13 +202,8 @@ public class LogSegmentTest {
             MemoryRecords ms = records(50, "hello", "there");
             seg.append(51, RecordBatch.NO_TIMESTAMP, -1L, ms);
 
-            // read before first offset
-            FetchDataInfo read = seg.read(48, maxSize, maxPosition, minOneMessage);
-            assertEquals(new LogOffsetMetadata(48, 40, 0), read.fetchOffsetMetadata);
-            assertFalse(read.records.records().iterator().hasNext());
-
             // read at first offset
-            read = seg.read(50, maxSize, maxPosition, minOneMessage);
+            FetchDataInfo read = seg.read(50, maxSize, maxPosition, minOneMessage);
             assertEquals(new LogOffsetMetadata(50, 40, 0), read.fetchOffsetMetadata);
             assertFalse(read.records.records().iterator().hasNext());
 

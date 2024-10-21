@@ -409,17 +409,17 @@ public class LogSegment implements Closeable {
     }
 
     /**
-     * Read a message set from this segment beginning with the first offset >= startOffset. The message set will include
+     * Read a message set from this segment that contains startOffset. The message set will include
      * no more than maxSize bytes and will end before maxOffset if a maxOffset is specified.
      *
      * This method is thread-safe.
      *
-     * @param startOffset A lower bound on the first offset to include in the message set we read
+     * @param startOffset The logical log offset we are trying to read, which is a lower bound when startOffset is the base offset of a batch
      * @param maxSize The maximum number of bytes to include in the message set we read
      * @param maxPositionOpt The maximum position in the log segment that should be exposed for read
      * @param minOneMessage If this is true, the first message will be returned even if it exceeds `maxSize` (if one exists)
      *
-     * @return The fetched data and the offset metadata of the first message whose offset is >= startOffset,
+     * @return The fetched data and the base offset metadata of the message batch that contains startOffset,
      *         or null if the startOffset is larger than the largest offset in this log
      */
     public FetchDataInfo read(long startOffset, int maxSize, Optional<Long> maxPositionOpt, boolean minOneMessage) throws IOException {
@@ -433,7 +433,7 @@ public class LogSegment implements Closeable {
             return null;
 
         int startPosition = startOffsetAndSize.position;
-        LogOffsetMetadata offsetMetadata = new LogOffsetMetadata(startOffset, this.baseOffset, startPosition);
+        LogOffsetMetadata offsetMetadata = new LogOffsetMetadata(startOffsetAndSize.offset, this.baseOffset, startPosition);
 
         int adjustedMaxSize = maxSize;
         if (minOneMessage)
