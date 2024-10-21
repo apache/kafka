@@ -37,7 +37,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
 import scala.collection.mutable
 import scala.collection.Seq
-import scala.compat.java8.OptionConverters
+import scala.jdk.javaapi.OptionConverters
 
 /**
  * A helper class for writing integration tests that involve producers, consumers, and servers

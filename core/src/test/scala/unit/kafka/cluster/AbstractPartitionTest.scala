@@ -21,7 +21,7 @@ import kafka.server.MetadataCache
 import kafka.server.metadata.MockConfigRepository
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.MockAlterPartitionManager
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.utils.Utils
@@ -49,6 +49,7 @@ class AbstractPartitionTest {
 
   val brokerId = AbstractPartitionTest.brokerId
   val remoteReplicaId = brokerId + 1
+  val topicId : Option[Uuid] = Option(Uuid.randomUuid())
   val topicPartition = new TopicPartition("test-topic", 0)
   val time = new MockTime()
   var tmpDir: File = _

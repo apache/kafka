@@ -26,6 +26,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.telemetry.ClientTelemetryPayload;
 import org.apache.kafka.server.telemetry.ClientTelemetryReceiver;
+import org.apache.kafka.test.TestUtils;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -59,7 +60,7 @@ public class ClientMetricsTestUtils {
     public static RequestContext requestContext() throws UnknownHostException {
         return new RequestContext(
             new RequestHeader(ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS, (short) 0, "producer-1", 0),
-            "1",
+            TestUtils.randomString(5),
             InetAddress.getLocalHost(),
             Optional.of(CLIENT_PORT),
             KafkaPrincipal.ANONYMOUS,
@@ -79,6 +80,19 @@ public class ClientMetricsTestUtils {
             ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
             SecurityProtocol.PLAINTEXT,
             null,
+            false);
+    }
+
+    public static RequestContext requestContextWithConnectionId(String connectionId) throws UnknownHostException {
+        return new RequestContext(
+            new RequestHeader(ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS, (short) 0, "producer-1", 0),
+            connectionId,
+            InetAddress.getLocalHost(),
+            Optional.of(CLIENT_PORT),
+            KafkaPrincipal.ANONYMOUS,
+            ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+            SecurityProtocol.PLAINTEXT,
+            new ClientInformation("apache-kafka-java", "3.5.2"),
             false);
     }
 

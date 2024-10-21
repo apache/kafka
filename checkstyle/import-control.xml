@@ -310,6 +310,7 @@
     <allow pkg="javax.rmi.ssl"/>
     <allow pkg="kafka.utils" />
     <allow pkg="scala.collection" />
+    <allow pkg="scala.jdk.javaapi" />
     <allow pkg="org.apache.kafka.coordinator.transaction" />
     <allow pkg="org.apache.kafka.coordinator.group" />
     <allow pkg="org.apache.kafka.tools" />
@@ -326,6 +327,10 @@
         <allow pkg="org.apache.kafka.tools"/>
         <allow pkg="org.apache.kafka.server.config" />
         <allow pkg="scala"/>
+        <subpackage name="share">
+          <allow pkg="org.apache.kafka.server.share" />
+          <allow pkg="org.apache.kafka.coordinator.share" />
+        </subpackage>
       </subpackage>
     </subpackage>
 
