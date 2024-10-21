@@ -33,6 +33,7 @@ class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
     LOG_DIR = os.path.join(PERSISTENT_ROOT, "logs")
     LOG_FILE = os.path.join(LOG_DIR, "producer_performance.log")
     LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
+    HEAP_DUMP_FILE = os.path.join(PERSISTENT_ROOT, "producer_performance_heap_dump.bin")
 
     def __init__(self, context, num_nodes, kafka, topic, num_records, record_size, throughput, version=DEV_BRANCH, settings=None,
                  intermediate_stats=False, client_id="producer-performance"):
@@ -48,6 +49,9 @@ class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
                 "collect_default": True},
             "producer_performance_log": {
                 "path": ProducerPerformanceService.LOG_FILE,
+                "collect_default": True},
+            "producer_performance_heap_dump_file": {
+                "path": ProducerPerformanceService.HEAP_DUMP_FILE,
                 "collect_default": True}
         }
 
@@ -78,7 +82,8 @@ class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
             'bootstrap_servers': self.kafka.bootstrap_servers(self.security_config.security_protocol),
             'client_id': self.client_id,
             'kafka_run_class': self.path.script("kafka-run-class.sh", node),
-            'metrics_props': ' '.join("%s=%s" % (k, v) for k, v in self.http_metrics_client_configs.items())
+            'metrics_props': ' '.join("%s=%s" % (k, v) for k, v in self.http_metrics_client_configs.items()),
+            'kafka_heap_opts': '-verbose:gc -XX:+PrintGCDetails -Xmx512m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/home/ducker/producer_performance_heap_dump.bin',
             })
 
         cmd = ""
@@ -94,8 +99,9 @@ class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
             cmd += "export CLASSPATH; "
 
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % ProducerPerformanceService.LOG4J_CONFIG
-        cmd += "KAFKA_OPTS=%(kafka_opts)s KAFKA_HEAP_OPTS=\"-XX:+HeapDumpOnOutOfMemoryError\" %(kafka_run_class)s org.apache.kafka.tools.ProducerPerformance " \
+        cmd += "KAFKA_OPTS=%(kafka_opts)s KAFKA_HEAP_OPTS=%(kafka_heap_opts)s %(kafka_run_class)s org.apache.kafka.tools.ProducerPerformance " \
               "--topic %(topic)s --num-records %(num_records)d --record-size %(record_size)d --throughput %(throughput)d --producer-props bootstrap.servers=%(bootstrap_servers)s client.id=%(client_id)s %(metrics_props)s" % args
+
 
         self.security_config.setup_node(node)
         if self.security_config.security_protocol != SecurityConfig.PLAINTEXT:
