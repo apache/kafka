@@ -36,7 +36,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import scala.Option;
@@ -139,11 +139,11 @@ public class DelayedShareFetch extends DelayedOperation {
             replicaManagerFetchDataFromTryComplete = replicaManagerFetchData(topicPartitionData, false);
             if (!replicaManagerFetchDataFromTryComplete.isEmpty())
                 return forceComplete();
-            log.info("minBytes is not satisfied for the share fetch request for group {}, member {}, " +
+            log.debug("minBytes is not satisfied for the share fetch request for group {}, member {}, " +
                 "topic partitions {}", shareFetchData.groupId(), shareFetchData.memberId(),
                 shareFetchData.partitionMaxBytes().keySet());
         } else {
-            log.info("Can't acquire records for any partition in the share fetch request for group {}, member {}, " +
+            log.trace("Can't acquire records for any partition in the share fetch request for group {}, member {}, " +
                 "topic partitions {}", shareFetchData.groupId(), shareFetchData.memberId(),
                 shareFetchData.partitionMaxBytes().keySet());
         }
@@ -210,7 +210,7 @@ public class DelayedShareFetch extends DelayedOperation {
                 QuotaFactory.UnboundedQuota$.MODULE$,
                 true);
 
-            AtomicInteger accumulatedBytes = new AtomicInteger(0);
+            AtomicLong accumulatedBytes = new AtomicLong(0);
 
             responseLogResult.foreach(tpLogResult -> {
                 TopicIdPartition topicIdPartition = tpLogResult._1();
