@@ -151,6 +151,7 @@ import org.apache.kafka.common.message.RemoveRaftVoterResponseData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.UnregisterBrokerResponseData;
 import org.apache.kafka.common.message.WriteTxnMarkersResponseData;
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
@@ -235,6 +236,7 @@ import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -466,6 +468,30 @@ public class KafkaAdminClientTest {
         props.setProperty(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG, "org.apache.kafka.common.metrics.JmxReporter");
         KafkaAdminClient admin = (KafkaAdminClient) AdminClient.create(props);
         assertEquals(1, admin.metrics.reporters().size());
+        admin.close();
+    }
+
+    @Test
+    public void testExplicitlyEnableTelemetryReporter() {
+        Properties props = new Properties();
+        props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG, "org.apache.kafka.common.metrics.JmxReporter");
+        props.setProperty(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, "true");
+        KafkaAdminClient admin = (KafkaAdminClient) AdminClient.create(props);
+        assertEquals(2, admin.metrics.reporters().size());
+        //ClientTelemetryReporter always added after metrics reporters created with JmxReporter
+        assertInstanceOf(ClientTelemetryReporter.class, admin.metrics.reporters().get(1));
+        admin.close();
+    }
+
+    @Test
+    public void testExplicitlyTelemetryReporterIsDisabled() {
+        Properties props = new Properties();
+        props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG, "org.apache.kafka.common.metrics.JmxReporter");
+        KafkaAdminClient admin = (KafkaAdminClient) AdminClient.create(props);
+        assertEquals(1, admin.metrics.reporters().size());
+        assertInstanceOf(JmxReporter.class, admin.metrics.reporters().get(0));
         admin.close();
     }
 
