@@ -29,7 +29,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class RemoteLogManagerConfigTest {
-
     @Test
     public void testValidConfigs() {
         String rsmPrefix = "__custom.rsm.";
@@ -57,6 +56,16 @@ public class RemoteLogManagerConfigTest {
     }
 
     @Test
+    public void testThreadPoolDefaults() {
+        // Even with empty properties, RemoteLogManagerConfig has default values
+        Map<String, Object> emptyProps = new HashMap<>();
+        RemoteLogManagerConfig remoteLogManagerConfigEmptyConfig = new RLMTestConfig(emptyProps).remoteLogManagerConfig();
+        assertEquals(RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE, remoteLogManagerConfigEmptyConfig.remoteLogManagerThreadPoolSize());
+        assertEquals(RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE, remoteLogManagerConfigEmptyConfig.remoteLogManagerCopierThreadPoolSize());
+        assertEquals(RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE, remoteLogManagerConfigEmptyConfig.remoteLogManagerExpirationThreadPoolSize());
+    }
+
+    @Test
     public void testValidateEmptyStringConfig() {
         // Test with a empty string props should throw ConfigException
         Map<String, Object> emptyStringProps = Collections.singletonMap(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, "");
@@ -65,7 +74,6 @@ public class RemoteLogManagerConfigTest {
     }
 
     private Map<String, Object> getRLMProps(String rsmPrefix, String rlmmPrefix) {
-
         Map<String, Object> props = new HashMap<>();
         props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true);
         props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP,
@@ -108,7 +116,6 @@ public class RemoteLogManagerConfigTest {
     }
 
     private static class RLMTestConfig extends AbstractConfig {
-
         private final RemoteLogManagerConfig rlmConfig;
 
         public RLMTestConfig(Map<?, ?> originals) {
