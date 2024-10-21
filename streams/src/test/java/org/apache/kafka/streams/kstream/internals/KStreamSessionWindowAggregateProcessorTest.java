@@ -58,11 +58,11 @@ import org.junit.jupiter.params.provider.EnumSource;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static java.time.Duration.ofMillis;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.hasItem;
@@ -525,8 +525,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
             "stream-task-metrics",
             "The total number of dropped records",
             mkMap(
-                mkEntry("thread-id", threadId),
-                mkEntry("task-id", "0_0")
+                Map.entry("thread-id", threadId),
+                Map.entry("task-id", "0_0")
             )
         );
         dropRate = new MetricName(
@@ -534,8 +534,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
             "stream-task-metrics",
             "The average number of dropped records per second",
             mkMap(
-                mkEntry("thread-id", threadId),
-                mkEntry("task-id", "0_0")
+                Map.entry("thread-id", threadId),
+                Map.entry("task-id", "0_0")
             )
         );
         assertThat(metrics.metrics().get(dropTotal).metricValue(), is(1.0));
@@ -600,8 +600,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
             "stream-task-metrics",
             "The total number of dropped records",
             mkMap(
-                mkEntry("thread-id", threadId),
-                mkEntry("task-id", "0_0")
+                Map.entry("thread-id", threadId),
+                Map.entry("task-id", "0_0")
             )
         );
         dropRate = new MetricName(
@@ -609,8 +609,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
             "stream-task-metrics",
             "The average number of dropped records per second",
             mkMap(
-                mkEntry("thread-id", threadId),
-                mkEntry("task-id", "0_0")
+                Map.entry("thread-id", threadId),
+                Map.entry("task-id", "0_0")
             )
         );
 

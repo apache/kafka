@@ -69,12 +69,12 @@ import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Stream;
 
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
@@ -1056,8 +1056,8 @@ public class KStreamWindowAggregateTest {
             "stream-task-metrics",
             "The total number of dropped records",
             mkMap(
-                mkEntry("thread-id", threadId),
-                mkEntry("task-id", "0_0")
+                Map.entry("thread-id", threadId),
+                Map.entry("task-id", "0_0")
             )
         );
         dropRateMetric = new MetricName(
@@ -1065,8 +1065,8 @@ public class KStreamWindowAggregateTest {
             "stream-task-metrics",
             "The average number of dropped records per second",
             mkMap(
-                mkEntry("thread-id", threadId),
-                mkEntry("task-id", "0_0")
+                Map.entry("thread-id", threadId),
+                Map.entry("task-id", "0_0")
             )
         );
         latenessMaxMetric = new MetricName(
@@ -1075,8 +1075,8 @@ public class KStreamWindowAggregateTest {
             "The observed maximum lateness of records in milliseconds, measured by comparing the record "
                 + "timestamp with the current stream time",
             mkMap(
-                mkEntry("thread-id", threadId),
-                mkEntry("task-id", "0_0")
+                Map.entry("thread-id", threadId),
+                Map.entry("task-id", "0_0")
             )
         );
         latenessAvgMetric = new MetricName(
@@ -1085,8 +1085,8 @@ public class KStreamWindowAggregateTest {
             "The observed average lateness of records in milliseconds, measured by comparing the record "
                 + "timestamp with the current stream time",
             mkMap(
-                mkEntry("thread-id", threadId),
-                mkEntry("task-id", "0_0")
+                Map.entry("thread-id", threadId),
+                Map.entry("task-id", "0_0")
             )
         );
 
@@ -1106,9 +1106,9 @@ public class KStreamWindowAggregateTest {
             "stream-processor-node-metrics",
             "The total number of emit final records",
             mkMap(
-                mkEntry("thread-id", threadId),
-                mkEntry("task-id", "0_0"),
-                mkEntry("processor-node-id", "KSTREAM-AGGREGATE-0000000001")
+                Map.entry("thread-id", threadId),
+                Map.entry("task-id", "0_0"),
+                Map.entry("processor-node-id", "KSTREAM-AGGREGATE-0000000001")
             )
         );
         emittedRateMetric = new MetricName(
@@ -1116,9 +1116,9 @@ public class KStreamWindowAggregateTest {
             "stream-processor-node-metrics",
             "The average number of emit final records per second",
             mkMap(
-                mkEntry("thread-id", threadId),
-                mkEntry("task-id", "0_0"),
-                mkEntry("processor-node-id", "KSTREAM-AGGREGATE-0000000001")
+                Map.entry("thread-id", threadId),
+                Map.entry("task-id", "0_0"),
+                Map.entry("processor-node-id", "KSTREAM-AGGREGATE-0000000001")
             )
         );
 

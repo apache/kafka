@@ -42,7 +42,6 @@ import java.util.Map;
 import java.util.function.Function;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
@@ -52,27 +51,27 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class SessionKeySchemaTest {
     private static final Map<SchemaType, KeySchema> SCHEMA_TYPE_MAP = mkMap(
-        mkEntry(SchemaType.SessionKeySchema, new SessionKeySchema()),
-        mkEntry(SchemaType.PrefixedKeyFirstSchema, new KeyFirstSessionKeySchema()),
-        mkEntry(SchemaType.PrefixedTimeFirstSchema, new TimeFirstSessionKeySchema())
+        Map.entry(SchemaType.SessionKeySchema, new SessionKeySchema()),
+        Map.entry(SchemaType.PrefixedKeyFirstSchema, new KeyFirstSessionKeySchema()),
+        Map.entry(SchemaType.PrefixedTimeFirstSchema, new TimeFirstSessionKeySchema())
     );
 
     private static final Map<SchemaType, Function<Windowed<Bytes>, Bytes>> WINDOW_TO_STORE_BINARY_MAP = mkMap(
-        mkEntry(SchemaType.SessionKeySchema, SessionKeySchema::toBinary),
-        mkEntry(SchemaType.PrefixedKeyFirstSchema, KeyFirstSessionKeySchema::toBinary),
-        mkEntry(SchemaType.PrefixedTimeFirstSchema, TimeFirstSessionKeySchema::toBinary)
+        Map.entry(SchemaType.SessionKeySchema, SessionKeySchema::toBinary),
+        Map.entry(SchemaType.PrefixedKeyFirstSchema, KeyFirstSessionKeySchema::toBinary),
+        Map.entry(SchemaType.PrefixedTimeFirstSchema, TimeFirstSessionKeySchema::toBinary)
     );
 
     private static final Map<SchemaType, Function<byte[], Long>> EXTRACT_END_TS_MAP = mkMap(
-        mkEntry(SchemaType.SessionKeySchema, SessionKeySchema::extractEndTimestamp),
-        mkEntry(SchemaType.PrefixedKeyFirstSchema, KeyFirstSessionKeySchema::extractEndTimestamp),
-        mkEntry(SchemaType.PrefixedTimeFirstSchema, TimeFirstSessionKeySchema::extractEndTimestamp)
+        Map.entry(SchemaType.SessionKeySchema, SessionKeySchema::extractEndTimestamp),
+        Map.entry(SchemaType.PrefixedKeyFirstSchema, KeyFirstSessionKeySchema::extractEndTimestamp),
+        Map.entry(SchemaType.PrefixedTimeFirstSchema, TimeFirstSessionKeySchema::extractEndTimestamp)
     );
 
     private static final Map<SchemaType, Function<byte[], Long>> EXTRACT_START_TS_MAP = mkMap(
-        mkEntry(SchemaType.SessionKeySchema, SessionKeySchema::extractStartTimestamp),
-        mkEntry(SchemaType.PrefixedKeyFirstSchema, KeyFirstSessionKeySchema::extractStartTimestamp),
-        mkEntry(SchemaType.PrefixedTimeFirstSchema, TimeFirstSessionKeySchema::extractStartTimestamp)
+        Map.entry(SchemaType.SessionKeySchema, SessionKeySchema::extractStartTimestamp),
+        Map.entry(SchemaType.PrefixedKeyFirstSchema, KeyFirstSessionKeySchema::extractStartTimestamp),
+        Map.entry(SchemaType.PrefixedTimeFirstSchema, TimeFirstSessionKeySchema::extractStartTimestamp)
     );
 
     @FunctionalInterface
@@ -81,33 +80,33 @@ public class SessionKeySchemaTest {
     }
 
     private static final Map<SchemaType, TriFunction<Windowed<String>, Serializer<String>, String, byte[]>> SERDE_TO_STORE_BINARY_MAP = mkMap(
-        mkEntry(SchemaType.SessionKeySchema, SessionKeySchema::toBinary),
-        mkEntry(SchemaType.PrefixedKeyFirstSchema, KeyFirstSessionKeySchema::toBinary),
-        mkEntry(SchemaType.PrefixedTimeFirstSchema, TimeFirstSessionKeySchema::toBinary)
+        Map.entry(SchemaType.SessionKeySchema, SessionKeySchema::toBinary),
+        Map.entry(SchemaType.PrefixedKeyFirstSchema, KeyFirstSessionKeySchema::toBinary),
+        Map.entry(SchemaType.PrefixedTimeFirstSchema, TimeFirstSessionKeySchema::toBinary)
     );
 
     private static final Map<SchemaType, TriFunction<byte[], Deserializer<String>, String, Windowed<String>>> SERDE_FROM_BYTES_MAP = mkMap(
-        mkEntry(SchemaType.SessionKeySchema, SessionKeySchema::from),
-        mkEntry(SchemaType.PrefixedKeyFirstSchema, KeyFirstSessionKeySchema::from),
-        mkEntry(SchemaType.PrefixedTimeFirstSchema, TimeFirstSessionKeySchema::from)
+        Map.entry(SchemaType.SessionKeySchema, SessionKeySchema::from),
+        Map.entry(SchemaType.PrefixedKeyFirstSchema, KeyFirstSessionKeySchema::from),
+        Map.entry(SchemaType.PrefixedTimeFirstSchema, TimeFirstSessionKeySchema::from)
     );
 
     private static final Map<SchemaType, Function<Bytes, Windowed<Bytes>>> FROM_BYTES_MAP = mkMap(
-        mkEntry(SchemaType.SessionKeySchema, SessionKeySchema::from),
-        mkEntry(SchemaType.PrefixedKeyFirstSchema, KeyFirstSessionKeySchema::from),
-        mkEntry(SchemaType.PrefixedTimeFirstSchema, TimeFirstSessionKeySchema::from)
+        Map.entry(SchemaType.SessionKeySchema, SessionKeySchema::from),
+        Map.entry(SchemaType.PrefixedKeyFirstSchema, KeyFirstSessionKeySchema::from),
+        Map.entry(SchemaType.PrefixedTimeFirstSchema, TimeFirstSessionKeySchema::from)
     );
 
     private static final Map<SchemaType, Function<byte[], Window>> EXTRACT_WINDOW = mkMap(
-        mkEntry(SchemaType.SessionKeySchema, SessionKeySchema::extractWindow),
-        mkEntry(SchemaType.PrefixedKeyFirstSchema, KeyFirstSessionKeySchema::extractWindow),
-        mkEntry(SchemaType.PrefixedTimeFirstSchema, TimeFirstSessionKeySchema::extractWindow)
+        Map.entry(SchemaType.SessionKeySchema, SessionKeySchema::extractWindow),
+        Map.entry(SchemaType.PrefixedKeyFirstSchema, KeyFirstSessionKeySchema::extractWindow),
+        Map.entry(SchemaType.PrefixedTimeFirstSchema, TimeFirstSessionKeySchema::extractWindow)
     );
 
     private static final Map<SchemaType, Function<byte[], byte[]>> EXTRACT_KEY_BYTES = mkMap(
-        mkEntry(SchemaType.SessionKeySchema, SessionKeySchema::extractKeyBytes),
-        mkEntry(SchemaType.PrefixedKeyFirstSchema, KeyFirstSessionKeySchema::extractKeyBytes),
-        mkEntry(SchemaType.PrefixedTimeFirstSchema, TimeFirstSessionKeySchema::extractKeyBytes)
+        Map.entry(SchemaType.SessionKeySchema, SessionKeySchema::extractKeyBytes),
+        Map.entry(SchemaType.PrefixedKeyFirstSchema, KeyFirstSessionKeySchema::extractKeyBytes),
+        Map.entry(SchemaType.PrefixedTimeFirstSchema, TimeFirstSessionKeySchema::extractKeyBytes)
     );
 
     private final String key = "key";

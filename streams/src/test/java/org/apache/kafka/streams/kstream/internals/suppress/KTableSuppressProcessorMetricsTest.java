@@ -46,7 +46,6 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxRecords;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -67,9 +66,9 @@ public class KTableSuppressProcessorMetricsTest {
         "stream-processor-node-metrics",
         "The total number of emitted records from the suppression buffer",
         mkMap(
-            mkEntry("thread-id", threadId),
-            mkEntry("task-id", TASK_ID.toString()),
-            mkEntry("processor-node-id", "testNode")
+            Map.entry("thread-id", threadId),
+            Map.entry("task-id", TASK_ID.toString()),
+            Map.entry("processor-node-id", "testNode")
         )
     );
 
@@ -78,9 +77,9 @@ public class KTableSuppressProcessorMetricsTest {
         "stream-processor-node-metrics",
         "The average number of emitted records from the suppression buffer per second",
         mkMap(
-            mkEntry("thread-id", threadId),
-            mkEntry("task-id", TASK_ID.toString()),
-            mkEntry("processor-node-id", "testNode")
+            Map.entry("thread-id", threadId),
+            Map.entry("task-id", TASK_ID.toString()),
+            Map.entry("processor-node-id", "testNode")
         )
     );
 
@@ -89,9 +88,9 @@ public class KTableSuppressProcessorMetricsTest {
         "stream-state-metrics",
         "The average size of buffered records",
         mkMap(
-            mkEntry("thread-id", threadId),
-            mkEntry("task-id", TASK_ID.toString()),
-            mkEntry("in-memory-suppression-state-id", "test-store")
+            Map.entry("thread-id", threadId),
+            Map.entry("task-id", TASK_ID.toString()),
+            Map.entry("in-memory-suppression-state-id", "test-store")
         )
     );
 
@@ -100,9 +99,9 @@ public class KTableSuppressProcessorMetricsTest {
         "stream-state-metrics",
         "The maximum size of buffered records",
         mkMap(
-            mkEntry("thread-id", threadId),
-            mkEntry("task-id", TASK_ID.toString()),
-            mkEntry("in-memory-suppression-state-id", "test-store")
+            Map.entry("thread-id", threadId),
+            Map.entry("task-id", TASK_ID.toString()),
+            Map.entry("in-memory-suppression-state-id", "test-store")
         )
     );
 
@@ -111,9 +110,9 @@ public class KTableSuppressProcessorMetricsTest {
         "stream-state-metrics",
         "The average count of buffered records",
         mkMap(
-            mkEntry("thread-id", threadId),
-            mkEntry("task-id", TASK_ID.toString()),
-            mkEntry("in-memory-suppression-state-id", "test-store")
+            Map.entry("thread-id", threadId),
+            Map.entry("task-id", TASK_ID.toString()),
+            Map.entry("in-memory-suppression-state-id", "test-store")
         )
     );
 
@@ -122,9 +121,9 @@ public class KTableSuppressProcessorMetricsTest {
         "stream-state-metrics",
         "The maximum count of buffered records",
         mkMap(
-            mkEntry("thread-id", threadId),
-            mkEntry("task-id", TASK_ID.toString()),
-            mkEntry("in-memory-suppression-state-id", "test-store")
+            Map.entry("thread-id", threadId),
+            Map.entry("task-id", TASK_ID.toString()),
+            Map.entry("in-memory-suppression-state-id", "test-store")
         )
     );
 

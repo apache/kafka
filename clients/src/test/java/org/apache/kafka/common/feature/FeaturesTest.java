@@ -22,7 +22,6 @@ import org.junit.jupiter.api.Test;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -54,7 +53,7 @@ public class FeaturesTest {
         SupportedVersionRange v1 = new SupportedVersionRange((short) 1, (short) 2);
         SupportedVersionRange v2 = new SupportedVersionRange((short) 3, (short) 4);
         Map<String, SupportedVersionRange> allFeatures =
-            mkMap(mkEntry("feature_1", v1), mkEntry("feature_2", v2));
+            mkMap(Map.entry("feature_1", v1), Map.entry("feature_2", v2));
         Features<SupportedVersionRange> features = Features.supportedFeatures(allFeatures);
         assertEquals(allFeatures, features.features());
     }
@@ -63,7 +62,7 @@ public class FeaturesTest {
     public void testGetAPI() {
         SupportedVersionRange v1 = new SupportedVersionRange((short) 1, (short) 2);
         SupportedVersionRange v2 = new SupportedVersionRange((short) 3, (short) 4);
-        Map<String, SupportedVersionRange> allFeatures = mkMap(mkEntry("feature_1", v1), mkEntry("feature_2", v2));
+        Map<String, SupportedVersionRange> allFeatures = mkMap(Map.entry("feature_1", v1), Map.entry("feature_2", v2));
         Features<SupportedVersionRange> features = Features.supportedFeatures(allFeatures);
         assertEquals(v1, features.get("feature_1"));
         assertEquals(v2, features.get("feature_2"));
@@ -74,13 +73,13 @@ public class FeaturesTest {
     public void testFromFeaturesMapToFeaturesMap() {
         SupportedVersionRange v1 = new SupportedVersionRange((short) 1, (short) 2);
         SupportedVersionRange v2 = new SupportedVersionRange((short) 3, (short) 4);
-        Map<String, SupportedVersionRange> allFeatures = mkMap(mkEntry("feature_1", v1), mkEntry("feature_2", v2));
+        Map<String, SupportedVersionRange> allFeatures = mkMap(Map.entry("feature_1", v1), Map.entry("feature_2", v2));
 
         Features<SupportedVersionRange> features = Features.supportedFeatures(allFeatures);
 
         Map<String, Map<String, Short>> expected = mkMap(
-            mkEntry("feature_1", mkMap(mkEntry("min_version", (short) 1), mkEntry("max_version", (short) 2))),
-            mkEntry("feature_2", mkMap(mkEntry("min_version", (short) 3), mkEntry("max_version", (short) 4))));
+            Map.entry("feature_1", mkMap(Map.entry("min_version", (short) 1), Map.entry("max_version", (short) 2))),
+            Map.entry("feature_2", mkMap(Map.entry("min_version", (short) 3), Map.entry("max_version", (short) 4))));
         assertEquals(expected, features.toMap());
         assertEquals(features, Features.fromSupportedFeaturesMap(expected));
     }
@@ -90,7 +89,7 @@ public class FeaturesTest {
         SupportedVersionRange v1 = new SupportedVersionRange((short) 1, (short) 2);
         SupportedVersionRange v2 = new SupportedVersionRange((short) 3, (short) 4);
         Map<String, SupportedVersionRange> allFeatures
-            = mkMap(mkEntry("feature_1", v1), mkEntry("feature_2", v2));
+            = mkMap(Map.entry("feature_1", v1), Map.entry("feature_2", v2));
 
         Features<SupportedVersionRange> features = Features.supportedFeatures(allFeatures);
 
@@ -103,7 +102,7 @@ public class FeaturesTest {
     public void testSupportedFeaturesFromMapFailureWithInvalidMissingMaxVersion() {
         // This is invalid because 'max_version' key is missing.
         Map<String, Map<String, Short>> invalidFeatures = mkMap(
-            mkEntry("feature_1", mkMap(mkEntry("min_version", (short) 1))));
+            Map.entry("feature_1", mkMap(Map.entry("min_version", (short) 1))));
         assertThrows(
             IllegalArgumentException.class,
             () -> Features.fromSupportedFeaturesMap(invalidFeatures));
@@ -112,13 +111,13 @@ public class FeaturesTest {
     @Test
     public void testEquals() {
         SupportedVersionRange v1 = new SupportedVersionRange((short) 1, (short) 2);
-        Map<String, SupportedVersionRange> allFeatures = mkMap(mkEntry("feature_1", v1));
+        Map<String, SupportedVersionRange> allFeatures = mkMap(Map.entry("feature_1", v1));
         Features<SupportedVersionRange> features = Features.supportedFeatures(allFeatures);
         Features<SupportedVersionRange> featuresClone = Features.supportedFeatures(allFeatures);
         assertEquals(features, featuresClone);
 
         SupportedVersionRange v2 = new SupportedVersionRange((short) 1, (short) 3);
-        Map<String, SupportedVersionRange> allFeaturesDifferent = mkMap(mkEntry("feature_1", v2));
+        Map<String, SupportedVersionRange> allFeaturesDifferent = mkMap(Map.entry("feature_1", v2));
         Features<SupportedVersionRange> featuresDifferent = Features.supportedFeatures(allFeaturesDifferent);
         assertNotEquals(features, featuresDifferent);
 

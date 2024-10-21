@@ -60,7 +60,6 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_VALID_TO_UNDEFINED;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -117,9 +116,9 @@ public class MeteredVersionedKeyValueStoreTest {
 
         metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
         tags = mkMap(
-            mkEntry("thread-id", threadId),
-            mkEntry("task-id", TASK_ID.toString()),
-            mkEntry(METRICS_SCOPE + "-state-id", STORE_NAME)
+            Map.entry("thread-id", threadId),
+            Map.entry("task-id", TASK_ID.toString()),
+            Map.entry(METRICS_SCOPE + "-state-id", STORE_NAME)
         );
 
         store = newMeteredStore(inner);

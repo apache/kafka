@@ -114,7 +114,6 @@ import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
 import static org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor.assignTasksToThreads;
@@ -398,9 +397,9 @@ public class StreamsPartitionAssignorTest {
                 asList(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2, TASK_1_3);
 
         final Map<String, List<TaskId>> previousAssignment = mkMap(
-            mkEntry(CONSUMER_1, asList(TASK_0_0, TASK_1_1, TASK_1_3)),
-            mkEntry(CONSUMER_2, asList(TASK_0_3, TASK_1_0)),
-            mkEntry(CONSUMER_3, asList(TASK_0_1, TASK_0_2, TASK_1_2))
+            Map.entry(CONSUMER_1, asList(TASK_0_0, TASK_1_1, TASK_1_3)),
+            Map.entry(CONSUMER_2, asList(TASK_0_3, TASK_1_0)),
+            Map.entry(CONSUMER_3, asList(TASK_0_1, TASK_0_2, TASK_1_2))
         );
 
         final ClientState state = new ClientState();
@@ -431,9 +430,9 @@ public class StreamsPartitionAssignorTest {
             new ArrayList<>(asList(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2, TASK_1_3));
 
         final Map<String, List<TaskId>> previousAssignment = mkMap(
-            mkEntry(CONSUMER_1, new ArrayList<>(asList(TASK_0_0, TASK_1_1, TASK_1_3))),
-            mkEntry(CONSUMER_2, new ArrayList<>(asList(TASK_0_3, TASK_1_0))),
-            mkEntry(CONSUMER_3, new ArrayList<>(asList(TASK_0_1, TASK_0_2, TASK_1_2)))
+            Map.entry(CONSUMER_1, new ArrayList<>(asList(TASK_0_0, TASK_1_1, TASK_1_3))),
+            Map.entry(CONSUMER_2, new ArrayList<>(asList(TASK_0_3, TASK_1_0))),
+            Map.entry(CONSUMER_3, new ArrayList<>(asList(TASK_0_1, TASK_0_2, TASK_1_2)))
         );
 
         final ClientState state = new ClientState();
@@ -470,9 +469,9 @@ public class StreamsPartitionAssignorTest {
             asList(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2, TASK_1_3);
 
         final Map<String, List<TaskId>> previousAssignment = mkMap(
-            mkEntry(CONSUMER_1, asList(TASK_0_0, TASK_1_1, TASK_1_3)),
-            mkEntry(CONSUMER_2, asList(TASK_0_3, TASK_1_0)),
-            mkEntry(CONSUMER_3, asList(TASK_0_1, TASK_0_2, TASK_1_2))
+            Map.entry(CONSUMER_1, asList(TASK_0_0, TASK_1_1, TASK_1_3)),
+            Map.entry(CONSUMER_2, asList(TASK_0_3, TASK_1_0)),
+            Map.entry(CONSUMER_3, asList(TASK_0_1, TASK_0_2, TASK_1_2))
         );
 
         final ClientState state = new ClientState();
@@ -511,9 +510,9 @@ public class StreamsPartitionAssignorTest {
             asList(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2, TASK_1_3);
 
         final Map<String, List<TaskId>> previousAssignment = mkMap(
-            mkEntry(CONSUMER_1, asList(TASK_0_0, TASK_1_1, TASK_1_3)),
-            mkEntry(CONSUMER_2, asList(TASK_0_3, TASK_1_0)),
-            mkEntry(CONSUMER_3, asList(TASK_0_1, TASK_0_2, TASK_1_2))
+            Map.entry(CONSUMER_1, asList(TASK_0_0, TASK_1_1, TASK_1_3)),
+            Map.entry(CONSUMER_2, asList(TASK_0_3, TASK_1_0)),
+            Map.entry(CONSUMER_3, asList(TASK_0_1, TASK_0_2, TASK_1_2))
         );
 
         final ClientState state = new ClientState();
@@ -558,9 +557,9 @@ public class StreamsPartitionAssignorTest {
             asList(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1);
 
         final Map<String, List<TaskId>> assignment = mkMap(
-            mkEntry(CONSUMER_1, new ArrayList<>(asList(TASK_0_0, TASK_0_3, TASK_1_2))),
-            mkEntry(CONSUMER_2, new ArrayList<>(asList(TASK_0_1, TASK_1_0, TASK_2_0))),
-            mkEntry(CONSUMER_3, new ArrayList<>(asList(TASK_0_2, TASK_1_1, TASK_2_1)))
+            Map.entry(CONSUMER_1, new ArrayList<>(asList(TASK_0_0, TASK_0_3, TASK_1_2))),
+            Map.entry(CONSUMER_2, new ArrayList<>(asList(TASK_0_1, TASK_1_0, TASK_2_0))),
+            Map.entry(CONSUMER_3, new ArrayList<>(asList(TASK_0_2, TASK_1_1, TASK_2_1)))
         );
 
         final ClientState state = new ClientState();
@@ -666,7 +665,7 @@ public class StreamsPartitionAssignorTest {
             true
         );
 
-        final List<Map<String, List<TopicPartitionInfo>>> partitionInfo = singletonList(mkMap(mkEntry(
+        final List<Map<String, List<TopicPartitionInfo>>> partitionInfo = singletonList(mkMap(Map.entry(
                 "stream-partition-assignor-test-store-changelog",
                 singletonList(
                     new TopicPartitionInfo(
@@ -1299,7 +1298,7 @@ public class StreamsPartitionAssignorTest {
             true
         );
         final Map<String, List<TopicPartitionInfo>> changelogTopicPartitionInfo = mkMap(
-            mkEntry(APPLICATION_ID + "-store1-changelog",
+            Map.entry(APPLICATION_ID + "-store1-changelog",
                 asList(
                     new TopicPartitionInfo(0, NODE_0, asList(REPLICA_0), asList(REPLICA_0)),
                     new TopicPartitionInfo(1, NODE_1, asList(REPLICA_1), asList(REPLICA_1)),
@@ -1902,13 +1901,13 @@ public class StreamsPartitionAssignorTest {
     public void shouldUpdateClusterMetadataAndHostInfoOnAssignment(final Map<String, Object> parameterizedConfig) {
         setUp(parameterizedConfig, false);
         final Map<HostInfo, Set<TopicPartition>> initialHostState = mkMap(
-            mkEntry(new HostInfo("localhost", 9090), Set.of(t1p0, t1p1)),
-            mkEntry(new HostInfo("otherhost", 9090), Set.of(t2p0, t2p1))
+            Map.entry(new HostInfo("localhost", 9090), Set.of(t1p0, t1p1)),
+            Map.entry(new HostInfo("otherhost", 9090), Set.of(t2p0, t2p1))
         );
 
         final Map<HostInfo, Set<TopicPartition>> newHostState = mkMap(
-            mkEntry(new HostInfo("localhost", 9090), Set.of(t1p0, t1p1)),
-            mkEntry(new HostInfo("newotherhost", 9090), Set.of(t2p0, t2p1))
+            Map.entry(new HostInfo("localhost", 9090), Set.of(t1p0, t1p1)),
+            Map.entry(new HostInfo("newotherhost", 9090), Set.of(t2p0, t2p1))
         );
 
         streamsMetadataState = mock(StreamsMetadataState.class);
@@ -1928,13 +1927,13 @@ public class StreamsPartitionAssignorTest {
     public void shouldTriggerImmediateRebalanceOnHostInfoChange(final Map<String, Object> parameterizedConfig) {
         setUp(parameterizedConfig, false);
         final Map<HostInfo, Set<TopicPartition>> oldHostState = mkMap(
-            mkEntry(new HostInfo("localhost", 9090), Set.of(t1p0, t1p1)),
-            mkEntry(new HostInfo("otherhost", 9090), Set.of(t2p0, t2p1))
+            Map.entry(new HostInfo("localhost", 9090), Set.of(t1p0, t1p1)),
+            Map.entry(new HostInfo("otherhost", 9090), Set.of(t2p0, t2p1))
         );
 
         final Map<HostInfo, Set<TopicPartition>> newHostState = mkMap(
-            mkEntry(new HostInfo("newhost", 9090), Set.of(t1p0, t1p1)),
-            mkEntry(new HostInfo("otherhost", 9090), Set.of(t2p0, t2p1))
+            Map.entry(new HostInfo("newhost", 9090), Set.of(t1p0, t1p1)),
+            Map.entry(new HostInfo("otherhost", 9090), Set.of(t2p0, t2p1))
         );
 
         createDefaultMockTaskManager();
@@ -2518,7 +2517,7 @@ public class StreamsPartitionAssignorTest {
                           ));
 
         configureDefault(parameterizedConfig);
-        final List<Map<String, List<TopicPartitionInfo>>> partitionInfo = singletonList(mkMap(mkEntry(
+        final List<Map<String, List<TopicPartitionInfo>>> partitionInfo = singletonList(mkMap(Map.entry(
                 "stream-partition-assignor-test-store-changelog",
                 singletonList(
                     new TopicPartitionInfo(
@@ -2573,7 +2572,7 @@ public class StreamsPartitionAssignorTest {
             ));
 
         configureDefault(parameterizedConfig);
-        final List<Map<String, List<TopicPartitionInfo>>> partitionInfo = singletonList(mkMap(mkEntry(
+        final List<Map<String, List<TopicPartitionInfo>>> partitionInfo = singletonList(mkMap(Map.entry(
                 "stream-partition-assignor-test-store-changelog",
                 singletonList(
                     new TopicPartitionInfo(
@@ -2739,7 +2738,7 @@ public class StreamsPartitionAssignorTest {
     @MethodSource("parameter")
     public void testClientTags(final Map<String, Object> parameterizedConfig) {
         setUp(parameterizedConfig, false);
-        clientTags = mkMap(mkEntry("cluster", "cluster1"), mkEntry("zone", "az1"));
+        clientTags = mkMap(Map.entry("cluster", "cluster1"), Map.entry("zone", "az1"));
         createDefaultMockTaskManager();
         configureDefaultPartitionAssignor(parameterizedConfig);
         final Set<String> topics = Set.of("input");
