@@ -414,53 +414,6 @@ public class ShareConsumeRequestManagerTest {
     }
 
     @Test
-    public void testAcknowledgeOnCloseWithInFlightAcks() {
-        buildRequestManager();
-        // Enabling the config so that background event is sent when the acknowledgement response is received.
-        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
-
-        assignFromSubscribed(Collections.singleton(tp0));
-
-        // normal fetch
-        assertEquals(1, sendFetches());
-        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
-
-        client.prepareResponse(fullFetchResponse(tip0, records, acquiredRecords, Errors.NONE));
-        networkClientDelegate.poll(time.timer(0));
-        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
-
-        Acknowledgements acknowledgements = Acknowledgements.empty();
-        acknowledgements.add(0L, AcknowledgeType.ACCEPT);
-        acknowledgements.add(1L, AcknowledgeType.REJECT);
-        acknowledgements.add(2L, AcknowledgeType.ACCEPT);
-
-        // Acknowledging via ShareFetch
-        shareConsumeRequestManager.fetch(Collections.singletonMap(tip0, acknowledgements));
-        fetchRecords();
-
-        assertEquals(1, sendFetches());
-        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
-
-        shareConsumeRequestManager.acknowledgeOnClose(Collections.emptyMap(),
-                calculateDeadlineMs(time.timer(100)));
-
-        // No acknowledgements should be sent here as all have already been sent via ShareFetch.
-        assertEquals(0, shareConsumeRequestManager.sendAcknowledgements());
-
-        client.prepareResponse(fullFetchResponse(tip0, MemoryRecords.EMPTY, emptyAcquiredRecords, Errors.NONE));
-        networkClientDelegate.poll(time.timer(0));
-        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
-
-        assertEquals(3.0,
-                metrics.metrics().get(metrics.metricInstance(shareFetchMetricsRegistry.acknowledgementSendTotal)).metricValue());
-
-        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
-        // Ensuring no additional acknowledgements were sent.
-        assertEquals(3.0,
-                metrics.metrics().get(metrics.metricInstance(shareFetchMetricsRegistry.acknowledgementSendTotal)).metricValue());
-    }
-
-    @Test
     public void testAcknowledgeOnCloseWithPendingCommitAsync() {
         buildRequestManager();
         // Enabling the config so that background event is sent when the acknowledgement response is received.

@@ -563,7 +563,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 for (TopicIdPartition tip : sessionHandler.sessionPartitions()) {
                     Acknowledgements acknowledgements = acknowledgementsMap.getOrDefault(tip, Acknowledgements.empty());
 
-                    if (isNodeFree(nodeId) && fetchAcknowledgementsMap.get(tip) != null) {
+                    if (fetchAcknowledgementsMap.get(tip) != null) {
                         acknowledgements.merge(fetchAcknowledgementsMap.remove(tip));
                     }
 
