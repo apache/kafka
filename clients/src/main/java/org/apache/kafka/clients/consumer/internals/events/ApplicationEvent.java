@@ -38,6 +38,7 @@ public abstract class ApplicationEvent {
         SHARE_ACKNOWLEDGE_ON_CLOSE,
         SHARE_ACKNOWLEDGEMENT_COMMIT_CALLBACK_REGISTRATION,
         SEEK_UNVALIDATED,
+        STREAMS_ON_ASSIGNMENT_CALLBACK_COMPLETED,
     }
 
     private final Type type;
