@@ -29,6 +29,7 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -631,11 +632,6 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;
 
-    /** {@code auto.include.jmx.reporter}
-     * @deprecated and will be removed in 4.0.0 */
-    @Deprecated
-    public static final String AUTO_INCLUDE_JMX_REPORTER_CONFIG = CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG;
-
     /** {@code num.standby.replicas} */
     @SuppressWarnings("WeakerAccess")
     public static final String NUM_STANDBY_REPLICAS_CONFIG = "num.standby.replicas";
@@ -1095,7 +1091,7 @@ public class StreamsConfig extends AbstractConfig {
                     CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
             .define(METRIC_REPORTER_CLASSES_CONFIG,
                     Type.LIST,
-                    "",
+                    JmxReporter.class.getName(),
                     Importance.LOW,
                     CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
             .define(METRICS_RECORDING_LEVEL_CONFIG,
@@ -1110,11 +1106,6 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0),
                     Importance.LOW,
                     CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC)
-            .define(AUTO_INCLUDE_JMX_REPORTER_CONFIG,
-                    Type.BOOLEAN,
-                    true,
-                    Importance.LOW,
-                    CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_DOC)
             .define(POLL_MS_CONFIG,
                     Type.LONG,
                     100L,
@@ -1234,6 +1225,13 @@ public class StreamsConfig extends AbstractConfig {
         final Map<String, Object> tempConsumerDefaultOverrides = new HashMap<>(CONSUMER_DEFAULT_OVERRIDES);
         tempConsumerDefaultOverrides.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, READ_COMMITTED.toString());
         CONSUMER_EOS_OVERRIDES = Collections.unmodifiableMap(tempConsumerDefaultOverrides);
+    }
+
+    private static final Map<String, Object> ADMIN_CLIENT_OVERRIDES;
+    static {
+        final Map<String, Object> tempAdminClientDefaultOverrides = new HashMap<>();
+        tempAdminClientDefaultOverrides.put(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, "true");
+        ADMIN_CLIENT_OVERRIDES = Collections.unmodifiableMap(tempAdminClientDefaultOverrides);
     }
 
     public static class InternalConfig {
@@ -1443,6 +1441,7 @@ public class StreamsConfig extends AbstractConfig {
             verifyEOSTransactionTimeoutCompatibility();
         }
         verifyTopologyOptimizationConfigs(getString(TOPOLOGY_OPTIMIZATION_CONFIG));
+        verifyClientTelemetryConfigs();
     }
 
     private void verifyEOSTransactionTimeoutCompatibility() {
@@ -1466,6 +1465,52 @@ public class StreamsConfig extends AbstractConfig {
                 commitInterval
             ));
         }
+    }
+
+    private void verifyClientTelemetryConfigs() {
+        final boolean streamTelemetryEnabled = getBoolean(ENABLE_METRICS_PUSH_CONFIG);
+        final Boolean mainConsumerMetricsConfig = maybeMetricsPushEnabled(MAIN_CONSUMER_PREFIX);
+        final Boolean consumerMetricsConfig = maybeMetricsPushEnabled(CONSUMER_PREFIX);
+        final Boolean adminMetricsConfig = maybeMetricsPushEnabled(ADMIN_CLIENT_PREFIX);
+
+        if (streamTelemetryEnabled) {
+            checkConsumerAndMainConsumerAndAdminMetricsConfig(adminMetricsConfig, consumerMetricsConfig, mainConsumerMetricsConfig);
+            checkMainConsumerAndAdminMetricsConfig(adminMetricsConfig, mainConsumerMetricsConfig, "enabled");
+        }
+    }
+
+
+    private void checkConsumerAndMainConsumerAndAdminMetricsConfig(final Boolean adminMetricsConfig,
+                                                                   final Boolean consumerMetricsConfig,
+                                                                   final Boolean mainConsumerMetricsConfig) {
+        if (consumerMetricsConfig != null) {
+            if (!consumerMetricsConfig
+                    && mainConsumerMetricsConfig == null
+                    && adminMetricsConfig == null) {
+                throw new ConfigException("Kafka Streams metrics push enabled but consumer.enable.metrics is false, the setting needs to be consistent between the two");
+            } else if (consumerMetricsConfig) {
+                checkMainConsumerAndAdminMetricsConfig(adminMetricsConfig, mainConsumerMetricsConfig, "and consumer.enable.metrics are enabled,");
+            }
+        }
+    }
+
+    private void checkMainConsumerAndAdminMetricsConfig(final Boolean adminMetricsConfig, final Boolean mainConsumerMetricsConfig, final String message) {
+        if (mainConsumerMetricsConfig != null && !mainConsumerMetricsConfig
+                && adminMetricsConfig != null && !adminMetricsConfig) {
+            throw new ConfigException("Kafka Streams metrics push " + message + " but main.consumer and admin.client metrics push are disabled, the setting needs to be consistent between the two");
+        } else if (mainConsumerMetricsConfig != null && !mainConsumerMetricsConfig) {
+            throw new ConfigException("Kafka Streams metrics push " + message + " but main.consumer metrics push is disabled, the setting needs to be consistent between the two");
+        } else if (adminMetricsConfig != null && !adminMetricsConfig) {
+            throw new ConfigException("Kafka Streams metrics push " + message + " but admin.client metrics push is disabled, the setting needs to be consistent between the two");
+        }
+    }
+
+    private Boolean maybeMetricsPushEnabled(final String prefix) {
+        Boolean configSetValue = null;
+        if (originalsWithPrefix(prefix).containsKey(ENABLE_METRICS_PUSH_CONFIG)) {
+            configSetValue =  (Boolean) originalsWithPrefix(prefix).get(ENABLE_METRICS_PUSH_CONFIG);
+        }
+        return configSetValue;
     }
 
     @Override
@@ -1806,7 +1851,7 @@ public class StreamsConfig extends AbstractConfig {
     public Map<String, Object> getAdminConfigs(final String clientId) {
         final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(ADMIN_CLIENT_PREFIX, AdminClientConfig.configNames());
 
-        final Map<String, Object> props = new HashMap<>();
+        final Map<String, Object> props = new HashMap<>(ADMIN_CLIENT_OVERRIDES);
         props.putAll(getClientCustomProps());
         props.putAll(clientProvidedProps);
 

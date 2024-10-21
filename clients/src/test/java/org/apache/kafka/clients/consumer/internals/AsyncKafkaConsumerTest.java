@@ -45,6 +45,7 @@ import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
+import org.apache.kafka.clients.consumer.internals.events.ResetOffsetEvent;
 import org.apache.kafka.clients.consumer.internals.events.SeekUnvalidatedEvent;
 import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
@@ -581,15 +582,6 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
-    public void testPollLongThrowsException() {
-        consumer = newConsumer();
-        Exception e = assertThrows(UnsupportedOperationException.class, () -> consumer.poll(0L));
-        assertEquals("Consumer.poll(long) is not supported when \"group.protocol\" is \"consumer\". " +
-            "This method is deprecated and will be removed in the next major release.", e.getMessage());
-    }
-
-    @Test
     public void testCommitSyncLeaderEpochUpdate() {
         consumer = newConsumer();
         final TopicPartition t0 = new TopicPartition("t0", 2);
@@ -772,6 +764,13 @@ public class AsyncKafkaConsumerTest {
     private <T> CompletableApplicationEvent<T> getLastEnqueuedEvent() {
         final ArgumentCaptor<CompletableApplicationEvent<T>> eventArgumentCaptor = ArgumentCaptor.forClass(CompletableApplicationEvent.class);
         verify(applicationEventHandler, atLeast(1)).add(eventArgumentCaptor.capture());
+        final List<CompletableApplicationEvent<T>> allValues = eventArgumentCaptor.getAllValues();
+        return allValues.get(allValues.size() - 1);
+    }
+
+    private <T> CompletableApplicationEvent<T> addAndGetLastEnqueuedEvent() {
+        final ArgumentCaptor<CompletableApplicationEvent<T>> eventArgumentCaptor = ArgumentCaptor.forClass(CompletableApplicationEvent.class);
+        verify(applicationEventHandler, atLeast(1)).addAndGet(eventArgumentCaptor.capture());
         final List<CompletableApplicationEvent<T>> allValues = eventArgumentCaptor.getAllValues();
         return allValues.get(allValues.size() - 1);
     }
@@ -1904,6 +1903,44 @@ public class AsyncKafkaConsumerTest {
         verify(applicationEventHandler).add(ArgumentMatchers.isA(UnsubscribeEvent.class));
     }
 
+    @Test
+    public void testSeekToBeginning() {
+        Collection<TopicPartition> topics = Collections.singleton(new TopicPartition("test", 0));
+        consumer = newConsumer();
+        consumer.seekToBeginning(topics);
+        CompletableApplicationEvent<Void> event = addAndGetLastEnqueuedEvent();
+        ResetOffsetEvent resetOffsetEvent = assertInstanceOf(ResetOffsetEvent.class, event);
+        assertEquals(topics, new HashSet<>(resetOffsetEvent.topicPartitions()));
+        assertEquals(OffsetResetStrategy.EARLIEST, resetOffsetEvent.offsetResetStrategy());
+    }
+
+    @Test
+    public void testSeekToBeginningWithException() {
+        Collection<TopicPartition> topics = Collections.singleton(new TopicPartition("test", 0));
+        consumer = newConsumer();
+        completeResetOffsetEventExceptionally(new TimeoutException());
+        assertThrows(TimeoutException.class, () -> consumer.seekToBeginning(topics));
+    }
+
+    @Test
+    public void testSeekToEndWithException() {
+        Collection<TopicPartition> topics = Collections.singleton(new TopicPartition("test", 0));
+        consumer = newConsumer();
+        completeResetOffsetEventExceptionally(new TimeoutException());
+        assertThrows(TimeoutException.class, () -> consumer.seekToEnd(topics));
+    }
+
+    @Test
+    public void testSeekToEnd() {
+        Collection<TopicPartition> topics = Collections.singleton(new TopicPartition("test", 0));
+        consumer = newConsumer();
+        consumer.seekToEnd(topics);
+        CompletableApplicationEvent<Void> event = addAndGetLastEnqueuedEvent();
+        ResetOffsetEvent resetOffsetEvent = assertInstanceOf(ResetOffsetEvent.class, event);
+        assertEquals(topics, new HashSet<>(resetOffsetEvent.topicPartitions()));
+        assertEquals(OffsetResetStrategy.LATEST, resetOffsetEvent.offsetResetStrategy());
+    }
+
     private void verifyUnsubscribeEvent(SubscriptionState subscriptions) {
         // Check that an unsubscribe event was generated, and that the consumer waited for it to
         // complete processing background events.
@@ -1957,6 +1994,10 @@ public class AsyncKafkaConsumerTest {
             event.future().completeExceptionally(ex);
             return null;
         }).when(applicationEventHandler).add(ArgumentMatchers.isA(SyncCommitEvent.class));
+    }
+
+    private void completeResetOffsetEventExceptionally(Exception ex) {
+        doThrow(ex).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ResetOffsetEvent.class));
     }
 
     private void completeCommitAsyncApplicationEventSuccessfully() {

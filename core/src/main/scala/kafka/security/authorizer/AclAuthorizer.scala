@@ -21,7 +21,6 @@ import java.util.concurrent.{CompletableFuture, CompletionStage}
 import com.typesafe.scalalogging.Logger
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils._
-import kafka.utils.Implicits._
 import kafka.zk._
 import org.apache.kafka.common.Endpoint
 import org.apache.kafka.common.acl._
@@ -107,7 +106,7 @@ object AclAuthorizer {
       // be sure to force creation since the zkSslClientEnable property in the kafkaConfig could be false
       val zkClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(kafkaConfig, forceZkSslClientEnable = true)
       // add in any prefixed overlays
-      ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.forKeyValue { (kafkaProp, sysProp) =>
+      ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.foreachEntry { (kafkaProp, sysProp) =>
         configMap.get(AclAuthorizer.configPrefix + kafkaProp).foreach { prefixedValue =>
           zkClientConfig.setProperty(sysProp,
             if (kafkaProp == ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG)
@@ -187,7 +186,7 @@ class AclAuthorizer extends Authorizer with Logging {
   override def configure(javaConfigs: util.Map[String, _]): Unit = {
     val configs = javaConfigs.asScala
     val props = new java.util.Properties()
-    configs.forKeyValue { (key, value) => props.put(key, value.toString.trim) }
+    configs.foreachEntry { (key, value) => props.put(key, value.toString.trim) }
 
     superUsers = configs.get(AclAuthorizer.SuperUsersProp).collect {
       case str: String if str.nonEmpty => str.split(";").map(s => SecurityUtils.parseKafkaPrincipal(s.trim)).toSet
@@ -251,7 +250,7 @@ class AclAuthorizer extends Authorizer with Logging {
 
     if (aclsToCreate.nonEmpty) {
       lock synchronized {
-        aclsToCreate.forKeyValue { (resource, aclsWithIndex) =>
+        aclsToCreate.foreachEntry { (resource, aclsWithIndex) =>
           try {
             updateResourceAcls(resource) { currentAcls =>
               val newAcls = aclsWithIndex.map { case (acl, _) => new AclEntry(acl.entry) }
@@ -299,7 +298,7 @@ class AclAuthorizer extends Authorizer with Logging {
         resource -> matchingFilters
       }.toMap.filter(_._2.nonEmpty)
 
-      resourcesToUpdate.forKeyValue { (resource, matchingFilters) =>
+      resourcesToUpdate.foreachEntry { (resource, matchingFilters) =>
         val resourceBindingsBeingDeleted = new mutable.HashMap[AclBinding, Int]()
         try {
           updateResourceAcls(resource) { currentAcls =>
@@ -334,7 +333,7 @@ class AclAuthorizer extends Authorizer with Logging {
 
   override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = {
     val aclBindings = new util.ArrayList[AclBinding]()
-    aclCache.forKeyValue { case (resource, versionedAcls) =>
+    aclCache.foreachEntry { case (resource, versionedAcls) =>
       versionedAcls.acls.foreach { acl =>
         val binding = new AclBinding(resource, acl.ace)
         if (filter.matches(binding))
@@ -552,7 +551,7 @@ class AclAuthorizer extends Authorizer with Logging {
     aclCacheSnapshot
       .from(new ResourcePattern(resourceType, resourceName, PatternType.PREFIXED))
       .to(new ResourcePattern(resourceType, resourceName.take(1), PatternType.PREFIXED))
-      .forKeyValue { (resource, acls) =>
+      .foreachEntry { (resource, acls) =>
         if (resourceName.startsWith(resource.name)) prefixed ++= acls.acls
       }
 

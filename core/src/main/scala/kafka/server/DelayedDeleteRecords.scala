@@ -20,7 +20,6 @@ package kafka.server
 
 import java.util.concurrent.TimeUnit
 
-import kafka.utils.Implicits._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.DeleteRecordsResponseData
 import org.apache.kafka.common.protocol.Errors
@@ -49,7 +48,7 @@ class DelayedDeleteRecords(delayMs: Long,
   extends DelayedOperation(delayMs) {
 
   // first update the acks pending variable according to the error code
-  deleteRecordsStatus.forKeyValue { (topicPartition, status) =>
+  deleteRecordsStatus.foreachEntry { (topicPartition, status) =>
     if (status.responseStatus.errorCode == Errors.NONE.code) {
       // Timeout error state will be cleared when required acks are received
       status.acksPending = true
@@ -70,7 +69,7 @@ class DelayedDeleteRecords(delayMs: Long,
    */
   override def tryComplete(): Boolean = {
     // check for each partition if it still has pending acks
-    deleteRecordsStatus.forKeyValue { (topicPartition, status) =>
+    deleteRecordsStatus.foreachEntry { (topicPartition, status) =>
       trace(s"Checking delete records satisfaction for $topicPartition, current status $status")
       // skip those partitions that have already been satisfied
       if (status.acksPending) {
@@ -106,7 +105,7 @@ class DelayedDeleteRecords(delayMs: Long,
   }
 
   override def onExpiration(): Unit = {
-    deleteRecordsStatus.forKeyValue { (topicPartition, status) =>
+    deleteRecordsStatus.foreachEntry { (topicPartition, status) =>
       if (status.acksPending) {
         DelayedDeleteRecordsMetrics.recordExpiration(topicPartition)
       }

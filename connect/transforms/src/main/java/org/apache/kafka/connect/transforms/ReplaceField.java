@@ -51,7 +51,7 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
         String EXCLUDE = "exclude";
         String INCLUDE = "include";
 
-        String RENAME = "renames";
+        String RENAMES = "renames";
         String REPLACE_NULL_WITH_DEFAULT_CONFIG = "replace.null.with.default";
     }
 
@@ -60,7 +60,7 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
                     "Fields to exclude. This takes precedence over the fields to include.")
             .define(ConfigName.INCLUDE, ConfigDef.Type.LIST, Collections.emptyList(), ConfigDef.Importance.MEDIUM,
                     "Fields to include. If specified, only these fields will be used.")
-            .define(ConfigName.RENAME, ConfigDef.Type.LIST, Collections.emptyList(),
+            .define(ConfigName.RENAMES, ConfigDef.Type.LIST, Collections.emptyList(),
                 ConfigDef.LambdaValidator.with(
                     (name, value) -> {
                         @SuppressWarnings("unchecked")
@@ -93,7 +93,7 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
 
         exclude = new HashSet<>(config.getList(ConfigName.EXCLUDE));
         include = new HashSet<>(config.getList(ConfigName.INCLUDE));
-        renames = parseRenameMappings(config.getList(ConfigName.RENAME));
+        renames = parseRenameMappings(config.getList(ConfigName.RENAMES));
         reverseRenames = invert(renames);
         replaceNullWithDefault = config.getBoolean(ConfigName.REPLACE_NULL_WITH_DEFAULT_CONFIG);
 
@@ -105,7 +105,7 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
         for (String mapping : mappings) {
             final String[] parts = mapping.split(":");
             if (parts.length != 2) {
-                throw new ConfigException(ConfigName.RENAME, mappings, "Invalid rename mapping: " + mapping);
+                throw new ConfigException(ConfigName.RENAMES, mappings, "Invalid rename mapping: " + mapping);
             }
             m.put(parts[0], parts[1]);
         }

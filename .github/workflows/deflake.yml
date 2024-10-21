@@ -54,13 +54,19 @@ jobs:
       - name: Test
         timeout-minutes: 60
         id: junit-test
+        env:
+          TEST_REPEAT: ${{ inputs.test-repeat }}
+          TEST_MODULE: ${{ inputs.test-module }}
+          TEST_PATTERN: ${{ inputs.test-pattern }}
         run: |
           set +e
           ./gradlew --info --build-cache --scan --continue \
           -PtestLoggingEvents=started,passed,skipped,failed \
           -PignoreFailures=true -PmaxParallelForks=2 \
-          -Pkafka.cluster.test.repeat=${{ inputs.test-repeat }} \
-          ${{ inputs.test-module }}:test --tests ${{ inputs.test-pattern }}
+          -Pkafka.cluster.test.repeat=$TEST_REPEAT \
+          -PmaxTestRetries=$TEST_REPEAT -PmaxTestRetryFailures=0 \
+          -PmaxQuarantineTestRetries=$TEST_REPEAT -PmaxQuarantineTestRetryFailures=0 \
+          ${TEST_MODULE}:test ${TEST_MODULE}:quarantinedTest --tests $TEST_PATTERN
           exitcode="$?"
           echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
       - name: Archive JUnit reports

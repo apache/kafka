@@ -77,7 +77,6 @@ import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_LIS
 import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIRS_CONFIG;
 
 
-@SuppressWarnings("deprecation") // Needed for Scala 2.12 compatibility
 public class KafkaClusterTestKit implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(KafkaClusterTestKit.class);
 
@@ -145,12 +144,20 @@ public class KafkaClusterTestKit implements AutoCloseable {
     }
 
     public static class Builder {
-        private TestKitNodes nodes;
+        private final TestKitNodes nodes;
         private final Map<String, Object> configProps = new HashMap<>();
         private final SimpleFaultHandlerFactory faultHandlerFactory = new SimpleFaultHandlerFactory();
+        private final String brokerListenerName;
+        private final String controllerListenerName;
+        private final String brokerSecurityProtocol;
+        private final String controllerSecurityProtocol;
 
         public Builder(TestKitNodes nodes) {
             this.nodes = nodes;
+            this.brokerListenerName = nodes.brokerListenerName().value();
+            this.controllerListenerName = nodes.controllerListenerName().value();
+            this.brokerSecurityProtocol = nodes.brokerListenerProtocol().name;
+            this.controllerSecurityProtocol = nodes.controllerListenerProtocol().name;
         }
 
         public Builder setConfigProp(String key, Object value) {
@@ -188,12 +195,11 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
             // We allow configuring the listeners and related properties via Builder::setConfigProp,
             // and they shouldn't be overridden here
-            props.putIfAbsent(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG,
-                "EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT");
+            props.putIfAbsent(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, String.format("%s:%s,%s:%s",
+                    brokerListenerName, brokerSecurityProtocol, controllerListenerName, controllerSecurityProtocol));
             props.putIfAbsent(SocketServerConfigs.LISTENERS_CONFIG, listeners(node.id()));
-            props.putIfAbsent(INTER_BROKER_LISTENER_NAME_CONFIG,
-                nodes.interBrokerListenerName().value());
-            props.putIfAbsent(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER");
+            props.putIfAbsent(INTER_BROKER_LISTENER_NAME_CONFIG, brokerListenerName);
+            props.putIfAbsent(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, controllerListenerName);
 
             // Note: we can't accurately set controller.quorum.voters yet, since we don't
             // yet know what ports each controller will pick.  Set it to a dummy string
@@ -308,12 +314,12 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
         private String listeners(int node) {
             if (nodes.isCombined(node)) {
-                return "EXTERNAL://localhost:0,CONTROLLER://localhost:0";
+                return String.format("%s://localhost:0,%s://localhost:0", brokerListenerName, controllerListenerName);
             }
             if (nodes.controllerNodes().containsKey(node)) {
-                return "CONTROLLER://localhost:0";
+                return String.format("%s://localhost:0", controllerListenerName);
             }
-            return "EXTERNAL://localhost:0";
+            return String.format("%s://localhost:0", brokerListenerName);
         }
 
         private String roles(int node) {
@@ -522,7 +528,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
         for (Entry<Integer, BrokerServer> entry : brokers.entrySet()) {
             int brokerId = entry.getKey();
             BrokerServer broker = entry.getValue();
-            ListenerName listenerName = nodes.externalListenerName();
+            ListenerName listenerName = nodes.brokerListenerName();
             int port = broker.boundPort(listenerName);
             if (port <= 0) {
                 throw new RuntimeException("Broker " + brokerId + " does not yet " +
@@ -560,7 +566,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
     public Controller waitForActiveController() throws InterruptedException {
         AtomicReference<Controller> active = new AtomicReference<>(null);
-        TestUtils.retryOnExceptionWithTimeout(60_000, () -> {
+        TestUtils.retryOnExceptionWithTimeout(() -> {
             for (ControllerServer controllerServer : controllers.values()) {
                 if (controllerServer.controller().isActive()) {
                     active.set(controllerServer.controller());
