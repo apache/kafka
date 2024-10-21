@@ -372,7 +372,7 @@ public class FormatterTest {
                 formatter1.formatter.setFeatureLevel("kraft.version", (short) 1);
             }
             formatter1.formatter.setUnstableFeatureVersionsEnabled(true);
-            formatter1.formatter.setInitialVoters(DynamicVoters.
+            formatter1.formatter.setInitialControllers(DynamicVoters.
                 parse("1@localhost:8020:4znU-ou9Taa06bmEJxsjnw"));
             formatter1.formatter.run();
             assertEquals(Arrays.asList(
@@ -403,7 +403,7 @@ public class FormatterTest {
             FormatterContext formatter1 = testEnv.newFormatter();
             formatter1.formatter.setFeatureLevel("kraft.version", (short) 0);
             formatter1.formatter.setUnstableFeatureVersionsEnabled(true);
-            formatter1.formatter.setInitialVoters(DynamicVoters.
+            formatter1.formatter.setInitialControllers(DynamicVoters.
                     parse("1@localhost:8020:4znU-ou9Taa06bmEJxsjnw"));
             assertTrue(formatter1.formatter.hasDynamicQuorum());
             assertEquals("Cannot set kraft.version to 0 if KIP-853 configuration is present. " +
@@ -433,7 +433,7 @@ public class FormatterTest {
             FormatterContext formatter1 = testEnv.newFormatter();
             formatter1.formatter.setReleaseVersion(MetadataVersion.IBP_3_8_IV0);
             formatter1.formatter.setFeatureLevel("kraft.version", (short) 1);
-            formatter1.formatter.setInitialVoters(DynamicVoters.
+            formatter1.formatter.setInitialControllers(DynamicVoters.
                     parse("1@localhost:8020:4znU-ou9Taa06bmEJxsjnw"));
             formatter1.formatter.setUnstableFeatureVersionsEnabled(true);
             assertEquals("kraft.version could not be set to 1 because it depends on " +
