@@ -64,7 +64,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import scala.Option;
-import scala.collection.JavaConverters;
+import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.server.common.KRaftVersion.KRAFT_VERSION_1;
 
@@ -98,7 +98,6 @@ public class CheckpointBench {
     private AlterPartitionManager alterPartitionManager;
 
 
-    @SuppressWarnings("deprecation")
     @Setup(Level.Trial)
     public void setup() {
         this.scheduler = new KafkaScheduler(1, true, "scheduler-thread");
@@ -110,8 +109,8 @@ public class CheckpointBench {
         this.time = new MockTime();
         this.failureChannel = new LogDirFailureChannel(brokerProperties.logDirs().size());
         final List<File> files =
-            JavaConverters.seqAsJavaList(brokerProperties.logDirs()).stream().map(File::new).collect(Collectors.toList());
-        this.logManager = TestUtils.createLogManager(JavaConverters.asScalaBuffer(files),
+            CollectionConverters.asJava(brokerProperties.logDirs()).stream().map(File::new).collect(Collectors.toList());
+        this.logManager = TestUtils.createLogManager(CollectionConverters.asScala(files),
                 new LogConfig(new Properties()), new MockConfigRepository(), new CleanerConfig(1, 4 * 1024 * 1024L, 0.9d,
                         1024 * 1024, 32 * 1024 * 1024, Double.MAX_VALUE, 15 * 1000, true), time, MetadataVersion.latestTesting(), 4, false, Option.empty(), false, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT);
         scheduler.startup();
@@ -161,7 +160,7 @@ public class CheckpointBench {
         this.metrics.close();
         this.scheduler.shutdown();
         this.quotaManagers.shutdown();
-        for (File dir : JavaConverters.asJavaCollection(logManager.liveLogDirs())) {
+        for (File dir : CollectionConverters.asJavaCollection(logManager.liveLogDirs())) {
             Utils.delete(dir);
         }
     }

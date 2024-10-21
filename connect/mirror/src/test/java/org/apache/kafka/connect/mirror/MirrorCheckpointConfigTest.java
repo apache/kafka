@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.Test;
 
@@ -26,6 +25,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.kafka.connect.mirror.TestUtils.assertEqualsExceptClientId;
 import static org.apache.kafka.connect.mirror.TestUtils.makeProps;
@@ -122,7 +122,7 @@ public class MirrorCheckpointConfigTest {
 
         configValues = MirrorCheckpointConfig.validate(makeProps(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, "true",
                 MirrorCheckpointConfig.EMIT_OFFSET_SYNCS_ENABLED, "false"));
-        assertEquals(configValues.keySet(), Utils.mkSet(MirrorCheckpointConfig.EMIT_OFFSET_SYNCS_ENABLED));
+        assertEquals(configValues.keySet(), Set.of(MirrorCheckpointConfig.EMIT_OFFSET_SYNCS_ENABLED));
 
         configValues = MirrorCheckpointConfig.validate(makeProps(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, "true",
                 MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, "true",

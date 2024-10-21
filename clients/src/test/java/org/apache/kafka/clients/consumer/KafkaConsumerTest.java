@@ -1105,7 +1105,7 @@ public class KafkaConsumerTest {
 
         // fetch offset for one topic
         client.prepareResponseFrom(offsetResponse(Utils.mkMap(Utils.mkEntry(tp0, offset1), Utils.mkEntry(tp1, -1L)), Errors.NONE), coordinator);
-        final Map<TopicPartition, OffsetAndMetadata> committed = consumer.committed(Utils.mkSet(tp0, tp1));
+        final Map<TopicPartition, OffsetAndMetadata> committed = consumer.committed(Set.of(tp0, tp1));
         assertEquals(2, committed.size());
         assertEquals(offset1, committed.get(tp0).offset());
         assertNull(committed.get(tp1));
@@ -1677,7 +1677,7 @@ public class KafkaConsumerTest {
         Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
 
         // manual assignment
-        Set<TopicPartition> partitions = Utils.mkSet(tp0, tp1);
+        Set<TopicPartition> partitions = Set.of(tp0, tp1);
         consumer.assign(partitions);
         // verify consumer's assignment
         assertEquals(partitions, consumer.assignment());
@@ -2276,11 +2276,11 @@ public class KafkaConsumerTest {
         // a poll with non-zero milliseconds would complete three round-trips (discover, join, sync)
         TestUtils.waitForCondition(() -> {
             consumer.poll(Duration.ofMillis(100L));
-            return consumer.assignment().equals(Utils.mkSet(tp0, t2p0));
+            return consumer.assignment().equals(Set.of(tp0, t2p0));
         }, "Does not complete rebalance in time");
 
-        assertEquals(Utils.mkSet(topic, topic2), consumer.subscription());
-        assertEquals(Utils.mkSet(tp0, t2p0), consumer.assignment());
+        assertEquals(Set.of(topic, topic2), consumer.subscription());
+        assertEquals(Set.of(tp0, t2p0), consumer.assignment());
 
         // prepare a response of the outstanding fetch so that we have data available on the next poll
         Map<TopicPartition, FetchInfo> fetches1 = new HashMap<>();
@@ -2305,8 +2305,8 @@ public class KafkaConsumerTest {
         consumer.subscribe(Arrays.asList(topic, topic3), getConsumerRebalanceListener(consumer));
 
         // verify that subscription has changed but assignment is still unchanged
-        assertEquals(Utils.mkSet(topic, topic3), consumer.subscription());
-        assertEquals(Utils.mkSet(tp0, t2p0), consumer.assignment());
+        assertEquals(Set.of(topic, topic3), consumer.subscription());
+        assertEquals(Set.of(tp0, t2p0), consumer.assignment());
 
         // mock the offset commit response for to be revoked partitions
         Map<TopicPartition, Long> partitionOffsets1 = new HashMap<>();
@@ -2322,7 +2322,7 @@ public class KafkaConsumerTest {
         client.respondFrom(fetchResponse(fetches1), node);
 
         // verify that the fetch still occurred as expected
-        assertEquals(Utils.mkSet(topic, topic3), consumer.subscription());
+        assertEquals(Set.of(topic, topic3), consumer.subscription());
         assertEquals(Collections.singleton(tp0), consumer.assignment());
         assertEquals(1, records.count());
         assertEquals(2L, consumer.position(tp0));
@@ -2338,7 +2338,7 @@ public class KafkaConsumerTest {
         records = consumer.poll(Duration.ZERO);
 
         // should not finish the response yet
-        assertEquals(Utils.mkSet(topic, topic3), consumer.subscription());
+        assertEquals(Set.of(topic, topic3), consumer.subscription());
         assertEquals(Collections.singleton(tp0), consumer.assignment());
         assertEquals(1, records.count());
         assertEquals(3L, consumer.position(tp0));
@@ -2353,13 +2353,13 @@ public class KafkaConsumerTest {
         AtomicInteger count = new AtomicInteger(0);
         TestUtils.waitForCondition(() -> {
             ConsumerRecords<String, String> recs = consumer.poll(Duration.ofMillis(100L));
-            return consumer.assignment().equals(Utils.mkSet(tp0, t3p0)) && count.addAndGet(recs.count()) == 1;
+            return consumer.assignment().equals(Set.of(tp0, t3p0)) && count.addAndGet(recs.count()) == 1;
 
         }, "Does not complete rebalance in time");
 
         // should have t3 but not sent yet the t3 records
-        assertEquals(Utils.mkSet(topic, topic3), consumer.subscription());
-        assertEquals(Utils.mkSet(tp0, t3p0), consumer.assignment());
+        assertEquals(Set.of(topic, topic3), consumer.subscription());
+        assertEquals(Set.of(tp0, t3p0), consumer.assignment());
         assertEquals(4L, consumer.position(tp0));
         assertEquals(0L, consumer.position(t3p0));
 

@@ -42,8 +42,8 @@ import java.util.Properties;
 
 import scala.Option;
 import scala.Some$;
-import scala.collection.JavaConverters;
 import scala.collection.Seq;
+import scala.jdk.javaapi.CollectionConverters;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -54,15 +54,14 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     public static final int NUM_PARTITIONS = 1;
     public static final int BROKER_COUNT = 1;
     public static final String KAFKA_CLIENT_SASL_MECHANISM = "SCRAM-SHA-256";
-    private static final Seq<String> KAFKA_SERVER_SASL_MECHANISMS = JavaConverters.asScalaIteratorConverter(Collections.singletonList(KAFKA_CLIENT_SASL_MECHANISM).iterator()).asScala().toSeq();
+    private static final Seq<String> KAFKA_SERVER_SASL_MECHANISMS =  CollectionConverters.asScala(Collections.singletonList(KAFKA_CLIENT_SASL_MECHANISM)).toSeq();
 
-    @SuppressWarnings({"deprecation"})
     private Consumer<byte[], byte[]> createConsumer() {
         return createConsumer(
             new ByteArrayDeserializer(),
             new ByteArrayDeserializer(),
             new Properties(),
-            JavaConverters.asScalaSet(Collections.<String>emptySet()).toList()
+            CollectionConverters.asScala(Collections.<String>emptySet()).toList()
         );
     }
 

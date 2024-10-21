@@ -32,8 +32,8 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import java.nio.ByteBuffer
 import java.util.Optional
 import scala.collection.{Map, Set, mutable}
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.{RichOption, RichOptional}
 import scala.util.Random
 
 class MockLeaderEndPoint(sourceBroker: BrokerEndPoint = new BrokerEndPoint(1, host = "localhost", port = Random.nextInt()),
@@ -154,7 +154,7 @@ class MockLeaderEndPoint(sourceBroker: BrokerEndPoint = new BrokerEndPoint(1, ho
       if (state.isReadyForFetch) {
         val replicaState = replicaPartitionStateCallback(partition).getOrElse(throw new IllegalArgumentException(s"Unknown partition $partition"))
         val lastFetchedEpoch = if (isTruncationOnFetchSupported)
-          state.lastFetchedEpoch.map(_.asInstanceOf[Integer]).asJava
+          state.lastFetchedEpoch.map(_.asInstanceOf[Integer]).toJava
         else
           Optional.empty[Integer]
         fetchData.put(partition,
@@ -204,7 +204,7 @@ class MockLeaderEndPoint(sourceBroker: BrokerEndPoint = new BrokerEndPoint(1, ho
                                       lastFetchedEpoch: Optional[Integer],
                                       fetchOffset: Long,
                                       partitionState: PartitionState): Option[FetchResponseData.EpochEndOffset] = {
-    lastFetchedEpoch.asScala.flatMap { fetchEpoch =>
+    lastFetchedEpoch.toScala.flatMap { fetchEpoch =>
       val epochEndOffset = fetchEpochEndOffsets(
         Map(topicPartition -> new EpochData()
           .setPartition(topicPartition.partition)

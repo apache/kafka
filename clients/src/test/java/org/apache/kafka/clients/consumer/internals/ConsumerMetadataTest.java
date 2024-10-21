@@ -33,7 +33,6 @@ import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -97,33 +96,33 @@ public class ConsumerMetadataTest {
         metadata.updateWithCurrentRequestVersion(response, false, time.milliseconds());
 
         if (includeInternalTopics)
-            assertEquals(Utils.mkSet("__matching_topic", "__consumer_offsets"), metadata.fetch().topics());
+            assertEquals(Set.of("__matching_topic", "__consumer_offsets"), metadata.fetch().topics());
         else
             assertEquals(Collections.singleton("__matching_topic"), metadata.fetch().topics());
     }
 
     @Test
     public void testUserAssignment() {
-        subscription.assignFromUser(Utils.mkSet(
+        subscription.assignFromUser(Set.of(
                 new TopicPartition("foo", 0),
                 new TopicPartition("bar", 0),
                 new TopicPartition("__consumer_offsets", 0)));
-        testBasicSubscription(Utils.mkSet("foo", "bar"), Utils.mkSet("__consumer_offsets"));
+        testBasicSubscription(Set.of("foo", "bar"), Set.of("__consumer_offsets"));
 
-        subscription.assignFromUser(Utils.mkSet(
+        subscription.assignFromUser(Set.of(
                 new TopicPartition("baz", 0),
                 new TopicPartition("__consumer_offsets", 0)));
-        testBasicSubscription(Utils.mkSet("baz"), Utils.mkSet("__consumer_offsets"));
+        testBasicSubscription(Set.of("baz"), Set.of("__consumer_offsets"));
     }
 
     @Test
     public void testNormalSubscription() {
-        subscription.subscribe(Utils.mkSet("foo", "bar", "__consumer_offsets"), Optional.empty());
-        subscription.groupSubscribe(Utils.mkSet("baz", "foo", "bar", "__consumer_offsets"));
-        testBasicSubscription(Utils.mkSet("foo", "bar", "baz"), Utils.mkSet("__consumer_offsets"));
+        subscription.subscribe(Set.of("foo", "bar", "__consumer_offsets"), Optional.empty());
+        subscription.groupSubscribe(Set.of("baz", "foo", "bar", "__consumer_offsets"));
+        testBasicSubscription(Set.of("foo", "bar", "baz"), Set.of("__consumer_offsets"));
 
         subscription.resetGroupSubscription();
-        testBasicSubscription(Utils.mkSet("foo", "bar"), Utils.mkSet("__consumer_offsets"));
+        testBasicSubscription(Set.of("foo", "bar"), Set.of("__consumer_offsets"));
     }
 
     @Test
@@ -151,7 +150,7 @@ public class ConsumerMetadataTest {
         topicIds.forEach((topicName, topicId) -> assertEquals(topicId, metadataTopicIds.get(topicName)));
         assertFalse(metadata.updateRequested());
 
-        assertEquals(Utils.mkSet("foo", "bar"), new HashSet<>(metadata.fetch().topics()));
+        assertEquals(Set.of("foo", "bar"), new HashSet<>(metadata.fetch().topics()));
 
         metadata.clearTransientTopics();
         topicIds.remove("bar");

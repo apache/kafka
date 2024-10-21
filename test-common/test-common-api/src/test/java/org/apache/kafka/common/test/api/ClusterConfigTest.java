@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.test.api;
 
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -33,6 +34,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.common.test.TestKitNodes.DEFAULT_BROKER_LISTENER_NAME;
+import static org.apache.kafka.common.test.TestKitNodes.DEFAULT_BROKER_SECURITY_PROTOCOL;
 
 public class ClusterConfigTest {
 
@@ -54,8 +58,8 @@ public class ClusterConfigTest {
                 .setDisksPerBroker(1)
                 .setAutoStart(true)
                 .setTags(Arrays.asList("name", "Generated Test"))
-                .setSecurityProtocol(SecurityProtocol.PLAINTEXT)
-                .setListenerName("EXTERNAL")
+                .setBrokerSecurityProtocol(SecurityProtocol.PLAINTEXT)
+                .setBrokerListenerName(ListenerName.normalised("EXTERNAL"))
                 .setTrustStoreFile(trustStoreFile)
                 .setMetadataVersion(MetadataVersion.IBP_0_8_0)
                 .setServerProperties(Collections.singletonMap("broker", "broker_value"))
@@ -110,6 +114,7 @@ public class ClusterConfigTest {
         Assertions.assertTrue(expectedDisplayTags.contains("tag 2"));
         Assertions.assertTrue(expectedDisplayTags.contains("tag 3"));
         Assertions.assertTrue(expectedDisplayTags.contains("MetadataVersion=" + MetadataVersion.latestTesting()));
-        Assertions.assertTrue(expectedDisplayTags.contains("Security=" + SecurityProtocol.PLAINTEXT));
+        Assertions.assertTrue(expectedDisplayTags.contains("BrokerSecurityProtocol=" + DEFAULT_BROKER_SECURITY_PROTOCOL));
+        Assertions.assertTrue(expectedDisplayTags.contains("BrokerListenerName=" + ListenerName.normalised(DEFAULT_BROKER_LISTENER_NAME)));
     }
 }
