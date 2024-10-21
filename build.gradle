@@ -2657,6 +2657,7 @@ project(':streams') {
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testImplementation libs.junitPlatformSuiteEngine // supports suite test
+    testImplementation libs.opentelemetryProto
     testImplementation project(':group-coordinator')
 
     testRuntimeOnly project(':streams:test-utils')
