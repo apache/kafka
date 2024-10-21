@@ -34,6 +34,8 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegexKey;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegexValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
@@ -46,8 +48,11 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
+import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupRegex;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
+
+import com.google.re2j.Pattern;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -79,6 +84,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupRegexRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord;
@@ -805,6 +811,44 @@ public class GroupCoordinatorRecordHelpersTest {
 
         CoordinatorRecord record = GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("group-id", "foo", 1);
         assertEquals(expectedRecord, record);
+    }
+
+    @Test
+    public void testNewConsumerGroupRegexRecord() {
+        String groupId = "group-id";
+        String regex = "foo.*";
+        List<String> matchingTopics = Arrays.asList("topic1", "topic2");
+        int metadataVersion  = 1;
+        int memberCount = 10;
+
+
+        CoordinatorRecord expectedRecord = new CoordinatorRecord(
+            new ApiMessageAndVersion(
+                new ConsumerGroupRegexKey()
+                    .setGroupId(groupId)
+                    .setRegex(regex),
+                (short) 16
+            ),
+            new ApiMessageAndVersion(
+                new ConsumerGroupRegexValue()
+                    .setMatchingTopicsNames(matchingTopics)
+                    .setMemberCount(memberCount)
+                    .setMetadataVersion(metadataVersion),
+                (short) 0));
+
+        ConsumerGroupRegex.RegexKey expectedKey = new ConsumerGroupRegex.RegexKey.Builder()
+            .withGroupId(groupId)
+            .withPattern(Pattern.compile(regex))
+            .build();
+        ConsumerGroupRegex.Resolution expectedResolution = new ConsumerGroupRegex.Resolution.Builder()
+            .withMatchingTopics(new HashSet<>(matchingTopics))
+            .withMetadataVersion(metadataVersion)
+            .withMemberCount(memberCount)
+            .build();
+        assertRecordEquals(expectedRecord, newConsumerGroupRegexRecord(
+            expectedKey,
+            expectedResolution
+        ));
     }
 
     /**

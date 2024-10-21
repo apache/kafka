@@ -118,6 +118,7 @@ versions += [
   protobuf: "3.25.5", // a dependency of opentelemetryProto
   pcollections: "4.0.1",
   reload4j: "1.2.25",
+  re2j: "1.7",
   rocksDB: "7.9.2",
   // When updating the scalafmt version please also update the version field in checkstyle/.scalafmt.conf. scalafmt now
   // has the version field as mandatory in its configuration, see
@@ -218,6 +219,7 @@ libs += [
   opentelemetryProto: "io.opentelemetry.proto:opentelemetry-proto:$versions.opentelemetryProto",
   protobuf: "com.google.protobuf:protobuf-java:$versions.protobuf",
   reload4j: "ch.qos.reload4j:reload4j:$versions.reload4j",
+  re2j: "com.google.re2j:re2j:$versions.re2j",
   rocksDBJni: "org.rocksdb:rocksdbjni:$versions.rocksDB",
   scalaLibrary: "org.scala-lang:scala-library:$versions.scala",
   scalaLogging: "com.typesafe.scala-logging:scala-logging_$versions.baseScala:$versions.scalaLogging",
