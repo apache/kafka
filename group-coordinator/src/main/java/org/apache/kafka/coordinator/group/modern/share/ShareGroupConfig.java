@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
@@ -71,15 +72,21 @@ public class ShareGroupConfig {
     public static final int SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_DEFAULT = 1000;
     public static final String SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_DOC = "The purge interval (in number of requests) of the share fetch request purgatory";
 
+    // Broker temporary configuration to limit the number of records fetched by a share fetch request.
+    public static final String SHARE_FETCH_MAX_FETCH_RECORDS_CONFIG = "share.fetch.max.fetch.records";
+    public static final int SHARE_FETCH_MAX_FETCH_RECORDS_DEFAULT = Integer.MAX_VALUE;
+    public static final String SHARE_FETCH_MAX_FETCH_RECORDS_DOC = "The maximum number of records that can be fetched by a share fetch request.";
+
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .defineInternal(SHARE_GROUP_ENABLE_CONFIG, BOOLEAN, SHARE_GROUP_ENABLE_DEFAULT, null, MEDIUM, SHARE_GROUP_ENABLE_DOC)
+            .defineInternal(SHARE_FETCH_MAX_FETCH_RECORDS_CONFIG, INT, SHARE_FETCH_MAX_FETCH_RECORDS_DEFAULT, null, HIGH, SHARE_FETCH_MAX_FETCH_RECORDS_DOC)
             .define(SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG, INT, SHARE_GROUP_DELIVERY_COUNT_LIMIT_DEFAULT, between(2, 10), MEDIUM, SHARE_GROUP_DELIVERY_COUNT_LIMIT_DOC)
             .define(SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, INT, SHARE_GROUP_RECORD_LOCK_DURATION_MS_DEFAULT, between(1000, 3600000), MEDIUM, SHARE_GROUP_RECORD_LOCK_DURATION_MS_DOC)
             .define(SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG, INT, SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_DEFAULT, between(1000, 30000), MEDIUM, SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_DOC)
             .define(SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, INT, SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_DEFAULT, between(30000, 3600000), MEDIUM, SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_DOC)
             .define(SHARE_GROUP_MAX_GROUPS_CONFIG, SHORT, SHARE_GROUP_MAX_GROUPS_DEFAULT, between(1, 100), MEDIUM, SHARE_GROUP_MAX_GROUPS_DOC)
             .define(SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG, INT, SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_DEFAULT, between(100, 10000), MEDIUM, SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_DOC)
-            .define(SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG, INT, SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_DEFAULT, MEDIUM, SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_DOC);;
+            .define(SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG, INT, SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_DEFAULT, MEDIUM, SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_DOC);
 
     private final boolean isShareGroupEnabled;
     private final int shareGroupPartitionMaxRecordLocks;
@@ -89,6 +96,7 @@ public class ShareGroupConfig {
     private final int shareGroupMaxRecordLockDurationMs;
     private final int shareGroupMinRecordLockDurationMs;
     private final int shareFetchPurgatoryPurgeIntervalRequests;
+    private final int shareFetchMaxFetchRecords;
 
     public ShareGroupConfig(AbstractConfig config) {
         // Share groups are enabled in two cases: 1) The internal configuration to enable it is
@@ -104,6 +112,7 @@ public class ShareGroupConfig {
         shareGroupMaxRecordLockDurationMs = config.getInt(ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG);
         shareGroupMinRecordLockDurationMs = config.getInt(ShareGroupConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG);
         shareFetchPurgatoryPurgeIntervalRequests = config.getInt(ShareGroupConfig.SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG);
+        shareFetchMaxFetchRecords = config.getInt(ShareGroupConfig.SHARE_FETCH_MAX_FETCH_RECORDS_CONFIG);
         validate();
     }
 
@@ -138,6 +147,10 @@ public class ShareGroupConfig {
 
     public int shareFetchPurgatoryPurgeIntervalRequests() {
         return shareFetchPurgatoryPurgeIntervalRequests;
+    }
+
+    public int shareFetchMaxFetchRecords() {
+        return shareFetchMaxFetchRecords;
     }
 
     private void validate() {
