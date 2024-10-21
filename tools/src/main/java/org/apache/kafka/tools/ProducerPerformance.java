@@ -441,8 +441,8 @@ public class ProducerPerformance {
             }
             /* maybe report the recent perf */
             if (time - windowStart >= reportingInterval) {
-                if (this.isSteadyState && count == windowCount ){
-                    System.out.println("Beginning steady state.
+                if (this.isSteadyState && count == windowCount) {
+                    System.out.println("Beginning steady state.");
                 }
                 printWindow();
                 newWindow();
