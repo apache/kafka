@@ -735,6 +735,12 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         int epoch,
         List<ApiMessageAndVersion> batch
     ) {
+        if (!leader.isLeader(nodeId)) {
+            log.debug("prepareAppend(nodeId={}, epoch={}): the given node id does not " +
+                    "match the current leader id of {}.", nodeId, epoch, leader.leaderId());
+            throw new NotLeaderException("Append failed because the replication is not the current leader");
+        }
+
         if (batch.isEmpty()) {
             throw new IllegalArgumentException("Batch cannot be empty");
         }
