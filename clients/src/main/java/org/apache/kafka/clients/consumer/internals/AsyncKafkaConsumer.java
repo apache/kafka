@@ -57,10 +57,12 @@ import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetOffsetEvent;
 import org.apache.kafka.clients.consumer.internals.events.SeekUnvalidatedEvent;
-import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
 import org.apache.kafka.clients.consumer.internals.events.TopicMetadataEvent;
+import org.apache.kafka.clients.consumer.internals.events.TopicPatternSubscriptionChangeEvent;
+import org.apache.kafka.clients.consumer.internals.events.TopicSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeEvent;
+import org.apache.kafka.clients.consumer.internals.events.UpdateSubscriptionMetadataEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.KafkaConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
 import org.apache.kafka.common.Cluster;
@@ -234,7 +236,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     private final SubscriptionState subscriptions;
     private final ConsumerMetadata metadata;
-    private int metadataVersionSnapshot;
     private final Metrics metrics;
     private final long retryBackoffMs;
     private final int defaultApiTimeoutMs;
@@ -313,7 +314,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             this.metadata = metadataFactory.build(config, subscriptions, logContext, clusterResourceListeners);
             final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
             metadata.bootstrap(addresses);
-            this.metadataVersionSnapshot = metadata.updateVersion();
 
             FetchMetricsManager fetchMetricsManager = createFetchMetricsManager(metrics);
             FetchConfig fetchConfig = new FetchConfig(config);
@@ -439,7 +439,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.metrics = metrics;
         this.groupMetadata.set(initializeGroupMetadata(groupId, Optional.empty()));
         this.metadata = metadata;
-        this.metadataVersionSnapshot = metadata.updateVersion();
         this.retryBackoffMs = retryBackoffMs;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.deserializers = deserializers;
@@ -469,7 +468,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.time = time;
         this.metrics = new Metrics(time);
         this.metadata = metadata;
-        this.metadataVersionSnapshot = metadata.updateVersion();
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
         this.deserializers = new Deserializers<>(keyDeserializer, valueDeserializer);
@@ -1445,25 +1443,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
     }
 
-    /**
-     * <p>
-     *
-     * This function evaluates the regex that the consumer subscribed to
-     * against the list of topic names from metadata, and updates
-     * the list of topics in subscription state accordingly
-     *
-     * @param cluster Cluster from which we get the topics
-     */
-    private void updatePatternSubscription(Cluster cluster) {
-        final Set<String> topicsToSubscribe = cluster.topics().stream()
-                .filter(subscriptions::matchesSubscribedPattern)
-                .collect(Collectors.toSet());
-        if (subscriptions.subscribeFromPattern(topicsToSubscribe)) {
-            applicationEventHandler.add(new SubscriptionChangeEvent());
-            this.metadataVersionSnapshot = metadata.requestUpdateForNewTopics();
-        }
-    }
-
     @Override
     public void unsubscribe() {
         acquireAndEnsureOpen();
@@ -1610,7 +1589,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public boolean updateAssignmentMetadataIfNeeded(Timer timer) {
         maybeThrowFencedInstanceException();
         offsetCommitCallbackInvoker.executeCallbacks();
-        maybeUpdateSubscriptionMetadata();
+        applicationEventHandler.addAndGet(new UpdateSubscriptionMetadataEvent(calculateDeadlineMs(timer)));
         processBackgroundEvents();
 
         return updateFetchPositions(timer);
@@ -1688,10 +1667,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             if (pattern == null || pattern.toString().isEmpty())
                 throw new IllegalArgumentException("Topic pattern to subscribe to cannot be " + (pattern == null ?
                     "null" : "empty"));
-            log.info("Subscribed to pattern: '{}'", pattern);
-            subscriptions.subscribe(pattern, listener);
-            metadata.requestUpdateForNewTopics();
-            updatePatternSubscription(metadata.fetch());
+            applicationEventHandler.addAndGet(new TopicPatternSubscriptionChangeEvent(pattern, listener, calculateDeadlineMs(time.timer(defaultApiTimeoutMs))));
         } finally {
             release();
         }
@@ -1721,13 +1697,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 }
 
                 fetchBuffer.retainAll(currentTopicPartitions);
-                log.info("Subscribed to topic(s): {}", String.join(", ", topics));
-                if (subscriptions.subscribe(new HashSet<>(topics), listener))
-                    this.metadataVersionSnapshot = metadata.requestUpdateForNewTopics();
-
-                // Trigger subscribe event to effectively join the group if not already part of it,
-                // or just send the new subscription to the broker.
-                applicationEventHandler.add(new SubscriptionChangeEvent());
+                applicationEventHandler.addAndGet(new TopicSubscriptionChangeEvent(new HashSet<>(topics), listener, calculateDeadlineMs(time.timer(defaultApiTimeoutMs))));
             }
         } finally {
             release();
@@ -1907,14 +1877,5 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     // Visible for testing
     SubscriptionState subscriptions() {
         return subscriptions;
-    }
-
-    private void maybeUpdateSubscriptionMetadata() {
-        if (this.metadataVersionSnapshot < metadata.updateVersion()) {
-            this.metadataVersionSnapshot = metadata.updateVersion();
-            if (subscriptions.hasPatternSubscription()) {
-                updatePatternSubscription(metadata.fetch());
-            }
-        }
     }
 }
