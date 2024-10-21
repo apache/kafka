@@ -16,7 +16,6 @@
  */
 package kafka.server.share;
 
-import kafka.server.DelayedActionQueue;
 import kafka.server.DelayedOperationPurgatory;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicaQuota;
@@ -54,6 +53,7 @@ import scala.jdk.javaapi.CollectionConverters;
 import static kafka.server.share.SharePartitionManagerTest.DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL;
 import static kafka.server.share.SharePartitionManagerTest.PARTITION_MAX_BYTES;
 import static kafka.server.share.SharePartitionManagerTest.buildLogReadResult;
+import static kafka.server.share.SharePartitionManagerTest.mockReplicaManagerDelayedShareFetch;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -330,6 +330,7 @@ public class DelayedShareFetchTest {
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
             "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
             DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
+        mockReplicaManagerDelayedShareFetch(replicaManager, delayedShareFetchPurgatory);
 
         Set<Object> delayedShareFetchWatchKeys = new HashSet<>();
         partitionMaxBytes1.keySet().forEach(topicIdPartition -> delayedShareFetchWatchKeys.add(new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId(), topicIdPartition.partition())));
@@ -357,16 +358,12 @@ public class DelayedShareFetchTest {
 
         doAnswer(invocation -> buildLogReadResult(Collections.singleton(tp1))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
-        DelayedActionQueue delayedActionQueue = spy(new DelayedActionQueue());
-
         Map<SharePartitionKey, SharePartition> partitionCacheMap = new ConcurrentHashMap<>();
         partitionCacheMap.put(new SharePartitionKey(groupId, tp0), sp0);
         partitionCacheMap.put(new SharePartitionKey(groupId, tp1), sp1);
         partitionCacheMap.put(new SharePartitionKey(groupId, tp2), sp2);
         SharePartitionManager sharePartitionManager2 = SharePartitionManagerTest.SharePartitionManagerBuilder
             .builder()
-            .withDelayedShareFetchPurgatory(delayedShareFetchPurgatory)
-            .withDelayedActionsQueue(delayedActionQueue)
             .withPartitionCacheMap(partitionCacheMap)
             .build();
 
@@ -390,8 +387,8 @@ public class DelayedShareFetchTest {
         Mockito.verify(replicaManager, times(1)).readFromLog(
             any(), any(), any(ReplicaQuota.class), anyBoolean());
         assertFalse(delayedShareFetch1.isCompleted());
-        Mockito.verify(delayedActionQueue, times(1)).add(any());
-        Mockito.verify(delayedActionQueue, times(0)).tryCompleteActions();
+        Mockito.verify(replicaManager, times(1)).addToActionQueue(any());
+        Mockito.verify(replicaManager, times(0)).tryCompleteActions();
     }
 
     static class DelayedShareFetchBuilder {

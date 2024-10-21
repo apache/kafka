@@ -46,25 +46,6 @@ if ( !versions.scala.contains('-') ) {
   versions["baseScala"] = versions.scala
 }
 
-// mockito >= 5.5 is required for Java 21 and mockito 5.x requires at least Java 11
-// mockito 4.11 is used with Java 8 and Scala 2.13
-String mockitoVersion
-if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_11))
-  mockitoVersion = "5.10.0"
-else
-  mockitoVersion = "4.11.0"
-
-// mockito 4.x has two mocking strategies: subclass (mockito-core) and inline (mockito-inline).
-// mockito 5.x has two mocking strategies: inline (mockito-core) and subclass (mockito-subclass).
-// The default strategy (i.e. what `mockito-core` uses) changed to `inline` in 5.x because it works better with newer
-// Java versions.
-// We always use the `inline` strategy.
-String mockitoArtifactName
-if (mockitoVersion.startsWith("4."))
-  mockitoArtifactName = "mockito-inline"
-else
-  mockitoArtifactName = "mockito-core"
-
 // When adding, removing or updating dependencies, please also update the LICENSE-binary file accordingly.
 // See https://issues.apache.org/jira/browse/KAFKA-12622 for steps to verify the LICENSE-binary file is correct.
 versions += [
@@ -72,7 +53,7 @@ versions += [
   apacheda: "1.0.2",
   apacheds: "2.0.0-M24",
   argparse4j: "0.7.0",
-  bcpkix: "1.75",
+  bcpkix: "1.78.1",
   caffeine: "2.9.3", // 3.x supports JDK 11 and above
   // when updating checkstyle, check whether the exclusion of
   // CVE-2023-2976 and CVE-2020-8908 can be dropped from
@@ -131,6 +112,7 @@ versions += [
   lz4: "1.8.0",
   mavenArtifact: "3.9.6",
   metrics: "2.2.0",
+  mockito: "5.14.2",
   netty: "4.1.111.Final",
   opentelemetryProto: "1.0.0-alpha",
   protobuf: "3.25.5", // a dependency of opentelemetryProto
@@ -228,8 +210,8 @@ libs += [
   lz4: "org.lz4:lz4-java:$versions.lz4",
   metrics: "com.yammer.metrics:metrics-core:$versions.metrics",
   dropwizardMetrics: "io.dropwizard.metrics:metrics-core:$versions.dropwizardMetrics",
-  mockitoCore: "org.mockito:$mockitoArtifactName:$mockitoVersion",
-  mockitoJunitJupiter: "org.mockito:mockito-junit-jupiter:$mockitoVersion",
+  mockitoCore: "org.mockito:mockito-core:$versions.mockito",
+  mockitoJunitJupiter: "org.mockito:mockito-junit-jupiter:$versions.mockito",
   nettyHandler: "io.netty:netty-handler:$versions.netty",
   nettyTransportNativeEpoll: "io.netty:netty-transport-native-epoll:$versions.netty",
   pcollections: "org.pcollections:pcollections:$versions.pcollections",

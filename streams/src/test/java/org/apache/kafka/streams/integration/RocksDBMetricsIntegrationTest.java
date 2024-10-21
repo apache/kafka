@@ -42,10 +42,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -143,10 +142,9 @@ public class RocksDBMetricsIntegrationTest {
         void verify(final KafkaStreams kafkaStreams, final String metricScope) throws Exception;
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
-    public void shouldExposeRocksDBMetricsBeforeAndAfterFailureWithEmptyStateDir(final String processingGuarantee, final TestInfo testInfo) throws Exception {
-        final Properties streamsConfiguration = streamsConfig(processingGuarantee, testInfo);
+    @Test
+    public void shouldExposeRocksDBMetricsBeforeAndAfterFailureWithEmptyStateDir(final TestInfo testInfo) throws Exception {
+        final Properties streamsConfiguration = streamsConfig(testInfo);
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
         final StreamsBuilder builder = builderForStateStores();
 
@@ -165,7 +163,7 @@ public class RocksDBMetricsIntegrationTest {
         );
     }
 
-    private Properties streamsConfig(final String processingGuarantee, final TestInfo testInfo) {
+    private Properties streamsConfig(final TestInfo testInfo) {
         final Properties streamsConfiguration = new Properties();
         final String safeTestName = safeUniqueTestName(testInfo);
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-application-" + safeTestName);
@@ -173,13 +171,11 @@ public class RocksDBMetricsIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfiguration.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.DEBUG.name);
-        streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuarantee);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         return streamsConfiguration;
     }
 
-    @SuppressWarnings("deprecation")
     private StreamsBuilder builderForStateStores() {
         final StreamsBuilder builder = new StreamsBuilder();
         // create two state stores, one non-segmented and one segmented

@@ -570,7 +570,7 @@ class KafkaServer(
               .orElse(throw new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
                 listenerName, "Should be set as a listener name within valid broker listener name list: "
                   + brokerInfo.broker.endPoints.map(_.listenerName).mkString(",")))
-              .foreach(e => rlm.onEndPointCreated(e))
+              .foreach(e => rlm.onEndPointCreated(e.toJava))
           }
           rlm.startup()
         }
