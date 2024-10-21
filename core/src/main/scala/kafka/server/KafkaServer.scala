@@ -21,7 +21,7 @@ import kafka.cluster.{Broker, EndPoint}
 import kafka.common.GenerateBrokerIdException
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinatorAdapter
-import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
+import kafka.coordinator.transaction.{TransactionCoordinator, ZkProducerIdManager}
 import kafka.log.LogManager
 import kafka.log.remote.RemoteLogManager
 import kafka.metrics.KafkaMetricsReporter
@@ -54,7 +54,7 @@ import org.apache.kafka.metadata.{BrokerState, MetadataRecordSerde, VersionRange
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.raft.Endpoints
 import org.apache.kafka.security.CredentialProvider
-import org.apache.kafka.server.{BrokerFeatures, NodeToControllerChannelManager}
+import org.apache.kafka.server.{BrokerFeatures, NodeToControllerChannelManager, ProducerIdManager}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
@@ -511,11 +511,11 @@ class KafkaServer(
           ProducerIdManager.rpc(
             config.brokerId,
             time,
-            brokerEpochSupplier = brokerEpochSupplier,
+            () => brokerEpochSupplier(),
             clientToControllerChannelManager
           )
         } else {
-          ProducerIdManager.zk(config.brokerId, zkClient)
+          new ZkProducerIdManager(config.brokerId, zkClient)
         }
         /* start transaction coordinator, with a separate background thread scheduler for transaction expiration and log loading */
         // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
