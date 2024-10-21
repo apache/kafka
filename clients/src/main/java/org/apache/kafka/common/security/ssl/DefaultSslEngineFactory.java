@@ -424,7 +424,6 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
         protected final Password keyPassword;
         private final Long fileLastModifiedMs;
         private final KeyStore keyStore;
-        private final boolean pathAsBase64EncodedString;
 
         FileBasedStore(String type, String path, Password password, Password keyPassword, boolean isKeyStore) {
             Objects.requireNonNull(type, "type must not be null");
