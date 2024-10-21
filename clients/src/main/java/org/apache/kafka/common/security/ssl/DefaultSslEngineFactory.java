@@ -26,10 +26,36 @@ import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.common.security.auth.SslEngineFactory;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.utils.Utils;
-
+import java.net.Socket;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Reconfigurable;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.network.Mode;
+import org.apache.kafka.common.utils.Base64;
+import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import java.security.PrivateKey;
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLEngineResult;
+import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLParameters;
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509ExtendedKeyManager;
+import javax.net.ssl.X509KeyManager;
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import javax.net.ssl.X509ExtendedKeyManager;
+import javax.net.ssl.X509KeyManager;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -164,14 +190,16 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
                 (Password) configs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG),
                 (Password) configs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG),
                 (Password) configs.get(SslConfigs.SSL_KEYSTORE_KEY_CONFIG),
-                (Password) configs.get(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG));
+                (Password) configs.get(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG)),
+                Boolean.parseBoolean((String) configs.get(SslConfigs.SSL_KEYSTORE_AS_STRING)));
 
         this.truststore = createTruststore((String) configs.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG),
                 (String) configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
                 (Password) configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG),
-                (Password) configs.get(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG));
+                (Password) configs.get(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG)),
+                Boolean.parseBoolean((String) configs.get(SslConfigs.SSL_TRUSTSTORE_AS_STRING)));
 
-        this.sslContext = createSSLContext(keystore, truststore);
+        this.sslContext = createSSLContext(keystore, truststore, configs);
     }
 
     @Override
@@ -234,7 +262,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
         }
     }
 
-    private SSLContext createSSLContext(SecurityStore keystore, SecurityStore truststore) {
+    private SSLContext createSSLContext(SecurityStore keystore, SecurityStore truststore, Map<String, ?> configs) {
         try {
             SSLContext sslContext;
             if (provider != null)
@@ -258,13 +286,70 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
             String tmfAlgorithm = this.tmfAlgorithm != null ? this.tmfAlgorithm : TrustManagerFactory.getDefaultAlgorithm();
             TrustManager[] trustManagers = getTrustManagers(truststore, tmfAlgorithm);
 
-            sslContext.init(keyManagers, trustManagers, this.secureRandomImplementation);
+            sslContext.init(applyAliasToKM(keyManagers, (String)configs.get(SslConfigs.SSL_KEYSTORE_ALIAS_CONFIG)), trustManagers, this.secureRandomImplementation);
             log.debug("Created SSL context with keystore {}, truststore {}, provider {}.",
                     keystore, truststore, sslContext.getProvider().getName());
             return sslContext;
         } catch (Exception e) {
             throw new KafkaException(e);
         }
+    }
+
+    private KeyManager[] applyAliasToKM(KeyManager[] kms, final String alias) {
+        if(alias == null || alias.isEmpty()){
+            return kms;
+        }
+
+        log.debug("Applying the custom KeyManagers for alias: {}", alias);
+
+        KeyManager[] updatedKMs = new KeyManager[kms.length];
+
+        int i=0;
+        for(KeyManager km : kms){
+            final X509KeyManager origKM = (X509KeyManager)km;
+            X509ExtendedKeyManager exKM = new X509ExtendedKeyManager() {
+                /* (non-Javadoc)
+                 * @see javax.net.ssl.X509ExtendedKeyManager#chooseEngineClientAlias(java.lang.String[], java.security.Principal[], javax.net.ssl.SSLEngine)
+                 */
+                @Override
+                public String chooseEngineClientAlias(String[] arg0,
+                                                      Principal[] arg1, SSLEngine arg2) {
+                    return alias;
+                }
+
+                @Override
+                public String[] getServerAliases(String arg0, Principal[] arg1) {
+                    return origKM.getServerAliases(arg0, arg1);
+                }
+
+                @Override
+                public PrivateKey getPrivateKey(String arg0) {
+                    return origKM.getPrivateKey(arg0);
+                }
+
+                @Override
+                public String[] getClientAliases(String arg0, Principal[] arg1) {
+                    return origKM.getClientAliases(arg0, arg1);
+                }
+
+                @Override
+                public X509Certificate[] getCertificateChain(String arg0) {
+                    return origKM.getCertificateChain(arg0);
+                }
+
+                @Override
+                public String chooseServerAlias(String arg0, Principal[] arg1, Socket arg2) {
+                    return origKM.chooseServerAlias(arg0, arg1, arg2);
+                }
+
+                @Override
+                public String chooseClientAlias(String[] arg0, Principal[] arg1, Socket arg2) {
+                    return alias;
+                }
+            };
+            updatedKMs[i++] = exKM;
+        }
+        return updatedKMs;
     }
 
     protected TrustManager[] getTrustManagers(SecurityStore truststore, String tmfAlgorithm) throws NoSuchAlgorithmException, KeyStoreException {
@@ -275,7 +360,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
     }
 
     // Visibility to override for testing
-    protected SecurityStore createKeystore(String type, String path, Password password, Password keyPassword, Password privateKey, Password certificateChain) {
+    protected SecurityStore createKeystore(String type, String path, Password password, Password keyPassword, Password privateKey, Password certificateChain, boolean pathAsBase64EncodedString) {
         if (privateKey != null) {
             if (!PEM_TYPE.equals(type))
                 throw new InvalidConfigurationException("SSL private key can be specified only for PEM, but key store type is " + type + ".");
@@ -299,12 +384,12 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
         } else if (path != null && password == null) {
             throw new InvalidConfigurationException("SSL key store is specified, but key store password is not specified.");
         } else if (path != null && password != null) {
-            return new FileBasedStore(type, path, password, keyPassword, true);
+            return new FileBasedStore(type, path, password, keyPassword, true, pathAsBase64EncodedString);
         } else
             return null; // path == null, clients may use this path with brokers that don't require client auth
     }
 
-    private static SecurityStore createTruststore(String type, String path, Password password, Password trustStoreCerts) {
+    private static SecurityStore createTruststore(String type, String path, Password password, Password trustStoreCerts, boolean pathAsBase64EncodedString) {
         if (trustStoreCerts != null) {
             if (!PEM_TYPE.equals(type))
                 throw new InvalidConfigurationException("SSL trust store certs can be specified only for PEM, but trust store type is " + type + ".");
@@ -322,7 +407,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
         } else if (path == null && password != null) {
             throw new InvalidConfigurationException("SSL trust store is not specified, but trust store password is specified.");
         } else if (path != null) {
-            return new FileBasedStore(type, path, password, null, false);
+            return new FileBasedStore(type, path, password, null, false, pathAsBase64EncodedString);
         } else
             return null;
     }
@@ -341,8 +426,9 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
         protected final Password keyPassword;
         private final Long fileLastModifiedMs;
         private final KeyStore keyStore;
+        private final boolean pathAsBase64EncodedString;
 
-        FileBasedStore(String type, String path, Password password, Password keyPassword, boolean isKeyStore) {
+        FileBasedStore(String type, String path, Password password, Password keyPassword, boolean isKeyStore, boolean pathAsBase64EncodedString) {
             Objects.requireNonNull(type, "type must not be null");
             this.type = type;
             this.path = path;
@@ -350,6 +436,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
             this.keyPassword = keyPassword;
             fileLastModifiedMs = lastModifiedMs(path);
             this.keyStore = load(isKeyStore);
+            this.pathAsBase64EncodedString = pathAsBase64EncodedString;
         }
 
         @Override
@@ -370,11 +457,24 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
          *   using the specified configs (e.g. if the password or keystore type is invalid)
          */
         protected KeyStore load(boolean isKeyStore) {
-            try (InputStream in = Files.newInputStream(Paths.get(path))) {
+            if (path == null) {
+                throw new KafkaException("Failed to load SSL keystore: path was null");
+            }
+            InputStream in;
+            try {
+                if (pathAsBase64EncodedString) {
+                    String encodedKeyStore = System.getenv(path);
+                    in = new ByteArrayInputStream(Base64.decoder().decode(encodedKeyStore));
+                } else if (type.equalsIgnoreCase(TruststoreUtility.CRT)) {
+                    return TruststoreUtility.createTrustStore(path, password.value());
+                } else {
+                    in = new FileInputStream(path);
+                }
                 KeyStore ks = KeyStore.getInstance(type);
                 // If a password is not set access to the truststore is still available, but integrity checking is disabled.
                 char[] passwordChars = password != null ? password.value().toCharArray() : null;
                 ks.load(in, passwordChars);
+                in.close();
                 return ks;
             } catch (GeneralSecurityException | IOException e) {
                 throw new KafkaException("Failed to load SSL keystore " + path + " of type " + type, e);
