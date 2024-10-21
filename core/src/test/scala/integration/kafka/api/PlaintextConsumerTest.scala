@@ -24,7 +24,7 @@ import org.apache.kafka.clients.admin.{NewPartitions, NewTopic}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.common.errors.{InvalidGroupIdException, InvalidTopicException, TimeoutException, WakeupException}
+import org.apache.kafka.common.errors.{InterruptException, InvalidGroupIdException, InvalidTopicException, TimeoutException, WakeupException}
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.{MetricName, TopicPartition}
@@ -35,7 +35,7 @@ import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
-import java.util.concurrent.{CompletableFuture, TimeUnit}
+import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit}
 import scala.jdk.CollectionConverters._
 
 @Timeout(600)
@@ -823,5 +823,52 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }
 
     assertThrows(classOf[WakeupException], () => consumer.position(topicPartition, Duration.ofSeconds(100)))
+  }
+
+  // NOTE: at present this test fails for the CLASSIC group protocol when run on the Apache CI infrastructure. For
+  //       now this will remain a test that only covers the CONSUMER group protocol.
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly"))
+  def testCloseLeavesGroupOnInterrupt(quorum: String, groupProtocol: String): Unit = {
+    val adminClient = createAdminClient()
+    val consumer = createConsumer()
+    val listener = new TestConsumerReassignmentListener()
+    consumer.subscribe(List(topic).asJava, listener)
+    awaitRebalance(consumer, listener)
+
+    assertEquals(1, listener.callsToAssigned)
+    assertEquals(0, listener.callsToRevoked)
+
+    try {
+      Thread.currentThread().interrupt()
+      assertThrows(classOf[InterruptException], () => consumer.close())
+    } finally {
+      // Clear the interrupted flag so we don't create problems for subsequent tests.
+      Thread.interrupted()
+    }
+
+    assertEquals(1, listener.callsToAssigned)
+    assertEquals(1, listener.callsToRevoked)
+
+    val config = new ConsumerConfig(consumerConfig)
+
+    // Set the wait timeout to be only *half* the configured session timeout. This way we can make sure that the
+    // consumer explicitly left the group as opposed to being kicked out by the broker.
+    val leaveGroupTimeoutMs = config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG) / 2
+
+    TestUtils.waitUntilTrue(
+      () => {
+        try {
+          val groupId = config.getString(ConsumerConfig.GROUP_ID_CONFIG)
+          val groupDescription = adminClient.describeConsumerGroups (Collections.singletonList (groupId) ).describedGroups.get (groupId).get
+          groupDescription.members.isEmpty
+        } catch {
+          case _: ExecutionException | _: InterruptedException =>
+            false
+        }
+      },
+      msg=s"Consumer did not leave the consumer group within $leaveGroupTimeoutMs of interrupt/close",
+      waitTimeMs=leaveGroupTimeoutMs
+    )
   }
 }
