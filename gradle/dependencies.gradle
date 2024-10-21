@@ -115,7 +115,7 @@ versions += [
   mockito: "5.14.2",
   netty: "4.1.111.Final",
   opentelemetryProto: "1.0.0-alpha",
-  protobuf: "3.25.5", // a dependency of opentelemetryProto
+  protobuf: "4.28.2", // a dependency of opentelemetryProto
   pcollections: "4.0.1",
   reload4j: "1.2.25",
   rocksDB: "7.9.2",
