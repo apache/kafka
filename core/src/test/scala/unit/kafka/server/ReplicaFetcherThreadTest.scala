@@ -35,6 +35,7 @@ import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBat
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, UpdateMetadataRequest}
 import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.server.BrokerFeatures
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0

@@ -1043,12 +1043,12 @@ public class GroupMetadataManager {
     /**
      * Validates the online downgrade if a consumer member is fenced from the consumer group.
      *
-     * @param consumerGroup The ConsumerGroup.
-     * @param memberId      The fenced member id.
+     * @param consumerGroup     The ConsumerGroup.
+     * @param fencedMemberId    The fenced member id.
      * @return A boolean indicating whether it's valid to online downgrade the consumer group.
      */
-    private boolean validateOnlineDowngrade(ConsumerGroup consumerGroup, String memberId) {
-        if (!consumerGroup.allMembersUseClassicProtocolExcept(memberId)) {
+    private boolean validateOnlineDowngradeWithFencedMember(ConsumerGroup consumerGroup, String fencedMemberId) {
+        if (!consumerGroup.allMembersUseClassicProtocolExcept(fencedMemberId)) {
             return false;
         } else if (consumerGroup.numMembers() <= 1) {
             log.debug("Skip downgrading the consumer group {} to classic group because it's empty.",
@@ -1067,26 +1067,58 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Validates whether the group id is eligible for an online downgrade if an existing
+     * static member is replaced by another new one uses the classic protocol.
+     *
+     * @param consumerGroup     The group to downgrade.
+     * @param replacedMemberId  The replaced member id.
+     *
+     * @return A boolean indicating whether it's valid to online downgrade the consumer group.
+     */
+    private boolean validateOnlineDowngradeWithReplacedMemberId(
+        ConsumerGroup consumerGroup,
+        String replacedMemberId
+    ) {
+        if (!consumerGroup.allMembersUseClassicProtocolExcept(replacedMemberId)) {
+            return false;
+        } else if (!consumerGroupMigrationPolicy.isDowngradeEnabled()) {
+            log.info("Cannot downgrade consumer group {} to classic group because the online downgrade is disabled.",
+                consumerGroup.groupId());
+            return false;
+        } else if (consumerGroup.numMembers() > classicGroupMaxSize) {
+            log.info("Cannot downgrade consumer group {} to classic group because its group size is greater than classic group max size.",
+                consumerGroup.groupId());
+            return false;
+        }
+        return true;
+    }
+
+    /**
      * Creates a ClassicGroup corresponding to the given ConsumerGroup.
      *
      * @param consumerGroup     The converted ConsumerGroup.
      * @param leavingMemberId   The leaving member that triggers the downgrade validation.
-     * @param response          The response of the returned CoordinatorResult.
-     * @return A CoordinatorResult.
+     * @param joiningMember     The newly joined member if the downgrade is triggered by static member replacement.
+     * @param records           The record list to which the conversion records are added.
      */
-    private <T> CoordinatorResult<T, CoordinatorRecord> convertToClassicGroup(
+    private void convertToClassicGroup(
         ConsumerGroup consumerGroup,
         String leavingMemberId,
-        T response
+        ConsumerGroupMember joiningMember,
+        List<CoordinatorRecord> records
     ) {
-        List<CoordinatorRecord> records = new ArrayList<>();
-        consumerGroup.createGroupTombstoneRecords(records);
+        if (joiningMember == null) {
+            consumerGroup.createGroupTombstoneRecords(records);
+        } else {
+            consumerGroup.createGroupTombstoneRecordsWithReplacedMember(records, leavingMemberId, joiningMember.memberId());
+        }
 
         ClassicGroup classicGroup;
         try {
             classicGroup = ClassicGroup.fromConsumerGroup(
                 consumerGroup,
                 leavingMemberId,
+                joiningMember,
                 logContext,
                 time,
                 metadataImage
@@ -1102,14 +1134,15 @@ public class GroupMetadataManager {
 
         // Directly update the states instead of replaying the records because
         // the classicGroup reference is needed for triggering the rebalance.
-        // Set the appendFuture to prevent the records from being replayed.
         removeGroup(consumerGroup.groupId());
         groups.put(consumerGroup.groupId(), classicGroup);
 
         classicGroup.allMembers().forEach(member -> rescheduleClassicGroupMemberHeartbeat(classicGroup, member));
-        prepareRebalance(classicGroup, String.format("Downgrade group %s from consumer to classic.", classicGroup.groupId()));
 
-        return new CoordinatorResult<>(records, response, null, false);
+        // If the downgrade is triggered by a member leaving the group, a rebalance should be triggered.
+        if (joiningMember == null) {
+            prepareRebalance(classicGroup, String.format("Downgrade group %s from consumer to classic.", classicGroup.groupId()));
+        }
     }
 
     /**
@@ -2028,6 +2061,20 @@ public class GroupMetadataManager {
             records
         );
 
+        // 4. Maybe downgrade the consumer group if the last static member using the
+        // consumer protocol is replaced by the joining static member.
+        String existingStaticMemberIdOrNull = group.staticMemberId(request.groupInstanceId());
+        boolean downgrade = existingStaticMemberIdOrNull != null &&
+            validateOnlineDowngradeWithReplacedMemberId(group, existingStaticMemberIdOrNull);
+        if (downgrade) {
+            convertToClassicGroup(
+                group,
+                existingStaticMemberIdOrNull,
+                updatedMember,
+                records
+            );
+        }
+
         final JoinGroupResponseData response = new JoinGroupResponseData()
             .setMemberId(updatedMember.memberId())
             .setGenerationId(updatedMember.memberEpoch())
@@ -2038,15 +2085,22 @@ public class GroupMetadataManager {
         appendFuture.whenComplete((__, t) -> {
             if (t == null) {
                 cancelConsumerGroupJoinTimeout(groupId, response.memberId());
-                scheduleConsumerGroupSessionTimeout(groupId, response.memberId(), sessionTimeoutMs);
-                // The sync timeout ensures that the member send sync request within the rebalance timeout.
-                scheduleConsumerGroupSyncTimeout(groupId, response.memberId(), request.rebalanceTimeoutMs());
-
+                if (!downgrade) {
+                    // If the group is still a consumer group, schedule the session
+                    // timeout for the joining member and the sync timeout to ensure
+                    // that the member send sync request within the rebalance timeout.
+                    scheduleConsumerGroupSessionTimeout(groupId, response.memberId(), sessionTimeoutMs);
+                    scheduleConsumerGroupSyncTimeout(groupId, response.memberId(), request.rebalanceTimeoutMs());
+                }
                 responseFuture.complete(response);
             }
         });
 
-        return new CoordinatorResult<>(records, null, appendFuture, true);
+        // If the joining member triggers a valid downgrade, the soft states will be directly
+        // updated in the conversion method, so the records don't need to be replayed.
+        // If the joining member doesn't trigger a valid downgrade, the group is still a
+        // consumer group. We still rely on replaying records to update the soft states.
+        return new CoordinatorResult<>(records, null, appendFuture, !downgrade);
     }
 
     /**
@@ -2185,7 +2239,7 @@ public class GroupMetadataManager {
         ShareGroupHeartbeatResponseData response = new ShareGroupHeartbeatResponseData()
             .setMemberId(updatedMember.memberId())
             .setMemberEpoch(updatedMember.memberEpoch())
-            .setHeartbeatIntervalMs(shareGroupHeartbeatIntervalMs);
+            .setHeartbeatIntervalMs(shareGroupHeartbeatIntervalMs(groupId));
 
         // The assignment is only provided in the following cases:
         // 1. The member just joined or rejoined to group (epoch equals to zero);
@@ -2728,10 +2782,11 @@ public class GroupMetadataManager {
         ConsumerGroupMember member,
         T response
     ) {
-        if (validateOnlineDowngrade(group, member.memberId())) {
-            return convertToClassicGroup(group, member.memberId(), response);
+        List<CoordinatorRecord> records = new ArrayList<>();
+        if (validateOnlineDowngradeWithFencedMember(group, member.memberId())) {
+            convertToClassicGroup(group, member.memberId(), null, records);
+            return new CoordinatorResult<>(records, response, null, false);
         } else {
-            List<CoordinatorRecord> records = new ArrayList<>();
             removeMember(records, group.groupId(), member.memberId());
 
             // We update the subscription metadata without the leaving member.
@@ -2884,7 +2939,7 @@ public class GroupMetadataManager {
         String groupId,
         String memberId
     ) {
-        scheduleShareGroupSessionTimeout(groupId, memberId, shareGroupSessionTimeoutMs);
+        scheduleShareGroupSessionTimeout(groupId, memberId, shareGroupSessionTimeoutMs(groupId));
     }
 
     /**
@@ -6010,21 +6065,39 @@ public class GroupMetadataManager {
 
 
     /**
-     * Get the session timeout of the provided group.
+     * Get the session timeout of the provided consumer group.
      */
     private int consumerGroupSessionTimeoutMs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
-        return groupConfig.map(GroupConfig::sessionTimeoutMs)
+        return groupConfig.map(GroupConfig::consumerSessionTimeoutMs)
             .orElse(consumerGroupSessionTimeoutMs);
     }
 
     /**
-     * Get the heartbeat interval of the provided group.
+     * Get the heartbeat interval of the provided consumer group.
      */
     private int consumerGroupHeartbeatIntervalMs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
-        return groupConfig.map(GroupConfig::heartbeatIntervalMs)
+        return groupConfig.map(GroupConfig::consumerHeartbeatIntervalMs)
             .orElse(consumerGroupHeartbeatIntervalMs);
+    }
+
+    /**
+     * Get the session timeout of the provided share group.
+     */
+    private int shareGroupSessionTimeoutMs(String groupId) {
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.map(GroupConfig::shareSessionTimeoutMs)
+            .orElse(shareGroupSessionTimeoutMs);
+    }
+
+    /**
+     * Get the heartbeat interval of the provided share group.
+     */
+    private int shareGroupHeartbeatIntervalMs(String groupId) {
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.map(GroupConfig::shareHeartbeatIntervalMs)
+            .orElse(shareGroupHeartbeatIntervalMs);
     }
 
     /**

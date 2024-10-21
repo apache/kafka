@@ -13,7 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG jdk_version=openjdk:8
+# The base image of openjdk:17 is typically oraclelinux:8-slim, which doesn't include apt-get. 
+# Therefore, use openjdk:17-buster instead.
+ARG jdk_version=openjdk:17-buster
 FROM $jdk_version AS build-native-image
 
 WORKDIR /build
@@ -60,11 +62,10 @@ ARG ducker_creator=default
 LABEL ducker.creator=$ducker_creator
 
 # Update Linux and install necessary utilities.
-# we have to install git since it is included in openjdk:8 but not openjdk:11
 RUN apt update && apt install -y sudo git netcat iptables rsync unzip wget curl jq coreutils openssh-server net-tools vim python3-pip python3-dev libffi-dev libssl-dev cmake pkg-config libfuse-dev iperf traceroute iproute2 iputils-ping && apt-get -y clean
 RUN python3 -m pip install -U pip==21.1.1;
-# NOTE: ducktape 0.11.4 requires python3.9
-RUN pip3 install --upgrade cffi virtualenv pyasn1 boto3 pycrypto pywinrm ipaddress enum34 debugpy && pip3 install --upgrade "ducktape==0.11.4"
+# NOTE: ducktape 0.12.0 supports py 3.9, 3.10, 3.11 and 3.12
+RUN pip3 install --upgrade cffi virtualenv pyasn1 boto3 pycrypto pywinrm ipaddress enum34 debugpy psutil && pip3 install --upgrade "ducktape==0.12.0"
 
 COPY --from=build-native-image /build/kafka-binary/ /opt/kafka-binary/
 # Set up ssh

@@ -28,7 +28,8 @@ import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, Timeout}
 
-import scala.compat.java8.OptionConverters._
+import scala.jdk.OptionConverters.RichOption
+
 
 class SchedulerTest {
 
@@ -154,7 +155,7 @@ class SchedulerTest {
       segments,
       0L,
       0L,
-      leaderEpochCache.asJava,
+      leaderEpochCache.toJava,
       producerStateManager,
       new ConcurrentHashMap[String, Integer],
       false

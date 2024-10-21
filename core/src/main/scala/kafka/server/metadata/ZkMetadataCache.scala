@@ -24,7 +24,7 @@ import scala.collection.{Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
 import kafka.cluster.{Broker, EndPoint}
 import kafka.controller.StateChangeLogger
-import kafka.server.{BrokerFeatures, CachedControllerId, KRaftCachedControllerId, MetadataCache, ZkCachedControllerId}
+import kafka.server.{CachedControllerId, KRaftCachedControllerId, MetadataCache, ZkCachedControllerId}
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import org.apache.kafka.admin.BrokerMetadata
@@ -39,6 +39,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractControlRequest, ApiVersionsResponse, MetadataResponse, UpdateMetadataRequest}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.metadata.LeaderAndIsr
+import org.apache.kafka.server.BrokerFeatures
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
 
 import java.util.concurrent.{ThreadLocalRandom, TimeUnit}
@@ -649,8 +650,8 @@ class ZkMetadataCache(
       throw new FeatureCacheUpdateException(errorMsg)
     } else {
       val incompatibleFeatures = brokerFeatures.incompatibleFeatures(
-        latest.finalizedFeatures().asScala.map(kv => (kv._1, kv._2.toShort)).toMap)
-      if (incompatibleFeatures.nonEmpty) {
+        latest.finalizedFeatures().asScala.map(kv => (kv._1, kv._2.toShort: java.lang.Short)).toMap.asJava)
+      if (!incompatibleFeatures.isEmpty) {
         val errorMsg = "FinalizedFeatureCache update failed since feature compatibility" +
           s" checks failed! Supported ${brokerFeatures.supportedFeatures} has incompatibilities" +
           s" with the latest $latest."

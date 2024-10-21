@@ -59,7 +59,6 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_CHANGELOG_END_OFFSETS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_TASKS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_1;
@@ -172,7 +171,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addProcessor("processor1", new MockApiProcessorSupplier<>(), "source1");
         builder.addStateStore(new MockKeyValueStoreBuilder("store1", false), "processor1");
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
+        final Set<TaskId> allTasks = Set.of(TASK_0_0, TASK_0_1, TASK_0_2);
 
         createMockTaskManager();
         when(adminClient.listOffsets(any())).thenThrow(new StreamsException("Should be handled"));
@@ -224,7 +223,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addProcessor("processor1", new MockApiProcessorSupplier<>(), "source1");
         builder.addStateStore(new MockKeyValueStoreBuilder("store1", false), "processor1");
-        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
+        final Set<TaskId> allTasks = Set.of(TASK_0_0, TASK_0_1, TASK_0_2);
 
         createMockTaskManager();
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
