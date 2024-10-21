@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.DescribeClusterRequestData;
 import org.apache.kafka.common.message.DescribeClusterResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -51,6 +52,13 @@ public class DescribeClusterRequest extends AbstractRequest {
     public DescribeClusterRequest(DescribeClusterRequestData data, short version) {
         super(ApiKeys.DESCRIBE_CLUSTER, version);
         this.data = data;
+        validateVersionForIncludingFencedBrokers(version, data.includeFencedBrokers());
+    }
+
+    private void validateVersionForIncludingFencedBrokers(short version, boolean includeFencedBrokers) {
+        if (version < 2 && includeFencedBrokers) {
+            throw new UnsupportedVersionException("Including fenced broker endpoints is not supported with version " + version);
+        }
     }
 
     @Override
