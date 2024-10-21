@@ -18,6 +18,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.ReadShareGroupStateRequestData;
 import org.apache.kafka.common.message.ReadShareGroupStateResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
@@ -31,6 +32,8 @@ import java.util.Map;
 
 public class ReadShareGroupStateResponse extends AbstractResponse {
     private final ReadShareGroupStateResponseData data;
+    public static final ReadShareGroupStateResponseData EMPTY_READ_RESPONSE_DATA = new ReadShareGroupStateResponseData()
+        .setResults(Collections.emptyList());
 
     public ReadShareGroupStateResponse(ReadShareGroupStateResponseData data) {
         super(ApiKeys.READ_SHARE_GROUP_STATE);

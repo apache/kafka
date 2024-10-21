@@ -413,37 +413,52 @@ public class ShareCoordinatorService implements ShareCoordinator {
         // be looping over the keys below and constructing new ReadShareGroupStateRequestData objects to pass
         // onto the shard method.
 
-        request.topics().forEach(topicData -> {
+        // It is possible that a read state request contains a leaderEpoch which is the higher than seen so
+        // far for a specific share partition. Hence, for each read request - we must issue a write state request
+        // as well so that the share state is up-to-date.
+
+        for (ReadShareGroupStateRequestData.ReadStateData topicData : request.topics()) {
             Uuid topicId = topicData.topicId();
-            topicData.partitions().forEach(partitionData -> {
-                // Request object containing information of a single topic partition
-                ReadShareGroupStateRequestData requestForCurrentPartition = new ReadShareGroupStateRequestData()
-                    .setGroupId(groupId)
-                    .setTopics(Collections.singletonList(new ReadShareGroupStateRequestData.ReadStateData()
-                        .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(partitionData))));
+            for (ReadShareGroupStateRequestData.PartitionData partitionData : topicData.partitions()) {
                 SharePartitionKey coordinatorKey = SharePartitionKey.getInstance(request.groupId(), topicId, partitionData.partition());
-                // Scheduling a runtime read operation to read share partition state from the coordinator in memory state
-                CompletableFuture<ReadShareGroupStateResponseData> future = runtime.scheduleReadOperation(
-                    "read-share-group-state",
-                    topicPartitionFor(coordinatorKey),
-                    (coordinator, offset) -> coordinator.readState(requestForCurrentPartition, offset)
-                ).exceptionally(exception -> handleOperationException(
-                    "read-share-group-state",
-                    request,
-                    exception,
-                    (error, message) -> ReadShareGroupStateResponse.toErrorResponseData(
-                        topicData.topicId(),
-                        partitionData.partition(),
-                        error,
-                        "Unable to read share group state: " + exception.getMessage()
-                    ),
-                    log
-                ));
+
+                CompletableFuture<ReadShareGroupStateResponseData> readFuture = maybeUpdateLeaderEpoch(
+                    coordinatorKey,
+                    partitionData
+                ).thenCompose(result -> {
+                    // will happen if the write state call faces exceptions
+                    // in that case, we do not want to run the read request anyway
+                    if (!result.results().isEmpty()) {
+                        return CompletableFuture.completedFuture(result);
+                    }
+                    ReadShareGroupStateRequestData requestForCurrentPartition = new ReadShareGroupStateRequestData()
+                        .setGroupId(groupId)
+                        .setTopics(Collections.singletonList(new ReadShareGroupStateRequestData.ReadStateData()
+                            .setTopicId(topicId)
+                            .setPartitions(Collections.singletonList(partitionData))));
+                    // Scheduling a runtime read operation to read share partition state from the coordinator in memory state
+                    return runtime.scheduleReadOperation(
+                        "read-share-group-state",
+                        topicPartitionFor(coordinatorKey),
+                        (coordinator, offset) -> coordinator.readState(requestForCurrentPartition, offset)
+                    ).exceptionally(readException ->
+                        handleOperationException(
+                            "read-share-group-state",
+                            request,
+                            readException,
+                            (error, message) -> ReadShareGroupStateResponse.toErrorResponseData(
+                                topicData.topicId(),
+                                partitionData.partition(),
+                                error,
+                                "Unable to read share group state: " + readException.getMessage()
+                            ),
+                            log
+                        ));
+                });
                 futureMap.computeIfAbsent(topicId, k -> new HashMap<>())
-                    .put(partitionData.partition(), future);
-            });
-        });
+                    .put(partitionData.partition(), readFuture);
+            }
+        }
 
         // Combine all futures into a single CompletableFuture<Void>
         CompletableFuture<Void> combinedFuture = CompletableFuture.allOf(futureMap.values().stream()
@@ -470,6 +485,57 @@ public class ShareCoordinatorService implements ShareCoordinator {
             return new ReadShareGroupStateResponseData()
                 .setResults(readStateResult);
         });
+    }
+
+    /**
+     * Util method to create and make a write state request,
+     * if leader epoch update is needed. Otw, return a completed
+     * future.
+     * @param coordinatorKey - The share partition key object
+     * @param partitionData - Share partition information we from read request
+     * @return Completable future of ReadShareGroupStateResponseData
+     */
+    private CompletableFuture<ReadShareGroupStateResponseData> maybeUpdateLeaderEpoch(
+        SharePartitionKey coordinatorKey,
+        ReadShareGroupStateRequestData.PartitionData partitionData
+    ) {
+        if (partitionData.leaderEpoch() != -1) {   // no need to issue write is leaderEpoch is -1 (no change)
+            WriteShareGroupStateRequestData writeStateLeaderEpoch = new WriteShareGroupStateRequestData()
+                .setGroupId(coordinatorKey.groupId())
+                .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
+                    .setTopicId(coordinatorKey.topicId())
+                    .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
+                        .setPartition(partitionData.partition())
+                        .setLeaderEpoch(partitionData.leaderEpoch())))));
+
+            // Scheduling a runtime write operation to write leaderEpoch to coordinator memory state
+            return runtime.scheduleWriteOperation(
+                "write-share-group-state",
+                topicPartitionFor(coordinatorKey),
+                Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()),
+                coordinator -> coordinator.writeState(writeStateLeaderEpoch)
+            ).handle((writeResponse, writeException) -> {
+                if (writeException != null) {
+                    return handleOperationException(
+                        "write-share-group-state",
+                        writeStateLeaderEpoch,
+                        writeException,
+                        (error, message) -> ReadShareGroupStateResponse.toErrorResponseData(
+                            coordinatorKey.topicId(),
+                            partitionData.partition(),
+                            error,
+                            "Unable to update leader epoch during read request: " + writeException.getMessage()
+                        ),
+                        log
+                    );
+                } else {
+                    return ReadShareGroupStateResponse.EMPTY_READ_RESPONSE_DATA;
+                }
+            });
+        }
+        return CompletableFuture.completedFuture(
+            ReadShareGroupStateResponse.EMPTY_READ_RESPONSE_DATA
+        );
     }
 
     private ReadShareGroupStateResponseData generateErrorReadStateResponse(
