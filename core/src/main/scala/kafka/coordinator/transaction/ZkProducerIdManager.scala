@@ -98,10 +98,4 @@ class ZkProducerIdManager(brokerId: Int, zkClient: KafkaZkClient) extends Produc
       nextProducerId - 1
     }
   }
-
-  override def hasValidBlock: Boolean = {
-    this synchronized {
-      !currentProducerIdBlock.equals(ProducerIdsBlock.EMPTY)
-    }
-  }
 }

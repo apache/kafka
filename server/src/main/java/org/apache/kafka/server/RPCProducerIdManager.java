@@ -98,11 +98,6 @@ public class RPCProducerIdManager extends ProducerIdManager {
         return result;
     }
 
-    @Override
-    public boolean hasValidBlock() {
-        return nextProducerIdBlock.get() != null;
-    }
-
     private void maybePrefetchNextBlock() {
         var retryTimestamp = backoffDeadlineMs.get();
         if (retryTimestamp == NO_RETRY || time.milliseconds() >= retryTimestamp) {

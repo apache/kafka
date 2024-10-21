@@ -38,9 +38,6 @@ public abstract class ProducerIdManager {
 
     public abstract Long generateProducerId() throws Exception;
 
-    // For testing purposes
-    public abstract boolean hasValidBlock();
-
     public void shutdown() {
     }
 

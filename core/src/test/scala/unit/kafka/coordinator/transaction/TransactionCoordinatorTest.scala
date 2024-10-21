@@ -37,7 +37,6 @@ import org.mockito.Mockito.{mock, times, verify, when}
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
-import scala.util.Success
 
 class TransactionCoordinatorTest {
 
@@ -78,7 +77,7 @@ class TransactionCoordinatorTest {
   private def mockPidGenerator(): Unit = {
     when(pidGenerator.generateProducerId()).thenAnswer(_ => {
       nextPid += 1
-      Success(nextPid - 1)
+      nextPid - 1
     })
   }
 
