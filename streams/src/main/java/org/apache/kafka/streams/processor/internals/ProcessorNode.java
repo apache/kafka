@@ -226,7 +226,11 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
                     errorHandlerContext,
                     processingException
                 );
-                throw new FailedProcessingException("Fatal user code error in processing error callback", fatalUserException);
+                throw new FailedProcessingException(
+                    "Fatal user code error in processing error callback",
+                    internalProcessorContext.currentNode().name(),
+                    fatalUserException
+                );
             }
 
             if (response == ProcessingExceptionHandler.ProcessingHandlerResponse.FAIL) {
@@ -234,7 +238,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
                      " a processing error. If you would rather have the streaming pipeline" +
                      " continue after a processing error, please set the " +
                      PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.");
-                throw new FailedProcessingException(processingException);
+                throw new FailedProcessingException(internalProcessorContext.currentNode().name(), processingException);
             } else {
                 droppedRecordsSensor.record();
             }

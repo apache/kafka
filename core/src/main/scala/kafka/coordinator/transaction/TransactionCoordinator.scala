@@ -50,7 +50,7 @@ object TransactionCoordinator {
       config.transactionLogConfig.transactionTopicPartitions,
       config.transactionLogConfig.transactionTopicReplicationFactor,
       config.transactionLogConfig.transactionTopicSegmentBytes,
-      config.transactionLogConfig.transactionsLoadBufferSize,
+      config.transactionLogConfig.transactionLoadBufferSize,
       config.transactionLogConfig.transactionTopicMinISR,
       config.transactionStateManagerConfig.transactionAbortTimedOutTransactionCleanupIntervalMs,
       config.transactionStateManagerConfig.transactionRemoveExpiredTransactionalIdCleanupIntervalMs,

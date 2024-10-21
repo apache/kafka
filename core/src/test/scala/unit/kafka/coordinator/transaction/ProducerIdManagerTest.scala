@@ -24,7 +24,6 @@ import org.apache.kafka.common.errors.CoordinatorLoadInProgressException
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.AllocateProducerIdsResponse
-import org.apache.kafka.common.test.api.Flaky
 import org.apache.kafka.common.utils.{MockTime, Time}
 import org.apache.kafka.server.NodeToControllerChannelManager
 import org.apache.kafka.server.common.ProducerIdsBlock
@@ -41,7 +40,6 @@ import java.util.concurrent.{ConcurrentLinkedQueue, CountDownLatch, Executors, T
 import scala.collection.mutable
 import scala.util.{Failure, Success, Try}
 
-@Flaky("KAFKA-17654")
 class ProducerIdManagerTest {
 
   var brokerToController: NodeToControllerChannelManager = mock(classOf[NodeToControllerChannelManager])
@@ -182,10 +180,11 @@ class ProducerIdManagerTest {
   def testUnrecoverableErrors(error: Errors): Unit = {
     val time = new MockTime()
     val manager = new MockProducerIdManager(0, 0, 1, errorQueue = queue(Errors.NONE, error), time = time)
-
+    // two block requests are sent in this case:
+    // 1. the first generateProducerId(), there is no Producer ID available.
+    // 2. the second generateProducerId(), the second block request will fail.
     verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 0, 1), 0)
-
-    verifyFailure(manager)
+    verifyFailureWithoutGenerateProducerId(manager)
 
     time.sleep(RetryBackoffMs)
     verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 1, 1), 1)
@@ -225,6 +224,10 @@ class ProducerIdManagerTest {
 
   private def verifyFailure(manager: MockProducerIdManager): Unit = {
     assertCoordinatorLoadInProgressExceptionFailure(manager.generateProducerId())
+    verifyFailureWithoutGenerateProducerId(manager)
+  }  
+  
+  private def verifyFailureWithoutGenerateProducerId(manager: MockProducerIdManager): Unit = {
     TestUtils.waitUntilTrue(() => {
       manager synchronized {
         manager.capturedFailure.get

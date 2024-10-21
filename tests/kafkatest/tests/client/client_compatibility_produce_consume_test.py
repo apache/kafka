@@ -23,10 +23,9 @@ from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int_with_prefix
-from kafkatest.version import DEV_BRANCH, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, \
-    LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, \
-    LATEST_2_8, LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, LATEST_3_6, LATEST_3_7, \
-    LATEST_3_8, KafkaVersion
+from kafkatest.version import DEV_BRANCH, LATEST_1_0, LATEST_1_1, \
+    LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, LATEST_2_8, \
+    LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, LATEST_3_6, LATEST_3_7, LATEST_3_8, KafkaVersion
 
 class ClientCompatibilityProduceConsumeTest(ProduceConsumeValidateTest):
     """
@@ -59,10 +58,6 @@ class ClientCompatibilityProduceConsumeTest(ProduceConsumeValidateTest):
 
     @cluster(num_nodes=9)
     @matrix(broker_version=[str(DEV_BRANCH)], metadata_quorum=quorum.all_non_upgrade)
-    @parametrize(broker_version=str(LATEST_0_10_0))
-    @parametrize(broker_version=str(LATEST_0_10_1))
-    @parametrize(broker_version=str(LATEST_0_10_2))
-    @parametrize(broker_version=str(LATEST_0_11_0))
     @parametrize(broker_version=str(LATEST_1_0))
     @parametrize(broker_version=str(LATEST_1_1))
     @parametrize(broker_version=str(LATEST_2_0))
