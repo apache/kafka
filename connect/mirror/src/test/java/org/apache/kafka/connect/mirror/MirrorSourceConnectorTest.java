@@ -40,7 +40,7 @@ import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.ExactlyOnceSupport;
 
-import org.apache.log4j.Level;
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;

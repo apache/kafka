@@ -22,6 +22,7 @@ fi
 base_dir=$(dirname $0)
 
 if [ "x$KAFKA_LOG4J_OPTS" = "x" ]; then
+    echo "DEPRECATED: using log4j 1.x configuration. To use log4j 2.x configuration, run with: 'export KAFKA_LOG4J_OPTS=\"-Dlog4j.configurationFile=file:$base_dir/../config/log4j2.properties\"'"
     export KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/../config/log4j.properties"
 fi
 
