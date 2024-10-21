@@ -40,7 +40,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response;
 
 import static org.apache.kafka.connect.integration.BlockingConnectorTest.Block.BLOCK_CONFIG;
 import static org.apache.kafka.connect.integration.BlockingConnectorTest.CONNECTOR_START;
