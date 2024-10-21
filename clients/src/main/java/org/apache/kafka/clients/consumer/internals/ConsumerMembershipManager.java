@@ -33,12 +33,10 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
-import org.apache.kafka.common.telemetry.internals.ClientTelemetryProvider;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -229,16 +227,6 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
             return;
         }
 
-        // Update the group member id label in the client telemetry reporter if the member id has
-        // changed. Initially the member id is empty, and it is updated when the member joins the
-        // group. This is done here to avoid updating the label on every heartbeat response. Also
-        // check if the member id is null, as the schema defines it as nullable.
-        if (responseData.memberId() != null && !responseData.memberId().equals(memberId)) {
-            clientTelemetryReporter.ifPresent(reporter -> reporter.updateMetricsLabels(
-                    Collections.singletonMap(ClientTelemetryProvider.GROUP_MEMBER_ID, responseData.memberId())));
-        }
-
-        this.memberId = responseData.memberId();
         updateMemberEpoch(responseData.memberEpoch());
 
         ConsumerGroupHeartbeatResponseData.Assignment assignment = responseData.assignment();

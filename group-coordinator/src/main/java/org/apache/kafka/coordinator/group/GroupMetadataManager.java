@@ -1293,13 +1293,12 @@ public class GroupMetadataManager {
      * Validates the request.
      *
      * @param request The request to validate.
-     *
+     * @param apiVersion The version of ConsumerGroupHeartbeat RPC
      * @throws InvalidRequestException if the request is not valid.
      * @throws UnsupportedAssignorException if the assignor is not supported.
      */
     private void throwIfConsumerGroupHeartbeatRequestIsInvalid(
-        ConsumerGroupHeartbeatRequestData request
-    ) throws InvalidRequestException, UnsupportedAssignorException {
+        ConsumerGroupHeartbeatRequestData request, short apiVersion) throws InvalidRequestException, UnsupportedAssignorException {
         throwIfEmptyString(request.groupId(), "GroupId can't be empty.");
         throwIfEmptyString(request.instanceId(), "InstanceId can't be empty.");
         throwIfEmptyString(request.rackId(), "RackId can't be empty.");
@@ -1316,6 +1315,9 @@ public class GroupMetadataManager {
             }
             if (request.subscribedTopicNames() == null || request.subscribedTopicNames().isEmpty()) {
                 throw new InvalidRequestException("SubscribedTopicNames must be set in first request.");
+            }
+            if (apiVersion >= 2) {
+                throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
             }
         } else if (request.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
             throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
@@ -3199,7 +3201,7 @@ public class GroupMetadataManager {
         RequestContext context,
         ConsumerGroupHeartbeatRequestData request
     ) throws ApiException {
-        throwIfConsumerGroupHeartbeatRequestIsInvalid(request);
+        throwIfConsumerGroupHeartbeatRequestIsInvalid(request, context.apiVersion());
 
         if (request.memberEpoch() == LEAVE_GROUP_MEMBER_EPOCH || request.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
             // -1 means that the member wants to leave the group.
