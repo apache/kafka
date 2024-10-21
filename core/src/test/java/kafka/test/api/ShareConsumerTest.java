@@ -562,13 +562,12 @@ public class ShareConsumerTest {
         shareConsumer1.acknowledge(secondRecord);
         shareConsumer1.commitAsync();
 
-        // Allowing acquisition lock timeout to expire.
-        Thread.sleep(20000);
-
-        // The 3rd record should be reassigned to 2nd consumer when it polls.
-        ConsumerRecords<byte[], byte[]> records2 = shareConsumer2.poll(Duration.ofMillis(5000));
-        assertEquals(1, records2.count());
-        assertEquals(2L, records2.iterator().next().offset());
+        // The 3rd record should be reassigned to 2nd consumer when it polls, kept higher wait time
+        // as time out for locks is 15 secs.
+        TestUtils.waitForCondition(() -> {
+            ConsumerRecords<byte[], byte[]> records2 = shareConsumer2.poll(Duration.ofMillis(200));
+            return records2.count() == 1 && records2.iterator().next().offset() == 2L;
+        }, 30000, 100L, () -> "Didn't receive timed out record");
 
         assertFalse(partitionExceptionMap1.containsKey(tp));
         // The callback will receive the acknowledgement responses asynchronously after the next poll.
@@ -839,10 +838,8 @@ public class ShareConsumerTest {
         producer.send(record);
 
         shareConsumer1Records.set(0);
-        TestUtils.waitForCondition(() -> {
-            int records1 = shareConsumer1Records.addAndGet(shareConsumer1.poll(Duration.ofMillis(2000)).count());
-            return records1 == 2;
-        }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume records for share consumer 1");
+        TestUtils.waitForCondition(() -> shareConsumer1Records.addAndGet(shareConsumer1.poll(Duration.ofMillis(2000)).count()) == 2,
+            DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume records for share consumer 1");
 
         producer.send(record);
         producer.send(record);
@@ -1393,10 +1390,8 @@ public class ShareConsumerTest {
         ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(topic, 0, null, "key".getBytes(), "value".getBytes());
         producer.send(record);
 
-        TestUtils.waitForCondition(() -> {
-            int records = shareConsumer.poll(Duration.ofMillis(2000)).count();
-            return records == 1;
-        }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume records for share consumer, metadata sync failed");
+        TestUtils.waitForCondition(() -> shareConsumer.poll(Duration.ofMillis(2000)).count() == 1,
+            DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume records for share consumer, metadata sync failed");
 
         producer.send(record);
         ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));

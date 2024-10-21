@@ -31,8 +31,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 
-import scala.compat.java8.OptionConverters;
 import scala.jdk.javaapi.CollectionConverters;
+import scala.jdk.javaapi.OptionConverters;
 
 public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinatorMetadataCacheHelper {
     private final KRaftMetadataCache metadataCache;
