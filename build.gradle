@@ -938,7 +938,8 @@ project(':server') {
     compileOnly libs.reload4j
 
     testImplementation project(':clients').sourceSets.test.output
-
+    testImplementation project(':test-common')
+    testImplementation project(':test-common:test-common-api')
     testImplementation libs.mockitoCore
     testImplementation libs.junitJupiter
     testImplementation libs.slf4jReload4j
