@@ -26,7 +26,6 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -84,7 +83,7 @@ public class GlobalStateTaskTest {
 
     @BeforeEach
     public void before() {
-        final Set<String> storeNames = Utils.mkSet("t1-store", "t2-store");
+        final Set<String> storeNames = Set.of("t1-store", "t2-store");
         final Map<String, SourceNode<?, ?>> sourceByTopics = new HashMap<>();
         sourceByTopics.put(topic1, sourceOne);
         sourceByTopics.put(topic2, sourceTwo);

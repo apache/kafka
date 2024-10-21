@@ -20,6 +20,9 @@ on:
     branches:
       - 'trunk'
 
+  schedule:
+    - cron: '0 0 * * 6,0'    # Run on Saturday and Sunday at midnight UTC
+
   pull_request:
     types: [ opened, synchronize, ready_for_review, reopened ]
     branches:

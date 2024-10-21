@@ -48,7 +48,6 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -74,7 +73,7 @@ public class DeleteRecordsHandlerTest {
     @Test
     public void testBuildRequestSimple() {
         DeleteRecordsHandler handler = new DeleteRecordsHandler(recordsToDelete, logContext, timeout);
-        DeleteRecordsRequest request = handler.buildBatchedRequest(node1.id(), mkSet(t0p0, t0p1)).build();
+        DeleteRecordsRequest request = handler.buildBatchedRequest(node1.id(), Set.of(t0p0, t0p1)).build();
         List<DeleteRecordsRequestData.DeleteRecordsTopic> topics = request.data().topics();
         assertEquals(1, topics.size());
         DeleteRecordsRequestData.DeleteRecordsTopic topic = topics.get(0);
@@ -233,10 +232,10 @@ public class DeleteRecordsHandlerTest {
         AdminApiLookupStrategy<TopicPartition> strategy = handler.lookupStrategy();
         assertInstanceOf(PartitionLeaderStrategy.class, strategy);
         PartitionLeaderStrategy specificStrategy = (PartitionLeaderStrategy) strategy;
-        MetadataRequest request = specificStrategy.buildRequest(mkSet(t0p0, t0p1, t0p2, t0p3)).build();
-        assertEquals(mkSet("t0"), new HashSet<>(request.topics()));
+        MetadataRequest request = specificStrategy.buildRequest(Set.of(t0p0, t0p1, t0p2, t0p3)).build();
+        assertEquals(Set.of("t0"), new HashSet<>(request.topics()));
 
-        Set<TopicPartition> tpSet = mkSet(t0p0, t0p1, t0p2, t0p3);
+        Set<TopicPartition> tpSet = Set.of(t0p0, t0p1, t0p2, t0p3);
         LookupResult<TopicPartition> lookupResult = strategy.handleResponse(tpSet, metadataResponse);
         assertEquals(emptyMap(), lookupResult.failedKeys);
         assertEquals(tpSet, lookupResult.mappedKeys.keySet());
@@ -246,13 +245,13 @@ public class DeleteRecordsHandlerTest {
 
         DeleteRecordsRequest deleteRequest = handler.buildBatchedRequest(node1.id(), partitionsPerBroker.get(node1.id())).build();
         assertEquals(2, deleteRequest.data().topics().get(0).partitions().size());
-        assertEquals(mkSet(t0p0, t0p2),
+        assertEquals(Set.of(t0p0, t0p2),
                 deleteRequest.data().topics().get(0).partitions().stream()
                         .map(drp -> new TopicPartition("t0", drp.partitionIndex()))
                         .collect(Collectors.toSet()));
         deleteRequest = handler.buildBatchedRequest(node2.id(), partitionsPerBroker.get(node2.id())).build();
         assertEquals(2, deleteRequest.data().topics().get(0).partitions().size());
-        assertEquals(mkSet(t0p1, t0p3),
+        assertEquals(Set.of(t0p1, t0p3),
                 deleteRequest.data().topics().get(0).partitions().stream()
                         .map(drp -> new TopicPartition("t0", drp.partitionIndex()))
                         .collect(Collectors.toSet()));
