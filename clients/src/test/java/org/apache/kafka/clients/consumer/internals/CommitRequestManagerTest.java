@@ -341,7 +341,6 @@ public class CommitRequestManagerTest {
 
     private static Stream<Arguments> commitSyncExpectedExceptions() {
         return Stream.of(
-            Arguments.of(Errors.FENCED_INSTANCE_ID, CommitFailedException.class),
             Arguments.of(Errors.UNKNOWN_MEMBER_ID, CommitFailedException.class),
             Arguments.of(Errors.OFFSET_METADATA_TOO_LARGE, Errors.OFFSET_METADATA_TOO_LARGE.exception().getClass()),
             Arguments.of(Errors.INVALID_COMMIT_OFFSET_SIZE, Errors.INVALID_COMMIT_OFFSET_SIZE.exception().getClass()),
@@ -966,10 +965,6 @@ public class CommitRequestManagerTest {
             case INVALID_COMMIT_OFFSET_SIZE:
                 assertPollDoesNotReturn(commitRequestManager, Long.MAX_VALUE);
                 break;
-            case FENCED_INSTANCE_ID:
-                // This is a fatal failure, so we should not retry
-                assertPollDoesNotReturn(commitRequestManager, Long.MAX_VALUE);
-                break;
             default:
                 if (errors.exception() instanceof RetriableException && requestShouldBeRetried) {
                     assertRetryBackOff(commitRequestManager, remainBackoffMs);
@@ -1260,7 +1255,6 @@ public class CommitRequestManagerTest {
             Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION),
             Arguments.of(Errors.COORDINATOR_NOT_AVAILABLE),
             Arguments.of(Errors.REQUEST_TIMED_OUT),
-            Arguments.of(Errors.FENCED_INSTANCE_ID),
             Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED),
             Arguments.of(Errors.STALE_MEMBER_EPOCH),
             Arguments.of(Errors.UNKNOWN_MEMBER_ID));
@@ -1280,7 +1274,6 @@ public class CommitRequestManagerTest {
             Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION),
             Arguments.of(Errors.COORDINATOR_NOT_AVAILABLE),
             Arguments.of(Errors.REQUEST_TIMED_OUT),
-            Arguments.of(Errors.FENCED_INSTANCE_ID),
             Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED),
             Arguments.of(Errors.UNKNOWN_MEMBER_ID),
             // Adding STALE_MEMBER_EPOCH as non-retriable here because it is only retried if a new
