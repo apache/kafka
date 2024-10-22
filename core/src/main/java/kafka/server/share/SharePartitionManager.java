@@ -233,8 +233,8 @@ public class SharePartitionManager implements AutoCloseable {
         FetchParams fetchParams,
         Map<TopicIdPartition, Integer> partitionMaxBytes
     ) {
-        log.trace("Fetch request for topicIdPartitions: {} with groupId: {} fetch params: {}",
-                partitionMaxBytes.keySet(), groupId, fetchParams);
+        log.info("Fetch request for topicIdPartitions: {} with groupId: {} fetch params: {}, {}",
+                partitionMaxBytes.keySet(), groupId, fetchParams, fetchParams.fetchOnlyLeader());
 
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
         processShareFetch(new ShareFetchData(fetchParams, groupId, memberId, future, partitionMaxBytes));
@@ -483,6 +483,27 @@ public class SharePartitionManager implements AutoCloseable {
                 shareSession.epoch = ShareRequestMetadata.nextEpoch(shareSession.epoch);
             }
         }
+    }
+
+    /**
+     * The handleFetchException method is used to handle the exception that occurred while reading from log.
+     * The method will handle the exception for each topic-partition in the request. The share partition
+     * might get removed from the cache.
+     * <p>
+     * The replica read request might error out for one share partition
+     * but as we cannot determine which share partition errored out, we might remove all the share partitions
+     * in the request.
+     *
+     * @param groupId The group id in the share fetch request.
+     * @param topicIdPartitions The topic-partitions in the replica read request.
+     * @param throwable The exception that occurred while fetching messages.
+     */
+    public void handleFetchException(
+        String groupId,
+        Set<TopicIdPartition> topicIdPartitions,
+        Throwable throwable
+    ) {
+        topicIdPartitions.forEach(topicIdPartition -> handleSharePartitionException(sharePartitionKey(groupId, topicIdPartition), throwable));
     }
 
     /**
