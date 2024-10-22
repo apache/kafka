@@ -1675,7 +1675,7 @@ public final class QuorumController implements Controller {
      */
     private void registerMaybeFenceStaleBroker(long sessionTimeoutNs) {
         periodicControl.registerTask(new PeriodicTask("maybeFenceStaleBroker",
-            () -> replicationControl.maybeFenceOneStaleBroker(),
+            replicationControl::maybeFenceOneStaleBroker,
             maybeFenceStaleBrokerPeriodNs(sessionTimeoutNs),
             EnumSet.noneOf(PeriodicTaskFlag.class)));
     }
@@ -1690,7 +1690,7 @@ public final class QuorumController implements Controller {
      */
     private void registerElectPreferred(long checkIntervalNs) {
         periodicControl.registerTask(new PeriodicTask("electPreferred",
-            () -> replicationControl.maybeBalancePartitionLeaders(),
+            replicationControl::maybeBalancePartitionLeaders,
             checkIntervalNs,
             EnumSet.of(PeriodicTaskFlag.VERBOSE)));
     }
@@ -1705,7 +1705,7 @@ public final class QuorumController implements Controller {
      */
     private void registerElectUnclean(long checkIntervalNs) {
         periodicControl.registerTask(new PeriodicTask("electUnclean",
-            () -> replicationControl.maybeElectUncleanLeaders(),
+            replicationControl::maybeElectUncleanLeaders,
             checkIntervalNs,
             EnumSet.of(PeriodicTaskFlag.VERBOSE)));
     }
@@ -1719,7 +1719,7 @@ public final class QuorumController implements Controller {
      */
     private void registerExpireDelegationTokens(long checkIntervalNs) {
         periodicControl.registerTask(new PeriodicTask("expireDelegationTokens",
-            () -> delegationTokenControlManager.sweepExpiredDelegationTokens(),
+            delegationTokenControlManager::sweepExpiredDelegationTokens,
             checkIntervalNs,
             EnumSet.of(PeriodicTaskFlag.VERBOSE)));
     }
