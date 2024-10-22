@@ -661,37 +661,39 @@ public class FetchCollectorTest {
         int recordCount = 20;
         assignAndSeek(topicAPartition0);
 
-        Records rawRecords = createTransactionalRecords(ControlRecordType.ABORT, recordCount, recordCount);
+        Records rawRecords = createTransactionalRecords(ControlRecordType.ABORT, true, 0, recordCount);
         FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
             .setRecords(rawRecords)
             .setAbortedTransactions(createAbortedTransactions());
-        CompletedFetch initialCompletedFetch = completedFetchBuilder
+        CompletedFetch completedFetch1 = completedFetchBuilder
             .partitionData(partitionData)
             .build();
-        fetchBuffer.add(initialCompletedFetch);
+        fetchBuffer.add(completedFetch1);
         Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
 
+        // The Fetch and read replica settings should be empty.
         assertFalse(fetch.isEmpty());
         assertEquals(0, fetch.numRecords());
         assertEquals(1, fetch.nextOffsets().size());
         assertEquals(new OffsetAndMetadata(recordCount + 1, Optional.of(0), ""), fetch.nextOffsets().get(topicAPartition0));
 
-        // Subsequent CompletedFetch with abort marker
-        rawRecords = createTransactionalRecords(ControlRecordType.ABORT, 0, recordCount);
+
+        int startOffset = recordCount + 1;
+        rawRecords = createTransactionalRecords(ControlRecordType.ABORT, false, startOffset, recordCount);
         partitionData = new FetchResponseData.PartitionData()
             .setRecords(rawRecords)
             .setAbortedTransactions(createAbortedTransactions());
-        CompletedFetch fetchWithAbortTxnRecord = completedFetchBuilder
+        CompletedFetch completedFetch2 = completedFetchBuilder
             .partitionData(partitionData)
-            .fetchOffset(recordCount + 1)
+            .fetchOffset(startOffset)
             .build();
-        fetchBuffer.add(fetchWithAbortTxnRecord);
+        fetchBuffer.add(completedFetch2);
         fetch = fetchCollector.collectFetch(fetchBuffer);
 
-        assertTrue(fetch.isEmpty());
-        assertEquals(0, fetch.numRecords());
+        assertFalse(fetch.isEmpty());
+        assertEquals(20, fetch.numRecords());
         assertEquals(1, fetch.nextOffsets().size());
-        assertEquals(new OffsetAndMetadata(recordCount + 1, Optional.empty(), ""), fetch.nextOffsets().get(topicAPartition0));
+        assertEquals(new OffsetAndMetadata(startOffset + recordCount + 1, Optional.empty(), ""), fetch.nextOffsets().get(topicAPartition0));
     }
 
     private List<FetchResponseData.AbortedTransaction> createAbortedTransactions() {
@@ -928,12 +930,6 @@ public class FetchCollectorTest {
     }
 
     private Records createRecords(final int recordCount) {
-        try (MemoryRecordsBuilder builder = createRecordsBuilder(recordCount)) {
-            return builder.build();
-        }
-    }
-
-    private MemoryRecordsBuilder createRecordsBuilder(final int recordCount) {
         ByteBuffer allocate = ByteBuffer.allocate(1024);
 
         try (MemoryRecordsBuilder builder = MemoryRecords.builder(allocate,
@@ -943,17 +939,18 @@ public class FetchCollectorTest {
             for (int i = 0; i < recordCount; i++)
                 builder.append(0L, "key".getBytes(), ("value-" + i).getBytes());
 
-            return builder;
+            return builder.build();
         }
     }
 
-    private Records createTransactionalRecords(ControlRecordType controlRecordType, int controlRecordOffset, int numRecords) {
+    private Records createTransactionalRecords(ControlRecordType controlRecordType, boolean isControlRecordLast, int startOffset, int recordCount) {
         Time time = new MockTime();
         ByteBuffer buffer = ByteBuffer.allocate(1024);
-        long baseOffset = 0;
-        if (controlRecordOffset == 0) {
-            writeTransactionMarker(buffer, controlRecordType, controlRecordOffset, time);
-            baseOffset = 1;
+
+        int baseOffset = startOffset;
+        if (!isControlRecordLast) {
+            writeTransactionMarker(buffer, controlRecordType, startOffset, time);
+            baseOffset++;
         }
 
         try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer,
@@ -967,17 +964,15 @@ public class FetchCollectorTest {
             0,
             true,
             RecordBatch.NO_PARTITION_LEADER_EPOCH)) {
-            for (int i = 0; i < numRecords; i++)
+            for (int i = 0; i < recordCount; i++)
                 builder.append(new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()));
 
             builder.build();
         }
-        if (controlRecordOffset != 0) {
-            writeTransactionMarker(buffer, controlRecordType, controlRecordOffset, time);
+        if (isControlRecordLast) {
+            writeTransactionMarker(buffer, controlRecordType, startOffset + recordCount, time);
         }
-
         buffer.flip();
-
         return MemoryRecords.readableRecords(buffer);
     }
 
