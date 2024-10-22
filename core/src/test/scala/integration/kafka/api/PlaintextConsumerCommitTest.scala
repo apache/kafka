@@ -304,13 +304,12 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
     consumeAndVerifyRecords(consumer = otherConsumer, numRecords = 1, startingOffset = 5, startingTimestamp = startingTimestamp)
   }
 
-  // TODO: This only works in the new consumer, but should be fixed for the old consumer as well
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testCommitAsyncCompletedBeforeConsumerCloses(quorum: String, groupProtocol: String): Unit = {
     // This is testing the contract that asynchronous offset commit are completed before the consumer
     // is closed, even when no commit sync is performed as part of the close (due to auto-commit
-    // disabled, or simply because there are no consumed offsets).
+    // disabled, or simply because there no consumed offsets).
     val producer = createProducer()
     sendRecords(producer, numRecords = 3, tp)
     sendRecords(producer, numRecords = 3, tp2)
@@ -326,9 +325,8 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
     assertEquals(2, cb.successCount)
   }
 
-  // TODO: This only works in the new consumer, but should be fixed for the old consumer as well
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testCommitAsyncCompletedBeforeCommitSyncReturns(quorum: String, groupProtocol: String): Unit = {
     // This is testing the contract that asynchronous offset commits sent previously with the
     // `commitAsync` are guaranteed to have their callbacks invoked prior to completion of
