@@ -47,7 +47,15 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
+import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG;
+import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG;
+import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.security.PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG;
+import static org.apache.kafka.server.config.ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG;
+import static org.apache.kafka.server.config.ServerConfigs.MESSAGE_MAX_BYTES_CONFIG;
+import static org.apache.kafka.server.config.ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -55,8 +63,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(value = ClusterTestExtensions.class)
 public class ConfigCommandIntegrationTest {
-
-    private List<String> alterOpts;
     private final String defaultBrokerId = "0";
     private final String defaultGroupName = "group";
     private final String defaultClientMetricsName = "cm";
@@ -134,31 +140,31 @@ public class ConfigCommandIntegrationTest {
 
     @ClusterTest
     public void testDynamicBrokerConfigUpdateUsingKraft() throws Exception {
-        alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
+        List<String> alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
 
         try (Admin client = cluster.createAdminClient()) {
             // Add config
-            alterAndVerifyConfig(client, Optional.of(defaultBrokerId), singletonMap("message.max.bytes", "110000"));
-            alterAndVerifyConfig(client, Optional.empty(), singletonMap("message.max.bytes", "120000"));
+            alterAndVerifyConfig(client, Optional.of(defaultBrokerId), singletonMap(MESSAGE_MAX_BYTES_CONFIG, "110000"), alterOpts);
+            alterAndVerifyConfig(client, Optional.empty(), singletonMap(MESSAGE_MAX_BYTES_CONFIG, "120000"), alterOpts);
 
             // Change config
-            alterAndVerifyConfig(client, Optional.of(defaultBrokerId), singletonMap("message.max.bytes", "130000"));
-            alterAndVerifyConfig(client, Optional.empty(), singletonMap("message.max.bytes", "140000"));
+            alterAndVerifyConfig(client, Optional.of(defaultBrokerId), singletonMap(MESSAGE_MAX_BYTES_CONFIG, "130000"), alterOpts);
+            alterAndVerifyConfig(client, Optional.empty(), singletonMap(MESSAGE_MAX_BYTES_CONFIG, "140000"), alterOpts);
 
             // Delete config
-            deleteAndVerifyConfigValue(client, defaultBrokerId, singleton("message.max.bytes"), true);
+            deleteAndVerifyConfigValue(client, defaultBrokerId, singleton(MESSAGE_MAX_BYTES_CONFIG), true, alterOpts);
 
             // Listener configs: should work only with listener name
             alterAndVerifyConfig(client, Optional.of(defaultBrokerId),
-                    singletonMap("listener.name.internal.ssl.keystore.location", "/tmp/test.jks"));
+                    singletonMap("listener.name.internal.ssl.keystore.location", "/tmp/test.jks"), alterOpts);
             // Per-broker config configured at default cluster-level should fail
             assertThrows(ExecutionException.class,
                     () -> alterConfigWithKraft(client, Optional.empty(),
-                            singletonMap("listener.name.internal.ssl.keystore.location", "/tmp/test.jks")));
+                            singletonMap("listener.name.internal.ssl.keystore.location", "/tmp/test.jks"), alterOpts));
             deleteAndVerifyConfigValue(client, defaultBrokerId,
-                    singleton("listener.name.internal.ssl.keystore.location"), false);
+                    singleton("listener.name.internal.ssl.keystore.location"), false, alterOpts);
             alterConfigWithKraft(client, Optional.of(defaultBrokerId),
-                    singletonMap("listener.name.external.ssl.keystore.password", "secret"));
+                    singletonMap("listener.name.external.ssl.keystore.password", "secret"), alterOpts);
 
             // Password config update with encoder secret should succeed and encoded password must be stored in ZK
             Map<String, String> configs = new HashMap<>();
@@ -169,113 +175,110 @@ public class ConfigCommandIntegrationTest {
 
             // Password config update at default cluster-level should fail
             assertThrows(ExecutionException.class,
-                    () -> alterConfigWithKraft(client, Optional.of(defaultBrokerId), configs));
+                    () -> alterConfigWithKraft(client, Optional.of(defaultBrokerId), configs, alterOpts));
         }
     }
 
     @ClusterTest
     public void testGroupConfigUpdateUsingKraft() throws Exception {
-        alterOpts = asList("--bootstrap-server", cluster.bootstrapServers(), "--entity-type", "groups", "--alter");
-        verifyGroupConfigUpdate();
+        List<String> alterOpts = Stream.concat(entityOp(Optional.of(defaultGroupName)).stream(),
+                        Stream.of("--entity-type", "groups", "--alter"))
+                .collect(Collectors.toList());
+        verifyGroupConfigUpdate(alterOpts);
 
         // Test for the --group alias
-        alterOpts = asList("--bootstrap-server", cluster.bootstrapServers(), "--group", "--alter");
-        verifyGroupConfigUpdate();
+        verifyGroupConfigUpdate(asList("--group", defaultGroupName, "--alter"));
     }
 
-    private void verifyGroupConfigUpdate() throws Exception {
+    private void verifyGroupConfigUpdate(List<String> alterOpts) throws Exception {
         try (Admin client = cluster.createAdminClient()) {
             // Add config
             Map<String, String> configs = new HashMap<>();
-            configs.put("consumer.session.timeout.ms", "50000");
-            configs.put("consumer.heartbeat.interval.ms", "6000");
-            alterAndVerifyGroupConfig(client, defaultGroupName, configs);
+            configs.put(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000");
+            configs.put(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "6000");
+            alterAndVerifyGroupConfig(client, defaultGroupName, configs, alterOpts);
 
             // Delete config
-            configs.put("consumer.session.timeout.ms", "45000");
-            configs.put("consumer.heartbeat.interval.ms", "5000");
-            deleteAndVerifyGroupConfigValue(client, defaultGroupName, configs);
+            configs.put(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "45000");
+            configs.put(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "5000");
+            deleteAndVerifyGroupConfigValue(client, defaultGroupName, configs, alterOpts);
 
             // Unknown config configured should fail
-            assertThrows(ExecutionException.class,
-                () -> alterConfigWithKraft(client, Optional.of(defaultGroupName),
-                    singletonMap("unknown.config", "20000")));
+            assertThrows(ExecutionException.class, () -> alterConfigWithKraft(client, singletonMap("unknown.config", "20000"), alterOpts));
         }
     }
 
 
     @ClusterTest(types = {Type.KRAFT})
     public void testClientMetricsConfigUpdate() throws Exception {
-        alterOpts = asList("--bootstrap-server", cluster.bootstrapServers(), "--entity-type", "client-metrics", "--alter");
-        verifyClientMetricsConfigUpdate();
+        List<String> alterOpts = Stream.concat(entityOp(Optional.of(defaultClientMetricsName)).stream(),
+                        Stream.of("--entity-type", "client-metrics", "--alter"))
+            .collect(Collectors.toList());
+        verifyClientMetricsConfigUpdate(alterOpts);
 
         // Test for the --client-metrics alias
-        alterOpts = asList("--bootstrap-server", cluster.bootstrapServers(), "--client-metrics", "--alter");
-        verifyClientMetricsConfigUpdate();
+        verifyClientMetricsConfigUpdate(asList("--client-metrics", defaultClientMetricsName, "--alter"));
     }
 
-    private void verifyClientMetricsConfigUpdate() throws Exception {
+    private void verifyClientMetricsConfigUpdate(List<String> alterOpts) throws Exception {
         try (Admin client = cluster.createAdminClient()) {
             // Add config
             Map<String, String> configs = new HashMap<>();
             configs.put("metrics", "");
             configs.put("interval.ms", "6000");
-            alterAndVerifyClientMetricsConfig(client, defaultClientMetricsName, configs);
+            alterAndVerifyClientMetricsConfig(client, defaultClientMetricsName, configs, alterOpts);
 
             // Delete config
-            deleteAndVerifyClientMetricsConfigValue(client, defaultClientMetricsName, configs.keySet());
+            deleteAndVerifyClientMetricsConfigValue(client, defaultClientMetricsName, configs.keySet(), alterOpts);
 
             // Unknown config configured should fail
-            assertThrows(ExecutionException.class,
-                () -> alterConfigWithKraft(client, Optional.of(defaultClientMetricsName),
-                    singletonMap("unknown.config", "20000")));
+            assertThrows(ExecutionException.class, () -> alterConfigWithKraft(client, singletonMap("unknown.config", "20000"), alterOpts));
         }
     }
 
     @ClusterTest
     public void testAlterReadOnlyConfigInKRaftThenShouldFail() {
-        alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
+        List<String> alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
 
         try (Admin client = cluster.createAdminClient()) {
             assertThrows(ExecutionException.class,
                     () -> alterConfigWithKraft(client, Optional.of(defaultBrokerId),
-                            singletonMap("auto.create.topics.enable", "false")));
+                            singletonMap(AUTO_CREATE_TOPICS_ENABLE_CONFIG, "false"), alterOpts));
             assertThrows(ExecutionException.class,
                     () -> alterConfigWithKraft(client, Optional.of(defaultBrokerId),
-                            singletonMap("auto.leader.rebalance.enable", "false")));
+                            singletonMap(AUTO_LEADER_REBALANCE_ENABLE_CONFIG, "false"), alterOpts));
             assertThrows(ExecutionException.class,
                     () -> alterConfigWithKraft(client, Optional.of(defaultBrokerId),
-                            singletonMap("broker.id", "1")));
+                            singletonMap("broker.id", "1"), alterOpts));
         }
     }
 
     @ClusterTest
     public void testUpdateClusterWideConfigInKRaftThenShouldSuccessful() throws Exception {
-        alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
+        List<String> alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
 
         try (Admin client = cluster.createAdminClient()) {
             alterAndVerifyConfig(client, Optional.of(defaultBrokerId),
-                    singletonMap("log.flush.interval.messages", "100"));
+                    singletonMap("log.flush.interval.messages", "100"), alterOpts);
             alterAndVerifyConfig(client, Optional.of(defaultBrokerId),
-                    singletonMap("log.retention.bytes", "20"));
+                    singletonMap("log.retention.bytes", "20"), alterOpts);
             alterAndVerifyConfig(client, Optional.of(defaultBrokerId),
-                    singletonMap("log.retention.ms", "2"));
+                    singletonMap("log.retention.ms", "2"), alterOpts);
         }
     }
 
     @ClusterTest
     public void testUpdatePerBrokerConfigWithListenerNameInKRaftThenShouldSuccessful() throws Exception {
-        alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
+        List<String> alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
         String listenerName = "listener.name.internal.";
 
         try (Admin client = cluster.createAdminClient()) {
             alterAndVerifyConfig(client, Optional.of(defaultBrokerId),
-                    singletonMap(listenerName + "ssl.truststore.type", "PKCS12"));
+                    singletonMap(listenerName + "ssl.truststore.type", "PKCS12"), alterOpts);
             alterAndVerifyConfig(client, Optional.of(defaultBrokerId),
-                    singletonMap(listenerName + "ssl.truststore.location", "/temp/test.jks"));
-
+                    singletonMap(listenerName + "ssl.truststore.location", "/temp/test.jks"), alterOpts);
             alterConfigWithKraft(client, Optional.of(defaultBrokerId),
-                    singletonMap(listenerName + "ssl.truststore.password", "password"));
+                    singletonMap(listenerName + "ssl.truststore.password", "password"), alterOpts);
             verifyConfigSecretValue(client, Optional.of(defaultBrokerId),
                     singleton(listenerName + "ssl.truststore.password"));
         }
@@ -283,18 +286,18 @@ public class ConfigCommandIntegrationTest {
 
     @ClusterTest
     public void testUpdatePerBrokerConfigInKRaftThenShouldFail() {
-        alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
+        List<String> alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
 
         try (Admin client = cluster.createAdminClient()) {
             assertThrows(ExecutionException.class,
                     () -> alterConfigWithKraft(client, Optional.of(defaultBrokerId),
-                            singletonMap("ssl.truststore.type", "PKCS12")));
+                            singletonMap(SSL_TRUSTSTORE_TYPE_CONFIG, "PKCS12"), alterOpts));
             assertThrows(ExecutionException.class,
                     () -> alterConfigWithKraft(client, Optional.of(defaultBrokerId),
-                            singletonMap("ssl.truststore.location", "/temp/test.jks")));
+                            singletonMap(SSL_TRUSTSTORE_LOCATION_CONFIG, "/temp/test.jks"), alterOpts));
             assertThrows(ExecutionException.class,
                     () -> alterConfigWithKraft(client, Optional.of(defaultBrokerId),
-                            singletonMap("ssl.truststore.password", "password")));
+                            singletonMap(SSL_TRUSTSTORE_PASSWORD_CONFIG, "password"), alterOpts));
         }
     }
 
@@ -326,25 +329,50 @@ public class ConfigCommandIntegrationTest {
                 "--entity-type", "brokers", "--alter");
     }
 
-    private void alterAndVerifyConfig(Admin client, Optional<String> brokerId, Map<String, String> config) throws Exception {
-        alterConfigWithKraft(client, brokerId, config);
+    private void alterAndVerifyConfig(Admin client,
+                                      Optional<String> brokerId,
+                                      Map<String, String> config,
+                                      List<String> alterOpts) throws Exception {
+        alterConfigWithKraft(client, brokerId, config, alterOpts);
         verifyConfig(client, brokerId, config);
     }
 
-    private void alterAndVerifyGroupConfig(Admin client, String groupName, Map<String, String> config) throws Exception {
-        alterConfigWithKraft(client, Optional.of(groupName), config);
+    private void alterAndVerifyGroupConfig(Admin client,
+                                           String groupName,
+                                           Map<String, String> config,
+                                           List<String> alterOpts) throws Exception {
+        alterConfigWithKraft(client, config, alterOpts);
         verifyGroupConfig(client, groupName, config);
     }
 
-    private void alterAndVerifyClientMetricsConfig(Admin client, String clientMetricsName, Map<String, String> config) throws Exception {
-        alterConfigWithKraft(client, Optional.of(clientMetricsName), config);
+    private void alterAndVerifyClientMetricsConfig(Admin client,
+                                                   String clientMetricsName,
+                                                   Map<String, String> config,
+                                                   List<String> alterOpts) throws Exception {
+        alterConfigWithKraft(client, config, alterOpts);
         verifyClientMetricsConfig(client, clientMetricsName, config);
     }
 
-    private void alterConfigWithKraft(Admin client, Optional<String> resourceName, Map<String, String> config) {
+    private void alterConfigWithKraft(Admin client, Optional<String> resourceName, Map<String, String> config, List<String> alterOpts) {
         String configStr = transferConfigMapToString(config);
+        List<String> bootstrapOpts = quorumArgs().collect(Collectors.toList());
         ConfigCommand.ConfigCommandOptions addOpts =
-                new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, entityOp(resourceName), asList("--add-config", configStr)));
+                new ConfigCommand.ConfigCommandOptions(toArray(bootstrapOpts,
+                        entityOp(resourceName),
+                        alterOpts,
+                        asList("--add-config", configStr)));
+        addOpts.checkArgs();
+        ConfigCommand.alterConfig(client, addOpts);
+    }
+
+    private void alterConfigWithKraft(Admin client, Map<String, String> config, List<String> alterOpts) {
+        String configStr = transferConfigMapToString(config);
+        List<String> bootstrapOpts = quorumArgs().collect(Collectors.toList());
+        ConfigCommand.ConfigCommandOptions addOpts =
+                new ConfigCommand.ConfigCommandOptions(toArray(bootstrapOpts,
+                        alterOpts,
+                        asList("--add-config", configStr)));
+        addOpts.checkArgs();
         ConfigCommand.alterConfig(client, addOpts);
     }
 
@@ -393,30 +421,40 @@ public class ConfigCommandIntegrationTest {
     private void deleteAndVerifyConfigValue(Admin client,
                                             String brokerId,
                                             Set<String> config,
-                                            boolean hasDefaultValue) throws Exception {
+                                            boolean hasDefaultValue,
+                                            List<String> alterOpts) throws Exception {
         ConfigCommand.ConfigCommandOptions deleteOpts =
                 new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, asList("--entity-name", brokerId),
                         asList("--delete-config", String.join(",", config))));
+        deleteOpts.checkArgs();
         ConfigCommand.alterConfig(client, deleteOpts);
         verifyPerBrokerConfigValue(client, brokerId, config, hasDefaultValue);
     }
 
     private void deleteAndVerifyGroupConfigValue(Admin client,
                                                  String groupName,
-                                                 Map<String, String> defaultConfigs) throws Exception {
+                                                 Map<String, String> defaultConfigs,
+                                                 List<String> alterOpts) throws Exception {
+        List<String> bootstrapOpts = quorumArgs().collect(Collectors.toList());
         ConfigCommand.ConfigCommandOptions deleteOpts =
-            new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, asList("--entity-name", groupName),
-                asList("--delete-config", String.join(",", defaultConfigs.keySet()))));
+            new ConfigCommand.ConfigCommandOptions(toArray(bootstrapOpts,
+                    alterOpts,
+                    asList("--delete-config", String.join(",", defaultConfigs.keySet()))));
+        deleteOpts.checkArgs();
         ConfigCommand.alterConfig(client, deleteOpts);
         verifyGroupConfig(client, groupName, defaultConfigs);
     }
 
     private void deleteAndVerifyClientMetricsConfigValue(Admin client,
                                                          String clientMetricsName,
-                                                         Set<String> defaultConfigs) throws Exception {
+                                                         Set<String> defaultConfigs,
+                                                         List<String> alterOpts) throws Exception {
+        List<String> bootstrapOpts = quorumArgs().collect(Collectors.toList());
         ConfigCommand.ConfigCommandOptions deleteOpts =
-            new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, asList("--entity-name", clientMetricsName),
-                asList("--delete-config", String.join(",", defaultConfigs))));
+            new ConfigCommand.ConfigCommandOptions(toArray(bootstrapOpts,
+                    alterOpts,
+                    asList("--delete-config", String.join(",", defaultConfigs))));
+        deleteOpts.checkArgs();
         ConfigCommand.alterConfig(client, deleteOpts);
         // There are no default configs returned for client metrics
         verifyClientMetricsConfig(client, clientMetricsName, Collections.emptyMap());
