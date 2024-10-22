@@ -37,7 +37,7 @@ fetch_jdk_tgz() {
 }
 
 JDK_MAJOR="${JDK_MAJOR:-11}"
-JDK_FULL="${JDK_FULL:-11.0.2-linux-x64}"
+JDK_FULL="${JDK_FULL:-11.0.18-linux-x64}"
 
 if [ -z `which javac` ]; then
     apt-get -y update
