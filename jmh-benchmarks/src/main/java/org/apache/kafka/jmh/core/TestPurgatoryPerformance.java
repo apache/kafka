@@ -16,15 +16,11 @@
  */
 package org.apache.kafka.jmh.core;
 
-import joptsimple.ArgumentAcceptingOptionSpec;
-import joptsimple.OptionParser;
-import joptsimple.OptionSet;
 import kafka.server.DelayedOperation;
 import kafka.server.DelayedOperationPurgatory;
+
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.server.util.ShutdownableThread;
-import scala.Option;
-import scala.jdk.javaapi.CollectionConverters;
 
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
@@ -42,6 +38,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import joptsimple.ArgumentAcceptingOptionSpec;
+import joptsimple.OptionParser;
+import joptsimple.OptionSet;
+import scala.Option;
+import scala.jdk.javaapi.CollectionConverters;
 
 import static java.lang.String.format;
 
