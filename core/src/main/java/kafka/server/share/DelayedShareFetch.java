@@ -79,16 +79,16 @@ public class DelayedShareFetch extends DelayedOperation {
      */
     @Override
     public void onComplete() {
-        log.trace("Completing the delayed share fetch request for group {}, member {}, " +
-                        "topic partitions {}", shareFetchData.groupId(),
-            shareFetchData.memberId(), shareFetchData.partitionMaxBytes().keySet());
+        log.trace("Completing the delayed share fetch request for group {}, member {}, "
+            + "topic partitions {}", shareFetchData.groupId(), shareFetchData.memberId(),
+            topicPartitionDataFromTryComplete != null ? topicPartitionDataFromTryComplete.keySet() : "null");
 
         if (shareFetchData.future().isDone())
             return;
 
         Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData;
         // tryComplete did not invoke forceComplete, so we need to check if we have any partitions to fetch.
-        if (topicPartitionDataFromTryComplete.isEmpty())
+        if (topicPartitionDataFromTryComplete == null || topicPartitionDataFromTryComplete.isEmpty())
             topicPartitionData = acquirablePartitions();
         // tryComplete invoked forceComplete, so we can use the data from tryComplete.
         else
@@ -100,7 +100,7 @@ public class DelayedShareFetch extends DelayedOperation {
             return;
         }
         log.trace("Fetchable share partitions data: {} with groupId: {} fetch params: {}",
-                topicPartitionData, shareFetchData.groupId(), shareFetchData.fetchParams());
+            topicPartitionData, shareFetchData.groupId(), shareFetchData.fetchParams());
 
         try {
             Seq<Tuple2<TopicIdPartition, LogReadResult>> responseLogResult = replicaManager.readFromLog(
@@ -157,7 +157,7 @@ public class DelayedShareFetch extends DelayedOperation {
 
         if (!topicPartitionDataFromTryComplete.isEmpty())
             return forceComplete();
-        log.info("Can't acquire records for any partition in the share fetch request for group {}, member {}, " +
+        log.trace("Can't acquire records for any partition in the share fetch request for group {}, member {}, " +
                 "topic partitions {}", shareFetchData.groupId(),
                 shareFetchData.memberId(), shareFetchData.partitionMaxBytes().keySet());
         return false;
