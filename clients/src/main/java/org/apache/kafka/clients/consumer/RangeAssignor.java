@@ -54,7 +54,7 @@ import java.util.stream.Collectors;
  * <li><code>C0: [t0p0, t0p1, t1p0, t1p1]</code></li>
  * <li><code>C1: [t0p2, t1p2]</code></li>
  * </ul>
- *
+ * <p>
  * Since the introduction of static membership, we could leverage <code>group.instance.id</code> to make the assignment behavior more sticky.
  * For the above example, after one rolling bounce, group coordinator will attempt to assign new <code>member.id</code> towards consumers,
  * for example <code>C0</code> -&gt; <code>C3</code> <code>C1</code> -&gt; <code>C2</code>.
@@ -64,7 +64,7 @@ import java.util.stream.Collectors;
  * <li><code>C3 (was C0): [t0p2, t1p2] (before was [t0p0, t0p1, t1p0, t1p1])</code>
  * <li><code>C2 (was C1): [t0p0, t0p1, t1p0, t1p1] (before was [t0p2, t1p2])</code>
  * </ul>
- *
+ * <p>
  * The assignment change was caused by the change of <code>member.id</code> relative order, and
  * can be avoided by setting the group.instance.id.
  * Consumers will have individual instance ids <code>I1</code>, <code>I2</code>. As long as
@@ -252,7 +252,18 @@ public class RangeAssignor extends AbstractPartitionAssignor {
                 partitionRacks = new HashMap<>(partitionInfos.size());
                 partitionInfos.forEach(p -> {
                     TopicPartition tp = new TopicPartition(p.topic(), p.partition());
-                    Set<String> racks = Arrays.stream(p.replicas())
+                    Node[] rackAwareNodes = null;
+                    switch (rackAwareType()) {
+                        case AWARE_LEADER_RACK: {
+                            rackAwareNodes = new Node[]{p.leader()};
+                            break;
+                        }
+                        case AWARE_REPLICA_RACK: {
+                            rackAwareNodes = p.replicas();
+                            break;
+                        }
+                    }
+                    Set<String> racks = Arrays.stream(rackAwareNodes)
                             .map(Node::rack)
                             .filter(Objects::nonNull)
                             .collect(Collectors.toSet());
