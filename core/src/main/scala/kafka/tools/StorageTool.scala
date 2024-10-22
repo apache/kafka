@@ -304,6 +304,7 @@ object StorageTool extends Logging {
               |'SCRAM-SHA-512=[name=alice,iterations=8192,salt="N3E=",saltedpassword="YCE="]'""".stripMargin)
 
     formatParser.addArgument("--ignore-formatted", "-g")
+      .help("When this option is passed, the format command will skip over already formatted directories rather than failing.")
       .action(storeTrue())
 
     formatParser.addArgument("--release-version", "-r")
