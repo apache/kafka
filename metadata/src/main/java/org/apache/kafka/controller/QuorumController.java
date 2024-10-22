@@ -1657,12 +1657,15 @@ public final class QuorumController implements Controller {
     /**
      * Calculate what the period should be for the maybeFenceStaleBroker task.
      *
+     * We sample 8 times per broker timeout period, so we'll generally fence a broker in no more
+     * than 112.5% of the given broker session timeout.
+     *
      * @param sessionTimeoutNs      The configured broker session timeout period in nanoseconds.
      *
      * @return                      The period for the maybeFenceStaleBroker task in nanoseconds.
      */
     static long maybeFenceStaleBrokerPeriodNs(long sessionTimeoutNs) {
-        return Math.max(TimeUnit.MILLISECONDS.toNanos(1), sessionTimeoutNs / 4);
+        return Math.max(TimeUnit.MILLISECONDS.toNanos(1), sessionTimeoutNs / 8);
     }
 
     /**
