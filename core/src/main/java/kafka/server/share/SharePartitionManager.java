@@ -70,6 +70,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 import scala.jdk.javaapi.CollectionConverters;
 import scala.util.Either;
@@ -233,7 +234,7 @@ public class SharePartitionManager implements AutoCloseable {
         FetchParams fetchParams,
         Map<TopicIdPartition, Integer> partitionMaxBytes
     ) {
-        log.info("Fetch request for topicIdPartitions: {} with groupId: {} fetch params: {}, {}",
+        log.trace("Fetch request for topicIdPartitions: {} with groupId: {} fetch params: {}, {}",
                 partitionMaxBytes.keySet(), groupId, fetchParams, fetchParams.fetchOnlyLeader());
 
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
@@ -496,14 +497,17 @@ public class SharePartitionManager implements AutoCloseable {
      *
      * @param groupId The group id in the share fetch request.
      * @param topicIdPartitions The topic-partitions in the replica read request.
+     * @param future The future to complete with the exception.
      * @param throwable The exception that occurred while fetching messages.
      */
     public void handleFetchException(
         String groupId,
         Set<TopicIdPartition> topicIdPartitions,
+        CompletableFuture<Map<TopicIdPartition, PartitionData>> future,
         Throwable throwable
     ) {
         topicIdPartitions.forEach(topicIdPartition -> handleSharePartitionException(sharePartitionKey(groupId, topicIdPartition), throwable));
+        maybeCompleteShareFetchExceptionally(future, topicIdPartitions, throwable);
     }
 
     /**
@@ -570,7 +574,7 @@ public class SharePartitionManager implements AutoCloseable {
                 // TopicPartitionData list will be populated only if the share partition is already initialized.
                 sharePartition.maybeInitialize().whenComplete((result, throwable) -> {
                     if (throwable != null) {
-                        maybeCompleteInitializationWithException(sharePartitionKey, shareFetchData.future(), throwable);
+                        maybeCompleteInitializationWithException(sharePartitionKey, shareFetchData.future(), topicIdPartition, throwable);
                     }
                 });
             });
@@ -597,7 +601,7 @@ public class SharePartitionManager implements AutoCloseable {
             // the share partition. But skip the processing for other share partitions in the request
             // as this situation is not expected.
             log.error("Error processing share fetch request", e);
-            shareFetchData.future().completeExceptionally(e);
+            maybeCompleteShareFetchExceptionally(shareFetchData.future(), shareFetchData.partitionMaxBytes().keySet(), e);
         }
     }
 
@@ -627,6 +631,7 @@ public class SharePartitionManager implements AutoCloseable {
     private void maybeCompleteInitializationWithException(
             SharePartitionKey sharePartitionKey,
             CompletableFuture<Map<TopicIdPartition, PartitionData>> future,
+            TopicIdPartition topicIdPartition,
             Throwable throwable) {
         if (throwable instanceof LeaderNotAvailableException) {
             log.debug("The share partition with key {} is not initialized yet", sharePartitionKey);
@@ -642,7 +647,7 @@ public class SharePartitionManager implements AutoCloseable {
         // The server should not be in this state, so log the error on broker and surface the same
         // to the client. The broker should not be in this state, investigate the root cause of the error.
         log.error("Error initializing share partition with key {}", sharePartitionKey, throwable);
-        future.completeExceptionally(throwable);
+        maybeCompleteShareFetchExceptionally(future, Collections.singletonList(topicIdPartition), throwable);
     }
 
     private void handleSharePartitionException(
@@ -658,17 +663,26 @@ public class SharePartitionManager implements AutoCloseable {
         }
     }
 
+    private void maybeCompleteShareFetchExceptionally(CompletableFuture<Map<TopicIdPartition, PartitionData>> future,
+        Collection<TopicIdPartition> topicIdPartitions, Throwable throwable) {
+        if (!future.isDone()) {
+            Errors error = Errors.forException(throwable);
+            future.complete(topicIdPartitions.stream().collect(Collectors.toMap(
+                tp -> tp, tp -> new PartitionData().setErrorCode(error.code()).setErrorMessage(error.message()))));
+        }
+    }
+
     private int leaderEpoch(TopicPartition tp) {
         Either<Errors, Partition> partitionOrError = replicaManager.getPartitionOrError(tp);
         if (partitionOrError.isLeft()) {
-            log.error("Failed to get partition leader for topic partition: {}-{} due to error: {}",
+            log.debug("Failed to get partition leader for topic partition: {}-{} due to error: {}",
                 tp.topic(), tp.partition(), partitionOrError.left().get());
             throw partitionOrError.left().get().exception();
         }
 
         Partition partition = partitionOrError.right().get();
         if (!partition.isLeader()) {
-            log.error("The broker is not the leader for topic partition: {}-{}", tp.topic(), tp.partition());
+            log.debug("The broker is not the leader for topic partition: {}-{}", tp.topic(), tp.partition());
             throw new NotLeaderOrFollowerException();
         }
         return partition.getLeaderEpoch();

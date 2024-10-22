@@ -37,6 +37,7 @@ import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.ShareSessionNotFoundException;
 import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData;
+import org.apache.kafka.common.message.ShareFetchResponseData.PartitionData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -105,7 +106,6 @@ import scala.jdk.javaapi.CollectionConverters;
 import scala.util.Either;
 import scala.util.Right;
 
-import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -2059,8 +2059,7 @@ public class SharePartitionManagerTest {
             future::isDone,
             DELAYED_SHARE_FETCH_TIMEOUT_MS,
             () -> "Processing in delayed share fetch queue never ended.");
-        assertTrue(future.isCompletedExceptionally());
-        assertFutureThrows(future, IllegalStateException.class);
+        validateShareFetchFutureException(future, tp0, Errors.UNKNOWN_SERVER_ERROR);
         assertTrue(partitionCacheMap.isEmpty());
 
         // The last exception removes the share partition from the cache hence re-add the share partition to cache.
@@ -2072,8 +2071,7 @@ public class SharePartitionManagerTest {
             future::isDone,
             DELAYED_SHARE_FETCH_TIMEOUT_MS,
             () -> "Processing in delayed share fetch queue never ended.");
-        assertTrue(future.isCompletedExceptionally());
-        assertFutureThrows(future, CoordinatorNotAvailableException.class);
+        validateShareFetchFutureException(future, tp0, Errors.COORDINATOR_NOT_AVAILABLE);
         assertTrue(partitionCacheMap.isEmpty());
 
         // The last exception removes the share partition from the cache hence re-add the share partition to cache.
@@ -2085,8 +2083,7 @@ public class SharePartitionManagerTest {
             future::isDone,
             DELAYED_SHARE_FETCH_TIMEOUT_MS,
             () -> "Processing in delayed share fetch queue never ended.");
-        assertTrue(future.isCompletedExceptionally());
-        assertFutureThrows(future, InvalidRequestException.class);
+        validateShareFetchFutureException(future, tp0, Errors.INVALID_REQUEST);
         assertTrue(partitionCacheMap.isEmpty());
 
         // The last exception removes the share partition from the cache hence re-add the share partition to cache.
@@ -2098,8 +2095,7 @@ public class SharePartitionManagerTest {
             future::isDone,
             DELAYED_SHARE_FETCH_TIMEOUT_MS,
             () -> "Processing in delayed share fetch queue never ended.");
-        assertTrue(future.isCompletedExceptionally());
-        assertFutureThrows(future, FencedStateEpochException.class);
+        validateShareFetchFutureException(future, tp0, Errors.FENCED_STATE_EPOCH);
         assertTrue(partitionCacheMap.isEmpty());
 
         // The last exception removes the share partition from the cache hence re-add the share partition to cache.
@@ -2111,8 +2107,7 @@ public class SharePartitionManagerTest {
             future::isDone,
             DELAYED_SHARE_FETCH_TIMEOUT_MS,
             () -> "Processing in delayed share fetch queue never ended.");
-        assertTrue(future.isCompletedExceptionally());
-        assertFutureThrows(future, NotLeaderOrFollowerException.class);
+        validateShareFetchFutureException(future, tp0, Errors.NOT_LEADER_OR_FOLLOWER);
         assertTrue(partitionCacheMap.isEmpty());
 
         // The last exception removes the share partition from the cache hence re-add the share partition to cache.
@@ -2124,10 +2119,10 @@ public class SharePartitionManagerTest {
             future::isDone,
             DELAYED_SHARE_FETCH_TIMEOUT_MS,
             () -> "Processing in delayed share fetch queue never ended.");
-        assertTrue(future.isCompletedExceptionally());
-        assertFutureThrows(future, RuntimeException.class);
+        validateShareFetchFutureException(future, tp0, Errors.UNKNOWN_SERVER_ERROR);
         assertTrue(partitionCacheMap.isEmpty());
     }
+
 
     @Test
     @SuppressWarnings("unchecked")
@@ -2153,8 +2148,7 @@ public class SharePartitionManagerTest {
             future::isDone,
             DELAYED_SHARE_FETCH_TIMEOUT_MS,
             () -> "Processing for delayed share fetch request not finished.");
-        assertTrue(future.isCompletedExceptionally());
-        assertFutureThrows(future, RuntimeException.class, "Error creating instance");
+        validateShareFetchFutureException(future, tp0, Errors.UNKNOWN_SERVER_ERROR);
 
         // Throw exception from share partition for second fetch request.
         when(sp0.maybeInitialize()).thenThrow(new RuntimeException("Error initializing instance"));
@@ -2164,8 +2158,7 @@ public class SharePartitionManagerTest {
             future::isDone,
             DELAYED_SHARE_FETCH_TIMEOUT_MS,
             () -> "Processing for delayed share fetch request not finished.");
-        assertTrue(future.isCompletedExceptionally());
-        assertFutureThrows(future, RuntimeException.class, "Error initializing instance");
+        validateShareFetchFutureException(future, tp0, Errors.UNKNOWN_SERVER_ERROR);
     }
 
     @Test
@@ -2186,8 +2179,7 @@ public class SharePartitionManagerTest {
             future::isDone,
             DELAYED_SHARE_FETCH_TIMEOUT_MS,
             () -> "Processing for delayed share fetch request not finished.");
-        assertTrue(future.isCompletedExceptionally());
-        assertFutureThrows(future, NotLeaderOrFollowerException.class, "Exception");
+        validateShareFetchFutureException(future, tp0, Errors.NOT_LEADER_OR_FOLLOWER);
     }
 
     @Test
@@ -2219,8 +2211,7 @@ public class SharePartitionManagerTest {
 
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
             sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, partitionMaxBytes);
-        assertTrue(future.isCompletedExceptionally());
-        assertFutureThrows(future, RuntimeException.class, "Exception");
+        validateShareFetchFutureException(future, tp0, Errors.UNKNOWN_SERVER_ERROR);
         // Verify that the share partition is still in the cache on exception.
         assertEquals(1, partitionCacheMap.size());
 
@@ -2228,8 +2219,7 @@ public class SharePartitionManagerTest {
         doThrow(new NotLeaderOrFollowerException("Leader exception")).when(mockReplicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
         future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, partitionMaxBytes);
-        assertTrue(future.isCompletedExceptionally());
-        assertFutureThrows(future, NotLeaderOrFollowerException.class, "Leader exception");
+        validateShareFetchFutureException(future, tp0, Errors.NOT_LEADER_OR_FOLLOWER);
         assertTrue(partitionCacheMap.isEmpty());
     }
 
@@ -2274,8 +2264,7 @@ public class SharePartitionManagerTest {
 
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
             sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, partitionMaxBytes);
-        assertTrue(future.isCompletedExceptionally());
-        assertFutureThrows(future, FencedStateEpochException.class, "Fenced exception");
+        validateShareFetchFutureException(future, tp0, Errors.FENCED_STATE_EPOCH);
         // Verify that tp1 is still in the cache on exception.
         assertEquals(1, partitionCacheMap.size());
         assertEquals(sp1, partitionCacheMap.get(new SharePartitionKey(groupId, tp1)));
@@ -2289,8 +2278,7 @@ public class SharePartitionManagerTest {
         doThrow(new FencedStateEpochException("Fenced exception again")).when(mockReplicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
         future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, partitionMaxBytes);
-        assertTrue(future.isCompletedExceptionally());
-        assertFutureThrows(future, FencedStateEpochException.class, "Fenced exception again");
+        validateShareFetchFutureException(future, List.of(tp0, tp1), Errors.FENCED_STATE_EPOCH);
         assertTrue(partitionCacheMap.isEmpty());
     }
 
@@ -2361,6 +2349,24 @@ public class SharePartitionManagerTest {
         Mockito.when(partition.getLeaderEpoch()).thenReturn(1);
 
         return new Right<>(partition);
+    }
+
+    private void validateShareFetchFutureException(CompletableFuture<Map<TopicIdPartition, PartitionData>> future,
+        TopicIdPartition topicIdPartition, Errors error) {
+        validateShareFetchFutureException(future, Collections.singletonList(topicIdPartition), error);
+    }
+
+    private void validateShareFetchFutureException(CompletableFuture<Map<TopicIdPartition, PartitionData>> future,
+        List<TopicIdPartition> topicIdPartitions, Errors error) {
+        assertFalse(future.isCompletedExceptionally());
+        Map<TopicIdPartition, ShareFetchResponseData.PartitionData> result = future.join();
+        assertEquals(topicIdPartitions.size(), result.size());
+        topicIdPartitions.forEach(topicIdPartition -> {
+            assertTrue(result.containsKey(topicIdPartition));
+            assertEquals(topicIdPartition.partition(), result.get(topicIdPartition).partitionIndex());
+            assertEquals(error.code(), result.get(topicIdPartition).errorCode());
+            assertEquals(error.message(), result.get(topicIdPartition).errorMessage());
+        });
     }
 
     static Seq<Tuple2<TopicIdPartition, LogReadResult>> buildLogReadResult(Set<TopicIdPartition> topicIdPartitions) {

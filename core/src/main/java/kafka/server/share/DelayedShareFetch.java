@@ -127,8 +127,7 @@ public class DelayedShareFetch extends DelayedOperation {
             shareFetchData.future().complete(result);
         } catch (Exception e) {
             log.error("Error processing delayed share fetch request", e);
-            sharePartitionManager.handleFetchException(shareFetchData.groupId(), topicPartitionData.keySet(), e);
-            shareFetchData.future().completeExceptionally(e);
+            sharePartitionManager.handleFetchException(shareFetchData.groupId(), topicPartitionData.keySet(), shareFetchData.future(), e);
         } finally {
             // Releasing the lock to move ahead with the next request in queue.
             releasePartitionLocks(shareFetchData.groupId(), topicPartitionData.keySet());
