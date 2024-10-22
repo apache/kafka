@@ -63,6 +63,7 @@
             <allow pkg="org.apache.kafka.deferred" />
             <allow pkg="org.apache.kafka.image"/>
             <allow pkg="org.apache.kafka.server.common"/>
+            <allow pkg="org.apache.kafka.server.immutable"/>
             <allow pkg="org.apache.kafka.server.record"/>
             <allow pkg="org.apache.kafka.server.util"/>
             <allow pkg="org.apache.kafka.storage.internals.log"/>
