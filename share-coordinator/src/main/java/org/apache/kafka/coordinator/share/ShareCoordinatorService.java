@@ -426,8 +426,10 @@ public class ShareCoordinatorService implements ShareCoordinator {
                     coordinatorKey,
                     partitionData
                 ).thenCompose(result -> {
-                    // will happen if the write state call faces exceptions
-                    // in that case, we do not want to run the read request anyway
+                    // maybeUpdateLeaderEpoch should not deliberately throw an exception. Possible
+                    // return value in the future returned from it could be:
+                    // - An empty read state response (does not contain any results) => we should proceed with read
+                    // - A read state response which contains some error information (contains results data) => we should forward the error
                     if (!result.results().isEmpty()) {
                         return CompletableFuture.completedFuture(result);
                     }
@@ -499,23 +501,36 @@ public class ShareCoordinatorService implements ShareCoordinator {
         SharePartitionKey coordinatorKey,
         ReadShareGroupStateRequestData.PartitionData partitionData
     ) {
-        if (partitionData.leaderEpoch() != -1) {   // no need to issue write is leaderEpoch is -1 (no change)
+        if (partitionData.leaderEpoch() != -1) {   // no need to issue write as leaderEpoch is -1 (no change)
             WriteShareGroupStateRequestData writeStateLeaderEpoch = new WriteShareGroupStateRequestData()
                 .setGroupId(coordinatorKey.groupId())
                 .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
                     .setTopicId(coordinatorKey.topicId())
                     .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
                         .setPartition(partitionData.partition())
-                        .setLeaderEpoch(partitionData.leaderEpoch())))));
+                        .setLeaderEpoch(partitionData.leaderEpoch())
+                        // force below attributes to be noop
+                        .setStateEpoch(-1)
+                        .setStateBatches(Collections.emptyList())
+                        .setStartOffset(-1))))
+                );
+
+
 
             // Scheduling a runtime write operation to write leaderEpoch to coordinator memory state
+            // At this point we do not know the offset to check that state of the leaderEpoch from
+            // the soft state of the share coordinator shard. Hence, it makes sense to issue the write
+            // state call. The write state method can judge if this needs to be written.
             return runtime.scheduleWriteOperation(
                 "write-share-group-state",
                 topicPartitionFor(coordinatorKey),
                 Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()),
-                coordinator -> coordinator.writeState(writeStateLeaderEpoch)
+                coordinator -> coordinator.writeLeaderEpoch(writeStateLeaderEpoch)
             ).handle((writeResponse, writeException) -> {
                 if (writeException != null) {
+                    // The exception here could be:
+                    // - Stale leader epoch
+                    // - Some coordinator related error (unrelated to RPC)
                     return handleOperationException(
                         "write-share-group-state",
                         writeStateLeaderEpoch,
@@ -529,6 +544,10 @@ public class ShareCoordinatorService implements ShareCoordinator {
                         log
                     );
                 } else {
+                    // This will be executed if the leaderEpoch was updated or leaderEpoch was equal
+                    // to the highest value seen so far.
+                    // Returning empty response here will make it composable. Any subsequent combined futures
+                    // do not need to know if we wrote a record or not.
                     return ReadShareGroupStateResponse.EMPTY_READ_RESPONSE_DATA;
                 }
             });

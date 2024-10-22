@@ -53,7 +53,9 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
@@ -552,7 +554,7 @@ class ShareCoordinatorShardTest {
             )
         ), result);
 
-        assertEquals(1, shard.getLeaderMapValue(coordinatorKey));
+        assertEquals(0, shard.getLeaderMapValue(coordinatorKey));
     }
 
     @Test
@@ -791,6 +793,97 @@ class ShareCoordinatorShardTest {
         ).value().message()), shard.getShareStateMapValue(shareCoordinatorKey));
         assertEquals(0, shard.getLeaderMapValue(shareCoordinatorKey));
         verify(shard.getMetricsShard(), times(3)).record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_SENSOR_NAME);
+    }
+
+    @Test
+    public void testWriteStateLeaderEpochUpdateSuccess() {
+        ShareCoordinatorShard shard = new ShareCoordinatorShardBuilder().build();
+
+        SharePartitionKey shareCoordinatorKey = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, PARTITION);
+
+        WriteShareGroupStateRequestData request = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(-1)
+                    .setStateEpoch(-1)
+                    .setLeaderEpoch(2)
+                    .setStateBatches(Collections.emptyList()))))
+            );
+
+        CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> result = shard.writeLeaderEpoch(request);
+
+        shard.replay(0L, 0L, (short) 0, result.records().get(0));
+
+        WriteShareGroupStateResponseData expectedData = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
+        List<CoordinatorRecord> expectedRecords = Collections.singletonList(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request.topics().get(0).partitions().get(0))
+        ));
+
+        assertEquals(expectedData, result.response());
+        assertEquals(expectedRecords, result.records());
+
+        assertEquals(groupOffset(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request.topics().get(0).partitions().get(0))
+        ).value().message()), shard.getShareStateMapValue(shareCoordinatorKey));
+        assertEquals(2, shard.getLeaderMapValue(shareCoordinatorKey));
+        verify(shard.getMetricsShard()).record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_SENSOR_NAME);
+    }
+
+    @Test
+    public void testWriteStateLeaderEpochUpdateNoUpdate() {
+        ShareCoordinatorShard shard = new ShareCoordinatorShardBuilder().build();
+
+        WriteShareGroupStateRequestData request = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(-1)
+                    .setStateEpoch(-1)
+                    .setLeaderEpoch(2)
+                    .setStateBatches(Collections.emptyList()))))
+            );
+
+        CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> result = shard.writeLeaderEpoch(request);
+        assertFalse(result.records().isEmpty());
+
+        shard.replay(0L, 0L, (short) 0, result.records().get(0));
+
+        WriteShareGroupStateRequestData request2 = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(-1)
+                    .setStateEpoch(-1)
+                    .setLeaderEpoch(-1)
+                    .setStateBatches(Collections.emptyList()))))
+            );
+
+        result = shard.writeLeaderEpoch(request);
+        assertTrue(result.records().isEmpty()); // -1 leaderEpoch (cannot reset a valid value)
+
+        WriteShareGroupStateRequestData request3 = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(-1)
+                    .setStateEpoch(-1)
+                    .setLeaderEpoch(2)
+                    .setStateBatches(Collections.emptyList()))))
+            );
+
+        result = shard.writeLeaderEpoch(request);
+        assertTrue(result.records().isEmpty()); // same epoch won't cause update
+
+        verify(shard.getMetricsShard(), times(1)).record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_SENSOR_NAME);
     }
 
     private static ShareGroupOffset groupOffset(ApiMessage record) {
