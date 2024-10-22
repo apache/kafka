@@ -16,9 +16,9 @@
  */
 package kafka.api
 
-import java.util.Collections
+import java.util.{Collections, stream}
 import java.util.concurrent.TimeUnit
-import kafka.utils.TestUtils
+import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
@@ -26,7 +26,7 @@ import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
 /**
   * Tests where the broker is configured to use LogAppendTime. For tests where LogAppendTime is configured via topic
@@ -49,9 +49,9 @@ class LogAppendTimeTest extends IntegrationTestHarness {
     createTopic(topic)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testProduceConsume(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testProduceConsume(quorum: String, groupProtocol: String): Unit = {
     val producer = createProducer()
     val now = System.currentTimeMillis()
     val createTime = now - TimeUnit.DAYS.toMillis(1)
@@ -77,5 +77,16 @@ class LogAppendTimeTest extends IntegrationTestHarness {
       assertEquals(TimestampType.LOG_APPEND_TIME, consumerRecord.timestampType)
     }
   }
+}
 
+object LogAppendTimeTest {
+  // We want to test the following combinations:
+  // * KRaft and the classic group protocol
+  // * KRaft and the consumer group protocol
+  def getTestQuorumAndGroupProtocolParametersAll() : java.util.stream.Stream[Arguments] = {
+    stream.Stream.of(
+      Arguments.of("kraft", "classic"),
+      Arguments.of("kraft", "consumer")
+    )
+  }
 }
