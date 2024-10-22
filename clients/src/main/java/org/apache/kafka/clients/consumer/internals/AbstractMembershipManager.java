@@ -275,9 +275,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     }
 
     /**
-     * Returns the Member ID that is generated at startup and remains unchanged for the entire lifetime of the process.
-     *
-     * @return Member ID that does not change during the process's lifetime.
+     * @return Member ID that is generated at startup and remains unchanged for the entire lifetime of the process.
      */
     public String memberId() {
         return memberId;

@@ -20,7 +20,7 @@ package kafka.server
 import org.apache.kafka.common.test.api.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.common.test.api.ClusterTestExtensions
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.message.OffsetFetchResponseData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
@@ -136,7 +136,7 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
 
     // Join the consumer group. Note that we don't heartbeat here so we must use
     // a session long enough for the duration of the test.
-    val (memberId, memberEpoch) = joinConsumerGroup("grp", useNewProtocol)
+    val (memberId, memberEpoch) = joinConsumerGroup("grp", useNewProtocol, Uuid.randomUuid.toString)
 
     // Commit offsets.
     for (partitionId <- 0 to 2) {
@@ -308,7 +308,7 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
 
     // Join the consumer group. Note that we don't heartbeat here so we must use
     // a session long enough for the duration of the test.
-    val (memberId, memberEpoch) = joinConsumerGroup("grp", useNewProtocol)
+    val (memberId, memberEpoch) = joinConsumerGroup("grp", useNewProtocol, Uuid.randomUuid.toString)
 
     // Commit offsets.
     for (partitionId <- 0 to 2) {
@@ -423,7 +423,7 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
     List("grp-0", "grp-1", "grp-2").foreach { groupId =>
       // Join the consumer group. Note that we don't heartbeat here so we must use
       // a session long enough for the duration of the test.
-      val (memberId, memberEpoch) = joinConsumerGroup(groupId, useNewProtocol)
+      val (memberId, memberEpoch) = joinConsumerGroup(groupId, useNewProtocol, Uuid.randomUuid.toString)
 
       for (partitionId <- 0 to 2) {
         commitOffset(

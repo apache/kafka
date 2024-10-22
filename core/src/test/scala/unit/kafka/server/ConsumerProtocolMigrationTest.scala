@@ -18,12 +18,13 @@ package kafka.server
 
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.message.{JoinGroupResponseData, ListGroupsResponseData, OffsetFetchResponseData, SyncGroupResponseData}
 import org.apache.kafka.common.test.api.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.common.test.api.ClusterTestExtensions
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.CONSUMER_GENERATED_MEMBER_ID_REQUIRED_VERSION
 import org.apache.kafka.coordinator.group.{Group, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState
@@ -242,50 +243,54 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       assignment = assignment(List(0, 1, 2))
     )
 
-    // The joining request with a consumer group member 2 is accepted.
-    val memberId2 = consumerGroupHeartbeat(
-      groupId = groupId,
-      rebalanceTimeoutMs = 5 * 60 * 1000,
-      subscribedTopicNames = List("foo"),
-      topicPartitions = List.empty,
-      expectedError = Errors.NONE
-    ).memberId
+    for (version <- ApiKeys.CONSUMER_GROUP_HEARTBEAT.oldestVersion() to ApiKeys.CONSUMER_GROUP_HEARTBEAT.latestVersion(isUnstableApiEnabled)) {
+      // The joining request with a consumer group member 2 is accepted.
+      val memberId2 = consumerGroupHeartbeat(
+        groupId = groupId,
+        memberId = if (version < CONSUMER_GENERATED_MEMBER_ID_REQUIRED_VERSION) "" else Uuid.randomUuid.toString,
+        rebalanceTimeoutMs = 5 * 60 * 1000,
+        subscribedTopicNames = List("foo"),
+        topicPartitions = List.empty,
+        expectedError = Errors.NONE,
+        version = version.toShort
+      ).memberId
 
-    // The group has become a consumer group.
-    assertEquals(
-      List(
-        new ListGroupsResponseData.ListedGroup()
-          .setGroupId(groupId)
-          .setProtocolType("consumer")
-          .setGroupState(ConsumerGroupState.RECONCILING.toString)
-          .setGroupType(Group.GroupType.CONSUMER.toString)
-      ),
-      listGroups(
-        statesFilter = List.empty,
-        typesFilter = List(Group.GroupType.CONSUMER.toString)
+      // The group has become a consumer group.
+      assertEquals(
+        List(
+          new ListGroupsResponseData.ListedGroup()
+            .setGroupId(groupId)
+            .setProtocolType("consumer")
+            .setGroupState(ConsumerGroupState.RECONCILING.toString)
+            .setGroupType(Group.GroupType.CONSUMER.toString)
+        ),
+        listGroups(
+          statesFilter = List.empty,
+          typesFilter = List(Group.GroupType.CONSUMER.toString)
+        )
       )
-    )
 
-    // Downgrade the group by leaving member 2.
-    leaveGroupWithNewProtocol(
-      groupId = groupId,
-      memberId = memberId2
-    )
-
-    // The group is still a consumer group.
-    assertEquals(
-      List(
-        new ListGroupsResponseData.ListedGroup()
-          .setGroupId(groupId)
-          .setProtocolType("consumer")
-          .setGroupState(ConsumerGroupState.ASSIGNING.toString)
-          .setGroupType(Group.GroupType.CONSUMER.toString)
-      ),
-      listGroups(
-        statesFilter = List.empty,
-        typesFilter = List(Group.GroupType.CONSUMER.toString)
+      // Downgrade the group by leaving member 2.
+      leaveGroupWithNewProtocol(
+        groupId = groupId,
+        memberId = memberId2
       )
-    )
+
+      // The group is still a consumer group.
+      assertEquals(
+        List(
+          new ListGroupsResponseData.ListedGroup()
+            .setGroupId(groupId)
+            .setProtocolType("consumer")
+            .setGroupState(ConsumerGroupState.ASSIGNING.toString)
+            .setGroupType(Group.GroupType.CONSUMER.toString)
+        ),
+        listGroups(
+          statesFilter = List.empty,
+          typesFilter = List(Group.GroupType.CONSUMER.toString)
+        )
+      )
+    }
   }
 
   @ClusterTest(
@@ -309,7 +314,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     val groupId = "grp"
 
     // Consumer member 1 joins the group.
-    val (memberId1, _) = joinConsumerGroupWithNewProtocol(groupId)
+    val (memberId1, _) = joinConsumerGroupWithNewProtocol(groupId, Uuid.randomUuid.toString)
 
     // Classic member 2 joins the group.
     val joinGroupResponseData = sendJoinRequest(
@@ -384,6 +389,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     // The consumerGroupHeartbeat request is rejected.
     consumerGroupHeartbeat(
       groupId = groupId,
+      memberId = memberId1,
       rebalanceTimeoutMs = 5 * 60 * 1000,
       subscribedTopicNames = List("foo"),
       topicPartitions = List.empty,
@@ -418,14 +424,18 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       assignment = assignment(List(0, 1, 2))
     )
 
-    // The consumerGroupHeartbeat request is rejected.
-    consumerGroupHeartbeat(
-      groupId = groupId,
-      rebalanceTimeoutMs = 5 * 60 * 1000,
-      subscribedTopicNames = List("foo"),
-      topicPartitions = List.empty,
-      expectedError = Errors.GROUP_ID_NOT_FOUND
-    )
+    for (version <- ApiKeys.CONSUMER_GROUP_HEARTBEAT.oldestVersion() to ApiKeys.CONSUMER_GROUP_HEARTBEAT.latestVersion(isUnstableApiEnabled)) {
+      // The consumerGroupHeartbeat request is rejected.
+      consumerGroupHeartbeat(
+        groupId = groupId,
+        memberId = if (version < CONSUMER_GENERATED_MEMBER_ID_REQUIRED_VERSION) "" else Uuid.randomUuid.toString,
+        rebalanceTimeoutMs = 5 * 60 * 1000,
+        subscribedTopicNames = List("foo"),
+        topicPartitions = List.empty,
+        expectedError = Errors.GROUP_ID_NOT_FOUND,
+        version = version.toShort
+      )
+    }
   }
 
   @ClusterTest(
@@ -449,7 +459,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     val groupId = "grp"
 
     // Consumer member 1 joins the group.
-    val (memberId1, _) = joinConsumerGroupWithNewProtocol(groupId)
+    val (memberId1, _) = joinConsumerGroupWithNewProtocol(groupId, Uuid.randomUuid.toString)
 
     // Classic member 2 joins the group.
     val joinGroupResponseData = sendJoinRequest(
@@ -560,7 +570,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
 
     // Create a consumer group by joining a member.
     val groupId = "grp"
-    val (memberId, _) = joinConsumerGroupWithNewProtocol(groupId)
+    val (memberId, _) = joinConsumerGroupWithNewProtocol(groupId, Uuid.randomUuid.toString)
 
     // The member leaves the group.
     leaveGroup(
@@ -646,6 +656,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     // The joining request with a consumer group member is accepted.
     consumerGroupHeartbeat(
       groupId = groupId,
+      memberId = Uuid.randomUuid.toString,
       rebalanceTimeoutMs = 5 * 60 * 1000,
       subscribedTopicNames = List(topicName),
       topicPartitions = List.empty,
@@ -714,6 +725,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     // The joining request with a consumer group member 2 is accepted.
     val memberId2 = consumerGroupHeartbeat(
       groupId = groupId,
+      memberId = Uuid.randomUuid.toString,
       instanceId = if (useStaticMembers) instanceId2 else null,
       rebalanceTimeoutMs = 5 * 60 * 1000,
       subscribedTopicNames = List("foo"),
@@ -1044,6 +1056,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     // The joining request with a consumer group member 2 is accepted.
     val memberId2 = consumerGroupHeartbeat(
       groupId = groupId,
+      memberId = Uuid.randomUuid.toString,
       instanceId = if (useStaticMembers) instanceId2 else null,
       rebalanceTimeoutMs = 5 * 60 * 1000,
       subscribedTopicNames = List("foo"),

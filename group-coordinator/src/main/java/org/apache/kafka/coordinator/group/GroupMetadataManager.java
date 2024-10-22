@@ -141,6 +141,7 @@ import static org.apache.kafka.common.protocol.Errors.COORDINATOR_NOT_AVAILABLE;
 import static org.apache.kafka.common.protocol.Errors.ILLEGAL_GENERATION;
 import static org.apache.kafka.common.protocol.Errors.NOT_COORDINATOR;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_SERVER_ERROR;
+import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.CONSUMER_GENERATED_MEMBER_ID_REQUIRED_VERSION;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
@@ -1298,7 +1299,9 @@ public class GroupMetadataManager {
      * @throws UnsupportedAssignorException if the assignor is not supported.
      */
     private void throwIfConsumerGroupHeartbeatRequestIsInvalid(
-        ConsumerGroupHeartbeatRequestData request, short apiVersion) throws InvalidRequestException, UnsupportedAssignorException {
+            ConsumerGroupHeartbeatRequestData request,
+            short apiVersion
+    ) throws InvalidRequestException, UnsupportedAssignorException {
         throwIfEmptyString(request.groupId(), "GroupId can't be empty.");
         throwIfEmptyString(request.instanceId(), "InstanceId can't be empty.");
         throwIfEmptyString(request.rackId(), "RackId can't be empty.");
@@ -1316,7 +1319,7 @@ public class GroupMetadataManager {
             if (request.subscribedTopicNames() == null || request.subscribedTopicNames().isEmpty()) {
                 throw new InvalidRequestException("SubscribedTopicNames must be set in first request.");
             }
-            if (apiVersion >= 2) {
+            if (apiVersion >= CONSUMER_GENERATED_MEMBER_ID_REQUIRED_VERSION) {
                 throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
             }
         } else if (request.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
@@ -1337,7 +1340,6 @@ public class GroupMetadataManager {
      * Validates the ShareGroupHeartbeat request.
      *
      * @param request The request to validate.
-     *
      * @throws InvalidRequestException if the request is not valid.
      * @throws UnsupportedAssignorException if the assignor is not supported.
      */
@@ -1353,6 +1355,7 @@ public class GroupMetadataManager {
             if (request.subscribedTopicNames() == null || request.subscribedTopicNames().isEmpty()) {
                 throw new InvalidRequestException("SubscribedTopicNames must be set in first request.");
             }
+            throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
         } else {
             throw new InvalidRequestException("MemberEpoch is invalid.");
         }

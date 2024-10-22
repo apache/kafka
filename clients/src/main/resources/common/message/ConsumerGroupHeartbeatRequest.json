@@ -18,9 +18,8 @@
   "type": "request",
   "listeners": ["zkBroker", "broker"],
   "name": "ConsumerGroupHeartbeatRequest",
-  // Version 1 adds SubscribedTopicRegex (KIP-848).
-  // Version 2 requires the consumer to generate their own Member ID
-  "validVersions": "0-2",
+  // Version 1 adds SubscribedTopicRegex (KIP-848), and requires the consumer to generate their own Member ID (KIP-1082)
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "latestVersionUnstable": true,
   "fields": [

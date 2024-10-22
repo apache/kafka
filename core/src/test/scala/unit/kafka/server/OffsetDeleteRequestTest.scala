@@ -16,6 +16,7 @@
  */
 package kafka.server
 
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.test.api.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.common.test.api.ClusterTestExtensions
@@ -75,7 +76,8 @@ class OffsetDeleteRequestTest(cluster: ClusterInstance) extends GroupCoordinator
       // a session long enough for the duration of the test.
       val (memberId, memberEpoch) = joinConsumerGroup(
         groupId = "grp",
-        useNewProtocol = useNewProtocol
+        useNewProtocol = useNewProtocol,
+        memberId = Uuid.randomUuid.toString
       )
 
       // Commit offsets.
