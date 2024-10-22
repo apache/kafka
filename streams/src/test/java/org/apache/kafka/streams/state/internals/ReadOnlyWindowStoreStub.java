@@ -268,7 +268,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
             final NavigableMap<K, V> kvMap = data.get(now);
             if (kvMap != null) {
                 final NavigableMap<K, V> kvSubMap;
-                if (keyFrom == null && keyFrom == null) {
+                if (keyFrom == null && keyTo == null) {
                     kvSubMap = kvMap;
                 } else if (keyFrom == null) {
                     kvSubMap = kvMap.headMap(keyTo, true);
@@ -324,7 +324,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
             final NavigableMap<K, V> kvMap = data.get(now);
             if (kvMap != null) {
                 final NavigableMap<K, V> kvSubMap;
-                if (keyFrom == null && keyFrom == null) {
+                if (keyFrom == null && keyTo == null) {
                     kvSubMap = kvMap;
                 } else if (keyFrom == null) {
                     kvSubMap = kvMap.headMap(keyTo, true);
