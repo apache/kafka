@@ -462,7 +462,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     dynamicVotersBuilder.append(String.format("%d@localhost:%d:%s",
                         controllerNode.id(), port, controllerNode.metadataDirectoryId()));
                 }
-                formatter.setInitialVoters(DynamicVoters.parse(dynamicVotersBuilder.toString()));
+                formatter.setInitialControllers(DynamicVoters.parse(dynamicVotersBuilder.toString()));
             }
             formatter.run();
         } catch (Exception e) {

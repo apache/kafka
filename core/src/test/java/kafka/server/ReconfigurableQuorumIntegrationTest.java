@@ -20,6 +20,7 @@ package kafka.server;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.FeatureMetadata;
 import org.apache.kafka.clients.admin.QuorumInfo;
+import org.apache.kafka.clients.admin.RaftVoterEndpoint;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.test.KafkaClusterTestKit;
 import org.apache.kafka.common.test.TestKitNodes;
@@ -29,6 +30,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.TreeMap;
@@ -123,6 +125,36 @@ public class ReconfigurableQuorumIntegrationTest {
                 });
                 admin.removeRaftVoter(3000, cluster.nodes().
                     controllerNodes().get(3000).metadataDirectoryId()).all().get();
+            }
+        }
+    }
+
+    @Test
+    public void testRemoveAndAddSameController() throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder().
+                setNumBrokerNodes(1).
+                setNumControllerNodes(4).
+                setFeature(KRaftVersion.FEATURE_NAME, (short) 1).
+                build()).build()
+        ) {
+            cluster.format();
+            cluster.startup();
+            try (Admin admin = Admin.create(cluster.clientProperties())) {
+                TestUtils.retryOnExceptionWithTimeout(30_000, 10, () -> {
+                    Map<Integer, Uuid> voters = findVoterDirs(admin);
+                    assertEquals(new HashSet<>(Arrays.asList(3000, 3001, 3002, 3003)), voters.keySet());
+                    for (int replicaId : new int[] {3000, 3001, 3002, 3003}) {
+                        assertNotEquals(Uuid.ZERO_UUID, voters.get(replicaId));
+                    }
+                });
+                Uuid dirId = cluster.nodes().controllerNodes().get(3000).metadataDirectoryId();
+                admin.removeRaftVoter(3000, dirId).all().get();
+                admin.addRaftVoter(
+                    3000,
+                    dirId,
+                    Collections.singleton(new RaftVoterEndpoint("CONTROLLER", "example.com", 8080))
+                ).all().get();
             }
         }
     }
