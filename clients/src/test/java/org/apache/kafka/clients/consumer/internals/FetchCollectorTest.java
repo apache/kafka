@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
@@ -652,7 +653,7 @@ public class FetchCollectorTest {
 
     @Test
     public void testReadCommittedWithAbortedTransaction() {
-        buildDependencies();
+        buildDependencies(IsolationLevel.READ_UNCOMMITTED);
         int recordCount = 20;
         assignAndSeek(topicAPartition0);
 
@@ -709,18 +710,25 @@ public class FetchCollectorTest {
     }
 
     private void buildDependencies() {
-        buildDependencies(DEFAULT_MAX_POLL_RECORDS);
+        buildDependencies(DEFAULT_MAX_POLL_RECORDS, IsolationLevel.READ_COMMITTED);
+    }
+
+    private void buildDependencies(IsolationLevel isolationLevel) {
+        buildDependencies(DEFAULT_MAX_POLL_RECORDS, isolationLevel);
     }
 
     private void buildDependencies(int maxPollRecords) {
+        buildDependencies(maxPollRecords, IsolationLevel.READ_COMMITTED);
+    }
+
+    private void buildDependencies(int maxPollRecords, IsolationLevel isolationLevel) {
         Properties p = consumerProperties(maxPollRecords);
         ConsumerConfig config = new ConsumerConfig(p);
 
         deserializers = new Deserializers<>(new StringDeserializer(), new StringDeserializer());
 
         subscriptions = createSubscriptionState(config, logContext);
-        fetchConfig = new FetchConfig(config);
-
+        fetchConfig = createFetchConfig(config, isolationLevel);
         Metrics metrics = createMetrics(config, time);
         metricsManager = createFetchMetricsManager(metrics);
         metadata = new ConsumerMetadata(
@@ -742,6 +750,19 @@ public class FetchCollectorTest {
                 time);
         fetchBuffer = new FetchBuffer(logContext);
         completedFetchBuilder = new CompletedFetchBuilder();
+    }
+
+    private FetchConfig createFetchConfig(ConsumerConfig config, IsolationLevel isolationLevel) {
+        return new FetchConfig(
+            config.getInt(ConsumerConfig.FETCH_MIN_BYTES_CONFIG),
+            config.getInt(ConsumerConfig.FETCH_MAX_BYTES_CONFIG),
+            config.getInt(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG),
+            config.getInt(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG),
+            config.getInt(ConsumerConfig.MAX_POLL_RECORDS_CONFIG),
+            config.getBoolean(ConsumerConfig.CHECK_CRCS_CONFIG),
+            config.getString(ConsumerConfig.CLIENT_RACK_CONFIG),
+            isolationLevel
+        );
     }
 
     private Properties consumerProps() {
