@@ -642,7 +642,7 @@ public class SharePartitionManager implements AutoCloseable {
         }
 
         // Remove the partition from the cache as it's failed to initialize.
-        partitionCacheMap.computeIfPresent(sharePartitionKey, (k, v) -> null);
+        partitionCacheMap.remove(sharePartitionKey);
         // The partition initialization failed, so complete the request with the exception.
         // The server should not be in this state, so log the error on broker and surface the same
         // to the client. The broker should not be in this state, investigate the root cause of the error.
@@ -659,7 +659,7 @@ public class SharePartitionManager implements AutoCloseable {
             // The share partition is fenced hence remove the partition from map and let the client retry.
             // But surface the error to the client so client might take some action i.e. re-fetch
             // the metadata and retry the fetch on new leader.
-            partitionCacheMap.computeIfPresent(sharePartitionKey, (k, v) -> null);
+            partitionCacheMap.remove(sharePartitionKey);
         }
     }
 
