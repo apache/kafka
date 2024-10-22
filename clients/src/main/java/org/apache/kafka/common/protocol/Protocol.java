@@ -52,7 +52,7 @@ public class Protocol {
                     subTypes.put(field.def.name, type.arrayElementType().get());
                 }
             } else if (type instanceof TaggedFields) {
-                b.append("TAG_BUFFER ");
+                b.append("_tagged_fields ");
             } else {
                 b.append(field.def.name);
                 b.append(" ");
@@ -103,15 +103,15 @@ public class Protocol {
         b.append("<th>Description</th>\n");
         b.append("</tr>");
         for (BoundField field : fields) {
+            b.append("<tr>\n");
+            b.append("<td>");
+            b.append(field.def.name);
+            b.append("</td>");
+            b.append("<td>");
             if (field.def.type instanceof TaggedFields) {
                 TaggedFields taggedFields = (TaggedFields) field.def.type;
                 // Only include the field in the table if there are actually tags defined
                 if (taggedFields.numFields() > 0) {
-                    b.append("<tr>\n");
-                    b.append("<td>");
-                    b.append(field.def.name);
-                    b.append("</td>");
-                    b.append("<td>");
                     b.append("<table class=\"data-table\"><tbody>\n");
                     b.append("<tr>");
                     b.append("<th>Tag</th>\n");
@@ -132,19 +132,14 @@ public class Protocol {
                         b.append("</tr>\n");
                     });
                     b.append("</tbody></table>\n");
-                    b.append("</td>");
-                    b.append("</tr>\n");
+                } else {
+                    b.append(field.def.docString);
                 }
             } else {
-                b.append("<tr>\n");
-                b.append("<td>");
-                b.append(field.def.name);
-                b.append("</td>");
-                b.append("<td>");
                 b.append(field.def.docString);
-                b.append("</td>");
-                b.append("</tr>\n");
             }
+            b.append("</td>");
+            b.append("</tr>\n");
         }
         b.append("</tbody></table>\n");
     }
