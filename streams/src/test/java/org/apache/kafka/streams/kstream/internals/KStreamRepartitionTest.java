@@ -149,8 +149,8 @@ public class KStreamRepartitionTest {
                 .to(outputTopic);
 
         final Map<String, Integer> repartitionTopicsWithNumOfPartitions = Utils.mkMap(
-                Utils.mkEntry(toRepartitionTopicName(topicBRepartitionedName), topicBNumberOfPartitions),
-                Utils.mkEntry(toRepartitionTopicName(inputTopicRepartitionedName), inputTopicNumberOfPartitions)
+                Map.entry(toRepartitionTopicName(topicBRepartitionedName), topicBNumberOfPartitions),
+                Map.entry(toRepartitionTopicName(inputTopicRepartitionedName), inputTopicNumberOfPartitions)
         );
 
         final TopologyException expected = assertThrows(

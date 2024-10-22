@@ -134,7 +134,6 @@ import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.adminClientId;
@@ -253,16 +252,16 @@ public class StreamThreadTest {
 
     private Properties configProps(final boolean enableEoS, final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
         return mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID),
-            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
-            mkEntry(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3"),
-            mkEntry(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName()),
-            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath()),
-            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, enableEoS ? StreamsConfig.EXACTLY_ONCE_V2 : StreamsConfig.AT_LEAST_ONCE),
-            mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class.getName()),
-            mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class.getName()),
-            mkEntry(InternalConfig.STATE_UPDATER_ENABLED, Boolean.toString(stateUpdaterEnabled)),
-            mkEntry(InternalConfig.PROCESSING_THREADS_ENABLED, Boolean.toString(processingThreadsEnabled))
+            Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID),
+            Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
+            Map.entry(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3"),
+            Map.entry(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName()),
+            Map.entry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath()),
+            Map.entry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, enableEoS ? StreamsConfig.EXACTLY_ONCE_V2 : StreamsConfig.AT_LEAST_ONCE),
+            Map.entry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class.getName()),
+            Map.entry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class.getName()),
+            Map.entry(InternalConfig.STATE_UPDATER_ENABLED, Boolean.toString(stateUpdaterEnabled)),
+            Map.entry(InternalConfig.PROCESSING_THREADS_ENABLED, Boolean.toString(processingThreadsEnabled))
         ));
     }
 
@@ -493,7 +492,7 @@ public class StreamThreadTest {
 
         final String taskGroupName = "stream-task-metrics";
         final Map<String, String> taskTags =
-            mkMap(mkEntry("task-id", "all"), mkEntry("thread-id", thread.getName()));
+            mkMap(Map.entry("task-id", "all"), Map.entry("thread-id", thread.getName()));
         assertNull(metrics.metrics().get(metrics.metricName(
             "commit-latency-avg", taskGroupName, descriptionIsNotVerified, taskTags)));
         assertNull(metrics.metrics().get(metrics.metricName(
@@ -1692,12 +1691,12 @@ public class StreamThreadTest {
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.mainConsumer();
         mockConsumer.assign(assignedPartitions);
         mockConsumer.updateBeginningOffsets(mkMap(
-                mkEntry(t1p1, 0L)
+                Map.entry(t1p1, 0L)
         ));
 
         final MockConsumer<byte[], byte[]> restoreConsumer = (MockConsumer<byte[], byte[]>) thread.restoreConsumer();
         restoreConsumer.updateBeginningOffsets(mkMap(
-                mkEntry(storeChangelogTopicPartition, 0L)
+                Map.entry(storeChangelogTopicPartition, 0L)
         ));
         final MockAdminClient admin = (MockAdminClient) thread.adminClient();
         admin.updateEndOffsets(singletonMap(storeChangelogTopicPartition, 0L));
@@ -2959,9 +2958,9 @@ public class StreamThreadTest {
         when(task3.state()).thenReturn(Task.State.CREATED);
 
         when(taskManager.allOwnedTasks()).thenReturn(mkMap(
-            mkEntry(taskId1, task1),
-            mkEntry(taskId2, task2),
-            mkEntry(taskId3, task3)
+            Map.entry(taskId1, task1),
+            Map.entry(taskId2, task2),
+            Map.entry(taskId3, task3)
         ));
 
         // expect not to try and commit task3, because it's not running.

@@ -56,6 +56,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -64,7 +65,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import static java.lang.Long.MAX_VALUE;
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
@@ -142,10 +142,10 @@ public class SuppressionDurabilityIntegrationTest {
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
         final Properties streamsConfig = mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
-            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
-            mkEntry(StreamsConfig.POLL_MS_CONFIG, Long.toString(COMMIT_INTERVAL)),
-            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
+                Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
+                Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+                Map.entry(StreamsConfig.POLL_MS_CONFIG, Long.toString(COMMIT_INTERVAL)),
+                Map.entry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
         ));
 
         streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL);
@@ -286,10 +286,10 @@ public class SuppressionDurabilityIntegrationTest {
     private void verifyOutput(final String topic, final List<KeyValueTimestamp<String, Long>> keyValueTimestamps) {
         final Properties properties = mkProperties(
             mkMap(
-                mkEntry(ConsumerConfig.GROUP_ID_CONFIG, "test-group"),
-                mkEntry(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
-                mkEntry(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ((Deserializer<String>) STRING_DESERIALIZER).getClass().getName()),
-                mkEntry(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ((Deserializer<Long>) LONG_DESERIALIZER).getClass().getName())
+                Map.entry(ConsumerConfig.GROUP_ID_CONFIG, "test-group"),
+                Map.entry(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+                Map.entry(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ((Deserializer<String>) STRING_DESERIALIZER).getClass().getName()),
+                Map.entry(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ((Deserializer<Long>) LONG_DESERIALIZER).getClass().getName())
             )
         );
         IntegrationTestUtils.verifyKeyValueTimestamps(properties, topic, keyValueTimestamps);
@@ -305,10 +305,10 @@ public class SuppressionDurabilityIntegrationTest {
 
     private static void produceSynchronouslyToPartitionZero(final String topic, final List<KeyValueTimestamp<String, String>> toProduce) {
         final Properties producerConfig = mkProperties(mkMap(
-            mkEntry(ProducerConfig.CLIENT_ID_CONFIG, "anything"),
-            mkEntry(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ((Serializer<String>) STRING_SERIALIZER).getClass().getName()),
-            mkEntry(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ((Serializer<String>) STRING_SERIALIZER).getClass().getName()),
-            mkEntry(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
+            Map.entry(ProducerConfig.CLIENT_ID_CONFIG, "anything"),
+            Map.entry(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ((Serializer<String>) STRING_SERIALIZER).getClass().getName()),
+            Map.entry(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ((Serializer<String>) STRING_SERIALIZER).getClass().getName()),
+            Map.entry(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
         ));
         IntegrationTestUtils.produceSynchronously(producerConfig, false, topic, Optional.of(0), toProduce);
     }

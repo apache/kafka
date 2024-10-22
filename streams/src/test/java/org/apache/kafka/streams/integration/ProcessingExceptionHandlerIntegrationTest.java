@@ -47,7 +47,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -345,8 +344,8 @@ public class ProcessingExceptionHandlerIntegrationTest {
             "stream-task-metrics",
             "The total number of dropped records",
             mkMap(
-                mkEntry("thread-id", threadId),
-                mkEntry("task-id", "0_0")
+                Map.entry("thread-id", threadId),
+                Map.entry("task-id", "0_0")
             )
         );
     }
@@ -362,8 +361,8 @@ public class ProcessingExceptionHandlerIntegrationTest {
             "stream-task-metrics",
             "The average number of dropped records per second",
             mkMap(
-                mkEntry("thread-id", threadId),
-                mkEntry("task-id", "0_0")
+                Map.entry("thread-id", threadId),
+                Map.entry("task-id", "0_0")
             )
         );
     }

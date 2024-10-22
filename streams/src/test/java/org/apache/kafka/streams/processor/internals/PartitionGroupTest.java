@@ -45,11 +45,11 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -434,7 +434,7 @@ public class PartitionGroupTest {
             new PartitionGroup(
                 logContext,
                 mkMap(
-                    mkEntry(partition1, queue1)
+                    Map.entry(partition1, queue1)
                 ),
                 tp -> OptionalLong.of(0L),
                 getValueSensor(metrics, lastLatenessValue),
@@ -498,7 +498,7 @@ public class PartitionGroupTest {
     public void shouldUpdatePartitionQueuesExpand() {
         final PartitionGroup group = new PartitionGroup(
             logContext,
-            mkMap(mkEntry(partition1, queue1)),
+            mkMap(Map.entry(partition1, queue1)),
             tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
@@ -531,7 +531,7 @@ public class PartitionGroupTest {
     public void shouldUpdatePartitionQueuesShrinkAndExpand() {
         final PartitionGroup group = new PartitionGroup(
             logContext,
-            mkMap(mkEntry(partition1, queue1)),
+            mkMap(Map.entry(partition1, queue1)),
             tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
@@ -564,8 +564,8 @@ public class PartitionGroupTest {
         final PartitionGroup group = new PartitionGroup(
             logContext,
             mkMap(
-                mkEntry(partition1, queue1),
-                mkEntry(partition2, queue2)
+                Map.entry(partition1, queue1),
+                Map.entry(partition2, queue2)
             ),
             tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
@@ -602,8 +602,8 @@ public class PartitionGroupTest {
         final PartitionGroup group = new PartitionGroup(
             logContext,
             mkMap(
-                mkEntry(partition1, queue1),
-                mkEntry(partition2, queue2)
+                Map.entry(partition1, queue1),
+                Map.entry(partition2, queue2)
             ),
             tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
@@ -641,8 +641,8 @@ public class PartitionGroupTest {
         final PartitionGroup group = new PartitionGroup(
             logContext,
             mkMap(
-                mkEntry(partition1, queue1),
-                mkEntry(partition2, queue2)
+                Map.entry(partition1, queue1),
+                Map.entry(partition2, queue2)
             ),
             tp -> lags.getOrDefault(tp, OptionalLong.empty()),
             getValueSensor(metrics, lastLatenessValue),
@@ -678,8 +678,8 @@ public class PartitionGroupTest {
         final PartitionGroup group = new PartitionGroup(
             logContext,
             mkMap(
-                mkEntry(partition1, queue1),
-                mkEntry(partition2, queue2)
+                Map.entry(partition1, queue1),
+                Map.entry(partition2, queue2)
             ),
             tp -> lags.getOrDefault(tp, OptionalLong.empty()),
             getValueSensor(metrics, lastLatenessValue),
@@ -715,8 +715,8 @@ public class PartitionGroupTest {
         final PartitionGroup group = new PartitionGroup(
             logContext,
             mkMap(
-                mkEntry(partition1, queue1),
-                mkEntry(partition2, queue2)
+                Map.entry(partition1, queue1),
+                Map.entry(partition2, queue2)
             ),
             tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
@@ -820,7 +820,7 @@ public class PartitionGroupTest {
         final PartitionGroup group = new PartitionGroup(
             logContext,
             mkMap(
-                mkEntry(partition1, queue1)
+                Map.entry(partition1, queue1)
             ),
             tp -> lags.getOrDefault(tp, OptionalLong.empty()),
             getValueSensor(metrics, lastLatenessValue),
@@ -856,8 +856,8 @@ public class PartitionGroupTest {
         return new PartitionGroup(
             logContext,
             mkMap(
-                mkEntry(partition1, queue1),
-                mkEntry(partition2, queue2)
+                Map.entry(partition1, queue1),
+                Map.entry(partition2, queue2)
             ),
             tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),

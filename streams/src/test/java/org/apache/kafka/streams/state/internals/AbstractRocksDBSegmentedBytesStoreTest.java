@@ -72,7 +72,6 @@ import java.util.Set;
 import java.util.SimpleTimeZone;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.timeWindowForSize;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -556,7 +555,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         context.setRecordContext(new ProcessorRecordContext(0, 4, 0, "", new RecordHeaders()));
         bytesStore.put(serializeKey(new Windowed<>(keyC, windows[3])), serializeValue(200));
 
-        final Position expected = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 4L)))));
+        final Position expected = Position.fromMap(mkMap(Map.entry("", mkMap(Map.entry(0, 4L)))));
         final Position actual = bytesStore.getPosition();
         assertEquals(expected, actual);
     }
@@ -841,8 +840,8 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             "stream-task-metrics",
             "",
             mkMap(
-                mkEntry("thread-id", threadId),
-                mkEntry("task-id", "0_0")
+                Map.entry("thread-id", threadId),
+                Map.entry("task-id", "0_0")
             )
         ));
 
@@ -851,8 +850,8 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             "stream-task-metrics",
             "",
             mkMap(
-                mkEntry("thread-id", threadId),
-                mkEntry("task-id", "0_0")
+                Map.entry("thread-id", threadId),
+                Map.entry("task-id", "0_0")
             )
         ));
         assertEquals(1.0, dropTotal.metricValue());

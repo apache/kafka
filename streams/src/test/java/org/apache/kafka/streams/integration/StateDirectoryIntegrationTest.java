@@ -43,11 +43,11 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
@@ -78,10 +78,10 @@ public class StateDirectoryIntegrationTest {
         CLUSTER.createTopic(input);
 
         final Properties producerConfig = mkProperties(mkMap(
-            mkEntry(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
-            mkEntry(ProducerConfig.ACKS_CONFIG, "all"),
-            mkEntry(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getCanonicalName()),
-            mkEntry(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getCanonicalName())
+            Map.entry(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+            Map.entry(ProducerConfig.ACKS_CONFIG, "all"),
+            Map.entry(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getCanonicalName()),
+            Map.entry(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getCanonicalName())
         ));
 
         try (final KafkaProducer<String, String> producer =
@@ -110,9 +110,9 @@ public class StateDirectoryIntegrationTest {
             // Create KafkaStreams instance
             final String applicationId = uniqueTestName + "-app";
             final Properties streamsConfig = mkProperties(mkMap(
-                mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, applicationId),
-                mkEntry(StreamsConfig.STATE_DIR_CONFIG, stateDir),
-                mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
+                Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, applicationId),
+                Map.entry(StreamsConfig.STATE_DIR_CONFIG, stateDir),
+                Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
             ));
 
             final KafkaStreams streams = new KafkaStreams(topology, streamsConfig);
@@ -184,10 +184,10 @@ public class StateDirectoryIntegrationTest {
         CLUSTER.createTopic(input);
 
         final Properties producerConfig = mkProperties(mkMap(
-            mkEntry(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
-            mkEntry(ProducerConfig.ACKS_CONFIG, "all"),
-            mkEntry(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getCanonicalName()),
-            mkEntry(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getCanonicalName())
+            Map.entry(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+            Map.entry(ProducerConfig.ACKS_CONFIG, "all"),
+            Map.entry(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getCanonicalName()),
+            Map.entry(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getCanonicalName())
         ));
 
         try (final KafkaProducer<String, String> producer =
@@ -216,9 +216,9 @@ public class StateDirectoryIntegrationTest {
             // Create KafkaStreams instance
             final String applicationId = uniqueTestName + "-app";
             final Properties streamsConfig = mkProperties(mkMap(
-                mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, applicationId),
-                mkEntry(StreamsConfig.STATE_DIR_CONFIG, stateDir),
-                mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
+                Map.entry(StreamsConfig.APPLICATION_ID_CONFIG, applicationId),
+                Map.entry(StreamsConfig.STATE_DIR_CONFIG, stateDir),
+                Map.entry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
             ));
 
             final KafkaStreams streams = new KafkaStreams(topology, streamsConfig);

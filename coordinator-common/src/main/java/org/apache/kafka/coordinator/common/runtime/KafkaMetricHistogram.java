@@ -56,10 +56,10 @@ public final class KafkaMetricHistogram implements CompoundStat {
      */
     private static final Map<Double, String> PERCENTILE_NAMES =
         Utils.mkMap(
-            Utils.mkEntry(50.0, "p50"),
-            Utils.mkEntry(95.0, "p95"),
-            Utils.mkEntry(99.0, "p99"),
-            Utils.mkEntry(99.9, "p999")
+            Map.entry(50.0, "p50"),
+            Map.entry(95.0, "p95"),
+            Map.entry(99.0, "p99"),
+            Map.entry(99.9, "p999")
         );
 
     /**

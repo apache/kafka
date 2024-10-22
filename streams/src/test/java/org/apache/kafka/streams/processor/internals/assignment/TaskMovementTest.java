@@ -35,7 +35,6 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.emptySortedSet;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_1;
@@ -92,20 +91,20 @@ public class TaskMovementTest {
         final ClientState client3 = getClientStateWithActiveAssignment(Set.of(TASK_0_2, TASK_1_2), Set.of(), allTasks);
 
         final Map<TaskId, SortedSet<ProcessId>> tasksToCaughtUpClients = mkMap(
-            mkEntry(TASK_0_0, emptySortedSet()),
-            mkEntry(TASK_0_1, emptySortedSet()),
-            mkEntry(TASK_0_2, emptySortedSet()),
-            mkEntry(TASK_1_0, emptySortedSet()),
-            mkEntry(TASK_1_1, emptySortedSet()),
-            mkEntry(TASK_1_2, emptySortedSet())
+            Map.entry(TASK_0_0, emptySortedSet()),
+            Map.entry(TASK_0_1, emptySortedSet()),
+            Map.entry(TASK_0_2, emptySortedSet()),
+            Map.entry(TASK_1_0, emptySortedSet()),
+            Map.entry(TASK_1_1, emptySortedSet()),
+            Map.entry(TASK_1_2, emptySortedSet())
         );
         final Map<TaskId, SortedSet<ProcessId>> tasksToClientByLag = mkMap(
-            mkEntry(TASK_0_0, mkOrderedSet(PID_1, PID_2, PID_3)),
-            mkEntry(TASK_0_1, mkOrderedSet(PID_1, PID_2, PID_3)),
-            mkEntry(TASK_0_2, mkOrderedSet(PID_1, PID_2, PID_3)),
-            mkEntry(TASK_1_0, mkOrderedSet(PID_1, PID_2, PID_3)),
-            mkEntry(TASK_1_1, mkOrderedSet(PID_1, PID_2, PID_3)),
-            mkEntry(TASK_1_2, mkOrderedSet(PID_1, PID_2, PID_3))
+            Map.entry(TASK_0_0, mkOrderedSet(PID_1, PID_2, PID_3)),
+            Map.entry(TASK_0_1, mkOrderedSet(PID_1, PID_2, PID_3)),
+            Map.entry(TASK_0_2, mkOrderedSet(PID_1, PID_2, PID_3)),
+            Map.entry(TASK_1_0, mkOrderedSet(PID_1, PID_2, PID_3)),
+            Map.entry(TASK_1_1, mkOrderedSet(PID_1, PID_2, PID_3)),
+            Map.entry(TASK_1_2, mkOrderedSet(PID_1, PID_2, PID_3))
         );
         assertThat(
             assignActiveTaskMovements(
@@ -129,14 +128,14 @@ public class TaskMovementTest {
         final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
 
         final Map<TaskId, SortedSet<ProcessId>> tasksToCaughtUpClients = mkMap(
-            mkEntry(TASK_0_0, mkSortedSet(PID_1)),
-            mkEntry(TASK_0_1, mkSortedSet(PID_3)),
-            mkEntry(TASK_0_2, mkSortedSet(PID_2))
+            Map.entry(TASK_0_0, mkSortedSet(PID_1)),
+            Map.entry(TASK_0_1, mkSortedSet(PID_3)),
+            Map.entry(TASK_0_2, mkSortedSet(PID_2))
         );
         final Map<TaskId, SortedSet<ProcessId>> tasksToClientByLag = mkMap(
-            mkEntry(TASK_0_0, mkOrderedSet(PID_1, PID_2, PID_3)),
-            mkEntry(TASK_0_1, mkOrderedSet(PID_3, PID_1, PID_2)),
-            mkEntry(TASK_0_2, mkOrderedSet(PID_2, PID_1, PID_3))
+            Map.entry(TASK_0_0, mkOrderedSet(PID_1, PID_2, PID_3)),
+            Map.entry(TASK_0_1, mkOrderedSet(PID_3, PID_1, PID_2)),
+            Map.entry(TASK_0_2, mkOrderedSet(PID_2, PID_1, PID_3))
         );
 
         assertThat(
@@ -164,9 +163,9 @@ public class TaskMovementTest {
     @Test
     public void shouldMoveTasksToMostCaughtUpClientsAndAssignWarmupReplicasInTheirPlace() {
         final int maxWarmupReplicas = Integer.MAX_VALUE;
-        final Map<TaskId, Long> client1Lags = mkMap(mkEntry(TASK_0_0, 10000L), mkEntry(TASK_0_1, 20000L), mkEntry(TASK_0_2, 30000L));
-        final Map<TaskId, Long> client2Lags = mkMap(mkEntry(TASK_0_2, 10000L), mkEntry(TASK_0_0, 20000L), mkEntry(TASK_0_1, 30000L));
-        final Map<TaskId, Long> client3Lags = mkMap(mkEntry(TASK_0_1, 10000L), mkEntry(TASK_0_2, 20000L), mkEntry(TASK_0_0, 30000L));
+        final Map<TaskId, Long> client1Lags = mkMap(Map.entry(TASK_0_0, 10000L), Map.entry(TASK_0_1, 20000L), Map.entry(TASK_0_2, 30000L));
+        final Map<TaskId, Long> client2Lags = mkMap(Map.entry(TASK_0_2, 10000L), Map.entry(TASK_0_0, 20000L), Map.entry(TASK_0_1, 30000L));
+        final Map<TaskId, Long> client3Lags = mkMap(Map.entry(TASK_0_1, 10000L), Map.entry(TASK_0_2, 20000L), Map.entry(TASK_0_0, 30000L));
 
         final ClientState client1 = getClientStateWithLags(Set.of(TASK_0_0), client1Lags);
         final ClientState client2 = getClientStateWithLags(Set.of(TASK_0_1), client2Lags);
@@ -176,14 +175,14 @@ public class TaskMovementTest {
         final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
 
         final Map<TaskId, SortedSet<ProcessId>> tasksToCaughtUpClients = mkMap(
-                mkEntry(TASK_0_0, mkSortedSet()),
-                mkEntry(TASK_0_1, mkSortedSet()),
-                mkEntry(TASK_0_2, mkSortedSet())
+                Map.entry(TASK_0_0, mkSortedSet()),
+                Map.entry(TASK_0_1, mkSortedSet()),
+                Map.entry(TASK_0_2, mkSortedSet())
         );
         final Map<TaskId, SortedSet<ProcessId>> tasksToClientByLag = mkMap(
-                mkEntry(TASK_0_0, mkOrderedSet(PID_1, PID_2, PID_3)),
-                mkEntry(TASK_0_1, mkOrderedSet(PID_3, PID_1, PID_2)),
-                mkEntry(TASK_0_2, mkOrderedSet(PID_2, PID_3, PID_1))
+                Map.entry(TASK_0_0, mkOrderedSet(PID_1, PID_2, PID_3)),
+                Map.entry(TASK_0_1, mkOrderedSet(PID_3, PID_1, PID_2)),
+                Map.entry(TASK_0_2, mkOrderedSet(PID_2, PID_3, PID_1))
         );
 
         assertThat(
@@ -218,14 +217,14 @@ public class TaskMovementTest {
         final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
 
         final Map<TaskId, SortedSet<ProcessId>> tasksToCaughtUpClients = mkMap(
-            mkEntry(TASK_0_0, mkSortedSet(PID_1)),
-            mkEntry(TASK_0_1, mkSortedSet(PID_3)),
-            mkEntry(TASK_0_2, mkSortedSet(PID_2))
+            Map.entry(TASK_0_0, mkSortedSet(PID_1)),
+            Map.entry(TASK_0_1, mkSortedSet(PID_3)),
+            Map.entry(TASK_0_2, mkSortedSet(PID_2))
         );
         final Map<TaskId, SortedSet<ProcessId>> tasksToClientByLag = mkMap(
-            mkEntry(TASK_0_0, mkOrderedSet(PID_1, PID_2, PID_3)),
-            mkEntry(TASK_0_1, mkOrderedSet(PID_3, PID_1, PID_2)),
-            mkEntry(TASK_0_2, mkOrderedSet(PID_2, PID_1, PID_3))
+            Map.entry(TASK_0_0, mkOrderedSet(PID_1, PID_2, PID_3)),
+            Map.entry(TASK_0_1, mkOrderedSet(PID_3, PID_1, PID_2)),
+            Map.entry(TASK_0_2, mkOrderedSet(PID_2, PID_1, PID_3))
         );
 
         assertThat(
@@ -260,10 +259,10 @@ public class TaskMovementTest {
         final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2);
 
         final Map<TaskId, SortedSet<ProcessId>> tasksToCaughtUpClients = mkMap(
-            mkEntry(TASK_0_0, mkSortedSet(PID_1))
+            Map.entry(TASK_0_0, mkSortedSet(PID_1))
         );
         final Map<TaskId, SortedSet<ProcessId>> tasksToClientByLag = mkMap(
-            mkEntry(TASK_0_0, mkOrderedSet(PID_1, PID_2))
+            Map.entry(TASK_0_0, mkOrderedSet(PID_1, PID_2))
         );
 
         assertThat(

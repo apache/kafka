@@ -25,10 +25,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collection;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
@@ -52,14 +52,14 @@ public class ThreadMetadataImplTest {
     public static final TaskMetadata TM_0 = new TaskMetadataImpl(
         TASK_ID_0,
         Set.of(TP_0_0, TP_1_0),
-        mkMap(mkEntry(TP_0_0, 1L), mkEntry(TP_1_0, 2L)),
-        mkMap(mkEntry(TP_0_0, 1L), mkEntry(TP_1_0, 2L)),
+        mkMap(Map.entry(TP_0_0, 1L), Map.entry(TP_1_0, 2L)),
+        mkMap(Map.entry(TP_0_0, 1L), Map.entry(TP_1_0, 2L)),
         Optional.of(3L));
     public static final TaskMetadata TM_1 = new TaskMetadataImpl(
         TASK_ID_1,
         Set.of(TP_0_1, TP_1_1),
-        mkMap(mkEntry(TP_0_1, 1L), mkEntry(TP_1_1, 2L)),
-        mkMap(mkEntry(TP_0_1, 1L), mkEntry(TP_1_1, 2L)),
+        mkMap(Map.entry(TP_0_1, 1L), Map.entry(TP_1_1, 2L)),
+        mkMap(Map.entry(TP_0_1, 1L), Map.entry(TP_1_1, 2L)),
         Optional.of(3L));
     public static final Set<TaskMetadata> STANDBY_TASKS = Set.of(TM_0, TM_1);
     public static final Set<TaskMetadata> ACTIVE_TASKS = Set.of(TM_1);

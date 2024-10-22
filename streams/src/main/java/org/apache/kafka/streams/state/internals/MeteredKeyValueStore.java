@@ -57,7 +57,6 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Function;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
@@ -101,11 +100,11 @@ public class MeteredKeyValueStore<K, V>
     @SuppressWarnings("rawtypes")
     private final Map<Class, QueryHandler> queryHandlers =
         mkMap(
-            mkEntry(
+            Map.entry(
                 RangeQuery.class,
                 (query, positionBound, config, store) -> runRangeQuery(query, positionBound, config)
             ),
-            mkEntry(
+            Map.entry(
                 KeyQuery.class,
                 (query, positionBound, config, store) -> runKeyQuery(query, positionBound, config)
             )

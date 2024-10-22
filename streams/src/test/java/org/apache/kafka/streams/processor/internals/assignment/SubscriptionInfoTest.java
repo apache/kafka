@@ -28,7 +28,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_CLIENT_TAGS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_T0_0_0;
@@ -66,24 +65,24 @@ public class SubscriptionInfoTest {
         TASK_1_1,
         TASK_2_0));
     private static final Map<TaskId, Long> TASK_OFFSET_SUMS = mkMap(
-        mkEntry(TASK_0_0, Task.LATEST_OFFSET),
-        mkEntry(TASK_0_1, Task.LATEST_OFFSET),
-        mkEntry(TASK_1_0, Task.LATEST_OFFSET),
-        mkEntry(TASK_1_1, 0L),
-        mkEntry(TASK_2_0, 10L)
+        Map.entry(TASK_0_0, Task.LATEST_OFFSET),
+        Map.entry(TASK_0_1, Task.LATEST_OFFSET),
+        Map.entry(TASK_1_0, Task.LATEST_OFFSET),
+        Map.entry(TASK_1_1, 0L),
+        Map.entry(TASK_2_0, 10L)
     );
 
     private static final Map<TaskId, Long> NAMED_TASK_OFFSET_SUMS = mkMap(
-        mkEntry(NAMED_TASK_T0_0_0, Task.LATEST_OFFSET),
-        mkEntry(NAMED_TASK_T0_0_1, Task.LATEST_OFFSET),
-        mkEntry(NAMED_TASK_T0_1_0, 5L),
-        mkEntry(NAMED_TASK_T0_1_1, 10_000L),
-        mkEntry(NAMED_TASK_T1_0_0, Task.LATEST_OFFSET),
-        mkEntry(NAMED_TASK_T1_0_1, 0L),
-        mkEntry(NAMED_TASK_T2_0_0, 10L),
-        mkEntry(NAMED_TASK_T2_2_0, 5L)
+        Map.entry(NAMED_TASK_T0_0_0, Task.LATEST_OFFSET),
+        Map.entry(NAMED_TASK_T0_0_1, Task.LATEST_OFFSET),
+        Map.entry(NAMED_TASK_T0_1_0, 5L),
+        Map.entry(NAMED_TASK_T0_1_1, 10_000L),
+        Map.entry(NAMED_TASK_T1_0_0, Task.LATEST_OFFSET),
+        Map.entry(NAMED_TASK_T1_0_1, 0L),
+        Map.entry(NAMED_TASK_T2_0_0, 10L),
+        Map.entry(NAMED_TASK_T2_2_0, 5L)
         );
-    private static final Map<String, String> CLIENT_TAGS = mkMap(mkEntry("t1", "v1"), mkEntry("t2", "v2"));
+    private static final Map<String, String> CLIENT_TAGS = mkMap(Map.entry("t1", "v1"), Map.entry("t2", "v2"));
 
     private static final String IGNORED_USER_ENDPOINT = "ignoredUserEndpoint:80";
     private static final byte IGNORED_UNIQUE_FIELD = (byte) 0;
@@ -381,11 +380,11 @@ public class SubscriptionInfoTest {
     @Test
     public void shouldConvertTaskSetsToTaskOffsetSumMapWithOlderSubscription() {
         final Map<TaskId, Long> expectedOffsetSumsMap = mkMap(
-            mkEntry(new TaskId(0, 0), Task.LATEST_OFFSET),
-            mkEntry(new TaskId(0, 1), Task.LATEST_OFFSET),
-            mkEntry(new TaskId(1, 0), Task.LATEST_OFFSET),
-            mkEntry(new TaskId(1, 1), UNKNOWN_OFFSET_SUM),
-            mkEntry(new TaskId(2, 0), UNKNOWN_OFFSET_SUM)
+            Map.entry(new TaskId(0, 0), Task.LATEST_OFFSET),
+            Map.entry(new TaskId(0, 1), Task.LATEST_OFFSET),
+            Map.entry(new TaskId(1, 0), Task.LATEST_OFFSET),
+            Map.entry(new TaskId(1, 1), UNKNOWN_OFFSET_SUM),
+            Map.entry(new TaskId(2, 0), UNKNOWN_OFFSET_SUM)
         );
 
         final SubscriptionInfo info = SubscriptionInfo.decode(
