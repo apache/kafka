@@ -122,7 +122,7 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
                     wrappedCert.hasUnsupportedCriticalExtension());
             // We have just generated a valid test certificate, it should still be valid now
             assertEquals(cert.getBasicConstraints(), wrappedCert.getBasicConstraints());
-            assertEquals(cert.getIssuerX500Principal(), wrappedCert.getIssuerDN());
+            assertEquals(cert.getIssuerDN(), wrappedCert.getIssuerDN());
             assertEquals(cert.getIssuerUniqueID(), wrappedCert.getIssuerUniqueID());
             assertEquals(cert.getKeyUsage(), wrappedCert.getKeyUsage());
             assertEquals(cert.getNotAfter(), wrappedCert.getNotAfter());
@@ -132,7 +132,7 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
             assertEquals(cert.getSigAlgOID(), wrappedCert.getSigAlgOID());
             assertArrayEquals(cert.getSigAlgParams(), wrappedCert.getSigAlgParams());
             assertArrayEquals(cert.getSignature(), wrappedCert.getSignature());
-            assertEquals(cert.getIssuerX500Principal(), wrappedCert.getSubjectDN());
+            assertEquals(cert.getSubjectDN(), wrappedCert.getSubjectDN());
             assertEquals(cert.getSubjectUniqueID(), wrappedCert.getSubjectUniqueID());
             assertArrayEquals(cert.getTBSCertificate(), wrappedCert.getTBSCertificate());
             assertEquals(cert.getVersion(), wrappedCert.getVersion());
