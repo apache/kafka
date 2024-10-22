@@ -16,17 +16,17 @@
  */
 package kafka.api
 
+import kafka.utils.TestInfoUtils
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
 import java.util
-import java.util.{Collections, Optional, Properties}
-import scala.annotation.nowarn
+import java.util.{Collections, Optional, Properties, stream}
 import scala.jdk.CollectionConverters._
 
 class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTest {
@@ -38,10 +38,9 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
       properties.put(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "2.8")
   }
 
-  @nowarn("cat=deprecation")
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testOffsetsForTimes(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testOffsetsForTimes(quorum: String, groupProtocol: String): Unit = {
     val numParts = 2
     val topic1 = "part-test-topic-1"
     val topic2 = "part-test-topic-2"
@@ -115,10 +114,9 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
     assertNull(timestampOffsets.get(new TopicPartition(topic3, 1)))
   }
 
-  @nowarn("cat=deprecation")
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testEarliestOrLatestOffsets(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testEarliestOrLatestOffsets(quorum: String, groupProtocol: String): Unit = {
     val topic0 = "topicWithNewMessageFormat"
     val topic1 = "topicWithOldMessageFormat"
     val prop = new Properties()
@@ -146,5 +144,17 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
     assertEquals(100L, latests.get(t0p0))
     assertEquals(100L, latests.get(t0p1))
     assertEquals(100L, latests.get(t1p0))
+  }
+}
+
+object ConsumerWithLegacyMessageFormatIntegrationTest {
+  // We want to test the following combinations:
+  // * KRaft and the classic group protocol
+  // * KRaft and the consumer group protocol
+  def getTestQuorumAndGroupProtocolParametersAll() : java.util.stream.Stream[Arguments] = {
+    stream.Stream.of(
+      Arguments.of("kraft", "classic"),
+      Arguments.of("kraft", "consumer")
+    )
   }
 }
