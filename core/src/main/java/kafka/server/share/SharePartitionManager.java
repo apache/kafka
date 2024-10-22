@@ -234,8 +234,8 @@ public class SharePartitionManager implements AutoCloseable {
         FetchParams fetchParams,
         Map<TopicIdPartition, Integer> partitionMaxBytes
     ) {
-        log.trace("Fetch request for topicIdPartitions: {} with groupId: {} fetch params: {}, {}",
-                partitionMaxBytes.keySet(), groupId, fetchParams, fetchParams.fetchOnlyLeader());
+        log.trace("Fetch request for topicIdPartitions: {} with groupId: {} fetch params: {}",
+                partitionMaxBytes.keySet(), groupId, fetchParams);
 
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
         processShareFetch(new ShareFetchData(fetchParams, groupId, memberId, future, partitionMaxBytes));
