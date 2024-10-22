@@ -1143,6 +1143,7 @@ public class SharePartition {
         List<AcquiredRecords> result
     ) {
         lock.writeLock().lock();
+        int acquiredCount = 0;
         try {
             for (Map.Entry<Long, InFlightState> offsetState : inFlightBatch.offsetState.entrySet()) {
                 // For the first batch which might have offsets prior to the request base
@@ -1181,11 +1182,12 @@ public class SharePartition {
                     .setFirstOffset(offsetState.getKey())
                     .setLastOffset(offsetState.getKey())
                     .setDeliveryCount((short) offsetState.getValue().deliveryCount));
+                acquiredCount++;
             }
         } finally {
             lock.writeLock().unlock();
         }
-        return result.size();
+        return acquiredCount;
     }
 
     /**
