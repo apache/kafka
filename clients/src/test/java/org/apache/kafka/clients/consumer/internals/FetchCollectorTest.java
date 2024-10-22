@@ -952,6 +952,7 @@ public class FetchCollectorTest {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         long baseOffset = 0;
         if (controlRecordOffset == 0) {
+            writeTransactionMarker(buffer, controlRecordType, controlRecordOffset, time);
             baseOffset = 1;
         }
 
