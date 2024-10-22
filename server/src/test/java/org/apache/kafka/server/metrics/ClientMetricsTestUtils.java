@@ -42,8 +42,8 @@ public class ClientMetricsTestUtils {
 
     public static final String DEFAULT_METRICS =
         "org.apache.kafka.client.producer.partition.queue.,org.apache.kafka.client.producer.partition.latency";
-    public static final int DEFAULT_PUSH_INTERVAL_MS = 30 * 1000; // 30 seconds
-    public static final List<String> DEFAULT_CLIENT_MATCH_PATTERNS = Collections.unmodifiableList(Arrays.asList(
+    public static final int DEFAULT_INTERVAL_MS = 30 * 1000; // 30 seconds
+    public static final List<String> DEFAULT_MATCH = Collections.unmodifiableList(Arrays.asList(
         ClientMetricsConfigs.CLIENT_SOFTWARE_NAME + "=apache-kafka-java",
         ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION + "=3.5.*"
     ));
@@ -51,9 +51,9 @@ public class ClientMetricsTestUtils {
 
     public static Properties defaultProperties() {
         Properties props = new Properties();
-        props.put(ClientMetricsConfigs.SUBSCRIPTION_METRICS, DEFAULT_METRICS);
-        props.put(ClientMetricsConfigs.PUSH_INTERVAL_MS, Integer.toString(DEFAULT_PUSH_INTERVAL_MS));
-        props.put(ClientMetricsConfigs.CLIENT_MATCH_PATTERN, String.join(",", DEFAULT_CLIENT_MATCH_PATTERNS));
+        props.put(ClientMetricsConfigs.METRICS_CONFIG, DEFAULT_METRICS);
+        props.put(ClientMetricsConfigs.INTERVAL_MS_CONFIG, Integer.toString(DEFAULT_INTERVAL_MS));
+        props.put(ClientMetricsConfigs.MATCH_CONFIG, String.join(",", DEFAULT_MATCH));
         return props;
     }
 

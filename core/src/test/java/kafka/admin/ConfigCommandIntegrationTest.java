@@ -30,7 +30,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -218,12 +217,14 @@ public class ConfigCommandIntegrationTest {
         try (Admin client = cluster.createAdminClient()) {
             // Add config
             Map<String, String> configs = new HashMap<>();
-            configs.put("metrics", "");
+            configs.put("metrics", "org.apache.kafka.producer.");
             configs.put("interval.ms", "6000");
             alterAndVerifyClientMetricsConfig(client, defaultClientMetricsName, configs);
 
             // Delete config
-            deleteAndVerifyClientMetricsConfigValue(client, defaultClientMetricsName, configs.keySet());
+            configs.put("metrics", "");
+            configs.put("interval.ms", "300000");
+            deleteAndVerifyClientMetricsConfigValue(client, defaultClientMetricsName, configs);
 
             // Unknown config configured should fail
             assertThrows(ExecutionException.class,
@@ -413,13 +414,12 @@ public class ConfigCommandIntegrationTest {
 
     private void deleteAndVerifyClientMetricsConfigValue(Admin client,
                                                          String clientMetricsName,
-                                                         Set<String> defaultConfigs) throws Exception {
+                                                         Map<String, String> defaultConfigs) throws Exception {
         ConfigCommand.ConfigCommandOptions deleteOpts =
             new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, asList("--entity-name", clientMetricsName),
-                asList("--delete-config", String.join(",", defaultConfigs))));
+                asList("--delete-config", String.join(",", defaultConfigs.keySet()))));
         ConfigCommand.alterConfig(client, deleteOpts);
-        // There are no default configs returned for client metrics
-        verifyClientMetricsConfig(client, clientMetricsName, Collections.emptyMap());
+        verifyClientMetricsConfig(client, clientMetricsName, defaultConfigs);
     }
 
     private void verifyPerBrokerConfigValue(Admin client,

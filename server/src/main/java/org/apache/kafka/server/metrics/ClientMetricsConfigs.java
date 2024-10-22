@@ -29,13 +29,14 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
 /**
- * Client metric configuration related parameters and the supporting methods like validation, etc. are
+ * Client metric configuration related parameters and the supporting methods like validation are
  * defined in this class.
  * <p>
  * {
@@ -53,7 +54,8 @@ import java.util.regex.PatternSyntaxException;
  * <ul>
  *    <li> "name" is a unique name for the subscription. This is used to identify the subscription in
  *          the broker. Ex: "METRICS-SUB"
- *    <li> "metrics" value should be comma separated metrics list. A prefix match on the requested metrics
+ *
+ *    <li> "metrics" value should be comma-separated metrics list. A prefix match on the requested metrics
  *          is performed in clients to determine subscribed metrics. An empty list means no metrics subscribed.
  *          A list containing just an empty string means all metrics subscribed.
  *          Ex: "org.apache.kafka.producer.partition.queue.,org.apache.kafka.producer.partition.latency"
@@ -61,19 +63,19 @@ import java.util.regex.PatternSyntaxException;
  *    <li> "interval.ms" should be between 100 and 3600000 (1 hour). This is the interval at which the client
  *          should push the metrics to the broker.
  *
- *    <li> "match" is a comma separated list of client match patterns, in case if there is no matching
+ *    <li> "match" is a comma-separated list of client match patterns, in case if there is no matching
  *          pattern specified then broker considers that as all match which means the associated metrics
  *          applies to all the clients. Ex: "client_software_name = Java, client_software_version = 11.1.*"
  *          which means all Java clients with any sub versions of 11.1 will be matched i.e. 11.1.1, 11.1.2 etc.
  * </ul>
- * For more information please look at kip-714:
- * https://cwiki.apache.org/confluence/display/KAFKA/KIP-714%3A+Client+metrics+and+observability#KIP714:Clientmetricsandobservability-Clientmetricsconfiguration
+ * For more information please look at
+ * <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-714%3A+Client+metrics+and+observability#KIP714:Clientmetricsandobservability-Clientmetricsconfiguration">KIP-714</a>
  */
 public class ClientMetricsConfigs extends AbstractConfig {
 
-    public static final String SUBSCRIPTION_METRICS = "metrics";
-    public static final String PUSH_INTERVAL_MS = "interval.ms";
-    public static final String CLIENT_MATCH_PATTERN = "match";
+    public static final String METRICS_CONFIG = "metrics";
+    public static final String INTERVAL_MS_CONFIG = "interval.ms";
+    public static final String MATCH_CONFIG = "match";
 
     public static final String CLIENT_INSTANCE_ID = "client_instance_id";
     public static final String CLIENT_ID = "client_id";
@@ -83,9 +85,9 @@ public class ClientMetricsConfigs extends AbstractConfig {
     public static final String CLIENT_SOURCE_PORT = "client_source_port";
 
     // '*' in client-metrics resource configs indicates that all the metrics are subscribed.
-    public static final String ALL_SUBSCRIBED_METRICS_CONFIG = "*";
+    public static final String ALL_SUBSCRIBED_METRICS = "*";
 
-    public static final int DEFAULT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+    public static final int INTERVAL_MS_DEFAULT = 5 * 60 * 1000; // 5 minutes
     private static final int MIN_INTERVAL_MS = 100; // 100ms
     private static final int MAX_INTERVAL_MS = 3600000; // 1 hour
 
@@ -99,9 +101,9 @@ public class ClientMetricsConfigs extends AbstractConfig {
     ));
 
     private static final ConfigDef CONFIG = new ConfigDef()
-        .define(SUBSCRIPTION_METRICS, Type.LIST, Collections.emptyList(), Importance.MEDIUM, "Subscription metrics list")
-        .define(PUSH_INTERVAL_MS, Type.INT, DEFAULT_INTERVAL_MS, Importance.MEDIUM, "Push interval in milliseconds")
-        .define(CLIENT_MATCH_PATTERN, Type.LIST, Collections.emptyList(), Importance.MEDIUM, "Client match pattern list");
+        .define(METRICS_CONFIG, Type.LIST, Collections.emptyList(), Importance.MEDIUM, "Telemetry metric name prefix list")
+        .define(INTERVAL_MS_CONFIG, Type.INT, INTERVAL_MS_DEFAULT, Importance.MEDIUM, "Metrics push interval in milliseconds")
+        .define(MATCH_CONFIG, Type.LIST, Collections.emptyList(), Importance.MEDIUM, "Client match criteria");
 
     public ClientMetricsConfigs(Properties props) {
         super(CONFIG, props);
@@ -109,6 +111,18 @@ public class ClientMetricsConfigs extends AbstractConfig {
 
     public static ConfigDef configDef() {
         return CONFIG;
+    }
+
+    public static Optional<Type> configType(String configName) {
+        return Optional.ofNullable(CONFIG.configKeys().get(configName)).map(c -> c.type);
+    }
+
+    public static Map<String, Object> defaultConfigsMap() {
+        Map<String, Object> clientMetricsProps = new HashMap<>();
+        clientMetricsProps.put(METRICS_CONFIG, Collections.emptyList());
+        clientMetricsProps.put(INTERVAL_MS_CONFIG, INTERVAL_MS_DEFAULT);
+        clientMetricsProps.put(MATCH_CONFIG, Collections.emptyList());
+        return clientMetricsProps;
     }
 
     public static Set<String> names() {
@@ -135,18 +149,18 @@ public class ClientMetricsConfigs extends AbstractConfig {
         Map<String, Object> parsed = CONFIG.parse(properties);
 
         // Make sure that push interval is between 100ms and 1 hour.
-        if (properties.containsKey(PUSH_INTERVAL_MS)) {
-            Integer pushIntervalMs = (Integer) parsed.get(PUSH_INTERVAL_MS);
+        if (properties.containsKey(INTERVAL_MS_CONFIG)) {
+            int pushIntervalMs = (Integer) parsed.get(INTERVAL_MS_CONFIG);
             if (pushIntervalMs < MIN_INTERVAL_MS || pushIntervalMs > MAX_INTERVAL_MS) {
                 String msg = String.format("Invalid value %s for %s, interval must be between 100 and 3600000 (1 hour)",
-                    pushIntervalMs, PUSH_INTERVAL_MS);
+                    pushIntervalMs, INTERVAL_MS_CONFIG);
                 throw new InvalidRequestException(msg);
             }
         }
 
         // Make sure that client match patterns are valid by parsing them.
-        if (properties.containsKey(CLIENT_MATCH_PATTERN)) {
-            List<String> patterns = (List<String>) parsed.get(CLIENT_MATCH_PATTERN);
+        if (properties.containsKey(MATCH_CONFIG)) {
+            List<String> patterns = (List<String>) parsed.get(MATCH_CONFIG);
             // Parse the client matching patterns to validate if the patterns are valid.
             parseMatchingPatterns(patterns);
         }
@@ -193,5 +207,15 @@ public class ClientMetricsConfigs extends AbstractConfig {
 
     private static boolean isValidParam(String paramName) {
         return ALLOWED_MATCH_PARAMS.contains(paramName);
+    }
+
+    /**
+     * Create a client metrics config instance using the given properties and defaults.
+     */
+    public static ClientMetricsConfigs fromProps(Map<?, ?> defaults, Properties overrides) {
+        Properties props = new Properties();
+        props.putAll(defaults);
+        props.putAll(overrides);
+        return new ClientMetricsConfigs(props);
     }
 }

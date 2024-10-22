@@ -35,9 +35,9 @@ import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.{CLUSTER, GROUP, TOPIC}
 import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms
+import org.apache.kafka.server.metrics.ClientMetricsConfigs
 import org.apache.kafka.storage.internals.log.LogConfig
 
-import scala.collection.mutable.ListBuffer
 import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOptional
@@ -136,21 +136,12 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
                   .setIsSensitive(false).setReadOnly(false).setSynonyms(List.empty.asJava))
 
           case ConfigResource.Type.CLIENT_METRICS =>
-            val subscriptionName = resource.resourceName
-            if (subscriptionName == null || subscriptionName.isEmpty) {
+            if (resource.resourceName == null || resource.resourceName.isEmpty) {
               throw new InvalidRequestException("Client metrics subscription name must not be empty")
             } else {
-              val entityProps = configRepository.config(new ConfigResource(ConfigResource.Type.CLIENT_METRICS, subscriptionName))
-              val configEntries = new ListBuffer[DescribeConfigsResponseData.DescribeConfigsResourceResult]()
-              entityProps.forEach((name, value) => {
-                configEntries += new DescribeConfigsResponseData.DescribeConfigsResourceResult().setName(name.toString)
-                  .setValue(value.toString).setConfigSource(ConfigSource.CLIENT_METRICS_CONFIG.id())
-                  .setIsSensitive(false).setReadOnly(false).setSynonyms(List.empty.asJava)
-              })
-
-              new DescribeConfigsResponseData.DescribeConfigsResult()
-                .setErrorCode(Errors.NONE.code)
-                .setConfigs(configEntries.asJava)
+              val clientMetricsProps = configRepository.config(new ConfigResource(ConfigResource.Type.CLIENT_METRICS, resource.resourceName))
+              val clientMetricsConfig = ClientMetricsConfigs.fromProps(ClientMetricsConfigs.defaultConfigsMap(), clientMetricsProps)
+              createResponseConfig(allConfigs(clientMetricsConfig), createClientMetricsConfigEntry(clientMetricsConfig, clientMetricsProps, includeSynonyms, includeDocumentation))
             }
 
           case ConfigResource.Type.GROUP =>
@@ -185,8 +176,8 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
     }
   }
 
-  def createGroupConfigEntry(groupConfig: GroupConfig, groupProps: Properties, includeSynonyms: Boolean, includeDocumentation: Boolean)
-                            (name: String, value: Any): DescribeConfigsResponseData.DescribeConfigsResourceResult = {
+  private def createGroupConfigEntry(groupConfig: GroupConfig, groupProps: Properties, includeSynonyms: Boolean, includeDocumentation: Boolean)
+                                    (name: String, value: Any): DescribeConfigsResponseData.DescribeConfigsResourceResult = {
     val allNames = brokerSynonyms(name)
     val configEntryType = GroupConfig.configType(name).toScala
     val isSensitive = KafkaConfig.maybeSensitive(configEntryType)
@@ -207,6 +198,28 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
     new DescribeConfigsResponseData.DescribeConfigsResourceResult()
       .setName(name).setValue(valueAsString).setConfigSource(source)
       .setIsSensitive(isSensitive).setReadOnly(false).setSynonyms(synonyms.asJava)
+      .setDocumentation(configDocumentation).setConfigType(dataType.id)
+  }
+
+  private def createClientMetricsConfigEntry(clientMetricsConfig: ClientMetricsConfigs, clientMetricsProps: Properties, includeSynonyms: Boolean, includeDocumentation: Boolean)
+                                            (name: String, value: Any): DescribeConfigsResponseData.DescribeConfigsResourceResult = {
+    val configEntryType = ClientMetricsConfigs.configType(name).asScala
+    val valueAsString = ConfigDef.convertToString(value, configEntryType.orNull)
+    val allSynonyms = {
+      if (!clientMetricsProps.containsKey(name)) {
+        Nil
+      } else {
+        new DescribeConfigsResponseData.DescribeConfigsSynonym().setName(name).setValue(valueAsString)
+          .setSource(ConfigSource.CLIENT_METRICS_CONFIG.id) :: Nil
+      }
+    }
+    val source = if (allSynonyms.isEmpty) ConfigSource.DEFAULT_CONFIG.id else allSynonyms.head.source
+    val synonyms = if (!includeSynonyms) List.empty else allSynonyms
+    val dataType = configResponseType(configEntryType)
+    val configDocumentation = if (includeDocumentation) clientMetricsConfig.documentationOf(name) else null
+    new DescribeConfigsResponseData.DescribeConfigsResourceResult()
+      .setName(name).setValue(valueAsString).setConfigSource(source)
+      .setIsSensitive(false).setReadOnly(false).setSynonyms(synonyms.asJava)
       .setDocumentation(configDocumentation).setConfigType(dataType.id)
   }
 
