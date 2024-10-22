@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server.config;
 
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 
@@ -30,7 +31,7 @@ import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Type.CLASS;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 
-public class QuotaConfigs {
+public class QuotaConfig {
     public static final String NUM_QUOTA_SAMPLES_CONFIG = "quota.window.num";
     public static final String NUM_QUOTA_SAMPLES_DOC = "The number of samples to retain in memory for client quotas";
     public static final String NUM_CONTROLLER_QUOTA_SAMPLES_CONFIG = "controller.quota.window.num";
@@ -105,15 +106,15 @@ public class QuotaConfigs {
     public static final int IP_CONNECTION_RATE_DEFAULT = Integer.MAX_VALUE;
 
     public static final ConfigDef CONFIG_DEF =  new ConfigDef()
-            .define(QuotaConfigs.NUM_QUOTA_SAMPLES_CONFIG, INT, QuotaConfigs.NUM_QUOTA_SAMPLES_DEFAULT, atLeast(1), LOW, QuotaConfigs.NUM_QUOTA_SAMPLES_DOC)
-            .define(QuotaConfigs.NUM_REPLICATION_QUOTA_SAMPLES_CONFIG, INT, QuotaConfigs.NUM_QUOTA_SAMPLES_DEFAULT, atLeast(1), LOW, QuotaConfigs.NUM_REPLICATION_QUOTA_SAMPLES_DOC)
-            .define(QuotaConfigs.NUM_ALTER_LOG_DIRS_REPLICATION_QUOTA_SAMPLES_CONFIG, INT, QuotaConfigs.NUM_QUOTA_SAMPLES_DEFAULT, atLeast(1), LOW, QuotaConfigs.NUM_ALTER_LOG_DIRS_REPLICATION_QUOTA_SAMPLES_DOC)
-            .define(QuotaConfigs.NUM_CONTROLLER_QUOTA_SAMPLES_CONFIG, INT, QuotaConfigs.NUM_QUOTA_SAMPLES_DEFAULT, atLeast(1), LOW, QuotaConfigs.NUM_CONTROLLER_QUOTA_SAMPLES_DOC)
-            .define(QuotaConfigs.QUOTA_WINDOW_SIZE_SECONDS_CONFIG, INT, QuotaConfigs.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT, atLeast(1), LOW, QuotaConfigs.QUOTA_WINDOW_SIZE_SECONDS_DOC)
-            .define(QuotaConfigs.REPLICATION_QUOTA_WINDOW_SIZE_SECONDS_CONFIG, INT, QuotaConfigs.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT, atLeast(1), LOW, QuotaConfigs.REPLICATION_QUOTA_WINDOW_SIZE_SECONDS_DOC)
-            .define(QuotaConfigs.ALTER_LOG_DIRS_REPLICATION_QUOTA_WINDOW_SIZE_SECONDS_CONFIG, INT, QuotaConfigs.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT, atLeast(1), LOW, QuotaConfigs.ALTER_LOG_DIRS_REPLICATION_QUOTA_WINDOW_SIZE_SECONDS_DOC)
-            .define(QuotaConfigs.CONTROLLER_QUOTA_WINDOW_SIZE_SECONDS_CONFIG, INT, QuotaConfigs.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT, atLeast(1), LOW, QuotaConfigs.CONTROLLER_QUOTA_WINDOW_SIZE_SECONDS_DOC)
-            .define(QuotaConfigs.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, CLASS, null, LOW, QuotaConfigs.CLIENT_QUOTA_CALLBACK_CLASS_DOC);
+            .define(QuotaConfig.NUM_QUOTA_SAMPLES_CONFIG, INT, QuotaConfig.NUM_QUOTA_SAMPLES_DEFAULT, atLeast(1), LOW, QuotaConfig.NUM_QUOTA_SAMPLES_DOC)
+            .define(QuotaConfig.NUM_REPLICATION_QUOTA_SAMPLES_CONFIG, INT, QuotaConfig.NUM_QUOTA_SAMPLES_DEFAULT, atLeast(1), LOW, QuotaConfig.NUM_REPLICATION_QUOTA_SAMPLES_DOC)
+            .define(QuotaConfig.NUM_ALTER_LOG_DIRS_REPLICATION_QUOTA_SAMPLES_CONFIG, INT, QuotaConfig.NUM_QUOTA_SAMPLES_DEFAULT, atLeast(1), LOW, QuotaConfig.NUM_ALTER_LOG_DIRS_REPLICATION_QUOTA_SAMPLES_DOC)
+            .define(QuotaConfig.NUM_CONTROLLER_QUOTA_SAMPLES_CONFIG, INT, QuotaConfig.NUM_QUOTA_SAMPLES_DEFAULT, atLeast(1), LOW, QuotaConfig.NUM_CONTROLLER_QUOTA_SAMPLES_DOC)
+            .define(QuotaConfig.QUOTA_WINDOW_SIZE_SECONDS_CONFIG, INT, QuotaConfig.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT, atLeast(1), LOW, QuotaConfig.QUOTA_WINDOW_SIZE_SECONDS_DOC)
+            .define(QuotaConfig.REPLICATION_QUOTA_WINDOW_SIZE_SECONDS_CONFIG, INT, QuotaConfig.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT, atLeast(1), LOW, QuotaConfig.REPLICATION_QUOTA_WINDOW_SIZE_SECONDS_DOC)
+            .define(QuotaConfig.ALTER_LOG_DIRS_REPLICATION_QUOTA_WINDOW_SIZE_SECONDS_CONFIG, INT, QuotaConfig.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT, atLeast(1), LOW, QuotaConfig.ALTER_LOG_DIRS_REPLICATION_QUOTA_WINDOW_SIZE_SECONDS_DOC)
+            .define(QuotaConfig.CONTROLLER_QUOTA_WINDOW_SIZE_SECONDS_CONFIG, INT, QuotaConfig.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT, atLeast(1), LOW, QuotaConfig.CONTROLLER_QUOTA_WINDOW_SIZE_SECONDS_DOC)
+            .define(QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, CLASS, null, LOW, QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_DOC);
     private static final Set<String> USER_AND_CLIENT_QUOTA_NAMES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
             PRODUCER_BYTE_RATE_OVERRIDE_CONFIG,
             CONSUMER_BYTE_RATE_OVERRIDE_CONFIG,
@@ -137,18 +138,94 @@ public class QuotaConfigs {
                 ConfigDef.Importance.MEDIUM, CONTROLLER_MUTATION_RATE_DOC);
     }
 
+    private final int numQuotaSamples;
+    private final int quotaWindowSizeSeconds;
+    private final int numReplicationQuotaSamples;
+    private final int replicationQuotaWindowSizeSeconds;
+    private final int numAlterLogDirsReplicationQuotaSamples;
+    private final int alterLogDirsReplicationQuotaWindowSizeSeconds;
+    private final int numControllerQuotaSamples;
+    private final int controllerQuotaWindowSizeSeconds;
+
+    public QuotaConfig(AbstractConfig config) {
+        this.numQuotaSamples = config.getInt(QuotaConfig.NUM_QUOTA_SAMPLES_CONFIG);
+        this.quotaWindowSizeSeconds = config.getInt(QuotaConfig.QUOTA_WINDOW_SIZE_SECONDS_CONFIG);
+        this.numReplicationQuotaSamples = config.getInt(QuotaConfig.NUM_REPLICATION_QUOTA_SAMPLES_CONFIG);
+        this.replicationQuotaWindowSizeSeconds = config.getInt(QuotaConfig.REPLICATION_QUOTA_WINDOW_SIZE_SECONDS_CONFIG);
+        this.numAlterLogDirsReplicationQuotaSamples = config.getInt(QuotaConfig.NUM_ALTER_LOG_DIRS_REPLICATION_QUOTA_SAMPLES_CONFIG);
+        this.alterLogDirsReplicationQuotaWindowSizeSeconds = config.getInt(QuotaConfig.ALTER_LOG_DIRS_REPLICATION_QUOTA_WINDOW_SIZE_SECONDS_CONFIG);
+        this.numControllerQuotaSamples = config.getInt(QuotaConfig.NUM_CONTROLLER_QUOTA_SAMPLES_CONFIG);
+        this.controllerQuotaWindowSizeSeconds = config.getInt(QuotaConfig.CONTROLLER_QUOTA_WINDOW_SIZE_SECONDS_CONFIG);
+    }
+
+   /**
+     * Gets the number of samples to retain in memory for client quotas.
+     */
+    public int numQuotaSamples() {
+        return numQuotaSamples;
+    }
+
+    /**
+     * Gets the time span of each sample for client quotas.
+     */
+    public int quotaWindowSizeSeconds() {
+        return quotaWindowSizeSeconds;
+    }
+
+    /**
+     * Gets the number of samples to retain in memory for replication quotas.
+     */
+    public int numReplicationQuotaSamples() {
+        return numReplicationQuotaSamples;
+    }
+
+    /**
+     * Gets the time span of each sample for replication quotas.
+     */
+    public int replicationQuotaWindowSizeSeconds() {
+        return replicationQuotaWindowSizeSeconds;
+    }
+
+    /**
+     * Gets the number of samples to retain in memory for alter log dirs replication quotas.
+     */
+    public int numAlterLogDirsReplicationQuotaSamples() {
+        return numAlterLogDirsReplicationQuotaSamples;
+    }
+
+    /**
+     * Gets the time span of each sample for alter log dirs replication quotas.
+     */
+    public int alterLogDirsReplicationQuotaWindowSizeSeconds() {
+        return alterLogDirsReplicationQuotaWindowSizeSeconds;
+    }
+
+    /**
+     * Gets the number of samples to retain in memory for controller mutation quotas.
+     */
+    public int numControllerQuotaSamples() {
+        return numControllerQuotaSamples;
+    }
+
+    /**
+     * Gets the time span of each sample for controller mutations quotas.
+     */
+    public int controllerQuotaWindowSizeSeconds() {
+        return controllerQuotaWindowSizeSeconds;
+    }
+
     public static ConfigDef brokerQuotaConfigs() {
         return new ConfigDef()
                 // Round minimum value down, to make it easier for users.
-                .define(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, ConfigDef.Type.LONG,
-                        QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT, ConfigDef.Range.atLeast(0),
-                        ConfigDef.Importance.MEDIUM, QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_DOC)
-                .define(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, ConfigDef.Type.LONG,
-                        QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT, ConfigDef.Range.atLeast(0),
-                        ConfigDef.Importance.MEDIUM, QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_DOC)
-                .define(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, ConfigDef.Type.LONG,
-                        QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT, ConfigDef.Range.atLeast(0),
-                        ConfigDef.Importance.MEDIUM, QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_DOC);
+                .define(QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, ConfigDef.Type.LONG,
+                        QuotaConfig.QUOTA_BYTES_PER_SECOND_DEFAULT, ConfigDef.Range.atLeast(0),
+                        ConfigDef.Importance.MEDIUM, QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_DOC)
+                .define(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, ConfigDef.Type.LONG,
+                        QuotaConfig.QUOTA_BYTES_PER_SECOND_DEFAULT, ConfigDef.Range.atLeast(0),
+                        ConfigDef.Importance.MEDIUM, QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_DOC)
+                .define(QuotaConfig.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, ConfigDef.Type.LONG,
+                        QuotaConfig.QUOTA_BYTES_PER_SECOND_DEFAULT, ConfigDef.Range.atLeast(0),
+                        ConfigDef.Importance.MEDIUM, QuotaConfig.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_DOC);
     }
 
     public static ConfigDef userAndClientQuotaConfigs() {

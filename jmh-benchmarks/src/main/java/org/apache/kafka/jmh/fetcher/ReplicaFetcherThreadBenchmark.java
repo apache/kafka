@@ -181,7 +181,7 @@ public class ReplicaFetcherThreadBenchmark {
             Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), tp)).thenReturn(Optional.of(0L));
             AlterPartitionManager isrChannelManager = Mockito.mock(AlterPartitionManager.class);
             Partition partition = new Partition(tp, 100, MetadataVersion.latestTesting(),
-                    0, () -> -1, Time.SYSTEM, alterPartitionListener, new DelayedOperationsMock(tp),
+                    0, () -> -1, Time.SYSTEM, alterPartitionListener, new DelayedOperationsMock(topicId, tp),
                     Mockito.mock(MetadataCache.class), logManager, isrChannelManager, topicId);
 
             partition.makeFollower(partitionState, offsetCheckpoints, topicId, Option.empty());
@@ -277,8 +277,8 @@ public class ReplicaFetcherThreadBenchmark {
 
     // avoid mocked DelayedOperations to avoid mocked class affecting benchmark results
     private static class DelayedOperationsMock extends DelayedOperations {
-        DelayedOperationsMock(TopicPartition topicPartition) {
-            super(topicPartition, null, null, null);
+        DelayedOperationsMock(Option<Uuid>  topicId, TopicPartition topicPartition) {
+            super(topicId, topicPartition, null, null, null, null);
         }
 
         @Override

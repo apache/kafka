@@ -16,7 +16,6 @@
  */
 package kafka.server.share;
 
-import kafka.server.DelayedActionQueue;
 import kafka.server.DelayedOperationPurgatory;
 import kafka.server.LogReadResult;
 import kafka.server.ReplicaManager;
@@ -27,7 +26,6 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.FencedStateEpochException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
@@ -93,7 +91,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -122,7 +119,6 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @Timeout(120)
@@ -1034,13 +1030,13 @@ public class SharePartitionManagerTest {
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
             "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
             DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
+        mockReplicaManagerDelayedShareFetch(replicaManager, delayedShareFetchPurgatory);
 
         SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withReplicaManager(replicaManager)
             .withTime(time)
             .withMetrics(metrics)
             .withTimer(mockTimer)
-            .withDelayedShareFetchPurgatory(delayedShareFetchPurgatory)
             .build();
 
         doAnswer(invocation -> buildLogReadResult(partitionMaxBytes.keySet())).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
@@ -1096,12 +1092,12 @@ public class SharePartitionManagerTest {
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
             "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
             DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
+        mockReplicaManagerDelayedShareFetch(replicaManager, delayedShareFetchPurgatory);
 
         SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withTime(time)
             .withReplicaManager(replicaManager)
             .withTimer(mockTimer)
-            .withDelayedShareFetchPurgatory(delayedShareFetchPurgatory)
             .build();
 
         SharePartition sp0 = mock(SharePartition.class);
@@ -1192,12 +1188,13 @@ public class SharePartitionManagerTest {
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
                 "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
                 DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
+        mockReplicaManagerDelayedShareFetch(replicaManager, delayedShareFetchPurgatory);
 
         SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withPartitionCacheMap(partitionCacheMap)
             .withReplicaManager(replicaManager)
             .withTimer(mockTimer)
-            .withDelayedShareFetchPurgatory(delayedShareFetchPurgatory).build();
+            .build();
 
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
             sharePartitionManager.fetchMessages(groupId, memberId.toString(), fetchParams, partitionMaxBytes);
@@ -1223,11 +1220,11 @@ public class SharePartitionManagerTest {
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
             "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
             DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
+        mockReplicaManagerDelayedShareFetch(replicaManager, delayedShareFetchPurgatory);
 
         SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withReplicaManager(replicaManager)
             .withTimer(mockTimer)
-            .withDelayedShareFetchPurgatory(delayedShareFetchPurgatory)
             .build();
 
         doAnswer(invocation -> buildLogReadResult(partitionMaxBytes.keySet())).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
@@ -1253,33 +1250,6 @@ public class SharePartitionManagerTest {
         sharePartitionManager.close();
         // Verify that the timer object in sharePartitionManager is closed by checking the calls to timer.close() and persister.stop().
         Mockito.verify(timer, times(1)).close();
-        Mockito.verify(persister, times(1)).stop();
-    }
-
-    @Test
-    public void testCloseShouldCompletePendingFetchRequests() throws Exception {
-        String groupId = "grp";
-        Uuid memberId = Uuid.randomUuid();
-        FetchParams fetchParams = new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, 0,
-            1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty());
-        Uuid fooId = Uuid.randomUuid();
-        TopicIdPartition tp0 = new TopicIdPartition(fooId, new TopicPartition("foo", 0));
-        Map<TopicIdPartition, Integer> partitionMaxBytes = Collections.singletonMap(tp0, PARTITION_MAX_BYTES);
-
-        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder().build();
-
-        // Acquire the fetch lock so fetch requests keep waiting in the queue.
-        assertTrue(sharePartitionManager.acquireProcessFetchQueueLock());
-        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
-            sharePartitionManager.fetchMessages(groupId, memberId.toString(), fetchParams, partitionMaxBytes);
-        // Verify that the fetch request is not completed.
-        assertFalse(future.isDone());
-
-        // Closing the sharePartitionManager closes pending fetch requests in the fetch queue.
-        sharePartitionManager.close();
-        // Verify that the fetch request is now completed.
-        assertTrue(future.isDone());
-        assertFutureThrows(future, BrokerNotAvailableException.class);
     }
 
     @Test
@@ -1641,49 +1611,6 @@ public class SharePartitionManagerTest {
     }
 
     @Test
-    public void testFetchQueueProcessingWhenFrontItemIsEmpty() {
-        String groupId = "grp";
-        String memberId = Uuid.randomUuid().toString();
-        FetchParams fetchParams = new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, DELAYED_SHARE_FETCH_MAX_WAIT_MS,
-            1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty());
-        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
-        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
-        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
-
-        final Time time = new MockTime();
-        ReplicaManager replicaManager = mock(ReplicaManager.class);
-
-        ShareFetchData shareFetchData1 = new ShareFetchData(
-                fetchParams, groupId, memberId, new CompletableFuture<>(), Collections.emptyMap());
-        ShareFetchData shareFetchData2 = new ShareFetchData(
-            fetchParams, groupId, memberId, new CompletableFuture<>(), partitionMaxBytes);
-
-        ConcurrentLinkedQueue<ShareFetchData> fetchQueue = new ConcurrentLinkedQueue<>();
-        // First request added to fetch queue is empty i.e. no topic partitions to fetch.
-        fetchQueue.add(shareFetchData1);
-        // Second request added to fetch queue has a topic partition to fetch.
-        fetchQueue.add(shareFetchData2);
-
-        DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
-                "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
-                DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
-
-        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
-            .withReplicaManager(replicaManager)
-            .withTime(time)
-            .withTimer(mockTimer)
-            .withDelayedShareFetchPurgatory(delayedShareFetchPurgatory)
-            .withFetchQueue(fetchQueue).build();
-
-        doAnswer(invocation -> buildLogReadResult(partitionMaxBytes.keySet())).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
-
-        sharePartitionManager.maybeProcessFetchQueue();
-
-        // Verifying that the second item in the fetchQueue is processed, even though the first item is empty.
-        verify(replicaManager, times(1)).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
-    }
-
-    @Test
     public void testAcknowledgeCompletesDelayedShareFetchRequest() {
         String groupId = "grp";
         String memberId = Uuid.randomUuid().toString();
@@ -1724,6 +1651,7 @@ public class SharePartitionManagerTest {
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
                 "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
                 DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
+        mockReplicaManagerDelayedShareFetch(replicaManager, delayedShareFetchPurgatory);
 
         // Initially you cannot acquire records for both sp1 and sp2.
         when(sp1.maybeAcquireFetchLock()).thenReturn(true);
@@ -1736,7 +1664,6 @@ public class SharePartitionManagerTest {
 
         SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withPartitionCacheMap(partitionCacheMap)
-            .withDelayedShareFetchPurgatory(delayedShareFetchPurgatory)
             .withReplicaManager(replicaManager)
             .withTimer(mockTimer)
             .build();
@@ -1820,6 +1747,7 @@ public class SharePartitionManagerTest {
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
                 "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
                 DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
+        mockReplicaManagerDelayedShareFetch(replicaManager, delayedShareFetchPurgatory);
 
         // Initially you cannot acquire records for both all 3 share partitions.
         when(sp1.maybeAcquireFetchLock()).thenReturn(true);
@@ -1834,7 +1762,6 @@ public class SharePartitionManagerTest {
 
         SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withPartitionCacheMap(partitionCacheMap)
-            .withDelayedShareFetchPurgatory(delayedShareFetchPurgatory)
             .withReplicaManager(replicaManager)
             .withTimer(mockTimer)
             .build();
@@ -1913,6 +1840,7 @@ public class SharePartitionManagerTest {
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
                 "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
                 DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
+        mockReplicaManagerDelayedShareFetch(replicaManager, delayedShareFetchPurgatory);
 
         // Initially you cannot acquire records for both sp1 and sp2.
         when(sp1.maybeAcquireFetchLock()).thenReturn(true);
@@ -1926,7 +1854,6 @@ public class SharePartitionManagerTest {
         SharePartitionManager sharePartitionManager = spy(SharePartitionManagerBuilder.builder()
             .withPartitionCacheMap(partitionCacheMap)
             .withCache(cache)
-            .withDelayedShareFetchPurgatory(delayedShareFetchPurgatory)
             .withReplicaManager(replicaManager)
             .withTimer(mockTimer)
             .build());
@@ -2013,6 +1940,7 @@ public class SharePartitionManagerTest {
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
                 "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
                 DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
+        mockReplicaManagerDelayedShareFetch(replicaManager, delayedShareFetchPurgatory);
 
         // Initially you cannot acquire records for both all 3 share partitions.
         when(sp1.maybeAcquireFetchLock()).thenReturn(true);
@@ -2028,7 +1956,6 @@ public class SharePartitionManagerTest {
         SharePartitionManager sharePartitionManager = spy(SharePartitionManagerBuilder.builder()
             .withPartitionCacheMap(partitionCacheMap)
             .withCache(cache)
-            .withDelayedShareFetchPurgatory(delayedShareFetchPurgatory)
             .withReplicaManager(replicaManager)
             .withTimer(mockTimer)
             .build());
@@ -2084,10 +2011,11 @@ public class SharePartitionManagerTest {
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
                 "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
                 DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
+        mockReplicaManagerDelayedShareFetch(replicaManager, delayedShareFetchPurgatory);
 
         SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withPartitionCacheMap(partitionCacheMap).withReplicaManager(replicaManager).withTimer(mockTimer)
-            .withDelayedShareFetchPurgatory(delayedShareFetchPurgatory).build();
+            .build();
 
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
             sharePartitionManager.fetchMessages(groupId, memberId.toString(), fetchParams, partitionMaxBytes);
@@ -2122,10 +2050,11 @@ public class SharePartitionManagerTest {
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
                 "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
                 DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
+        mockReplicaManagerDelayedShareFetch(replicaManager, delayedShareFetchPurgatory);
 
         SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withPartitionCacheMap(partitionCacheMap).withReplicaManager(replicaManager).withTimer(mockTimer)
-                .withDelayedShareFetchPurgatory(delayedShareFetchPurgatory).build();
+            .build();
 
         // Return LeaderNotAvailableException to simulate initialization failure.
         when(sp0.maybeInitialize()).thenReturn(FutureUtils.failedFuture(new LeaderNotAvailableException("Leader not available")));
@@ -2289,6 +2218,21 @@ public class SharePartitionManagerTest {
         return CollectionConverters.asScala(logReadResults).toSeq();
     }
 
+    static void mockReplicaManagerDelayedShareFetch(ReplicaManager replicaManager,
+                                                    DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory) {
+        doAnswer(invocationOnMock -> {
+            Object[] args = invocationOnMock.getArguments();
+            delayedShareFetchPurgatory.checkAndComplete(args[0]);
+            return null;
+        }).when(replicaManager).completeDelayedShareFetchRequest(any(DelayedShareFetchKey.class));
+
+        doAnswer(invocationOnMock -> {
+            Object[] args = invocationOnMock.getArguments();
+            delayedShareFetchPurgatory.tryCompleteElseWatch((DelayedShareFetch) args[0], (Seq<Object>) args[1]);
+            return null;
+        }).when(replicaManager).addDelayedShareFetchRequest(any(), any());
+    }
+
     static class SharePartitionManagerBuilder {
         private ReplicaManager replicaManager = mock(ReplicaManager.class);
         private Time time = new MockTime();
@@ -2297,9 +2241,6 @@ public class SharePartitionManagerTest {
         private Persister persister = NoOpShareStatePersister.getInstance();
         private Timer timer = new MockTimer();
         private Metrics metrics = new Metrics();
-        private ConcurrentLinkedQueue<ShareFetchData> fetchQueue = new ConcurrentLinkedQueue<>();
-        private DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = mock(DelayedOperationPurgatory.class);
-        private DelayedActionQueue delayedActionsQueue = mock(DelayedActionQueue.class);
 
         private SharePartitionManagerBuilder withReplicaManager(ReplicaManager replicaManager) {
             this.replicaManager = replicaManager;
@@ -2336,21 +2277,6 @@ public class SharePartitionManagerTest {
             return this;
         }
 
-        private SharePartitionManagerBuilder withFetchQueue(ConcurrentLinkedQueue<ShareFetchData> fetchQueue) {
-            this.fetchQueue = fetchQueue;
-            return this;
-        }
-
-        SharePartitionManagerBuilder withDelayedShareFetchPurgatory(DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory) {
-            this.delayedShareFetchPurgatory = delayedShareFetchPurgatory;
-            return this;
-        }
-
-        SharePartitionManagerBuilder withDelayedActionsQueue(DelayedActionQueue delayedActionsQueue) {
-            this.delayedActionsQueue = delayedActionsQueue;
-            return this;
-        }
-
         public static SharePartitionManagerBuilder builder() {
             return new SharePartitionManagerBuilder();
         }
@@ -2360,14 +2286,11 @@ public class SharePartitionManagerTest {
                     time,
                     cache,
                     partitionCacheMap,
-                    fetchQueue,
                     DEFAULT_RECORD_LOCK_DURATION_MS,
                     timer,
                     MAX_DELIVERY_COUNT,
                     MAX_IN_FLIGHT_MESSAGES,
                     persister,
-                    delayedShareFetchPurgatory,
-                    delayedActionsQueue,
                     mock(GroupConfigManager.class),
                     metrics);
         }
