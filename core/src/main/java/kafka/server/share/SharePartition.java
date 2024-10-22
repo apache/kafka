@@ -1718,11 +1718,18 @@ public class SharePartition {
         Iterable<? extends RecordBatch> batches,
         long offset
     ) {
+        // Fetch the last batch which might contains the request offset. Avoid calling lastOffset()
+        // on the batches as it loads the header in memory.
+        RecordBatch previousBatch = null;
         for (RecordBatch batch : batches) {
-            if (offset >= batch.baseOffset() && offset <= batch.lastOffset()) {
-                return batch.lastOffset();
+            if (offset >= batch.baseOffset()) {
+                previousBatch =  batch;
+                continue;
             }
+            break;
         }
+        if (previousBatch != null && offset <= previousBatch.lastOffset())
+            return previousBatch.lastOffset();
         return offset;
     }
 

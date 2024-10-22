@@ -27,7 +27,7 @@ import java.util.List;
  */
 public class ShareAcquiredRecords {
 
-    public static final ShareAcquiredRecords EMPTY_SHARE_ACQUIRED_RECORDS = new ShareAcquiredRecords();
+    private static final ShareAcquiredRecords EMPTY_SHARE_ACQUIRED_RECORDS = new ShareAcquiredRecords();
 
     /**
      * The list of acquired records.
