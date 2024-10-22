@@ -86,7 +86,7 @@ class StreamsRelationalSmokeTest(KafkaTest):
 
     @cluster(num_nodes=8)
     @matrix(crash=[False, True],
-            metadata_quorum=[quorum.isolated_kraft])
+            metadata_quorum=[quorum.combined_kraft])
     def test_streams(self, crash, metadata_quorum):
         driver = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "driver", "ignored", "ignored")
         processing_guarantee='exactly_once_v2'
