@@ -33,7 +33,7 @@ public class ServerConnectionId {
 
     // The regex for parsing the URI string. The URI string should be in the format of "host:port",
     //  where host can be an IPv4 address or an IPv6 address.
-    //  Note: The IPv6 address will not be enclosed in square brackets.
+    //  Note: The IPv6 address should not be enclosed in square brackets.
     private static final Pattern URI_PARSE_EXP = Pattern.compile("([0-9a-zA-Z\\-%._:]*):([0-9]+)");
 
     private final String localHost;
