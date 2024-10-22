@@ -27,6 +27,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.metadata.{BrokerRegistration, VersionRange}
 import org.apache.kafka.server.authorizer.AuthorizerServerInfo
+import org.apache.kafka.server.network.BrokerEndPoint
 
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
