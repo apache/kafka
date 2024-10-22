@@ -19,6 +19,7 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.controller.errors.PeriodicControlTaskException;
 
 import org.slf4j.Logger;
 
@@ -28,6 +29,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
+import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 
@@ -84,7 +86,18 @@ class PeriodicTaskControlManager {
             if (log.isDebugEnabled() || task.flags().contains(PeriodicTaskFlag.VERBOSE)) {
                 startNs = time.nanoseconds();
             }
-            ControllerResult<Boolean> result = task.op().get();
+            ControllerResult<Boolean> result;
+            try {
+                result = task.op().get();
+            } catch (Exception e) {
+                // Reschedule the task after a lengthy delay.
+                reschedule(task, false, true);
+                // We wrap the exception in a PeriodicControlTaskException before throwing it to ensure
+                // that it is handled correctly in QuorumController::handleEventException. We want it to
+                // cause the metadata error metric to be incremented, but not cause a controller failover.
+                throw new PeriodicControlTaskException(task.name() + ": periodic task failed: " +
+                    e.getMessage(), e);
+            }
             if (log.isDebugEnabled() || task.flags().contains(PeriodicTaskFlag.VERBOSE)) {
                 long endNs = time.nanoseconds();
                 long durationUs = TimeUnit.NANOSECONDS.toMicros(endNs - startNs);
@@ -96,7 +109,7 @@ class PeriodicTaskControlManager {
                             task.name(), result.records().size(), durationUs);
                 }
             }
-            reschedule(task, result.response());
+            reschedule(task, result.response(), false);
             if (result.isAtomic()) {
                 return ControllerResult.atomicOf(result.records(), null);
             } else {
@@ -154,7 +167,7 @@ class PeriodicTaskControlManager {
         tasks.put(task.name(), task);
         log.info("Registering periodic task {} to run every {} ms", task.name(),
                 NANOSECONDS.toMillis(task.periodNs()));
-        reschedule(task, false);
+        reschedule(task, false, false);
     }
 
     void unregisterTask(String taskName) {
@@ -164,27 +177,35 @@ class PeriodicTaskControlManager {
             return;
         }
         log.info("Unregistering periodic task {}", taskName);
-        reschedule(task, false);
+        reschedule(task, false, false);
     }
 
-    private long nextDelayTimeNs(PeriodicTask task, boolean immediate) {
-        if (!immediate) {
+    private long nextDelayTimeNs(PeriodicTask task, boolean immediate, boolean error) {
+        if (immediate) {
+            // The current implementation of KafkaEventQueue always picks from the deferred
+            // collection of operations before picking from the non-deferred collection of
+            // operations. This can result in some unfairness if deferred operation are
+            // scheduled for immediate execution. This delays them by a small amount of time.
+            return NANOSECONDS.convert(10, TimeUnit.MILLISECONDS);
+        } else if (error) {
+            // If the periodic task hit an error, reschedule it in 5 minutes. This is to avoid
+            // scenarios where we spin in a tight loop hitting errors, but still give the task
+            // a chance to succeed.
+            return MINUTES.convert(5, TimeUnit.MILLISECONDS);
+        } else {
+            // Otherwise, use the designated period.
             return task.periodNs();
         }
-        // The current implementation of KafkaEventQueue always picks from the deferred collection of operations
-        // before picking from the non-deferred collection of operations. This can result in some unfairness if
-        // deferred operation are scheduled for immediate execution. This delays them by a small amount of time.
-        return NANOSECONDS.convert(10, TimeUnit.MILLISECONDS);
     }
 
-    private void reschedule(PeriodicTask task, boolean immediate) {
+    private void reschedule(PeriodicTask task, boolean immediate, boolean error) {
         if (!active) {
             log.trace("cancelling {} because we are inactive.", task.name());
             queueAccessor.cancelDeferred(task.name());
         } else if (tasks.containsKey(task.name())) {
-            long nextDelayTimeNs = nextDelayTimeNs(task, immediate);
+            long nextDelayTimeNs = nextDelayTimeNs(task, immediate, error);
             long nextRunTimeNs = time.nanoseconds() + nextDelayTimeNs;
-            log.trace("rescheduling {} in {} ns (immediate = {})",
+            log.trace("rescheduling {} in {} ns (immediate = {}, error = {})",
                     task.name(), nextDelayTimeNs, immediate);
             queueAccessor.scheduleDeferred(task.name(),
                     nextRunTimeNs,
@@ -204,7 +225,7 @@ class PeriodicTaskControlManager {
         }
         active = true;
         for (PeriodicTask task : tasks.values()) {
-            reschedule(task, false);
+            reschedule(task, false, false);
         }
         String[] taskNames = tasks.keySet().toArray(new String[0]);
         Arrays.sort(taskNames);
@@ -220,7 +241,7 @@ class PeriodicTaskControlManager {
         }
         active = false;
         for (PeriodicTask task : tasks.values()) {
-            reschedule(task, false);
+            reschedule(task, false, false);
         }
         String[] taskNames = tasks.keySet().toArray(new String[0]);
         Arrays.sort(taskNames);

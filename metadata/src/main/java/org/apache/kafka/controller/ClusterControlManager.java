@@ -731,6 +731,9 @@ public class ClusterControlManager {
     }
 
     BrokerHeartbeatManager heartbeatManager() {
+        // We throw RuntimeException here rather than NotControllerException because all the callers
+        // have already verified that we are active. For example, ControllerWriteEvent.run verifies
+        // that we are the current active controller before running any event-specific code.
         if (heartbeatManager == null) {
             throw new RuntimeException("ClusterControlManager is not active.");
         }
