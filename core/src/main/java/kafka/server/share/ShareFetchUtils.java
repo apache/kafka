@@ -18,6 +18,7 @@ package kafka.server.share;
 
 import kafka.server.ReplicaManager;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
@@ -37,6 +38,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import scala.Option;
+import scala.Some;
 
 /**
  * Utility class for post-processing of share fetch operations.
@@ -116,5 +118,18 @@ public class ShareFetchUtils {
                 topicIdPartition.topicPartition(), ListOffsetsRequest.EARLIEST_TIMESTAMP, Option.empty(),
                 Optional.empty(), true).timestampAndOffsetOpt();
         return timestampAndOffset.isEmpty() ? (long) 0 : timestampAndOffset.get().offset;
+    }
+
+    /**
+     * The method is used to get the offset for the latest timestamp for the topic-partition.
+     *
+     * @return The offset for the latest timestamp.
+     */
+    static long offsetForLatestTimestamp(TopicIdPartition topicIdPartition, ReplicaManager replicaManager) {
+        // Isolation level is set to READ_UNCOMMITTED, matching with that used in share fetch requests
+        Option<FileRecords.TimestampAndOffset> timestampAndOffset = replicaManager.fetchOffsetForTimestamp(
+            topicIdPartition.topicPartition(), ListOffsetsRequest.LATEST_TIMESTAMP, new Some<>(IsolationLevel.READ_UNCOMMITTED),
+            Optional.empty(), true).timestampAndOffsetOpt();
+        return timestampAndOffset.get().offset;
     }
 }

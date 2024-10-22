@@ -32,6 +32,7 @@ import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
 import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
@@ -65,6 +66,9 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+
+import static kafka.server.share.ShareFetchUtils.offsetForEarliestTimestamp;
+import static kafka.server.share.ShareFetchUtils.offsetForLatestTimestamp;
 
 /**
  * The SharePartition is used to track the state of a partition that is shared between multiple
@@ -314,6 +318,7 @@ public class SharePartition {
      * @return The method returns a future which is completed when the share partition is initialized
      *         or completes with an exception if the share partition is in non-initializable state.
      */
+    @SuppressWarnings("CyclomaticComplexity")
     public CompletableFuture<Void> maybeInitialize() {
         log.debug("Maybe initialize share partition: {}-{}", groupId, topicIdPartition);
         CompletableFuture<Void> future = new CompletableFuture<>();
@@ -382,7 +387,25 @@ public class SharePartition {
                 }
 
                 // Set the state epoch and end offset from the persisted state.
-                startOffset = partitionData.startOffset() != -1 ? partitionData.startOffset() : 0;
+                if (partitionData.startOffset() != PartitionFactory.DEFAULT_START_OFFSET) {
+                    startOffset = partitionData.startOffset();
+                } else {
+                    GroupConfig.ShareGroupAutoOffsetReset offsetResetStrategy;
+                    if (groupConfigManager.groupConfig(groupId).isPresent()) {
+                        offsetResetStrategy = groupConfigManager.groupConfig(groupId).get().shareAutoOffsetReset();
+                        if (offsetResetStrategy == GroupConfig.ShareGroupAutoOffsetReset.UNKNOWN) {
+                            offsetResetStrategy = GroupConfig.defaultShareAutoOffsetReset();
+                        }
+                    } else {
+                        offsetResetStrategy = GroupConfig.defaultShareAutoOffsetReset();
+                    }
+
+                    if (offsetResetStrategy == GroupConfig.ShareGroupAutoOffsetReset.EARLIEST) {
+                        startOffset = offsetForEarliestTimestamp(topicIdPartition, replicaManager);
+                    } else {
+                        startOffset = offsetForLatestTimestamp(topicIdPartition, replicaManager);
+                    }
+                }
                 stateEpoch = partitionData.stateEpoch();
 
                 List<PersisterStateBatch> stateBatches = partitionData.stateBatches();
@@ -408,7 +431,7 @@ public class SharePartition {
                     // and start/end offsets.
                     maybeUpdateCachedStateAndOffsets();
                 } else {
-                    endOffset = partitionData.startOffset();
+                    endOffset = startOffset;
                 }
                 // Set the partition state to Active and complete the future.
                 partitionState = SharePartitionState.ACTIVE;
