@@ -28,12 +28,12 @@ import org.apache.kafka.common.test.TestKitNodes;
 import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.BrokerState;
-
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.storage.FormatterException;
 import org.apache.kafka.server.common.FeatureVersion;
 import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
+
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
 import org.junit.jupiter.api.extension.BeforeTestExecutionCallback;
 import org.junit.jupiter.api.extension.Extension;
@@ -250,7 +250,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                     if (!featureName.equals(MetadataVersion.FEATURE_NAME)) {
                         if (!nameToSupportedFeature.containsKey(featureName)) {
                             throw new FormatterException("Unsupported feature: " + featureName +
-                                    ". Supported features are: " + String.join(", ", nameToSupportedFeature.keySet()));
+                                ". Supported features are: " + String.join(", ", nameToSupportedFeature.keySet()));
                         }
                     }
                     newFeatureLevels.put(featureName, level);
@@ -261,7 +261,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 Features.PRODUCTION_FEATURES.forEach(supportedFeature -> {
                     if (!newFeatureLevels.containsKey(supportedFeature.featureName())) {
                         newFeatureLevels.put(supportedFeature.featureName(),
-                                supportedFeature.defaultValue(clusterConfig.metadataVersion()));
+                            supportedFeature.defaultValue(clusterConfig.metadataVersion()));
                     }
                 });
 
@@ -273,7 +273,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                         short level = entry.getValue();
                         Features supportedFeature = nameToSupportedFeature.get(featureName);
                         FeatureVersion featureVersion =
-                                supportedFeature.fromFeatureLevel(level, true);
+                            supportedFeature.fromFeatureLevel(level, true);
                         Features.validateVersion(featureVersion, newFeatureLevels);
                     }
                 }
@@ -286,7 +286,8 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                         .setPerServerProperties(clusterConfig.perServerOverrideProperties())
                         .setNumControllerNodes(clusterConfig.numControllers())
                         .setBrokerListenerName(listenerName)
-                        .setBrokerSecurityProtocol(clusterConfig.brokerSecurityProtocol()).build();
+                        .setBrokerSecurityProtocol(clusterConfig.brokerSecurityProtocol())
+                        .build();
                 KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(nodes);
                 // Copy properties into the TestKit builder
                 clusterConfig.serverProperties().forEach(builder::setConfigProp);
