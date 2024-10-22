@@ -107,14 +107,14 @@ public class ClientQuotaControlManagerTest {
         ClientQuotaEntity userEntity = userEntity("user-1");
         List<ClientQuotaAlteration> alters = new ArrayList<>();
         Map<ClientQuotaEntity, Map<String, Double>> quotaResult = Collections.singletonMap(userEntity,
-                Collections.singletonMap(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, 10000.0));
+                Collections.singletonMap(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, 10000.0));
 
 
         // Add one quota
-        entityQuotaToAlterations(userEntity, quotas(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, 10000.0), alters::add);
+        entityQuotaToAlterations(userEntity, quotas(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, 10000.0), alters::add);
         alterQuotas(alters, manager);
         assertEquals(1, manager.clientQuotaData.get(userEntity).size());
-        assertEquals(10000.0, manager.clientQuotaData.get(userEntity).get(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG), 1e-6);
+        assertEquals(10000.0, manager.clientQuotaData.get(userEntity).get(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG), 1e-6);
 
         // Describe quota
         Map<ClientQuotaEntity, Map<String, Double>> res = manager.describeClientQuotas(SnapshotRegistry.LATEST_EPOCH, ClientQuotaFilter.all());
