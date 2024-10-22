@@ -36,8 +36,8 @@ fetch_jdk_tgz() {
   fi
 }
 
-JDK_MAJOR="${JDK_MAJOR:-8}"
-JDK_FULL="${JDK_FULL:-8u202-linux-x64}"
+JDK_MAJOR="${JDK_MAJOR:-11}"
+JDK_FULL="${JDK_FULL:-11.0.2-linux-x64}"
 
 if [ -z `which javac` ]; then
     apt-get -y update
