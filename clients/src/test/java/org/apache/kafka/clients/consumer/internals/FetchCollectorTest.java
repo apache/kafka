@@ -653,7 +653,7 @@ public class FetchCollectorTest {
 
     @Test
     public void testReadCommittedWithAbortedTransaction() {
-        buildDependencies(IsolationLevel.READ_UNCOMMITTED);
+        buildDependencies(IsolationLevel.READ_COMMITTED);
         int recordCount = 20;
         assignAndSeek(topicAPartition0);
 
@@ -710,7 +710,7 @@ public class FetchCollectorTest {
     }
 
     private void buildDependencies() {
-        buildDependencies(DEFAULT_MAX_POLL_RECORDS, IsolationLevel.READ_COMMITTED);
+        buildDependencies(DEFAULT_MAX_POLL_RECORDS, IsolationLevel.READ_UNCOMMITTED);
     }
 
     private void buildDependencies(IsolationLevel isolationLevel) {
@@ -718,7 +718,7 @@ public class FetchCollectorTest {
     }
 
     private void buildDependencies(int maxPollRecords) {
-        buildDependencies(maxPollRecords, IsolationLevel.READ_COMMITTED);
+        buildDependencies(maxPollRecords, IsolationLevel.READ_UNCOMMITTED);
     }
 
     private void buildDependencies(int maxPollRecords, IsolationLevel isolationLevel) {
