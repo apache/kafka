@@ -16,27 +16,24 @@
  */
 package org.apache.kafka.jmh.core;
 
+import joptsimple.ArgumentAcceptingOptionSpec;
+import joptsimple.OptionParser;
+import joptsimple.OptionSet;
 import kafka.server.DelayedOperation;
 import kafka.server.DelayedOperationPurgatory;
-
+import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.server.util.ShutdownableThread;
+import scala.Option;
+import scala.jdk.javaapi.CollectionConverters;
 
-import org.openjdk.jmh.annotations.Benchmark;
-import org.openjdk.jmh.annotations.BenchmarkMode;
-import org.openjdk.jmh.annotations.Fork;
-import org.openjdk.jmh.annotations.Level;
-import org.openjdk.jmh.annotations.Measurement;
-import org.openjdk.jmh.annotations.Mode;
-import org.openjdk.jmh.annotations.OutputTimeUnit;
-import org.openjdk.jmh.annotations.Param;
-import org.openjdk.jmh.annotations.Scope;
-import org.openjdk.jmh.annotations.Setup;
-import org.openjdk.jmh.annotations.State;
-import org.openjdk.jmh.annotations.TearDown;
-import org.openjdk.jmh.annotations.Warmup;
-
+import java.lang.management.GarbageCollectorMXBean;
+import java.lang.management.ManagementFactory;
+import java.lang.management.MemoryManagerMXBean;
+import java.lang.management.OperatingSystemMXBean;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.DelayQueue;
@@ -46,102 +43,202 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import scala.Option;
-import scala.jdk.javaapi.CollectionConverters;
+import static java.lang.String.format;
 
-@State(Scope.Benchmark)
-@Fork(value = 1)
-@Warmup(iterations = 5)
-@Measurement(iterations = 15)
-@BenchmarkMode({Mode.AverageTime, Mode.Throughput})
-@OutputTimeUnit(TimeUnit.NANOSECONDS)
 public class TestPurgatoryPerformance {
 
-    /**
-     * The number of requests
-     */
-    @Param({"100"})
-    private Integer numRequests;
-    /**
-     * The request rate per second
-     */
-    @Param({"10.0"})
-    private Double requestRate;
-    /**
-     * The total number of possible keys
-     */
-    @Param({"100"})
-    private Integer numPossibleKeys;
-    /**
-     * The number of keys for each request
-     */
-    @Param({"3"})
-    private Integer numKeys;
-    /**
-     * The request timeout in ms
-     */
-    @Param({"1000"})
-    private Long timeout;
-    /**
-     * 75th percentile of request latency in ms (log-normal distribution)
-     */
-    @Param({"0.75"})
-    private Double pct75;
-    /**
-     * 50th percentile of request latency in ms (log-normal distribution)
-     */
-    @Param({"0.5"})
-    private Double pct50;
+    public static void main(String[] args) throws InterruptedException {
+        TestArgumentDefinition def = new TestArgumentDefinition(args);
+        def.checkRequiredArgs();
 
-    private Random rand;
+        int numRequests = def.numRequests();
+        double requestRate = def.requestRate();
+        int numPossibleKeys = def.numPossibleKeys();
+        int numKeys = def.numKeys();
+        long timeout = def.timeout();
+        double pct75 = def.pct75();
+        double pct50 = def.pct50();
+        boolean verbose = def.verbose();
 
-    private DelayedOperationPurgatory<FakeOperation> purgatory;
-    private CompletionQueue queue;
-
-    @Setup(Level.Invocation)
-    public void setUpInvocation() {
-        rand = new Random();
-    }
-
-    @Setup(Level.Trial)
-    public void setUpTrial() {
-        purgatory = DelayedOperationPurgatory.apply("fake purgatory",
-                0, 1000, true, true);
-        queue = new CompletionQueue();
-    }
-
-    @TearDown(Level.Trial)
-    public void tearDownTrial() throws InterruptedException {
-        queue.shutdown();
-        purgatory.shutdown();
-    }
-
-    @Benchmark
-    public void testPurgatoryPerformance() throws InterruptedException {
+        List<GarbageCollectorMXBean> gcMXBeans = ManagementFactory.getGarbageCollectorMXBeans();
+        gcMXBeans.sort(Comparator.comparing(MemoryManagerMXBean::getName));
+        OperatingSystemMXBean osMXBean = ManagementFactory.getOperatingSystemMXBean();
         LatencySamples latencySamples = new LatencySamples(1000000, pct75, pct50);
         IntervalSamples intervalSamples = new IntervalSamples(1000000, requestRate);
-        CountDownLatch latch = new CountDownLatch(numRequests);
-        
-        List<String> keys = IntStream.range(0, numRequests)
-                .mapToObj(i -> String.format("fakeKey%d", rand.nextInt(numPossibleKeys)))
-                .collect(Collectors.toList());
-        AtomicLong requestArrivalTime = new AtomicLong(System.currentTimeMillis());
-        AtomicLong end = new AtomicLong(0);
-        Runnable generate = () -> generateTask(intervalSamples, latencySamples, requestArrivalTime, latch, keys, end);
 
-        Thread generateThread = new Thread(generate);
+        DelayedOperationPurgatory<FakeOperation> purgatory =
+                DelayedOperationPurgatory.apply("fake purgatory", 0, 1000, true, true);
+        CompletionQueue queue = new CompletionQueue();
+
+        List<String> gcNames = gcMXBeans.stream().map(MemoryManagerMXBean::getName).collect(Collectors.toList());
+        CountDownLatch latch = new CountDownLatch(numRequests);
+        long initialCpuTimeNano = getProcessCpuTimeNanos(osMXBean).orElseThrow();
+        long start = System.currentTimeMillis();
+        Random rand = new Random();
+        List<String> keys = IntStream.range(0, numKeys)
+                .mapToObj(i -> format("fakeKey%d", rand.nextInt(numPossibleKeys)))
+                .collect(Collectors.toList());
+
+        AtomicLong requestArrivalTime = new AtomicLong(start);
+        AtomicLong end = new AtomicLong(0);
+        Runnable task = () -> generateTask(numRequests, timeout, purgatory, queue, intervalSamples,
+                latencySamples, requestArrivalTime, latch, keys, end);
+
+        Thread generateThread = new Thread(task);
         generateThread.start();
         generateThread.join();
         latch.await();
+
+        long done = System.currentTimeMillis();
+        queue.shutdown();
+
+        if (verbose) {
+            latencySamples.printStats();
+            intervalSamples.printStats();
+            System.out.printf("# enqueue rate (%d requests):%n", numRequests);
+            String gcCountHeader = gcNames.stream().map(gc -> "<" + gc + " count>").collect(Collectors.joining(" "));
+            String gcTimeHeader = gcNames.stream().map(gc -> "<" + gc + " time ms>").collect(Collectors.joining(" "));
+            System.out.printf("# <elapsed time ms>\t<target rate>\t<actual rate>\t<process cpu time ms>\t%s\t%s%n", gcCountHeader, gcTimeHeader);
+        }
+
+        double targetRate = numRequests * 1000d / (requestArrivalTime.get() - start);
+        double actualRate = numRequests * 1000d / (end.get() - start);
+
+        Optional<Long> cpuTime = getProcessCpuTimeNanos(osMXBean).map(x -> (x - initialCpuTimeNano) / 1000000L);
+        String gcCounts = gcMXBeans.stream()
+                .map(GarbageCollectorMXBean::getCollectionCount)
+                .map(String::valueOf)
+                .collect(Collectors.joining(" "));
+        String gcTimes = gcMXBeans.stream()
+                .map(GarbageCollectorMXBean::getCollectionTime)
+                .map(String::valueOf)
+                .collect(Collectors.joining(" "));
+
+        System.out.printf("%d\t%f\t%f\t%d\t%s\t%s%n", done - start, targetRate, actualRate, cpuTime.orElse(-1L), gcCounts, gcTimes);
+        purgatory.shutdown();
     }
 
-    private void generateTask(IntervalSamples intervalSamples,
-                              LatencySamples latencySamples,
-                              AtomicLong requestArrivalTime,
-                              CountDownLatch latch,
-                              List<String> keys,
-                              AtomicLong end) {
-        Integer i = numRequests;
+    private static Optional<Long> getProcessCpuTimeNanos(OperatingSystemMXBean osMXBean) {
+        try {
+            return Optional.of(Long.parseLong(Class.forName("com.sun.management.OperatingSystemMXBean")
+                    .getMethod("getProcessCpuTime").invoke(osMXBean).toString()));
+        } catch (Exception e) {
+            try {
+                return Optional.of(Long.parseLong(Class.forName("com.ibm.lang.management.OperatingSystemMXBean")
+                        .getMethod("getProcessCpuTimeByNS").invoke(osMXBean).toString()));
+            } catch (Exception ex) {
+                throw new RuntimeException(ex);
+            }
+        }
+    }
+
+    private static class TestArgumentDefinition {
+        final OptionParser parser = new OptionParser(false);
+        public final ArgumentAcceptingOptionSpec<Integer> keySpaceSizeOpt;
+        public final ArgumentAcceptingOptionSpec<Double> numRequestsOpt;
+        public final ArgumentAcceptingOptionSpec<Double> requestRateOpt;
+        public final ArgumentAcceptingOptionSpec<Integer> numKeysOpt;
+        public final ArgumentAcceptingOptionSpec<Long> timeoutOpt;
+        public final ArgumentAcceptingOptionSpec<Double> pct75Opt;
+        public final ArgumentAcceptingOptionSpec<Double> pct50Opt;
+        public final ArgumentAcceptingOptionSpec<Boolean> verboseOpt;
+        public OptionSet options;
+
+        public TestArgumentDefinition(String[] args) {
+            this.keySpaceSizeOpt = parser
+                    .accepts("key-space-size", "The total number of possible keys")
+                    .withRequiredArg()
+                    .describedAs("total_num_possible_keys")
+                    .ofType(Integer.class)
+                    .defaultsTo(100);
+            this.numRequestsOpt = parser
+                    .accepts("num", "The number of requests")
+                    .withRequiredArg()
+                    .describedAs("num_requests")
+                    .ofType(Double.class);
+            this.requestRateOpt = parser
+                    .accepts("rate", "The request rate per second")
+                    .withRequiredArg()
+                    .describedAs("request_per_second")
+                    .ofType(Double.class);
+            this.numKeysOpt = parser
+                    .accepts("keys", "The number of keys for each request")
+                    .withRequiredArg()
+                    .describedAs("num_keys")
+                    .ofType(Integer.class)
+                    .defaultsTo(3);
+            this.timeoutOpt = parser
+                    .accepts("timeout", "The request timeout in ms")
+                    .withRequiredArg()
+                    .describedAs("timeout_milliseconds")
+                    .ofType(Long.class);
+            this.pct75Opt = parser
+                    .accepts("pct75", "75th percentile of request latency in ms (log-normal distribution)")
+                    .withRequiredArg()
+                    .describedAs("75th_percentile")
+                    .ofType(Double.class);
+            this.pct50Opt = parser
+                    .accepts("pct50", "50th percentile of request latency in ms (log-normal distribution)")
+                    .withRequiredArg()
+                    .describedAs("50th_percentile")
+                    .ofType(Double.class);
+            this.verboseOpt = parser
+                    .accepts("verbose", "show additional information")
+                    .withRequiredArg()
+                    .describedAs("true|false")
+                    .ofType(Boolean.class)
+                    .defaultsTo(true);
+            this.options = parser.parse(args);
+        }
+
+        public void checkRequiredArgs() {
+            CommandLineUtils.checkRequiredArgs(parser, options, numRequestsOpt, requestRateOpt, pct75Opt, pct50Opt);
+        }
+
+        public int numRequests() {
+            return options.valueOf(numRequestsOpt).intValue();
+        }
+
+        public double requestRate() {
+            return options.valueOf(requestRateOpt);
+        }
+
+        public int numPossibleKeys() {
+            return options.valueOf(keySpaceSizeOpt);
+        }
+
+        public int numKeys() {
+            return options.valueOf(numKeysOpt);
+        }
+
+        public long timeout() {
+            return options.valueOf(timeoutOpt);
+        }
+
+        public double pct75() {
+            return options.valueOf(pct75Opt);
+        }
+
+        public double pct50() {
+            return options.valueOf(pct50Opt);
+        }
+
+        public boolean verbose() {
+            return options.valueOf(verboseOpt);
+        }
+    }
+
+    private static void generateTask(int numRequests,
+                                     long timeout,
+                                     DelayedOperationPurgatory<FakeOperation> purgatory,
+                                     CompletionQueue queue,
+                                     IntervalSamples intervalSamples,
+                                     LatencySamples latencySamples,
+                                     AtomicLong requestArrivalTime,
+                                     CountDownLatch latch,
+                                     List<String> keys,
+                                     AtomicLong end) {
+        int i = numRequests;
         while (i > 0) {
             i -= 1;
             long requestArrivalInterval = intervalSamples.next();
@@ -213,6 +310,17 @@ public class TestPurgatoryPerformance {
         public long next() {
             return samples.get(random.nextInt(samples.size()));
         }
+
+        public void printStats() {
+            List<Long> samples = this.samples.stream().sorted().collect(Collectors.toList());
+
+            long p75 = samples.get((int) (samples.size() * 0.75d));
+            long p50 = samples.get((int) (samples.size() * 0.5d));
+
+            System.out.printf("# latency samples: pct75 = %d, pct50 = %d, min = %d, max = %d%n", p75, p50,
+                    samples.stream().min(Comparator.comparingDouble(s -> s)).get(),
+                    samples.stream().min(Comparator.comparingDouble(s -> s)).get());
+        }
     }
 
     /**
@@ -240,6 +348,13 @@ public class TestPurgatoryPerformance {
             return samples.get(random.nextInt(samples.size()));
         }
 
+        public void printStats() {
+            System.out.printf(
+                    "# interval samples: rate = %f, min = %d, max = %d%n"
+                    , 1000d / (samples.stream().mapToDouble(s -> s).sum() / samples.size())
+                    , samples.stream().min(Comparator.comparingDouble(s -> s)).get()
+                    , samples.stream().max(Comparator.comparingDouble(s -> s)).get());
+        }
     }
 
     /**
