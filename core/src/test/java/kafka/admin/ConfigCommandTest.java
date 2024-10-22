@@ -564,7 +564,7 @@ public class ConfigCommandTest {
     public void shouldFailIfUnrecognisedEntityType() {
         ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--bootstrap-server", "localhost:9092",
             "--entity-name", "client", "--entity-type", "not-recognised", "--alter", "--add-config", "a=b,c=d"});
-        assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts));
+        assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts, true));
     }
 
     @Test
@@ -578,7 +578,7 @@ public class ConfigCommandTest {
     public void shouldFailIfBrokerEntityTypeIsNotAnInteger() {
         ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--bootstrap-server", "localhost:9092",
             "--entity-name", "A", "--entity-type", "brokers", "--alter", "--add-config", "a=b,c=d"});
-        assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts));
+        assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts, true));
     }
 
     @Test
@@ -592,7 +592,7 @@ public class ConfigCommandTest {
     public void shouldFailIfShortBrokerEntityTypeIsNotAnInteger() {
         ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--bootstrap-server", "localhost:9092",
             "--broker", "A", "--alter", "--add-config", "a=b,c=d"});
-        assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts));
+        assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts, true));
     }
 
     @Test
@@ -720,7 +720,7 @@ public class ConfigCommandTest {
         Admin mockAdminClient = mock(Admin.class);
         ConfigCommand.ConfigCommandOptions opts = new ConfigCommand.ConfigCommandOptions(toArray(Arrays.asList("--bootstrap-server", "localhost:9092",
             "--alter"), alterOpts));
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfig(mockAdminClient, opts));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfig(mockAdminClient, opts, true));
         assertTrue(e.getMessage().contains(expectedErrorMessage), "Unexpected exception: " + e);
     }
 
@@ -820,7 +820,7 @@ public class ConfigCommandTest {
                 return alterResult;
             }
         };
-        ConfigCommand.alterConfig(mockAdminClient, createOpts);
+        ConfigCommand.alterConfig(mockAdminClient, createOpts, true);
         assertTrue(describedConfigs.get());
         assertTrue(alteredConfigs.get());
     }
@@ -1077,7 +1077,7 @@ public class ConfigCommandTest {
                 return alterResult;
             }
         };
-        ConfigCommand.alterConfig(mockAdminClient, alterOpts);
+        ConfigCommand.alterConfig(mockAdminClient, alterOpts, true);
         assertTrue(alteredConfigs.get());
         verify(describeResult).all();
     }
@@ -1313,17 +1313,17 @@ public class ConfigCommandTest {
             }
 
             @Override
-            public synchronized AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options) {
+            public synchronized AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs, AlterConfigsOptions options) {
                 assertEquals(1, configs.size());
-                Map.Entry<ConfigResource, Config> entry = configs.entrySet().iterator().next();
+                Map.Entry<ConfigResource, Collection<AlterConfigOp>> entry = configs.entrySet().iterator().next();
                 ConfigResource res = entry.getKey();
-                Config config = entry.getValue();
+                Collection<AlterConfigOp> config = entry.getValue();
                 assertEquals(ConfigResource.Type.BROKER, res.type());
-                config.entries().forEach(e -> brokerConfigs.put(e.name(), e.value()));
+                config.forEach(e -> brokerConfigs.put(e.configEntry().name(), e.configEntry().value()));
                 return alterResult;
             }
         };
-        ConfigCommand.alterConfig(mockAdminClient, alterOpts);
+        ConfigCommand.alterConfig(mockAdminClient, alterOpts, true);
         Map<String, String> expected = new HashMap<>();
         expected.put("message.max.bytes", "10");
         expected.put("num.io.threads", "5");
@@ -1422,7 +1422,7 @@ public class ConfigCommandTest {
                 return alterResult;
             }
         };
-        ConfigCommand.alterConfig(mockAdminClient, alterOpts);
+        ConfigCommand.alterConfig(mockAdminClient, alterOpts, true);
         assertTrue(alteredConfigs.get());
         verify(describeResult).all();
     }
@@ -1472,7 +1472,7 @@ public class ConfigCommandTest {
             "--entity-type", "brokers",
             "--alter",
             "--add-config", "leader.replication.throttled.rate=10"));
-        assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts));
+        assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts, true));
     }
 
     @Test
@@ -1492,7 +1492,7 @@ public class ConfigCommandTest {
             "--entity-type", "brokers",
             "--alter",
             "--add-config", "a=="));
-        assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts));
+        assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts, true));
     }
 
     @Test
@@ -1512,7 +1512,7 @@ public class ConfigCommandTest {
             "--entity-type", "brokers",
             "--alter",
             "--add-config", "a=[b,c,d=e"));
-        assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts));
+        assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts, true));
     }
 
     @Test
@@ -1553,7 +1553,7 @@ public class ConfigCommandTest {
             }
         };
 
-        assertThrows(InvalidConfigurationException.class, () -> ConfigCommand.alterConfig(mockAdminClient, createOpts));
+        assertThrows(InvalidConfigurationException.class, () -> ConfigCommand.alterConfig(mockAdminClient, createOpts, true));
         verify(describeResult).all();
     }
 
@@ -1924,7 +1924,7 @@ public class ConfigCommandTest {
                 return alterResult;
             }
         };
-        ConfigCommand.alterConfig(mockAdminClient, alterOpts);
+        ConfigCommand.alterConfig(mockAdminClient, alterOpts, true);
         verify(describeResult).all();
         verify(alterResult).all();
     }
@@ -2094,7 +2094,7 @@ public class ConfigCommandTest {
                 return alterResult;
             }
         };
-        ConfigCommand.alterConfig(mockAdminClient, alterOpts);
+        ConfigCommand.alterConfig(mockAdminClient, alterOpts, true);
         verify(describeResult).all();
         verify(alterResult).all();
     }
