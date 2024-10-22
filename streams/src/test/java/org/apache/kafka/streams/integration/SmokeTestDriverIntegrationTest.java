@@ -127,19 +127,6 @@ public class SmokeTestDriverIntegrationTest extends IntegrationTestHarness {
         }
 
         for (final String topic: new String[]{
-            "SmokeTest-KSTREAM-REDUCE-STATE-STORE-0000000020-changelog",
-            "SmokeTest-minStoreName-changelog",
-            "SmokeTest-cntByCnt-repartition",
-            "SmokeTest-KTABLE-SUPPRESS-STATE-STORE-0000000011-changelog",
-            "SmokeTest-sum-STATE-STORE-0000000050-changelog",
-            "SmokeTest-uwin-cnt-changelog",
-            "SmokeTest-maxStoreName-changelog",
-            "SmokeTest-cntStoreName-changelog",
-            "SmokeTest-KTABLE-SUPPRESS-STATE-STORE-0000000027-changelog",
-            "SmokeTest-win-sum-changelog",
-            "SmokeTest-uwin-max-changelog",
-            "SmokeTest-uwin-min-changelog",
-            "SmokeTest-cntByCnt-changelog",
             "data",
             "echo",
             "max",
