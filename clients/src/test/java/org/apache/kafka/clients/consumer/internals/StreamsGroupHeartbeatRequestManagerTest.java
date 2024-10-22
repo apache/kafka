@@ -303,18 +303,18 @@ class StreamsGroupHeartbeatRequestManagerTest {
         final Assignment targetAssignment = streamsAssignmentInterface.targetAssignment.get();
         assertEquals(1, targetAssignment.activeTasks.size());
         final TaskId activeTaskId = targetAssignment.activeTasks.stream().findFirst().get();
-        assertEquals(activeTaskId.subtopologyId, "0");
-        assertEquals(activeTaskId.partitionId, 0);
+        assertEquals(activeTaskId.subtopologyId(), "0");
+        assertEquals(activeTaskId.partitionId(), 0);
 
         assertEquals(1, targetAssignment.standbyTasks.size());
         final TaskId standbyTaskId = targetAssignment.standbyTasks.stream().findFirst().get();
-        assertEquals(standbyTaskId.subtopologyId, "1");
-        assertEquals(standbyTaskId.partitionId, 1);
+        assertEquals(standbyTaskId.subtopologyId(), "1");
+        assertEquals(standbyTaskId.partitionId(), 1);
 
         assertEquals(1, targetAssignment.warmupTasks.size());
         final TaskId warmupTaskId = targetAssignment.warmupTasks.stream().findFirst().get();
-        assertEquals(warmupTaskId.subtopologyId, "2");
-        assertEquals(warmupTaskId.partitionId, 2);
+        assertEquals(warmupTaskId.subtopologyId(), "2");
+        assertEquals(warmupTaskId.partitionId(), 2);
 
     }
 

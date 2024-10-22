@@ -200,10 +200,10 @@ public class StreamsAssignmentInterface {
         }
     }
 
-    public static class TaskId {
+    public static class TaskId implements Comparable<TaskId> {
 
-        public final String subtopologyId;
-        public final int partitionId;
+        private final String subtopologyId;
+        private final int partitionId;
 
         public int partitionId() {
             return partitionId;
@@ -216,6 +216,27 @@ public class StreamsAssignmentInterface {
         public TaskId(final String subtopologyId, final int partitionId) {
             this.subtopologyId = subtopologyId;
             this.partitionId = partitionId;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            TaskId taskId = (TaskId) o;
+            return partitionId == taskId.partitionId && Objects.equals(subtopologyId, taskId.subtopologyId);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(subtopologyId, partitionId);
+        }
+
+        @Override
+        public int compareTo(TaskId taskId) {
+            if (subtopologyId.equals(taskId.subtopologyId)) {
+                return partitionId - taskId.partitionId;
+            }
+            return subtopologyId.compareTo(taskId.subtopologyId);
         }
 
         @Override
