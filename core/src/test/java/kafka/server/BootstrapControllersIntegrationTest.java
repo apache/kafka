@@ -86,7 +86,7 @@ import static org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_CONTROL
 import static org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.admin.ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG;
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
-import static org.apache.kafka.server.config.QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG;
+import static org.apache.kafka.server.config.QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG;
 import static org.apache.kafka.server.config.ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
