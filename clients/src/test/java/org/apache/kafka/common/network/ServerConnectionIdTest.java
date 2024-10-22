@@ -61,7 +61,7 @@ public class ServerConnectionIdTest {
         assertEquals(0, serverConnectionId.index());
 
         // IPv6 endpoints
-        connectionIdString = "[2001:db8:0:0:0:0:0:1]:9092-127.0.0.1:9093-1-2";
+        connectionIdString = "2001:db8:0:0:0:0:0:1:9092-127.0.0.1:9093-1-2";
         serverConnectionIdOptional = ServerConnectionId.fromString(connectionIdString);
         assertTrue(serverConnectionIdOptional.isPresent());
         serverConnectionId = serverConnectionIdOptional.get();
@@ -123,6 +123,10 @@ public class ServerConnectionIdTest {
         // Invalid index
         connectionIdString = "localhost:9092-localhost:9093-1-b";
         assertFalse(ServerConnectionId.fromString(connectionIdString).isPresent());
+
+        // Invalid IPv6 address
+        connectionIdString = "[2001:db8:0:0:0:0:0:1]:9092-127.0.0.1:9093-1-2";
+        assertFalse(ServerConnectionId.fromString(connectionIdString).isPresent());
     }
 
     @Test
@@ -140,6 +144,8 @@ public class ServerConnectionIdTest {
     @Test
     public void testGenerateConnectionIdIpV6() throws IOException {
         Socket socket = mock(Socket.class);
+        // The test should pass when the address is enclosed in brackets for socket. As getHostAddress()
+        // returns the address without brackets.
         when(socket.getLocalAddress()).thenReturn(InetAddress.getByName("[2001:db8::1]"));
         when(socket.getLocalPort()).thenReturn(9092);
         when(socket.getInetAddress()).thenReturn(InetAddress.getByName("127.0.0.1"));
@@ -176,7 +182,7 @@ public class ServerConnectionIdTest {
         assertEquals(9092, hostPortEntry.get().getValue());
 
         // IPv6 endpoint
-        hostPortEntry = ServerConnectionId.parseHostPort("[2001:db8::1]:9092");
+        hostPortEntry = ServerConnectionId.parseHostPort("2001:db8::1:9092");
         assertTrue(hostPortEntry.isPresent());
         assertEquals("2001:db8::1", hostPortEntry.get().getKey());
         assertEquals(9092, hostPortEntry.get().getValue());
@@ -194,6 +200,10 @@ public class ServerConnectionIdTest {
 
         // Invalid port
         hostPortEntry = ServerConnectionId.parseHostPort("myhost:abcd");
+        assertFalse(hostPortEntry.isPresent());
+
+        // Invalid IPv6 endpoint
+        hostPortEntry = ServerConnectionId.parseHostPort("[2001:db8::1]:9092");
         assertFalse(hostPortEntry.isPresent());
     }
 }
