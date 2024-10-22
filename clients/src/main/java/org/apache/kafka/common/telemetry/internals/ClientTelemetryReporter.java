@@ -41,6 +41,7 @@ import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Collections;
@@ -707,7 +708,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
             try (MetricsEmitter emitter = new ClientTelemetryEmitter(localSubscription.selector(), localSubscription.deltaTemporality())) {
                 emitter.init();
                 kafkaMetricsCollector.collect(emitter);
-                payload = createPayload(emitter.emittedMetrics());
+                MetricsData payloadMetricsData = createPayload(emitter.emittedMetrics());
+                payload = compressPayload(payloadMetricsData);
             } catch (Exception e) {
                 log.warn("Error constructing client telemetry payload: ", e);
                 // Update last accessed time for push request to be retried on next interval.
@@ -862,14 +864,20 @@ public class ClientTelemetryReporter implements MetricsReporter {
             }
         }
 
-        private byte[] createPayload(List<SinglePointMetric> emittedMetrics) {
+        private MetricsData createPayload(List<SinglePointMetric> emittedMetrics) {
             MetricsData.Builder builder = MetricsData.newBuilder();
             emittedMetrics.forEach(metric -> {
                 Metric m = metric.builder().build();
                 ResourceMetrics rm = buildMetric(m);
                 builder.addResourceMetrics(rm);
             });
-            return builder.build().toByteArray();
+            return builder.build();
+        }
+
+        private byte[] compressPayload(MetricsData payload) throws IOException {
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            payload.writeTo(outputStream);
+            return outputStream.toByteArray();
         }
 
         // Visible for testing
