@@ -29,6 +29,11 @@ import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.BrokerState;
 
+import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
+import org.apache.kafka.metadata.storage.FormatterException;
+import org.apache.kafka.server.common.FeatureVersion;
+import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
 import org.junit.jupiter.api.extension.BeforeTestExecutionCallback;
 import org.junit.jupiter.api.extension.Extension;
@@ -42,6 +47,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -233,18 +239,54 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
         public void format() throws Exception {
             if (formated.compareAndSet(false, true)) {
-                TestKitNodes.Builder nodesBuilder = new TestKitNodes.Builder()
-                        .setBootstrapMetadataVersion(clusterConfig.metadataVersion())
+                Map<String, Features> nameToSupportedFeature = new TreeMap<>();
+                Features.PRODUCTION_FEATURES.forEach(feature -> nameToSupportedFeature.put(feature.featureName(), feature));
+                Map<String, Short> newFeatureLevels = new TreeMap<>();
+
+                // Verify that all specified features are known to us.
+                for (Map.Entry<Features, Short> entry : clusterConfig.features().entrySet()) {
+                    String featureName = entry.getKey().featureName();
+                    short level = entry.getValue();
+                    if (!featureName.equals(MetadataVersion.FEATURE_NAME)) {
+                        if (!nameToSupportedFeature.containsKey(featureName)) {
+                            throw new FormatterException("Unsupported feature: " + featureName +
+                                    ". Supported features are: " + String.join(", ", nameToSupportedFeature.keySet()));
+                        }
+                    }
+                    newFeatureLevels.put(featureName, level);
+                }
+                newFeatureLevels.put(MetadataVersion.FEATURE_NAME, clusterConfig.metadataVersion().featureLevel());
+
+                // Add default values for features that were not specified.
+                Features.PRODUCTION_FEATURES.forEach(supportedFeature -> {
+                    if (!newFeatureLevels.containsKey(supportedFeature.featureName())) {
+                        newFeatureLevels.put(supportedFeature.featureName(),
+                                supportedFeature.defaultValue(clusterConfig.metadataVersion()));
+                    }
+                });
+
+                // Verify that the specified features support the given levels. This requires the full
+                // features map since there may be cross-feature dependencies.
+                for (Map.Entry<String, Short> entry : newFeatureLevels.entrySet()) {
+                    String featureName = entry.getKey();
+                    if (!featureName.equals(MetadataVersion.FEATURE_NAME)) {
+                        short level = entry.getValue();
+                        Features supportedFeature = nameToSupportedFeature.get(featureName);
+                        FeatureVersion featureVersion =
+                                supportedFeature.fromFeatureLevel(level, true);
+                        Features.validateVersion(featureVersion, newFeatureLevels);
+                    }
+                }
+
+                TestKitNodes nodes = new TestKitNodes.Builder()
+                        .setBootstrapMetadata(BootstrapMetadata.fromVersions(clusterConfig.metadataVersion(), newFeatureLevels, "testkit"))
                         .setCombined(isCombined)
                         .setNumBrokerNodes(clusterConfig.numBrokers())
                         .setNumDisksPerBroker(clusterConfig.numDisksPerBroker())
                         .setPerServerProperties(clusterConfig.perServerOverrideProperties())
                         .setNumControllerNodes(clusterConfig.numControllers())
                         .setBrokerListenerName(listenerName)
-                        .setBrokerSecurityProtocol(clusterConfig.brokerSecurityProtocol());
-                clusterConfig.features().forEach((feature, version) ->
-                    nodesBuilder.setFeature(feature.featureName(), version));
-                TestKitNodes nodes = nodesBuilder.build();
+                        .setBrokerSecurityProtocol(clusterConfig.brokerSecurityProtocol()).build();
                 KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(nodes);
                 // Copy properties into the TestKit builder
                 clusterConfig.serverProperties().forEach(builder::setConfigProp);

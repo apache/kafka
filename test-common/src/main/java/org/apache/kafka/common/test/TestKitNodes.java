@@ -80,6 +80,11 @@ public class TestKitNodes {
             return this;
         }
 
+        public Builder setBootstrapMetadata(BootstrapMetadata bootstrapMetadata) {
+            this.bootstrapMetadata = bootstrapMetadata;
+            return this;
+        }
+
         public Builder setFeature(String featureName, short level) {
             this.bootstrapMetadata = bootstrapMetadata.copyWithFeatureRecord(featureName, level);
             return this;
