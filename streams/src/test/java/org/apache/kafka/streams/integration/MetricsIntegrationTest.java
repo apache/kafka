@@ -325,7 +325,7 @@ public class MetricsIntegrationTest {
     }
 
     private void closeApplication() throws Exception {
-        kafkaStreams.close();
+        kafkaStreams.close(Duration.ofSeconds(60));
         kafkaStreams.cleanUp();
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
         final long timeout = 60000;

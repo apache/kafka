@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerHeartbeatRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMembershipManager;
@@ -39,6 +40,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -126,7 +128,6 @@ public class ApplicationEventProcessorTest {
 
     private static Stream<Arguments> applicationEvents() {
         return Stream.of(
-                Arguments.of(new PollEvent(100)),
                 Arguments.of(new AsyncCommitEvent(new HashMap<>())),
                 Arguments.of(new SyncCommitEvent(new HashMap<>(), 500)),
                 Arguments.of(new CheckAndUpdatePositionsEvent(500)),
@@ -179,6 +180,17 @@ public class ApplicationEventProcessorTest {
     }
 
     @Test
+    public void testResetOffsetEvent() {
+        Collection<TopicPartition> tp = Collections.singleton(new TopicPartition("topic", 0));
+        OffsetResetStrategy strategy = OffsetResetStrategy.LATEST;
+        ResetOffsetEvent event = new ResetOffsetEvent(tp, strategy, 12345);
+
+        setupProcessor(false);
+        processor.process(event);
+        verify(subscriptionState).requestOffsetReset(event.topicPartitions(), event.offsetResetStrategy());
+    }
+
+    @Test
     public void testSeekUnvalidatedEvent() {
         TopicPartition tp = new TopicPartition("topic", 0);
         SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
@@ -206,6 +218,30 @@ public class ApplicationEventProcessorTest {
 
         ExecutionException e = assertThrows(ExecutionException.class, () -> event.future().get());
         assertInstanceOf(IllegalStateException.class, e.getCause());
+    }
+
+    @Test
+    public void testPollEvent() {
+        PollEvent event = new PollEvent(12345);
+
+        setupProcessor(true);
+        when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
+        processor.process(event);
+        verify(commitRequestManager).updateAutoCommitTimer(12345);
+        verify(membershipManager).onConsumerPoll();
+        verify(heartbeatRequestManager).resetPollTimer(12345);
+    }
+
+    @Test
+    public void testSubscriptionChangeEvent() {
+        SubscriptionChangeEvent event = new SubscriptionChangeEvent();
+
+        setupProcessor(true);
+        when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
+        processor.process(event);
+        verify(membershipManager).onSubscriptionUpdated();
+        // verify member state doesn't transition to JOINING.
+        verify(membershipManager, never()).onConsumerPoll();
     }
 
     private List<NetworkClientDelegate.UnsentRequest> mockCommitResults() {

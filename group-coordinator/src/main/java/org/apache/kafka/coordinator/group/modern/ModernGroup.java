@@ -35,7 +35,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
@@ -389,26 +388,11 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
         subscribedTopicNames.forEach((topicName, count) -> {
             TopicImage topicImage = topicsImage.getTopic(topicName);
             if (topicImage != null) {
-                Map<Integer, Set<String>> partitionRacks = new HashMap<>();
-                topicImage.partitions().forEach((partition, partitionRegistration) -> {
-                    Set<String> racks = new HashSet<>();
-                    for (int replica : partitionRegistration.replicas) {
-                        Optional<String> rackOptional = clusterImage.broker(replica).rack();
-                        // Only add the rack if it is available for the broker/replica.
-                        rackOptional.ifPresent(racks::add);
-                    }
-                    // If rack information is unavailable for all replicas of this partition,
-                    // no corresponding entry will be stored for it in the map.
-                    if (!racks.isEmpty())
-                        partitionRacks.put(partition, racks);
-                });
-
                 newSubscriptionMetadata.put(topicName, new TopicMetadata(
                     topicImage.id(),
                     topicImage.name(),
-                    topicImage.partitions().size(),
-                    partitionRacks)
-                );
+                    topicImage.partitions().size()
+                ));
             }
         });
 

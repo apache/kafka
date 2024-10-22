@@ -16,46 +16,8 @@
  */
 package kafka.server.share;
 
-import kafka.server.DelayedOperationKey;
-
-import org.apache.kafka.common.TopicIdPartition;
-
-import java.util.Objects;
-
 /**
  * A key for delayed operations that fetch data for share consumers.
  */
-public class DelayedShareFetchKey implements DelayedOperationKey {
-    private final String groupId;
-    private final TopicIdPartition topicIdPartition;
-
-    DelayedShareFetchKey(String groupId, TopicIdPartition topicIdPartition) {
-        this.groupId = groupId;
-        this.topicIdPartition = topicIdPartition;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        DelayedShareFetchKey that = (DelayedShareFetchKey) o;
-        return topicIdPartition.equals(that.topicIdPartition) && groupId.equals(that.groupId);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(topicIdPartition, groupId);
-    }
-
-    @Override
-    public String toString() {
-        return "DelayedShareFetchKey(groupId=" + groupId +
-                ", topicIdPartition=" + topicIdPartition +
-                ")";
-    }
-
-    @Override
-    public String keyLabel() {
-        return String.format("groupId=%s, topicIdPartition=%s", groupId, topicIdPartition);
-    }
+public interface DelayedShareFetchKey {
 }

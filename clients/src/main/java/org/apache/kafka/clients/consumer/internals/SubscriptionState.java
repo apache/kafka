@@ -20,7 +20,6 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -32,7 +31,6 @@ import org.apache.kafka.common.utils.LogContext;
 
 import org.slf4j.Logger;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -773,21 +771,17 @@ public class SubscriptionState {
     }
 
     /**
-     * Note: this will not attempt to reset partitions that are in the process of being assigned
-     * and are pending the completion of any {@link ConsumerRebalanceListener#onPartitionsAssigned(Collection)}
-     * callbacks.
+     * Request reset for partitions that require a position, using the configured reset strategy.
      *
-     * <p/>
-     *
-     * This method only appears to be invoked the by the {@link KafkaConsumer} during its
-     * {@link KafkaConsumer#poll(Duration)} logic. <em>Direct</em> calls to methods like
-     * {@link #requestOffsetReset(TopicPartition)}, {@link #requestOffsetResetIfPartitionAssigned(TopicPartition)},
-     * etc. do <em>not</em> skip partitions pending assignment.
+     * @param initPartitionsToInclude Initializing partitions to include in the reset. Assigned partitions that
+     *                                require a positions but are not included in this set won't be reset.
+     * @throws NoOffsetForPartitionException If there are partitions assigned that require a position but
+     *                                       there is no reset strategy configured.
      */
-    public synchronized void resetInitializingPositions() {
+    public synchronized void resetInitializingPositions(Predicate<TopicPartition> initPartitionsToInclude) {
         final Set<TopicPartition> partitionsWithNoOffsets = new HashSet<>();
         assignment.forEach((tp, partitionState) -> {
-            if (partitionState.shouldInitialize()) {
+            if (partitionState.shouldInitialize() && initPartitionsToInclude.test(tp)) {
                 if (defaultResetStrategy == OffsetResetStrategy.NONE)
                     partitionsWithNoOffsets.add(tp);
                 else
@@ -797,6 +791,10 @@ public class SubscriptionState {
 
         if (!partitionsWithNoOffsets.isEmpty())
             throw new NoOffsetForPartitionException(partitionsWithNoOffsets);
+    }
+
+    public synchronized void resetInitializingPositions() {
+        resetInitializingPositions(tp -> true);
     }
 
     public synchronized Set<TopicPartition> partitionsNeedingReset(long nowMs) {

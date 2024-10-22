@@ -16,11 +16,6 @@
  */
 package org.apache.kafka.tools.consumer.group;
 
-import kafka.test.ClusterConfig;
-import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterTemplate;
-import kafka.test.junit.ClusterTestExtensions;
-
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -33,6 +28,10 @@ import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.test.api.ClusterConfig;
+import org.apache.kafka.common.test.api.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterTemplate;
+import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
 
@@ -64,7 +63,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CO
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.common.utils.Utils.mkSet;
+
 
 @ExtendWith(ClusterTestExtensions.class)
 public class ListConsumerGroupTest {
@@ -80,10 +79,6 @@ public class ListConsumerGroupTest {
 
     private static List<ClusterConfig> defaultGenerator() {
         return ConsumerGroupCommandTestUtils.generator();
-    }
-
-    private static List<ClusterConfig> consumerProtocolOnlyGenerator() {
-        return ConsumerGroupCommandTestUtils.forKRaftGroupCoordinator();
     }
 
     private List<GroupProtocol> supportedGroupProtocols() {
@@ -138,7 +133,7 @@ public class ListConsumerGroupTest {
                  AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, protocolGroup, topic);
                  ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state"});
             ) {
-                Set<ConsumerGroupListing> expectedListing = mkSet(
+                Set<ConsumerGroupListing> expectedListing = Set.of(
                         new ConsumerGroupListing(
                                 topicPartitionsGroup,
                                 true,
@@ -160,7 +155,7 @@ public class ListConsumerGroupTest {
                         expectedListing
                 );
 
-                expectedListing = mkSet(
+                expectedListing = Set.of(
                         new ConsumerGroupListing(
                                 protocolGroup,
                                 false,
@@ -172,14 +167,14 @@ public class ListConsumerGroupTest {
                 assertGroupListing(
                         service,
                         Collections.emptySet(),
-                        mkSet(ConsumerGroupState.STABLE),
+                        Set.of(ConsumerGroupState.STABLE),
                         expectedListing
                 );
 
                 assertGroupListing(
                         service,
                         Collections.emptySet(),
-                        mkSet(ConsumerGroupState.PREPARING_REBALANCE),
+                        Set.of(ConsumerGroupState.PREPARING_REBALANCE),
                         Collections.emptySet()
                 );
             }
@@ -201,7 +196,7 @@ public class ListConsumerGroupTest {
              AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, protocolGroup, topic);
              ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state"});
         ) {
-            Set<ConsumerGroupListing> expectedListing = mkSet(
+            Set<ConsumerGroupListing> expectedListing = Set.of(
                     new ConsumerGroupListing(
                             topicPartitionsGroup,
                             true,
@@ -229,21 +224,21 @@ public class ListConsumerGroupTest {
             // New Group Coordinator returns groups according to the filter.
             assertGroupListing(
                     service,
-                    mkSet(GroupType.CONSUMER),
+                    Set.of(GroupType.CONSUMER),
                     Collections.emptySet(),
                     Collections.emptySet()
             );
 
             assertGroupListing(
                     service,
-                    mkSet(GroupType.CLASSIC),
+                    Set.of(GroupType.CLASSIC),
                     Collections.emptySet(),
                     expectedListing
             );
         }
     }
 
-    @ClusterTemplate("consumerProtocolOnlyGenerator")
+    @ClusterTemplate("defaultGenerator")
     public void testListConsumerGroupsWithTypesConsumerProtocol() throws Exception {
         GroupProtocol groupProtocol = GroupProtocol.CONSUMER;
         String topic = TOPIC_PREFIX + groupProtocol.name;
@@ -260,7 +255,7 @@ public class ListConsumerGroupTest {
 
 
             // No filters explicitly mentioned. Expectation is that all groups are returned.
-            Set<ConsumerGroupListing> expectedListing = mkSet(
+            Set<ConsumerGroupListing> expectedListing = Set.of(
                     new ConsumerGroupListing(
                             topicPartitionsGroup,
                             true,
@@ -290,7 +285,7 @@ public class ListConsumerGroupTest {
 
             // When group type is mentioned:
             // New Group Coordinator returns groups according to the filter.
-            expectedListing = mkSet(
+            expectedListing = Set.of(
                     new ConsumerGroupListing(
                             protocolGroup,
                             false,
@@ -301,12 +296,12 @@ public class ListConsumerGroupTest {
 
             assertGroupListing(
                     service,
-                    mkSet(GroupType.CONSUMER),
+                    Set.of(GroupType.CONSUMER),
                     Collections.emptySet(),
                     expectedListing
             );
 
-            expectedListing = mkSet(
+            expectedListing = Set.of(
                     new ConsumerGroupListing(
                             topicPartitionsGroup,
                             true,
@@ -323,7 +318,7 @@ public class ListConsumerGroupTest {
 
             assertGroupListing(
                     service,
-                    mkSet(GroupType.CLASSIC),
+                    Set.of(GroupType.CLASSIC),
                     Collections.emptySet(),
                     expectedListing
             );
@@ -344,7 +339,7 @@ public class ListConsumerGroupTest {
             validateListOutput(
                     Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--list"),
                     Collections.emptyList(),
-                    mkSet(
+                    Set.of(
                             Collections.singletonList(protocolGroup),
                             Collections.singletonList(topicPartitionsGroup)
                     )
@@ -353,7 +348,7 @@ public class ListConsumerGroupTest {
             validateListOutput(
                     Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state"),
                     Arrays.asList("GROUP", "STATE"),
-                    mkSet(
+                    Set.of(
                             Arrays.asList(protocolGroup, "Stable"),
                             Arrays.asList(topicPartitionsGroup, "Empty")
                     )
@@ -362,7 +357,7 @@ public class ListConsumerGroupTest {
             validateListOutput(
                     Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type"),
                     Arrays.asList("GROUP", "TYPE"),
-                    mkSet(
+                    Set.of(
                             Arrays.asList(protocolGroup, "Classic"),
                             Arrays.asList(topicPartitionsGroup, "Classic")
                     )
@@ -371,7 +366,7 @@ public class ListConsumerGroupTest {
             validateListOutput(
                     Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "--state"),
                     Arrays.asList("GROUP", "TYPE", "STATE"),
-                    mkSet(
+                    Set.of(
                             Arrays.asList(protocolGroup, "Classic", "Stable"),
                             Arrays.asList(topicPartitionsGroup, "Classic", "Empty")
                     )
@@ -380,7 +375,7 @@ public class ListConsumerGroupTest {
             validateListOutput(
                     Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state", "Stable"),
                     Arrays.asList("GROUP", "STATE"),
-                    mkSet(
+                    Set.of(
                             Arrays.asList(protocolGroup, "Stable")
                     )
             );
@@ -389,7 +384,7 @@ public class ListConsumerGroupTest {
             validateListOutput(
                     Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state", "stable"),
                     Arrays.asList("GROUP", "STATE"),
-                    mkSet(
+                    Set.of(
                             Arrays.asList(protocolGroup, "Stable")
                     )
             );
@@ -397,7 +392,7 @@ public class ListConsumerGroupTest {
             validateListOutput(
                     Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "Classic"),
                     Arrays.asList("GROUP", "TYPE"),
-                    mkSet(
+                    Set.of(
                             Arrays.asList(protocolGroup, "Classic"),
                             Arrays.asList(topicPartitionsGroup, "Classic")
                     )
@@ -407,7 +402,7 @@ public class ListConsumerGroupTest {
             validateListOutput(
                     Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "classic"),
                     Arrays.asList("GROUP", "TYPE"),
-                    mkSet(
+                    Set.of(
                             Arrays.asList(protocolGroup, "Classic"),
                             Arrays.asList(topicPartitionsGroup, "Classic")
                     )
@@ -415,7 +410,7 @@ public class ListConsumerGroupTest {
         }
     }
 
-    @ClusterTemplate("consumerProtocolOnlyGenerator")
+    @ClusterTemplate("defaultGenerator")
     public void testListGroupCommandConsumerProtocol() throws Exception {
         GroupProtocol groupProtocol = GroupProtocol.CONSUMER;
         String topic = TOPIC_PREFIX + groupProtocol.name;
@@ -429,7 +424,7 @@ public class ListConsumerGroupTest {
             validateListOutput(
                     Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--list"),
                     Collections.emptyList(),
-                    mkSet(
+                    Set.of(
                             Collections.singletonList(protocolGroup),
                             Collections.singletonList(topicPartitionsGroup)
                     )
@@ -438,7 +433,7 @@ public class ListConsumerGroupTest {
             validateListOutput(
                     Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state"),
                     Arrays.asList("GROUP", "STATE"),
-                    mkSet(
+                    Set.of(
                             Arrays.asList(protocolGroup, "Stable"),
                             Arrays.asList(topicPartitionsGroup, "Empty")
                     )
@@ -447,7 +442,7 @@ public class ListConsumerGroupTest {
             validateListOutput(
                     Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type"),
                     Arrays.asList("GROUP", "TYPE"),
-                    mkSet(
+                    Set.of(
                             Arrays.asList(protocolGroup, "Consumer"),
                             Arrays.asList(topicPartitionsGroup, "Classic")
                     )
@@ -456,7 +451,7 @@ public class ListConsumerGroupTest {
             validateListOutput(
                     Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "--state"),
                     Arrays.asList("GROUP", "TYPE", "STATE"),
-                    mkSet(
+                    Set.of(
                             Arrays.asList(protocolGroup, "Consumer", "Stable"),
                             Arrays.asList(topicPartitionsGroup, "Classic", "Empty")
                     )
@@ -465,7 +460,7 @@ public class ListConsumerGroupTest {
             validateListOutput(
                     Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "consumer"),
                     Arrays.asList("GROUP", "TYPE"),
-                    mkSet(
+                    Set.of(
                             Arrays.asList(protocolGroup, "Consumer")
                     )
             );
@@ -473,7 +468,7 @@ public class ListConsumerGroupTest {
             validateListOutput(
                     Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "consumer", "--state", "Stable"),
                     Arrays.asList("GROUP", "TYPE", "STATE"),
-                    mkSet(
+                    Set.of(
                             Arrays.asList(protocolGroup, "Consumer", "Stable")
                     )
             );

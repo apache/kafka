@@ -16,7 +16,7 @@
  */
 package kafka.server
 
-import kafka.test.ClusterInstance
+import org.apache.kafka.common.test.api.ClusterInstance
 import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion
@@ -31,14 +31,14 @@ import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Tag
 
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOptional
 
 @Tag("integration")
 abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
 
   def sendApiVersionsRequest(request: ApiVersionsRequest, listenerName: ListenerName): ApiVersionsResponse = {
-    val socket = if (cluster.controllerListenerName().asScala.contains(listenerName)) {
+    val socket = if (cluster.controllerListenerName().toScala.contains(listenerName)) {
       cluster.controllerSocketServers().asScala.head
     } else {
       cluster.brokerSocketServers().asScala.head
@@ -89,7 +89,7 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
         ApiKeys.apisForListener(ApiMessageType.ListenerType.ZK_BROKER),
         enableUnstableLastVersion
       )
-    } else if (cluster.controllerListenerName().asScala.contains(listenerName)) {
+    } else if (cluster.controllerListenerName().toScala.contains(listenerName)) {
       ApiVersionsResponse.collectApis(
         ApiKeys.apisForListener(ApiMessageType.ListenerType.CONTROLLER),
         enableUnstableLastVersion
@@ -109,7 +109,7 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
 
     val defaultApiVersionsResponse = if (!cluster.isKRaftTest) {
       TestUtils.defaultApiVersionsResponse(0, ListenerType.ZK_BROKER, enableUnstableLastVersion)
-    } else if (cluster.controllerListenerName().asScala.contains(listenerName)) {
+    } else if (cluster.controllerListenerName().toScala.contains(listenerName)) {
       TestUtils.defaultApiVersionsResponse(0, ListenerType.CONTROLLER, enableUnstableLastVersion)
     } else {
       TestUtils.createApiVersionsResponse(0, expectedApis)

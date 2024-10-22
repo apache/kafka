@@ -16,7 +16,7 @@
  */
 package kafka.server.share;
 
-import kafka.server.DelayedOperationPurgatory;
+import kafka.server.ReplicaManager;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
@@ -32,21 +32,22 @@ import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.server.group.share.GroupTopicPartitionData;
-import org.apache.kafka.server.group.share.PartitionAllData;
-import org.apache.kafka.server.group.share.PartitionErrorData;
-import org.apache.kafka.server.group.share.PartitionFactory;
-import org.apache.kafka.server.group.share.PartitionIdLeaderEpochData;
-import org.apache.kafka.server.group.share.PartitionStateBatchData;
-import org.apache.kafka.server.group.share.Persister;
-import org.apache.kafka.server.group.share.PersisterStateBatch;
-import org.apache.kafka.server.group.share.ReadShareGroupStateParameters;
-import org.apache.kafka.server.group.share.TopicData;
-import org.apache.kafka.server.group.share.WriteShareGroupStateParameters;
-import org.apache.kafka.server.share.ShareAcknowledgementBatch;
+import org.apache.kafka.coordinator.group.GroupConfigManager;
+import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
+import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
+import org.apache.kafka.server.share.persister.PartitionAllData;
+import org.apache.kafka.server.share.persister.PartitionErrorData;
+import org.apache.kafka.server.share.persister.PartitionFactory;
+import org.apache.kafka.server.share.persister.PartitionIdLeaderEpochData;
+import org.apache.kafka.server.share.persister.PartitionStateBatchData;
+import org.apache.kafka.server.share.persister.Persister;
+import org.apache.kafka.server.share.persister.PersisterStateBatch;
+import org.apache.kafka.server.share.persister.ReadShareGroupStateParameters;
+import org.apache.kafka.server.share.persister.TopicData;
+import org.apache.kafka.server.share.persister.WriteShareGroupStateParameters;
+import org.apache.kafka.server.storage.log.FetchPartitionData;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
-import org.apache.kafka.storage.internals.log.FetchPartitionData;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -220,10 +221,16 @@ public class SharePartition {
     private final int maxDeliveryCount;
 
     /**
+     * The group config manager is used to retrieve the values for dynamic group configurations
+     */
+    private final GroupConfigManager groupConfigManager;
+
+    /**
+     * This is the default value which is used unless the group has a configuration which overrides it.
      * The record lock duration is used to limit the duration for which a consumer can acquire a record.
      * Once this time period is elapsed, the record will be made available or archived depending on the delivery count.
      */
-    private final int recordLockDurationMs;
+    private final int defaultRecordLockDurationMs;
 
     /**
      * Timer is used to implement acquisition lock on records that guarantees the movement of records from
@@ -264,20 +271,22 @@ public class SharePartition {
     private SharePartitionState partitionState;
 
     /**
-     * The delayed share fetch purgatory is used to store the share fetch requests that could not be processed immediately.
+     * The replica manager is used to check to see if any delayed share fetch request can be completed because of data
+     * availability due to acquisition lock timeout.
      */
-    private final DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory;
+    private final ReplicaManager replicaManager;
 
     SharePartition(
         String groupId,
         TopicIdPartition topicIdPartition,
         int maxInFlightMessages,
         int maxDeliveryCount,
-        int recordLockDurationMs,
+        int defaultRecordLockDurationMs,
         Timer timer,
         Time time,
         Persister persister,
-        DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory
+        ReplicaManager replicaManager,
+        GroupConfigManager groupConfigManager
     ) {
         this.groupId = groupId;
         this.topicIdPartition = topicIdPartition;
@@ -287,12 +296,13 @@ public class SharePartition {
         this.lock = new ReentrantReadWriteLock();
         this.findNextFetchOffset = new AtomicBoolean(false);
         this.fetchLock = new AtomicBoolean(false);
-        this.recordLockDurationMs = recordLockDurationMs;
+        this.defaultRecordLockDurationMs = defaultRecordLockDurationMs;
         this.timer = timer;
         this.time = time;
         this.persister = persister;
         this.partitionState = SharePartitionState.EMPTY;
-        this.delayedShareFetchPurgatory = delayedShareFetchPurgatory;
+        this.replicaManager = replicaManager;
+        this.groupConfigManager = groupConfigManager;
     }
 
     /**
@@ -504,9 +514,9 @@ public class SharePartition {
      *
      * @param memberId           The member id of the client that is fetching the record.
      * @param fetchPartitionData The fetched records for the share partition.
-     * @return A future which is completed when the records are acquired.
+     * @return The acquired records for the share partition.
      */
-    public CompletableFuture<List<AcquiredRecords>> acquire(
+    public List<AcquiredRecords> acquire(
         String memberId,
         FetchPartitionData fetchPartitionData
     ) {
@@ -514,7 +524,7 @@ public class SharePartition {
         RecordBatch lastBatch = fetchPartitionData.records.lastBatch().orElse(null);
         if (lastBatch == null) {
             // Nothing to acquire.
-            return CompletableFuture.completedFuture(Collections.emptyList());
+            return Collections.emptyList();
         }
 
         // We require the first batch of records to get the base offset. Stop parsing further
@@ -540,8 +550,8 @@ public class SharePartition {
             if (subMap.isEmpty()) {
                 log.trace("No cached data exists for the share partition for requested fetch batch: {}-{}",
                     groupId, topicIdPartition);
-                return CompletableFuture.completedFuture(Collections.singletonList(
-                    acquireNewBatchRecords(memberId, firstBatch.baseOffset(), lastBatch.lastOffset())));
+                return Collections.singletonList(
+                    acquireNewBatchRecords(memberId, firstBatch.baseOffset(), lastBatch.lastOffset()));
             }
 
             log.trace("Overlap exists with in-flight records. Acquire the records if available for"
@@ -611,7 +621,7 @@ public class SharePartition {
                 result.add(acquireNewBatchRecords(memberId, subMap.lastEntry().getValue().lastOffset() + 1,
                     lastBatch.lastOffset()));
             }
-            return CompletableFuture.completedFuture(result);
+            return result;
         } finally {
             lock.writeLock().unlock();
         }
@@ -1716,7 +1726,17 @@ public class SharePartition {
         }
     }
 
-    private AcquisitionLockTimerTask scheduleAcquisitionLockTimeout(String memberId, long firstOffset, long lastOffset) {
+    // Visible for testing
+    AcquisitionLockTimerTask scheduleAcquisitionLockTimeout(String memberId, long firstOffset, long lastOffset) {
+        // The recordLockDuration value would depend on whether the dynamic config SHARE_RECORD_LOCK_DURATION_MS in
+        // GroupConfig.java is set or not. If dynamic config is set, then that is used, otherwise the value of
+        // SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG defined in ShareGroupConfig is used
+        int recordLockDurationMs;
+        if (groupConfigManager.groupConfig(groupId).isPresent()) {
+            recordLockDurationMs = groupConfigManager.groupConfig(groupId).get().shareRecordLockDurationMs();
+        } else {
+            recordLockDurationMs = defaultRecordLockDurationMs;
+        }
         return scheduleAcquisitionLockTimeout(memberId, firstOffset, lastOffset, recordLockDurationMs);
     }
 
@@ -1790,8 +1810,8 @@ public class SharePartition {
 
                     // If we have an acquisition lock timeout for a share-partition, then we should check if
                     // there is a pending share fetch request for the share-partition and complete it.
-                    DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchKey(groupId, topicIdPartition);
-                    delayedShareFetchPurgatory.checkAndComplete(delayedShareFetchKey);
+                    DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId(), topicIdPartition.partition());
+                    replicaManager.completeDelayedShareFetchRequest(delayedShareFetchKey);
                 });
             }
         } finally {
@@ -1916,7 +1936,8 @@ public class SharePartition {
         return timer;
     }
 
-    private final class AcquisitionLockTimerTask extends TimerTask {
+    // Visible for testing
+    final class AcquisitionLockTimerTask extends TimerTask {
         private final long expirationMs;
         private final String memberId;
         private final long firstOffset;

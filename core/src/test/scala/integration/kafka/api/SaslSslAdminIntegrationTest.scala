@@ -14,9 +14,8 @@ package kafka.api
 
 import java.time
 import kafka.security.JaasTestUtils
-import kafka.security.authorizer.AclAuthorizer
 import kafka.utils.TestUtils._
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.acl._
@@ -31,7 +30,7 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.SecurityUtils
 import org.apache.kafka.common.security.token.delegation.DelegationToken
 import org.apache.kafka.security.authorizer.AclEntry.{WILDCARD_HOST, WILDCARD_PRINCIPAL_STRING}
-import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, ServerConfigs, ZkConfigs}
+import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, ServerConfigs}
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.junit.jupiter.api.Assertions._
@@ -42,41 +41,33 @@ import org.junit.jupiter.params.provider.ValueSource
 import java.util
 import java.util.Collections
 import scala.collection.Seq
-import scala.compat.java8.OptionConverters._
 import scala.concurrent.ExecutionException
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOption
 import scala.util.{Failure, Success, Try}
 
 @Timeout(120)
 class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetup {
   val clusterResourcePattern = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
-  val zkAuthorizerClassName = classOf[AclAuthorizer].getName
   val kraftAuthorizerClassName = classOf[StandardAuthorizer].getName
   val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KAFKA_SERVER_PRINCIPAL_UNQUALIFIED_NAME)
   var superUserAdmin: Admin = _
   val secretKey = "secretKey"
-  val maxLifeTime = 5000
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
   override protected lazy val trustStoreFile = Some(TestUtils.tempFile("truststore", ".jks"))
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    // set this to use delegation token
-    if (TestInfoUtils.isKRaft(testInfo)) {
-      this.serverConfig.setProperty(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, kraftAuthorizerClassName)
-      this.controllerConfig.setProperty(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, kraftAuthorizerClassName)
-      // controllers talk to brokers as User:ANONYMOUS therefore it needs to be super user
-      this.serverConfig.setProperty(StandardAuthorizer.SUPER_USERS_CONFIG, kafkaPrincipal.toString + ";" + KafkaPrincipal.ANONYMOUS.toString)
-      this.controllerConfig.setProperty(StandardAuthorizer.SUPER_USERS_CONFIG, kafkaPrincipal.toString)
-    } else {
-      this.serverConfig.setProperty(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, zkAuthorizerClassName)
-      this.serverConfig.setProperty(ZkConfigs.ZK_ENABLE_SECURE_ACLS_CONFIG, "true")
-      this.serverConfig.setProperty(AclAuthorizer.SuperUsersProp, kafkaPrincipal.toString)
-    }
+    this.serverConfig.setProperty(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, kraftAuthorizerClassName)
+    this.controllerConfig.setProperty(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, kraftAuthorizerClassName)
+    // controllers talk to brokers as User:ANONYMOUS therefore it needs to be super user
+    this.serverConfig.setProperty(StandardAuthorizer.SUPER_USERS_CONFIG, kafkaPrincipal.toString + ";" + KafkaPrincipal.ANONYMOUS.toString)
+    this.controllerConfig.setProperty(StandardAuthorizer.SUPER_USERS_CONFIG, kafkaPrincipal.toString)
 
     // Enable delegationTokenControlManager
     this.serverConfig.setProperty(DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG, secretKey)
-    this.serverConfig.setProperty(DelegationTokenManagerConfigs.DELEGATION_TOKEN_MAX_LIFETIME_CONFIG, maxLifeTime.toString)
+    this.serverConfig.setProperty(DelegationTokenManagerConfigs.DELEGATION_TOKEN_EXPIRY_TIME_MS_CONFIG, Long.MaxValue.toString)
+    this.serverConfig.setProperty(DelegationTokenManagerConfigs.DELEGATION_TOKEN_MAX_LIFETIME_CONFIG, Long.MaxValue.toString)
 
     setUpSasl()
     super.setUp(testInfo)
@@ -140,7 +131,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
 
   @ParameterizedTest
   @Timeout(30)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testAclOperationsWithOptionTimeoutMs(quorum: String): Unit = {
     val config = createConfig
     // this will cause timeout connecting to broker
@@ -159,7 +150,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
 
   @ParameterizedTest
   @Timeout(30)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDeleteAclsWithOptionTimeoutMs(quorum: String): Unit = {
     val config = createConfig
     // this will cause timeout connecting to broker
@@ -175,7 +166,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk","kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testExpireDelegationTokenWithOptionExpireTimePeriodMs(quorum: String): Unit = {
     client = createAdminClient
     val renewer = List(SecurityUtils.parseKafkaPrincipal("User:renewer"))
@@ -211,7 +202,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testAclOperations(quorum: String): Unit = {
     client = createAdminClient
     val acl = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "mytopic3", PatternType.LITERAL),
@@ -233,7 +224,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testAclOperations2(quorum: String): Unit = {
     client = createAdminClient
     val results = client.createAcls(List(acl2, acl2, transactionalIdAcl).asJava)
@@ -260,7 +251,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testAclDescribe(quorum: String): Unit = {
     client = createAdminClient
     ensureAcls(Set(anyAcl, acl2, fooAcl, prefixAcl))
@@ -288,7 +279,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testAclDelete(quorum: String): Unit = {
     client = createAdminClient
     ensureAcls(Set(anyAcl, acl2, fooAcl, prefixAcl))
@@ -356,7 +347,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
 
   //noinspection ScalaDeprecation - test explicitly covers clients using legacy / deprecated constructors
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testLegacyAclOpsNeverAffectOrReturnPrefixed(quorum: String): Unit = {
     client = createAdminClient
     ensureAcls(Set(anyAcl, acl2, fooAcl, prefixAcl))  // <-- prefixed exists, but should never be returned.
@@ -402,7 +393,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testAttemptToCreateInvalidAcls(quorum: String): Unit = {
     client = createAdminClient
     val clusterAcl = new AclBinding(new ResourcePattern(ResourceType.CLUSTER, "foobar", PatternType.LITERAL),
@@ -416,29 +407,29 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testCreateDelegationTokenWithLargeTimeout(quorum: String): Unit = {
+  @ValueSource(strings = Array("kraft"))
+  def testCreateDelegationTokenWithSmallerTimeout(quorum: String): Unit = {
     client = createAdminClient
-    val timeout = Long.MaxValue
+    val timeout = 5000
 
     val options = new CreateDelegationTokenOptions().maxlifeTimeMs(timeout)
     val tokenInfo = client.createDelegationToken(options).delegationToken.get.tokenInfo
 
-    assertEquals(maxLifeTime, tokenInfo.maxTimestamp - tokenInfo.issueTimestamp)
+    assertEquals(timeout, tokenInfo.maxTimestamp - tokenInfo.issueTimestamp)
     assertTrue(tokenInfo.maxTimestamp >= tokenInfo.expiryTimestamp)
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testExpiredTimeStampLargerThanMaxLifeStamp(quorum: String): Unit = {
     client = createAdminClient
-    val timeout = -1
+    val timeout = 5000
 
     val createOptions = new CreateDelegationTokenOptions().maxlifeTimeMs(timeout)
     val token = client.createDelegationToken(createOptions).delegationToken.get
     val tokenInfo = token.tokenInfo
 
-    assertEquals(maxLifeTime, tokenInfo.maxTimestamp - tokenInfo.issueTimestamp)
+    assertEquals(timeout, tokenInfo.maxTimestamp - tokenInfo.issueTimestamp)
     assertTrue(tokenInfo.maxTimestamp >= tokenInfo.expiryTimestamp)
 
     TestUtils.waitUntilTrue(() => brokers.forall(server => server.tokenCache.tokens.size == 1),
@@ -528,7 +519,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testAclAuthorizationDenied(quorum: String): Unit = {
     client = createAdminClient
 
@@ -578,7 +569,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testCreateTopicsResponseMetadataAndConfig(quorum: String): Unit = {
     val topic1 = "mytopic1"
     val topic2 = "mytopic2"
@@ -592,7 +583,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     val configsOverride = Map(TopicConfig.SEGMENT_BYTES_CONFIG -> "100000").asJava
     val newTopics = Seq(
       new NewTopic(topic1, 2, 3.toShort).configs(configsOverride),
-      new NewTopic(topic2, Option.empty[Integer].asJava, Option.empty[java.lang.Short].asJava).configs(configsOverride))
+      new NewTopic(topic2, Option.empty[Integer].toJava, Option.empty[java.lang.Short].toJava).configs(configsOverride))
     val validateResult = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true))
     validateResult.all.get()
     waitForTopics(client, List(), topics)
@@ -639,10 +630,10 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testExpireDelegationToken(quorum: String): Unit = {
     client = createAdminClient
-    val createDelegationTokenOptions = new CreateDelegationTokenOptions()
+    val createDelegationTokenOptions = new CreateDelegationTokenOptions().maxlifeTimeMs(5000)
 
     // Test expiration for non-exists token
     TestUtils.assertFutureExceptionTypeEquals(
@@ -669,6 +660,22 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     // Test shortening the expiryTimestamp
     val token3 = client.createDelegationToken(createDelegationTokenOptions).delegationToken().get()
     TestUtils.retry(1000) { assertTrue(expireTokenOrFailWithAssert(token3, 200) < token3.tokenInfo().expiryTimestamp()) }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testCreateTokenWithOverflowTimestamp(quorum: String): Unit = {
+    client = createAdminClient
+    val token = client.createDelegationToken(new CreateDelegationTokenOptions().maxlifeTimeMs(Long.MaxValue)).delegationToken().get()
+    assertEquals(Long.MaxValue, token.tokenInfo().expiryTimestamp())
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testExpireTokenWithOverflowTimestamp(quorum: String): Unit = {
+    client = createAdminClient
+    val token = client.createDelegationToken(new CreateDelegationTokenOptions().maxlifeTimeMs(Long.MaxValue)).delegationToken().get()
+    TestUtils.retry(1000) { assertTrue(expireTokenOrFailWithAssert(token, Long.MaxValue) == Long.MaxValue) }
   }
 
   private def expireTokenOrFailWithAssert(token: DelegationToken, expiryTimePeriodMs: Long): Long  = {

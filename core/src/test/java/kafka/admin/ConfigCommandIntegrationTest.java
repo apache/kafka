@@ -16,31 +16,17 @@
  */
 package kafka.admin;
 
-import kafka.cluster.Broker;
-import kafka.cluster.EndPoint;
-import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterTest;
-import kafka.test.annotation.Type;
-import kafka.test.junit.ClusterTestExtensions;
-import kafka.test.junit.ZkClusterInvocationContext;
-import kafka.zk.AdminZkClient;
-import kafka.zk.BrokerInfo;
-import kafka.zk.KafkaZkClient;
-
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConfigEntry;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
-import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.test.api.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestExtensions;
+import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.security.PasswordEncoder;
-import org.apache.kafka.server.common.MetadataVersion;
-import org.apache.kafka.server.config.ZooKeeperInternals;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.platform.commons.util.StringUtils;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -50,7 +36,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
@@ -62,13 +47,8 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
-import static org.apache.kafka.security.PasswordEncoderConfigs.PASSWORD_ENCODER_CIPHER_ALGORITHM_CONFIG;
-import static org.apache.kafka.security.PasswordEncoderConfigs.PASSWORD_ENCODER_ITERATIONS_CONFIG;
-import static org.apache.kafka.security.PasswordEncoderConfigs.PASSWORD_ENCODER_KEYFACTORY_ALGORITHM_CONFIG;
-import static org.apache.kafka.security.PasswordEncoderConfigs.PASSWORD_ENCODER_KEY_LENGTH_CONFIG;
 import static org.apache.kafka.security.PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -98,7 +78,7 @@ public class ConfigCommandIntegrationTest {
         this.cluster = cluster;
     }
 
-    @ClusterTest(types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT})
+    @ClusterTest
     public void testExitWithNonZeroStatusOnUpdatingUnallowedConfig() {
         assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
             "--entity-name", cluster.isKRaftTest() ? "0" : "1",
@@ -108,180 +88,51 @@ public class ConfigCommandIntegrationTest {
             errOut -> assertTrue(errOut.contains("Cannot update these configs dynamically: Set(security.inter.broker.protocol)"), errOut));
     }
 
-    @ClusterTest(types = {Type.ZK})
-    public void testExitWithNonZeroStatusOnZkCommandAlterUserQuota() {
-        assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
-            "--entity-type", "users",
-            "--entity-name", "admin",
-            "--alter", "--add-config", "consumer_byte_rate=20000")),
-            errOut -> assertTrue(errOut.contains("User configuration updates using ZooKeeper are only supported for SCRAM credential updates."), errOut));
-    }
-
-    @ClusterTest(types = {Type.ZK})
-    public void testExitWithNonZeroStatusOnZkCommandAlterGroup() {
-        assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
-                "--entity-type", "groups",
-                "--entity-name", "group",
-                "--alter", "--add-config", "consumer.session.timeout.ms=50000")),
-            errOut -> assertTrue(errOut.contains("Invalid entity type groups, the entity type must be one of users, brokers with a --zookeeper argument"), errOut));
-
-        // Test for the --group alias
-        assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
-                "--group", "group",
-                "--alter", "--add-config", "consumer.session.timeout.ms=50000")),
-            errOut -> assertTrue(errOut.contains("Invalid entity type groups, the entity type must be one of users, brokers with a --zookeeper argument"), errOut));
-    }
-
-    @ClusterTest(types = {Type.ZK})
-    public void testExitWithNonZeroStatusOnZkCommandAlterClientMetrics() {
-        assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
-                        "--entity-type", "client-metrics",
-                        "--entity-name", "cm",
-                        "--alter", "--add-config", "metrics=org.apache")),
-                errOut -> assertTrue(errOut.contains("Invalid entity type client-metrics, the entity type must be one of users, brokers with a --zookeeper argument"), errOut));
-
-        // Test for the --client-metrics alias
-        assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
-                        "--client-metrics", "cm",
-                        "--alter", "--add-config", "consumer.session.timeout.ms=50000")),
-                errOut -> assertTrue(errOut.contains("Invalid entity type client-metrics, the entity type must be one of users, brokers with a --zookeeper argument"), errOut));
-    }
-
-    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
+    @ClusterTest
     public void testNullStatusOnKraftCommandAlterUserQuota() {
         Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
             "--entity-type", "users",
             "--entity-name", "admin",
             "--alter", "--add-config", "consumer_byte_rate=20000"));
-        String message = captureStandardMsg(run(command));
-
-        assertTrue(StringUtils.isBlank(message), message);
+        String message = captureStandardStream(false, run(command));
+        assertEquals("Completed updating config for user admin.", message);
     }
 
-    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
+    @ClusterTest
     public void testNullStatusOnKraftCommandAlterGroup() {
         Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
             "--entity-type", "groups",
             "--entity-name", "group",
             "--alter", "--add-config", "consumer.session.timeout.ms=50000"));
-        String message = captureStandardMsg(run(command));
-        assertTrue(StringUtils.isBlank(message), message);
+        String message = captureStandardStream(false, run(command));
+        assertEquals("Completed updating config for group group.", message);
 
         // Test for the --group alias
         command = Stream.concat(quorumArgs(), Stream.of(
             "--group", "group",
             "--alter", "--add-config", "consumer.session.timeout.ms=50000"));
-        message = captureStandardMsg(run(command));
-        assertTrue(StringUtils.isBlank(message), message);
+        message = captureStandardStream(false, run(command));
+        assertEquals("Completed updating config for group group.", message);
     }
 
-    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
+    @ClusterTest
     public void testNullStatusOnKraftCommandAlterClientMetrics() {
         Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
                 "--entity-type", "client-metrics",
                 "--entity-name", "cm",
                 "--alter", "--add-config", "metrics=org.apache"));
-        String message = captureStandardMsg(run(command));
-        assertTrue(StringUtils.isBlank(message), message);
+        String message = captureStandardStream(false, run(command));
+        assertEquals("Completed updating config for client-metric cm.", message);
 
         // Test for the --client-metrics alias
         command = Stream.concat(quorumArgs(), Stream.of(
                 "--client-metrics", "cm",
                 "--alter", "--add-config", "metrics=org.apache"));
-        message = captureStandardMsg(run(command));
-        assertTrue(StringUtils.isBlank(message), message);
+        message = captureStandardStream(false, run(command));
+        assertEquals("Completed updating config for client-metric cm.", message);
     }
 
-    @ClusterTest(types = Type.ZK)
-    public void testDynamicBrokerConfigUpdateUsingZooKeeper() throws Exception {
-        cluster.shutdownBroker(0);
-        String zkConnect = ((ZkClusterInvocationContext.ZkClusterInstance) cluster).getUnderlying().zkConnect();
-        KafkaZkClient zkClient = ((ZkClusterInvocationContext.ZkClusterInstance) cluster).getUnderlying().zkClient();
-
-        String brokerId = "1";
-        AdminZkClient adminZkClient = new AdminZkClient(zkClient, scala.None$.empty());
-        alterOpts = asList("--zookeeper", zkConnect, "--entity-type", "brokers", "--alter");
-
-        // Add config
-        alterAndVerifyConfig(zkClient, adminZkClient, Optional.of(brokerId),
-                singletonMap("message.max.bytes", "110000"));
-        alterAndVerifyConfig(zkClient, adminZkClient, Optional.empty(),
-                singletonMap("message.max.bytes", "120000"));
-
-        // Change config
-        alterAndVerifyConfig(zkClient, adminZkClient, Optional.of(brokerId),
-                singletonMap("message.max.bytes", "130000"));
-        alterAndVerifyConfig(zkClient, adminZkClient, Optional.empty(),
-                singletonMap("message.max.bytes", "140000"));
-
-        // Delete config
-        deleteAndVerifyConfig(zkClient, adminZkClient, Optional.of(brokerId),
-                singleton("message.max.bytes"));
-        deleteAndVerifyConfig(zkClient, adminZkClient, Optional.empty(),
-                singleton("message.max.bytes"));
-
-        // Listener configs: should work only with listener name
-        alterAndVerifyConfig(zkClient, adminZkClient, Optional.of(brokerId),
-                singletonMap("listener.name.internal.ssl.keystore.location", "/tmp/test.jks"));
-        assertThrows(ConfigException.class,
-                () -> alterConfigWithZk(zkClient, adminZkClient, Optional.of(brokerId),
-                        singletonMap("ssl.keystore.location", "/tmp/test.jks")));
-
-        // Per-broker config configured at default cluster-level should fail
-        assertThrows(ConfigException.class,
-                () -> alterConfigWithZk(zkClient, adminZkClient, Optional.empty(),
-                        singletonMap("listener.name.internal.ssl.keystore.location", "/tmp/test.jks")));
-        deleteAndVerifyConfig(zkClient, adminZkClient, Optional.of(brokerId),
-                singleton("listener.name.internal.ssl.keystore.location"));
-
-        // Password config update without encoder secret should fail
-        assertThrows(IllegalArgumentException.class,
-                () -> alterConfigWithZk(zkClient, adminZkClient, Optional.of(brokerId),
-                        singletonMap("listener.name.external.ssl.keystore.password", "secret")));
-
-        // Password config update with encoder secret should succeed and encoded password must be stored in ZK
-        Map<String, String> configs = new HashMap<>();
-        configs.put("listener.name.external.ssl.keystore.password", "secret");
-        configs.put("log.cleaner.threads", "2");
-        Map<String, String> encoderConfigs = new HashMap<>(configs);
-        encoderConfigs.put(PASSWORD_ENCODER_SECRET_CONFIG, "encoder-secret");
-        alterConfigWithZk(zkClient, adminZkClient, Optional.of(brokerId), encoderConfigs);
-        Properties brokerConfigs = zkClient.getEntityConfigs("brokers", brokerId);
-        assertFalse(brokerConfigs.contains(PASSWORD_ENCODER_SECRET_CONFIG), "Encoder secret stored in ZooKeeper");
-        assertEquals("2", brokerConfigs.getProperty("log.cleaner.threads")); // not encoded
-        String encodedPassword = brokerConfigs.getProperty("listener.name.external.ssl.keystore.password");
-        PasswordEncoder passwordEncoder = ConfigCommand.createPasswordEncoder(encoderConfigs);
-        assertEquals("secret", passwordEncoder.decode(encodedPassword).value());
-        assertEquals(configs.size(), brokerConfigs.size());
-
-        // Password config update with overrides for encoder parameters
-        Map<String, String> encoderConfigs2 = generateEncodeConfig();
-        alterConfigWithZk(zkClient, adminZkClient, Optional.of(brokerId), encoderConfigs2);
-        Properties brokerConfigs2 = zkClient.getEntityConfigs("brokers", brokerId);
-        String encodedPassword2 = brokerConfigs2.getProperty("listener.name.external.ssl.keystore.password");
-        assertEquals("secret2", ConfigCommand.createPasswordEncoder(encoderConfigs)
-                .decode(encodedPassword2).value());
-        assertEquals("secret2", ConfigCommand.createPasswordEncoder(encoderConfigs2)
-                .decode(encodedPassword2).value());
-
-        // Password config update at default cluster-level should fail
-        assertThrows(ConfigException.class,
-                () -> alterConfigWithZk(zkClient, adminZkClient, Optional.empty(), encoderConfigs));
-
-        // Dynamic config updates using ZK should fail if broker is running.
-        registerBrokerInZk(zkClient, Integer.parseInt(brokerId));
-        assertThrows(IllegalArgumentException.class,
-                () -> alterConfigWithZk(zkClient, adminZkClient,
-                        Optional.of(brokerId), singletonMap("message.max.bytes", "210000")));
-        assertThrows(IllegalArgumentException.class,
-                () -> alterConfigWithZk(zkClient, adminZkClient,
-                        Optional.empty(), singletonMap("message.max.bytes", "220000")));
-
-        // Dynamic config updates using ZK should for a different broker that is not running should succeed
-        alterAndVerifyConfig(zkClient, adminZkClient, Optional.of("2"), singletonMap("message.max.bytes", "230000"));
-    }
-
-    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
+    @ClusterTest
     public void testDynamicBrokerConfigUpdateUsingKraft() throws Exception {
         alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
 
@@ -322,7 +173,7 @@ public class ConfigCommandIntegrationTest {
         }
     }
 
-    @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT})
+    @ClusterTest
     public void testGroupConfigUpdateUsingKraft() throws Exception {
         alterOpts = asList("--bootstrap-server", cluster.bootstrapServers(), "--entity-type", "groups", "--alter");
         verifyGroupConfigUpdate();
@@ -381,26 +232,7 @@ public class ConfigCommandIntegrationTest {
         }
     }
 
-    @ClusterTest(types = {Type.ZK})
-    public void testAlterReadOnlyConfigInZookeeperThenShouldFail() {
-        cluster.shutdownBroker(0);
-        String zkConnect = ((ZkClusterInvocationContext.ZkClusterInstance) cluster).getUnderlying().zkConnect();
-        KafkaZkClient zkClient = ((ZkClusterInvocationContext.ZkClusterInstance) cluster).getUnderlying().zkClient();
-        AdminZkClient adminZkClient = new AdminZkClient(zkClient, scala.None$.empty());
-        alterOpts = generateDefaultAlterOpts(zkConnect);
-
-        assertThrows(ConfigException.class,
-                () -> alterConfigWithZk(zkClient, adminZkClient, Optional.of(defaultBrokerId),
-                        singletonMap("auto.create.topics.enable", "false")));
-        assertThrows(ConfigException.class,
-                () -> alterConfigWithZk(zkClient, adminZkClient, Optional.of(defaultBrokerId),
-                        singletonMap("auto.leader.rebalance.enable", "false")));
-        assertThrows(ConfigException.class,
-                () -> alterConfigWithZk(zkClient, adminZkClient, Optional.of(defaultBrokerId),
-                        singletonMap("broker.id", "1")));
-    }
-
-    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
+    @ClusterTest
     public void testAlterReadOnlyConfigInKRaftThenShouldFail() {
         alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
 
@@ -417,23 +249,7 @@ public class ConfigCommandIntegrationTest {
         }
     }
 
-    @ClusterTest(types = {Type.ZK})
-    public void testUpdateClusterWideConfigInZookeeperThenShouldSuccessful() {
-        cluster.shutdownBroker(0);
-        String zkConnect = ((ZkClusterInvocationContext.ZkClusterInstance) cluster).getUnderlying().zkConnect();
-        KafkaZkClient zkClient = ((ZkClusterInvocationContext.ZkClusterInstance) cluster).getUnderlying().zkClient();
-        AdminZkClient adminZkClient = new AdminZkClient(zkClient, scala.None$.empty());
-        alterOpts = generateDefaultAlterOpts(zkConnect);
-
-        Map<String, String> configs = new HashMap<>();
-        configs.put("log.flush.interval.messages", "100");
-        configs.put("log.retention.bytes", "20");
-        configs.put("log.retention.ms", "2");
-
-        alterAndVerifyConfig(zkClient, adminZkClient, Optional.of(defaultBrokerId), configs);
-    }
-
-    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
+    @ClusterTest
     public void testUpdateClusterWideConfigInKRaftThenShouldSuccessful() throws Exception {
         alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
 
@@ -447,34 +263,7 @@ public class ConfigCommandIntegrationTest {
         }
     }
 
-    @ClusterTest(types = {Type.ZK})
-    public void testUpdatePerBrokerConfigWithListenerNameInZookeeperThenShouldSuccessful() {
-        cluster.shutdownBroker(0);
-        String zkConnect = ((ZkClusterInvocationContext.ZkClusterInstance) cluster).getUnderlying().zkConnect();
-        KafkaZkClient zkClient = ((ZkClusterInvocationContext.ZkClusterInstance) cluster).getUnderlying().zkClient();
-        AdminZkClient adminZkClient = new AdminZkClient(zkClient, scala.None$.empty());
-        alterOpts = generateDefaultAlterOpts(zkConnect);
-
-        String listenerName = "listener.name.internal.";
-        String sslTruststoreType = listenerName + "ssl.truststore.type";
-        String sslTruststoreLocation = listenerName + "ssl.truststore.location";
-        String sslTruststorePassword = listenerName + "ssl.truststore.password";
-
-        Map<String, String> configs = new HashMap<>();
-        configs.put(sslTruststoreType, "PKCS12");
-        configs.put(sslTruststoreLocation, "/temp/test.jks");
-        configs.put("password.encoder.secret", "encoder-secret");
-        configs.put(sslTruststorePassword, "password");
-
-        alterConfigWithZk(zkClient, adminZkClient, Optional.of(defaultBrokerId), configs);
-
-        Properties properties = zkClient.getEntityConfigs("brokers", defaultBrokerId);
-        assertTrue(properties.containsKey(sslTruststorePassword));
-        assertEquals(configs.get(sslTruststoreType), properties.getProperty(sslTruststoreType));
-        assertEquals(configs.get(sslTruststoreLocation), properties.getProperty(sslTruststoreLocation));
-    }
-
-    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
+    @ClusterTest
     public void testUpdatePerBrokerConfigWithListenerNameInKRaftThenShouldSuccessful() throws Exception {
         alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
         String listenerName = "listener.name.internal.";
@@ -492,26 +281,7 @@ public class ConfigCommandIntegrationTest {
         }
     }
 
-    @ClusterTest(types = {Type.ZK})
-    public void testUpdatePerBrokerConfigInZookeeperThenShouldFail() {
-        cluster.shutdownBroker(0);
-        String zkConnect = ((ZkClusterInvocationContext.ZkClusterInstance) cluster).getUnderlying().zkConnect();
-        KafkaZkClient zkClient = ((ZkClusterInvocationContext.ZkClusterInstance) cluster).getUnderlying().zkClient();
-        AdminZkClient adminZkClient = new AdminZkClient(zkClient, scala.None$.empty());
-        alterOpts = generateDefaultAlterOpts(zkConnect);
-
-        assertThrows(ConfigException.class, () ->
-                alterAndVerifyConfig(zkClient, adminZkClient, Optional.of(defaultBrokerId),
-                        singletonMap("ssl.truststore.type", "PKCS12")));
-        assertThrows(ConfigException.class, () ->
-                alterAndVerifyConfig(zkClient, adminZkClient, Optional.of(defaultBrokerId),
-                        singletonMap("ssl.truststore.location", "/temp/test.jks")));
-        assertThrows(ConfigException.class, () ->
-                alterAndVerifyConfig(zkClient, adminZkClient, Optional.of(defaultBrokerId),
-                        singletonMap("ssl.truststore.password", "password")));
-    }
-
-    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
+    @ClusterTest
     public void testUpdatePerBrokerConfigInKRaftThenShouldFail() {
         alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
 
@@ -535,7 +305,7 @@ public class ConfigCommandIntegrationTest {
             throw new RuntimeException();
         });
 
-        String errOut = captureStandardMsg(run(args));
+        String errOut = captureStandardStream(true, run(args));
 
         checkErrOut.accept(errOut);
         assertNotNull(exitStatus.get());
@@ -543,64 +313,12 @@ public class ConfigCommandIntegrationTest {
     }
 
     private Stream<String> quorumArgs() {
-        return cluster.isKRaftTest()
-                ? Stream.of("--bootstrap-server", cluster.bootstrapServers())
-                : Stream.of("--zookeeper", ((ZkClusterInvocationContext.ZkClusterInstance) cluster).getUnderlying().zkConnect());
+        return Stream.of("--bootstrap-server", cluster.bootstrapServers());
     }
 
-    private void verifyConfig(KafkaZkClient zkClient, Optional<String> brokerId, Map<String, String> config) {
-        Properties entityConfigs = zkClient.getEntityConfigs("brokers",
-                brokerId.orElse(ZooKeeperInternals.DEFAULT_STRING));
-        assertEquals(config, entityConfigs);
-    }
-
-    private void alterAndVerifyConfig(KafkaZkClient zkClient, AdminZkClient adminZkClient,
-                                      Optional<String> brokerId, Map<String, String> configs) {
-        alterConfigWithZk(zkClient, adminZkClient, brokerId, configs);
-        verifyConfig(zkClient, brokerId, configs);
-    }
-
-    private void alterConfigWithZk(KafkaZkClient zkClient, AdminZkClient adminZkClient,
-                                   Optional<String> brokerId, Map<String, String> config) {
-        String configStr = transferConfigMapToString(config);
-        ConfigCommand.ConfigCommandOptions addOpts =
-                new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, entityOp(brokerId), asList("--add-config", configStr)));
-        ConfigCommand.alterConfigWithZk(zkClient, addOpts, adminZkClient);
-    }
-
-    private List<String> entityOp(Optional<String> brokerId) {
-        return brokerId.map(id -> asList("--entity-name", id))
+    private List<String> entityOp(Optional<String> entityId) {
+        return entityId.map(id -> asList("--entity-name", id))
                 .orElse(singletonList("--entity-default"));
-    }
-
-    private void deleteAndVerifyConfig(KafkaZkClient zkClient, AdminZkClient adminZkClient,
-                                       Optional<String> brokerId, Set<String> configNames) {
-        ConfigCommand.ConfigCommandOptions deleteOpts =
-                new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, entityOp(brokerId),
-                        asList("--delete-config", String.join(",", configNames))));
-        ConfigCommand.alterConfigWithZk(zkClient, deleteOpts, adminZkClient);
-        verifyConfig(zkClient, brokerId, Collections.emptyMap());
-    }
-
-    private Map<String, String> generateEncodeConfig() {
-        Map<String, String> map = new HashMap<>();
-        map.put(PASSWORD_ENCODER_SECRET_CONFIG, "encoder-secret");
-        map.put(PASSWORD_ENCODER_CIPHER_ALGORITHM_CONFIG, "DES/CBC/PKCS5Padding");
-        map.put(PASSWORD_ENCODER_ITERATIONS_CONFIG, "1024");
-        map.put(PASSWORD_ENCODER_KEYFACTORY_ALGORITHM_CONFIG, "PBKDF2WithHmacSHA1");
-        map.put(PASSWORD_ENCODER_KEY_LENGTH_CONFIG, "64");
-        map.put("listener.name.external.ssl.keystore.password", "secret2");
-        return map;
-    }
-
-    private void registerBrokerInZk(KafkaZkClient zkClient, int id) {
-        zkClient.createTopLevelPaths();
-        SecurityProtocol securityProtocol = SecurityProtocol.PLAINTEXT;
-        EndPoint endpoint = new EndPoint("localhost", 9092,
-                ListenerName.forSecurityProtocol(securityProtocol), securityProtocol);
-        BrokerInfo brokerInfo = BrokerInfo.apply(Broker.apply(id, endpoint,
-                scala.None$.empty()), MetadataVersion.latestTesting(), 9192);
-        zkClient.registerBroker(brokerInfo);
     }
 
     private List<String> generateDefaultAlterOpts(String bootstrapServers) {
@@ -737,10 +455,6 @@ public class ConfigCommandIntegrationTest {
         return Stream.of(lists).flatMap(List::stream).toArray(String[]::new);
     }
 
-    private String captureStandardMsg(Runnable runnable) {
-        return captureStandardStream(runnable);
-    }
-
     private String transferConfigMapToString(Map<String, String> configs) {
         return configs.entrySet()
                 .stream()
@@ -748,17 +462,25 @@ public class ConfigCommandIntegrationTest {
                 .collect(Collectors.joining(","));
     }
 
-    private String captureStandardStream(Runnable runnable) {
+    // Copied from ToolsTestUtils.java, can be removed after we move ConfigCommand to tools module
+    static String captureStandardStream(boolean isErr, Runnable runnable) {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        PrintStream currentStream = System.err;
-        try (PrintStream tempStream = new PrintStream(outputStream)) {
+        PrintStream currentStream = isErr ? System.err : System.out;
+        PrintStream tempStream = new PrintStream(outputStream);
+        if (isErr)
             System.setErr(tempStream);
-            try {
-                runnable.run();
-                return outputStream.toString().trim();
-            } finally {
+        else
+            System.setOut(tempStream);
+        try {
+            runnable.run();
+            return outputStream.toString().trim();
+        } finally {
+            if (isErr)
                 System.setErr(currentStream);
-            }
+            else
+                System.setOut(currentStream);
+
+            tempStream.close();
         }
     }
 }

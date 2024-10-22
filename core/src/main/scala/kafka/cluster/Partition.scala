@@ -25,6 +25,7 @@ import kafka.log._
 import kafka.log.remote.RemoteLogManager
 import kafka.server._
 import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
+import kafka.server.share.{DelayedShareFetch, DelayedShareFetchPartitionKey}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
 import kafka.zookeeper.ZooKeeperClientException
@@ -42,8 +43,9 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
 import org.apache.kafka.server.common.{MetadataVersion, RequestLocal}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, FetchParams, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason, VerificationGuard}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams}
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints
 import org.slf4j.event.Level
 
@@ -86,16 +88,20 @@ trait AlterPartitionListener {
   def markFailed(): Unit
 }
 
-class DelayedOperations(topicPartition: TopicPartition,
+class DelayedOperations(topicId: Option[Uuid],
+                        topicPartition: TopicPartition,
                         produce: DelayedOperationPurgatory[DelayedProduce],
                         fetch: DelayedOperationPurgatory[DelayedFetch],
-                        deleteRecords: DelayedOperationPurgatory[DelayedDeleteRecords]) {
+                        deleteRecords: DelayedOperationPurgatory[DelayedDeleteRecords],
+                        shareFetch: DelayedOperationPurgatory[DelayedShareFetch]) {
 
   def checkAndCompleteAll(): Unit = {
     val requestKey = TopicPartitionOperationKey(topicPartition)
     CoreUtils.swallow(() -> fetch.checkAndComplete(requestKey), fetch, Level.ERROR)
     CoreUtils.swallow(() -> produce.checkAndComplete(requestKey), produce, Level.ERROR)
     CoreUtils.swallow(() -> deleteRecords.checkAndComplete(requestKey), deleteRecords, Level.ERROR)
+    if (topicId.isDefined) CoreUtils.swallow(() -> shareFetch.checkAndComplete(new DelayedShareFetchPartitionKey(
+      topicId.get, topicPartition.partition())), shareFetch, Level.ERROR)
   }
 
   def numDelayedDelete: Int = deleteRecords.numDelayed
@@ -131,10 +137,12 @@ object Partition {
     }
 
     val delayedOperations = new DelayedOperations(
+      topicId,
       topicPartition,
       replicaManager.delayedProducePurgatory,
       replicaManager.delayedFetchPurgatory,
-      replicaManager.delayedDeleteRecordsPurgatory)
+      replicaManager.delayedDeleteRecordsPurgatory,
+      replicaManager.delayedShareFetchPurgatory)
 
     new Partition(topicPartition,
       _topicId = topicId,

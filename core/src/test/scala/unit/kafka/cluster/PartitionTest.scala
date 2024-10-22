@@ -46,6 +46,7 @@ import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.{ConcurrentHashMap, CountDownLatch, Semaphore}
 import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
+import kafka.server.share.{DelayedShareFetch, DelayedShareFetchPartitionKey}
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
@@ -58,16 +59,17 @@ import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToContro
 import org.apache.kafka.server.common.{MetadataVersion, RequestLocal}
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams}
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, EpochEntry, FetchIsolation, FetchParams, LogAppendInfo, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogReadInfo, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, EpochEntry, LogAppendInfo, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogReadInfo, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOption
 
 object PartitionTest {
   class MockPartitionListener extends PartitionListener {
@@ -147,7 +149,7 @@ object PartitionTest {
       minBytes,
       maxBytes,
       isolation,
-      clientMetadata.asJava
+      clientMetadata.toJava
     )
   }
 }
@@ -4109,7 +4111,11 @@ class PartitionTest extends AbstractPartitionTest {
     val deleteRecords = mock(classOf[DelayedOperationPurgatory[DelayedDeleteRecords]])
     when(deleteRecords.checkAndComplete(requestKey)).thenThrow(new RuntimeException("uh oh"))
 
-    val delayedOperations = new DelayedOperations(topicPartition, produce, fetch, deleteRecords)
+    val shareFetch = mock(classOf[DelayedOperationPurgatory[DelayedShareFetch]])
+    when(shareFetch.checkAndComplete(new DelayedShareFetchPartitionKey(topicId.get, topicPartition.partition())))
+      .thenThrow(new RuntimeException("uh oh"))
+
+    val delayedOperations = new DelayedOperations(topicId, topicPartition, produce, fetch, deleteRecords, shareFetch)
     val spyLogManager = spy(logManager)
     val partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,

@@ -18,9 +18,11 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
@@ -99,7 +101,7 @@ public class StandbyTaskEOSMultiRebalanceIntegrationTest {
         storeName = "store-" + safeTestName;
         counterName = "counter-" + safeTestName;
 
-        CLUSTER.deleteTopicsAndWait(inputTopic, outputTopic);
+        CLUSTER.deleteTopics(inputTopic, outputTopic);
         CLUSTER.createTopic(inputTopic, partitionCount, 3);
         CLUSTER.createTopic(outputTopic, partitionCount, 3);
     }
@@ -109,13 +111,13 @@ public class StandbyTaskEOSMultiRebalanceIntegrationTest {
     @AfterEach
     public void cleanUp() {
         if (streamInstanceOne != null) {
-            streamInstanceOne.close();
+            streamInstanceOne.close(Duration.ofSeconds(60));
         }
         if (streamInstanceTwo != null) {
-            streamInstanceTwo.close();
+            streamInstanceTwo.close(Duration.ofSeconds(60));
         }
         if (streamInstanceThree != null) {
-            streamInstanceThree.close();
+            streamInstanceThree.close(Duration.ofSeconds(60));
         }
     }
 
@@ -141,7 +143,7 @@ public class StandbyTaskEOSMultiRebalanceIntegrationTest {
                         CLUSTER.bootstrapServers(),
                         IntegerSerializer.class,
                         IntegerSerializer.class,
-                        new Properties()
+                        Utils.mkProperties(Collections.singletonMap(ProducerConfig.ACKS_CONFIG, "all"))
                 ),
                 10L + time
         );

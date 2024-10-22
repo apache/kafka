@@ -45,7 +45,7 @@ docker_run_memory_limit="2000m"
 default_num_nodes=14
 
 # The default OpenJDK base image.
-default_jdk="openjdk:8"
+default_jdk="openjdk:17-buster"
 
 # The default ducker-ak image name.
 default_image_name="ducker-ak"

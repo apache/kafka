@@ -1071,6 +1071,9 @@ public class ClientMetricsManagerTest {
         assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "-count").metricValue());
         assertEquals(Double.NaN, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "-avg").metricValue());
         assertEquals(Double.NaN, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "-max").metricValue());
+        // Validate client connection id map should contain 2 entries. 1 for GET request and 1 for PUSH request as we did
+        // generate random connection id. The throttled request should not be added to the map.
+        assertEquals(2, clientMetricsManager.clientConnectionIdMap().size());
     }
 
     @Test
@@ -1139,6 +1142,7 @@ public class ClientMetricsManagerTest {
         assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.INSTANCE_COUNT).metricValue());
 
         assertNotNull(clientMetricsManager.clientInstance(response.data().clientInstanceId()));
+        assertEquals(1, clientMetricsManager.clientConnectionIdMap().size());
         assertEquals(1, clientMetricsManager.expirationTimer().size());
         // Cache expiry should occur after 100 * 3 = 300 ms, wait for the eviction to happen.
         // Force clocks to advance by 300 ms.
@@ -1155,6 +1159,8 @@ public class ClientMetricsManagerTest {
         // subscription count metrics and kafka metrics count registered i.e. 4 metrics.
         assertEquals(4, kafkaMetrics.metrics().size());
         assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.INSTANCE_COUNT).metricValue());
+        // Validate client connection id map should be empty.
+        assertTrue(clientMetricsManager.clientConnectionIdMap().isEmpty());
     }
 
     @Test
@@ -1181,6 +1187,7 @@ public class ClientMetricsManagerTest {
 
         assertNotNull(clientMetricsManager.clientInstance(response1.data().clientInstanceId()));
         assertNotNull(clientMetricsManager.clientInstance(response2.data().clientInstanceId()));
+        assertEquals(2, clientMetricsManager.clientConnectionIdMap().size());
         assertEquals(2, clientMetricsManager.expirationTimer().size());
         // Cache expiry should occur after 100 * 3 = 300 ms, wait for the eviction to happen.
         // Force clocks to advance by 300 ms.
@@ -1198,6 +1205,8 @@ public class ClientMetricsManagerTest {
         // subscription count metrics and kafka metrics count registered i.e. 4 metrics.
         assertEquals(4, kafkaMetrics.metrics().size());
         assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.INSTANCE_COUNT).metricValue());
+        // Validate client connection id map should be empty.
+        assertTrue(clientMetricsManager.clientConnectionIdMap().isEmpty());
     }
 
     @Test
@@ -1206,7 +1215,7 @@ public class ClientMetricsManagerTest {
             new GetTelemetrySubscriptionsRequestData(), true).build();
 
         GetTelemetrySubscriptionsResponse response = clientMetricsManager.processGetTelemetrySubscriptionRequest(
-            request, ClientMetricsTestUtils.requestContext());
+            request, ClientMetricsTestUtils.requestContextWithConnectionId("conn-1"));
         assertEquals(Errors.NONE, response.error());
         Uuid clientInstanceId = response.data().clientInstanceId();
         int subscriptionId = response.data().subscriptionId();
@@ -1224,7 +1233,7 @@ public class ClientMetricsManagerTest {
             new GetTelemetrySubscriptionsRequestData().setClientInstanceId(clientInstanceId), true).build();
 
         response = clientMetricsManager.processGetTelemetrySubscriptionRequest(
-            request, ClientMetricsTestUtils.requestContext());
+            request, ClientMetricsTestUtils.requestContextWithConnectionId("conn-1"));
         assertEquals(Errors.NONE, response.error());
         assertTrue(subscriptionId != response.data().subscriptionId());
 
@@ -1237,6 +1246,60 @@ public class ClientMetricsManagerTest {
         assertNotNull(instance.expirationTimerTask());
         assertEquals(1, clientMetricsManager.expirationTimer().size());
         // Metrics size should remain same on instance update.
+        assertEquals(12, kafkaMetrics.metrics().size());
+        assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.INSTANCE_COUNT).metricValue());
+        // Validate client connection id map contains new connection id.
+        assertEquals(1, clientMetricsManager.clientConnectionIdMap().size());
+    }
+
+    @Test
+    public void testRemoveConnection() throws Exception {
+        GetTelemetrySubscriptionsRequest request = new GetTelemetrySubscriptionsRequest.Builder(
+            new GetTelemetrySubscriptionsRequestData(), true).build();
+
+        GetTelemetrySubscriptionsResponse response = clientMetricsManager.processGetTelemetrySubscriptionRequest(
+            request, ClientMetricsTestUtils.requestContextWithConnectionId("conn-1"));
+        assertEquals(Errors.NONE, response.error());
+        Uuid clientInstanceId = response.data().clientInstanceId();
+
+        // Validate instance and metrics exists.
+        ClientMetricsInstance instance = clientMetricsManager.clientInstance(clientInstanceId);
+        assertNotNull(instance);
+        assertEquals(1, clientMetricsManager.clientConnectionIdMap().size());
+        assertEquals(clientInstanceId, clientMetricsManager.clientConnectionIdMap().get("conn-1"));
+        assertEquals(12, kafkaMetrics.metrics().size());
+        assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.INSTANCE_COUNT).metricValue());
+
+        clientMetricsManager.connectionDisconnectListener().onDisconnect("conn-1");
+        assertNull(clientMetricsManager.clientInstance(clientInstanceId));
+        assertTrue(clientMetricsManager.clientConnectionIdMap().isEmpty());
+        // Instance metrics should get removed.
+        assertEquals(4, kafkaMetrics.metrics().size());
+        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.INSTANCE_COUNT).metricValue());
+    }
+
+    @Test
+    public void testRemoveConnectionUnknownConnectionId() throws Exception {
+        GetTelemetrySubscriptionsRequest request = new GetTelemetrySubscriptionsRequest.Builder(
+            new GetTelemetrySubscriptionsRequestData(), true).build();
+
+        GetTelemetrySubscriptionsResponse response = clientMetricsManager.processGetTelemetrySubscriptionRequest(
+            request, ClientMetricsTestUtils.requestContextWithConnectionId("conn-1"));
+        assertEquals(Errors.NONE, response.error());
+        Uuid clientInstanceId = response.data().clientInstanceId();
+
+        // Validate instance and metrics exists.
+        ClientMetricsInstance instance = clientMetricsManager.clientInstance(clientInstanceId);
+        assertNotNull(instance);
+        assertEquals(1, clientMetricsManager.clientConnectionIdMap().size());
+        assertEquals(clientInstanceId, clientMetricsManager.clientConnectionIdMap().get("conn-1"));
+        assertEquals(12, kafkaMetrics.metrics().size());
+        assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.INSTANCE_COUNT).metricValue());
+
+        clientMetricsManager.connectionDisconnectListener().onDisconnect("conn-2");
+        assertNotNull(clientMetricsManager.clientInstance(clientInstanceId));
+        assertEquals(1, clientMetricsManager.clientConnectionIdMap().size());
+        // Metrics size should remain same.
         assertEquals(12, kafkaMetrics.metrics().size());
         assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.INSTANCE_COUNT).metricValue());
     }

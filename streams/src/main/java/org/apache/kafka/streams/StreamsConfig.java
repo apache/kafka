@@ -29,6 +29,7 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -138,8 +139,7 @@ import static org.apache.kafka.common.config.ConfigDef.parseType;
  * </ul>
  *
  * If {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} is set to {@link #EXACTLY_ONCE_V2 "exactly_once_v2"},
- * {@link #EXACTLY_ONCE "exactly_once"} (deprecated), or {@link #EXACTLY_ONCE_BETA "exactly_once_beta"} (deprecated), Kafka Streams does not
- * allow users to overwrite the following properties (Streams setting shown in parentheses):
+ * Kafka Streams does not allow users to overwrite the following properties (Streams setting shown in parentheses):
  * <ul>
  *   <li>{@link ConsumerConfig#ISOLATION_LEVEL_CONFIG "isolation.level"} (read_committed) - Consumers will always read committed data only</li>
  *   <li>{@link ProducerConfig#ENABLE_IDEMPOTENCE_CONFIG "enable.idempotence"} (true) - Producer will always have idempotency enabled</li>
@@ -431,34 +431,8 @@ public class StreamsConfig extends AbstractConfig {
 
     /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for exactly-once processing guarantees.
-     * <p>
-     * Enabling exactly-once processing semantics requires broker version 0.11.0 or higher.
-     * If you enable this feature Kafka Streams will use more resources (like broker connections)
-     * compared to {@link #AT_LEAST_ONCE "at_least_once"} and {@link #EXACTLY_ONCE_V2 "exactly_once_v2"}.
      *
-     * @deprecated since 3.0.0, will be removed in 4.0. Use {@link #EXACTLY_ONCE_V2 "exactly_once_v2"} instead.
-     */
-    @SuppressWarnings("WeakerAccess")
-    @Deprecated
-    public static final String EXACTLY_ONCE = "exactly_once";
-
-    /**
-     * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for exactly-once processing guarantees.
-     * <p>
-     * Enabling exactly-once (beta) requires broker version 2.5 or higher.
-     * If you enable this feature Kafka Streams will use fewer resources (like broker connections)
-     * compared to the {@link #EXACTLY_ONCE} (deprecated) case.
-     *
-     * @deprecated since 3.0.0, will be removed in 4.0. Use {@link #EXACTLY_ONCE_V2 "exactly_once_v2"} instead.
-     */
-    @SuppressWarnings("WeakerAccess")
-    @Deprecated
-    public static final String EXACTLY_ONCE_BETA = "exactly_once_beta";
-
-    /**
-     * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for exactly-once processing guarantees.
-     * <p>
-     * Enabling exactly-once-v2 requires broker version 2.5 or higher.
+     * <p> Enabling exactly-once-v2 requires broker version 2.5 or higher.
      */
     @SuppressWarnings("WeakerAccess")
     public static final String EXACTLY_ONCE_V2 = "exactly_once_v2";
@@ -466,6 +440,7 @@ public class StreamsConfig extends AbstractConfig {
     public static final String RACK_AWARE_ASSIGNMENT_STRATEGY_NONE = "none";
     public static final String RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC = "min_traffic";
     public static final String RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY = "balance_subtopology";
+
     /**
      * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for the latest built-in metrics version.
      */
@@ -522,7 +497,7 @@ public class StreamsConfig extends AbstractConfig {
     private static final String COMMIT_INTERVAL_MS_DOC = "The frequency in milliseconds with which to commit processing progress." +
         " For at-least-once processing, committing means to save the position (ie, offsets) of the processor." +
         " For exactly-once processing, it means to commit the transaction which includes to save the position and to make the committed data in the output topic visible to consumers with isolation level read_committed." +
-        " (Note, if <code>processing.guarantee</code> is set to <code>" + EXACTLY_ONCE_V2 + "</code>, <code>" + EXACTLY_ONCE + "</code>,the default value is <code>" + EOS_DEFAULT_COMMIT_INTERVAL_MS + "</code>," +
+        " (Note, if <code>processing.guarantee</code> is set to <code>" + EXACTLY_ONCE_V2 + "</code>, the default value is <code>" + EOS_DEFAULT_COMMIT_INTERVAL_MS + "</code>," +
         " otherwise the default value is <code>" + DEFAULT_COMMIT_INTERVAL_MS + "</code>.";
 
     /** {@code connections.max.idle.ms} */
@@ -657,11 +632,6 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;
 
-    /** {@code auto.include.jmx.reporter}
-     * @deprecated and will be removed in 4.0.0 */
-    @Deprecated
-    public static final String AUTO_INCLUDE_JMX_REPORTER_CONFIG = CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG;
-
     /** {@code num.standby.replicas} */
     @SuppressWarnings("WeakerAccess")
     public static final String NUM_STANDBY_REPLICAS_CONFIG = "num.standby.replicas";
@@ -694,8 +664,6 @@ public class StreamsConfig extends AbstractConfig {
     private static final String PROCESSING_GUARANTEE_DOC = "The processing guarantee that should be used. " +
         "Possible values are <code>" + AT_LEAST_ONCE + "</code> (default) " +
         "and <code>" + EXACTLY_ONCE_V2 + "</code> (requires brokers version 2.5 or higher). " +
-        "Deprecated options are <code>" + EXACTLY_ONCE + "</code> (requires brokers version 0.11.0 or higher) " +
-        "and <code>" + EXACTLY_ONCE_BETA + "</code> (requires brokers version 2.5 or higher). " +
         "Note that exactly-once processing requires a cluster of at least three brokers by default what is the " +
         "recommended setting for production; for development you can change this, by adjusting broker setting " +
         "<code>transaction.state.log.replication.factor</code> and <code>transaction.state.log.min.isr</code>.";
@@ -725,7 +693,7 @@ public class StreamsConfig extends AbstractConfig {
     @Deprecated
     public static final String RACK_AWARE_ASSIGNMENT_STRATEGY_DOC = "The strategy we use for rack aware assignment. Rack aware assignment will take <code>client.rack</code> and <code>racks</code> of <code>TopicPartition</code> into account when assigning"
         + " tasks to minimize cross rack traffic. Valid settings are : <code>" + RACK_AWARE_ASSIGNMENT_STRATEGY_NONE + "</code> (default), which will disable rack aware assignment; <code>" + RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC
-        + "</code>, which will compute minimum cross rack traffic assignment; <code>" + RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY + "</code>, which will compute minimum cross rack traffic and try to balance the tasks of same subtopolgies across different clients";
+        + "</code>, which will compute minimum cross rack traffic assignment; <code>" + RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY + "</code>, which will compute minimum cross rack traffic and try to balance the tasks of same subtopologies across different clients";
 
     /** {@code rack.aware.assignment.tags} */
     @SuppressWarnings("WeakerAccess")
@@ -985,7 +953,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(PROCESSING_GUARANTEE_CONFIG,
                     Type.STRING,
                     AT_LEAST_ONCE,
-                    in(AT_LEAST_ONCE, EXACTLY_ONCE, EXACTLY_ONCE_BETA, EXACTLY_ONCE_V2),
+                    in(AT_LEAST_ONCE, EXACTLY_ONCE_V2),
                     Importance.MEDIUM,
                     PROCESSING_GUARANTEE_DOC)
             .define(PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG,
@@ -1123,7 +1091,7 @@ public class StreamsConfig extends AbstractConfig {
                     CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
             .define(METRIC_REPORTER_CLASSES_CONFIG,
                     Type.LIST,
-                    "",
+                    JmxReporter.class.getName(),
                     Importance.LOW,
                     CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
             .define(METRICS_RECORDING_LEVEL_CONFIG,
@@ -1138,11 +1106,6 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0),
                     Importance.LOW,
                     CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC)
-            .define(AUTO_INCLUDE_JMX_REPORTER_CONFIG,
-                    Type.BOOLEAN,
-                    true,
-                    Importance.LOW,
-                    CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_DOC)
             .define(POLL_MS_CONFIG,
                     Type.LONG,
                     100L,
@@ -1264,6 +1227,13 @@ public class StreamsConfig extends AbstractConfig {
         CONSUMER_EOS_OVERRIDES = Collections.unmodifiableMap(tempConsumerDefaultOverrides);
     }
 
+    private static final Map<String, Object> ADMIN_CLIENT_OVERRIDES;
+    static {
+        final Map<String, Object> tempAdminClientDefaultOverrides = new HashMap<>();
+        tempAdminClientDefaultOverrides.put(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, "true");
+        ADMIN_CLIENT_OVERRIDES = Collections.unmodifiableMap(tempAdminClientDefaultOverrides);
+    }
+
     public static class InternalConfig {
         // This is settable in the main Streams config, but it's a private API for now
         public static final String INTERNAL_TASK_ASSIGNOR_CLASS = "internal.task.assignor.class";
@@ -1309,7 +1279,11 @@ public class StreamsConfig extends AbstractConfig {
             } else if (value instanceof String) {
                 return Boolean.parseBoolean((String) value);
             } else {
-                log.warn("Invalid value (" + value + ") on internal configuration '" + key + "'. Please specify a true/false value.");
+                log.warn(
+                    "Invalid value ({}) on internal configuration '{}'. Please specify a true/false value.",
+                    value,
+                    key
+                );
                 return defaultValue;
             }
         }
@@ -1321,7 +1295,11 @@ public class StreamsConfig extends AbstractConfig {
             } else if (value instanceof String) {
                 return Long.parseLong((String) value);
             } else {
-                log.warn("Invalid value (" + value + ") on internal configuration '" + key + "'. Please specify a numeric value.");
+                log.warn(
+                    "Invalid value ({}) on internal configuration '{}'. Please specify a numeric value.",
+                    value,
+                    key
+                );
                 return defaultValue;
             }
         }
@@ -1331,7 +1309,11 @@ public class StreamsConfig extends AbstractConfig {
             if (value instanceof String) {
                 return (String) value;
             } else {
-                log.warn("Invalid value (" + value + ") on internal configuration '" + key + "'. Please specify a String value.");
+                log.warn(
+                    "Invalid value ({}) on internal configuration '{}'. Please specify a String value.",
+                    value,
+                    key
+                );
                 return defaultValue;
             }
         }
@@ -1455,22 +1437,11 @@ public class StreamsConfig extends AbstractConfig {
                             final boolean doLog) {
         super(CONFIG, props, doLog);
         eosEnabled = StreamsConfigUtils.eosEnabled(this);
-
-        final String processingModeConfig = getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG);
-        if (processingModeConfig.equals(EXACTLY_ONCE)) {
-            log.warn("Configuration parameter `{}` is deprecated and will be removed in the 4.0.0 release. " +
-                         "Please use `{}` instead. Note that this requires broker version 2.5+ so you should prepare "
-                         + "to upgrade your brokers if necessary.", EXACTLY_ONCE, EXACTLY_ONCE_V2);
-        }
-        if (processingModeConfig.equals(EXACTLY_ONCE_BETA)) {
-            log.warn("Configuration parameter `{}` is deprecated and will be removed in the 4.0.0 release. " +
-                         "Please use `{}` instead.", EXACTLY_ONCE_BETA, EXACTLY_ONCE_V2);
-        }
-
         if (eosEnabled) {
             verifyEOSTransactionTimeoutCompatibility();
         }
         verifyTopologyOptimizationConfigs(getString(TOPOLOGY_OPTIMIZATION_CONFIG));
+        verifyClientTelemetryConfigs();
     }
 
     private void verifyEOSTransactionTimeoutCompatibility() {
@@ -1484,13 +1455,62 @@ public class StreamsConfig extends AbstractConfig {
                     DEFAULT_TRANSACTION_TIMEOUT;
 
         if (transactionTimeout < commitInterval) {
-            throw new IllegalArgumentException(String.format("Transaction timeout %d was set lower than " +
+            throw new IllegalArgumentException(String.format(
+                "Transaction timeout %d was set lower than " +
                 "streams commit interval %d. This will cause ongoing transaction always timeout due to inactivity " +
                 "caused by long commit interval. Consider reconfiguring commit interval to match " +
                 "transaction timeout by tuning 'commit.interval.ms' config, or increase the transaction timeout to match " +
                 "commit interval by tuning `producer.transaction.timeout.ms` config.",
-                transactionTimeout, commitInterval));
+                transactionTimeout,
+                commitInterval
+            ));
         }
+    }
+
+    private void verifyClientTelemetryConfigs() {
+        final boolean streamTelemetryEnabled = getBoolean(ENABLE_METRICS_PUSH_CONFIG);
+        final Boolean mainConsumerMetricsConfig = maybeMetricsPushEnabled(MAIN_CONSUMER_PREFIX);
+        final Boolean consumerMetricsConfig = maybeMetricsPushEnabled(CONSUMER_PREFIX);
+        final Boolean adminMetricsConfig = maybeMetricsPushEnabled(ADMIN_CLIENT_PREFIX);
+
+        if (streamTelemetryEnabled) {
+            checkConsumerAndMainConsumerAndAdminMetricsConfig(adminMetricsConfig, consumerMetricsConfig, mainConsumerMetricsConfig);
+            checkMainConsumerAndAdminMetricsConfig(adminMetricsConfig, mainConsumerMetricsConfig, "enabled");
+        }
+    }
+
+
+    private void checkConsumerAndMainConsumerAndAdminMetricsConfig(final Boolean adminMetricsConfig,
+                                                                   final Boolean consumerMetricsConfig,
+                                                                   final Boolean mainConsumerMetricsConfig) {
+        if (consumerMetricsConfig != null) {
+            if (!consumerMetricsConfig
+                    && mainConsumerMetricsConfig == null
+                    && adminMetricsConfig == null) {
+                throw new ConfigException("Kafka Streams metrics push enabled but consumer.enable.metrics is false, the setting needs to be consistent between the two");
+            } else if (consumerMetricsConfig) {
+                checkMainConsumerAndAdminMetricsConfig(adminMetricsConfig, mainConsumerMetricsConfig, "and consumer.enable.metrics are enabled,");
+            }
+        }
+    }
+
+    private void checkMainConsumerAndAdminMetricsConfig(final Boolean adminMetricsConfig, final Boolean mainConsumerMetricsConfig, final String message) {
+        if (mainConsumerMetricsConfig != null && !mainConsumerMetricsConfig
+                && adminMetricsConfig != null && !adminMetricsConfig) {
+            throw new ConfigException("Kafka Streams metrics push " + message + " but main.consumer and admin.client metrics push are disabled, the setting needs to be consistent between the two");
+        } else if (mainConsumerMetricsConfig != null && !mainConsumerMetricsConfig) {
+            throw new ConfigException("Kafka Streams metrics push " + message + " but main.consumer metrics push is disabled, the setting needs to be consistent between the two");
+        } else if (adminMetricsConfig != null && !adminMetricsConfig) {
+            throw new ConfigException("Kafka Streams metrics push " + message + " but admin.client metrics push is disabled, the setting needs to be consistent between the two");
+        }
+    }
+
+    private Boolean maybeMetricsPushEnabled(final String prefix) {
+        Boolean configSetValue = null;
+        if (originalsWithPrefix(prefix).containsKey(ENABLE_METRICS_PUSH_CONFIG)) {
+            configSetValue =  (Boolean) originalsWithPrefix(prefix).get(ENABLE_METRICS_PUSH_CONFIG);
+        }
+        return configSetValue;
     }
 
     @Override
@@ -1565,36 +1585,61 @@ public class StreamsConfig extends AbstractConfig {
         // Streams does not allow users to configure certain consumer/producer configurations, for example,
         // enable.auto.commit. In cases where user tries to override such non-configurable
         // consumer/producer configurations, log a warning and remove the user defined value from the Map.
-        // Thus the default values for these consumer/producer configurations that are suitable for
+        // Thus, the default values for these consumer/producer configurations that are suitable for
         // Streams will be used instead.
 
-        final String nonConfigurableConfigMessage = "Unexpected user-specified %s config: %s found. %sUser setting (%s) will be ignored and the Streams default setting (%s) will be used ";
-        final String eosMessage = PROCESSING_GUARANTEE_CONFIG + " is set to " + getString(PROCESSING_GUARANTEE_CONFIG) + ". Hence, ";
+        final String nonConfigurableConfigMessage = "Unexpected user-specified {} config '{}' found. {} setting ({}) will be ignored and the Streams default setting ({}) will be used.";
+        final String eosMessage = "'" + PROCESSING_GUARANTEE_CONFIG + "' is set to \"" + getString(PROCESSING_GUARANTEE_CONFIG) + "\". Hence, user";
 
         for (final String config: nonConfigurableConfigs) {
             if (clientProvidedProps.containsKey(config)) {
 
                 if (CONSUMER_DEFAULT_OVERRIDES.containsKey(config)) {
                     if (!clientProvidedProps.get(config).equals(CONSUMER_DEFAULT_OVERRIDES.get(config))) {
-                        log.warn(String.format(nonConfigurableConfigMessage, "consumer", config, "", clientProvidedProps.get(config),  CONSUMER_DEFAULT_OVERRIDES.get(config)));
+                        log.error(
+                            nonConfigurableConfigMessage,
+                            "consumer",
+                            config,
+                            "User",
+                            clientProvidedProps.get(config),
+                            CONSUMER_DEFAULT_OVERRIDES.get(config)
+                        );
                         clientProvidedProps.remove(config);
                     }
                 } else if (eosEnabled) {
                     if (CONSUMER_EOS_OVERRIDES.containsKey(config)) {
                         if (!clientProvidedProps.get(config).equals(CONSUMER_EOS_OVERRIDES.get(config))) {
-                            log.warn(String.format(nonConfigurableConfigMessage,
-                                    "consumer", config, eosMessage, clientProvidedProps.get(config), CONSUMER_EOS_OVERRIDES.get(config)));
+                            log.warn(
+                                nonConfigurableConfigMessage,
+                                "consumer",
+                                config,
+                                eosMessage,
+                                clientProvidedProps.get(config),
+                                CONSUMER_EOS_OVERRIDES.get(config)
+                            );
                             clientProvidedProps.remove(config);
                         }
                     } else if (PRODUCER_EOS_OVERRIDES.containsKey(config)) {
                         if (!clientProvidedProps.get(config).equals(PRODUCER_EOS_OVERRIDES.get(config))) {
-                            log.warn(String.format(nonConfigurableConfigMessage,
-                                    "producer", config, eosMessage, clientProvidedProps.get(config), PRODUCER_EOS_OVERRIDES.get(config)));
+                            log.warn(
+                                nonConfigurableConfigMessage,
+                                "producer",
+                                config,
+                                eosMessage,
+                                clientProvidedProps.get(config),
+                                PRODUCER_EOS_OVERRIDES.get(config)
+                            );
                             clientProvidedProps.remove(config);
                         }
                     } else if (ProducerConfig.TRANSACTIONAL_ID_CONFIG.equals(config)) {
-                        log.warn(String.format(nonConfigurableConfigMessage,
-                            "producer", config, eosMessage, clientProvidedProps.get(config), "<appId>-<generatedSuffix>"));
+                        log.warn(
+                            nonConfigurableConfigMessage,
+                            "producer",
+                            config,
+                            eosMessage,
+                            clientProvidedProps.get(config),
+                            "<appId>-<generatedSuffix>"
+                        );
                         clientProvidedProps.remove(config);
                     }
                 }
@@ -1691,9 +1736,11 @@ public class StreamsConfig extends AbstractConfig {
             final int batchSize = Integer.parseInt(producerProps.get(ProducerConfig.BATCH_SIZE_CONFIG).toString());
 
             if (segmentSize < batchSize) {
-                throw new IllegalArgumentException(String.format("Specified topic segment size %d is is smaller than the configured producer batch size %d, this will cause produced batch not able to be appended to the topic",
-                        segmentSize,
-                        batchSize));
+                throw new IllegalArgumentException(String.format(
+                    "Specified topic segment size %d is is smaller than the configured producer batch size %d, this will cause produced batch not able to be appended to the topic",
+                    segmentSize,
+                    batchSize
+                ));
             }
         }
 
@@ -1788,11 +1835,6 @@ public class StreamsConfig extends AbstractConfig {
         props.putAll(getClientCustomProps());
         props.putAll(clientProvidedProps);
 
-        // When using EOS alpha, stream should auto-downgrade the transactional commit protocol to be compatible with older brokers.
-        if (StreamsConfigUtils.processingMode(this) == StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA) {
-            props.put("internal.auto.downgrade.txn.commit", true);
-        }
-
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, originals().get(BOOTSTRAP_SERVERS_CONFIG));
         // add client id with stream client id prefix
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
@@ -1809,7 +1851,7 @@ public class StreamsConfig extends AbstractConfig {
     public Map<String, Object> getAdminConfigs(final String clientId) {
         final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(ADMIN_CLIENT_PREFIX, AdminClientConfig.configNames());
 
-        final Map<String, Object> props = new HashMap<>();
+        final Map<String, Object> props = new HashMap<>(ADMIN_CLIENT_OVERRIDES);
         props.putAll(getClientCustomProps());
         props.putAll(clientProvidedProps);
 
@@ -1912,7 +1954,9 @@ public class StreamsConfig extends AbstractConfig {
             return serde;
         } catch (final Exception e) {
             throw new StreamsException(
-                String.format("Failed to configure key serde %s", keySerdeConfigSetting), e);
+                String.format("Failed to configure key serde %s", keySerdeConfigSetting),
+                e
+            );
         }
     }
 
@@ -1934,7 +1978,9 @@ public class StreamsConfig extends AbstractConfig {
             return serde;
         } catch (final Exception e) {
             throw new StreamsException(
-                String.format("Failed to configure value serde %s", valueSerdeConfigSetting), e);
+                String.format("Failed to configure value serde %s", valueSerdeConfigSetting),
+                e
+            );
         }
     }
 

@@ -22,8 +22,7 @@ import kafka.coordinator.transaction.TransactionMarkerChannelManager.{LogAppendR
 import java.util
 import java.util.concurrent.{BlockingQueue, ConcurrentHashMap, LinkedBlockingQueue}
 import kafka.server.{KafkaConfig, MetadataCache}
-import kafka.utils.Implicits._
-import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.Logging
 import org.apache.kafka.clients._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
@@ -121,7 +120,7 @@ class TxnMarkerQueue(@volatile var destination: Node) extends Logging {
   }
 
   def addMarkers(txnTopicPartition: Int, pendingCompleteTxnAndMarker: PendingCompleteTxnAndMarkerEntry): Unit = {
-    val queue = CoreUtils.atomicGetOrUpdate(markersPerTxnTopicPartition, txnTopicPartition, {
+    val queue = markersPerTxnTopicPartition.getOrElseUpdate(txnTopicPartition, {
       // Note that this may get called more than once if threads have a close race while adding new queue.
       info(s"Creating new marker queue for txn partition $txnTopicPartition to destination broker ${destination.id}")
       new LinkedBlockingQueue[PendingCompleteTxnAndMarkerEntry]()
@@ -147,7 +146,7 @@ class TxnMarkerQueue(@volatile var destination: Node) extends Logging {
   }
 
   def forEachTxnTopicPartition[B](f:(Int, BlockingQueue[PendingCompleteTxnAndMarkerEntry]) => B): Unit =
-    markersPerTxnTopicPartition.forKeyValue { (partition, queue) =>
+    markersPerTxnTopicPartition.foreachEntry { (partition, queue) =>
       if (!queue.isEmpty) f(partition, queue)
     }
 
@@ -209,7 +208,7 @@ class TransactionMarkerChannelManager(
 
     // we do not synchronize on the update of the broker node with the enqueuing,
     // since even if there is a race condition we will just retry
-    val brokerRequestQueue = CoreUtils.atomicGetOrUpdate(markersQueuePerBroker, brokerId, {
+    val brokerRequestQueue = markersQueuePerBroker.getOrElseUpdate(brokerId, {
       // Note that this may get called more than once if threads have a close race while adding new queue.
       info(s"Creating new marker queue map to destination broker $brokerId")
       new TxnMarkerQueue(broker)

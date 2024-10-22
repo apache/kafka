@@ -55,7 +55,6 @@ import org.apache.kafka.streams.kstream.internals.graph.StreamTableJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamToTableNode;
 import org.apache.kafka.streams.kstream.internals.graph.UnoptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.UnoptimizableRepartitionNode.UnoptimizableRepartitionNodeBuilder;
-import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
@@ -496,39 +495,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             requireRepartitioning,
             mergeNode,
             builder);
-    }
-
-    @Deprecated
-    @Override
-    public KStream<K, V> through(final String topic) {
-        return through(topic, Produced.with(keySerde, valueSerde, null));
-    }
-
-    @Deprecated
-    @Override
-    public KStream<K, V> through(final String topic,
-                                 final Produced<K, V> produced) {
-        Objects.requireNonNull(topic, "topic can't be null");
-        Objects.requireNonNull(produced, "produced can't be null");
-
-        final ProducedInternal<K, V> producedInternal = new ProducedInternal<>(produced);
-        if (producedInternal.keySerde() == null) {
-            producedInternal.withKeySerde(keySerde);
-        }
-        if (producedInternal.valueSerde() == null) {
-            producedInternal.withValueSerde(valueSerde);
-        }
-        to(topic, producedInternal);
-
-        return builder.stream(
-            Collections.singleton(topic),
-            new ConsumedInternal<>(
-                producedInternal.keySerde(),
-                producedInternal.valueSerde(),
-                new FailOnInvalidTimestamp(),
-                null
-            )
-        );
     }
 
     @Override

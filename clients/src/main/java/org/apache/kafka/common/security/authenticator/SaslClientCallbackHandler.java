@@ -17,13 +17,13 @@
 package org.apache.kafka.common.security.authenticator;
 
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.internals.SecurityManagerCompatibility;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.scram.ScramExtensionsCallback;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 
-import java.security.AccessController;
 import java.util.List;
 import java.util.Map;
 
@@ -55,7 +55,7 @@ public class SaslClientCallbackHandler implements AuthenticateCallbackHandler {
 
     @Override
     public void handle(Callback[] callbacks) throws UnsupportedCallbackException {
-        Subject subject = Subject.getSubject(AccessController.getContext());
+        Subject subject = SecurityManagerCompatibility.get().current();
         for (Callback callback : callbacks) {
             if (callback instanceof NameCallback) {
                 NameCallback nc = (NameCallback) callback;

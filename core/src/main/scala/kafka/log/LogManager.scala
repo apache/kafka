@@ -35,7 +35,6 @@ import scala.jdk.CollectionConverters._
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success, Try}
-import kafka.utils.Implicits._
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.requests.{AbstractControlRequest, LeaderAndIsrRequest}
 import org.apache.kafka.image.TopicsImage
@@ -127,7 +126,8 @@ class LogManager(logDirs: Seq[File],
       _liveLogDirs.asScala.toBuffer
   }
 
-  private val dirLocks = lockLogDirs(liveLogDirs)
+  // visible for testing
+  private[log] val dirLocks = lockLogDirs(liveLogDirs)
   private val directoryIds: mutable.Map[String, Uuid] = loadDirectoryIds(liveLogDirs)
   def directoryIdsSet: Predef.Set[Uuid] = directoryIds.values.toSet
 
@@ -698,7 +698,7 @@ class LogManager(logDirs: Seq[File],
     }
 
     try {
-      jobs.forKeyValue { (dir, dirJobs) =>
+      jobs.foreachEntry { (dir, dirJobs) =>
         if (waitForAllToComplete(dirJobs,
           e => warn(s"There was an error in one of the threads during LogManager shutdown: ${e.getCause}"))) {
           val logs = logsInDir(localLogsByDir, dir)

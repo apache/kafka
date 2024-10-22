@@ -20,8 +20,11 @@ on:
     branches:
       - 'trunk'
 
+  schedule:
+    - cron: '0 0 * * 6,0'    # Run on Saturday and Sunday at midnight UTC
+
   pull_request:
-    types: [ opened, synchronize, reopened ]
+    types: [ opened, synchronize, ready_for_review, reopened ]
     branches:
       - 'trunk'
 
@@ -35,6 +38,6 @@ jobs:
     with:
       gradle-cache-read-only: ${{ github.ref != 'refs/heads/trunk' }}
       gradle-cache-write-only: ${{ github.ref == 'refs/heads/trunk' }}
-      is-public-fork: ${{ github.event.pull_request.head.repo.fork == 'true' }}
+      is-public-fork: ${{ github.event.pull_request.head.repo.fork || false }}
     secrets:
       inherit

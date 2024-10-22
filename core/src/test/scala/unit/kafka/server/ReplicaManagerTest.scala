@@ -26,6 +26,7 @@ import org.apache.kafka.server.log.remote.quota.RLMQuotaManagerConfig.INACTIVE_S
 import org.apache.kafka.server.log.remote.quota.RLMQuotaMetrics
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.epoch.util.MockBlockingSender
+import kafka.server.share.DelayedShareFetch
 import kafka.utils.TestUtils.waitUntilTrue
 import kafka.utils.{Pool, TestUtils}
 import kafka.zk.KafkaZkClient
@@ -64,10 +65,11 @@ import org.apache.kafka.server.common.{DirectoryEventHandler, MetadataVersion, O
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.storage._
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
+import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
 import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{MockScheduler, MockTime}
 import org.apache.kafka.storage.internals.checkpoint.{LazyOffsetCheckpoints, OffsetCheckpointFile, PartitionMetadataFile}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, FetchParams, FetchPartitionData, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogOffsetSnapshot, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, RemoteStorageFetchInfo, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogOffsetSnapshot, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, RemoteStorageFetchInfo, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeEach, Test}
@@ -89,8 +91,8 @@ import java.util.concurrent.{Callable, ConcurrentHashMap, CountDownLatch, TimeUn
 import java.util.stream.IntStream
 import java.util.{Collections, Optional, OptionalLong, Properties}
 import scala.collection.{Map, Seq, mutable}
-import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOption
 
 object ReplicaManagerTest {
   @AfterAll
@@ -2937,7 +2939,7 @@ class ReplicaManagerTest {
       segments,
       0L,
       0L,
-      leaderEpochCache.asJava,
+      leaderEpochCache.toJava,
       producerStateManager,
       new ConcurrentHashMap[String, Integer],
       false
@@ -3003,6 +3005,8 @@ class ReplicaManagerTest {
       purgatoryName = "RemoteFetch", timer, reaperEnabled = false)
     val mockRemoteListOffsetsPurgatory = new DelayedOperationPurgatory[DelayedRemoteListOffsets](
       purgatoryName = "RemoteListOffsets", timer, reaperEnabled = false)
+    val mockDelayedShareFetchPurgatory = new DelayedOperationPurgatory[DelayedShareFetch](
+      purgatoryName = "ShareFetch", timer, reaperEnabled = false)
 
     // Mock network client to show leader offset of 5
     val blockingSend = new MockBlockingSender(
@@ -3029,6 +3033,7 @@ class ReplicaManagerTest {
       delayedElectLeaderPurgatoryParam = Some(mockElectLeaderPurgatory),
       delayedRemoteFetchPurgatoryParam = Some(mockRemoteFetchPurgatory),
       delayedRemoteListOffsetsPurgatoryParam = Some(mockRemoteListOffsetsPurgatory),
+      delayedShareFetchPurgatoryParam = Some(mockDelayedShareFetchPurgatory),
       threadNamePrefix = Option(this.getClass.getName)) {
 
       override protected def createReplicaFetcherManager(metrics: Metrics,
@@ -3317,7 +3322,7 @@ class ReplicaManagerTest {
       minBytes,
       maxBytes,
       isolation,
-      clientMetadata.asJava
+      clientMetadata.toJava
     )
 
     replicaManager.fetchMessages(
@@ -3427,6 +3432,8 @@ class ReplicaManagerTest {
       purgatoryName = "DelayedRemoteFetch", timer, reaperEnabled = false)
     val mockDelayedRemoteListOffsetsPurgatory = new DelayedOperationPurgatory[DelayedRemoteListOffsets](
       purgatoryName = "RemoteListOffsets", timer, reaperEnabled = false)
+    val mockDelayedShareFetchPurgatory = new DelayedOperationPurgatory[DelayedShareFetch](
+      purgatoryName = "ShareFetch", timer, reaperEnabled = false)
 
     when(metadataCache.contains(new TopicPartition(topic, 0))).thenReturn(true)
 
@@ -3460,6 +3467,7 @@ class ReplicaManagerTest {
       delayedElectLeaderPurgatoryParam = Some(mockDelayedElectLeaderPurgatory),
       delayedRemoteFetchPurgatoryParam = Some(mockDelayedRemoteFetchPurgatory),
       delayedRemoteListOffsetsPurgatoryParam = Some(mockDelayedRemoteListOffsetsPurgatory),
+      delayedShareFetchPurgatoryParam = Some(mockDelayedShareFetchPurgatory),
       threadNamePrefix = Option(this.getClass.getName),
       addPartitionsToTxnManager = Some(addPartitionsToTxnManager),
       directoryEventHandler = directoryEventHandler,
@@ -6358,7 +6366,7 @@ class ReplicaManagerTest {
       MetadataVersion.latestProduction(),
       ZkMigrationState.NONE)
     new MetadataImage(
-      new MetadataProvenance(100L, 10, 1000L),
+      new MetadataProvenance(100L, 10, 1000L, true),
       featuresImageLatest,
       ClusterImageTest.IMAGE1,
       topicsImage,

@@ -1,0 +1,55 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+---
+name: "Approve Workflow Run"
+description: "Approve a Workflow run that has been submitted by a non-committer"
+inputs:
+  gh-token:
+    description: "The GitHub token for use with the CLI"
+    required: true
+  repository:
+    description: "The GitHub repository"
+    required: true
+    default: "apache/kafka"
+  run_id:
+    description: "The Workflow Run ID"
+    required: true
+  pr_number:
+    description: "The Pull Request number"
+    required: true
+  commit_sha:
+    description: "The SHA of the commit the run is for"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Approve Workflow Run
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.gh-token }}
+        REPO: ${{ inputs.repository }}
+        RUN_ID: ${{ inputs.run_id }}
+        PR_NUMBER: ${{ inputs.pr_number }}
+        COMMIT_SHA: ${{ inputs.commit_sha }}
+      run: |
+        echo "Approving workflow run $RUN_ID for PR $PR_NUMBER at SHA $COMMIT_SHA";
+        gh api --method POST \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              /repos/$REPO/actions/runs/$RUN_ID/approve

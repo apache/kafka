@@ -45,6 +45,7 @@ import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
+import org.apache.kafka.clients.consumer.internals.events.ResetOffsetEvent;
 import org.apache.kafka.clients.consumer.internals.events.SeekUnvalidatedEvent;
 import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
@@ -59,6 +60,7 @@ import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
@@ -105,6 +107,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
@@ -246,6 +249,23 @@ public class AsyncKafkaConsumerTest {
         consumer.close();
         final IllegalStateException res = assertThrows(IllegalStateException.class, consumer::assignment);
         assertEquals("This consumer has already been closed.", res.getMessage());
+    }
+
+    @Test
+    public void testUnsubscribeWithInvalidTopicException() {
+        consumer = newConsumer();
+        backgroundEventQueue.add(new ErrorEvent(new InvalidTopicException("Invalid topic name")));
+        completeUnsubscribeApplicationEventSuccessfully();
+        assertDoesNotThrow(() -> consumer.unsubscribe());
+        assertDoesNotThrow(() -> consumer.close());
+    }
+
+    @Test
+    public void testCloseWithInvalidTopicException() {
+        consumer = newConsumer();
+        backgroundEventQueue.add(new ErrorEvent(new InvalidTopicException("Invalid topic name")));
+        completeUnsubscribeApplicationEventSuccessfully();
+        assertDoesNotThrow(() -> consumer.close());
     }
 
     @Test
@@ -562,15 +582,6 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
-    public void testPollLongThrowsException() {
-        consumer = newConsumer();
-        Exception e = assertThrows(UnsupportedOperationException.class, () -> consumer.poll(0L));
-        assertEquals("Consumer.poll(long) is not supported when \"group.protocol\" is \"consumer\". " +
-            "This method is deprecated and will be removed in the next major release.", e.getMessage());
-    }
-
-    @Test
     public void testCommitSyncLeaderEpochUpdate() {
         consumer = newConsumer();
         final TopicPartition t0 = new TopicPartition("t0", 2);
@@ -757,6 +768,13 @@ public class AsyncKafkaConsumerTest {
         return allValues.get(allValues.size() - 1);
     }
 
+    private <T> CompletableApplicationEvent<T> addAndGetLastEnqueuedEvent() {
+        final ArgumentCaptor<CompletableApplicationEvent<T>> eventArgumentCaptor = ArgumentCaptor.forClass(CompletableApplicationEvent.class);
+        verify(applicationEventHandler, atLeast(1)).addAndGet(eventArgumentCaptor.capture());
+        final List<CompletableApplicationEvent<T>> allValues = eventArgumentCaptor.getAllValues();
+        return allValues.get(allValues.size() - 1);
+    }
+
     @Test
     public void testPollTriggersFencedExceptionFromCommitAsync() {
         final String groupId = "consumerGroupA";
@@ -845,7 +863,7 @@ public class AsyncKafkaConsumerTest {
             subscriptions,
             "group-id",
             "client-id"));
-        doThrow(new KafkaException()).when(consumer).processBackgroundEvents(any(), any());
+        doThrow(new KafkaException()).when(consumer).processBackgroundEvents(any(), any(), any());
         assertThrows(KafkaException.class, () -> consumer.close(Duration.ZERO));
         verifyUnsubscribeEvent(subscriptions);
         // Close operation should carry on even if the unsubscribe fails
@@ -1750,7 +1768,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     /**
-     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(Future, Timer) processBackgroundEvents}
+     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(Future, Timer, Predicate) processBackgroundEvents}
      * handles the case where the {@link Future} takes a bit of time to complete, but does within the timeout.
      */
     @Test
@@ -1776,14 +1794,14 @@ public class AsyncKafkaConsumerTest {
             return null;
         }).when(future).get(any(Long.class), any(TimeUnit.class));
 
-        consumer.processBackgroundEvents(future, timer);
+        consumer.processBackgroundEvents(future, timer, e -> false);
 
         // 800 is the 1000 ms timeout (above) minus the 200 ms delay for the two incremental timeouts/retries.
         assertEquals(800, timer.remainingMs());
     }
 
     /**
-     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(Future, Timer) processBackgroundEvents}
+     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(Future, Timer, Predicate) processBackgroundEvents}
      * handles the case where the {@link Future} is already complete when invoked, so it doesn't have to wait.
      */
     @Test
@@ -1794,7 +1812,7 @@ public class AsyncKafkaConsumerTest {
         // Create a future that is already completed.
         CompletableFuture<?> future = CompletableFuture.completedFuture(null);
 
-        consumer.processBackgroundEvents(future, timer);
+        consumer.processBackgroundEvents(future, timer, e -> false);
 
         // Because we didn't need to perform a timed get, we should still have every last millisecond
         // of our initial timeout.
@@ -1802,7 +1820,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     /**
-     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(Future, Timer) processBackgroundEvents}
+     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(Future, Timer, Predicate) processBackgroundEvents}
      * handles the case where the {@link Future} does not complete within the timeout.
      */
     @Test
@@ -1817,7 +1835,7 @@ public class AsyncKafkaConsumerTest {
             throw new java.util.concurrent.TimeoutException("Intentional timeout");
         }).when(future).get(any(Long.class), any(TimeUnit.class));
 
-        assertThrows(TimeoutException.class, () -> consumer.processBackgroundEvents(future, timer));
+        assertThrows(TimeoutException.class, () -> consumer.processBackgroundEvents(future, timer, e -> false));
 
         // Because we forced our mocked future to continuously time out, we should have no time remaining.
         assertEquals(0, timer.remainingMs());
@@ -1885,11 +1903,49 @@ public class AsyncKafkaConsumerTest {
         verify(applicationEventHandler).add(ArgumentMatchers.isA(UnsubscribeEvent.class));
     }
 
+    @Test
+    public void testSeekToBeginning() {
+        Collection<TopicPartition> topics = Collections.singleton(new TopicPartition("test", 0));
+        consumer = newConsumer();
+        consumer.seekToBeginning(topics);
+        CompletableApplicationEvent<Void> event = addAndGetLastEnqueuedEvent();
+        ResetOffsetEvent resetOffsetEvent = assertInstanceOf(ResetOffsetEvent.class, event);
+        assertEquals(topics, new HashSet<>(resetOffsetEvent.topicPartitions()));
+        assertEquals(OffsetResetStrategy.EARLIEST, resetOffsetEvent.offsetResetStrategy());
+    }
+
+    @Test
+    public void testSeekToBeginningWithException() {
+        Collection<TopicPartition> topics = Collections.singleton(new TopicPartition("test", 0));
+        consumer = newConsumer();
+        completeResetOffsetEventExceptionally(new TimeoutException());
+        assertThrows(TimeoutException.class, () -> consumer.seekToBeginning(topics));
+    }
+
+    @Test
+    public void testSeekToEndWithException() {
+        Collection<TopicPartition> topics = Collections.singleton(new TopicPartition("test", 0));
+        consumer = newConsumer();
+        completeResetOffsetEventExceptionally(new TimeoutException());
+        assertThrows(TimeoutException.class, () -> consumer.seekToEnd(topics));
+    }
+
+    @Test
+    public void testSeekToEnd() {
+        Collection<TopicPartition> topics = Collections.singleton(new TopicPartition("test", 0));
+        consumer = newConsumer();
+        consumer.seekToEnd(topics);
+        CompletableApplicationEvent<Void> event = addAndGetLastEnqueuedEvent();
+        ResetOffsetEvent resetOffsetEvent = assertInstanceOf(ResetOffsetEvent.class, event);
+        assertEquals(topics, new HashSet<>(resetOffsetEvent.topicPartitions()));
+        assertEquals(OffsetResetStrategy.LATEST, resetOffsetEvent.offsetResetStrategy());
+    }
+
     private void verifyUnsubscribeEvent(SubscriptionState subscriptions) {
         // Check that an unsubscribe event was generated, and that the consumer waited for it to
         // complete processing background events.
         verify(applicationEventHandler).add(any(UnsubscribeEvent.class));
-        verify(consumer).processBackgroundEvents(any(), any());
+        verify(consumer).processBackgroundEvents(any(), any(), any());
 
         // The consumer should not clear the assignment in the app thread. The unsubscribe
         // event is the one responsible for updating the assignment in the background when it
@@ -1938,6 +1994,10 @@ public class AsyncKafkaConsumerTest {
             event.future().completeExceptionally(ex);
             return null;
         }).when(applicationEventHandler).add(ArgumentMatchers.isA(SyncCommitEvent.class));
+    }
+
+    private void completeResetOffsetEventExceptionally(Exception ex) {
+        doThrow(ex).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ResetOffsetEvent.class));
     }
 
     private void completeCommitAsyncApplicationEventSuccessfully() {

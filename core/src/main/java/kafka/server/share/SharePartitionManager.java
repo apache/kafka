@@ -16,7 +16,6 @@
  */
 package kafka.server.share;
 
-import kafka.server.DelayedOperationPurgatory;
 import kafka.server.ReplicaManager;
 
 import org.apache.kafka.clients.consumer.AcknowledgeType;
@@ -38,20 +37,23 @@ import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.server.group.share.Persister;
+import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.server.share.CachedSharePartition;
-import org.apache.kafka.server.share.ShareAcknowledgementBatch;
+import org.apache.kafka.server.share.SharePartitionKey;
+import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
 import org.apache.kafka.server.share.context.FinalContext;
 import org.apache.kafka.server.share.context.ShareFetchContext;
 import org.apache.kafka.server.share.context.ShareSessionContext;
+import org.apache.kafka.server.share.fetch.ShareFetchData;
+import org.apache.kafka.server.share.persister.Persister;
 import org.apache.kafka.server.share.session.ShareSession;
 import org.apache.kafka.server.share.session.ShareSessionCache;
 import org.apache.kafka.server.share.session.ShareSessionKey;
+import org.apache.kafka.server.storage.log.FetchParams;
 import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
-import org.apache.kafka.storage.internals.log.FetchParams;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -67,8 +69,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import scala.jdk.javaapi.CollectionConverters;
 
@@ -101,19 +101,15 @@ public class SharePartitionManager implements AutoCloseable {
     private final ShareSessionCache cache;
 
     /**
-     * The fetch queue stores the share fetch requests that are waiting to be processed.
+     * The group config manager is used to retrieve the values for dynamic group configurations
      */
-    private final ConcurrentLinkedQueue<ShareFetchPartitionData> fetchQueue;
+    private final GroupConfigManager groupConfigManager;
 
     /**
-     * The process fetch queue lock is used to ensure that only one thread is processing the fetch queue at a time.
+     * The default record lock duration is the time in milliseconds that a record lock is held for.
+     * This default value can be overridden by a group-specific configuration.
      */
-    private final AtomicBoolean processFetchQueueLock;
-
-    /**
-     * The record lock duration is the time in milliseconds that a record lock is held for.
-     */
-    private final int recordLockDurationMs;
+    private final int defaultRecordLockDurationMs;
 
     /**
      * The timer is used to schedule the records lock timeout.
@@ -140,31 +136,26 @@ public class SharePartitionManager implements AutoCloseable {
      */
     private final ShareGroupMetrics shareGroupMetrics;
 
-    /**
-     * The delayed share fetch purgatory is used to store the share fetch requests that could not be processed immediately.
-     */
-    private final DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory;
-
     public SharePartitionManager(
         ReplicaManager replicaManager,
         Time time,
         ShareSessionCache cache,
-        int recordLockDurationMs,
+        int defaultRecordLockDurationMs,
         int maxDeliveryCount,
         int maxInFlightMessages,
-        int shareFetchPurgatoryPurgeIntervalRequests,
         Persister persister,
+        GroupConfigManager groupConfigManager,
         Metrics metrics
     ) {
         this(replicaManager,
             time,
             cache,
             new ConcurrentHashMap<>(),
-            recordLockDurationMs,
+            defaultRecordLockDurationMs,
             maxDeliveryCount,
             maxInFlightMessages,
-            shareFetchPurgatoryPurgeIntervalRequests,
             persister,
+            groupConfigManager,
             metrics
         );
     }
@@ -174,27 +165,26 @@ public class SharePartitionManager implements AutoCloseable {
         Time time,
         ShareSessionCache cache,
         Map<SharePartitionKey, SharePartition> partitionCacheMap,
-        int recordLockDurationMs,
+        int defaultRecordLockDurationMs,
         int maxDeliveryCount,
         int maxInFlightMessages,
-        int shareFetchPurgatoryPurgeIntervalRequests,
         Persister persister,
+        GroupConfigManager groupConfigManager,
         Metrics metrics
     ) {
-        this.replicaManager = replicaManager;
-        this.time = time;
-        this.cache = cache;
-        this.partitionCacheMap = partitionCacheMap;
-        this.fetchQueue = new ConcurrentLinkedQueue<>();
-        this.processFetchQueueLock = new AtomicBoolean(false);
-        this.recordLockDurationMs = recordLockDurationMs;
-        this.timer = new SystemTimerReaper("share-group-lock-timeout-reaper",
-            new SystemTimer("share-group-lock-timeout"));
-        this.maxDeliveryCount = maxDeliveryCount;
-        this.maxInFlightMessages = maxInFlightMessages;
-        this.persister = persister;
-        this.shareGroupMetrics = new ShareGroupMetrics(Objects.requireNonNull(metrics), time);
-        this.delayedShareFetchPurgatory = new DelayedOperationPurgatory<>("ShareFetch", this.timer, this.replicaManager.localBrokerId(), shareFetchPurgatoryPurgeIntervalRequests, true, true);
+        this(replicaManager,
+            time,
+            cache,
+            partitionCacheMap,
+            defaultRecordLockDurationMs,
+            new SystemTimerReaper("share-group-lock-timeout-reaper",
+                new SystemTimer("share-group-lock-timeout")),
+            maxDeliveryCount,
+            maxInFlightMessages,
+            persister,
+            groupConfigManager,
+            metrics
+        );
     }
 
     // Visible for testing.
@@ -203,28 +193,25 @@ public class SharePartitionManager implements AutoCloseable {
             Time time,
             ShareSessionCache cache,
             Map<SharePartitionKey, SharePartition> partitionCacheMap,
-            ConcurrentLinkedQueue<ShareFetchPartitionData> fetchQueue,
-            int recordLockDurationMs,
+            int defaultRecordLockDurationMs,
             Timer timer,
             int maxDeliveryCount,
             int maxInFlightMessages,
             Persister persister,
-            Metrics metrics,
-            DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory
+            GroupConfigManager groupConfigManager,
+            Metrics metrics
     ) {
         this.replicaManager = replicaManager;
         this.time = time;
         this.cache = cache;
         this.partitionCacheMap = partitionCacheMap;
-        this.fetchQueue = fetchQueue;
-        this.processFetchQueueLock = new AtomicBoolean(false);
-        this.recordLockDurationMs = recordLockDurationMs;
+        this.defaultRecordLockDurationMs = defaultRecordLockDurationMs;
         this.timer = timer;
         this.maxDeliveryCount = maxDeliveryCount;
         this.maxInFlightMessages = maxInFlightMessages;
         this.persister = persister;
+        this.groupConfigManager = groupConfigManager;
         this.shareGroupMetrics = new ShareGroupMetrics(Objects.requireNonNull(metrics), time);
-        this.delayedShareFetchPurgatory = delayedShareFetchPurgatory;
     }
 
     /**
@@ -248,9 +235,7 @@ public class SharePartitionManager implements AutoCloseable {
                 partitionMaxBytes.keySet(), groupId, fetchParams);
 
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
-        ShareFetchPartitionData shareFetchPartitionData = new ShareFetchPartitionData(fetchParams, groupId, memberId, future, partitionMaxBytes);
-        fetchQueue.add(shareFetchPartitionData);
-        maybeProcessFetchQueue();
+        processShareFetch(new ShareFetchData(fetchParams, groupId, memberId, future, partitionMaxBytes));
 
         return future;
     }
@@ -289,8 +274,8 @@ public class SharePartitionManager implements AutoCloseable {
 
                 // If we have an acknowledgement completed for a topic-partition, then we should check if
                 // there is a pending share fetch request for the topic-partition and complete it.
-                DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchKey(groupId, topicIdPartition);
-                delayedShareFetchPurgatory.checkAndComplete(delayedShareFetchKey);
+                DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId(), topicIdPartition.partition());
+                replicaManager.completeDelayedShareFetchRequest(delayedShareFetchKey);
 
                 futures.put(topicIdPartition, future);
             } else {
@@ -358,8 +343,8 @@ public class SharePartitionManager implements AutoCloseable {
                 });
                 // If we have a release acquired request completed for a topic-partition, then we should check if
                 // there is a pending share fetch request for the topic-partition and complete it.
-                DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchKey(groupId, topicIdPartition);
-                delayedShareFetchPurgatory.checkAndComplete(delayedShareFetchKey);
+                DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId(), topicIdPartition.partition());
+                replicaManager.completeDelayedShareFetchRequest(delayedShareFetchKey);
 
                 futuresMap.put(topicIdPartition, future);
             }
@@ -518,21 +503,14 @@ public class SharePartitionManager implements AutoCloseable {
 
     // Add the share fetch request to the delayed share fetch purgatory to process the fetch request if it can be
     // completed else watch until it can be completed/timeout.
-    private void addDelayedShareFetch(DelayedShareFetch delayedShareFetch, Set<Object> keys) {
-        delayedShareFetchPurgatory.tryCompleteElseWatch(delayedShareFetch, CollectionConverters.asScala(keys).toSeq());
+    private void addDelayedShareFetch(DelayedShareFetch delayedShareFetch, Set<DelayedShareFetchKey> keys) {
+        replicaManager.addDelayedShareFetchRequest(delayedShareFetch,
+            CollectionConverters.asScala(keys).toSeq());
     }
 
     @Override
     public void close() throws Exception {
-        this.delayedShareFetchPurgatory.shutdown();
         this.timer.close();
-        this.persister.stop();
-        if (!fetchQueue.isEmpty()) {
-            log.warn("Closing SharePartitionManager with pending fetch requests count: {}", fetchQueue.size());
-            fetchQueue.forEach(shareFetchPartitionData -> shareFetchPartitionData.future.completeExceptionally(
-                Errors.BROKER_NOT_AVAILABLE.exception()));
-            fetchQueue.clear();
-        }
     }
 
     private ShareSessionKey shareSessionKey(String groupId, Uuid memberId) {
@@ -543,41 +521,21 @@ public class SharePartitionManager implements AutoCloseable {
         return ShareSession.partitionsToLogString(partitions, log.isTraceEnabled());
     }
 
-    /**
-     * Recursive function to process all the fetch requests present inside the fetch queue
-     */
     // Visible for testing.
-    void maybeProcessFetchQueue() {
-        if (!acquireProcessFetchQueueLock()) {
-            // The queue is already being processed hence avoid re-triggering.
-            return;
-        }
-
-        ShareFetchPartitionData shareFetchPartitionData = fetchQueue.poll();
-        if (shareFetchPartitionData == null) {
-            // No more requests to process, so release the lock. Though we should not reach here as the lock
-            // is acquired only when there are requests in the queue. But still, it's safe to release the lock.
-            releaseProcessFetchQueueLock();
-            return;
-        }
-
-        if (shareFetchPartitionData.partitionMaxBytes.isEmpty()) {
+    void processShareFetch(ShareFetchData shareFetchData) {
+        if (shareFetchData.partitionMaxBytes().isEmpty()) {
             // If there are no partitions to fetch then complete the future with an empty map.
-            shareFetchPartitionData.future.complete(Collections.emptyMap());
-            // Release the lock so that other threads can process the queue.
-            releaseProcessFetchQueueLock();
-            if (!fetchQueue.isEmpty())
-                maybeProcessFetchQueue();
+            shareFetchData.future().complete(Collections.emptyMap());
             return;
         }
 
         try {
-            shareFetchPartitionData.partitionMaxBytes.keySet().forEach(topicIdPartition -> {
+            shareFetchData.partitionMaxBytes().keySet().forEach(topicIdPartition -> {
                 SharePartitionKey sharePartitionKey = sharePartitionKey(
-                    shareFetchPartitionData.groupId,
+                    shareFetchData.groupId(),
                     topicIdPartition
                 );
-                SharePartition sharePartition = fetchSharePartition(sharePartitionKey);
+                SharePartition sharePartition = getOrCreateSharePartition(sharePartitionKey);
 
                 // The share partition is initialized asynchronously, so we need to wait for it to be initialized.
                 // But if the share partition is already initialized, then the future will be completed immediately.
@@ -585,51 +543,48 @@ public class SharePartitionManager implements AutoCloseable {
                 // TopicPartitionData list will be populated only if the share partition is already initialized.
                 sharePartition.maybeInitialize().whenComplete((result, throwable) -> {
                     if (throwable != null) {
-                        maybeCompleteInitializationWithException(sharePartitionKey, shareFetchPartitionData.future, throwable);
-                        return;
+                        maybeCompleteInitializationWithException(sharePartitionKey, shareFetchData.future(), throwable);
                     }
                 });
             });
 
-            Set<Object> delayedShareFetchWatchKeys = new HashSet<>();
-            shareFetchPartitionData.partitionMaxBytes.keySet().forEach(
-                topicIdPartition -> delayedShareFetchWatchKeys.add(
-                    new DelayedShareFetchKey(shareFetchPartitionData.groupId, topicIdPartition)));
+            Set<DelayedShareFetchKey> delayedShareFetchWatchKeys = new HashSet<>();
+            shareFetchData.partitionMaxBytes().keySet().forEach(
+                topicIdPartition -> {
+                    // We add a key corresponding to each share partition in the request in the group so that when there are
+                    // acknowledgements/acquisition lock timeout etc, we have a way to perform checkAndComplete for all
+                    // such requests which are delayed because of lack of data to acquire for the share partition.
+                    delayedShareFetchWatchKeys.add(new DelayedShareFetchGroupKey(shareFetchData.groupId(), topicIdPartition.topicId(), topicIdPartition.partition()));
+                    // We add a key corresponding to each topic partition in the request so that when the HWM is updated
+                    // for any topic partition, we have a way to perform checkAndComplete for all such requests which are
+                    // delayed because of lack of data to acquire for the topic partition.
+                    delayedShareFetchWatchKeys.add(new DelayedShareFetchPartitionKey(topicIdPartition.topicId(), topicIdPartition.partition()));
+                });
 
             // Add the share fetch to the delayed share fetch purgatory to process the fetch request.
-            addDelayedShareFetch(new DelayedShareFetch(shareFetchPartitionData, replicaManager, partitionCacheMap),
+            addDelayedShareFetch(new DelayedShareFetch(shareFetchData, replicaManager, this),
                 delayedShareFetchWatchKeys);
-
-            // Release the lock so that other threads can process the queue.
-            releaseProcessFetchQueueLock();
-            // If there are more requests in the queue, then process them.
-            if (!fetchQueue.isEmpty())
-                maybeProcessFetchQueue();
-
         } catch (Exception e) {
             // In case exception occurs then release the locks so queue can be further processed.
             log.error("Error processing fetch queue for share partitions", e);
-            releaseProcessFetchQueueLock();
-            // If there are more requests in the queue, then process them.
-            if (!fetchQueue.isEmpty())
-                maybeProcessFetchQueue();
         }
     }
 
-    private SharePartition fetchSharePartition(SharePartitionKey sharePartitionKey) {
+    private SharePartition getOrCreateSharePartition(SharePartitionKey sharePartitionKey) {
         return partitionCacheMap.computeIfAbsent(sharePartitionKey,
                 k -> {
                     long start = time.hiResClockMs();
                     SharePartition partition = new SharePartition(
-                            sharePartitionKey.groupId,
-                            sharePartitionKey.topicIdPartition,
+                            sharePartitionKey.groupId(),
+                            sharePartitionKey.topicIdPartition(),
                             maxInFlightMessages,
                             maxDeliveryCount,
-                            recordLockDurationMs,
+                            defaultRecordLockDurationMs,
                             timer,
                             time,
                             persister,
-                            delayedShareFetchPurgatory
+                            replicaManager,
+                            groupConfigManager
                     );
                     this.shareGroupMetrics.partitionLoadTime(start);
                     return partition;
@@ -666,100 +621,18 @@ public class SharePartitionManager implements AutoCloseable {
         future.completeExceptionally(throwable);
     }
 
-    // Visible for testing.
-    boolean acquireProcessFetchQueueLock() {
-        return processFetchQueueLock.compareAndSet(false, true);
-    }
-
-    private void releaseProcessFetchQueueLock() {
-        processFetchQueueLock.set(false);
-    }
-
     private SharePartitionKey sharePartitionKey(String groupId, TopicIdPartition topicIdPartition) {
         return new SharePartitionKey(groupId, topicIdPartition);
     }
 
     /**
-     * The SharePartitionKey is used to uniquely identify a share partition. The key is made up of the
-     * share group id, the topic id and the partition id. The key is used to store the SharePartition
-     * objects in the partition cache map.
+     *
+     * @param groupId The share group id, this is used to identify the share group.
+     * @param topicIdPartition The topic partition that the group is subscribed to.
+     * @return The share partition stored for the share group topic-partition.
      */
-    // Visible for testing
-    static class SharePartitionKey {
-        private final String groupId;
-        private final TopicIdPartition topicIdPartition;
-
-        public SharePartitionKey(String groupId, TopicIdPartition topicIdPartition) {
-            this.groupId = Objects.requireNonNull(groupId);
-            this.topicIdPartition = Objects.requireNonNull(topicIdPartition);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(groupId, topicIdPartition);
-        }
-
-        @Override
-        public boolean equals(final Object obj) {
-            if (this == obj)
-                return true;
-            else if (obj == null || getClass() != obj.getClass())
-                return false;
-            else {
-                SharePartitionKey that = (SharePartitionKey) obj;
-                return groupId.equals(that.groupId) && Objects.equals(topicIdPartition, that.topicIdPartition);
-            }
-        }
-
-        @Override
-        public String toString() {
-            return "SharePartitionKey{" +
-                "groupId='" + groupId +
-                ", topicIdPartition=" + topicIdPartition +
-                '}';
-        }
-    }
-
-    /**
-     * The ShareFetchPartitionData class is used to store the fetch parameters for a share fetch request.
-     */
-    // Visible for testing
-    static class ShareFetchPartitionData {
-        private final FetchParams fetchParams;
-        private final String groupId;
-        private final String memberId;
-        private final CompletableFuture<Map<TopicIdPartition, PartitionData>> future;
-        private final Map<TopicIdPartition, Integer> partitionMaxBytes;
-
-        public ShareFetchPartitionData(FetchParams fetchParams, String groupId, String memberId,
-                                       CompletableFuture<Map<TopicIdPartition, PartitionData>> future,
-                                       Map<TopicIdPartition, Integer> partitionMaxBytes) {
-            this.fetchParams = fetchParams;
-            this.groupId = groupId;
-            this.memberId = memberId;
-            this.future = future;
-            this.partitionMaxBytes = partitionMaxBytes;
-        }
-
-        public String groupId() {
-            return groupId;
-        }
-
-        public String memberId() {
-            return memberId;
-        }
-
-        public CompletableFuture<Map<TopicIdPartition, PartitionData>> future() {
-            return future;
-        }
-
-        public Map<TopicIdPartition, Integer> partitionMaxBytes() {
-            return partitionMaxBytes;
-        }
-
-        public FetchParams fetchParams() {
-            return fetchParams;
-        }
+    protected SharePartition sharePartition(String groupId, TopicIdPartition topicIdPartition) {
+        return partitionCacheMap.get(sharePartitionKey(groupId, topicIdPartition));
     }
 
     static class ShareGroupMetrics {
