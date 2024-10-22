@@ -16,7 +16,6 @@
  */
 package kafka.server.share;
 
-import kafka.cluster.Partition;
 import kafka.server.ReplicaManager;
 import kafka.server.share.SharePartition.InFlightState;
 import kafka.server.share.SharePartition.RecordState;
@@ -75,9 +74,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-import scala.util.Either;
-import scala.util.Right;
-
 import static kafka.server.share.SharePartition.EMPTY_MEMBER_ID;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -101,14 +97,11 @@ public class SharePartitionTest {
     private static final short MAX_IN_FLIGHT_MESSAGES = 200;
     private static final int ACQUISITION_LOCK_TIMEOUT_MS = 100;
     private static final int DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS = 300;
-    private static final ReplicaManager DEFAULT_REPLICA_MANAGER = Mockito.mock(ReplicaManager.class);
 
     @BeforeEach
     public void setUp() {
         mockTimer = new SystemTimerReaper("share-group-lock-timeout-test-reaper",
             new SystemTimer("share-group-lock-test-timeout"));
-        Either<Errors, Partition> partition = mockPartition();
-        Mockito.when(DEFAULT_REPLICA_MANAGER.getPartitionOrError(Mockito.any())).thenReturn(partition);
     }
 
     @AfterEach
@@ -4902,14 +4895,6 @@ public class SharePartitionTest {
         assertEquals(734, sharePartition.nextFetchOffset());
         assertEquals(734, sharePartition.startOffset());
         assertEquals(734, sharePartition.endOffset());
-    }
-
-    private Either<Errors, Partition> mockPartition() {
-        Partition partition = Mockito.mock(Partition.class);
-        Mockito.when(partition.isLeader()).thenReturn(true);
-        Mockito.when(partition.getLeaderEpoch()).thenReturn(1);
-
-        return new Right<>(partition);
     }
 
     private MemoryRecords memoryRecords(int numOfRecords) {

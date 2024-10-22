@@ -571,11 +571,12 @@ public class SharePartitionManager implements AutoCloseable {
             addDelayedShareFetch(new DelayedShareFetch(shareFetchData, replicaManager, this),
                 delayedShareFetchWatchKeys);
         } catch (Exception e) {
-            // In case exception occurs then release the locks so queue can be further processed.
-            log.error("Error processing fetch queue for share partitions", e);
-            if (!shareFetchData.future().isDone()) {
-                shareFetchData.future().completeExceptionally(e);
-            }
+            // Complete the whole fetch request with an exception if there is an error processing.
+            // The exception currently can be thrown only if there is an error while initializing
+            // the share partition. But skip the processing for other share partitions in the request
+            // as this situation is not expected.
+            log.error("Error processing share fetch request", e);
+            shareFetchData.future().completeExceptionally(e);
         }
     }
 
@@ -583,7 +584,7 @@ public class SharePartitionManager implements AutoCloseable {
         return partitionCacheMap.computeIfAbsent(sharePartitionKey,
                 k -> {
                     long start = time.hiResClockMs();
-                    int leaderEpoch = getLeaderEpoch(sharePartitionKey.topicIdPartition().topicPartition());
+                    int leaderEpoch = leaderEpoch(sharePartitionKey.topicIdPartition().topicPartition());
                     SharePartition partition = new SharePartition(
                             sharePartitionKey.groupId(),
                             sharePartitionKey.topicIdPartition(),
@@ -605,8 +606,7 @@ public class SharePartitionManager implements AutoCloseable {
     private void maybeCompleteInitializationWithException(
             SharePartitionKey sharePartitionKey,
             CompletableFuture<Map<TopicIdPartition, PartitionData>> future,
-            Throwable throwable
-    ) {
+            Throwable throwable) {
         if (throwable instanceof LeaderNotAvailableException) {
             log.debug("The share partition with key {} is not initialized yet", sharePartitionKey);
             // Do not process the fetch request for this partition as the leader is not initialized yet.
@@ -637,19 +637,18 @@ public class SharePartitionManager implements AutoCloseable {
         }
     }
 
-    // TODO: Should the return be -1 or throw an exception?
-    private int getLeaderEpoch(TopicPartition tp) {
+    private int leaderEpoch(TopicPartition tp) {
         Either<Errors, Partition> partitionOrError = replicaManager.getPartitionOrError(tp);
         if (partitionOrError.isLeft()) {
-          log.error("Failed to get partition leader for topic partition: {}-{} due to error: {}",
-              tp.topic(), tp.partition(), partitionOrError.left().get());
-          return -1;
+            log.error("Failed to get partition leader for topic partition: {}-{} due to error: {}",
+                tp.topic(), tp.partition(), partitionOrError.left().get());
+            throw partitionOrError.left().get().exception();
         }
 
         Partition partition = partitionOrError.right().get();
         if (!partition.isLeader()) {
-          log.error("The broker is not the leader for topic partition: {}-{}", tp.topic(), tp.partition());
-          return -1;
+            log.error("The broker is not the leader for topic partition: {}-{}", tp.topic(), tp.partition());
+            throw new NotLeaderOrFollowerException();
         }
         return partition.getLeaderEpoch();
     }
