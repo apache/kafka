@@ -16,7 +16,6 @@
   */
 package kafka.server.epoch
 
-import kafka.cluster.BrokerEndPoint
 import kafka.server.KafkaConfig._
 import kafka.server._
 import kafka.utils.TestUtils._
@@ -34,6 +33,7 @@ import org.apache.kafka.common.requests.{OffsetsForLeaderEpochRequest, OffsetsFo
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions._
