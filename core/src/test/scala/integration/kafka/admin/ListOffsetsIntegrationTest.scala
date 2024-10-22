@@ -66,7 +66,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testListMaxTimestampWithEmptyLog(quorum: String): Unit = {
     val maxTimestampOffset = runFetchOffsets(adminClient, OffsetSpec.maxTimestamp(), topicName)
     assertEquals(ListOffsetsResponse.UNKNOWN_OFFSET, maxTimestampOffset.offset())
@@ -88,7 +88,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
 
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testThreeCompressedRecordsInOneBatch(quorum: String): Unit = {
     produceMessagesInOneBatch("gzip")
     verifyListOffsets()
@@ -102,7 +102,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testThreeNonCompressedRecordsInOneBatch(quorum: String): Unit = {
     produceMessagesInOneBatch()
     verifyListOffsets()
@@ -117,7 +117,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testThreeNonCompressedRecordsInSeparateBatch(quorum: String): Unit = {
     produceMessagesInSeparateBatch()
     verifyListOffsets()
@@ -162,7 +162,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testThreeRecordsInOneBatchHavingDifferentCompressionTypeWithServer(quorum: String): Unit = {
     val props: Properties = new Properties()
     props.setProperty(TopicConfig.COMPRESSION_TYPE_CONFIG, "lz4")
@@ -172,7 +172,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testThreeRecordsInSeparateBatchHavingDifferentCompressionTypeWithServer(quorum: String): Unit = {
     val props: Properties = new Properties()
     props.setProperty(TopicConfig.COMPRESSION_TYPE_CONFIG, "lz4")
@@ -182,7 +182,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testThreeCompressedRecordsInSeparateBatch(quorum: String): Unit = {
     produceMessagesInSeparateBatch("gzip")
     verifyListOffsets()
