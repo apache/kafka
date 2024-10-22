@@ -39,14 +39,15 @@ public class ChangelogTopics {
     public ChangelogTopics(
         final LogContext logContext,
         final Map<String, ConfiguredSubtopology> subtopologies,
-        final Function<String, Integer> topicPartitionCountProvider) {
+        final Function<String, Integer> topicPartitionCountProvider
+    ) {
         this.log = logContext.logger(getClass());
         this.subtopologies = subtopologies;
         this.topicPartitionCountProvider = topicPartitionCountProvider;
     }
 
     /**
-     * Modifies the provided TopicsInfo to set the number of partitions for each changelog topic.
+     * Modifies the provided ConfiguredSubtopology to set the number of partitions for each changelog topic.
      *
      * @return the map of changelog topics for the requested topology that are internal and may need to be created.
      */

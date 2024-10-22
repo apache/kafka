@@ -37,7 +37,8 @@ public class ConfiguredSubtopologyTest {
         Map<String, ConfiguredInternalTopic> repartitionSourceTopics = new HashMap<>();
         Map<String, ConfiguredInternalTopic> stateChangelogTopics = new HashMap<>();
 
-        ConfiguredSubtopology configuredSubtopology = new ConfiguredSubtopology(repartitionSinkTopics, sourceTopics, repartitionSourceTopics, stateChangelogTopics);
+        ConfiguredSubtopology configuredSubtopology = new ConfiguredSubtopology(repartitionSinkTopics, sourceTopics,
+            repartitionSourceTopics, stateChangelogTopics);
 
         assertEquals(repartitionSinkTopics, configuredSubtopology.repartitionSinkTopics());
         assertEquals(sourceTopics, configuredSubtopology.sourceTopics());
@@ -91,8 +92,10 @@ public class ConfiguredSubtopologyTest {
         Map<String, ConfiguredInternalTopic> repartitionSourceTopics = new HashMap<>();
         Map<String, ConfiguredInternalTopic> stateChangelogTopics = new HashMap<>();
 
-        ConfiguredSubtopology configuredSubtopology1 = new ConfiguredSubtopology(repartitionSinkTopics, sourceTopics, repartitionSourceTopics, stateChangelogTopics);
-        ConfiguredSubtopology configuredSubtopology2 = new ConfiguredSubtopology(repartitionSinkTopics, sourceTopics, repartitionSourceTopics, stateChangelogTopics);
+        ConfiguredSubtopology configuredSubtopology1 = new ConfiguredSubtopology(repartitionSinkTopics, sourceTopics,
+            repartitionSourceTopics, stateChangelogTopics);
+        ConfiguredSubtopology configuredSubtopology2 = new ConfiguredSubtopology(repartitionSinkTopics, sourceTopics,
+            repartitionSourceTopics, stateChangelogTopics);
 
         assertEquals(configuredSubtopology1, configuredSubtopology2);
     }
@@ -104,8 +107,10 @@ public class ConfiguredSubtopologyTest {
         Map<String, ConfiguredInternalTopic> repartitionSourceTopics = new HashMap<>();
         Map<String, ConfiguredInternalTopic> stateChangelogTopics = new HashMap<>();
 
-        ConfiguredSubtopology configuredSubtopology1 = new ConfiguredSubtopology(repartitionSinkTopics, sourceTopics, repartitionSourceTopics, stateChangelogTopics);
-        ConfiguredSubtopology configuredSubtopology2 = new ConfiguredSubtopology(repartitionSinkTopics, sourceTopics, repartitionSourceTopics, stateChangelogTopics);
+        ConfiguredSubtopology configuredSubtopology1 = new ConfiguredSubtopology(repartitionSinkTopics, sourceTopics,
+            repartitionSourceTopics, stateChangelogTopics);
+        ConfiguredSubtopology configuredSubtopology2 = new ConfiguredSubtopology(repartitionSinkTopics, sourceTopics,
+            repartitionSourceTopics, stateChangelogTopics);
 
         assertEquals(configuredSubtopology1.hashCode(), configuredSubtopology2.hashCode());
     }
@@ -117,7 +122,8 @@ public class ConfiguredSubtopologyTest {
         Map<String, ConfiguredInternalTopic> repartitionSourceTopics = new HashMap<>();
         Map<String, ConfiguredInternalTopic> stateChangelogTopics = new HashMap<>();
 
-        ConfiguredSubtopology configuredSubtopology = new ConfiguredSubtopology(repartitionSinkTopics, sourceTopics, repartitionSourceTopics, stateChangelogTopics);
+        ConfiguredSubtopology configuredSubtopology = new ConfiguredSubtopology(repartitionSinkTopics, sourceTopics,
+            repartitionSourceTopics, stateChangelogTopics);
 
         String expectedString = "ConfiguredSubtopology{" +
             "repartitionSinkTopics=" + repartitionSinkTopics +

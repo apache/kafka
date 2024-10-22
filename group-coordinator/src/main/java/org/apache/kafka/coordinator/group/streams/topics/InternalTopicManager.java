@@ -59,8 +59,8 @@ public class InternalTopicManager {
 
 
     public static Map<String, ConfiguredSubtopology> configureTopics(LogContext logContext,
-                                                          List<StreamsGroupTopologyValue.Subtopology> subtopologyList,
-                                                          MetadataImage metadataImage) {
+                                                                     List<StreamsGroupTopologyValue.Subtopology> subtopologyList,
+                                                                     MetadataImage metadataImage) {
 
         final Logger log = logContext.logger(InternalTopicManager.class);
 
@@ -87,7 +87,7 @@ public class InternalTopicManager {
             ).collect(Collectors.toMap(ConfiguredInternalTopic::name, x -> x));
 
         final Function<String, Integer> topicPartitionCountProvider =
-            x -> getPartitionCount(metadataImage, x, configuredInternalTopics);
+            topic -> getPartitionCount(metadataImage, topic, configuredInternalTopics);
 
         configureRepartitionTopics(logContext, configuredSubtopologies, topicPartitionCountProvider);
         enforceCopartitioning(logContext, configuredSubtopologies, copartitionGroupsBySubtopology, topicPartitionCountProvider, log);

@@ -72,8 +72,7 @@ public class CopartitionedTopicsEnforcer {
         final Map<Object, ConfiguredInternalTopic> repartitionTopicConfigs =
             copartitionedTopics.stream()
                 .filter(repartitionTopics::containsKey)
-                .collect(
-                    Collectors.toMap(topic -> topic, repartitionTopics::get));
+                .collect(Collectors.toMap(topic -> topic, repartitionTopics::get));
 
         final Map<String, Integer> nonRepartitionTopicPartitions =
             copartitionedTopics.stream().filter(topic -> !repartitionTopics.containsKey(topic))
@@ -92,7 +91,7 @@ public class CopartitionedTopicsEnforcer {
         final Collection<ConfiguredInternalTopic> configuredInternalTopics = repartitionTopicConfigs.values();
 
         if (copartitionedTopics.equals(repartitionTopicConfigs.keySet())) {
-            final Collection<ConfiguredInternalTopic> configuredInternalTopicConfigsWithEnforcedNumberOfPartitions =
+            final Collection<ConfiguredInternalTopic> configuredConfiguredInternalTopicsWithEnforcedNumberOfPartitions =
                 configuredInternalTopics
                     .stream()
                     .filter(ConfiguredInternalTopic::hasEnforcedNumberOfPartitions)
@@ -100,10 +99,10 @@ public class CopartitionedTopicsEnforcer {
 
             // if there's at least one repartition topic with enforced number of partitions
             // validate that they all have same number of partitions
-            if (!configuredInternalTopicConfigsWithEnforcedNumberOfPartitions.isEmpty()) {
+            if (!configuredConfiguredInternalTopicsWithEnforcedNumberOfPartitions.isEmpty()) {
                 numPartitionsToUseForRepartitionTopics = validateAndGetNumOfPartitions(
                     repartitionTopicConfigs,
-                    configuredInternalTopicConfigsWithEnforcedNumberOfPartitions
+                    configuredConfiguredInternalTopicsWithEnforcedNumberOfPartitions
                 );
             } else {
                 // If all topics for this co-partition group are repartition topics,

@@ -36,21 +36,21 @@ import java.util.stream.Collectors;
 public class RepartitionTopics {
 
     private final Logger log;
-    private final Map<String, ConfiguredSubtopology> subtopologyToTopicsInfo;
+    private final Map<String, ConfiguredSubtopology> subtopologyToConfiguredSubtopology;
     private final Function<String, Integer> topicPartitionCountProvider;
 
     private final Map<String, Set<String>> missingInputTopicsBySubtopology = new HashMap<>();
 
     public RepartitionTopics(final LogContext logContext,
-                             final Map<String, ConfiguredSubtopology> subtopologyToTopicsInfo,
+                             final Map<String, ConfiguredSubtopology> subtopologyToConfiguredSubtopology,
                              final Function<String, Integer> topicPartitionCountProvider) {
         this.log = logContext.logger(getClass());
-        this.subtopologyToTopicsInfo = subtopologyToTopicsInfo;
+        this.subtopologyToConfiguredSubtopology = subtopologyToConfiguredSubtopology;
         this.topicPartitionCountProvider = topicPartitionCountProvider;
     }
 
     /**
-     * Modifies the provided TopicsInfo to set the number of partitions for each repartition topic.
+     * Modifies the provided ConfiguredSubtopology to set the number of partitions for each repartition topic.
      *
      * @return the map of repartition topics for the requested topology that are internal and may need to be created.
      */
@@ -58,7 +58,7 @@ public class RepartitionTopics {
         final Set<String> missingSourceTopicsForTopology = new HashSet<>();
         final Map<String, ConfiguredInternalTopic> configuredRepartitionTopics = new HashMap<>();
 
-        for (final Map.Entry<String, ConfiguredSubtopology> subtopologyEntry : subtopologyToTopicsInfo.entrySet()) {
+        for (final Map.Entry<String, ConfiguredSubtopology> subtopologyEntry : subtopologyToConfiguredSubtopology.entrySet()) {
             final ConfiguredSubtopology configuredSubtopology = subtopologyEntry.getValue();
 
             configuredRepartitionTopics.putAll(
@@ -110,7 +110,7 @@ public class RepartitionTopics {
             // avoid infinitely looping without making any progress on unknown repartitions
             boolean progressMadeThisIteration = false;
 
-            for (final ConfiguredSubtopology configuredSubtopology : subtopologyToTopicsInfo.values()) {
+            for (final ConfiguredSubtopology configuredSubtopology : subtopologyToConfiguredSubtopology.values()) {
                 for (final String repartitionSourceTopic : configuredSubtopology.repartitionSourceTopics()
                     .keySet()) {
                     final Optional<Integer> repartitionSourceTopicPartitionCount =
@@ -148,7 +148,7 @@ public class RepartitionTopics {
                                           final String repartitionSourceTopic) {
         Integer partitionCount = null;
         // try set the number of partitions for this repartition topic if it is not set yet
-        for (final ConfiguredSubtopology configuredSubtopology : subtopologyToTopicsInfo.values()) {
+        for (final ConfiguredSubtopology configuredSubtopology : subtopologyToConfiguredSubtopology.values()) {
             final Set<String> repartitionSinkTopics = configuredSubtopology.repartitionSinkTopics();
 
             if (repartitionSinkTopics.contains(repartitionSourceTopic)) {

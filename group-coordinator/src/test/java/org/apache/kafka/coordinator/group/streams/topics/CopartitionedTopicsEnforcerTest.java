@@ -43,26 +43,34 @@ public class CopartitionedTopicsEnforcerTest {
     }
 
     private static Integer firstSecondTopicConsistent(String topic) {
-        if (topic.equals("first") || topic.equals("second")) return 2;
+        if (topic.equals("first") || topic.equals("second")) {
+            return 2;
+        }
         return null;
     }
 
     private static Integer firstSecondTopicInconsistent(String topic) {
-        if (topic.equals("first")) return 2;
-        if (topic.equals("second")) return 1;
+        if (topic.equals("first")) {
+            return 2;
+        }
+        if (topic.equals("second")) {
+            return 1;
+        }
         return null;
     }
 
     @Test
     public void shouldThrowStreamsInconsistentInternalTopicsExceptionIfNoPartitionsFoundForCoPartitionedTopic() {
-        final CopartitionedTopicsEnforcer validator = new CopartitionedTopicsEnforcer(LOG_CONTEXT, CopartitionedTopicsEnforcerTest::emptyTopicPartitionProvider);
+        final CopartitionedTopicsEnforcer validator = new CopartitionedTopicsEnforcer(LOG_CONTEXT,
+            CopartitionedTopicsEnforcerTest::emptyTopicPartitionProvider);
         assertThrows(StreamsInvalidTopologyException.class, () -> validator.enforce(Collections.singleton("topic"),
             Collections.emptyMap()));
     }
 
     @Test
     public void shouldThrowStreamsInconsistentInternalTopicsExceptionIfPartitionCountsForCoPartitionedTopicsDontMatch() {
-        final CopartitionedTopicsEnforcer validator = new CopartitionedTopicsEnforcer(LOG_CONTEXT, CopartitionedTopicsEnforcerTest::firstSecondTopicInconsistent);
+        final CopartitionedTopicsEnforcer validator = new CopartitionedTopicsEnforcer(LOG_CONTEXT,
+            CopartitionedTopicsEnforcerTest::firstSecondTopicInconsistent);
         assertThrows(StreamsInconsistentInternalTopicsException.class, () -> validator.enforce(Set.of("first", "second"),
             Collections.emptyMap()));
     }
@@ -70,7 +78,8 @@ public class CopartitionedTopicsEnforcerTest {
 
     @Test
     public void shouldEnforceCopartitioningOnRepartitionTopics() {
-        final CopartitionedTopicsEnforcer validator = new CopartitionedTopicsEnforcer(LOG_CONTEXT, CopartitionedTopicsEnforcerTest::firstSecondTopicConsistent);
+        final CopartitionedTopicsEnforcer validator = new CopartitionedTopicsEnforcer(LOG_CONTEXT,
+            CopartitionedTopicsEnforcerTest::firstSecondTopicConsistent);
         final ConfiguredInternalTopic config = createTopicConfig("repartitioned", 10);
 
         validator.enforce(Set.of("first", "second", config.name()),
@@ -82,20 +91,23 @@ public class CopartitionedTopicsEnforcerTest {
 
     @Test
     public void shouldSetNumPartitionsToMaximumPartitionsWhenAllTopicsAreRepartitionTopics() {
-        final CopartitionedTopicsEnforcer validator = new CopartitionedTopicsEnforcer(LOG_CONTEXT, CopartitionedTopicsEnforcerTest::emptyTopicPartitionProvider);
+        final CopartitionedTopicsEnforcer validator = new CopartitionedTopicsEnforcer(LOG_CONTEXT,
+            CopartitionedTopicsEnforcerTest::emptyTopicPartitionProvider);
         final ConfiguredInternalTopic one = createTopicConfig("one", 1);
         final ConfiguredInternalTopic two = createTopicConfig("two", 15);
         final ConfiguredInternalTopic three = createTopicConfig("three", 5);
-        final Map<String, ConfiguredInternalTopic> internalTopicConfigs = new HashMap<>();
+        final Map<String, ConfiguredInternalTopic> configuredInternalTopics = new HashMap<>();
 
-        internalTopicConfigs.put(one.name(), one);
-        internalTopicConfigs.put(two.name(), two);
-        internalTopicConfigs.put(three.name(), three);
+        configuredInternalTopics.put(one.name(), one);
+        configuredInternalTopics.put(two.name(), two);
+        configuredInternalTopics.put(three.name(), three);
 
-        validator.enforce(Set.of(one.name(),
+        validator.enforce(Set.of(
+                one.name(),
                 two.name(),
-                three.name()),
-            internalTopicConfigs
+                three.name()
+            ),
+            configuredInternalTopics
         );
 
         assertEquals(Optional.of(15), one.numberOfPartitions());
@@ -104,16 +116,20 @@ public class CopartitionedTopicsEnforcerTest {
     }
 
     @Test
-    public void shouldThrowAnExceptionIfInternalTopicConfigsWithEnforcedNumOfPartitionsHaveDifferentNumOfPartitions() {
-        final CopartitionedTopicsEnforcer validator = new CopartitionedTopicsEnforcer(LOG_CONTEXT, CopartitionedTopicsEnforcerTest::firstSecondTopicConsistent);
-        final ConfiguredInternalTopic topic1 = createInternalTopicConfigWithEnforcedNumberOfPartitions("repartitioned-1", 10);
-        final ConfiguredInternalTopic topic2 = createInternalTopicConfigWithEnforcedNumberOfPartitions("repartitioned-2", 5);
+    public void shouldThrowAnExceptionIfConfiguredInternalTopicsWithEnforcedNumOfPartitionsHaveDifferentNumOfPartitions() {
+        final CopartitionedTopicsEnforcer validator = new CopartitionedTopicsEnforcer(LOG_CONTEXT,
+            CopartitionedTopicsEnforcerTest::firstSecondTopicConsistent);
+        final ConfiguredInternalTopic topic1 = createConfiguredInternalTopicWithEnforcedNumberOfPartitions("repartitioned-1", 10);
+        final ConfiguredInternalTopic topic2 = createConfiguredInternalTopicWithEnforcedNumberOfPartitions("repartitioned-2", 5);
 
         final StreamsInconsistentInternalTopicsException ex = assertThrows(
             StreamsInconsistentInternalTopicsException.class,
             () -> validator.enforce(Set.of(topic1.name(), topic2.name()),
-                Utils.mkMap(Utils.mkEntry(topic1.name(), topic1),
-                    Utils.mkEntry(topic2.name(), topic2)))
+                Utils.mkMap(
+                    Utils.mkEntry(topic1.name(), topic1),
+                    Utils.mkEntry(topic2.name(), topic2)
+                )
+            )
         );
 
         final TreeMap<String, Integer> sorted = new TreeMap<>(
@@ -127,14 +143,18 @@ public class CopartitionedTopicsEnforcerTest {
     }
 
     @Test
-    public void shouldNotThrowAnExceptionWhenInternalTopicConfigsWithEnforcedNumOfPartitionsAreValid() {
-        final CopartitionedTopicsEnforcer validator = new CopartitionedTopicsEnforcer(LOG_CONTEXT, CopartitionedTopicsEnforcerTest::firstSecondTopicConsistent);
-        final ConfiguredInternalTopic topic1 = createInternalTopicConfigWithEnforcedNumberOfPartitions("repartitioned-1", 10);
-        final ConfiguredInternalTopic topic2 = createInternalTopicConfigWithEnforcedNumberOfPartitions("repartitioned-2", 10);
+    public void shouldNotThrowAnExceptionWhenConfiguredInternalTopicsWithEnforcedNumOfPartitionsAreValid() {
+        final CopartitionedTopicsEnforcer validator = new CopartitionedTopicsEnforcer(LOG_CONTEXT,
+            CopartitionedTopicsEnforcerTest::firstSecondTopicConsistent);
+        final ConfiguredInternalTopic topic1 = createConfiguredInternalTopicWithEnforcedNumberOfPartitions("repartitioned-1", 10);
+        final ConfiguredInternalTopic topic2 = createConfiguredInternalTopicWithEnforcedNumberOfPartitions("repartitioned-2", 10);
 
         validator.enforce(Set.of(topic1.name(), topic2.name()),
-            Utils.mkMap(Utils.mkEntry(topic1.name(), topic1),
-                Utils.mkEntry(topic2.name(), topic2)));
+            Utils.mkMap(
+                Utils.mkEntry(topic1.name(), topic1),
+                Utils.mkEntry(topic2.name(), topic2)
+            )
+        );
 
         assertEquals(Optional.of(10), topic1.numberOfPartitions());
         assertEquals(Optional.of(10), topic2.numberOfPartitions());
@@ -142,8 +162,9 @@ public class CopartitionedTopicsEnforcerTest {
 
     @Test
     public void shouldThrowAnExceptionWhenNumberOfPartitionsOfNonRepartitionTopicAndRepartitionTopicWithEnforcedNumOfPartitionsDoNotMatch() {
-        final CopartitionedTopicsEnforcer validator = new CopartitionedTopicsEnforcer(LOG_CONTEXT, CopartitionedTopicsEnforcerTest::firstSecondTopicConsistent);
-        final ConfiguredInternalTopic topic1 = createInternalTopicConfigWithEnforcedNumberOfPartitions("repartitioned-1", 10);
+        final CopartitionedTopicsEnforcer validator = new CopartitionedTopicsEnforcer(LOG_CONTEXT,
+            CopartitionedTopicsEnforcerTest::firstSecondTopicConsistent);
+        final ConfiguredInternalTopic topic1 = createConfiguredInternalTopicWithEnforcedNumberOfPartitions("repartitioned-1", 10);
 
         final StreamsInconsistentInternalTopicsException ex = assertThrows(
             StreamsInconsistentInternalTopicsException.class,
@@ -159,8 +180,9 @@ public class CopartitionedTopicsEnforcerTest {
 
     @Test
     public void shouldNotThrowAnExceptionWhenNumberOfPartitionsOfNonRepartitionTopicAndRepartitionTopicWithEnforcedNumOfPartitionsMatch() {
-        final CopartitionedTopicsEnforcer validator = new CopartitionedTopicsEnforcer(LOG_CONTEXT, CopartitionedTopicsEnforcerTest::firstSecondTopicConsistent);
-        final ConfiguredInternalTopic topic1 = createInternalTopicConfigWithEnforcedNumberOfPartitions("repartitioned-1", 2);
+        final CopartitionedTopicsEnforcer validator = new CopartitionedTopicsEnforcer(LOG_CONTEXT,
+            CopartitionedTopicsEnforcerTest::firstSecondTopicConsistent);
+        final ConfiguredInternalTopic topic1 = createConfiguredInternalTopicWithEnforcedNumberOfPartitions("repartitioned-1", 2);
 
         validator.enforce(Set.of(topic1.name(), "second"),
             Utils.mkMap(Utils.mkEntry(topic1.name(), topic1)));
@@ -170,15 +192,19 @@ public class CopartitionedTopicsEnforcerTest {
 
     @Test
     public void shouldDeductNumberOfPartitionsFromRepartitionTopicWithEnforcedNumberOfPartitions() {
-        final CopartitionedTopicsEnforcer validator = new CopartitionedTopicsEnforcer(LOG_CONTEXT, CopartitionedTopicsEnforcerTest::firstSecondTopicConsistent);
-        final ConfiguredInternalTopic topic1 = createInternalTopicConfigWithEnforcedNumberOfPartitions("repartitioned-1", 2);
+        final CopartitionedTopicsEnforcer validator = new CopartitionedTopicsEnforcer(LOG_CONTEXT,
+            CopartitionedTopicsEnforcerTest::firstSecondTopicConsistent);
+        final ConfiguredInternalTopic topic1 = createConfiguredInternalTopicWithEnforcedNumberOfPartitions("repartitioned-1", 2);
         final ConfiguredInternalTopic topic2 = createTopicConfig("repartitioned-2", 5);
-        final ConfiguredInternalTopic topic3 = createInternalTopicConfigWithEnforcedNumberOfPartitions("repartitioned-3", 2);
+        final ConfiguredInternalTopic topic3 = createConfiguredInternalTopicWithEnforcedNumberOfPartitions("repartitioned-3", 2);
 
         validator.enforce(Set.of(topic1.name(), topic2.name()),
-            Utils.mkMap(Utils.mkEntry(topic1.name(), topic1),
+            Utils.mkMap(
+                Utils.mkEntry(topic1.name(), topic1),
                 Utils.mkEntry(topic2.name(), topic2),
-                Utils.mkEntry(topic3.name(), topic3)));
+                Utils.mkEntry(topic3.name(), topic3)
+            )
+        );
 
         assertEquals(topic1.numberOfPartitions(), topic2.numberOfPartitions());
         assertEquals(topic2.numberOfPartitions(), topic3.numberOfPartitions());
@@ -193,8 +219,8 @@ public class CopartitionedTopicsEnforcerTest {
         return config;
     }
 
-    private ConfiguredInternalTopic createInternalTopicConfigWithEnforcedNumberOfPartitions(final String repartitionTopic,
-                                                                                            final int partitions) {
+    private ConfiguredInternalTopic createConfiguredInternalTopicWithEnforcedNumberOfPartitions(final String repartitionTopic,
+                                                                                                final int partitions) {
         return new ConfiguredInternalTopic(repartitionTopic,
             Collections.emptyMap(),
             Optional.of(partitions),

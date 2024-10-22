@@ -24,10 +24,10 @@ import java.util.Set;
 
 /**
  * Internal representation of a subtopology.
- *
- * The subtopology is configured according to the number of partitions available in the source topics. It has regular expressions
- * already resolved and defined exactly the information that is being used by streams groups assignment reconciliation.
- *
+ * <p>
+ * The subtopology is configured according to the number of partitions available in the source topics. It has regular expressions already
+ * resolved and defined exactly the information that is being used by streams groups assignment reconciliation.
+ * <p>
  * Configured subtopologies may be recreated every time the input topics used by the subtopology are modified.
  */
 public class ConfiguredSubtopology {
@@ -83,20 +83,22 @@ public class ConfiguredSubtopology {
     }
 
     public ConfiguredSubtopology setStateChangelogTopics(
-        final Map<String, ConfiguredInternalTopic> stateChangelogTopics) {
+        final Map<String, ConfiguredInternalTopic> stateChangelogTopics
+    ) {
         this.stateChangelogTopics = stateChangelogTopics;
         return this;
     }
 
     public ConfiguredSubtopology setRepartitionSourceTopics(
-        final Map<String, ConfiguredInternalTopic> repartitionSourceTopics) {
+        final Map<String, ConfiguredInternalTopic> repartitionSourceTopics
+    ) {
         this.repartitionSourceTopics = repartitionSourceTopics;
         return this;
     }
 
     /**
-     * Returns the config for any changelogs that must be prepared for this topic group, ie
-     * excluding any source topics that are reused as a changelog
+     * Returns the config for any changelogs that must be prepared for this topic group, ie excluding any source topics that are reused as a
+     * changelog
      */
     public Set<ConfiguredInternalTopic> nonSourceChangelogTopics() {
         final Set<ConfiguredInternalTopic> topicConfigs = new HashSet<>();

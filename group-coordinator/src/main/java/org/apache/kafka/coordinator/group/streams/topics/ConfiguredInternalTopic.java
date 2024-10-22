@@ -24,12 +24,11 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * ConfiguredInternalTopic captures the properties required for configuring
- * the internal topics we create for change-logs and repartitioning etc.
- *
- * It is derived from the topology sent by the client, and the current state
- * of the topics inside the broker. If the topics on the broker changes, the
- * internal topic may need to be reconfigured.
+ * ConfiguredInternalTopic captures the properties required for configuring the internal topics we create for change-logs and repartitioning
+ * etc.
+ * <p>
+ * It is derived from the topology sent by the client, and the current state of the topics inside the broker. If the topics on the broker
+ * changes, the internal topic may need to be reconfigured.
  */
 public class ConfiguredInternalTopic {
 
@@ -48,11 +47,10 @@ public class ConfiguredInternalTopic {
         this(name, topicConfigs, Optional.empty(), Optional.empty());
     }
 
-    public ConfiguredInternalTopic(
-        final String name,
-        final Map<String, String> topicConfigs,
-        final Optional<Integer> numberOfPartitions,
-        final Optional<Short> replicationFactor) {
+    public ConfiguredInternalTopic(final String name,
+                                   final Map<String, String> topicConfigs,
+                                   final Optional<Integer> numberOfPartitions,
+                                   final Optional<Short> replicationFactor) {
         this.name = Objects.requireNonNull(name, "name can't be null");
         Topic.validate(name);
         numberOfPartitions.ifPresent(ConfiguredInternalTopic::validateNumberOfPartitions);
@@ -115,8 +113,12 @@ public class ConfiguredInternalTopic {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
         ConfiguredInternalTopic that = (ConfiguredInternalTopic) o;
         return enforceNumberOfPartitions == that.enforceNumberOfPartitions
             && Objects.equals(name, that.name)

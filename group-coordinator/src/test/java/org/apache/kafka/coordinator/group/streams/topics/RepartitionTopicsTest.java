@@ -88,11 +88,12 @@ public class RepartitionTopicsTest {
 
     @Test
     public void shouldSetupRepartitionTopics() {
-        Map<String, ConfiguredSubtopology> subtopologyToTopicsInfo = mkMap(mkEntry("subtopology_0", TOPICS_INFO1), mkEntry("subtopology_1", TOPICS_INFO2));
+        Map<String, ConfiguredSubtopology> subtopologyToConfiguredSubtopology = mkMap(mkEntry("subtopology_0", TOPICS_INFO1),
+            mkEntry("subtopology_1", TOPICS_INFO2));
         Function<String, Integer> topicPartitionCountProvider = s -> TOPICS.contains(s) ? 3 : null;
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
             LOG_CONTEXT,
-            subtopologyToTopicsInfo,
+            subtopologyToConfiguredSubtopology,
             topicPartitionCountProvider
         );
 
@@ -109,15 +110,18 @@ public class RepartitionTopicsTest {
 
     @Test
     public void shouldThrowStreamsMissingSourceTopicsExceptionIfMissingSourceTopics() {
-        Map<String, ConfiguredSubtopology> subtopologyToTopicsInfo = mkMap(mkEntry("subtopology_0", TOPICS_INFO1), mkEntry("subtopology_1", TOPICS_INFO2));
-        Function<String, Integer> topicPartitionCountProvider = s -> Objects.equals(s, SOURCE_TOPIC_NAME1) ? null : (TOPICS.contains(s) ? 3 : null);
+        Map<String, ConfiguredSubtopology> subtopologyToConfiguredSubtopology = mkMap(mkEntry("subtopology_0", TOPICS_INFO1),
+            mkEntry("subtopology_1", TOPICS_INFO2));
+        Function<String, Integer> topicPartitionCountProvider = s -> Objects.equals(s, SOURCE_TOPIC_NAME1) ? null
+            : (TOPICS.contains(s) ? 3 : null);
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
             LOG_CONTEXT,
-            subtopologyToTopicsInfo,
+            subtopologyToConfiguredSubtopology,
             topicPartitionCountProvider
         );
 
-        final StreamsMissingSourceTopicsException exception = assertThrows(StreamsMissingSourceTopicsException.class, repartitionTopics::setup);
+        final StreamsMissingSourceTopicsException exception = assertThrows(StreamsMissingSourceTopicsException.class,
+            repartitionTopics::setup);
 
         assertNotNull(exception);
         assertEquals("Missing source topics: source1", exception.getMessage());
@@ -125,14 +129,14 @@ public class RepartitionTopicsTest {
 
     @Test
     public void shouldThrowStreamsMissingSourceTopicsExceptionIfPartitionCountCannotBeComputedForAllRepartitionTopics() {
-        Map<String, ConfiguredSubtopology> subtopologyToTopicsInfo = mkMap(
+        Map<String, ConfiguredSubtopology> subtopologyToConfiguredSubtopology = mkMap(
             mkEntry("subtopology_0", TOPICS_INFO1),
             mkEntry("subtopology_1", TOPICS_INFO_WITHOUT_PARTITION_COUNT)
         );
         Function<String, Integer> topicPartitionCountProvider = s -> TOPICS.contains(s) ? 3 : null;
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
             LOG_CONTEXT,
-            subtopologyToTopicsInfo,
+            subtopologyToConfiguredSubtopology,
             topicPartitionCountProvider
         );
 
@@ -156,14 +160,14 @@ public class RepartitionTopicsTest {
             ),
             Collections.emptyMap()
         );
-        Map<String, ConfiguredSubtopology> subtopologyToTopicsInfo = mkMap(
+        Map<String, ConfiguredSubtopology> subtopologyToConfiguredSubtopology = mkMap(
             mkEntry("subtopology_0", configuredSubtopology),
             mkEntry("subtopology_1", TOPICS_INFO_WITHOUT_PARTITION_COUNT)
         );
         Function<String, Integer> topicPartitionCountProvider = s -> TOPICS.contains(s) ? 3 : null;
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
             LOG_CONTEXT,
-            subtopologyToTopicsInfo,
+            subtopologyToConfiguredSubtopology,
             topicPartitionCountProvider
         );
 
@@ -188,14 +192,14 @@ public class RepartitionTopicsTest {
             ),
             Collections.emptyMap()
         );
-        Map<String, ConfiguredSubtopology> subtopologyToTopicsInfo = mkMap(
+        Map<String, ConfiguredSubtopology> subtopologyToConfiguredSubtopology = mkMap(
             mkEntry("subtopology_0", configuredSubtopology),
             mkEntry("subtopology_1", TOPICS_INFO_WITHOUT_PARTITION_COUNT)
         );
         Function<String, Integer> topicPartitionCountProvider = s -> TOPICS.contains(s) ? 3 : null;
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
             LOG_CONTEXT,
-            subtopologyToTopicsInfo,
+            subtopologyToConfiguredSubtopology,
             topicPartitionCountProvider
         );
 
@@ -219,11 +223,11 @@ public class RepartitionTopicsTest {
             Collections.emptyMap(),
             Collections.emptyMap()
         );
-        Map<String, ConfiguredSubtopology> subtopologyToTopicsInfo = mkMap(mkEntry("subtopology_0", configuredSubtopology));
+        Map<String, ConfiguredSubtopology> subtopologyToConfiguredSubtopology = mkMap(mkEntry("subtopology_0", configuredSubtopology));
         Function<String, Integer> topicPartitionCountProvider = s -> TOPICS.contains(s) ? 3 : null;
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
             LOG_CONTEXT,
-            subtopologyToTopicsInfo,
+            subtopologyToConfiguredSubtopology,
             topicPartitionCountProvider
         );
 

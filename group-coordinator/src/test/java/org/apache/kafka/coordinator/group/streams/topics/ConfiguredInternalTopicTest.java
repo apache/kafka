@@ -74,7 +74,8 @@ public class ConfiguredInternalTopicTest {
 
     @Test
     public void testSetNumberOfPartitionsUnsupportedOperation() {
-        ConfiguredInternalTopic config = new ConfiguredInternalTopic("test-topic", Collections.emptyMap(), Optional.of(3), Optional.empty());
+        ConfiguredInternalTopic config = new ConfiguredInternalTopic("test-topic", Collections.emptyMap(), Optional.of(3),
+            Optional.empty());
         assertThrows(UnsupportedOperationException.class, () -> config.setNumberOfPartitions(4));
     }
 
