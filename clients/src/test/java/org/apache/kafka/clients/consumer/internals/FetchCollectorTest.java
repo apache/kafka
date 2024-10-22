@@ -661,6 +661,7 @@ public class FetchCollectorTest {
         int recordCount = 20;
         assignAndSeek(topicAPartition0);
 
+        /* The first CompletedFetch object */
         Records rawRecords = createTransactionalRecords(ControlRecordType.ABORT, true, 0, recordCount);
         FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
             .setRecords(rawRecords)
@@ -671,13 +672,13 @@ public class FetchCollectorTest {
         fetchBuffer.add(completedFetch1);
         Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
 
-        // The Fetch and read replica settings should be empty.
+        // The Fetch object contains no data record but the offset is moved forward
         assertFalse(fetch.isEmpty());
         assertEquals(0, fetch.numRecords());
         assertEquals(1, fetch.nextOffsets().size());
         assertEquals(new OffsetAndMetadata(recordCount + 1, Optional.of(0), ""), fetch.nextOffsets().get(topicAPartition0));
 
-
+        /* The second CompletedFetch object */
         int startOffset = recordCount + 1;
         rawRecords = createTransactionalRecords(ControlRecordType.ABORT, false, startOffset, recordCount);
         partitionData = new FetchResponseData.PartitionData()
@@ -690,10 +691,11 @@ public class FetchCollectorTest {
         fetchBuffer.add(completedFetch2);
         fetch = fetchCollector.collectFetch(fetchBuffer);
 
+        // The Fetch object contains both data records and the advanced offset
         assertFalse(fetch.isEmpty());
-        assertEquals(20, fetch.numRecords());
+        assertEquals(recordCount, fetch.numRecords());
         assertEquals(1, fetch.nextOffsets().size());
-        assertEquals(new OffsetAndMetadata(startOffset + recordCount + 1, Optional.empty(), ""), fetch.nextOffsets().get(topicAPartition0));
+        assertEquals(new OffsetAndMetadata(startOffset + recordCount + 1, Optional.of(0), ""), fetch.nextOffsets().get(topicAPartition0));
     }
 
     private List<FetchResponseData.AbortedTransaction> createAbortedTransactions() {
@@ -963,7 +965,7 @@ public class FetchCollectorTest {
             (short) 0,
             0,
             true,
-            RecordBatch.NO_PARTITION_LEADER_EPOCH)) {
+            0)) {
             for (int i = 0; i < recordCount; i++)
                 builder.append(new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()));
 
