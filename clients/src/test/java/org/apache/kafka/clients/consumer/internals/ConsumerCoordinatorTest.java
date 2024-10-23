@@ -93,6 +93,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -700,6 +701,18 @@ public abstract class ConsumerCoordinatorTest {
         consumerClient.pollNoWakeup();
         assertTrue(asyncCallbackInvoked.get());
         assertEquals(coordinator.inFlightAsyncCommits.get(), 0);
+    }
+
+    @Test
+    public void testReuseRequest() {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        Set<TopicPartition> supersetPartition = Set.of(t1p, t2p);
+        Set<TopicPartition> subsetPartition = Set.of(t1p);
+        coordinator.fetchCommittedOffsets(supersetPartition, time.timer(Duration.ZERO));
+        coordinator.fetchCommittedOffsets(subsetPartition, time.timer(Duration.ZERO));
+        assertEquals(1, client.inFlightRequestCount());
     }
 
     @Test
