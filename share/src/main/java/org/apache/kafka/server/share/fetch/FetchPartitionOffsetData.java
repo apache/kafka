@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.server.share;
+package org.apache.kafka.server.share.fetch;
 
 import org.apache.kafka.server.storage.log.FetchPartitionData;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
