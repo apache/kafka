@@ -160,7 +160,7 @@ public class DelayedShareFetch extends DelayedOperation {
         Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData = acquirablePartitions();
 
         if (!topicPartitionData.isEmpty()) {
-            if (isMinBytesCriteriaSatisfied(topicPartitionData)) {
+            if (isMinBytesSatisfied(topicPartitionData)) {
                 topicPartitionDataFromTryComplete = topicPartitionData;
                 return forceComplete();
             }
@@ -217,25 +217,35 @@ public class DelayedShareFetch extends DelayedOperation {
         return topicPartitionData;
     }
 
-    private boolean isMinBytesCriteriaSatisfied(Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData) {
-        AtomicLong accumulatedSize = new AtomicLong(0);
-        topicPartitionData.forEach((topicIdPartition, partitionData) -> {
-            Partition partition = replicaManager.getPartitionOrException(topicIdPartition.topicPartition());
-            LogOffsetSnapshot offsetSnapshot = partition.fetchOffsetSnapshot(Optional.empty(), true);
-            LogOffsetMetadata endOffsetMetadata = offsetSnapshot.highWatermark;
-            SharePartition sharePartition = sharePartitionManager.sharePartition(shareFetchData.groupId(), topicIdPartition);
-            if (sharePartition == null) {
-                log.error("Encountered null share partition for groupId={}, topicIdPartition={}. Skipping it.", shareFetchData.groupId(), topicIdPartition);
-                return;
-            }
+    private boolean isMinBytesSatisfied(Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData) {
+        try {
+            AtomicLong accumulatedSize = new AtomicLong(0);
+            topicPartitionData.forEach((topicIdPartition, partitionData) -> {
+                Partition partition = replicaManager.getPartitionOrException(topicIdPartition.topicPartition());
+                LogOffsetSnapshot offsetSnapshot = partition.fetchOffsetSnapshot(Optional.empty(), true);
+                // The FetchIsolation type that we use for share fetch is FetchIsolation.HIGH_WATERMARK. In the future, we can
+                // extend it other FetchIsolation types.
+                LogOffsetMetadata endOffsetMetadata = offsetSnapshot.highWatermark;
+                SharePartition sharePartition = sharePartitionManager.sharePartition(shareFetchData.groupId(), topicIdPartition);
+                if (sharePartition == null) {
+                    log.error("Encountered null share partition for groupId={}, topicIdPartition={}. Skipping it.", shareFetchData.groupId(), topicIdPartition);
+                    return;
+                }
 
-            // we take the partition fetch size as upper bound when accumulating the bytes (skip if a throttled partition)
-            long bytesAvailable = sharePartition.latestFetchOffsetMetadata() == null ?
-                Math.min(endOffsetMetadata.relativePositionInSegment, partitionData.maxBytes) :
-                Math.min(endOffsetMetadata.positionDiff(sharePartition.latestFetchOffsetMetadata()), partitionData.maxBytes);
-            accumulatedSize.addAndGet(bytesAvailable);
-        });
-        return accumulatedSize.get() >= shareFetchData.fetchParams().minBytes;
+                // we take the partition fetch size as upper bound when accumulating the bytes (skip if a throttled partition)
+                long bytesAvailable = sharePartition.latestFetchOffsetMetadata() == null ?
+                    Math.min(endOffsetMetadata.relativePositionInSegment, partitionData.maxBytes) :
+                    Math.min(endOffsetMetadata.positionDiff(sharePartition.latestFetchOffsetMetadata()), partitionData.maxBytes);
+                accumulatedSize.addAndGet(bytesAvailable);
+            });
+            return accumulatedSize.get() >= shareFetchData.fetchParams().minBytes;
+        } catch (Exception e) {
+            // Ideally we should complete the share fetch request's future exceptionally in this case from tryComplete itself.
+            // A function that can be utilized is handleFetchException in an in-flight PR https://github.com/apache/kafka/pull/16842.
+            // Perhaps, once the mentioned PR is merged, I'll change it to better exception handling.
+            log.error("Error processing the minBytes criteria for share fetch request", e);
+            return true;
+        }
     }
 
     // Visible for testing.
