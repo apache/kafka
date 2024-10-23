@@ -83,7 +83,7 @@ import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
  * Test rig for measuring throttling performance. Configure the parameters for a set of experiments, then execute them
  * and view the html output file, with charts, that are produced. You can also render the charts to the screen if
  * you wish.
- *
+ * <p>
  * Currently you'll need about 40GB of disk space to run these experiments (largest data written x2). Tune the msgSize
  * & #partitions and throttle to adjust this.
  */
