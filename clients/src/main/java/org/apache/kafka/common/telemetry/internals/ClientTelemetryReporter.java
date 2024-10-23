@@ -362,9 +362,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
                     throw new IllegalStateException("Unknown telemetry state: " + localState);
             }
 
-            if (log.isTraceEnabled()) {
-                log.trace("For telemetry state {}, returning the value {} ms; {}", localState, timeMs, msg);
-            }
+            log.trace("For telemetry state {}, returning the value {} ms; {}", localState, timeMs, msg);
             return timeMs;
         }
 
