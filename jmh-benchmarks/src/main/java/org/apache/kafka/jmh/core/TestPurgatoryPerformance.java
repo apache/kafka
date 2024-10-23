@@ -26,6 +26,7 @@ import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryManagerMXBean;
 import java.lang.management.OperatingSystemMXBean;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -124,11 +125,11 @@ public class TestPurgatoryPerformance {
         try {
             return Optional.of(Long.parseLong(Class.forName("com.sun.management.OperatingSystemMXBean")
                     .getMethod("getProcessCpuTime").invoke(osMXBean).toString()));
-        } catch (Exception e) {
+        } catch (ClassNotFoundException | InvocationTargetException | IllegalAccessException | NoSuchMethodException e) {
             try {
                 return Optional.of(Long.parseLong(Class.forName("com.ibm.lang.management.OperatingSystemMXBean")
                         .getMethod("getProcessCpuTimeByNS").invoke(osMXBean).toString()));
-            } catch (Exception ex) {
+            } catch (ClassNotFoundException | InvocationTargetException | IllegalAccessException | NoSuchMethodException ex) {
                 throw new RuntimeException(ex);
             }
         }
