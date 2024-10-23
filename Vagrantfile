@@ -56,7 +56,7 @@ ec2_iam_instance_profile_name = nil
 ebs_volume_type = 'gp3'
 
 jdk_major = '17'
-jdk_full = 'jdk-17-linux-x64'
+jdk_full = '17-linux-x64'
 
 local_config_file = File.join(File.dirname(__FILE__), "Vagrantfile.local")
 if File.exists?(local_config_file) then
