@@ -19,14 +19,11 @@ package kafka.server.share;
 import kafka.server.DelayedOperation;
 import kafka.server.LogReadResult;
 import kafka.server.QuotaFactory;
-import kafka.server.QuotaFactory.UnboundedQuota$;
 import kafka.server.ReplicaManager;
 
 import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.requests.FetchRequest;
-import org.apache.kafka.common.requests.FetchRequest.PartitionData;
 import org.apache.kafka.server.share.fetch.ShareFetchData;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
 
