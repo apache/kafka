@@ -353,10 +353,10 @@ public class TestPurgatoryPerformance {
 
         public void printStats() {
             System.out.printf(
-                    "# interval samples: rate = %f, min = %d, max = %d%n"
-                    , 1000d / (samples.stream().mapToDouble(s -> s).sum() / samples.size())
-                    , samples.stream().min(Comparator.comparingDouble(s -> s)).get()
-                    , samples.stream().max(Comparator.comparingDouble(s -> s)).get());
+                    "# interval samples: rate = %f, min = %d, max = %d%n", 
+                    1000d / (samples.stream().mapToDouble(s -> s).sum() / samples.size()), 
+                    samples.stream().min(Comparator.comparingDouble(s -> s)).get(), 
+                    samples.stream().max(Comparator.comparingDouble(s -> s)).get());
         }
     }
 
