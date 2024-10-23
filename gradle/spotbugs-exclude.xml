@@ -335,7 +335,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
 
     <Match>
         <!-- Suppress a warning about intentional missing default cases and fallthroughs. -->
-        <Class name="org.apache.kafka.streams.state.internals.Murmur3"/>
+        <Class name="org.apache.kafka.common.hash.Murmur3"/>
         <Or>
             <Bug pattern="SF_SWITCH_NO_DEFAULT"/>
             <Bug pattern="SF_SWITCH_FALLTHROUGH"/>
@@ -345,7 +345,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
 
     <Match>
         <!-- Suppress a warning about intentional missing default cases and fallthroughs. -->
-        <Class name="org.apache.kafka.streams.state.internals.Murmur3$IncrementalHash32"/>
+        <Class name="org.apache.kafka.common.hash.Murmur3$IncrementalHash32"/>
         <Or>
             <Bug pattern="SF_SWITCH_NO_DEFAULT"/>
             <Bug pattern="SF_SWITCH_FALLTHROUGH"/>
