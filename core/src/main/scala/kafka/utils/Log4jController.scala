@@ -31,12 +31,6 @@ object Log4jController {
   val ROOT_LOGGER = ""
 
   /**
-   * Returns given logger's parent's (or the first ancestor's) name.
-   *
-   * @throws IllegalArgumentException loggerName is null or empty.
-   */
-
-  /**
    * Returns a map of the log4j loggers and their assigned log level.
    * If a logger does not have a log level assigned, we return the log level of the first ancestor with a level configured.
    */

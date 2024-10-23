@@ -153,4 +153,9 @@
     <allow pkg="org.apache.kafka.clients.admin" />
     <allow pkg="org.apache.kafka.test" />
   </subpackage>
+
+  <subpackage name="utils">
+    <allow pkg="org.apache.logging.log4j" />
+    <allow pkg="org.apache.logging.log4j.core.config" />
+  </subpackage>
 </import-control>

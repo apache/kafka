@@ -175,6 +175,10 @@ public class LoggersTest {
 
     @Test
     public void testSetRootLevel() {
+        // In this test case, we focus on setting the level for the root logger.
+        // Ideally, we want to start with a "clean" configuration to conduct this test case.
+        // By programmatically creating a new configuration at the beginning, we can ensure
+        // that this test case is not affected by existing Log4j configurations.
         LoggerContext loggerContext = (LoggerContext) LogManager.getContext(false);
         Configuration config = loggerContext.getConfiguration();
         LoggerConfig rootConfig = new LoggerConfig("", Level.ERROR, false);
