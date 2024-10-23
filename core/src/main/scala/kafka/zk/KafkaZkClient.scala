@@ -19,7 +19,6 @@ package kafka.zk
 import java.util.Properties
 import kafka.cluster.Broker
 import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch, ReplicaAssignment}
-import kafka.security.authorizer.AclAuthorizer.{NoAcls, VersionedAcls}
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import kafka.zk.TopicZNode.TopicIdReplicaAssignment
@@ -1347,12 +1346,12 @@ class KafkaZkClient private[zk] (
    * @param resource Resource to get VersionedAcls for
    * @return  VersionedAcls
    */
-  def getVersionedAclsForResource(resource: ResourcePattern): VersionedAcls = {
+  def getVersionedAclsForResource(resource: ResourcePattern): ZkData.VersionedAcls = {
     val getDataRequest = GetDataRequest(ResourceZNode.path(resource))
     val getDataResponse = retryRequestUntilConnected(getDataRequest)
     getDataResponse.resultCode match {
       case Code.OK => ResourceZNode.decode(getDataResponse.data, getDataResponse.stat)
-      case Code.NONODE => NoAcls
+      case Code.NONODE => ZkData.VersionedAcls(Set.empty, ZkVersion.UnknownVersion)
       case _ => throw getDataResponse.resultException.get
     }
   }

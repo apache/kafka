@@ -24,7 +24,6 @@ import com.fasterxml.jackson.core.JsonProcessingException
 import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch, ReplicaAssignment}
-import kafka.security.authorizer.AclAuthorizer.VersionedAcls
 import kafka.server.DelegationTokenManagerZk
 import kafka.utils.Json
 import kafka.utils.json.JsonObject
@@ -766,7 +765,7 @@ object ResourceZNode {
   def path(resource: ResourcePattern): String = ZkAclStore(resource.patternType).path(resource.resourceType, resource.name)
 
   def encode(acls: Set[AclEntry]): Array[Byte] = Json.encodeAsBytes(AclEntry.toJsonCompatibleMap(acls.asJava))
-  def decode(bytes: Array[Byte], stat: Stat): VersionedAcls = VersionedAcls(AclEntry.fromBytes(bytes).asScala.toSet, stat.getVersion)
+  def decode(bytes: Array[Byte], stat: Stat): ZkData.VersionedAcls = ZkData.VersionedAcls(AclEntry.fromBytes(bytes).asScala.toSet, stat.getVersion)
 }
 
 object ExtendedAclChangeEvent {
@@ -1084,6 +1083,11 @@ object MigrationZNode {
 }
 
 object ZkData {
+
+  case class VersionedAcls(acls: Set[AclEntry], zkVersion: Int) {
+    def exists: Boolean = zkVersion != ZkVersion.UnknownVersion
+  }
+
 
   // Important: it is necessary to add any new top level Zookeeper path to the Seq
   val SecureRootPaths: Seq[String] = Seq(AdminZNode.path,

@@ -57,7 +57,7 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
     */
   @Timeout(15)
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft"))
   def testTwoConsumersWithDifferentSaslCredentials(quorum: String): Unit = {
     setAclsAndProduce(tp)
     val consumer1 = createConsumer()
