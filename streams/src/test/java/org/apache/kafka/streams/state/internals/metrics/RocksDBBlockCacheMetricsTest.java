@@ -52,13 +52,13 @@ public class RocksDBBlockCacheMetricsTest {
     private static final String STORE_NAME = "test";
     private static final String METRICS_SCOPE = "test-scope";
 
-    private static TaskId taskId = new TaskId(0, 0);
+    private static final TaskId TASK_ID = new TaskId(0, 0);
 
     public static Stream<Arguments> stores() {
         final File stateDir = TestUtils.tempDirectory("state");
         return Stream.of(
-            Arguments.of(new RocksDBStore(STORE_NAME, METRICS_SCOPE), new MockInternalProcessorContext(new Properties(), taskId, stateDir)),
-            Arguments.of(new RocksDBTimestampedStore(STORE_NAME, METRICS_SCOPE), new MockInternalProcessorContext(new Properties(), taskId, stateDir))
+            Arguments.of(new RocksDBStore(STORE_NAME, METRICS_SCOPE), new MockInternalProcessorContext(new Properties(), TASK_ID, stateDir)),
+            Arguments.of(new RocksDBTimestampedStore(STORE_NAME, METRICS_SCOPE), new MockInternalProcessorContext(new Properties(), TASK_ID, stateDir))
         );
     }
 
@@ -109,7 +109,7 @@ public class RocksDBBlockCacheMetricsTest {
                 metricName,
                 group,
                 "Ignored",
-                storeLevelTagMap(taskId.toString(), METRICS_SCOPE, STORE_NAME)
+                storeLevelTagMap(TASK_ID.toString(), METRICS_SCOPE, STORE_NAME)
         );
         final KafkaMetric metric = (KafkaMetric) metrics.metrics().get(name);
         assertEquals(expected, metric.metricValue(), String.format("Value for metric '%s-%s' was incorrect", group, metricName));

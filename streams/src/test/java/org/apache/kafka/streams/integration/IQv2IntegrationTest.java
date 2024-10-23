@@ -312,7 +312,7 @@ public class IQv2IntegrationTest {
                 public KeyValueStore<Bytes, byte[]> get() {
                     return new KeyValueStore<Bytes, byte[]>() {
                         private boolean open = false;
-                        private Map<Bytes, byte[]> map = new HashMap<>();
+                        private final Map<Bytes, byte[]> map = new HashMap<>();
                         private Position position;
                         private StateStoreContext context;
 

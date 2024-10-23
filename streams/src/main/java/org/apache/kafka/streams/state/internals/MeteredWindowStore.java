@@ -76,8 +76,8 @@ public class MeteredWindowStore<K, V>
     private InternalProcessorContext<?, ?> context;
     private TaskId taskId;
 
-    private LongAdder numOpenIterators = new LongAdder();
-    private NavigableSet<MeteredIterator> openIterators = new ConcurrentSkipListSet<>(Comparator.comparingLong(MeteredIterator::startTimestamp));
+    private final LongAdder numOpenIterators = new LongAdder();
+    private final NavigableSet<MeteredIterator> openIterators = new ConcurrentSkipListSet<>(Comparator.comparingLong(MeteredIterator::startTimestamp));
 
     @SuppressWarnings("rawtypes")
     private final Map<Class, QueryHandler> queryHandlers =
