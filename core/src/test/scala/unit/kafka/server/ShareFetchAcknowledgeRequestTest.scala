@@ -97,8 +97,9 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val topic = "topic"
     val partition = 0
 
-    // Create a single-partition topic and find a broker which is not the leader
-    val partitionToLeader = createTopicAndReturnLeaders(topic)
+    // Create a single-partition topic and find a broker which is not the leader. We need replicationFactor to make sure
+    // the topic partition exists on all brokers.
+    val partitionToLeader = createTopicAndReturnLeaders(topic, replicationFactor = getBrokers.size)
     val topicIds = getTopicIds.asJava
     val topicId = topicIds.get(topic)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(topic, partition))
