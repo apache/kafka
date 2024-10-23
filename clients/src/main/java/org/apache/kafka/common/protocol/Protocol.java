@@ -128,6 +128,14 @@ public class Protocol {
                         b.append("</td>");
                         b.append("<td>");
                         b.append(taggedField.docString);
+                        if (taggedField.type.isArray()) {
+                            Type innerType = taggedField.type.arrayElementType().get();
+                            if (innerType instanceof Schema) {
+                                schemaToFieldTableHtml((Schema) innerType, b);
+                            }
+                        } else if (taggedField.type instanceof Schema) {
+                            schemaToFieldTableHtml((Schema) taggedField.type, b);
+                        }
                         b.append("</td>");
                         b.append("</tr>\n");
                     });
