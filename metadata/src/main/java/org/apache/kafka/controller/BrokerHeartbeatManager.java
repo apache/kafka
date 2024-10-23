@@ -42,11 +42,11 @@ import static org.apache.kafka.controller.BrokerControlState.UNFENCED;
 
 
 /**
- * The BrokerHeartbeatManager manages all the soft state associated with broker heartbeats.
- * Soft state is state which does not appear in the metadata log.  This state includes
- * things like the last time each broker sent us a heartbeat.  As of KIP-841, the controlled
- * shutdown state is no longer treated as soft state and is persisted to the metadata log on broker
- * controlled shutdown requests.
+ * The BrokerHeartbeatManager manages some of the soft state associated with broker heartbeats.
+ * For example, it stores the last metadata offset which each broker reported. It contains the
+ * BrokerHeartbeatTracker, which stores the last time we received a heartbeat from each broker.
+ * In addition to storing this soft state, the BrokerHeartbeatManager aggregates some information
+ * about brokers (such as whether they're fenced or not) into a single place.
  *
  * Only the active controller has a BrokerHeartbeatManager, since only the active
  * controller handles broker heartbeats.  Standby controllers will create a heartbeat
