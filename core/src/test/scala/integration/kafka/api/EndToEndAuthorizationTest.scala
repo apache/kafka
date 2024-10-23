@@ -21,7 +21,6 @@ import com.yammer.metrics.core.Gauge
 
 import java.util.{Collections, Properties}
 import java.util.concurrent.ExecutionException
-import kafka.security.authorizer.AclAuthorizer
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import kafka.utils._
 import org.apache.kafka.clients.admin.Admin
@@ -39,7 +38,7 @@ import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.security.authorizer.AclEntry.WILDCARD_HOST
-import org.apache.kafka.server.config.{ServerConfigs, ReplicationConfigs, ServerLogConfigs, ZkConfigs}
+import org.apache.kafka.server.config.{ServerConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
@@ -56,8 +55,7 @@ import scala.jdk.CollectionConverters._
   * This test relies on a chain of test harness traits to set up. It directly
   * extends IntegrationTestHarness. IntegrationTestHarness creates producers and
   * consumers, and it extends KafkaServerTestHarness. KafkaServerTestHarness starts
-  * brokers, but first it initializes a ZooKeeper server and client, which happens
-  * in QuorumTestHarness.
+  * brokers.
   *
   * To start brokers we need to set a cluster ACL, which happens optionally in KafkaServerTestHarness.
   * The remaining ACLs to enable access to producers and consumers are set here. To set ACLs, we use AclCommand directly.
@@ -81,7 +79,6 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   val tp = new TopicPartition(topic, part)
 
   override protected lazy val trustStoreFile = Some(TestUtils.tempFile("truststore", ".jks"))
-  protected def authorizerClass: Class[_] = classOf[AclAuthorizer]
 
   val topicResource = new ResourcePattern(TOPIC, topic, LITERAL)
   val groupResource =  new ResourcePattern(GROUP, group, LITERAL)
@@ -148,21 +145,10 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     */
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-
-    if (TestInfoUtils.isKRaft(testInfo)) {
-      this.serverConfig.setProperty(StandardAuthorizer.SUPER_USERS_CONFIG, kafkaPrincipal.toString)
-      this.controllerConfig.setProperty(StandardAuthorizer.SUPER_USERS_CONFIG, kafkaPrincipal.toString + ";" + "User:ANONYMOUS")
-      this.serverConfig.setProperty(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[StandardAuthorizer].getName)
-      this.controllerConfig.setProperty(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[StandardAuthorizer].getName)
-    } else {
-      // The next two configuration parameters enable ZooKeeper secure ACLs
-      // and sets the Kafka authorizer, both necessary to enable security.
-      this.serverConfig.setProperty(ZkConfigs.ZK_ENABLE_SECURE_ACLS_CONFIG, "true")
-      this.serverConfig.setProperty(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, authorizerClass.getName)
-
-      // Set the specific principal that can update ACLs.
-      this.serverConfig.setProperty(AclAuthorizer.SuperUsersProp, kafkaPrincipal.toString)
-    }
+    this.serverConfig.setProperty(StandardAuthorizer.SUPER_USERS_CONFIG, kafkaPrincipal.toString)
+    this.controllerConfig.setProperty(StandardAuthorizer.SUPER_USERS_CONFIG, kafkaPrincipal.toString + ";" + "User:ANONYMOUS")
+    this.serverConfig.setProperty(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[StandardAuthorizer].getName)
+    this.controllerConfig.setProperty(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[StandardAuthorizer].getName)
 
     super.setUp(testInfo)
 
@@ -185,7 +171,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     * Tests the ability of producing and consuming with the appropriate ACLs set.
     */
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft"))
   def testProduceConsumeViaAssign(quorum: String): Unit = {
     setAclsAndProduce(tp)
     val consumer = createConsumer()
@@ -214,7 +200,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft"))
   def testProduceConsumeViaSubscribe(quorum: String): Unit = {
     setAclsAndProduce(tp)
     val consumer = createConsumer()
@@ -224,7 +210,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft"))
   def testProduceConsumeWithWildcardAcls(quorum: String): Unit = {
     setWildcardResourceAcls()
     val producer = createProducer()
@@ -236,7 +222,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft"))
   def testProduceConsumeWithPrefixedAcls(quorum: String): Unit = {
     setPrefixedResourceAcls()
     val producer = createProducer()
@@ -248,7 +234,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft"))
   def testProduceConsumeTopicAutoCreateTopicCreateAcl(quorum: String): Unit = {
     // topic2 is not created on setup()
     val tp2 = new TopicPartition("topic2", 0)
@@ -319,8 +305,6 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   @CsvSource(value = Array(
     "kraft, true",
     "kraft, false",
-    "zk, true",
-    "zk, false"
   ))
   def testNoDescribeProduceOrConsumeWithoutTopicDescribeAcl(quorum:String, isIdempotenceEnabled:Boolean): Unit = {
     // Set consumer group acls since we are testing topic authorization
@@ -390,8 +374,6 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   @CsvSource(value = Array(
     "kraft, true",
     "kraft, false",
-    "zk, true",
-    "zk, false"
   ))
   def testNoProduceWithDescribeAcl(quorum:String, isIdempotenceEnabled:Boolean): Unit = {
     val superuserAdminClient = createSuperuserAdminClient()
@@ -420,7 +402,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     * ACL set.
     */
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft"))
   def testNoConsumeWithoutDescribeAclViaAssign(quorum: String): Unit = {
     noConsumeWithoutDescribeAclSetup()
     val consumer = createConsumer()
@@ -431,7 +413,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft"))
   def testNoConsumeWithoutDescribeAclViaSubscribe(quorum: String): Unit = {
     noConsumeWithoutDescribeAclSetup()
     val consumer = createConsumer()
@@ -472,7 +454,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft"))
   def testNoConsumeWithDescribeAclViaAssign(quorum: String): Unit = {
     noConsumeWithDescribeAclSetup()
     val consumer = createConsumer()
@@ -484,7 +466,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft"))
   def testNoConsumeWithDescribeAclViaSubscribe(quorum: String): Unit = {
     noConsumeWithDescribeAclSetup()
     val consumer = createConsumer()
@@ -513,7 +495,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     * ACL set.
     */
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft"))
   def testNoGroupAcl(quorum: String): Unit = {
     val superuserAdminClient = createSuperuserAdminClient()
     superuserAdminClient.createAcls(List(AclTopicWrite(), AclTopicCreate(), AclTopicDescribe()).asJava).values
