@@ -310,7 +310,6 @@ public class SharePartition {
         this.partitionState = SharePartitionState.EMPTY;
         this.replicaManager = replicaManager;
         this.groupConfigManager = groupConfigManager;
-        latestFetchOffsetMetadata = null;
     }
 
     /**
@@ -521,15 +520,16 @@ public class SharePartition {
      * fetched from the leader.
      *
      * @param memberId           The member id of the client that is fetching the record.
-     * @param fetchPartitionData The fetched records for the share partition.
+     * @param fetchPartitionOffsetData The fetched records for the share partition along with log offset metadata
      * @return The acquired records for the share partition.
      */
     public List<AcquiredRecords> acquire(
         String memberId,
-        FetchPartitionData fetchPartitionData,
-        LogOffsetMetadata fetchOffsetMetadata
+        FetchPartitionOffsetData fetchPartitionOffsetData
     ) {
         log.trace("Received acquire request for share partition: {}-{} memberId: {}", groupId, topicIdPartition, memberId);
+        FetchPartitionData fetchPartitionData = fetchPartitionOffsetData.fetchPartitionData();
+        LogOffsetMetadata fetchOffsetMetadata = fetchPartitionOffsetData.logOffsetMetadata();
         RecordBatch lastBatch = fetchPartitionData.records.lastBatch().orElse(null);
         if (lastBatch == null) {
             // Nothing to acquire.
@@ -1486,7 +1486,7 @@ public class SharePartition {
         return Optional.empty();
     }
 
-    LogOffsetMetadata latestFetchOffsetMetadata() {
+    protected LogOffsetMetadata latestFetchOffsetMetadata() {
         return latestFetchOffsetMetadata;
     }
 

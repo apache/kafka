@@ -545,9 +545,9 @@ public class SharePartitionTest {
 
         List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 3, 0, records,
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 3, 0, records,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false),
-            Mockito.mock(LogOffsetMetadata.class));
+            Mockito.mock(LogOffsetMetadata.class)));
 
         assertArrayEquals(expectedAcquiredRecords(records, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(1, sharePartition.nextFetchOffset());
@@ -567,8 +567,8 @@ public class SharePartitionTest {
 
         List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 3, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 3, records,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertArrayEquals(expectedAcquiredRecords(records, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(15, sharePartition.nextFetchOffset());
@@ -588,8 +588,8 @@ public class SharePartitionTest {
 
         List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 3, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 3, records,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertArrayEquals(expectedAcquiredRecords(records, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(5, sharePartition.nextFetchOffset());
@@ -598,8 +598,8 @@ public class SharePartitionTest {
         records = memoryRecords(10, 0);
         acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 3, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 3, records,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertArrayEquals(expectedAcquiredRecords(memoryRecords(5, 5), 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(10, sharePartition.nextFetchOffset());
@@ -613,16 +613,16 @@ public class SharePartitionTest {
 
         List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 3, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 3, records,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertArrayEquals(expectedAcquiredRecords(records, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(15, sharePartition.nextFetchOffset());
 
         acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 3, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 3, records,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // No records should be returned as the batch is already acquired.
         assertEquals(0, acquiredRecordsList.size());
@@ -632,8 +632,8 @@ public class SharePartitionTest {
         MemoryRecords subsetRecords = memoryRecords(2, 10);
         acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 3, subsetRecords,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 3, subsetRecords,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // No records should be returned as the batch is already acquired.
         assertEquals(0, acquiredRecordsList.size());
@@ -647,8 +647,8 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
         List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 3, MemoryRecords.EMPTY,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 3, MemoryRecords.EMPTY,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertEquals(0, acquiredRecordsList.size());
         assertEquals(0, sharePartition.nextFetchOffset());
@@ -665,8 +665,8 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
         sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5),
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
         assertEquals(5, sharePartition.nextFetchOffset());
     }
 
@@ -686,8 +686,8 @@ public class SharePartitionTest {
         assertTrue(sharePartition.findNextFetchOffset());
         sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5),
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
         assertEquals(5, sharePartition.nextFetchOffset());
         assertFalse(sharePartition.findNextFetchOffset());
     }
@@ -703,8 +703,8 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(6).build();
         sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5),
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
         // Limit not reached as only 6 in-flight messages is the limit.
         assertTrue(sharePartition.canAcquireRecords());
     }
@@ -714,8 +714,8 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(1).build();
         sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5),
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
         // Limit reached as only one in-flight message is the limit.
         assertFalse(sharePartition.canAcquireRecords());
     }
@@ -743,15 +743,15 @@ public class SharePartitionTest {
         // Another batch is acquired because if there is only 1 batch, and it is acknowledged, the batch will be removed from cachedState
         List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 10, 0, records1,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 10, 0, records1,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertEquals(1, acquiredRecordsList.size());
 
         acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 10, 0, records2,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 10, 0, records2,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertEquals(1, acquiredRecordsList.size());
 
@@ -775,8 +775,8 @@ public class SharePartitionTest {
 
         List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 0, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, records,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertEquals(1, acquiredRecordsList.size());
 
@@ -802,16 +802,16 @@ public class SharePartitionTest {
 
         List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 30, 0, records1,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 0, records1,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertArrayEquals(expectedAcquiredRecords(records1, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(7, sharePartition.nextFetchOffset());
 
         acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 30, 0, records2,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 0, records2,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertArrayEquals(expectedAcquiredRecords(records2, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(19, sharePartition.nextFetchOffset());
@@ -865,16 +865,16 @@ public class SharePartitionTest {
 
         List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 30, 0, records1,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 0, records1,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertArrayEquals(expectedAcquiredRecords(records1, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(7, sharePartition.nextFetchOffset());
 
         acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 30, 0, records2,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 0, records2,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertArrayEquals(expectedAcquiredRecords(records2, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(21, sharePartition.nextFetchOffset());
@@ -930,8 +930,8 @@ public class SharePartitionTest {
         MemoryRecords records = memoryRecords(5, 5);
         List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 0, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, records,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertEquals(1, acquiredRecordsList.size());
         // Cached data with offset 5-9 should exist.
@@ -953,8 +953,8 @@ public class SharePartitionTest {
         MemoryRecords records = memoryRecords(5, 0);
         List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 0, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, records,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertEquals(1, acquiredRecordsList.size());
 
@@ -962,8 +962,8 @@ public class SharePartitionTest {
         records = memoryRecords(5, 20);
         acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 0, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, records,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertEquals(1, acquiredRecordsList.size());
 
@@ -980,8 +980,8 @@ public class SharePartitionTest {
         records = memoryRecords(6, 5);
         acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 0, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, records,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertEquals(1, acquiredRecordsList.size());
 
@@ -998,8 +998,8 @@ public class SharePartitionTest {
         MemoryRecords records = memoryRecords(5, 5);
         List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 0, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, records,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertEquals(1, acquiredRecordsList.size());
         // Cached data with offset 5-9 should exist.
@@ -1019,8 +1019,8 @@ public class SharePartitionTest {
         MemoryRecords records = memoryRecords(5, 5);
         List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 0, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, records,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertEquals(1, acquiredRecordsList.size());
         // Cached data with offset 5-9 should exist.
@@ -1043,8 +1043,8 @@ public class SharePartitionTest {
         // Re-acquire the same batch and then acknowledge subset with ACCEPT type.
         acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 0, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, records,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertEquals(1, acquiredRecordsList.size());
 
@@ -1070,22 +1070,22 @@ public class SharePartitionTest {
         MemoryRecords records3 = memoryRecords(5, 15);
         List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 0, records1,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, records1,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertEquals(1, acquiredRecordsList.size());
 
         acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 0, records2,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, records2,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertEquals(1, acquiredRecordsList.size());
 
         acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 0, records3,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, records3,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertEquals(1, acquiredRecordsList.size());
         // Cached data with offset 5-19 should exist.
@@ -1117,22 +1117,22 @@ public class SharePartitionTest {
         MemoryRecords records3 = memoryRecords(5, 15);
         List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 0, records1,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, records1,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertEquals(1, acquiredRecordsList.size());
 
         acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 0, records2,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, records2,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertEquals(1, acquiredRecordsList.size());
 
         acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 0, records3,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, records3,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertEquals(1, acquiredRecordsList.size());
         // Cached data with offset 5-19 should exist.
@@ -1165,8 +1165,8 @@ public class SharePartitionTest {
 
         List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 3, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 3, records,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertArrayEquals(expectedAcquiredRecords(records, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(15, sharePartition.nextFetchOffset());
@@ -1192,8 +1192,8 @@ public class SharePartitionTest {
         // Send the same fetch request batch again but only 2 offsets should come as acquired.
         acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 3, records,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 3, records,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertArrayEquals(expectedAcquiredRecords(12, 13, 2).toArray(), acquiredRecordsList.toArray());
         assertEquals(15, sharePartition.nextFetchOffset());
@@ -1213,32 +1213,32 @@ public class SharePartitionTest {
 
         List<AcquiredRecords> acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 40, 3, records1,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 40, 3, records1,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertArrayEquals(expectedAcquiredRecords(records1, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(15, sharePartition.nextFetchOffset());
 
         acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 30, 3, records2,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 3, records2,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertArrayEquals(expectedAcquiredRecords(records2, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(20, sharePartition.nextFetchOffset());
 
         acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 30, 3, records3,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 3, records3,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertArrayEquals(expectedAcquiredRecords(records3, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(28, sharePartition.nextFetchOffset());
 
         acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 30, 3, records4,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 3, records4,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertArrayEquals(expectedAcquiredRecords(records4, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(33, sharePartition.nextFetchOffset());
@@ -1290,8 +1290,8 @@ public class SharePartitionTest {
         // Send next batch from offset 12, only 3 records should be acquired.
         acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 40, 3, records1,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 40, 3, records1,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertArrayEquals(expectedAcquiredRecords(12, 14, 2).toArray(), acquiredRecordsList.toArray());
         assertEquals(15, sharePartition.nextFetchOffset());
@@ -1300,8 +1300,8 @@ public class SharePartitionTest {
         // next fetch offset should not move.
         acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 40, 3, records3,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 40, 3, records3,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertArrayEquals(expectedAcquiredRecords(records3, 2).toArray(), acquiredRecordsList.toArray());
         assertEquals(15, sharePartition.nextFetchOffset());
@@ -1310,8 +1310,8 @@ public class SharePartitionTest {
         MemoryRecords subsetRecords = memoryRecords(2, 17);
         acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 3, subsetRecords,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 3, subsetRecords,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertArrayEquals(expectedAcquiredRecords(17, 18, 2).toArray(), acquiredRecordsList.toArray());
         // Next fetch offset should not move.
@@ -1322,8 +1322,8 @@ public class SharePartitionTest {
         subsetRecords = memoryRecords(1, 28);
         acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 3, subsetRecords,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 3, subsetRecords,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertArrayEquals(expectedAcquiredRecords(28, 28, 2).toArray(), acquiredRecordsList.toArray());
         // Next fetch offset should not move.
@@ -1333,8 +1333,8 @@ public class SharePartitionTest {
         // offset should move.
         acquiredRecordsList = sharePartition.acquire(
             MEMBER_ID,
-            new FetchPartitionData(Errors.NONE, 20, 3, records2,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+            new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 3, records2,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // Offset 15,16 and 19 should be acquired.
         List<AcquiredRecords> expectedAcquiredRecords = expectedAcquiredRecords(15, 16, 2);
@@ -1347,9 +1347,9 @@ public class SharePartitionTest {
     @Test
     public void testAcquisitionLockForAcquiringSingleRecord() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(1),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(1),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertNotNull(sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
@@ -1368,9 +1368,9 @@ public class SharePartitionTest {
     @Test
     public void testAcquisitionLockForAcquiringMultipleRecords() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5, 10),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5, 10),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertEquals(1, sharePartition.timer().size());
         assertNotNull(sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask());
@@ -1390,17 +1390,17 @@ public class SharePartitionTest {
     public void testAcquisitionLockForAcquiringMultipleRecordsWithOverlapAndNewBatch() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5, 0),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5, 0),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertNotNull(sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
 
         // Add records from 0-9 offsets, 5-9 should be acquired and 0-4 should be ignored.
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(10, 0),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(10, 0),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertNotNull(sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask());
         assertNotNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
@@ -1422,9 +1422,9 @@ public class SharePartitionTest {
     public void testAcquisitionLockForAcquiringSameBatchAgain() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5, 10),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5, 10),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertNotNull(sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
@@ -1438,9 +1438,9 @@ public class SharePartitionTest {
                 () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
 
         // Acquire the same batch again.
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5, 10),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5, 10),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // Acquisition lock timeout task should be created on re-acquire action.
         assertNotNull(sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask());
@@ -1451,9 +1451,9 @@ public class SharePartitionTest {
     public void testAcquisitionLockOnAcknowledgingSingleRecordBatch() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 10, 0, memoryRecords(1, 0),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 10, 0, memoryRecords(1, 0),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertNotNull(sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
@@ -1485,9 +1485,9 @@ public class SharePartitionTest {
     public void testAcquisitionLockOnAcknowledgingMultipleRecordBatch() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertNotNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
@@ -1523,20 +1523,20 @@ public class SharePartitionTest {
         MemoryRecords records2 = recordsBuilder.build();
         MemoryRecords records3 = memoryRecords(2, 1);
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records3,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 0, records3,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertNotNull(sharePartition.cachedState().get(1L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records1,
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 0, records1,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertNotNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
         assertEquals(2, sharePartition.timer().size());
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records2,
-                        Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 0, records2,
+                        Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertNotNull(sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask());
         assertEquals(3, sharePartition.timer().size());
@@ -1570,9 +1570,9 @@ public class SharePartitionTest {
     public void testAcquisitionLockForAcquiringSubsetBatchAgain() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(8, 10),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(8, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertNotNull(sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
@@ -1588,9 +1588,9 @@ public class SharePartitionTest {
                 () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
 
         // Acquire subset of records again.
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(3, 12),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(3, 12),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // Acquisition lock timeout task should be created only on offsets which have been acquired again.
         assertNull(sharePartition.cachedState().get(10L).offsetState().get(10L).acquisitionLockTimeoutTask());
@@ -1646,16 +1646,16 @@ public class SharePartitionTest {
         recordsBuilder.appendWithOffset(20, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
         MemoryRecords records2 = recordsBuilder.build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records1,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 0, records1,
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertNotNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records2,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 0, records2,
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertNotNull(sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask());
         assertEquals(2, sharePartition.timer().size());
@@ -1738,13 +1738,13 @@ public class SharePartitionTest {
 
         // Adding memoryRecords(10, 0) in the sharePartition to make sure that SPSO doesn't move forward when delivery count of records2
         // exceed the max delivery count.
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(10, 0),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(10, 0),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(10, 10),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(10, 10),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertNotNull(sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask());
         assertNotNull(sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask());
@@ -1760,9 +1760,9 @@ public class SharePartitionTest {
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
                 () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(10, 10),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(10, 10),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(10L).batchState());
         assertEquals(2, sharePartition.cachedState().get(10L).batchDeliveryCount());
@@ -1788,9 +1788,9 @@ public class SharePartitionTest {
                 .withMaxDeliveryCount(2) // Only 2 delivery attempts will be made before archiving the records
                 .build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(10, 0),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(10, 0),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertNotNull(sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
@@ -1805,9 +1805,9 @@ public class SharePartitionTest {
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
                 () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(5, 0),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(5, 0),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertNotNull(sharePartition.cachedState().get(0L).offsetState().get(0L).acquisitionLockTimeoutTask());
         assertNotNull(sharePartition.cachedState().get(0L).offsetState().get(1L).acquisitionLockTimeoutTask());
@@ -1864,9 +1864,9 @@ public class SharePartitionTest {
                 .withMaxDeliveryCount(2) // Only 2 delivery attempts will be made before archiving the records
                 .build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(10, 0),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(10, 0),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertNotNull(sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
@@ -1880,9 +1880,9 @@ public class SharePartitionTest {
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
                 () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(10, 0),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(10, 0),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertNotNull(sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
@@ -1902,9 +1902,9 @@ public class SharePartitionTest {
     public void testAcknowledgeAfterAcquisitionLockTimeout() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertNotNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
@@ -1939,9 +1939,9 @@ public class SharePartitionTest {
     public void testAcquisitionLockAfterDifferentAcknowledges() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertNotNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
@@ -2005,9 +2005,9 @@ public class SharePartitionTest {
                         PartitionFactory.newPartitionErrorData(0, Errors.GROUP_ID_NOT_FOUND.code(), Errors.GROUP_ID_NOT_FOUND.message())))));
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false),
-            Mockito.mock(LogOffsetMetadata.class));
+            Mockito.mock(LogOffsetMetadata.class)));
 
         assertEquals(1, sharePartition.timer().size());
         assertNotNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
@@ -2038,9 +2038,9 @@ public class SharePartitionTest {
                         PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(6, 5),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(6, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false),
-            Mockito.mock(LogOffsetMetadata.class));
+            Mockito.mock(LogOffsetMetadata.class)));
 
         assertEquals(1, sharePartition.timer().size());
         assertNotNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
@@ -2081,9 +2081,9 @@ public class SharePartitionTest {
     public void testReleaseSingleRecordBatch() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 10, 0, memoryRecords(1, 0),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 10, 0, memoryRecords(1, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         CompletableFuture<Void> releaseResult = sharePartition.releaseAcquiredRecords(MEMBER_ID);
         assertNull(releaseResult.join());
@@ -2100,9 +2100,9 @@ public class SharePartitionTest {
     public void testReleaseMultipleRecordBatch() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         CompletableFuture<Void> releaseResult = sharePartition.releaseAcquiredRecords(MEMBER_ID);
         assertNull(releaseResult.join());
@@ -2123,17 +2123,17 @@ public class SharePartitionTest {
         // Untracked gap of 3 offsets from 7-9.
         MemoryRecords records2 = memoryRecords(9, 10);
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records0,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 0, records0,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records1,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 0, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records2,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 0, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(new ShareAcknowledgementBatch(5, 18, Collections.singletonList((byte) 1))));
 
@@ -2163,13 +2163,13 @@ public class SharePartitionTest {
         recordsBuilder.appendWithOffset(20, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
         MemoryRecords records2 = recordsBuilder.build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records1,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 0, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records2,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 0, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // Acknowledging over subset of both batch with subset of gap offsets.
         sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(new ShareAcknowledgementBatch(6, 18, Arrays.asList(
@@ -2219,13 +2219,13 @@ public class SharePartitionTest {
         recordsBuilder.appendWithOffset(20, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
         MemoryRecords records2 = recordsBuilder.build();
 
-        sharePartition.acquire("member-2", new FetchPartitionData(Errors.NONE, 30, 0, records1,
+        sharePartition.acquire("member-2", new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 0, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false),
-            Mockito.mock(LogOffsetMetadata.class));
+            Mockito.mock(LogOffsetMetadata.class)));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records2,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 0, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false),
-            Mockito.mock(LogOffsetMetadata.class));
+            Mockito.mock(LogOffsetMetadata.class)));
 
         // Acknowledging over subset of second batch with subset of gap offsets.
         sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(new ShareAcknowledgementBatch(10, 18, Arrays.asList(
@@ -2294,13 +2294,13 @@ public class SharePartitionTest {
         recordsBuilder.appendWithOffset(20, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
         MemoryRecords records2 = recordsBuilder.build();
 
-        sharePartition.acquire("member-2", new FetchPartitionData(Errors.NONE, 30, 0, records1,
+        sharePartition.acquire("member-2", new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 0, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false),
-            Mockito.mock(LogOffsetMetadata.class));
+            Mockito.mock(LogOffsetMetadata.class)));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records2,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 0, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false),
-            Mockito.mock(LogOffsetMetadata.class));
+            Mockito.mock(LogOffsetMetadata.class)));
 
         // Acknowledging over subset of second batch with subset of gap offsets.
         sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(new ShareAcknowledgementBatch(10, 18, Arrays.asList(
@@ -2375,9 +2375,9 @@ public class SharePartitionTest {
     @Test
     public void testReleaseAcquiredRecordsAfterDifferentAcknowledges() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false),
-            Mockito.mock(LogOffsetMetadata.class));
+            Mockito.mock(LogOffsetMetadata.class)));
 
         sharePartition.acknowledge(MEMBER_ID,
                 Collections.singletonList(new ShareAcknowledgementBatch(5, 6, Collections.singletonList((byte) 2))));
@@ -2403,21 +2403,21 @@ public class SharePartitionTest {
     public void testMaxDeliveryCountLimitExceededForRecordsSubsetAfterReleaseAcquiredRecords() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withMaxDeliveryCount(2).build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, memoryRecords(10, 0),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 40, 3, memoryRecords(10, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         MemoryRecords records2 = memoryRecords(5, 10);
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records2,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 40, 3, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(
                 new ShareAcknowledgementBatch(10, 14, Collections.singletonList((byte) 2))));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records2,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 40, 3, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         CompletableFuture<Void> releaseResult = sharePartition.releaseAcquiredRecords(MEMBER_ID);
         assertNull(releaseResult.join());
@@ -2439,17 +2439,17 @@ public class SharePartitionTest {
         // third fetch request with 5 records starting from offset20.
         MemoryRecords records3 = memoryRecords(5, 20);
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records1,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 40, 3, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 3, records2,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 3, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 50, 3, records3,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 50, 3, records3,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         sharePartition.acknowledge(MEMBER_ID, new ArrayList<>(Arrays.asList(
                 new ShareAcknowledgementBatch(13, 16, Collections.singletonList((byte) 2)),
@@ -2458,18 +2458,18 @@ public class SharePartitionTest {
         )));
 
         // Send next batch from offset 13, only 2 records should be acquired.
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records1,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 40, 3, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // Send next batch from offset 15, only 2 records should be acquired.
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records2,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 40, 3, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records3,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 40, 3, records3,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         CompletableFuture<Void> releaseResult = sharePartition.releaseAcquiredRecords(MEMBER_ID);
         assertNull(releaseResult.join());
@@ -2512,17 +2512,17 @@ public class SharePartitionTest {
         // Third fetch request with 5 records starting from offset 20.
         MemoryRecords records3 = memoryRecords(5, 20);
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records1,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 40, 3, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 3, records2,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 3, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 50, 3, records3,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 50, 3, records3,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         sharePartition.acknowledge(MEMBER_ID, new ArrayList<>(Arrays.asList(
                 new ShareAcknowledgementBatch(10, 12, Collections.singletonList((byte) 1)),
@@ -2532,18 +2532,18 @@ public class SharePartitionTest {
         )));
 
         // Send next batch from offset 13, only 2 records should be acquired.
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records1,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 40, 3, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // Send next batch from offset 15, only 2 records should be acquired.
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records2,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 40, 3, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records3,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 40, 3, records3,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         CompletableFuture<Void> releaseResult = sharePartition.releaseAcquiredRecords(MEMBER_ID);
         assertNull(releaseResult.join());
@@ -2558,9 +2558,9 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
         sharePartition.acquire(MEMBER_ID,
-                new FetchPartitionData(Errors.NONE, 30, 0, memoryRecords(7, 5),
+                new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 0, memoryRecords(7, 5),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                        OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                        OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         sharePartition.acknowledge(MEMBER_ID,
                 Collections.singletonList(new ShareAcknowledgementBatch(5, 7, Collections.singletonList((byte) 1))));
@@ -2594,9 +2594,9 @@ public class SharePartitionTest {
                         PartitionFactory.newPartitionErrorData(0, Errors.GROUP_ID_NOT_FOUND.code(), Errors.GROUP_ID_NOT_FOUND.message())))));
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         CompletableFuture<Void> releaseResult = sharePartition.releaseAcquiredRecords(MEMBER_ID);
         assertTrue(releaseResult.isCompletedExceptionally());
@@ -2621,9 +2621,9 @@ public class SharePartitionTest {
                         PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(6, 5),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(6, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         sharePartition.acknowledge(MEMBER_ID,
                 Collections.singletonList(new ShareAcknowledgementBatch(8, 9, Collections.singletonList((byte) 1))));
@@ -2659,9 +2659,9 @@ public class SharePartitionTest {
     public void testAcquisitionLockOnReleasingMultipleRecordBatch() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         CompletableFuture<Void> releaseResult = sharePartition.releaseAcquiredRecords(MEMBER_ID);
         assertNull(releaseResult.join());
@@ -2691,13 +2691,13 @@ public class SharePartitionTest {
         recordsBuilder.appendWithOffset(20, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
         MemoryRecords records2 = recordsBuilder.build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records1,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 0, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records2,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 0, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // Acknowledging over subset of both batch with subset of gap offsets.
         sharePartition.acknowledge(MEMBER_ID,
@@ -2772,27 +2772,27 @@ public class SharePartitionTest {
     public void testLsoMovementForArchivingBatches() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7),
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7),
                 Optional.empty(),
-                        OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                        OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
         sharePartition.acquire(MEMBER_ID,
-                new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 12), Optional.empty(),
-                        OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 12), Optional.empty(),
+                        OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
         sharePartition.acquire(MEMBER_ID,
-                new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 17), Optional.empty(),
-                        OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 17), Optional.empty(),
+                        OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
         sharePartition.acquire(MEMBER_ID,
-                new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 22), Optional.empty(),
-                        OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 22), Optional.empty(),
+                        OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
         sharePartition.acquire(MEMBER_ID,
-                new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 27), Optional.empty(),
-                        OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 27), Optional.empty(),
+                        OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
         sharePartition.acquire(MEMBER_ID,
-                new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 32), Optional.empty(),
-                        OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 32), Optional.empty(),
+                        OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         sharePartition.acknowledge(MEMBER_ID, Arrays.asList(
                 new ShareAcknowledgementBatch(2, 6, Collections.singletonList((byte) 1)),
@@ -2840,12 +2840,12 @@ public class SharePartitionTest {
     public void testLsoMovementForArchivingOffsets() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7),
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(
                 new ShareAcknowledgementBatch(4, 8, Collections.singletonList((byte) 1))));
@@ -2892,12 +2892,12 @@ public class SharePartitionTest {
     public void testLsoMovementForArchivingOffsetsWithStartAndEndBatchesNotFullMatches() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7),
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // LSO is at 4.
         sharePartition.updateCacheAndOffsets(4);
@@ -2932,12 +2932,12 @@ public class SharePartitionTest {
     public void testLsoMovementForArchivingOffsetsWithStartOffsetNotFullMatches() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7),
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // LSO is at 4.
         sharePartition.updateCacheAndOffsets(4);
@@ -2972,12 +2972,12 @@ public class SharePartitionTest {
     public void testLsoMovementForArchivingOffsetsWithStartOffsetNotFullMatchesPostAcceptAcknowledgement() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7),
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // LSO is at 4.
         sharePartition.updateCacheAndOffsets(4);
@@ -3022,10 +3022,10 @@ public class SharePartitionTest {
     public void testLsoMovementForArchivingOffsetsWithStartOffsetNotFullMatchesPostReleaseAcknowledgement() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2), Optional.empty(),
-                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7), Optional.empty(),
-                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2), Optional.empty(),
+                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7), Optional.empty(),
+                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // LSO is at 4.
         sharePartition.updateCacheAndOffsets(4);
@@ -3070,10 +3070,10 @@ public class SharePartitionTest {
     public void testLsoMovementToEndOffset() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2), Optional.empty(),
-                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7), Optional.empty(),
-                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2), Optional.empty(),
+                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7), Optional.empty(),
+                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // Acknowledge with RELEASE action.
         sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(
@@ -3104,10 +3104,10 @@ public class SharePartitionTest {
     public void testLsoMovementToEndOffsetWhereEndOffsetIsAvailable() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2), Optional.empty(),
-                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7), Optional.empty(),
-                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2), Optional.empty(),
+                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7), Optional.empty(),
+                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // Acknowledge with RELEASE action.
         sharePartition.acknowledge(MEMBER_ID, Arrays.asList(
@@ -3139,10 +3139,10 @@ public class SharePartitionTest {
     public void testLsoMovementAheadOfEndOffsetPostAcknowledgment() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2), Optional.empty(),
-                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7), Optional.empty(),
-                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2), Optional.empty(),
+                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7), Optional.empty(),
+                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // Acknowledge with RELEASE action.
         sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(
@@ -3173,10 +3173,10 @@ public class SharePartitionTest {
     public void testLsoMovementAheadOfEndOffset() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2), Optional.empty(),
-                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7), Optional.empty(),
-                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2), Optional.empty(),
+                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 7), Optional.empty(),
+                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // LSO is at 14.
         sharePartition.updateCacheAndOffsets(14);
@@ -3203,12 +3203,12 @@ public class SharePartitionTest {
         // Gap of 15-19.
         MemoryRecords records3 = memoryRecords(5, 20);
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, records1, Optional.empty(),
-                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, records2, Optional.empty(),
-                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, records3, Optional.empty(),
-                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, records1, Optional.empty(),
+                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, records2, Optional.empty(),
+                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, records3, Optional.empty(),
+                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // LSO is at 18.
         sharePartition.updateCacheAndOffsets(18);
@@ -3236,10 +3236,10 @@ public class SharePartitionTest {
         // Gap of 7-9.
         MemoryRecords records2 = memoryRecords(5, 10);
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, records1, Optional.empty(),
-                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, records2, Optional.empty(),
-                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, records1, Optional.empty(),
+                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, records2, Optional.empty(),
+                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // Acknowledge with RELEASE action.
         sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(
@@ -3271,11 +3271,11 @@ public class SharePartitionTest {
         recordsBuilder.appendWithOffset(18, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
         MemoryRecords records2 = recordsBuilder.build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records1, Optional.empty(),
-                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 0, records1, Optional.empty(),
+                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records2, Optional.empty(),
-                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 0, records2, Optional.empty(),
+                OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         sharePartition.acknowledge(MEMBER_ID, Arrays.asList(
                 new ShareAcknowledgementBatch(5, 6, Collections.singletonList((byte) 2)),
@@ -3312,27 +3312,27 @@ public class SharePartitionTest {
     public void testReleaseAcquiredRecordsBatchesPostStartOffsetMovement() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire("member-2", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 15),
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire("member-2", new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 15),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 20),
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 20),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 25),
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 25),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 30),
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 30),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 35),
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 35),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // Acknowledge records.
         sharePartition.acknowledge(MEMBER_ID, Arrays.asList(
@@ -3399,12 +3399,12 @@ public class SharePartitionTest {
     public void testReleaseAcquiredRecordsBatchesPostStartOffsetMovementToStartOfBatch() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // LSO is at 10.
         sharePartition.updateCacheAndOffsets(10);
@@ -3430,12 +3430,12 @@ public class SharePartitionTest {
     public void testReleaseAcquiredRecordsBatchesPostStartOffsetMovementToMiddleOfBatch() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // LSO is at 11.
         sharePartition.updateCacheAndOffsets(11);
@@ -3468,27 +3468,27 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder()
                 .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire("member-2", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 15),
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire("member-2", new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 15),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 20),
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 20),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 25),
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 25),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 30),
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 30),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 35),
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 35),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // Acknowledge records.
         sharePartition.acknowledge(MEMBER_ID, Arrays.asList(
@@ -3551,12 +3551,12 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder()
                 .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // LSO is at 10.
         sharePartition.updateCacheAndOffsets(10);
@@ -3581,12 +3581,12 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder()
                 .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // LSO is at 11.
         sharePartition.updateCacheAndOffsets(11);
@@ -3665,12 +3665,12 @@ public class SharePartitionTest {
     public void testAcknowledgeBatchAndOffsetPostLsoMovement() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // LSO is at 12.
         sharePartition.updateCacheAndOffsets(12);
@@ -3724,15 +3724,15 @@ public class SharePartitionTest {
     public void testAcknowledgeBatchPostLsoMovement() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 20),
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 20),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // LSO is at 14.
         sharePartition.updateCacheAndOffsets(14);
@@ -3784,9 +3784,9 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder()
                 .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // LSO is at 7.
         sharePartition.updateCacheAndOffsets(7);
@@ -3807,9 +3807,9 @@ public class SharePartitionTest {
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
                 () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertEquals(15, sharePartition.nextFetchOffset());
         assertEquals(10, sharePartition.startOffset());
@@ -3834,9 +3834,9 @@ public class SharePartitionTest {
     public void testLsoMovementThenAcquisitionLockTimeoutThenAcknowledgeBatchLastOffsetAheadOfStartOffsetBatch() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(2, 1),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(2, 1),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // LSO is at 3.
         sharePartition.updateCacheAndOffsets(3);
@@ -3857,13 +3857,13 @@ public class SharePartitionTest {
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
                 () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(2, 3),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(2, 3),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(3, 5),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(3, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertEquals(8, sharePartition.nextFetchOffset());
         assertEquals(3, sharePartition.startOffset());
@@ -4106,9 +4106,9 @@ public class SharePartitionTest {
     public void testMaybeUpdateCachedStateWhenAcknowledgementTypeAccept() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0,  memoryRecords(250, 0),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0,  memoryRecords(250, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertFalse(sharePartition.canAcquireRecords());
 
@@ -4128,9 +4128,9 @@ public class SharePartitionTest {
     public void testMaybeUpdateCachedStateWhenAcknowledgementTypeReject() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(250, 0),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(250, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertFalse(sharePartition.canAcquireRecords());
 
@@ -4150,9 +4150,9 @@ public class SharePartitionTest {
     public void testMaybeUpdateCachedStateWhenAcknowledgementTypeRelease() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(250, 0),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(250, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
         assertFalse(sharePartition.canAcquireRecords());
 
         sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(
@@ -4173,14 +4173,14 @@ public class SharePartitionTest {
     public void testMaybeUpdateCachedStateWhenAcknowledgementsFromBeginningForBatchSubset() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(20).build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 0),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
         assertTrue(sharePartition.canAcquireRecords());
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 15),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 15),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
         assertFalse(sharePartition.canAcquireRecords());
 
         sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(
@@ -4199,14 +4199,14 @@ public class SharePartitionTest {
     @Test
     public void testMaybeUpdateCachedStateWhenAcknowledgementsFromBeginningForEntireBatch() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(20).build();
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 0),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
         assertTrue(sharePartition.canAcquireRecords());
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 15),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 15),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
         assertFalse(sharePartition.canAcquireRecords());
 
         sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(
@@ -4226,14 +4226,14 @@ public class SharePartitionTest {
     public void testMaybeUpdateCachedStateWhenAcknowledgementsInBetween() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(20).build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 0),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
         assertTrue(sharePartition.canAcquireRecords());
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 15),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 15),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
         assertFalse(sharePartition.canAcquireRecords());
 
         sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(
@@ -4256,14 +4256,14 @@ public class SharePartitionTest {
     public void testMaybeUpdateCachedStateWhenAllRecordsInCachedStateAreAcknowledged() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(20).build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 0),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
         assertTrue(sharePartition.canAcquireRecords());
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 15),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 15),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
         assertFalse(sharePartition.canAcquireRecords());
 
         sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(
@@ -4279,19 +4279,19 @@ public class SharePartitionTest {
     public void testMaybeUpdateCachedStateMultipleAcquisitionsAndAcknowledgements() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(100).build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(20, 0),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(20, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
         assertTrue(sharePartition.canAcquireRecords());
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(20, 20),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(20, 20),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
         assertTrue(sharePartition.canAcquireRecords());
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(20, 40),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(20, 40),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
         assertTrue(sharePartition.canAcquireRecords());
 
         // First Acknowledgement for the first batch of records 0-19.
@@ -4303,9 +4303,9 @@ public class SharePartitionTest {
         assertEquals(59, sharePartition.endOffset());
         assertEquals(60, sharePartition.nextFetchOffset());
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(20, 60),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(20, 60),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
         assertTrue(sharePartition.canAcquireRecords());
 
         sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(
@@ -4319,9 +4319,9 @@ public class SharePartitionTest {
         assertEquals(79, sharePartition.endOffset());
         assertEquals(80, sharePartition.nextFetchOffset());
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(100, 80),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(100, 80),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
         assertFalse(sharePartition.canAcquireRecords());
 
         // Final Acknowledgment, all records are acknowledged here.
@@ -4334,9 +4334,9 @@ public class SharePartitionTest {
         assertEquals(180, sharePartition.endOffset());
         assertEquals(180, sharePartition.nextFetchOffset());
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(20, 180),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(20, 180),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertEquals(1, sharePartition.cachedState().size());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(180L).batchState());
@@ -4353,9 +4353,9 @@ public class SharePartitionTest {
         assertEquals(0, sharePartition.startOffset());
         assertEquals(0, sharePartition.endOffset());
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(150, 0),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(150, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertTrue(sharePartition.canAcquireRecords());
         assertEquals(0, sharePartition.startOffset());
@@ -4369,15 +4369,15 @@ public class SharePartitionTest {
         assertEquals(0, sharePartition.startOffset());
         assertEquals(0, sharePartition.endOffset());
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(150, 0),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(150, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertTrue(sharePartition.canAcquireRecords());
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(100, 150),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(100, 150),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertFalse(sharePartition.canAcquireRecords());
         assertEquals(0, sharePartition.startOffset());
@@ -4395,17 +4395,17 @@ public class SharePartitionTest {
     public void testCanAcquireRecordsAfterReleaseAcknowledgement() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(150, 0),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(150, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertTrue(sharePartition.canAcquireRecords());
         assertEquals(0, sharePartition.startOffset());
         assertEquals(149, sharePartition.endOffset());
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(100, 150),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(100, 150),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertFalse(sharePartition.canAcquireRecords());
         assertEquals(0, sharePartition.startOffset());
@@ -4425,17 +4425,17 @@ public class SharePartitionTest {
     public void testCanAcquireRecordsAfterArchiveAcknowledgement() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(150, 0),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(150, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertTrue(sharePartition.canAcquireRecords());
         assertEquals(0, sharePartition.startOffset());
         assertEquals(149, sharePartition.endOffset());
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(100, 150),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(100, 150),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertFalse(sharePartition.canAcquireRecords());
         assertEquals(0, sharePartition.startOffset());
@@ -4454,16 +4454,16 @@ public class SharePartitionTest {
     public void testCanAcquireRecordsAfterAcceptAcknowledgement() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(150, 0),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(150, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertTrue(sharePartition.canAcquireRecords());
         assertEquals(0, sharePartition.startOffset());
         assertEquals(149, sharePartition.endOffset());
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(100, 150),
-                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(100, 150),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertFalse(sharePartition.canAcquireRecords());
         assertEquals(0, sharePartition.startOffset());
@@ -4491,9 +4491,9 @@ public class SharePartitionTest {
                         PartitionFactory.newPartitionErrorData(0, Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), Errors.UNKNOWN_TOPIC_OR_PARTITION.message())))));
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(MEMBER_ID,
                 Collections.singletonList(new ShareAcknowledgementBatch(5, 14, Collections.singletonList((byte) 1))));
@@ -4519,9 +4519,9 @@ public class SharePartitionTest {
                         PartitionFactory.newPartitionErrorData(0, Errors.GROUP_ID_NOT_FOUND.code(), Errors.GROUP_ID_NOT_FOUND.message())))));
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(6, 5),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(6, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(
                 MEMBER_ID,
@@ -4549,9 +4549,9 @@ public class SharePartitionTest {
     public void testAcknowledgeSubsetWithAnotherMember() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, memoryRecords(7, 5),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 0, memoryRecords(7, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         sharePartition.acknowledge(MEMBER_ID,
                 Collections.singletonList(new ShareAcknowledgementBatch(5, 7, Collections.singletonList((byte) 1))));
@@ -4567,17 +4567,17 @@ public class SharePartitionTest {
     public void testAcknowledgeWithAnotherMemberRollbackBatchError() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
-        sharePartition.acquire("member-2", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
+        sharePartition.acquire("member-2", new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 15),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 15),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(MEMBER_ID, Arrays.asList(
                 new ShareAcknowledgementBatch(5, 9, Collections.singletonList((byte) 2)),
@@ -4604,17 +4604,17 @@ public class SharePartitionTest {
     public void testAcknowledgeWithAnotherMemberRollbackSubsetError() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
-        sharePartition.acquire("member-2", new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 15),
+        sharePartition.acquire("member-2", new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 15),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(MEMBER_ID, Arrays.asList(
                 new ShareAcknowledgementBatch(5, 9, Collections.singletonList((byte) 2)),
@@ -4642,16 +4642,16 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().withMaxDeliveryCount(2).build();
         MemoryRecords records = memoryRecords(10, 5);
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, records,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, records,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(
                 new ShareAcknowledgementBatch(5, 14, Collections.singletonList((byte) 2))));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, records,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, records,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(
                 new ShareAcknowledgementBatch(5, 14, Collections.singletonList((byte) 2))));
@@ -4671,13 +4671,13 @@ public class SharePartitionTest {
         // Second fetch request with 5 records starting from offset 15.
         MemoryRecords records2 = memoryRecords(5, 15);
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records1,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 40, 3, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 3, records2,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 3, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         sharePartition.acknowledge(MEMBER_ID, new ArrayList<>(Arrays.asList(
                 new ShareAcknowledgementBatch(10, 12, Collections.singletonList((byte) 1)),
@@ -4685,14 +4685,14 @@ public class SharePartitionTest {
                 new ShareAcknowledgementBatch(17, 19, Collections.singletonList((byte) 1)))));
 
         // Send next batch from offset 13, only 2 records should be acquired.
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records1,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 40, 3, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         // Send next batch from offset 15, only 2 records should be acquired.
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records2,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 40, 3, records2,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(
                 new ShareAcknowledgementBatch(13, 16, Collections.singletonList((byte) 2))));
@@ -4710,17 +4710,17 @@ public class SharePartitionTest {
         // First fetch request with 5 records starting from offset 0.
         MemoryRecords records1 = memoryRecords(5, 0);
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, records1,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 40, 3, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         sharePartition.acknowledge(MEMBER_ID, new ArrayList<>(Collections.singletonList(
                 new ShareAcknowledgementBatch(0, 1, Collections.singletonList((byte) 2)))));
 
         // Send next batch from offset 0, only 2 records should be acquired.
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 40, 3, memoryRecords(2, 0),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 40, 3, memoryRecords(2, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(
                 new ShareAcknowledgementBatch(0, 4, Collections.singletonList((byte) 2))));
@@ -4744,16 +4744,16 @@ public class SharePartitionTest {
         String memberId1 = "memberId-1";
         String memberId2 = "memberId-2";
 
-        sharePartition.acquire(memberId1, new FetchPartitionData(Errors.NONE, 20, 0, records1,
+        sharePartition.acquire(memberId1, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertFalse(sharePartition.findNextFetchOffset());
         assertEquals(10, sharePartition.nextFetchOffset());
 
-        sharePartition.acquire(memberId2, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 10),
+        sharePartition.acquire(memberId2, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertFalse(sharePartition.findNextFetchOffset());
         assertEquals(20, sharePartition.nextFetchOffset());
@@ -4764,9 +4764,9 @@ public class SharePartitionTest {
         assertTrue(sharePartition.findNextFetchOffset());
         assertEquals(5, sharePartition.nextFetchOffset());
 
-        sharePartition.acquire(memberId1, new FetchPartitionData(Errors.NONE, 20, 0, records1,
+        sharePartition.acquire(memberId1, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         assertTrue(sharePartition.findNextFetchOffset());
         assertEquals(20, sharePartition.nextFetchOffset());
@@ -4780,23 +4780,23 @@ public class SharePartitionTest {
         String memberId1 = MEMBER_ID;
         String memberId2 = "member-2";
 
-        sharePartition.acquire(memberId1, new FetchPartitionData(Errors.NONE, 20, 0, records1,
+        sharePartition.acquire(memberId1, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
         assertEquals(3, sharePartition.nextFetchOffset());
 
         sharePartition.acknowledge(memberId1, Collections.singletonList(
                 new ShareAcknowledgementBatch(0, 2, Collections.singletonList((byte) 2))));
         assertEquals(0, sharePartition.nextFetchOffset());
 
-        sharePartition.acquire(memberId2, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(2, 3),
+        sharePartition.acquire(memberId2, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(2, 3),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
         assertEquals(0, sharePartition.nextFetchOffset());
 
-        sharePartition.acquire(memberId1, new FetchPartitionData(Errors.NONE, 20, 0, records1,
+        sharePartition.acquire(memberId1, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 20, 0, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
         assertEquals(5, sharePartition.nextFetchOffset());
 
         sharePartition.acknowledge(memberId2, Collections.singletonList(
@@ -4808,9 +4808,9 @@ public class SharePartitionTest {
     public void testNumberOfWriteCallsOnUpdates() {
         SharePartition sharePartition = Mockito.spy(SharePartitionBuilder.builder().build());
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 10, 0, memoryRecords(5, 2),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 10, 0, memoryRecords(5, 2),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(
                 new ShareAcknowledgementBatch(2, 6, Collections.singletonList((byte) 1))));
@@ -4828,13 +4828,13 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
         MemoryRecords records1 = memoryRecords(5, 5);
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, records1,
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 0, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
-        sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 30, 0, memoryRecords(12, 10),
+        sharePartition.acquire(MEMBER_ID, new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 0, memoryRecords(12, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
 
         sharePartition.acknowledge(MEMBER_ID, Arrays.asList(
                 new ShareAcknowledgementBatch(5, 11, Collections.singletonList((byte) 2)),
@@ -4843,15 +4843,15 @@ public class SharePartitionTest {
                 new ShareAcknowledgementBatch(17, 20, Collections.singletonList((byte) 2))));
 
         // Reacquire with another member.
-        sharePartition.acquire("member-2", new FetchPartitionData(Errors.NONE, 30, 0, records1,
+        sharePartition.acquire("member-2", new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 0, records1,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
         assertEquals(10, sharePartition.nextFetchOffset());
 
         // Reacquire with another member.
-        sharePartition.acquire("member-2", new FetchPartitionData(Errors.NONE, 30, 0, memoryRecords(7, 10),
+        sharePartition.acquire("member-2", new FetchPartitionOffsetData(new FetchPartitionData(Errors.NONE, 30, 0, memoryRecords(7, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class));
+                OptionalInt.empty(), false), Mockito.mock(LogOffsetMetadata.class)));
         assertEquals(17, sharePartition.nextFetchOffset());
 
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).batchState());

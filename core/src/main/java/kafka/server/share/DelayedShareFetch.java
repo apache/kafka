@@ -217,7 +217,7 @@ public class DelayedShareFetch extends DelayedOperation {
         return topicPartitionData;
     }
 
-    boolean isMinBytesCriteriaSatisfied(Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData) {
+    private boolean isMinBytesCriteriaSatisfied(Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData) {
         AtomicLong accumulatedSize = new AtomicLong(0);
         topicPartitionData.forEach((topicIdPartition, partitionData) -> {
             Partition partition = replicaManager.getPartitionOrException(topicIdPartition.topicPartition());

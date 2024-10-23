@@ -82,10 +82,10 @@ public class ShareFetchUtilsTest {
         when(sp0.nextFetchOffset()).thenReturn((long) 3);
         when(sp1.nextFetchOffset()).thenReturn((long) 3);
 
-        when(sp0.acquire(any(), any(), any())).thenReturn(
+        when(sp0.acquire(any(), any())).thenReturn(
                 Collections.singletonList(new ShareFetchResponseData.AcquiredRecords()
                         .setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)));
-        when(sp1.acquire(any(), any(), any())).thenReturn(
+        when(sp1.acquire(any(), any())).thenReturn(
                 Collections.singletonList(new ShareFetchResponseData.AcquiredRecords()
                         .setFirstOffset(100).setLastOffset(103).setDeliveryCount((short) 1)));
 
@@ -156,8 +156,8 @@ public class ShareFetchUtilsTest {
         when(sp0.nextFetchOffset()).thenReturn((long) 3);
         when(sp1.nextFetchOffset()).thenReturn((long) 3);
 
-        when(sp0.acquire(any(), any(), any())).thenReturn(Collections.emptyList());
-        when(sp1.acquire(any(), any(), any())).thenReturn(Collections.emptyList());
+        when(sp0.acquire(any(), any())).thenReturn(Collections.emptyList());
+        when(sp1.acquire(any(), any())).thenReturn(Collections.emptyList());
 
         doNothing().when(sp1).updateCacheAndOffsets(any(Long.class));
         doNothing().when(sp0).updateCacheAndOffsets(any(Long.class));
@@ -225,11 +225,11 @@ public class ShareFetchUtilsTest {
         when(sp0.nextFetchOffset()).thenReturn((long) 0, (long) 5);
         when(sp1.nextFetchOffset()).thenReturn((long) 4, (long) 4);
 
-        when(sp0.acquire(anyString(), any(FetchPartitionData.class), any())).thenReturn(
+        when(sp0.acquire(anyString(), any(FetchPartitionOffsetData.class))).thenReturn(
                 Collections.emptyList(),
                 Collections.singletonList(new ShareFetchResponseData.AcquiredRecords()
                         .setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)));
-        when(sp1.acquire(anyString(), any(FetchPartitionData.class), any())).thenReturn(
+        when(sp1.acquire(anyString(), any(FetchPartitionOffsetData.class))).thenReturn(
                 Collections.singletonList(new ShareFetchResponseData.AcquiredRecords()
                         .setFirstOffset(100).setLastOffset(103).setDeliveryCount((short) 1)),
                 Collections.emptyList());
@@ -319,7 +319,7 @@ public class ShareFetchUtilsTest {
         FileRecords.TimestampAndOffset timestampAndOffset = new FileRecords.TimestampAndOffset(100L, 1L, Optional.empty());
         doReturn(new OffsetResultHolder(Option.apply(timestampAndOffset), Option.empty())).when(replicaManager).fetchOffsetForTimestamp(any(TopicPartition.class), anyLong(), any(), any(), anyBoolean());
 
-        when(sp0.acquire(anyString(), any(FetchPartitionData.class), any())).thenReturn(Collections.emptyList());
+        when(sp0.acquire(anyString(), any(FetchPartitionOffsetData.class))).thenReturn(Collections.emptyList());
         doNothing().when(sp0).updateCacheAndOffsets(any(Long.class));
 
         MemoryRecords records = MemoryRecords.withRecords(Compression.NONE,

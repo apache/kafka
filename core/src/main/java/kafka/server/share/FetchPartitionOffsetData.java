@@ -20,8 +20,6 @@ package kafka.server.share;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 
-import java.util.Objects;
-
 public class FetchPartitionOffsetData {
     private final FetchPartitionData fetchPartitionData;
     private final LogOffsetMetadata logOffsetMetadata;
@@ -37,24 +35,5 @@ public class FetchPartitionOffsetData {
 
     public LogOffsetMetadata logOffsetMetadata() {
         return logOffsetMetadata;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        FetchPartitionOffsetData that = (FetchPartitionOffsetData) o;
-        return fetchPartitionData.equals(that.fetchPartitionData) && logOffsetMetadata == that.logOffsetMetadata;
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(fetchPartitionData, logOffsetMetadata);
-    }
-
-    @Override
-    public String toString() {
-        return "FetchPartitionOffsetData(fetchPartitionData=" + fetchPartitionData +
-            ", logOffsetMetadata=" + logOffsetMetadata + ")";
     }
 }
