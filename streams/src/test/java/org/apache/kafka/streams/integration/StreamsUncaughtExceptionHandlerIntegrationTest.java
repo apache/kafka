@@ -104,7 +104,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
     private String outputTopic2;
     private final StreamsBuilder builder = new StreamsBuilder();
     private final List<String> processorValueCollector = new ArrayList<>();
-    private static AtomicBoolean throwError = new AtomicBoolean(true);
+    private static final AtomicBoolean THROW_ERROR = new AtomicBoolean(true);
 
     private Properties properties;
 
@@ -226,10 +226,10 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
         @Override
         public void process(final Record<KIn, VIn> record) {
             valueList.add(record.value().toString());
-            if (throwError.get()) {
+            if (THROW_ERROR.get()) {
                 throw new StreamsException(Thread.currentThread().getName());
             }
-            throwError.set(true);
+            THROW_ERROR.set(true);
         }
     }
 
@@ -382,7 +382,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
             final AtomicInteger count = new AtomicInteger();
             kafkaStreams.setUncaughtExceptionHandler(exception -> {
                 if (count.incrementAndGet() == numThreads) {
-                    throwError.set(false);
+                    THROW_ERROR.set(false);
                 }
                 return REPLACE_THREAD;
             });
@@ -390,7 +390,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
             produceMessages(NOW, inputTopic, "A");
             TestUtils.waitForCondition(() -> count.get() == numThreads, "finished replacing threads");
-            TestUtils.waitForCondition(() -> throwError.get(), "finished replacing threads");
+            TestUtils.waitForCondition(THROW_ERROR::get, "finished replacing threads");
             kafkaStreams.close();
             waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.NOT_RUNNING, DEFAULT_DURATION);
 
