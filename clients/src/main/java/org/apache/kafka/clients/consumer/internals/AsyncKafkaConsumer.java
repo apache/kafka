@@ -73,10 +73,12 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
@@ -1105,6 +1107,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                                                            long timestamp,
                                                            Duration timeout) {
         acquireAndEnsureOpen();
+        Timer timer = time.timer(timeout);
         try {
             // Keeping same argument validation error thrown by the current consumer implementation
             // to avoid API level changes.
@@ -1131,7 +1134,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             Map<TopicPartition, OffsetAndTimestampInternal> offsetAndTimestampMap;
             try {
-                offsetAndTimestampMap = applicationEventHandler.addAndGet(listOffsetsEvent);
+                applicationEventHandler.add(listOffsetsEvent);
+                offsetAndTimestampMap = processBackgroundEvents(
+                        listOffsetsEvent.future(),
+                        timer, __ -> false
+                );
                 return offsetAndTimestampMap.entrySet()
                     .stream()
                     .collect(Collectors.toMap(
@@ -1276,10 +1283,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         UnsubscribeEvent unsubscribeEvent = new UnsubscribeEvent(calculateDeadlineMs(timer));
         applicationEventHandler.add(unsubscribeEvent);
         try {
-            // If users subscribe to an invalid topic name, they will get InvalidTopicException in error events,
+            // If users subscribe to an invalid topic name or subscribe an authorization topic,
+            // they will get InvalidTopicException or TopicAuthorizationException in error events,
             // because network thread keeps trying to send MetadataRequest in the background.
             // Ignore it to avoid unsubscribe failed.
-            processBackgroundEvents(unsubscribeEvent.future(), timer, e -> e instanceof InvalidTopicException);
+            processBackgroundEvents(unsubscribeEvent.future(), timer,
+                    e -> e instanceof InvalidTopicException || e instanceof TopicAuthorizationException || e instanceof GroupAuthorizationException);
             log.info("Completed releasing assignment and sending leave group to close consumer");
         } catch (TimeoutException e) {
             log.warn("Consumer triggered an unsubscribe event to leave the group but couldn't " +
@@ -1335,7 +1344,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             awaitPendingAsyncCommitsAndExecuteCommitCallbacks(requestTimer, true);
 
             wakeupTrigger.setActiveTask(commitFuture);
-            ConsumerUtils.getResult(commitFuture, requestTimer);
+            processBackgroundEvents(commitFuture, requestTimer, __ -> false);
             interceptors.onCommit(offsets);
         } finally {
             wakeupTrigger.clearTask();
@@ -1583,7 +1592,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         try {
             CheckAndUpdatePositionsEvent checkAndUpdatePositionsEvent = new CheckAndUpdatePositionsEvent(calculateDeadlineMs(timer));
             wakeupTrigger.setActiveTask(checkAndUpdatePositionsEvent.future());
-            cachedSubscriptionHasAllFetchPositions = applicationEventHandler.addAndGet(checkAndUpdatePositionsEvent);
+            applicationEventHandler.add(checkAndUpdatePositionsEvent);
+            cachedSubscriptionHasAllFetchPositions = processBackgroundEvents(
+                    checkAndUpdatePositionsEvent.future(),
+                    timer, __ -> false
+            );
         } catch (TimeoutException e) {
             return false;
         } finally {
