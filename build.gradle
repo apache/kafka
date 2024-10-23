@@ -2526,7 +2526,9 @@ project(':trogdor') {
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
     implementation libs.slf4jApi
-    runtimeOnly libs.reload4j
+    runtimeOnly libs.log4j2Api
+    runtimeOnly libs.log4j2Core
+    runtimeOnly libs.log4j1Bridge2Api
 
     implementation libs.jacksonJaxrsJsonProvider
     implementation libs.jerseyContainerServlet
