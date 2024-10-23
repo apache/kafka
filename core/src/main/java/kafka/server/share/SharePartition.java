@@ -401,9 +401,19 @@ public class SharePartition {
                     }
 
                     if (offsetResetStrategy == GroupConfig.ShareGroupAutoOffsetReset.EARLIEST) {
-                        startOffset = offsetForEarliestTimestamp(topicIdPartition, replicaManager);
+                        try {
+                            startOffset = offsetForEarliestTimestamp(topicIdPartition, replicaManager);
+                        } catch (Exception e) {
+                            completeInitializationWithException(future, e);
+                            return;
+                        }
                     } else {
-                        startOffset = offsetForLatestTimestamp(topicIdPartition, replicaManager);
+                        try {
+                            startOffset = offsetForLatestTimestamp(topicIdPartition, replicaManager);
+                        } catch (Exception e) {
+                            completeInitializationWithException(future, e);
+                            return;
+                        }
                     }
                 }
                 stateEpoch = partitionData.stateEpoch();
