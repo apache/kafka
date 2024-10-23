@@ -345,7 +345,7 @@ Successfully started partition reassignment for foo-0</code></pre>
   <pre><code class="language-bash">$ bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 --reassignment-json-file increase-replication-factor.json --verify
 Status of partition reassignment:
 Reassignment of partition [foo,0] is completed</code></pre>
-  You can also verify the increase in replication factor with the kafka-topics tool:
+  You can also verify the increase in replication factor with the kafka-topics.sh tool:
   <pre><code class="language-bash">$ bin/kafka-topics.sh --bootstrap-server localhost:9092 --topic foo --describe
 Topic:foo	PartitionCount:1	ReplicationFactor:3	Configs:
   Topic: foo	Partition: 0	Leader: 5	Replicas: 5,6,7	Isr: 5,6,7</code></pre>
@@ -430,7 +430,7 @@ Configs for topic 'my-topic' are leader.replication.throttled.replicas=1:102,0:1
   <p>Some care should be taken when using throttled replication. In particular:</p>
 
   <p><i>(1) Throttle Removal:</i></p>
-  The throttle should be removed in a timely manner once reassignment completes (by running kafka-reassign-partitions.sh --verify).
+  The throttle should be removed in a timely manner once reassignment completes (by running <code>bin/kafka-reassign-partitions.sh --verify</code>).
 
   <p><i>(2) Ensuring Progress:</i></p>
   <p>If the throttle is set too low, in comparison to the incoming write rate, it is possible for replication to not
@@ -989,7 +989,7 @@ $ bin/connect-mirror-maker.sh connect-mirror-maker.properties \
 </code></pre>
 
   <p>
-    <em>Note when testing replication of consumer groups:</em> By default, MirrorMaker does not replicate consumer groups created by the  <code>kafka-console-consumer.sh</code> tool, which you might use to test your MirrorMaker setup on the command line. If you do want to replicate these consumer groups as well, set the <code>groups.exclude</code> configuration accordingly (default: <code>groups.exclude = console-consumer-.*, connect-.*, __.*</code>). Remember to update the configuration again once you completed your testing.
+    <em>Note when testing replication of consumer groups:</em> By default, MirrorMaker does not replicate consumer groups created by the kafka-console-consumer.sh tool, which you might use to test your MirrorMaker setup on the command line. If you do want to replicate these consumer groups as well, set the <code>groups.exclude</code> configuration accordingly (default: <code>groups.exclude = console-consumer-.*, connect-.*, __.*</code>). Remember to update the configuration again once you completed your testing.
   </p>
 
 <h4 class="anchor-heading"><a id="georeplication-stopping" class="anchor-link"></a><a href="#georeplication-stopping">Stopping Geo-Replication</a></h4>
@@ -1249,10 +1249,9 @@ queued.max.requests=[number of concurrent requests]</code></pre>
 
   <h3 class="anchor-heading"><a id="java" class="anchor-link"></a><a href="#java">6.6 Java Version</a></h3>
 
-  Java 8, Java 11, Java 17, and Java 21 are supported.
+  Java 11, Java 17, and Java 21 are supported.
   <p>
-  Note that Java 8 support project-wide has been deprecated since Apache Kafka 3.0 and Java 11 support for the broker and tools
-  has been deprecated since Apache Kafka 3.7. Both will be removed in Apache Kafka 4.0.
+  Note that Java 11 support for the broker and tools has been deprecated since Apache Kafka 3.7. Both will be removed in Apache Kafka 4.0.
   <p>
   Java 11 and later versions perform significantly better if TLS is enabled, so they are highly recommended (they also include a number of other
   performance improvements: G1GC, CRC32C, Compact Strings, Thread-Local Handshakes and more).
@@ -1364,18 +1363,18 @@ queued.max.requests=[number of concurrent requests]</code></pre>
   <h4 class="anchor-heading"><a id="replace_disk" class="anchor-link"></a><a href="#replace_disk">Replace KRaft Controller Disk</a></h4>
   <p>When Kafka is configured to use KRaft, the controllers store the cluster metadata in the directory specified in <code>metadata.log.dir</code> -- or the first log directory, if <code>metadata.log.dir</code> is not configured. See the documentation for <code>metadata.log.dir</code> for details.</p>
 
-  <p>If the data in the cluster metadata directory is lost either because of hardware failure or the hardware needs to be replaced, care should be taken when provisioning the new controller node. The new controller node should not be formatted and started until the majority of the controllers have all of the committed data. To determine if the majority of the controllers have the committed data, run the <code>kafka-metadata-quorum.sh</code> tool to describe the replication status:</p>
+  <p>If the data in the cluster metadata directory is lost either because of hardware failure or the hardware needs to be replaced, care should be taken when provisioning the new controller node. The new controller node should not be formatted and started until the majority of the controllers have all of the committed data. To determine if the majority of the controllers have the committed data, run the kafka-metadata-quorum.sh tool to describe the replication status:</p>
 
   <pre><code class="language-bash">$ bin/kafka-metadata-quorum.sh --bootstrap-server localhost:9092 describe --replication
 NodeId  LogEndOffset    Lag     LastFetchTimestamp      LastCaughtUpTimestamp   Status
 1       25806           0       1662500992757           1662500992757           Leader
 ...     ...             ...     ...                     ...                     ...</code></pre>
 
-  <p>Check and wait until the <code>Lag</code> is small for a majority of the controllers. If the leader's end offset is not increasing, you can wait until the lag is 0 for a majority; otherwise, you can pick the latest leader end offset and wait until all replicas have reached it. Check and wait until the <code>LastFetchTimestamp</code> and <code>LastCaughtUpTimestamp</code> are close to each other for the majority of the controllers. At this point it is safer to format the controller's metadata log directory. This can be done by running the <code>kafka-storage.sh</code> command.</p>
+  <p>Check and wait until the <code>Lag</code> is small for a majority of the controllers. If the leader's end offset is not increasing, you can wait until the lag is 0 for a majority; otherwise, you can pick the latest leader end offset and wait until all replicas have reached it. Check and wait until the <code>LastFetchTimestamp</code> and <code>LastCaughtUpTimestamp</code> are close to each other for the majority of the controllers. At this point it is safer to format the controller's metadata log directory. This can be done by running the kafka-storage.sh command.</p>
 
   <pre><code class="language-bash">$ bin/kafka-storage.sh format --cluster-id uuid --config server_properties</code></pre>
 
-  <p>It is possible for the <code>bin/kafka-storage.sh format</code> command above to fail with a message like <code>Log directory ... is already formatted</code>. This can happen when combined mode is used and only the metadata log directory was lost but not the others. In that case and only in that case, can you run the <code>kafka-storage.sh format</code> command with the <code>--ignore-formatted</code> option.</p>
+  <p>It is possible for the <code>bin/kafka-storage.sh format</code> command above to fail with a message like <code>Log directory ... is already formatted</code>. This can happen when combined mode is used and only the metadata log directory was lost but not the others. In that case and only in that case, can you run the <code>bin/kafka-storage.sh format</code> command with the <code>--ignore-formatted</code> option.</p>
 
   <p>Start the KRaft controller after formatting the log directories.</p>
 
@@ -3789,27 +3788,27 @@ controller.listener.names=CONTROLLER</code></pre>
 
   <h4 class="anchor-heading"><a id="kraft_storage" class="anchor-link"></a><a href="#kraft_storage">Provisioning Nodes</a></h4>
   <p></p>
-  The <code>kafka-storage.sh random-uuid</code> command can be used to generate a cluster ID for your new cluster. This cluster ID must be used when formatting each server in the cluster with the <code>kafka-storage.sh format</code> command.
+  The <code>bin/kafka-storage.sh random-uuid</code> command can be used to generate a cluster ID for your new cluster. This cluster ID must be used when formatting each server in the cluster with the <code>bin/kafka-storage.sh format</code> command.
 
   <p>This is different from how Kafka has operated in the past. Previously, Kafka would format blank storage directories automatically, and also generate a new cluster ID automatically. One reason for the change is that auto-formatting can sometimes obscure an error condition. This is particularly important for the metadata log maintained by the controller and broker servers. If a majority of the controllers were able to start with an empty log directory, a leader might be able to be elected with missing committed data.</p>
 
   <h5 class="anchor-heading"><a id="kraft_storage_standalone" class="anchor-link"></a><a href="#kraft_storage_standalone">Bootstrap a Standalone Controller</a></h5>
   The recommended method for creating a new KRaft controller cluster is to bootstrap it with one voter and dynamically <a href="#kraft_reconfig_add">add the rest of the controllers</a>. Bootstrapping the first controller can be done with the following CLI command:
 
-  <pre><code class="language-bash">$ bin/kafka-storage format --cluster-id &lt;cluster-id&gt; --standalone --config controller.properties</code></pre>
+  <pre><code class="language-bash">$ bin/kafka-storage.sh format --cluster-id &lt;cluster-id&gt; --standalone --config controller.properties</code></pre>
 
   This command will 1) create a meta.properties file in metadata.log.dir with a randomly generated directory.id, 2) create a snapshot at 00000000000000000000-0000000000.checkpoint with the necessary control records (KRaftVersionRecord and VotersRecord) to make this Kafka node the only voter for the quorum.
 
   <h5 class="anchor-heading"><a id="kraft_storage_voters" class="anchor-link"></a><a href="#kraft_storage_voters">Bootstrap with Multiple Controllers</a></h5>
   The KRaft cluster metadata partition can also be bootstrapped with more than one voter. This can be done by using the --initial-controllers flag:
 
-  <pre><code class="language-bash">cluster-id=$(kafka-storage random-uuid)
-controller-0-uuid=$(kafka-storage random-uuid)
-controller-1-uuid=$(kafka-storage random-uuid)
-controller-2-uuid=$(kafka-storage random-uuid)
+  <pre><code class="language-bash">cluster-id=$(bin/kafka-storage.sh random-uuid)
+controller-0-uuid=$(bin/kafka-storage.sh random-uuid)
+controller-1-uuid=$(bin/kafka-storage.sh random-uuid)
+controller-2-uuid=$(bin/kafka-storage.sh random-uuid)
 
 # In each controller execute
-kafka-storage format --cluster-id ${cluster-id} \
+bin/kafka-storage.sh format --cluster-id ${cluster-id} \
                      --initial-controllers "0@controller-0:1234:${controller-0-uuid},1@controller-1:1234:${controller-1-uuid},2@controller-2:1234:${controller-2-uuid}" \
                      --config controller.properties</code></pre>
 
@@ -3818,37 +3817,37 @@ This command is similar to the standalone version but the snapshot at 0000000000
 In the replica description 0@controller-0:1234:3Db5QLSqSZieL3rJBUUegA, 0 is the replica id, 3Db5QLSqSZieL3rJBUUegA is the replica directory id, controller-0 is the replica's host and 1234 is the replica's port.
 
   <h5 class="anchor-heading"><a id="kraft_storage_observers" class="anchor-link"></a><a href="#kraft_storage_observers">Formatting Brokers and New Controllers</a></h5>
-  When provisioning new broker and controller nodes that we want to add to an existing Kafka cluster, use the <code>kafka-storage.sh format</code> command without the --standalone or --initial-controllers flags.
+  When provisioning new broker and controller nodes that we want to add to an existing Kafka cluster, use the <code>kafka-storage.sh format</code> command with the --no-initial-controllers flag.
 
-  <pre><code class="language-bash">$ bin/kafka-storage format --cluster-id &lt;cluster-id&gt; --config server.properties</code></pre>
+  <pre><code class="language-bash">$ bin/kafka-storage.sh format --cluster-id &lt;cluster-id&gt; --config server.properties --no-initial-controllers</code></pre>
 
   <h4 class="anchor-heading"><a id="kraft_reconfig" class="anchor-link"></a><a href="#kraft_reconfig">Controller membership changes</a></h4>
 
   <h5 class="anchor-heading"><a id="kraft_reconfig_add" class="anchor-link"></a><a href="#kraft_reconfig_add">Add New Controller</a></h5>
-  If the KRaft Controller cluster already exists, the cluster can be expanded by first provisioning a new controller using the <a href="#kraft_storage_observers">kafka-storage tool</a> and starting the controller.
+  If the KRaft Controller cluster already exists, the cluster can be expanded by first provisioning a new controller using the <a href="#kraft_storage_observers">kafka-storage.sh tool</a> and starting the controller.
 
-  After starting the controller, the replication to the new controller can be monitored using the <code>kafka-metadata-quorum describe --replication</code> command. Once the new controller has caught up to the active controller, it can be added to the cluster using the <code>kafka-metadata-quorum add-controller</code> command.
+  After starting the controller, the replication to the new controller can be monitored using the <code>bin/kafka-metadata-quorum.sh describe --replication</code> command. Once the new controller has caught up to the active controller, it can be added to the cluster using the <code>bin/kafka-metadata-quorum.sh add-controller</code> command.
 
   When using broker endpoints use the --bootstrap-server flag:
-  <pre><code class="language-bash">$ bin/kafka-metadata-quorum --command-config controller.properties --bootstrap-server localhost:9092 add-controller</code></pre>
+  <pre><code class="language-bash">$ bin/kafka-metadata-quorum.sh --command-config controller.properties --bootstrap-server localhost:9092 add-controller</code></pre>
 
   When using controller endpoints use the --bootstrap-controller flag:
-  <pre><code class="language-bash">$ bin/kafka-metadata-quorum --command-config controller.properties --bootstrap-controller localhost:9092 add-controller</code></pre>
+  <pre><code class="language-bash">$ bin/kafka-metadata-quorum.sh --command-config controller.properties --bootstrap-controller localhost:9092 add-controller</code></pre>
 
   <h5 class="anchor-heading"><a id="kraft_reconfig_remove" class="anchor-link"></a><a href="#kraft_reconfig_remove">Remove Controller</a></h5>
-  If the KRaft Controller cluster already exists, the cluster can be shrunk using the <code>kafka-metadata-quorum remove-controller</code> command. Until KIP-996: Pre-vote has been implemented and released, it is recommended to shutdown the controller that will be removed before running the remove-controller command.
+  If the KRaft Controller cluster already exists, the cluster can be shrunk using the <code>bin/kafka-metadata-quorum.sh remove-controller</code> command. Until KIP-996: Pre-vote has been implemented and released, it is recommended to shutdown the controller that will be removed before running the remove-controller command.
 
   When using broker endpoints use the --bootstrap-server flag:
-  <pre><code class="language-bash">$ bin/kafka-metadata-quorum --bootstrap-server localhost:9092 remove-controller --controller-id &lt;id&gt; --controller-directory-id &lt;directory-id&gt;</code></pre>
+  <pre><code class="language-bash">$ bin/kafka-metadata-quorum.sh --bootstrap-server localhost:9092 remove-controller --controller-id &lt;id&gt; --controller-directory-id &lt;directory-id&gt;</code></pre>
 
   When using controller endpoints use the --bootstrap-controller flag:
-  <pre><code class="language-bash">$ bin/kafka-metadata-quorum --bootstrap-controller localhost:9092 remove-controller --controller-id &lt;id&gt; --controller-directory-id &lt;directory-id&gt;</code></pre>
+  <pre><code class="language-bash">$ bin/kafka-metadata-quorum.sh --bootstrap-controller localhost:9092 remove-controller --controller-id &lt;id&gt; --controller-directory-id &lt;directory-id&gt;</code></pre>
 
   <h4 class="anchor-heading"><a id="kraft_debug" class="anchor-link"></a><a href="#kraft_debug">Debugging</a></h4>
 
   <h5 class="anchor-heading"><a id="kraft_metadata_tool" class="anchor-link"></a><a href="#kraft_metadata_tool">Metadata Quorum Tool</a></h5>
 
-  <p>The <code>kafka-metadata-quorum</code> tool can be used to describe the runtime state of the cluster metadata partition. For example, the following command displays a summary of the metadata quorum:</p>
+  <p>The kafka-metadata-quorum.sh tool can be used to describe the runtime state of the cluster metadata partition. For example, the following command displays a summary of the metadata quorum:</p>
 
   <pre><code class="language-bash">$ bin/kafka-metadata-quorum.sh --bootstrap-server localhost:9092 describe --status
 ClusterId:              fMCL8kv1SWm87L_Md-I2hg
@@ -3866,7 +3865,7 @@ CurrentObservers:       [{"id": 0, "directoryId": "3Db5QLSqSZieL3rJBUUegA"},
 
   <h5 class="anchor-heading"><a id="kraft_dump_log" class="anchor-link"></a><a href="#kraft_dump_log">Dump Log Tool</a></h5>
 
-  <p>The <code>kafka-dump-log</code> tool can be used to debug the log segments and snapshots for the cluster metadata directory. The tool will scan the provided files and decode the metadata records. For example, this command decodes and prints the records in the first log segment:</p>
+  <p>The kafka-dump-log.sh tool can be used to debug the log segments and snapshots for the cluster metadata directory. The tool will scan the provided files and decode the metadata records. For example, this command decodes and prints the records in the first log segment:</p>
 
   <pre><code class="language-bash">$ bin/kafka-dump-log.sh --cluster-metadata-decoder --files metadata_log_dir/__cluster_metadata-0/00000000000000000000.log</code></pre>
 
@@ -3876,7 +3875,7 @@ CurrentObservers:       [{"id": 0, "directoryId": "3Db5QLSqSZieL3rJBUUegA"},
 
   <h5 class="anchor-heading"><a id="kraft_shell_tool" class="anchor-link"></a><a href="#kraft_shell_tool">Metadata Shell</a></h5>
 
-  <p>The <code>kafka-metadata-shell</code> tool can be used to interactively inspect the state of the cluster metadata partition:</p>
+  <p>The kafka-metadata-shell.sh tool can be used to interactively inspect the state of the cluster metadata partition:</p>
 
   <pre><code class="language-bash">$ bin/kafka-metadata-shell.sh --snapshot metadata_log_dir/__cluster_metadata-0/00000000000000000000.log
 &gt;&gt; ls /
@@ -3978,7 +3977,7 @@ foo
 
   <p>
     The KRaft controller quorum should also be provisioned with the latest <code>metadata.version</code>.
-    This is done automatically when you format the node with the <code>kafka-storage.sh</code> tool.
+    This is done automatically when you format the node with the kafka-storage.sh tool.
     For further instructions on KRaft deployment, please refer to <a href="#kraft_config">the above documentation</a>.
   </p>
 
@@ -4008,7 +4007,7 @@ inter.broker.listener.name=PLAINTEXT
 
 # Other configs ...</code></pre>
 
-  <p>The new standalone controller in the example configuration above should be formatted using the <code>kafka-storage format --standalone</code>command.</p>
+  <p>The new standalone controller in the example configuration above should be formatted using the <code>bin/kafka-storage.sh format --standalone</code>command.</p>
 
   <p><em>Note: The KRaft cluster <code>node.id</code> values must be different from any existing ZK broker <code>broker.id</code>.
   In KRaft-mode, the brokers and controllers share the same Node ID namespace.</em></p>

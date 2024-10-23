@@ -53,8 +53,8 @@ import java.util
 import java.util.{Optional, OptionalLong}
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, TimeUnit}
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOption
 
 
 /**
@@ -172,7 +172,7 @@ class ControllerServer(
 
       val endpointReadyFutures = {
         val builder = new EndpointReadyFutures.Builder()
-        builder.build(authorizer.asJava,
+        builder.build(authorizer.toJava,
           new KafkaAuthorizerServerInfo(
             new ClusterResource(clusterId),
             config.nodeId,
@@ -229,8 +229,8 @@ class ControllerServer(
           setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs).
           setMaxIdleIntervalNs(maxIdleIntervalNs).
           setMetrics(quorumControllerMetrics).
-          setCreateTopicPolicy(createTopicPolicy.asJava).
-          setAlterConfigPolicy(alterConfigPolicy.asJava).
+          setCreateTopicPolicy(createTopicPolicy.toJava).
+          setAlterConfigPolicy(alterConfigPolicy.toJava).
           setConfigurationValidator(new ControllerConfigurationValidator(sharedServer.brokerConfig)).
           setStaticConfig(config.originals).
           setBootstrapMetadata(bootstrapMetadata).

@@ -20,7 +20,6 @@ import kafka.security.JaasTestUtils
 
 import java.util.Properties
 import kafka.utils._
-import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.metadata.storage.Formatter
@@ -42,11 +41,6 @@ class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
   override def configureSecurityBeforeServersStart(testInfo: TestInfo): Unit = {
     super.configureSecurityBeforeServersStart(testInfo)
 
-    if (!TestInfoUtils.isKRaft(testInfo)) {
-      zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
-      // Create broker credentials before starting brokers
-      createScramCredentials(zkConnect, kafkaPrincipal.getName, kafkaPassword)
-    }
     TestSslUtils.convertToPemWithoutFiles(producerConfig)
     TestSslUtils.convertToPemWithoutFiles(consumerConfig)
     TestSslUtils.convertToPemWithoutFiles(adminClientConfig)
@@ -75,7 +69,7 @@ class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft"))
   def testAuthentications(quorum: String): Unit = {
     val successfulAuths = TestUtils.totalMetricValue(brokers.head, "successful-authentication-total")
     assertTrue(successfulAuths > 0, "No successful authentications")

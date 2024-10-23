@@ -31,10 +31,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class OffsetUtilsTest {
 
@@ -47,7 +46,7 @@ public class OffsetUtilsTest {
     @Test
     public void testValidateFormatNotMap() {
         DataException e = assertThrows(DataException.class, () -> OffsetUtils.validateFormat(new Object()));
-        assertThat(e.getMessage(), containsString("Offsets must be specified as a Map"));
+        assertTrue(e.getMessage().contains("Offsets must be specified as a Map"));
     }
 
     @Test
@@ -56,18 +55,18 @@ public class OffsetUtilsTest {
         offsetData.put("k1", "v1");
         offsetData.put(1, "v2");
         DataException e = assertThrows(DataException.class, () -> OffsetUtils.validateFormat(offsetData));
-        assertThat(e.getMessage(), containsString("Offsets may only use String keys"));
+        assertTrue(e.getMessage().contains("Offsets may only use String keys"));
     }
 
     @Test
     public void testValidateFormatMapWithNonPrimitiveKeys() {
         Map<Object, Object> offsetData = Collections.singletonMap("key", new Object());
         DataException e = assertThrows(DataException.class, () -> OffsetUtils.validateFormat(offsetData));
-        assertThat(e.getMessage(), containsString("Offsets may only contain primitive types as values"));
+        assertTrue(e.getMessage().contains("Offsets may only contain primitive types as values"));
 
         Map<Object, Object> offsetData2 = Collections.singletonMap("key", new ArrayList<>());
         e = assertThrows(DataException.class, () -> OffsetUtils.validateFormat(offsetData2));
-        assertThat(e.getMessage(), containsString("Offsets may only contain primitive types as values"));
+        assertTrue(e.getMessage().contains("Offsets may only contain primitive types as values"));
     }
 
     @Test
@@ -121,7 +120,7 @@ public class OffsetUtilsTest {
             // Expect no partition to be added to the map since the partition key is of an invalid format
             assertEquals(0, connectorPartitions.size());
             assertEquals(1, logCaptureAppender.getMessages().size());
-            assertThat(logCaptureAppender.getMessages().get(0), containsString(message));
+            assertTrue(logCaptureAppender.getMessages().get(0).contains(message));
         }
     }
 

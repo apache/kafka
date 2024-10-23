@@ -91,7 +91,7 @@ public class MockShareConsumer<K, V> implements ShareConsumer<K, V> {
         }
 
         records.clear();
-        return new ConsumerRecords<>(results);
+        return new ConsumerRecords<>(results, Map.of());
     }
 
     @Override

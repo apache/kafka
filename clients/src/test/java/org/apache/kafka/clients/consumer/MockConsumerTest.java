@@ -64,39 +64,10 @@ public class MockConsumerTest {
         assertFalse(iter.hasNext());
         final TopicPartition tp = new TopicPartition("test", 0);
         assertEquals(2L, consumer.position(tp));
+        assertEquals(1, recs.nextOffsets().size());
+        assertEquals(new OffsetAndMetadata(2, Optional.empty(), ""), recs.nextOffsets().get(tp));
         consumer.commitSync();
         assertEquals(2L, consumer.committed(Collections.singleton(tp)).get(tp).offset());
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void testSimpleMockDeprecated() {
-        consumer.subscribe(Collections.singleton("test"));
-        assertEquals(0, consumer.poll(1000).count());
-        consumer.rebalance(Arrays.asList(new TopicPartition("test", 0), new TopicPartition("test", 1)));
-        // Mock consumers need to seek manually since they cannot automatically reset offsets
-        HashMap<TopicPartition, Long> beginningOffsets = new HashMap<>();
-        beginningOffsets.put(new TopicPartition("test", 0), 0L);
-        beginningOffsets.put(new TopicPartition("test", 1), 0L);
-        consumer.updateBeginningOffsets(beginningOffsets);
-        consumer.seek(new TopicPartition("test", 0), 0);
-        ConsumerRecord<String, String> rec1 = new ConsumerRecord<>("test", 0, 0, 0L, TimestampType.CREATE_TIME,
-            0, 0, "key1", "value1", new RecordHeaders(), Optional.empty());
-        ConsumerRecord<String, String> rec2 = new ConsumerRecord<>("test", 0, 1, 0L, TimestampType.CREATE_TIME,
-            0, 0, "key2", "value2", new RecordHeaders(), Optional.empty());
-        consumer.addRecord(rec1);
-        consumer.addRecord(rec2);
-        ConsumerRecords<String, String> recs = consumer.poll(1);
-        Iterator<ConsumerRecord<String, String>> iter = recs.iterator();
-        assertEquals(rec1, iter.next());
-        assertEquals(rec2, iter.next());
-        assertFalse(iter.hasNext());
-        final TopicPartition tp = new TopicPartition("test", 0);
-        assertEquals(2L, consumer.position(tp));
-        consumer.commitSync();
-        assertEquals(2L, consumer.committed(Collections.singleton(tp)).get(tp).offset());
-        assertEquals(new ConsumerGroupMetadata("dummy.group.id", 1, "1", Optional.empty()),
-            consumer.groupMetadata());
     }
 
     @Test
@@ -125,6 +96,8 @@ public class MockConsumerTest {
         consumer.resume(testPartitionList);
         ConsumerRecords<String, String> recordsSecondPoll = consumer.poll(Duration.ofMillis(1));
         assertEquals(1, recordsSecondPoll.count());
+        assertEquals(1, recordsSecondPoll.nextOffsets().size());
+        assertEquals(new OffsetAndMetadata(1, Optional.empty(), ""), recordsSecondPoll.nextOffsets().get(new TopicPartition("test", 0)));
     }
 
     @Test
