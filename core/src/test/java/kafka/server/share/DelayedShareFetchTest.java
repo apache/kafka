@@ -16,6 +16,7 @@
  */
 package kafka.server.share;
 
+import kafka.cluster.Partition;
 import kafka.server.DelayedOperationPurgatory;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicaQuota;
@@ -33,6 +34,8 @@ import org.apache.kafka.server.storage.log.FetchParams;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
+import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
+import org.apache.kafka.storage.internals.log.LogOffsetSnapshot;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -120,7 +123,7 @@ public class DelayedShareFetchTest {
     }
 
     @Test
-    public void testDelayedShareFetchTryCompleteReturnsFalseDueToMinBytes() {
+    public void testDelayedShareFetchTryCompleteReturnsFalseDueToMinBytesOnFirstSharePartitionFetch() {
         String groupId = "grp";
         Uuid topicId = Uuid.randomUuid();
         ReplicaManager replicaManager = mock(ReplicaManager.class);
@@ -142,15 +145,69 @@ public class DelayedShareFetchTest {
 
         ShareFetchData shareFetchData = new ShareFetchData(
             new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS,
-                1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
+                2, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
             new CompletableFuture<>(), partitionMaxBytes);
 
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(false);
-        when(sp0.acquire(any(), any())).thenReturn(
+        when(sp0.acquire(any(), any(), any())).thenReturn(
             Collections.singletonList(new ShareFetchResponseData.AcquiredRecords().setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)));
-        // Replica Manager fetch response size -> 0 bytes (< minBytes)
-        doAnswer(invocation -> buildLogReadResult(Collections.singleton(tp0), 0)).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+
+        // We are testing the case when the share partition is getting fetched for the first time, hence we are using 1
+        // as the file position, so it doesn't satisfy the minBytes(2) criteria.
+        LogOffsetMetadata hwmOffsetMetadata = new LogOffsetMetadata(1, 1, 1);
+        mockTopicIdPartitionFetchBytes(replicaManager, tp0, hwmOffsetMetadata);
+
+        DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
+            .withShareFetchData(shareFetchData)
+            .withSharePartitionManager(sharePartitionManager)
+            .withReplicaManager(replicaManager)
+            .build());
+        assertFalse(delayedShareFetch.isCompleted());
+
+        // Since sp1 can be acquired, tryComplete should return true.
+        assertFalse(delayedShareFetch.tryComplete());
+        assertFalse(delayedShareFetch.isCompleted());
+        Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(any(), any());
+    }
+
+    @Test
+    public void testDelayedShareFetchTryCompleteReturnsFalseDueToMinBytesOnLatestSharePartitionFetch() {
+        String groupId = "grp";
+        Uuid topicId = Uuid.randomUuid();
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(topicId, new TopicPartition("foo", 1));
+        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
+        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
+        partitionMaxBytes.put(tp1, PARTITION_MAX_BYTES);
+
+        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp1 = mock(SharePartition.class);
+
+        when(sp0.maybeAcquireFetchLock()).thenReturn(true);
+        when(sp1.maybeAcquireFetchLock()).thenReturn(true);
+
+        SharePartitionManager sharePartitionManager = mock(SharePartitionManager.class);
+        when(sharePartitionManager.sharePartition(groupId, tp0)).thenReturn(sp0);
+        when(sharePartitionManager.sharePartition(groupId, tp1)).thenReturn(sp1);
+
+        ShareFetchData shareFetchData = new ShareFetchData(
+            new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS,
+                2, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
+            new CompletableFuture<>(), partitionMaxBytes);
+
+        when(sp0.canAcquireRecords()).thenReturn(true);
+        when(sp1.canAcquireRecords()).thenReturn(false);
+        when(sp0.acquire(any(), any(), any())).thenReturn(
+            Collections.singletonList(new ShareFetchResponseData.AcquiredRecords().setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)));
+
+        // We are testing the case when the share partition has been fetched before, hence we are mocking positionDiff
+        // functionality to give the file position difference as 1 byte, so it doesn't satisfy the minBytes(2) criteria.
+        LogOffsetMetadata hwmOffsetMetadata = mock(LogOffsetMetadata.class);
+        when(hwmOffsetMetadata.positionDiff(any())).thenReturn(1);
+        when(sp0.latestFetchOffsetMetadata()).thenReturn(mock(LogOffsetMetadata.class));
+        mockTopicIdPartitionFetchBytes(replicaManager, tp0, hwmOffsetMetadata);
 
         DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetchData)
@@ -193,11 +250,11 @@ public class DelayedShareFetchTest {
 
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(false);
-        when(sp0.acquire(any(), any())).thenReturn(
+        when(sp0.acquire(any(), any(), any())).thenReturn(
             Collections.singletonList(new ShareFetchResponseData.AcquiredRecords().setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)));
-        // Replica Manager fetch response size -> 1 bytes (>= minBytes)
-        doAnswer(invocation -> buildLogReadResult(Collections.singleton(tp0), 1)).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+        doAnswer(invocation -> buildLogReadResult(Collections.singleton(tp0))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
+        mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp0, 1);
         DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetchData)
             .withSharePartitionManager(sharePartitionManager)
@@ -283,9 +340,9 @@ public class DelayedShareFetchTest {
 
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(false);
-        when(sp0.acquire(any(), any())).thenReturn(
+        when(sp0.acquire(any(), any(), any())).thenReturn(
             Collections.singletonList(new ShareFetchResponseData.AcquiredRecords().setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)));
-        doAnswer(invocation -> buildLogReadResult(Collections.singleton(tp0), 0)).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+        doAnswer(invocation -> buildLogReadResult(Collections.singleton(tp0))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
         DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetchData)
             .withReplicaManager(replicaManager)
@@ -409,7 +466,7 @@ public class DelayedShareFetchTest {
                 1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
             new CompletableFuture<>(), partitionMaxBytes2);
 
-        doAnswer(invocation -> buildLogReadResult(Collections.singleton(tp1), 0)).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+        doAnswer(invocation -> buildLogReadResult(Collections.singleton(tp1))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
         Map<SharePartitionKey, SharePartition> partitionCacheMap = new ConcurrentHashMap<>();
         partitionCacheMap.put(new SharePartitionKey(groupId, tp0), sp0);
@@ -429,7 +486,7 @@ public class DelayedShareFetchTest {
         // sp1 can be acquired now
         when(sp1.maybeAcquireFetchLock()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(true);
-        when(sp1.acquire(any(), any())).thenReturn(
+        when(sp1.acquire(any(), any(), any())).thenReturn(
             Collections.singletonList(new ShareFetchResponseData.AcquiredRecords().setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)));
 
         // when forceComplete is called for delayedShareFetch2, since tp1 is common in between delayed share fetch
@@ -443,6 +500,23 @@ public class DelayedShareFetchTest {
         Mockito.verify(replicaManager, times(1)).addToActionQueue(any());
         Mockito.verify(replicaManager, times(0)).tryCompleteActions();
         Mockito.verify(delayedShareFetch2, times(1)).releasePartitionLocks(any(), any());
+    }
+
+    static void mockTopicIdPartitionToReturnDataEqualToMinBytes(ReplicaManager replicaManager, TopicIdPartition topicIdPartition, int minBytes) {
+        LogOffsetMetadata hwmOffsetMetadata = new LogOffsetMetadata(1, 1, minBytes);
+        LogOffsetSnapshot endOffsetSnapshot = new LogOffsetSnapshot(1, mock(LogOffsetMetadata.class),
+            hwmOffsetMetadata, mock(LogOffsetMetadata.class));
+        Partition partition = mock(Partition.class);
+        when(partition.fetchOffsetSnapshot(any(), anyBoolean())).thenReturn(endOffsetSnapshot);
+        when(replicaManager.getPartitionOrException(topicIdPartition.topicPartition())).thenReturn(partition);
+    }
+
+    private void mockTopicIdPartitionFetchBytes(ReplicaManager replicaManager, TopicIdPartition topicIdPartition, LogOffsetMetadata hwmOffsetMetadata) {
+        LogOffsetSnapshot endOffsetSnapshot = new LogOffsetSnapshot(1, mock(LogOffsetMetadata.class),
+            hwmOffsetMetadata, mock(LogOffsetMetadata.class));
+        Partition partition = mock(Partition.class);
+        when(partition.fetchOffsetSnapshot(any(), anyBoolean())).thenReturn(endOffsetSnapshot);
+        when(replicaManager.getPartitionOrException(topicIdPartition.topicPartition())).thenReturn(partition);
     }
 
     static class DelayedShareFetchBuilder {

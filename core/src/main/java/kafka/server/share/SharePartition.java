@@ -48,6 +48,7 @@ import org.apache.kafka.server.share.persister.WriteShareGroupStateParameters;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
+import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -276,6 +277,12 @@ public class SharePartition {
      */
     private final ReplicaManager replicaManager;
 
+    /**
+     * We maintain the latest fetch offset metadata in order to know the last segment position that has been fetched
+     * for the share partition.
+     */
+    private LogOffsetMetadata latestFetchOffsetMetadata;
+
     SharePartition(
         String groupId,
         TopicIdPartition topicIdPartition,
@@ -303,6 +310,7 @@ public class SharePartition {
         this.partitionState = SharePartitionState.EMPTY;
         this.replicaManager = replicaManager;
         this.groupConfigManager = groupConfigManager;
+        latestFetchOffsetMetadata = null;
     }
 
     /**
@@ -518,7 +526,8 @@ public class SharePartition {
      */
     public List<AcquiredRecords> acquire(
         String memberId,
-        FetchPartitionData fetchPartitionData
+        FetchPartitionData fetchPartitionData,
+        LogOffsetMetadata fetchOffsetMetadata
     ) {
         log.trace("Received acquire request for share partition: {}-{} memberId: {}", groupId, topicIdPartition, memberId);
         RecordBatch lastBatch = fetchPartitionData.records.lastBatch().orElse(null);
@@ -532,6 +541,8 @@ public class SharePartition {
         RecordBatch firstBatch = fetchPartitionData.records.batches().iterator().next();
         lock.writeLock().lock();
         try {
+            // Update the latest fetch offset metadata for any future queries.
+            this.latestFetchOffsetMetadata = fetchOffsetMetadata;
             long baseOffset = firstBatch.baseOffset();
             // Find the floor batch record for the request batch. The request batch could be
             // for a subset of the in-flight batch i.e. cached batch of offset 10-14 and request batch
@@ -1473,6 +1484,10 @@ public class SharePartition {
             lock.writeLock().unlock();
         }
         return Optional.empty();
+    }
+
+    LogOffsetMetadata latestFetchOffsetMetadata() {
+        return latestFetchOffsetMetadata;
     }
 
     // Visible for testing

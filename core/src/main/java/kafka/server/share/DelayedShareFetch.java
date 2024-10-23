@@ -16,6 +16,7 @@
  */
 package kafka.server.share;
 
+import kafka.cluster.Partition;
 import kafka.server.DelayedOperation;
 import kafka.server.LogReadResult;
 import kafka.server.QuotaFactory;
@@ -26,6 +27,8 @@ import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.server.share.fetch.ShareFetchData;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
+import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
+import org.apache.kafka.storage.internals.log.LogOffsetSnapshot;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,9 +57,9 @@ public class DelayedShareFetch extends DelayedOperation {
 
     private final ShareFetchData shareFetchData;
     private final ReplicaManager replicaManager;
-    private final SharePartitionManager sharePartitionManager;
+
     private Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionDataFromTryComplete;
-    private Map<TopicIdPartition, FetchPartitionData> replicaManagerFetchDataFromTryComplete;
+    private final SharePartitionManager sharePartitionManager;
 
     DelayedShareFetch(
             ShareFetchData shareFetchData,
@@ -65,9 +68,8 @@ public class DelayedShareFetch extends DelayedOperation {
         super(shareFetchData.fetchParams().maxWaitMs, Option.empty());
         this.shareFetchData = shareFetchData;
         this.replicaManager = replicaManager;
-        this.sharePartitionManager = sharePartitionManager;
         this.topicPartitionDataFromTryComplete = new LinkedHashMap<>();
-        this.replicaManagerFetchDataFromTryComplete = new LinkedHashMap<>();
+        this.sharePartitionManager = sharePartitionManager;
     }
 
     @Override
@@ -89,25 +91,45 @@ public class DelayedShareFetch extends DelayedOperation {
             return;
 
         Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData;
-        Map<TopicIdPartition, FetchPartitionData> fetchResponseData;
-        // tryComplete did not invoke forceComplete, so we need to get replica manager response data.
-        if (replicaManagerFetchDataFromTryComplete.isEmpty()) {
+        // tryComplete did not invoke forceComplete, so we need to check if we have any partitions to fetch.
+        if (topicPartitionDataFromTryComplete.isEmpty())
             topicPartitionData = acquirablePartitions();
-            if (topicPartitionData.isEmpty()) {
-                // No locks for share partitions could be acquired, so we complete the request with an empty response.
-                shareFetchData.future().complete(Collections.emptyMap());
-                return;
-            }
-            fetchResponseData = replicaManagerFetchData(topicPartitionData, true);
-        } else {
-            // tryComplete invoked forceComplete, so we can use the topic partitions data and replica manager response data from tryComplete.
+        // tryComplete invoked forceComplete, so we can use the data from tryComplete.
+        else
             topicPartitionData = topicPartitionDataFromTryComplete;
-            fetchResponseData = replicaManagerFetchDataFromTryComplete;
+
+        if (topicPartitionData.isEmpty()) {
+            // No locks for share partitions could be acquired, so we complete the request with an empty response.
+            shareFetchData.future().complete(Collections.emptyMap());
+            return;
         }
+        log.trace("Fetchable share partitions data: {} with groupId: {} fetch params: {}",
+                topicPartitionData, shareFetchData.groupId(), shareFetchData.fetchParams());
 
         try {
+            Seq<Tuple2<TopicIdPartition, LogReadResult>> responseLogResult = replicaManager.readFromLog(
+                shareFetchData.fetchParams(),
+                CollectionConverters.asScala(
+                    topicPartitionData.entrySet().stream().map(entry ->
+                        new Tuple2<>(entry.getKey(), entry.getValue())).collect(Collectors.toList())
+                ),
+                QuotaFactory.UnboundedQuota$.MODULE$,
+                true);
+
+            Map<TopicIdPartition, FetchPartitionData> responseData = new HashMap<>();
+            Map<TopicIdPartition, LogOffsetMetadata> fetchOffsetMetadata = new HashMap<>();
+            responseLogResult.foreach(tpLogResult -> {
+                TopicIdPartition topicIdPartition = tpLogResult._1();
+                LogReadResult logResult = tpLogResult._2();
+                FetchPartitionData fetchPartitionData = logResult.toFetchPartitionData(false);
+                responseData.put(topicIdPartition, fetchPartitionData);
+                fetchOffsetMetadata.put(topicIdPartition, logResult.info().fetchOffsetMetadata);
+                return BoxedUnit.UNIT;
+            });
+
+            log.trace("Data successfully retrieved by replica manager: {}", responseData);
             Map<TopicIdPartition, ShareFetchResponseData.PartitionData> result =
-                ShareFetchUtils.processFetchResponse(shareFetchData, fetchResponseData, sharePartitionManager, replicaManager);
+                ShareFetchUtils.processFetchResponse(shareFetchData, responseData, fetchOffsetMetadata, sharePartitionManager, replicaManager);
             shareFetchData.future().complete(result);
         } catch (Exception e) {
             log.error("Error processing delayed share fetch request", e);
@@ -120,7 +142,7 @@ public class DelayedShareFetch extends DelayedOperation {
             // We add the action to delayed actions queue to avoid an infinite call stack, which could happen if
             // we directly call delayedShareFetchPurgatory.checkAndComplete
             replicaManager.addToActionQueue(() -> {
-                fetchResponseData.keySet().forEach(topicIdPartition ->
+                topicPartitionData.keySet().forEach(topicIdPartition ->
                     replicaManager.completeDelayedShareFetchRequest(
                         new DelayedShareFetchGroupKey(shareFetchData.groupId(), topicIdPartition.topicId(), topicIdPartition.partition())));
                 return BoxedUnit.UNIT;
@@ -140,14 +162,14 @@ public class DelayedShareFetch extends DelayedOperation {
         Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData = acquirablePartitions();
 
         if (!topicPartitionData.isEmpty()) {
-            replicaManagerFetchDataFromTryComplete = replicaManagerFetchData(topicPartitionData, false);
-            if (!replicaManagerFetchDataFromTryComplete.isEmpty()) {
+            if (isMinBytesCriteriaSatisfied(topicPartitionData)) {
                 topicPartitionDataFromTryComplete = topicPartitionData;
                 return forceComplete();
             }
             log.debug("minBytes is not satisfied for the share fetch request for group {}, member {}, " +
                 "topic partitions {}", shareFetchData.groupId(), shareFetchData.memberId(),
                 shareFetchData.partitionMaxBytes().keySet());
+            releasePartitionLocks(shareFetchData.groupId(), topicPartitionData.keySet());
         } else {
             log.trace("Can't acquire records for any partition in the share fetch request for group {}, member {}, " +
                 "topic partitions {}", shareFetchData.groupId(), shareFetchData.memberId(),
@@ -197,58 +219,25 @@ public class DelayedShareFetch extends DelayedOperation {
         return topicPartitionData;
     }
 
-    /**
-     * Prepare partitions fetch data structure for acquirable partitions in the share fetch request satisfying minBytes criteria.
-     */
-    Map<TopicIdPartition, FetchPartitionData> replicaManagerFetchData(Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData,
-                                                                      boolean hasRequestTimedOut) {
-        log.trace("Fetchable share partitions data: {} with groupId: {} fetch params: {}", topicPartitionData,
-            shareFetchData.groupId(), shareFetchData.fetchParams());
-        boolean minBytesSatisfied = false;
-        Map<TopicIdPartition, FetchPartitionData> responseData = new HashMap<>();
-        try {
-            Seq<Tuple2<TopicIdPartition, LogReadResult>> responseLogResult = replicaManager.readFromLog(
-                shareFetchData.fetchParams(),
-                CollectionConverters.asScala(
-                    topicPartitionData.entrySet().stream().map(entry ->
-                        new Tuple2<>(entry.getKey(), entry.getValue())).collect(Collectors.toList())
-                ),
-                QuotaFactory.UnboundedQuota$.MODULE$,
-                true);
-
-            AtomicLong accumulatedBytes = new AtomicLong(0);
-
-            responseLogResult.foreach(tpLogResult -> {
-                TopicIdPartition topicIdPartition = tpLogResult._1();
-                LogReadResult logResult = tpLogResult._2();
-                FetchPartitionData fetchPartitionData = logResult.toFetchPartitionData(false);
-                responseData.put(topicIdPartition, fetchPartitionData);
-                accumulatedBytes.addAndGet(logResult.info().records.sizeInBytes());
-                return BoxedUnit.UNIT;
-            });
-            log.trace("Data successfully retrieved by replica manager: {}", responseData);
-
-            if (accumulatedBytes.get() >= shareFetchData.fetchParams().minBytes)
-                minBytesSatisfied = true;
-        } catch (Exception e) {
-            log.error("Error processing delayed share fetch request", e);
-        } finally {
-            // The case when we cannot satisfy the share fetch requests because the response has lesser data than minBytes
-            // and the call is coming from tryComplete, hence we want to release partitions lock so that the next
-            // tryComplete/onComplete call complete successfully.
-            if (!minBytesSatisfied && !hasRequestTimedOut) {
-                // Releasing the lock to move ahead with the next request in queue.
-                releasePartitionLocks(shareFetchData.groupId(), topicPartitionData.keySet());
+    boolean isMinBytesCriteriaSatisfied(Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData) {
+        AtomicLong accumulatedSize = new AtomicLong(0);
+        topicPartitionData.forEach((topicIdPartition, partitionData) -> {
+            Partition partition = replicaManager.getPartitionOrException(topicIdPartition.topicPartition());
+            LogOffsetSnapshot offsetSnapshot = partition.fetchOffsetSnapshot(Optional.empty(), true);
+            LogOffsetMetadata endOffsetMetadata = offsetSnapshot.highWatermark;
+            SharePartition sharePartition = sharePartitionManager.sharePartition(shareFetchData.groupId(), topicIdPartition);
+            if (sharePartition == null) {
+                log.error("Encountered null share partition for groupId={}, topicIdPartition={}. Skipping it.", shareFetchData.groupId(), topicIdPartition);
+                return;
             }
-        }
-        // We can return the replica manager fetch response for the following 2 cases -
-        // 1. This call is coming from onComplete, hence we return the response data irrespective of whether minBytes is
-        // satisfied or not.
-        // 2. Return the response if minBytes criteria is satisfied (request is coming from tryComplete).
-        if (hasRequestTimedOut || minBytesSatisfied)
-            return responseData;
-        // Return an empty map if replica manager fetch does not satisfy minBytes (request is coming from tryComplete).
-        return Collections.emptyMap();
+
+            // we take the partition fetch size as upper bound when accumulating the bytes (skip if a throttled partition)
+            long bytesAvailable = sharePartition.latestFetchOffsetMetadata() == null ?
+                Math.min(endOffsetMetadata.relativePositionInSegment, partitionData.maxBytes) :
+                Math.min(endOffsetMetadata.positionDiff(sharePartition.latestFetchOffsetMetadata()), partitionData.maxBytes);
+            accumulatedSize.addAndGet(bytesAvailable);
+        });
+        return accumulatedSize.get() >= shareFetchData.fetchParams().minBytes;
     }
 
     // Visible for testing.

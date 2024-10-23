@@ -26,6 +26,7 @@ import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.server.share.fetch.ShareFetchData;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
+import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,6 +52,7 @@ public class ShareFetchUtils {
     static Map<TopicIdPartition, ShareFetchResponseData.PartitionData> processFetchResponse(
             ShareFetchData shareFetchData,
             Map<TopicIdPartition, FetchPartitionData> responseData,
+            Map<TopicIdPartition, LogOffsetMetadata> fetchOffsetMetadata,
             SharePartitionManager sharePartitionManager,
             ReplicaManager replicaManager
     ) {
@@ -84,7 +86,8 @@ public class ShareFetchUtils {
                     partitionData.setErrorMessage(Errors.NONE.message());
                 }
             } else {
-                List<AcquiredRecords> acquiredRecords = sharePartition.acquire(shareFetchData.memberId(), fetchPartitionData);
+                List<AcquiredRecords> acquiredRecords = sharePartition.acquire(shareFetchData.memberId(), fetchPartitionData,
+                    fetchOffsetMetadata.get(topicIdPartition));
                 log.trace("Acquired records for topicIdPartition: {} with share fetch data: {}, records: {}",
                     topicIdPartition, shareFetchData, acquiredRecords);
                 // Maybe, in the future, check if no records are acquired, and we want to retry

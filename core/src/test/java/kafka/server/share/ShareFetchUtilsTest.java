@@ -34,6 +34,7 @@ import org.apache.kafka.server.share.fetch.ShareFetchData;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchParams;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
+import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -81,10 +82,10 @@ public class ShareFetchUtilsTest {
         when(sp0.nextFetchOffset()).thenReturn((long) 3);
         when(sp1.nextFetchOffset()).thenReturn((long) 3);
 
-        when(sp0.acquire(any(), any())).thenReturn(
+        when(sp0.acquire(any(), any(), any())).thenReturn(
                 Collections.singletonList(new ShareFetchResponseData.AcquiredRecords()
                         .setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)));
-        when(sp1.acquire(any(), any())).thenReturn(
+        when(sp1.acquire(any(), any(), any())).thenReturn(
                 Collections.singletonList(new ShareFetchResponseData.AcquiredRecords()
                         .setFirstOffset(100).setLastOffset(103).setDeliveryCount((short) 1)));
 
@@ -119,8 +120,13 @@ public class ShareFetchUtilsTest {
         responseData.put(tp1, new FetchPartitionData(Errors.NONE, 0L, 100L,
                 records1, Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
+
+        Map<TopicIdPartition, LogOffsetMetadata> fetchOffsetMetadata = new HashMap<>();
+        fetchOffsetMetadata.put(tp0, mock(LogOffsetMetadata.class));
+        fetchOffsetMetadata.put(tp1, mock(LogOffsetMetadata.class));
+
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData =
-                ShareFetchUtils.processFetchResponse(shareFetchData, responseData, sharePartitionManager, mock(ReplicaManager.class));
+                ShareFetchUtils.processFetchResponse(shareFetchData, responseData, fetchOffsetMetadata, sharePartitionManager, mock(ReplicaManager.class));
 
         assertEquals(2, resultData.size());
         assertTrue(resultData.containsKey(tp0));
@@ -154,8 +160,8 @@ public class ShareFetchUtilsTest {
         when(sp0.nextFetchOffset()).thenReturn((long) 3);
         when(sp1.nextFetchOffset()).thenReturn((long) 3);
 
-        when(sp0.acquire(any(), any())).thenReturn(Collections.emptyList());
-        when(sp1.acquire(any(), any())).thenReturn(Collections.emptyList());
+        when(sp0.acquire(any(), any(), any())).thenReturn(Collections.emptyList());
+        when(sp1.acquire(any(), any(), any())).thenReturn(Collections.emptyList());
 
         doNothing().when(sp1).updateCacheAndOffsets(any(Long.class));
         doNothing().when(sp0).updateCacheAndOffsets(any(Long.class));
@@ -176,8 +182,12 @@ public class ShareFetchUtilsTest {
         responseData.put(tp1, new FetchPartitionData(Errors.NONE, 0L, 0L,
                 MemoryRecords.EMPTY, Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
+        Map<TopicIdPartition, LogOffsetMetadata> fetchOffsetMetadata = new HashMap<>();
+        fetchOffsetMetadata.put(tp0, mock(LogOffsetMetadata.class));
+        fetchOffsetMetadata.put(tp1, mock(LogOffsetMetadata.class));
+
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData =
-                ShareFetchUtils.processFetchResponse(shareFetchData, responseData, sharePartitionManager, mock(ReplicaManager.class));
+                ShareFetchUtils.processFetchResponse(shareFetchData, responseData, fetchOffsetMetadata, sharePartitionManager, mock(ReplicaManager.class));
 
         assertEquals(2, resultData.size());
         assertTrue(resultData.containsKey(tp0));
@@ -222,11 +232,11 @@ public class ShareFetchUtilsTest {
         when(sp0.nextFetchOffset()).thenReturn((long) 0, (long) 5);
         when(sp1.nextFetchOffset()).thenReturn((long) 4, (long) 4);
 
-        when(sp0.acquire(anyString(), any(FetchPartitionData.class))).thenReturn(
+        when(sp0.acquire(anyString(), any(FetchPartitionData.class), any())).thenReturn(
                 Collections.emptyList(),
                 Collections.singletonList(new ShareFetchResponseData.AcquiredRecords()
                         .setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)));
-        when(sp1.acquire(anyString(), any(FetchPartitionData.class))).thenReturn(
+        when(sp1.acquire(anyString(), any(FetchPartitionData.class), any())).thenReturn(
                 Collections.singletonList(new ShareFetchResponseData.AcquiredRecords()
                         .setFirstOffset(100).setLastOffset(103).setDeliveryCount((short) 1)),
                 Collections.emptyList());
@@ -247,8 +257,11 @@ public class ShareFetchUtilsTest {
         responseData1.put(tp1, new FetchPartitionData(Errors.NONE, 0L, 0L,
                 records1, Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
+        Map<TopicIdPartition, LogOffsetMetadata> fetchOffsetMetadata = new HashMap<>();
+        fetchOffsetMetadata.put(tp0, mock(LogOffsetMetadata.class));
+        fetchOffsetMetadata.put(tp1, mock(LogOffsetMetadata.class));
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData1 =
-                ShareFetchUtils.processFetchResponse(shareFetchData, responseData1, sharePartitionManager, replicaManager);
+                ShareFetchUtils.processFetchResponse(shareFetchData, responseData1, fetchOffsetMetadata, sharePartitionManager, replicaManager);
 
         assertEquals(2, resultData1.size());
         assertTrue(resultData1.containsKey(tp0));
@@ -276,8 +289,11 @@ public class ShareFetchUtilsTest {
         responseData2.put(tp1, new FetchPartitionData(Errors.NONE, 0L, 0L,
                 MemoryRecords.EMPTY, Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
+        Map<TopicIdPartition, LogOffsetMetadata> fetchOffsetMetadata2 = new HashMap<>();
+        fetchOffsetMetadata2.put(tp0, mock(LogOffsetMetadata.class));
+        fetchOffsetMetadata2.put(tp1, mock(LogOffsetMetadata.class));
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData2 =
-                ShareFetchUtils.processFetchResponse(shareFetchData, responseData2, sharePartitionManager, replicaManager);
+                ShareFetchUtils.processFetchResponse(shareFetchData, responseData2, fetchOffsetMetadata2, sharePartitionManager, replicaManager);
 
         assertEquals(2, resultData2.size());
         assertTrue(resultData2.containsKey(tp0));
@@ -316,7 +332,7 @@ public class ShareFetchUtilsTest {
         FileRecords.TimestampAndOffset timestampAndOffset = new FileRecords.TimestampAndOffset(100L, 1L, Optional.empty());
         doReturn(new OffsetResultHolder(Option.apply(timestampAndOffset), Option.empty())).when(replicaManager).fetchOffsetForTimestamp(any(TopicPartition.class), anyLong(), any(), any(), anyBoolean());
 
-        when(sp0.acquire(anyString(), any(FetchPartitionData.class))).thenReturn(Collections.emptyList());
+        when(sp0.acquire(anyString(), any(FetchPartitionData.class), any())).thenReturn(Collections.emptyList());
         doNothing().when(sp0).updateCacheAndOffsets(any(Long.class));
 
         MemoryRecords records = MemoryRecords.withRecords(Compression.NONE,
@@ -330,9 +346,11 @@ public class ShareFetchUtilsTest {
             tp0, new FetchPartitionData(Errors.NONE, 0L, 0L,
                 records, Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
+        Map<TopicIdPartition, LogOffsetMetadata> fetchOffsetMetadata = Collections.singletonMap(
+            tp0, mock(LogOffsetMetadata.class));
 
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData =
-            ShareFetchUtils.processFetchResponse(shareFetchData, responseData, sharePartitionManager, replicaManager);
+            ShareFetchUtils.processFetchResponse(shareFetchData, responseData, fetchOffsetMetadata, sharePartitionManager, replicaManager);
 
         assertEquals(1, resultData.size());
         assertTrue(resultData.containsKey(tp0));
@@ -346,8 +364,9 @@ public class ShareFetchUtilsTest {
             tp0, new FetchPartitionData(Errors.OFFSET_OUT_OF_RANGE, 0L, 0L,
                 records, Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
+        fetchOffsetMetadata = Collections.singletonMap(tp0, mock(LogOffsetMetadata.class));
 
-        resultData = ShareFetchUtils.processFetchResponse(shareFetchData, responseData, sharePartitionManager, replicaManager);
+        resultData = ShareFetchUtils.processFetchResponse(shareFetchData, responseData, fetchOffsetMetadata, sharePartitionManager, replicaManager);
 
         assertEquals(1, resultData.size());
         assertTrue(resultData.containsKey(tp0));
