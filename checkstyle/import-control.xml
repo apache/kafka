@@ -419,7 +419,7 @@
       <allow pkg="org.apache.kafka.tools" />
       <allow pkg="org.apache.kafka.server.config" />
       <allow class="org.apache.kafka.server.authorizer.AuthorizableRequestContext" />
-      <allow class="io.opentelemetry.proto.metrics.v1.MetricsData"/>
+      <allow class="org.apache.kafka.shaded.io.opentelemetry.proto.metrics.v1.MetricsData"/>
       <allow class="org.apache.kafka.server.telemetry.ClientTelemetry" />
       <allow class="org.apache.kafka.server.telemetry.ClientTelemetryPayload" />
       <allow class="org.apache.kafka.server.telemetry.ClientTelemetryReceiver" />

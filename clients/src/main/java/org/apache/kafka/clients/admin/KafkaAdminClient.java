@@ -153,7 +153,6 @@ import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData.UserName;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
-import org.apache.kafka.common.message.GetTelemetrySubscriptionsRequestData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.ListClientMetricsResourcesRequestData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
@@ -228,8 +227,6 @@ import org.apache.kafka.common.requests.ElectLeadersRequest;
 import org.apache.kafka.common.requests.ElectLeadersResponse;
 import org.apache.kafka.common.requests.ExpireDelegationTokenRequest;
 import org.apache.kafka.common.requests.ExpireDelegationTokenResponse;
-import org.apache.kafka.common.requests.GetTelemetrySubscriptionsRequest;
-import org.apache.kafka.common.requests.GetTelemetrySubscriptionsResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsRequest;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
@@ -255,6 +252,7 @@ import org.apache.kafka.common.security.scram.internals.ScramFormatter;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.KafkaThread;
@@ -583,12 +581,13 @@ public class KafkaAdminClient extends AdminClient {
                                            Time time) {
         Metrics metrics = null;
         String clientId = generateClientId(config);
-
+        Optional<ClientTelemetryReporter> clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
+        
         try {
             metrics = new Metrics(new MetricConfig(), new LinkedList<>(), time);
             LogContext logContext = createLogContext(clientId);
             return new KafkaAdminClient(config, clientId, time, metadataManager, metrics,
-                client, null, logContext, Optional.empty());
+                client, null, logContext, clientTelemetryReporter);
         } catch (Throwable exc) {
             closeQuietly(metrics, "Metrics");
             throw new KafkaException("Failed to create new KafkaAdminClient", exc);
@@ -4935,48 +4934,16 @@ public class KafkaAdminClient extends AdminClient {
             throw new IllegalArgumentException("The timeout cannot be negative.");
         }
 
-        if (!clientTelemetryEnabled) {
+        if (clientTelemetryReporter.isEmpty()) {
             throw new IllegalStateException("Telemetry is not enabled. Set config `" + AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG + "` to `true`.");
+
         }
 
         if (clientInstanceId != null) {
             return clientInstanceId;
         }
 
-        final long now = time.milliseconds();
-        final KafkaFutureImpl<Uuid> future = new KafkaFutureImpl<>();
-        runnable.call(new Call("getTelemetrySubscriptions", calcDeadlineMs(now, (int) timeout.toMillis()),
-            new LeastLoadedNodeProvider()) {
-
-            @Override
-            GetTelemetrySubscriptionsRequest.Builder createRequest(int timeoutMs) {
-                return new GetTelemetrySubscriptionsRequest.Builder(new GetTelemetrySubscriptionsRequestData(), true);
-            }
-
-            @Override
-            void handleResponse(AbstractResponse abstractResponse) {
-                GetTelemetrySubscriptionsResponse response = (GetTelemetrySubscriptionsResponse) abstractResponse;
-                if (response.error() != Errors.NONE) {
-                    future.completeExceptionally(response.error().exception());
-                } else {
-                    future.complete(response.data().clientInstanceId());
-                }
-            }
-
-            @Override
-            void handleFailure(Throwable throwable) {
-                future.completeExceptionally(throwable);
-            }
-        }, now);
-
-        try {
-            clientInstanceId = future.get();
-        } catch (Exception e) {
-            log.error("Error occurred while fetching client instance id", e);
-            throw new KafkaException("Error occurred while fetching client instance id", e);
-        }
-
-        return clientInstanceId;
+        return ClientTelemetryUtils.fetchClientInstanceId(clientTelemetryReporter.get(), timeout);
     }
 
     private <K, V> void invokeDriver(

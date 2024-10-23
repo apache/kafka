@@ -40,6 +40,7 @@ import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.telemetry.ClientTelemetry;
 import org.apache.kafka.server.telemetry.ClientTelemetryPayload;
 import org.apache.kafka.server.telemetry.ClientTelemetryReceiver;
+import org.apache.kafka.shaded.io.opentelemetry.proto.metrics.v1.MetricsData;
 import org.apache.kafka.streams.ClientInstanceIds;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
@@ -81,8 +82,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import io.opentelemetry.proto.metrics.v1.MetricsData;
-
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
@@ -102,7 +101,8 @@ public class KafkaStreamsTelemetryIntegrationTest {
     private String outputTopicTwoPartitions;
     private String inputTopicOnePartition;
     private String outputTopicOnePartition;
-    private final List<Properties> streamsConfigurations = new ArrayList<>();
+    private Properties streamsApplicationProperties = new Properties();
+    private Properties streamsSecondApplicationProperties = new Properties();
 
     private static EmbeddedKafkaCluster cluster;
     private static final List<MetricsInterceptingConsumer<byte[], byte[]>> INTERCEPTING_CONSUMERS = new ArrayList<>();
@@ -111,12 +111,12 @@ public class KafkaStreamsTelemetryIntegrationTest {
     private static final int FIRST_INSTANCE_CONSUMER = 0;
     private static final int SECOND_INSTANCE_CONSUMER = 1;
     private static final Logger LOG = LoggerFactory.getLogger(KafkaStreamsTelemetryIntegrationTest.class);
-    public static final Map<Uuid, List<String>> SUBSCRIBED_CLIENT_METRICS = new ConcurrentHashMap<>();
+
 
     @BeforeAll
     public static void startCluster() throws IOException {
         final Properties properties = new Properties();
-        properties.put("metric.reporters", TestingClientTelemetry.class.getName());
+        properties.put("metric.reporters", TelemetryPlugin.class.getName());
         cluster = new EmbeddedKafkaCluster(NUM_BROKERS, properties);
         cluster.start();
     }
@@ -143,16 +143,18 @@ public class KafkaStreamsTelemetryIntegrationTest {
     public void tearDown() throws Exception {
         INTERCEPTING_CONSUMERS.clear();
         INTERCEPTING_ADMIN_CLIENTS.clear();
-        IntegrationTestUtils.purgeLocalStreamsState(streamsConfigurations);
-        streamsConfigurations.clear();
+        IntegrationTestUtils.purgeLocalStreamsState(streamsApplicationProperties);
+        if (!streamsSecondApplicationProperties.isEmpty()) {
+            IntegrationTestUtils.purgeLocalStreamsState(streamsSecondApplicationProperties);
+        }
     }
 
     @Test
     @DisplayName("Calling unregisterMetric on metrics not registered should not cause an error")
     public void shouldNotThrowExceptionWhenRemovingNonExistingMetrics() throws InterruptedException {
-        final Properties properties = props(true);
+        streamsApplicationProperties = props(true);
         final Topology topology = complexTopology();
-        try (final KafkaStreams streams = new KafkaStreams(topology, properties)) {
+        try (final KafkaStreams streams = new KafkaStreams(topology, streamsApplicationProperties)) {
             streams.start();
             waitForCondition(() -> KafkaStreams.State.RUNNING == streams.state(),
                     IntegrationTestUtils.DEFAULT_TIMEOUT,
@@ -168,40 +170,44 @@ public class KafkaStreamsTelemetryIntegrationTest {
     @Test
     @DisplayName("End-to-end test validating metrics pushed to broker")
     public void shouldPushMetricsToBroker() throws Exception {
-        final Properties properties = props(true);
+        streamsApplicationProperties  = props(true);
         final Topology topology = simpleTopology();
         subscribeForStreamsMetrics();
-        try (final KafkaStreams streams = new KafkaStreams(topology, properties)) {
+        try (final KafkaStreams streams = new KafkaStreams(topology, streamsApplicationProperties)) {
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
             final ClientInstanceIds clientInstanceIds = streams.clientInstanceIds(Duration.ofSeconds(60));
             final Uuid adminInstanceId = clientInstanceIds.adminInstanceId();
             final Uuid mainConsumerInstanceId = clientInstanceIds.consumerInstanceIds().entrySet().stream()
                     .filter(entry -> !entry.getKey().contains("restore"))
                     .map(Map.Entry::getValue)
-                    .findFirst().get();
+                    .findFirst().orElseThrow();
             assertNotNull(adminInstanceId);
             assertNotNull(mainConsumerInstanceId);
 
-            TestUtils.waitForCondition(() -> !SUBSCRIBED_CLIENT_METRICS.get(mainConsumerInstanceId).isEmpty(),
+            TestUtils.waitForCondition(() -> !TelemetryPlugin.SUBSCRIBED_METRICS.get(mainConsumerInstanceId).isEmpty(),
                     30_000,
                     "Never received subscribed metrics");
-            final List<String> actualTaskMetrics = SUBSCRIBED_CLIENT_METRICS.get(mainConsumerInstanceId).stream().filter(metricName -> metricName.startsWith("org.apache.kafka.stream.task")).collect(Collectors.toList());
+            final List<String> actualTaskMetrics = TelemetryPlugin.SUBSCRIBED_METRICS.get(mainConsumerInstanceId).stream().filter(metricName -> metricName.startsWith("org.apache.kafka.stream.task")).collect(Collectors.toList());
             assertEquals(EXPECTED_MAIN_CONSUMER_TASK_METRICS, actualTaskMetrics);
+
+            TestUtils.waitForCondition(() -> !TelemetryPlugin.SUBSCRIBED_METRICS.get(adminInstanceId).isEmpty(),
+                    30_000,
+                    "Never received subscribed metrics");
+            final List<String> actualInstanceMetrics = TelemetryPlugin.SUBSCRIBED_METRICS.get(adminInstanceId);
+            final List<String> expectedInstanceMetrics = Arrays.asList("org.apache.kafka.stream.alive.stream.threads", "org.apache.kafka.stream.failed.stream.threads");
+            assertEquals(expectedInstanceMetrics, actualInstanceMetrics);
         }
     }
 
     @ParameterizedTest
     @MethodSource("singleAndMultiTaskParameters")
     @DisplayName("Streams metrics should get passed to Admin and Consumer")
-    public void shouldPassMetrics(final String topologyType, final boolean stateUpdaterEnabled) throws InterruptedException {
-        final Properties properties = props(stateUpdaterEnabled);
+    public void shouldPassMetrics(final String topologyType, final boolean stateUpdaterEnabled) throws Exception {
+        streamsApplicationProperties = props(stateUpdaterEnabled);
         final Topology topology = topologyType.equals("simple") ? simpleTopology() : complexTopology();
        
-        try (final KafkaStreams streams = new KafkaStreams(topology, properties)) {
-            streams.start();
-            waitForCondition(() -> KafkaStreams.State.RUNNING == streams.state(),
-                    IntegrationTestUtils.DEFAULT_TIMEOUT,
-                    () -> "Kafka Streams never transitioned to a RUNNING state.");
+        try (final KafkaStreams streams = new KafkaStreams(topology, streamsApplicationProperties)) {
+            IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
             final List<MetricName> streamsThreadMetrics = streams.metrics().values().stream().map(Metric::metricName)
                     .filter(metricName -> metricName.tags().containsKey("thread-id")).collect(Collectors.toList());
@@ -226,23 +232,20 @@ public class KafkaStreamsTelemetryIntegrationTest {
     @ParameterizedTest
     @MethodSource("multiTaskParameters")
     @DisplayName("Correct streams metrics should get passed with dynamic membership")
-    public void shouldPassCorrectMetricsDynamicInstances(final boolean stateUpdaterEnabled) throws InterruptedException {
-        final Properties properties1 = props(stateUpdaterEnabled);
-        properties1.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks1");
-        properties1.put(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks1");
+    public void shouldPassCorrectMetricsDynamicInstances(final boolean stateUpdaterEnabled) throws Exception {
+        streamsApplicationProperties = props(stateUpdaterEnabled);
+        streamsApplicationProperties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks1");
+        streamsApplicationProperties.put(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks1");
 
 
-        final Properties properties2 = props(stateUpdaterEnabled);
-        properties2.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks2");
-        properties2.put(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks2");
+        streamsSecondApplicationProperties = props(stateUpdaterEnabled);
+        streamsSecondApplicationProperties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks2");
+        streamsSecondApplicationProperties.put(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks2");
         
 
         final Topology topology = complexTopology();
-        try (final KafkaStreams streamsOne = new KafkaStreams(topology, properties1)) {
-            streamsOne.start();
-            waitForCondition(() -> KafkaStreams.State.RUNNING == streamsOne.state(),
-                    IntegrationTestUtils.DEFAULT_TIMEOUT,
-                    () -> "Kafka Streams never transitioned to a RUNNING state.");
+        try (final KafkaStreams streamsOne = new KafkaStreams(topology, streamsApplicationProperties)) {
+            IntegrationTestUtils.startApplicationAndWaitUntilRunning(streamsOne);
 
             final List<MetricName> streamsTaskMetricNames = streamsOne.metrics().values().stream().map(Metric::metricName)
                     .filter(metricName -> metricName.tags().containsKey("task-id")).collect(Collectors.toList());
@@ -259,7 +262,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
             assertEquals(consumerPassedTaskMetricCount, streamsTaskMetricNames.size());
 
 
-            try (final KafkaStreams streamsTwo = new KafkaStreams(topology, properties2)) {
+            try (final KafkaStreams streamsTwo = new KafkaStreams(topology, streamsSecondApplicationProperties)) {
                 streamsTwo.start();
                 waitForCondition(() -> KafkaStreams.State.RUNNING == streamsTwo.state() && KafkaStreams.State.RUNNING == streamsOne.state(),
                         IntegrationTestUtils.DEFAULT_TIMEOUT,
@@ -321,22 +324,24 @@ public class KafkaStreamsTelemetryIntegrationTest {
 
     @Test
     @DisplayName("Streams metrics should not be visible in consumer metrics")
-    public void passedMetricsShouldNotLeakIntoConsumerMetrics() throws InterruptedException {
-        final Properties properties = props(true);
+    public void passedMetricsShouldNotLeakIntoConsumerMetrics() throws Exception {
+        streamsApplicationProperties = props(true);
         final Topology topology =  complexTopology();
 
-        try (final KafkaStreams streams = new KafkaStreams(topology, properties)) {
-            streams.start();
-            waitForCondition(() -> KafkaStreams.State.RUNNING == streams.state(),
-                    IntegrationTestUtils.DEFAULT_TIMEOUT,
-                    () -> "Kafka Streams never transitioned to a RUNNING state.");
+        try (final KafkaStreams streams = new KafkaStreams(topology, streamsApplicationProperties)) {
+            IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
             final List<MetricName> streamsThreadMetrics = streams.metrics().values().stream().map(Metric::metricName)
                     .filter(metricName -> metricName.tags().containsKey("thread-id")).collect(Collectors.toList());
 
+            final List<MetricName> streamsClientMetrics = streams.metrics().values().stream().map(Metric::metricName)
+                    .filter(metricName -> metricName.group().equals("stream-metrics")).collect(Collectors.toList());
+
             final Map<MetricName, ? extends Metric> embeddedConsumerMetrics = INTERCEPTING_CONSUMERS.get(FIRST_INSTANCE_CONSUMER).metrics();
+            final Map<MetricName, ? extends Metric> embeddedAdminMetrics = INTERCEPTING_ADMIN_CLIENTS.get(FIRST_INSTANCE_CONSUMER).metrics();
 
             streamsThreadMetrics.forEach(metricName -> assertFalse(embeddedConsumerMetrics.containsKey(metricName), "Stream thread metric found in client metrics" + metricName));
+            streamsClientMetrics.forEach(metricName -> assertFalse(embeddedAdminMetrics.containsKey(metricName), "Stream client metric found in client metrics" + metricName));
         }
     }
 
@@ -383,8 +388,6 @@ public class KafkaStreamsTelemetryIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_CLIENT_SUPPLIER_CONFIG, TestClientSupplier.class);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.putAll(extraProperties);
-        streamsConfigurations.add(streamsConfiguration);
-
         return streamsConfiguration;
     }
 
@@ -444,18 +447,6 @@ public class KafkaStreamsTelemetryIntegrationTest {
 
         public List<KafkaMetric> passedMetrics = new ArrayList<>();
 
-        public MetricsInterceptingConsumer(final Map<String, Object> configs) {
-            super(configs);
-        }
-
-        public MetricsInterceptingConsumer(final Properties properties) {
-            super(properties);
-        }
-
-        public MetricsInterceptingConsumer(final Properties properties, final Deserializer<K> keyDeserializer, final Deserializer<V> valueDeserializer) {
-            super(properties, keyDeserializer, valueDeserializer);
-        }
-
         public MetricsInterceptingConsumer(final Map<String, Object> configs, final Deserializer<K> keyDeserializer, final Deserializer<V> valueDeserializer) {
             super(configs, keyDeserializer, valueDeserializer);
         }
@@ -473,9 +464,10 @@ public class KafkaStreamsTelemetryIntegrationTest {
         }
     }
 
-    public static class TestingClientTelemetry implements ClientTelemetry, MetricsReporter, ClientTelemetryReceiver {
+    public static class TelemetryPlugin implements ClientTelemetry, MetricsReporter, ClientTelemetryReceiver {
 
-        public TestingClientTelemetry() {
+        public static final Map<Uuid, List<String>> SUBSCRIBED_METRICS = new ConcurrentHashMap<>();
+        public TelemetryPlugin() {
         }
 
         @Override
@@ -516,9 +508,9 @@ public class KafkaStreamsTelemetryIntegrationTest {
                         .sorted()
                         .collect(Collectors.toList());
                 LOG.info("Found metrics {} for clientId={}", metricNames, clientId);
-                SUBSCRIBED_CLIENT_METRICS.put(clientId, metricNames);
+                SUBSCRIBED_METRICS.put(clientId, metricNames);
             } catch (final Exception e) {
-                e.printStackTrace(System.out);
+                e.printStackTrace(System.err);
             }
         }
     }
