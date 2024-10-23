@@ -135,18 +135,19 @@ public class TestPurgatoryPerformance {
     }
 
     private static class TestArgumentDefinition {
-        final OptionParser parser = new OptionParser(false);
-        public final ArgumentAcceptingOptionSpec<Integer> keySpaceSizeOpt;
-        public final ArgumentAcceptingOptionSpec<Double> numRequestsOpt;
-        public final ArgumentAcceptingOptionSpec<Double> requestRateOpt;
-        public final ArgumentAcceptingOptionSpec<Integer> numKeysOpt;
-        public final ArgumentAcceptingOptionSpec<Long> timeoutOpt;
-        public final ArgumentAcceptingOptionSpec<Double> pct75Opt;
-        public final ArgumentAcceptingOptionSpec<Double> pct50Opt;
-        public final ArgumentAcceptingOptionSpec<Boolean> verboseOpt;
-        public OptionSet options;
+        private final OptionParser parser;
+        private final ArgumentAcceptingOptionSpec<Integer> keySpaceSizeOpt;
+        private final ArgumentAcceptingOptionSpec<Double> numRequestsOpt;
+        private final ArgumentAcceptingOptionSpec<Double> requestRateOpt;
+        private final ArgumentAcceptingOptionSpec<Integer> numKeysOpt;
+        private final ArgumentAcceptingOptionSpec<Long> timeoutOpt;
+        private final ArgumentAcceptingOptionSpec<Double> pct75Opt;
+        private final ArgumentAcceptingOptionSpec<Double> pct50Opt;
+        private final ArgumentAcceptingOptionSpec<Boolean> verboseOpt;
+        private final OptionSet options;
 
         public TestArgumentDefinition(String[] args) {
+            this.parser = new OptionParser(false);
             this.keySpaceSizeOpt = parser
                     .accepts("key-space-size", "The total number of possible keys")
                     .withRequiredArg()
@@ -321,7 +322,7 @@ public class TestPurgatoryPerformance {
 
             System.out.printf("# latency samples: pct75 = %d, pct50 = %d, min = %d, max = %d%n", p75, p50,
                     samples.stream().min(Comparator.comparingDouble(s -> s)).get(),
-                    samples.stream().min(Comparator.comparingDouble(s -> s)).get());
+                    samples.stream().max(Comparator.comparingDouble(s -> s)).get());
         }
     }
 
