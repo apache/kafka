@@ -26,9 +26,9 @@ import org.slf4j.Logger;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
@@ -100,7 +100,7 @@ class PeriodicTaskControlManager {
             }
             if (log.isDebugEnabled() || task.flags().contains(PeriodicTaskFlag.VERBOSE)) {
                 long endNs = time.nanoseconds();
-                long durationUs = TimeUnit.NANOSECONDS.toMicros(endNs - startNs);
+                long durationUs = NANOSECONDS.toMicros(endNs - startNs);
                 if (task.flags().contains(PeriodicTaskFlag.VERBOSE)) {
                     log.info("Periodic task {} generated {} records in {} microseconds.",
                             task.name(), result.records().size(), durationUs);
@@ -186,12 +186,12 @@ class PeriodicTaskControlManager {
             // collection of operations before picking from the non-deferred collection of
             // operations. This can result in some unfairness if deferred operation are
             // scheduled for immediate execution. This delays them by a small amount of time.
-            return NANOSECONDS.convert(10, TimeUnit.MILLISECONDS);
+            return MILLISECONDS.toNanos(10);
         } else if (error) {
             // If the periodic task hit an error, reschedule it in 5 minutes. This is to avoid
             // scenarios where we spin in a tight loop hitting errors, but still give the task
             // a chance to succeed.
-            return MINUTES.convert(5, TimeUnit.MILLISECONDS);
+            return MINUTES.toNanos(5);
         } else {
             // Otherwise, use the designated period.
             return task.periodNs();

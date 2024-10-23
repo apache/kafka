@@ -44,6 +44,7 @@ public class PeriodicTaskControlManagerTest {
         final AtomicInteger numCalls;
         final AtomicBoolean continuation = new AtomicBoolean(false);
         final PeriodicTask task;
+        final AtomicBoolean shouldFail = new AtomicBoolean(false);
 
         FakePeriodicTask(
             String name,
@@ -53,6 +54,9 @@ public class PeriodicTaskControlManagerTest {
             this.task = new PeriodicTask(name,
                 () -> {
                     numCalls.addAndGet(1);
+                    if (shouldFail.getAndSet(false)) {
+                        throw new NullPointerException("uh oh");
+                    }
                     return ControllerResult.of(Collections.emptyList(),
                         continuation.getAndSet(false));
                 },
@@ -154,7 +158,11 @@ public class PeriodicTaskControlManagerTest {
                     Iterator<TrackedTask> taskIter = entry.getValue().iterator();
                     TrackedTask task = taskIter.next();
                     taskIter.remove();
-                    task.op.get();
+                    try {
+                        task.op.get();
+                    } catch (Exception e) {
+                        // discard exception
+                    }
                     continue;
                 }
                 iter.remove();
@@ -272,6 +280,21 @@ public class PeriodicTaskControlManagerTest {
         env.advanceTime(200);
         assertEquals(0, foo.numCalls.get());
         assertEquals(1, bar.numCalls.get());
+        env.manager.deactivate();
+    }
+
+    @Test
+    public void testReschedulingAfterFailure() {
+        FakePeriodicTask foo = new FakePeriodicTask("foo", MILLISECONDS.toNanos(100));
+        foo.shouldFail.set(true);
+        PeriodicTaskControlManagerTestEnv env = new PeriodicTaskControlManagerTestEnv();
+        env.manager.activate();
+        env.manager.registerTask(foo.task);
+        assertEquals(1, env.numDeferred());
+        env.advanceTime(100);
+        assertEquals(1, foo.numCalls.get());
+        env.advanceTime(300000);
+        assertEquals(2, foo.numCalls.get());
         env.manager.deactivate();
     }
 }
