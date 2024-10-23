@@ -51,13 +51,12 @@ public class ShareFetchUtils {
      */
     static Map<TopicIdPartition, ShareFetchResponseData.PartitionData> processFetchResponse(
             ShareFetchData shareFetchData,
-            Map<TopicIdPartition, FetchPartitionData> responseData,
-            Map<TopicIdPartition, LogOffsetMetadata> fetchOffsetMetadata,
+            Map<TopicIdPartition, FetchPartitionOffsetData> responseData,
             SharePartitionManager sharePartitionManager,
             ReplicaManager replicaManager
     ) {
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> response = new HashMap<>();
-        responseData.forEach((topicIdPartition, fetchPartitionData) -> {
+        responseData.forEach((topicIdPartition, fetchPartitionOffsetData) -> {
 
             SharePartition sharePartition = sharePartitionManager.sharePartition(shareFetchData.groupId(), topicIdPartition);
             if (sharePartition == null) {
@@ -66,6 +65,9 @@ public class ShareFetchUtils {
             }
             ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
                 .setPartitionIndex(topicIdPartition.partition());
+
+            FetchPartitionData fetchPartitionData = fetchPartitionOffsetData.fetchPartitionData();
+            LogOffsetMetadata logOffsetMetadata = fetchPartitionOffsetData.logOffsetMetadata();
 
             if (fetchPartitionData.error.code() != Errors.NONE.code()) {
                 partitionData
@@ -87,7 +89,7 @@ public class ShareFetchUtils {
                 }
             } else {
                 List<AcquiredRecords> acquiredRecords = sharePartition.acquire(shareFetchData.memberId(), fetchPartitionData,
-                    fetchOffsetMetadata.get(topicIdPartition));
+                    logOffsetMetadata);
                 log.trace("Acquired records for topicIdPartition: {} with share fetch data: {}, records: {}",
                     topicIdPartition, shareFetchData, acquiredRecords);
                 // Maybe, in the future, check if no records are acquired, and we want to retry

@@ -116,20 +116,18 @@ public class DelayedShareFetch extends DelayedOperation {
                 QuotaFactory.UnboundedQuota$.MODULE$,
                 true);
 
-            Map<TopicIdPartition, FetchPartitionData> responseData = new HashMap<>();
-            Map<TopicIdPartition, LogOffsetMetadata> fetchOffsetMetadata = new HashMap<>();
+            Map<TopicIdPartition, FetchPartitionOffsetData> responseData = new HashMap<>();
             responseLogResult.foreach(tpLogResult -> {
                 TopicIdPartition topicIdPartition = tpLogResult._1();
                 LogReadResult logResult = tpLogResult._2();
                 FetchPartitionData fetchPartitionData = logResult.toFetchPartitionData(false);
-                responseData.put(topicIdPartition, fetchPartitionData);
-                fetchOffsetMetadata.put(topicIdPartition, logResult.info().fetchOffsetMetadata);
+                responseData.put(topicIdPartition, new FetchPartitionOffsetData(fetchPartitionData, logResult.info().fetchOffsetMetadata));
                 return BoxedUnit.UNIT;
             });
 
             log.trace("Data successfully retrieved by replica manager: {}", responseData);
             Map<TopicIdPartition, ShareFetchResponseData.PartitionData> result =
-                ShareFetchUtils.processFetchResponse(shareFetchData, responseData, fetchOffsetMetadata, sharePartitionManager, replicaManager);
+                ShareFetchUtils.processFetchResponse(shareFetchData, responseData, sharePartitionManager, replicaManager);
             shareFetchData.future().complete(result);
         } catch (Exception e) {
             log.error("Error processing delayed share fetch request", e);
