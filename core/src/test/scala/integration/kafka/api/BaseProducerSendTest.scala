@@ -19,7 +19,7 @@ package kafka.api
 
 import java.time.Duration
 import java.nio.charset.StandardCharsets
-import java.util.{Collections, Properties, stream}
+import java.util.{Collections, Properties}
 import java.util.concurrent.TimeUnit
 import kafka.integration.KafkaServerTestHarness
 import kafka.security.JaasTestUtils
@@ -38,7 +38,7 @@ import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, MethodSource}
+import org.junit.jupiter.params.provider.MethodSource
 
 import scala.collection.mutable
 import scala.concurrent.ExecutionException
@@ -564,16 +564,4 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     }
   }
 
-}
-
-object BaseProducerSendTest {
-  // We want to test the following combinations:
-  // * KRaft and the classic group protocol
-  // * KRaft and the consumer group protocol
-  def getTestQuorumAndGroupProtocolParametersAll() : java.util.stream.Stream[Arguments] = {
-    stream.Stream.of(
-      Arguments.of("kraft", "classic"),
-      Arguments.of("kraft", "consumer")
-    )
-  }
 }

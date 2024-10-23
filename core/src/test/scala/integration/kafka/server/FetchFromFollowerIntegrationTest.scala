@@ -29,10 +29,10 @@ import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{Disabled, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, MethodSource}
+import org.junit.jupiter.params.provider.MethodSource
 
 import java.util
-import java.util.{Collections, Properties, stream}
+import java.util.{Collections, Properties}
 import java.util.concurrent.{Executors, TimeUnit}
 import scala.jdk.CollectionConverters._
 
@@ -288,17 +288,5 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     assertEquals(1, topicResponse.partitions.size)
 
     topicResponse.partitions.get(0).preferredReadReplica
-  }
-}
-
-object FetchFromFollowerIntegrationTest {
-  // We want to test the following combinations:
-  // * KRaft and the classic group protocol
-  // * KRaft and the consumer group protocol
-  def getTestQuorumAndGroupProtocolParametersAll() : java.util.stream.Stream[Arguments] = {
-    stream.Stream.of(
-      Arguments.of("kraft", "classic"),
-      Arguments.of("kraft", "consumer")
-    )
   }
 }

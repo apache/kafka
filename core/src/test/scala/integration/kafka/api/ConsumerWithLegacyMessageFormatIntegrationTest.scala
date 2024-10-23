@@ -23,10 +23,10 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, MethodSource}
+import org.junit.jupiter.params.provider.MethodSource
 
 import java.util
-import java.util.{Collections, Optional, Properties, stream}
+import java.util.{Collections, Optional, Properties}
 import scala.jdk.CollectionConverters._
 
 class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTest {
@@ -144,17 +144,5 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
     assertEquals(100L, latests.get(t0p0))
     assertEquals(100L, latests.get(t0p1))
     assertEquals(100L, latests.get(t1p0))
-  }
-}
-
-object ConsumerWithLegacyMessageFormatIntegrationTest {
-  // We want to test the following combinations:
-  // * KRaft and the classic group protocol
-  // * KRaft and the consumer group protocol
-  def getTestQuorumAndGroupProtocolParametersAll() : java.util.stream.Stream[Arguments] = {
-    stream.Stream.of(
-      Arguments.of("kraft", "classic"),
-      Arguments.of("kraft", "consumer")
-    )
   }
 }
