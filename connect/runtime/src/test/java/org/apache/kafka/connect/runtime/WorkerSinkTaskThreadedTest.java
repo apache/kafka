@@ -598,7 +598,8 @@ public class WorkerSinkTaskThreadedTest {
 
             TopicPartition topicPartition = new TopicPartition(TOPIC, PARTITION);
             ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned, TIMESTAMP, TIMESTAMP_TYPE, 0, 0, RAW_KEY, RAW_VALUE, emptyHeaders(), Optional.empty());
-            ConsumerRecords<byte[], byte[]> records = new ConsumerRecords<>(Collections.singletonMap(topicPartition, singletonList(consumerRecord)));
+            ConsumerRecords<byte[], byte[]> records = new ConsumerRecords<>(Map.of(topicPartition, List.of(consumerRecord)),
+                Map.of(topicPartition, new OffsetAndMetadata(FIRST_OFFSET + recordsReturned + 1, Optional.empty(), "")));
             recordsReturned++;
             return records;
         });
@@ -629,7 +630,8 @@ public class WorkerSinkTaskThreadedTest {
                     TOPIC, PARTITION, FIRST_OFFSET + recordsReturned, TIMESTAMP, TIMESTAMP_TYPE,
                     0, 0, RAW_KEY, RAW_VALUE, emptyHeaders(), Optional.empty());
             ConsumerRecords<byte[], byte[]> records =
-                    new ConsumerRecords<>(Collections.singletonMap(topicPartition, singletonList(consumerRecord)));
+                    new ConsumerRecords<>(Map.of(topicPartition, List.of(consumerRecord)),
+                        Map.of(topicPartition, new OffsetAndMetadata(FIRST_OFFSET + recordsReturned + 1, Optional.empty(), "")));
             recordsReturned++;
             return records;
         });
