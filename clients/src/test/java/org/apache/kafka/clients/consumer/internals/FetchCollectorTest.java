@@ -665,7 +665,7 @@ public class FetchCollectorTest {
         Records rawRecords = createTransactionalRecords(ControlRecordType.ABORT, true, 0, recordCount);
         FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
             .setRecords(rawRecords)
-            .setAbortedTransactions(createAbortedTransactions());
+            .setAbortedTransactions(createAbortedTransaction(0));
         CompletedFetch completedFetch1 = completedFetchBuilder
             .partitionData(partitionData)
             .build();
@@ -683,7 +683,7 @@ public class FetchCollectorTest {
         rawRecords = createTransactionalRecords(ControlRecordType.ABORT, false, startOffset, recordCount);
         partitionData = new FetchResponseData.PartitionData()
             .setRecords(rawRecords)
-            .setAbortedTransactions(createAbortedTransactions());
+            .setAbortedTransactions(createAbortedTransaction(startOffset));
         CompletedFetch completedFetch2 = completedFetchBuilder
             .partitionData(partitionData)
             .fetchOffset(startOffset)
@@ -698,9 +698,9 @@ public class FetchCollectorTest {
         assertEquals(new OffsetAndMetadata(startOffset + recordCount + 1, Optional.of(0), ""), fetch.nextOffsets().get(topicAPartition0));
     }
 
-    private List<FetchResponseData.AbortedTransaction> createAbortedTransactions() {
+    private List<FetchResponseData.AbortedTransaction> createAbortedTransaction(final long firstOffset) {
         FetchResponseData.AbortedTransaction abortedTransaction = new FetchResponseData.AbortedTransaction();
-        abortedTransaction.setFirstOffset(0);
+        abortedTransaction.setFirstOffset(firstOffset);
         abortedTransaction.setProducerId(PRODUCER_ID);
         return Collections.singletonList(abortedTransaction);
     }
