@@ -24,8 +24,10 @@ import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 
-import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.spi.LoggerContext;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -46,7 +48,8 @@ import static net.sourceforge.argparse4j.impl.Arguments.store;
  */
 
 public class VerifiableLog4jAppender {
-    Logger logger = Logger.getLogger(VerifiableLog4jAppender.class);
+    LoggerContext loggerContext = LogManager.getContext(false);
+    Logger logger = loggerContext.getLogger(VerifiableLog4jAppender.class);
 
     // If maxMessages < 0, log until the process is killed externally
     private long maxMessages = -1;
