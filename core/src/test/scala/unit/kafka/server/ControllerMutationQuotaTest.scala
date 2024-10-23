@@ -42,7 +42,8 @@ import org.apache.kafka.common.requests.DeleteTopicsResponse
 import org.apache.kafka.common.security.auth.AuthenticationContext
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
-import org.apache.kafka.server.config.{QuotaConfigs, ServerConfigs}
+import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs}
+import org.apache.kafka.server.quota.QuotaType
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -106,13 +107,13 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     properties.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG,
       classOf[ControllerMutationQuotaTest.TestPrincipalBuilder].getName)
     // Specify number of samples and window size.
-    properties.put(QuotaConfigs.NUM_CONTROLLER_QUOTA_SAMPLES_CONFIG, ControllerQuotaSamples.toString)
-    properties.put(QuotaConfigs.CONTROLLER_QUOTA_WINDOW_SIZE_SECONDS_CONFIG, ControllerQuotaWindowSizeSeconds.toString)
+    properties.put(QuotaConfig.NUM_CONTROLLER_QUOTA_SAMPLES_CONFIG, ControllerQuotaSamples.toString)
+    properties.put(QuotaConfig.CONTROLLER_QUOTA_WINDOW_SIZE_SECONDS_CONFIG, ControllerQuotaWindowSizeSeconds.toString)
   }
 
   override def kraftControllerConfigs(testInfo: TestInfo): Seq[Properties] = {
     val props = super.kraftControllerConfigs(testInfo)
-    props.head.setProperty(QuotaConfigs.NUM_CONTROLLER_QUOTA_SAMPLES_CONFIG, ControllerQuotaSamples.toString)
+    props.head.setProperty(QuotaConfig.NUM_CONTROLLER_QUOTA_SAMPLES_CONFIG, ControllerQuotaSamples.toString)
     props
   }
 
@@ -377,7 +378,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
 
   private def defineUserQuota(user: String, quota: Option[Double]): Unit = {
     val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.USER -> user).asJava)
-    val quotas = Map(QuotaConfigs.CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG -> quota)
+    val quotas = Map(QuotaConfig.CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG -> quota)
 
     try alterClientQuotas(Map(entity -> quotas))(entity).get(10, TimeUnit.SECONDS) catch {
       case e: ExecutionException => throw e.getCause
@@ -406,7 +407,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       else brokers.head.metrics
     val metricName = metrics.metricName(
       "tokens",
-      QuotaType.ControllerMutation.toString,
+      QuotaType.CONTROLLER_MUTATION.toString,
       "Tracking remaining tokens in the token bucket per user/client-id",
       Map(DefaultTags.User -> user, DefaultTags.ClientId -> "").asJava)
     Option(metrics.metric(metricName))

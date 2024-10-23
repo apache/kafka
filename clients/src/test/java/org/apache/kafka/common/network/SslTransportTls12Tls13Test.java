@@ -26,8 +26,6 @@ import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledForJreRange;
-import org.junit.jupiter.api.condition.JRE;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -70,7 +68,6 @@ public class SslTransportTls12Tls13Test {
      * Tests that connections fails if TLSv1.3 enabled but cipher suite suitable only for TLSv1.2 used.
      */
     @Test
-    @EnabledForJreRange(min = JRE.JAVA_11)
     public void testCiphersSuiteForTls12FailsForTls13() throws Exception {
         String cipherSuite = "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384";
 
@@ -89,7 +86,6 @@ public class SslTransportTls12Tls13Test {
      * Tests that connections can't be made if server uses TLSv1.2 with custom cipher suite and client uses TLSv1.3.
      */
     @Test
-    @EnabledForJreRange(min = JRE.JAVA_11)
     public void testCiphersSuiteFailForServerTls12ClientTls13() throws Exception {
         String tls12CipherSuite = "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384";
         String tls13CipherSuite = "TLS_AES_128_GCM_SHA256";
@@ -110,7 +106,6 @@ public class SslTransportTls12Tls13Test {
      * Tests that connections can be made with TLSv1.3 cipher suite.
      */
     @Test
-    @EnabledForJreRange(min = JRE.JAVA_11)
     public void testCiphersSuiteForTls13() throws Exception {
         String cipherSuite = "TLS_AES_128_GCM_SHA256";
 

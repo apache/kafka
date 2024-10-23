@@ -56,7 +56,6 @@ import java.util.concurrent.atomic.LongAdder;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
-import static org.apache.kafka.streams.state.internals.StoreQueryUtils.getDeserializeValue;
 
 public class MeteredWindowStore<K, V>
     extends WrappedStateStore<WindowStore<Bytes, byte[]>, Windowed<K>, V>
@@ -417,7 +416,7 @@ public class MeteredWindowStore<K, V>
                         iteratorDurationSensor,
                         streamsMetrics,
                         serdes::keyFrom,
-                        getDeserializeValue(serdes, wrapped()),
+                        StoreQueryUtils.deserializeValue(serdes, wrapped()),
                         time,
                         numOpenIterators,
                         openIterators
@@ -469,7 +468,7 @@ public class MeteredWindowStore<K, V>
                     fetchSensor,
                     iteratorDurationSensor,
                     streamsMetrics,
-                    getDeserializeValue(serdes, wrapped()),
+                    StoreQueryUtils.deserializeValue(serdes, wrapped()),
                     time,
                     numOpenIterators,
                     openIterators

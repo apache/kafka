@@ -21,8 +21,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.equalTo;
@@ -39,7 +39,7 @@ public class PositionBoundTest {
         final PositionBound positionBound = PositionBound.at(position);
         position.withComponent("topic", 1, 2L);
 
-        assertThat(position.getTopics(), equalTo(mkSet("topic")));
+        assertThat(position.getTopics(), equalTo(Set.of("topic")));
         assertThat(positionBound.position().getTopics(), empty());
     }
 

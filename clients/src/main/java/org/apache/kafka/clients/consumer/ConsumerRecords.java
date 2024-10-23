@@ -32,20 +32,20 @@ import java.util.Set;
  * partition returned by a {@link Consumer#poll(java.time.Duration)} operation.
  */
 public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
-    public static final ConsumerRecords<Object, Object> EMPTY = new ConsumerRecords<>(Collections.emptyMap());
+    public static final ConsumerRecords<Object, Object> EMPTY = new ConsumerRecords<>(Map.of(), Map.of());
 
     private final Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
-    private Map<TopicPartition, OffsetAndMetadata> nextOffsets;
+    private final Map<TopicPartition, OffsetAndMetadata> nextOffsets;
 
+    @Deprecated
     public ConsumerRecords(Map<TopicPartition, List<ConsumerRecord<K, V>>> records) {
-        this.records = records;
+        this(records, Map.of());
     }
 
-    public ConsumerRecords(Map<TopicPartition, List<ConsumerRecord<K, V>>> records, Map<TopicPartition, OffsetAndMetadata> nextOffsets) {
+    public ConsumerRecords(Map<TopicPartition, List<ConsumerRecord<K, V>>> records, final Map<TopicPartition, OffsetAndMetadata> nextOffsets) {
         this.records = records;
-        this.nextOffsets = nextOffsets;
+        this.nextOffsets = Map.copyOf(nextOffsets);
     }
-
 
     /**
      * Get just the records for the given partition
@@ -58,6 +58,14 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
             return Collections.emptyList();
         else
             return Collections.unmodifiableList(recs);
+    }
+
+    /**
+     * Get the next offsets and metadata corresponding to all topic partitions for which the position have been advanced in this poll call
+     * @return the next offsets that the consumer will consume
+     */
+    public Map<TopicPartition, OffsetAndMetadata> nextOffsets() {
+        return nextOffsets;
     }
 
     /**
@@ -80,10 +88,6 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
      */
     public Set<TopicPartition> partitions() {
         return Collections.unmodifiableSet(records.keySet());
-    }
-
-    public Map<TopicPartition, OffsetAndMetadata> nextOffsets() {
-        return nextOffsets;
     }
 
     @Override

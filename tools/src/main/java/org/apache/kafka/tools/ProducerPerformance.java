@@ -428,7 +428,7 @@ public class ProducerPerformance {
             double recsPerSec = 1000.0 * count / (double) elapsed;
             double mbPerSec = 1000.0 * this.bytes / (double) elapsed / (1024.0 * 1024.0);
             int[] percs = percentiles(this.latencies, index, 0.5, 0.95, 0.99, 0.999);
-            System.out.printf("%d records sent, %f records/sec (%.2f MB/sec), %.2f ms avg latency, %.2f ms max latency, %d ms 50th, %d ms 95th, %d ms 99th, %d ms 99.9th.%n",
+            System.out.printf("%d records sent, %.1f records/sec (%.2f MB/sec), %.2f ms avg latency, %.2f ms max latency, %d ms 50th, %d ms 95th, %d ms 99th, %d ms 99.9th.%n",
                               count,
                               recsPerSec,
                               mbPerSec,
@@ -479,7 +479,7 @@ public class ProducerPerformance {
 
     static final class ConfigPostProcessor {
         final String topicName;
-        final long numRecords;
+        final Long numRecords;
         final Integer recordSize;
         final double throughput;
         final boolean payloadMonotonic;
@@ -503,11 +503,17 @@ public class ProducerPerformance {
             String payloadFilePath = namespace.getString("payloadFile");
             Long transactionDurationMsArg = namespace.getLong("transactionDurationMs");
             String transactionIdArg = namespace.getString("transactionalId");
+            if (numRecords != null && numRecords <= 0) {
+                throw new ArgumentParserException("--num-records should be greater than zero", parser);
+            }
+            if (recordSize != null && recordSize <= 0) {
+                throw new ArgumentParserException("--record-size should be greater than zero", parser);
+            }
             if (producerConfigs == null && producerConfigFile == null) {
                 throw new ArgumentParserException("Either --producer-props or --producer.config must be specified.", parser);
             }
             if (transactionDurationMsArg != null && transactionDurationMsArg <= 0) {
-                throw new ArgumentParserException("--transaction-duration-ms should > 0", parser);
+                throw new ArgumentParserException("--transaction-duration-ms should be greater than zero", parser);
             }
 
             // since default value gets printed with the help text, we are escaping \n there and replacing it with correct value here.

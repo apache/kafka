@@ -21,8 +21,9 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
-import org.apache.kafka.coordinator.transaction.TransactionLogConfigs;
-import org.apache.kafka.coordinator.transaction.TransactionStateManagerConfigs;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
+import org.apache.kafka.coordinator.transaction.TransactionStateManagerConfig;
 import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.security.PasswordEncoderConfigs;
@@ -57,11 +58,12 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
             CleanerConfig.CONFIG_DEF,
             LogConfig.SERVER_CONFIG_DEF,
             ShareGroupConfig.CONFIG_DEF,
-            TransactionLogConfigs.CONFIG_DEF,
-            TransactionStateManagerConfigs.CONFIG_DEF,
+            ShareCoordinatorConfig.CONFIG_DEF,
+            TransactionLogConfig.CONFIG_DEF,
+            TransactionStateManagerConfig.CONFIG_DEF,
             QuorumConfig.CONFIG_DEF,
             MetricConfigs.CONFIG_DEF,
-            QuotaConfigs.CONFIG_DEF,
+            QuotaConfig.CONFIG_DEF,
             BrokerSecurityConfigs.CONFIG_DEF,
             DelegationTokenManagerConfigs.CONFIG_DEF,
             PasswordEncoderConfigs.CONFIG_DEF

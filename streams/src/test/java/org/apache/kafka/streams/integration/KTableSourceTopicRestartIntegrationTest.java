@@ -67,8 +67,8 @@ public class KTableSourceTopicRestartIntegrationTest {
     public static void startCluster() throws IOException {
         CLUSTER.start();
         STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        STREAMS_CONFIG.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        STREAMS_CONFIG.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        STREAMS_CONFIG.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+        STREAMS_CONFIG.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         STREAMS_CONFIG.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         STREAMS_CONFIG.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         STREAMS_CONFIG.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 5L);
@@ -120,8 +120,7 @@ public class KTableSourceTopicRestartIntegrationTest {
     @Test
     public void shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosDisabled() throws Exception {
         try {
-            streams = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
-            streams.start();
+            streams = IntegrationTestUtils.getRunningStreams(STREAMS_CONFIG, streamsBuilder, false);
 
             produceKeyValues("a", "b", "c");
 
@@ -131,7 +130,7 @@ public class KTableSourceTopicRestartIntegrationTest {
             streams = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
             // the state restore listener will append one record to the log
             streams.setGlobalStateRestoreListener(new UpdatingSourceTopicOnRestoreStartStateRestoreListener());
-            streams.start();
+            IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
             produceKeyValues("f", "g", "h");
 
@@ -144,23 +143,12 @@ public class KTableSourceTopicRestartIntegrationTest {
         }
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosAlphaEnabled() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
-        shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosEnabled();
-    }
-
     @Test
     public void shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosV2Enabled() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
-        shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosEnabled();
-    }
 
-    private void shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosEnabled() throws Exception {
         try {
-            streams = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
-            streams.start();
+            streams = IntegrationTestUtils.getRunningStreams(STREAMS_CONFIG, streamsBuilder, false);
 
             produceKeyValues("a", "b", "c");
 
@@ -170,7 +158,7 @@ public class KTableSourceTopicRestartIntegrationTest {
             streams = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
             // the state restore listener will append one record to the log
             streams.setGlobalStateRestoreListener(new UpdatingSourceTopicOnRestoreStartStateRestoreListener());
-            streams.start();
+            IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
             produceKeyValues("f", "g", "h");
 
@@ -186,16 +174,14 @@ public class KTableSourceTopicRestartIntegrationTest {
     @Test
     public void shouldRestoreAndProgressWhenTopicNotWrittenToDuringRestoration() throws Exception {
         try {
-            streams = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
-            streams.start();
+            streams = IntegrationTestUtils.getStartedStreams(STREAMS_CONFIG, streamsBuilder, false);
 
             produceKeyValues("a", "b", "c");
 
             assertNumberValuesRead(readKeyValues, expectedInitialResultsMap, "Table did not read all values");
 
             streams.close();
-            streams = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
-            streams.start();
+            streams = IntegrationTestUtils.getRunningStreams(STREAMS_CONFIG, streamsBuilder, false);
 
             produceKeyValues("f", "g", "h");
 

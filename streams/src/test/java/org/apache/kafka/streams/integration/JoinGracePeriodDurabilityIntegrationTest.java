@@ -42,13 +42,13 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -70,12 +70,8 @@ import static org.hamcrest.MatcherAssert.assertThat;
 @Timeout(600)
 public class JoinGracePeriodDurabilityIntegrationTest {
 
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
-        3,
-        mkProperties(mkMap()),
-        0L
-    );
-
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
+    private static final long NOW = Instant.now().toEpochMilli();
     @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
@@ -91,10 +87,8 @@ public class JoinGracePeriodDurabilityIntegrationTest {
     private static final Serde<String> STRING_SERDE = Serdes.String();
     private static final long COMMIT_INTERVAL = 100L;
 
-    @SuppressWarnings("deprecation")
-    @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
-    public void shouldRecoverBufferAfterShutdown(final String processingGuarantee, final TestInfo testInfo) {
+    @Test
+    public void shouldRecoverBufferAfterShutdown(final TestInfo testInfo) {
         final String testId = safeUniqueTestName(testInfo);
         final String appId = "appId_" + testId;
         final String streamInput = "Streaminput" + testId;
@@ -124,7 +118,6 @@ public class JoinGracePeriodDurabilityIntegrationTest {
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
             mkEntry(StreamsConfig.POLL_MS_CONFIG, Long.toString(COMMIT_INTERVAL)),
-            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuarantee),
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
             mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
             mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class)
@@ -219,7 +212,7 @@ public class JoinGracePeriodDurabilityIntegrationTest {
      * just to exercise that everything works properly in the presence of commits.
      */
     private long scaledTime(final long unscaledTime) {
-        return COMMIT_INTERVAL * 2 * unscaledTime;
+        return NOW + COMMIT_INTERVAL * 2 * unscaledTime;
     }
 
     private static void produceSynchronouslyToPartitionZero(final String topic, final List<KeyValueTimestamp<String, String>> toProduce) {

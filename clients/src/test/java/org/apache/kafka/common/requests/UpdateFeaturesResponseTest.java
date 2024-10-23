@@ -17,11 +17,15 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.UpdateFeaturesResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
 
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -59,4 +63,21 @@ public class UpdateFeaturesResponseTest {
         assertEquals(1, errorCounts.get(Errors.FEATURE_UPDATE_FAILED).intValue());
     }
 
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.UPDATE_FEATURES)
+    public void testSerialization(short version) {
+        UpdateFeaturesResponse noErrorResponse = UpdateFeaturesResponse.parse(UpdateFeaturesResponse.createWithErrors(ApiError.NONE,
+            Set.of("feature-1", "feature-2"), 0).serialize(version), version);
+
+        // Versions 1 and below still contain feature level results when the error is NONE.
+        int expectedSize = version <= 1 ? 2 : 0;
+        assertEquals(ApiError.NONE, noErrorResponse.topLevelError());
+        assertEquals(expectedSize, noErrorResponse.data().results().size());
+
+        ApiError error = new ApiError(Errors.INVALID_UPDATE_VERSION);
+        UpdateFeaturesResponse errorResponse = UpdateFeaturesResponse.parse(UpdateFeaturesResponse.createWithErrors(error,
+            Set.of("feature-1", "feature-2"), 0).serialize(version), version);
+        assertEquals(error, errorResponse.topLevelError());
+        assertEquals(0, errorResponse.data().results().size());
+    }
 }

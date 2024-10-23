@@ -15,31 +15,42 @@
 
 name: Check and Test
 
+# This workflow should only be called from ci.yml which is triggered on
+# the "pull_request" event type. We should never dispatch this workflow from
+# a "pull_request_target" event.
 on:
   workflow_call:
     inputs:
       gradle-cache-read-only:
         description: "Should the Gradle cache be read-only?"
-        default: "true"
-        type: string
-      github-actions-opt-in:
-        description: "Should we run the opt-in steps?"
-        default: "false"
-        type: string
+        default: true
+        type: boolean
+      gradle-cache-write-only:
+        description: "Should the Gradle cache be write-only?"
+        default: false
+        type: boolean
+      is-public-fork:
+        description: "Is this CI run from a public fork?"
+        default: true
+        type: boolean
 
 jobs:
   validate:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        java: [ 21, 17, 11, 8 ]
-    name: Compile and Check Java ${{ matrix.java }}
+    name: Compile and Check Java
+    outputs:
+      is-draft: ${{ steps.check-draft-pr.outputs.is-draft }}
     steps:
       - name: Env
         run: printenv
         env:
           GITHUB_CONTEXT: ${{ toJson(github) }}
+      - name: Check for Draft PR
+        id: check-draft-pr
+        if: |
+          github.event_name == 'pull_request' && 
+          github.event.pull_request.draft
+        run: echo "is-draft=true" >> "$GITHUB_OUTPUT"
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -50,75 +61,135 @@ jobs:
       - name: Setup Gradle
         uses: ./.github/actions/setup-gradle
         with:
-          java-version: ${{ matrix.java }}
+          java-version: 21
           gradle-cache-read-only: ${{ inputs.gradle-cache-read-only }}
+          gradle-cache-write-only: ${{ inputs.gradle-cache-write-only }}
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
       - name: Compile and validate
+        env:
+          SCAN_ARG: ${{ inputs.is-public-fork && '--no-scan' || '--scan' }}
         # Gradle flags
         # --build-cache:  Let Gradle restore the build cache
         # --info:         For now, we'll generate lots of logs while setting up the GH Actions
-        # --scan:         Attempt to publish build scans in PRs. This will only work on PRs from apache/kafka, not public forks.
-        run: ./gradlew --build-cache --info --scan check -x test
+        # --scan:         Publish the build scan. This will only work on PRs from apache/kafka and trunk
+        # --no-scan:      For public fork PRs, we won't attempt to publish the scan
+        run: |
+          ./gradlew --build-cache --info $SCAN_ARG check -x test
       - name: Archive check reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: check-reports-${{ matrix.java }}
+          name: check-reports
           path: |
             **/build/**/*.html
+          compression-level: 9
           if-no-files-found: ignore
       - name: Annotate checkstyle errors
         # Avoid duplicate annotations, only run on java 21
-        # For now, limit to "gh-" PRs
-        if: ${{ inputs.github-actions-opt-in && failure() && matrix.java == '21' }}
+        if: failure()
         run: python .github/scripts/checkstyle.py
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+      - name: Annotate Rat errors
+        # Avoid duplicate annotations, only run on java 21
+        if: failure()
+        run: python .github/scripts/rat.py
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
 
   test:
     needs: validate
+    if: ${{ ! needs.validate.outputs.is-draft }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        java: [ 17, 11 ]
-    if: ${{ inputs.github-actions-opt-in == 'true' }}
+        java: [ 23, 11 ]  # If we change these, make sure to adjust ci-complete.yml
     name: JUnit tests Java ${{ matrix.java }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r .github/scripts/requirements.txt
       - name: Setup Gradle
         uses: ./.github/actions/setup-gradle
         with:
           java-version: ${{ matrix.java }}
           gradle-cache-read-only: ${{ inputs.gradle-cache-read-only }}
+          gradle-cache-write-only: ${{ inputs.gradle-cache-write-only }}
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
       - name: Test
         # Gradle flags
         # --build-cache:  Let Gradle restore the build cache
-        # --scan:         Attempt to publish build scans in PRs. This will only work on PRs from apache/kafka, not public forks.
+        # --no-scan:      Don't attempt to publish the scan yet. We want to archive it first.
         # --continue:     Keep running even if a test fails
-        timeout-minutes: 180  # 3 hours
+        # -PcommitId      Prevent the Git SHA being written into the jar files (which breaks caching)
+        id: junit-test
+        env:
+          TIMEOUT_MINUTES: 180  # 3 hours
         run: |
-          ./gradlew --build-cache --scan --continue \
+          set +e
+          ./.github/scripts/thread-dump.sh &
+          timeout ${TIMEOUT_MINUTES}m ./gradlew --build-cache --continue --no-scan \
           -PtestLoggingEvents=started,passed,skipped,failed \
-          -PignoreFailures=true -PmaxParallelForks=2 \
-          -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
-          test
-      - name: Archive JUnit reports
-        if: always()
+          -PmaxParallelForks=2 \
+          -PmaxTestRetries=1 -PmaxTestRetryFailures=3 \
+          -PmaxQuarantineTestRetries=3 -PmaxQuarantineTestRetryFailures=0 \
+          -PcommitId=xxxxxxxxxxxxxxxx \
+          quarantinedTest test
+          exitcode="$?"
+          echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
+      - name: Archive JUnit HTML reports
         uses: actions/upload-artifact@v4
         id: junit-upload-artifact
         with:
           name: junit-reports-${{ matrix.java }}
           path: |
-            **/build/reports/tests/test/*
+            **/build/reports/tests/*
+          compression-level: 9
+          if-no-files-found: ignore
+      - name: Archive JUnit XML
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-xml-${{ matrix.java }}
+          path: |
+            build/junit-xml/**/*.xml
+          compression-level: 9
+          if-no-files-found: ignore
+      - name: Archive Thread Dumps
+        id: thread-dump-upload-artifact
+        if: always() && steps.junit-test.outputs.exitcode == '124'
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-thread-dumps-${{ matrix.java }}
+          path: |
+            thread-dumps/*
+          compression-level: 9
           if-no-files-found: ignore
       - name: Parse JUnit tests
-        if: always()
-        run: python .github/scripts/junit.py >> $GITHUB_STEP_SUMMARY
+        run: python .github/scripts/junit.py --export-test-catalog ./test-catalog >> $GITHUB_STEP_SUMMARY
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
-          REPORT_URL: ${{ steps.junit-upload-artifact.outputs.artifact-url }}
+          JUNIT_REPORT_URL: ${{ steps.junit-upload-artifact.outputs.artifact-url }}
+          THREAD_DUMP_URL: ${{ steps.thread-dump-upload-artifact.outputs.artifact-url }}
+          GRADLE_EXIT_CODE: ${{ steps.junit-test.outputs.exitcode }}
+      - name: Archive Test Catalog
+        if: ${{ always() && matrix.java == '21' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-catalog
+          path: test-catalog
+          compression-level: 9
+          if-no-files-found: ignore
+      - name: Archive Build Scan
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-scan-test-${{ matrix.java }}
+          path: ~/.gradle/build-scan-data
+          compression-level: 9
+          if-no-files-found: ignore

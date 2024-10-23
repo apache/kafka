@@ -59,6 +59,7 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.metadata.LeaderRecoveryState;
+import org.apache.kafka.network.metrics.RequestChannelMetrics;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
@@ -90,7 +91,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class DescribeTopicPartitionsRequestHandlerTest {
-    private final RequestChannel.Metrics requestChannelMetrics = mock(RequestChannel.Metrics.class);
+    private final RequestChannelMetrics requestChannelMetrics = mock(RequestChannelMetrics.class);
     private final KafkaPrincipalSerde kafkaPrincipalSerde = new KafkaPrincipalSerde() {
         @Override
         public byte[] serialize(KafkaPrincipal principal) throws SerializationException {
@@ -494,7 +495,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
     void updateKraftMetadataCache(KRaftMetadataCache kRaftMetadataCache, List<ApiMessage> records) {
         MetadataImage image = kRaftMetadataCache.currentImage();
         MetadataImage partialImage = new MetadataImage(
-            new MetadataProvenance(100L, 10, 1000L),
+            new MetadataProvenance(100L, 10, 1000L, true),
             image.features(),
             ClusterImage.EMPTY,
             image.topics(),
@@ -507,7 +508,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         );
         MetadataDelta delta = new MetadataDelta.Builder().setImage(partialImage).build();
         records.stream().forEach(record -> delta.replay(record));
-        kRaftMetadataCache.setImage(delta.apply(new MetadataProvenance(100L, 10, 1000L)));
+        kRaftMetadataCache.setImage(delta.apply(new MetadataProvenance(100L, 10, 1000L, true)));
     }
 
     private RequestChannel.Request buildRequest(AbstractRequest request,

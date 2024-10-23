@@ -20,7 +20,7 @@ import java.util.concurrent.TimeUnit
 import java.util.{Collections, Properties}
 import com.yammer.metrics.core.{Histogram, Meter}
 import kafka.api.QuotaTestClients._
-import kafka.server.{ClientQuotaManager, KafkaBroker, QuotaType}
+import kafka.server.{ClientQuotaManager, KafkaBroker}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
@@ -33,8 +33,9 @@ import org.apache.kafka.common.quota.ClientQuotaAlteration
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
-import org.apache.kafka.server.config.{ServerConfigs, QuotaConfigs}
+import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.quota.QuotaType
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -105,8 +106,8 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
   def testProducerConsumerOverrideUnthrottled(quorum: String): Unit = {
     // Give effectively unlimited quota for producer and consumer
     val props = new Properties()
-    props.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, Long.MaxValue.toString)
-    props.put(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, Long.MaxValue.toString)
+    props.put(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, Long.MaxValue.toString)
+    props.put(QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, Long.MaxValue.toString)
 
     quotaTestClients.overrideQuotas(Long.MaxValue, Long.MaxValue, Long.MaxValue.toDouble)
     quotaTestClients.waitForQuotaUpdate(Long.MaxValue, Long.MaxValue, Long.MaxValue.toDouble)
@@ -178,13 +179,13 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     while ((!throttled || quotaTestClients.exemptRequestMetric == null || metricValue(quotaTestClients.exemptRequestMetric) <= 0)
       && System.currentTimeMillis < endTimeMs) {
       consumer.poll(Duration.ofMillis(100L))
-      val throttleMetric = quotaTestClients.throttleMetric(QuotaType.Request, consumerClientId)
+      val throttleMetric = quotaTestClients.throttleMetric(QuotaType.REQUEST, consumerClientId)
       throttled = throttleMetric != null && metricValue(throttleMetric) > 0
     }
 
     assertTrue(throttled, "Should have been throttled")
     quotaTestClients.verifyConsumerClientThrottleTimeMetric(expectThrottle = true,
-      Some(QuotaConfigs.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT * 1000.0))
+      Some(QuotaConfig.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT * 1000.0))
 
     val exemptMetric = quotaTestClients.exemptRequestMetric
     assertNotNull(exemptMetric, "Exempt requests not recorded")
@@ -221,7 +222,7 @@ abstract class QuotaTestClients(topic: String,
         new ErrorLoggingCallback(topic, null, null, true))
       numProduced += 1
       do {
-        val metric = throttleMetric(QuotaType.Produce, producerClientId)
+        val metric = throttleMetric(QuotaType.PRODUCE, producerClientId)
         throttled = metric != null && metricValue(metric) > 0
       } while (!future.isDone && (!throttled || waitForRequestCompletion))
     } while (numProduced < maxRecords && !throttled)
@@ -237,7 +238,7 @@ abstract class QuotaTestClients(topic: String,
     val startMs = System.currentTimeMillis
     do {
       numConsumed += consumer.poll(Duration.ofMillis(100L)).count
-      val metric = throttleMetric(QuotaType.Fetch, consumerClientId)
+      val metric = throttleMetric(QuotaType.FETCH, consumerClientId)
       throttled = metric != null && metricValue(metric) > 0
     } while (numConsumed < maxRecords && !throttled && System.currentTimeMillis < startMs + timeoutMs)
 
@@ -266,7 +267,7 @@ abstract class QuotaTestClients(topic: String,
 
   def verifyProduceThrottle(expectThrottle: Boolean, verifyClientMetric: Boolean = true,
                             verifyRequestChannelMetric: Boolean = true): Unit = {
-    verifyThrottleTimeMetric(QuotaType.Produce, producerClientId, expectThrottle)
+    verifyThrottleTimeMetric(QuotaType.PRODUCE, producerClientId, expectThrottle)
     if (verifyRequestChannelMetric)
       verifyThrottleTimeRequestChannelMetric(ApiKeys.PRODUCE, "", producerClientId, expectThrottle)
     if (verifyClientMetric)
@@ -275,7 +276,7 @@ abstract class QuotaTestClients(topic: String,
 
   def verifyConsumeThrottle(expectThrottle: Boolean, verifyClientMetric: Boolean = true,
                             verifyRequestChannelMetric: Boolean = true): Unit = {
-    verifyThrottleTimeMetric(QuotaType.Fetch, consumerClientId, expectThrottle)
+    verifyThrottleTimeMetric(QuotaType.FETCH, consumerClientId, expectThrottle)
     if (verifyRequestChannelMetric)
       verifyThrottleTimeRequestChannelMetric(ApiKeys.FETCH, "Consumer", consumerClientId, expectThrottle)
     if (verifyClientMetric)
@@ -318,7 +319,7 @@ abstract class QuotaTestClients(topic: String,
   }
 
   def exemptRequestMetric: KafkaMetric = {
-    val metricName = leaderNode.metrics.metricName("exempt-request-time", QuotaType.Request.toString, "")
+    val metricName = leaderNode.metrics.metricName("exempt-request-time", QuotaType.REQUEST.toString, "")
     leaderNode.metrics.metrics.get(metricName)
   }
 
@@ -366,9 +367,9 @@ abstract class QuotaTestClients(topic: String,
     def addOp(key: String, value: Option[Double]): Unit = {
       ops = ops ++ Seq(new ClientQuotaAlteration.Op(key, value.map(Double.box).orNull))
     }
-    addOp(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, producerQuota.map(_.toDouble))
-    addOp(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, consumerQuota.map(_.toDouble))
-    addOp(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, requestQuota)
+    addOp(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, producerQuota.map(_.toDouble))
+    addOp(QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, consumerQuota.map(_.toDouble))
+    addOp(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, requestQuota)
     new ClientQuotaAlteration(quotaEntity, ops.asJava)
   }
 

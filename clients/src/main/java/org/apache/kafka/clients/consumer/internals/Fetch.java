@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.ArrayList;
@@ -25,7 +26,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -34,63 +34,35 @@ public class Fetch<K, V> {
     private final Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
     private boolean positionAdvanced;
     private int numRecords;
-    private Map<TopicPartition, Long> nextFetchOffsets;
-    private Map<TopicPartition, Optional<Integer>> lastEpochs;
+    private Map<TopicPartition, OffsetAndMetadata> nextOffsetAndMetadata;
 
     public static <K, V> Fetch<K, V> empty() {
-        return new Fetch<>(new HashMap<>(), false, 0);
-    }
-
-    public static <K, V> Fetch<K, V> forPartition(
-            TopicPartition partition,
-            List<ConsumerRecord<K, V>> records,
-            boolean positionAdvanced
-    ) {
-        Map<TopicPartition, List<ConsumerRecord<K, V>>> recordsMap = records.isEmpty()
-                ? new HashMap<>()
-                : mkMap(mkEntry(partition, records));
-        return new Fetch<>(recordsMap, positionAdvanced, records.size());
+        return new Fetch<>(new HashMap<>(), false, 0, new HashMap<>());
     }
 
     public static <K, V> Fetch<K, V> forPartition(
             TopicPartition partition,
             List<ConsumerRecord<K, V>> records,
             boolean positionAdvanced,
-            long nextFetchOffset,
-            Optional<Integer> lastEpoch
+            OffsetAndMetadata nextOffsetAndMetadata
     ) {
         Map<TopicPartition, List<ConsumerRecord<K, V>>> recordsMap = records.isEmpty()
                 ? new HashMap<>()
                 : mkMap(mkEntry(partition, records));
-        Map<TopicPartition, Long> nextFetchOffsets = mkMap(mkEntry(partition, nextFetchOffset));
-        Map<TopicPartition, Optional<Integer>> lastEpochs = mkMap(mkEntry(partition, lastEpoch));
-        return new Fetch<>(recordsMap, positionAdvanced, records.size(), nextFetchOffsets, lastEpochs);
-    }
-
-    private Fetch(
-            Map<TopicPartition, List<ConsumerRecord<K, V>>> records,
-            boolean positionAdvanced,
-            int numRecords
-    ) {
-        this.records = records;
-        this.positionAdvanced = positionAdvanced;
-        this.numRecords = numRecords;
-        this.nextFetchOffsets = new HashMap<>();
-        this.lastEpochs = new HashMap<>();
+        Map<TopicPartition, OffsetAndMetadata> nextOffsetAndMetadataMap = mkMap(mkEntry(partition, nextOffsetAndMetadata));
+        return new Fetch<>(recordsMap, positionAdvanced, records.size(), nextOffsetAndMetadataMap);
     }
 
     private Fetch(
             Map<TopicPartition, List<ConsumerRecord<K, V>>> records,
             boolean positionAdvanced,
             int numRecords,
-            Map<TopicPartition, Long> nextFetchOffsets,
-            Map<TopicPartition, Optional<Integer>> lastEpochs
+            Map<TopicPartition, OffsetAndMetadata> nextOffsetAndMetadata
     ) {
         this.records = records;
         this.positionAdvanced = positionAdvanced;
         this.numRecords = numRecords;
-        this.nextFetchOffsets = nextFetchOffsets;
-        this.lastEpochs = lastEpochs;
+        this.nextOffsetAndMetadata = nextOffsetAndMetadata;
     }
 
     /**
@@ -104,8 +76,7 @@ public class Fetch<K, V> {
         Objects.requireNonNull(fetch);
         addRecords(fetch.records);
         this.positionAdvanced |= fetch.positionAdvanced;
-        nextFetchOffsets.putAll(fetch.nextFetchOffsets);
-        lastEpochs.putAll(fetch.lastEpochs);
+        this.nextOffsetAndMetadata.putAll(fetch.nextOffsetAndMetadata);
     }
 
     /**
@@ -132,18 +103,10 @@ public class Fetch<K, V> {
     }
 
     /**
-     * @return the next offset per partition for this fetch
+     * @return the next offsets and metadata that the consumer will consume (last epoch is included)
      */
-    public Map<TopicPartition, Long> nextFetchOffsets() {
-        return nextFetchOffsets;
-    }
-
-
-    /**
-     * @return the last epochs per partition for this fetch
-     */
-    public Map<TopicPartition, Optional<Integer>> lastEpochs() {
-        return lastEpochs;
+    public Map<TopicPartition, OffsetAndMetadata> nextOffsets() {
+        return Map.copyOf(nextOffsetAndMetadata);
     }
 
     /**

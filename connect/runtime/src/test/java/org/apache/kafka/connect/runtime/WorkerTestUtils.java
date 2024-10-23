@@ -31,8 +31,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.WorkerLoad;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
@@ -187,14 +185,12 @@ public class WorkerTestUtils {
 
         assertEquals(expectedOffset, assignment.offset(), "Wrong offset in " + assignment);
 
-        assertThat("Wrong set of assigned connectors in " + assignment,
-                assignment.connectors(), is(expectedAssignedConnectors));
+        assertEquals(expectedAssignedConnectors, assignment.connectors(), "Wrong set of assigned connectors in " + assignment);
 
         assertEquals(expectedAssignedTaskNum, assignment.tasks().size(),
                 "Wrong number of assigned tasks in " + assignment);
 
-        assertThat("Wrong set of revoked connectors in " + assignment,
-                assignment.revokedConnectors(), is(expectedRevokedConnectors));
+        assertEquals(expectedRevokedConnectors, assignment.revokedConnectors(), "Wrong set of revoked connectors in " + assignment);
 
         assertEquals(expectedRevokedTaskNum, assignment.revokedTasks().size(),
                 "Wrong number of revoked tasks in " + assignment);

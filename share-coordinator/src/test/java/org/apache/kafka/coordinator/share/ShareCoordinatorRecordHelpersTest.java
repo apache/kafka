@@ -23,6 +23,7 @@ import org.apache.kafka.coordinator.share.generated.ShareSnapshotValue;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateKey;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.share.persister.PersisterStateBatch;
 
 import org.junit.jupiter.api.Test;
 
@@ -36,7 +37,7 @@ public class ShareCoordinatorRecordHelpersTest {
         String groupId = "test-group";
         Uuid topicId = Uuid.randomUuid();
         int partitionId = 1;
-        PersisterOffsetsStateBatch batch = new PersisterOffsetsStateBatch(1L, 10L, (byte) 0, (short) 1);
+        PersisterStateBatch batch = new PersisterStateBatch(1L, 10L, (byte) 0, (short) 1);
         CoordinatorRecord record = ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
             groupId,
             topicId,
@@ -69,7 +70,7 @@ public class ShareCoordinatorRecordHelpersTest {
                             .setLastOffset(10L)
                             .setDeliveryState((byte) 0)
                             .setDeliveryCount((short) 1))),
-                (short) 0));
+                ShareCoordinator.SHARE_SNAPSHOT_RECORD_VALUE_VERSION));
 
         assertEquals(expectedRecord, record);
     }
@@ -79,7 +80,7 @@ public class ShareCoordinatorRecordHelpersTest {
         String groupId = "test-group";
         Uuid topicId = Uuid.randomUuid();
         int partitionId = 1;
-        PersisterOffsetsStateBatch batch = new PersisterOffsetsStateBatch(1L, 10L, (byte) 0, (short) 1);
+        PersisterStateBatch batch = new PersisterStateBatch(1L, 10L, (byte) 0, (short) 1);
         CoordinatorRecord record = ShareCoordinatorRecordHelpers.newShareSnapshotUpdateRecord(
             groupId,
             topicId,
@@ -111,7 +112,7 @@ public class ShareCoordinatorRecordHelpersTest {
                             .setLastOffset(10L)
                             .setDeliveryState((byte) 0)
                             .setDeliveryCount((short) 1))),
-                (short) 0));
+                ShareCoordinator.SHARE_UPDATE_RECORD_VALUE_VERSION));
 
         assertEquals(expectedRecord, record);
     }

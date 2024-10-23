@@ -24,7 +24,6 @@ import java.util.{Collections, Properties}
 import com.yammer.metrics.core.Meter
 import kafka.network.Processor.ListenerMetricTag
 import kafka.server.KafkaConfig
-import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.metrics.internals.MetricsUtils
@@ -32,7 +31,7 @@ import org.apache.kafka.common.metrics.{KafkaMetric, MetricConfig, Metrics}
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.network.{ConnectionThrottledException, SocketServerConfigs, TooManyConnectionsException}
-import org.apache.kafka.server.config.{QuotaConfigs, ReplicationConfigs}
+import org.apache.kafka.server.config.{QuotaConfig, ReplicationConfigs}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.Assertions._
@@ -72,8 +71,8 @@ class ConnectionQuotasTest {
     // ConnectionQuotas does not limit inter-broker listener even when broker-wide connection limit is reached
     props.put(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG, "REPLICATION")
     props.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "EXTERNAL:PLAINTEXT,REPLICATION:PLAINTEXT,ADMIN:PLAINTEXT")
-    props.put(QuotaConfigs.NUM_QUOTA_SAMPLES_CONFIG, numQuotaSamples.toString)
-    props.put(QuotaConfigs.QUOTA_WINDOW_SIZE_SECONDS_CONFIG, quotaWindowSizeSeconds.toString)
+    props.put(QuotaConfig.NUM_QUOTA_SAMPLES_CONFIG, numQuotaSamples.toString)
+    props.put(QuotaConfig.QUOTA_WINDOW_SIZE_SECONDS_CONFIG, quotaWindowSizeSeconds.toString)
     props
   }
 
@@ -653,12 +652,12 @@ class ConnectionQuotasTest {
 
     // remove default connection rate quota
     connectionQuotas.updateIpConnectionRateQuota(None, None)
-    verifyIpConnectionQuota(adminListener.defaultIp, QuotaConfigs.IP_CONNECTION_RATE_DEFAULT)
+    verifyIpConnectionQuota(adminListener.defaultIp, QuotaConfig.IP_CONNECTION_RATE_DEFAULT)
     verifyIpConnectionQuota(externalListener.defaultIp, overrideIpRate)
 
     // remove override for external listener IP
     connectionQuotas.updateIpConnectionRateQuota(Some(externalListener.defaultIp), None)
-    verifyIpConnectionQuota(externalListener.defaultIp, QuotaConfigs.IP_CONNECTION_RATE_DEFAULT)
+    verifyIpConnectionQuota(externalListener.defaultIp, QuotaConfig.IP_CONNECTION_RATE_DEFAULT)
   }
 
   @Test
@@ -760,7 +759,7 @@ class ConnectionQuotasTest {
       "Expected broker-connection-accept-rate metric to exist")
 
     // add listeners and verify connection limits not exceeded
-    listeners.forKeyValue { (name, listener) =>
+    listeners.foreachEntry { (name, listener) =>
       val listenerName = listener.listenerName
       connectionQuotas.addListener(config, listenerName)
       connectionQuotas.maxConnectionsPerListener(listenerName).configure(listenerConfig)
@@ -785,14 +784,14 @@ class ConnectionQuotasTest {
   }
 
   private def verifyNoBlockedPercentRecordedOnAllListeners(): Unit = {
-    blockedPercentMeters.forKeyValue { (name, meter) =>
+    blockedPercentMeters.foreachEntry { (name, meter) =>
       assertEquals(0, meter.count(),
         s"BlockedPercentMeter metric for $name listener")
     }
   }
 
   private def verifyNonZeroBlockedPercentAndThrottleTimeOnAllListeners(): Unit = {
-    blockedPercentMeters.forKeyValue { (name, meter) =>
+    blockedPercentMeters.foreachEntry { (name, meter) =>
       assertTrue(meter.count() > 0,
         s"Expected BlockedPercentMeter metric for $name listener to be recorded")
     }
@@ -808,7 +807,7 @@ class ConnectionQuotasTest {
   }
 
   private def verifyOnlyNonInterBrokerListenersBlockedPercentRecorded(): Unit = {
-    blockedPercentMeters.forKeyValue { (name, meter) =>
+    blockedPercentMeters.foreachEntry { (name, meter) =>
       name match {
         case "REPLICATION" =>
           assertEquals(0, meter.count(), s"BlockedPercentMeter metric for $name listener")

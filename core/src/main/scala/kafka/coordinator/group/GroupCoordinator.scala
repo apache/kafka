@@ -18,7 +18,6 @@ package kafka.coordinator.group
 
 import java.util.{OptionalInt, Properties}
 import java.util.concurrent.atomic.AtomicBoolean
-import kafka.common.OffsetAndMetadata
 import kafka.server._
 import kafka.utils.Logging
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition}
@@ -32,7 +31,8 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.coordinator.group.{Group, OffsetConfig}
+import org.apache.kafka.coordinator.group.{Group, OffsetAndMetadata, OffsetConfig}
+import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.storage.internals.log.VerificationGuard
 
@@ -170,7 +170,7 @@ private[group] class GroupCoordinator(
                       protocols: List[(String, Array[Byte])],
                       responseCallback: JoinCallback,
                       reason: Option[String] = None,
-                      requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
+                      requestLocal: RequestLocal = RequestLocal.noCaching): Unit = {
     validateGroupStatus(groupId, ApiKeys.JOIN_GROUP).foreach { error =>
       responseCallback(JoinGroupResult(memberId, error))
       return
@@ -427,7 +427,7 @@ private[group] class GroupCoordinator(
             s"for pending member with memberId=$memberId")
         }
 
-        debug(s"Pending dynamic member with id $memberId joins group ${group.groupId} in " +
+        info(s"Pending dynamic member with id $memberId joins group ${group.groupId} in " +
           s"${group.currentState} state. Adding to the group now.")
         addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, memberId, None,
           clientId, clientHost, protocolType, protocols, group, responseCallback, reason)
@@ -513,7 +513,7 @@ private[group] class GroupCoordinator(
                       groupInstanceId: Option[String],
                       groupAssignment: Map[String, Array[Byte]],
                       responseCallback: SyncCallback,
-                      requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
+                      requestLocal: RequestLocal = RequestLocal.noCaching): Unit = {
     validateGroupStatus(groupId, ApiKeys.SYNC_GROUP) match {
       case Some(error) if error == Errors.COORDINATOR_LOAD_IN_PROGRESS =>
         // The coordinator is loading, which means we've lost the state of the active rebalance and the
@@ -715,7 +715,7 @@ private[group] class GroupCoordinator(
   }
 
   def handleDeleteGroups(groupIds: Set[String],
-                         requestLocal: RequestLocal = RequestLocal.NoCaching): Map[String, Errors] = {
+                         requestLocal: RequestLocal = RequestLocal.noCaching): Map[String, Errors] = {
     val groupErrors = mutable.Map.empty[String, Errors]
     val groupsEligibleForDeletion = mutable.ArrayBuffer[GroupMetadata]()
 
@@ -905,7 +905,7 @@ private[group] class GroupCoordinator(
                              generationId: Int,
                              offsetMetadata: immutable.Map[TopicIdPartition, OffsetAndMetadata],
                              responseCallback: immutable.Map[TopicIdPartition, Errors] => Unit,
-                             requestLocal: RequestLocal = RequestLocal.NoCaching,
+                             requestLocal: RequestLocal = RequestLocal.noCaching,
                              apiVersion: Short): Unit = {
     validateGroupStatus(groupId, ApiKeys.TXN_OFFSET_COMMIT) match {
       case Some(error) => responseCallback(offsetMetadata.map { case (k, _) => k -> error })
@@ -954,7 +954,7 @@ private[group] class GroupCoordinator(
                           generationId: Int,
                           offsetMetadata: immutable.Map[TopicIdPartition, OffsetAndMetadata],
                           responseCallback: immutable.Map[TopicIdPartition, Errors] => Unit,
-                          requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
+                          requestLocal: RequestLocal = RequestLocal.noCaching): Unit = {
     validateGroupStatus(groupId, ApiKeys.OFFSET_COMMIT) match {
       case Some(error) => responseCallback(offsetMetadata.map { case (k, _) => k -> error })
       case None =>
@@ -962,6 +962,7 @@ private[group] class GroupCoordinator(
           case None =>
             if (generationId < 0) {
               // the group is not relying on Kafka for group management, so allow the commit
+              info(s"Creating simple consumer group $groupId via manual offset commit.")
               val group = groupManager.addGroup(new GroupMetadata(groupId, Empty, time))
               doCommitOffsets(group, memberId, groupInstanceId, generationId, offsetMetadata,
                 responseCallback, requestLocal)
@@ -1567,7 +1568,7 @@ private[group] class GroupCoordinator(
               // This should be safe since there are no active members in an empty generation, so we just warn.
               warn(s"Failed to write empty metadata for group ${group.groupId}: ${error.message}")
             }
-          }, RequestLocal.NoCaching)
+          }, RequestLocal.noCaching)
         } else {
           info(s"Stabilized group ${group.groupId} generation ${group.generationId} " +
             s"(${Topic.GROUP_METADATA_TOPIC_NAME}-${partitionFor(group.groupId)}) with ${group.size} members")

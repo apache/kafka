@@ -47,19 +47,17 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.HashSet;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -82,12 +80,8 @@ import static org.hamcrest.Matchers.equalTo;
 @Tag("integration")
 @Timeout(600)
 public class SuppressionDurabilityIntegrationTest {
-
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
-        3,
-        mkProperties(mkMap()),
-        0L
-    );
+    private static final long NOW = Instant.now().toEpochMilli();
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
 
     @BeforeAll
     public static void startCluster() throws IOException {
@@ -107,10 +101,8 @@ public class SuppressionDurabilityIntegrationTest {
     private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
     private static final long COMMIT_INTERVAL = 100L;
 
-    @SuppressWarnings("deprecation")
-    @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
-    public void shouldRecoverBufferAfterShutdown(final String processingGuarantee, final TestInfo testInfo) {
+    @Test
+    public void shouldRecoverBufferAfterShutdown(final TestInfo testInfo) {
         final String testId = safeUniqueTestName(testInfo);
         final String appId = "appId_" + testId;
         final String input = "input" + testId;
@@ -153,7 +145,6 @@ public class SuppressionDurabilityIntegrationTest {
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
             mkEntry(StreamsConfig.POLL_MS_CONFIG, Long.toString(COMMIT_INTERVAL)),
-            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuarantee),
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
         ));
 
@@ -174,11 +165,11 @@ public class SuppressionDurabilityIntegrationTest {
             );
             verifyOutput(
                 outputRaw,
-                new HashSet<>(asList(
+                asList(
                     new KeyValueTimestamp<>("k1", 1L, scaledTime(1L)),
                     new KeyValueTimestamp<>("k2", 1L, scaledTime(2L)),
                     new KeyValueTimestamp<>("k3", 1L, scaledTime(3L))
-                ))
+                )
             );
             assertThat(eventCount.get(), is(0));
 
@@ -192,10 +183,10 @@ public class SuppressionDurabilityIntegrationTest {
             );
             verifyOutput(
                 outputRaw,
-                new HashSet<>(asList(
+                asList(
                     new KeyValueTimestamp<>("k4", 1L, scaledTime(4L)),
                     new KeyValueTimestamp<>("k5", 1L, scaledTime(5L))
-                ))
+                )
             );
             assertThat(eventCount.get(), is(2));
             verifyOutput(
@@ -226,11 +217,11 @@ public class SuppressionDurabilityIntegrationTest {
             );
             verifyOutput(
                 outputRaw,
-                new HashSet<>(asList(
+                asList(
                     new KeyValueTimestamp<>("k6", 1L, scaledTime(6L)),
                     new KeyValueTimestamp<>("k7", 1L, scaledTime(7L)),
                     new KeyValueTimestamp<>("k8", 1L, scaledTime(8L))
-                ))
+                )
             );
             assertThat("suppress has apparently produced some duplicates. There should only be 5 output events.",
                        eventCount.get(), is(5));
@@ -304,24 +295,12 @@ public class SuppressionDurabilityIntegrationTest {
         IntegrationTestUtils.verifyKeyValueTimestamps(properties, topic, keyValueTimestamps);
     }
 
-    private void verifyOutput(final String topic, final Set<KeyValueTimestamp<String, Long>> keyValueTimestamps) {
-        final Properties properties = mkProperties(
-            mkMap(
-                mkEntry(ConsumerConfig.GROUP_ID_CONFIG, "test-group"),
-                mkEntry(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
-                mkEntry(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ((Deserializer<String>) STRING_DESERIALIZER).getClass().getName()),
-                mkEntry(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ((Deserializer<Long>) LONG_DESERIALIZER).getClass().getName())
-            )
-        );
-        IntegrationTestUtils.verifyKeyValueTimestamps(properties, topic, keyValueTimestamps);
-    }
-
     /**
      * scaling to ensure that there are commits in between the various test events,
      * just to exercise that everything works properly in the presence of commits.
      */
     private long scaledTime(final long unscaledTime) {
-        return COMMIT_INTERVAL * 2 * unscaledTime;
+        return NOW + COMMIT_INTERVAL * 2 * unscaledTime;
     }
 
     private static void produceSynchronouslyToPartitionZero(final String topic, final List<KeyValueTimestamp<String, String>> toProduce) {

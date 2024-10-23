@@ -50,11 +50,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
@@ -529,7 +529,7 @@ public class PartitionGroupTest {
         group.nextRecord(new RecordInfo(), time.milliseconds());
 
         // shrink list of queues
-        group.updatePartitions(mkSet(createPartition2()), p -> {
+        group.updatePartitions(Set.of(createPartition2()), p -> {
             fail("should not create any queues");
             return null;
         });
@@ -562,7 +562,7 @@ public class PartitionGroupTest {
         group.nextRecord(new RecordInfo(), time.milliseconds());
 
         // expand list of queues
-        group.updatePartitions(mkSet(createPartition1(), createPartition2()), p -> {
+        group.updatePartitions(Set.of(createPartition1(), createPartition2()), p -> {
             assertEquals(createPartition2(), p);
             return createQueue2();
         });
@@ -594,7 +594,7 @@ public class PartitionGroupTest {
         group.nextRecord(new RecordInfo(), time.milliseconds());
 
         // expand and shrink list of queues
-        group.updatePartitions(mkSet(createPartition2()), p -> {
+        group.updatePartitions(Set.of(createPartition2()), p -> {
             assertEquals(createPartition2(), p);
             return createQueue2();
         });

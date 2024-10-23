@@ -17,10 +17,8 @@
 
 package kafka.server
 
-import kafka.cluster.BrokerEndPoint
 import kafka.server.AbstractFetcherThread.ReplicaFetch
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
-import kafka.utils.Implicits.MapExtensionMethods
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -29,15 +27,16 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.server.network.BrokerEndPoint
 
 import java.nio.ByteBuffer
 import java.util.Optional
 import scala.collection.{Map, Set, mutable}
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.{RichOption, RichOptional}
 import scala.util.Random
 
-class MockLeaderEndPoint(sourceBroker: BrokerEndPoint = new BrokerEndPoint(1, host = "localhost", port = Random.nextInt()),
+class MockLeaderEndPoint(sourceBroker: BrokerEndPoint = new BrokerEndPoint(1, "localhost", Random.nextInt()),
                          truncateOnFetch: Boolean = true,
                          version: Short = ApiKeys.FETCH.latestVersion())
   extends LeaderEndPoint {
@@ -139,7 +138,7 @@ class MockLeaderEndPoint(sourceBroker: BrokerEndPoint = new BrokerEndPoint(1, ho
 
   override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
     val endOffsets = mutable.Map[TopicPartition, EpochEndOffset]()
-    partitions.forKeyValue { (partition, epochData) =>
+    partitions.foreachEntry { (partition, epochData) =>
       assert(partition.partition == epochData.partition,
         "Partition must be consistent between TopicPartition and EpochData")
       val leaderState = leaderPartitionState(partition)
@@ -155,7 +154,7 @@ class MockLeaderEndPoint(sourceBroker: BrokerEndPoint = new BrokerEndPoint(1, ho
       if (state.isReadyForFetch) {
         val replicaState = replicaPartitionStateCallback(partition).getOrElse(throw new IllegalArgumentException(s"Unknown partition $partition"))
         val lastFetchedEpoch = if (isTruncationOnFetchSupported)
-          state.lastFetchedEpoch.map(_.asInstanceOf[Integer]).asJava
+          state.lastFetchedEpoch.map(_.asInstanceOf[Integer]).toJava
         else
           Optional.empty[Integer]
         fetchData.put(partition,
@@ -205,7 +204,7 @@ class MockLeaderEndPoint(sourceBroker: BrokerEndPoint = new BrokerEndPoint(1, ho
                                       lastFetchedEpoch: Optional[Integer],
                                       fetchOffset: Long,
                                       partitionState: PartitionState): Option[FetchResponseData.EpochEndOffset] = {
-    lastFetchedEpoch.asScala.flatMap { fetchEpoch =>
+    lastFetchedEpoch.toScala.flatMap { fetchEpoch =>
       val epochEndOffset = fetchEpochEndOffsets(
         Map(topicPartition -> new EpochData()
           .setPartition(topicPartition.partition)

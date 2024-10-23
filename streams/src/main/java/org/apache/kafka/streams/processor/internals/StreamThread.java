@@ -349,8 +349,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     private volatile long fetchDeadlineClientInstanceId = -1;
     private volatile KafkaFutureImpl<Uuid> mainConsumerInstanceIdFuture = new KafkaFutureImpl<>();
     private volatile KafkaFutureImpl<Uuid> restoreConsumerInstanceIdFuture = new KafkaFutureImpl<>();
-    private volatile KafkaFutureImpl<Map<String, KafkaFuture<Uuid>>> producerInstanceIdFuture = new KafkaFutureImpl<>();
-    private volatile KafkaFutureImpl<Uuid> threadProducerInstanceIdFuture = new KafkaFutureImpl<>();
+    private volatile KafkaFutureImpl<Uuid> producerInstanceIdFuture = new KafkaFutureImpl<>();
 
     public static StreamThread create(final TopologyMetadata topologyMetadata,
                                       final StreamsConfig config,
@@ -408,6 +407,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             time,
             clientSupplier,
             threadId,
+            threadIdx,
             processId,
             log,
             stateUpdaterEnabled,
@@ -685,7 +685,6 @@ public class StreamThread extends Thread implements ProcessingThread {
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException      if the store's change log does not contain the partition
      */
-    @SuppressWarnings("deprecation") // Needed to include StreamsConfig.EXACTLY_ONCE_BETA in error log for UnsupportedVersionException
     boolean runLoop() {
         subscribeConsumer();
 
@@ -742,9 +741,9 @@ public class StreamThread extends Thread implements ProcessingThread {
                     errorMessage.startsWith("Broker unexpectedly doesn't support requireStable flag on version ")) {
 
                     log.error("Shutting down because the Kafka cluster seems to be on a too old version. " +
-                              "Setting {}=\"{}\"/\"{}\" requires broker version 2.5 or higher.",
+                              "Setting {}=\"{}\" requires broker version 2.5 or higher.",
                           StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
-                          StreamsConfig.EXACTLY_ONCE_V2, StreamsConfig.EXACTLY_ONCE_BETA);
+                          StreamsConfig.EXACTLY_ONCE_V2);
                 }
                 failedStreamThreadSensor.record();
                 this.streamsUncaughtExceptionHandler.accept(new StreamsException(e), false);
@@ -806,46 +805,34 @@ public class StreamThread extends Thread implements ProcessingThread {
                 }
             }
 
-            if (!processingMode.equals(StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA) &&
-                    !threadProducerInstanceIdFuture.isDone()) {
-
+            if (!producerInstanceIdFuture.isDone()) {
                 if (fetchDeadlineClientInstanceId >= time.milliseconds()) {
                     try {
-                        threadProducerInstanceIdFuture.complete(
-                            taskManager.threadProducer().kafkaProducer().clientInstanceId(Duration.ZERO)
+                        producerInstanceIdFuture.complete(
+                            taskManager.streamsProducer().kafkaProducer().clientInstanceId(Duration.ZERO)
                         );
                     } catch (final IllegalStateException disabledError) {
                         // if telemetry is disabled on a client, we swallow the error,
                         // to allow returning a partial result for all other clients
-                        threadProducerInstanceIdFuture.complete(null);
+                        producerInstanceIdFuture.complete(null);
                     } catch (final TimeoutException swallow) {
                         // swallow
                     } catch (final Exception error) {
-                        threadProducerInstanceIdFuture.completeExceptionally(error);
+                        producerInstanceIdFuture.completeExceptionally(error);
                     }
                 } else {
-                    threadProducerInstanceIdFuture.completeExceptionally(
+                    producerInstanceIdFuture.completeExceptionally(
                         new TimeoutException("Could not retrieve thread producer client instance id.")
                     );
                 }
             }
 
-            maybeResetFetchDeadline();
-        }
-    }
+            if (mainConsumerInstanceIdFuture.isDone()
+                && (!stateUpdaterEnabled && restoreConsumerInstanceIdFuture.isDone())
+                && producerInstanceIdFuture.isDone()) {
 
-    private void maybeResetFetchDeadline() {
-        boolean reset = mainConsumerInstanceIdFuture.isDone()
-            && (!stateUpdaterEnabled && restoreConsumerInstanceIdFuture.isDone());
-
-        if (processingMode.equals(StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA)) {
-            throw new UnsupportedOperationException("not implemented yet");
-        } else if (!threadProducerInstanceIdFuture.isDone()) {
-            reset = false;
-        }
-
-        if (reset) {
-            fetchDeadlineClientInstanceId = -1L;
+                fetchDeadlineClientInstanceId = -1L;
+            }
         }
     }
 
@@ -931,14 +918,14 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     /**
      * One iteration of a thread includes the following steps:
-     *
+     * <p>
      * 1. poll records from main consumer and add to buffer;
      * 2. restore from restore consumer and update standby tasks if necessary;
      * 3. process active tasks from the buffers;
      * 4. punctuate active tasks if necessary;
      * 5. commit all tasks if necessary;
      *
-     * Among them, step 3/4/5 is done in batches in which we try to process as much as possible while trying to
+     * <p> Among them, step 3/4/5 is done in batches in which we try to process as much as possible while trying to
      * stop iteration to call the next iteration when it's close to the next main consumer's poll deadline
      *
      * @throws IllegalStateException If store gets registered after initialized is already finished
@@ -1083,7 +1070,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     /**
      * One iteration of a thread includes the following steps:
-     *
+     * <p>
      * 1. poll records from main consumer and add to buffer;
      * 2. check the task manager for any exceptions to be handled
      * 3. commit all tasks if necessary;
@@ -1367,11 +1354,10 @@ public class StreamThread extends Thread implements ProcessingThread {
     /**
      * Try to commit all active tasks owned by this thread.
      *
-     * Visible for testing.
-     *
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      */
+    // visible for testing
     int maybeCommit() {
         final int committed;
         if (now - lastCommitMs > commitTimeMs) {
@@ -1611,7 +1597,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     }
 
     // this method is NOT thread-safe (we rely on the callee to be `synchronized`)
-    public Map<String, KafkaFuture<Uuid>> consumerClientInstanceIds(final Duration timeout) {
+    public Map<String, KafkaFuture<Uuid>> clientInstanceIds(final Duration timeout) {
         boolean setDeadline = false;
 
         final Map<String, KafkaFuture<Uuid>> result = new HashMap<>();
@@ -1640,17 +1626,6 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
         result.put(getName() + "-restore-consumer", restoreConsumerInstanceIdFuture);
 
-        if (setDeadline) {
-            fetchDeadlineClientInstanceId = time.milliseconds() + timeout.toMillis();
-        }
-
-        return result;
-    }
-
-    // this method is NOT thread-safe (we rely on the callee to be `synchronized`)
-    public KafkaFuture<Map<String, KafkaFuture<Uuid>>> producersClientInstanceIds(final Duration timeout) {
-        boolean setDeadline = false;
-
         if (producerInstanceIdFuture.isDone()) {
             if (producerInstanceIdFuture.isCompletedExceptionally()) {
                 producerInstanceIdFuture = new KafkaFutureImpl<>();
@@ -1659,26 +1634,13 @@ public class StreamThread extends Thread implements ProcessingThread {
         } else {
             setDeadline = true;
         }
+        result.put(getName() + "-producer", producerInstanceIdFuture);
 
-        if (processingMode.equals(StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA)) {
-            throw new UnsupportedOperationException("not yet implemented");
-        } else {
-            if (threadProducerInstanceIdFuture.isDone()) {
-                if (threadProducerInstanceIdFuture.isCompletedExceptionally()) {
-                    threadProducerInstanceIdFuture = new KafkaFutureImpl<>();
-                    setDeadline = true;
-                }
-            } else {
-                setDeadline = true;
-            }
-            producerInstanceIdFuture.complete(Collections.singletonMap(getName() + "-producer", threadProducerInstanceIdFuture));
-
-            if (setDeadline) {
-                fetchDeadlineClientInstanceId = time.milliseconds() + timeout.toMillis();
-            }
+        if (setDeadline) {
+            fetchDeadlineClientInstanceId = time.milliseconds() + timeout.toMillis();
         }
 
-        return producerInstanceIdFuture;
+        return result;
     }
 
     // the following are for testing only

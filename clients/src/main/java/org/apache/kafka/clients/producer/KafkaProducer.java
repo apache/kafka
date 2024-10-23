@@ -264,7 +264,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final ProducerInterceptors<K, V> interceptors;
     private final ApiVersions apiVersions;
     private final TransactionManager transactionManager;
-    private final Optional<ClientTelemetryReporter> clientTelemetryReporter;
+    // Init value is needed to avoid NPE in case of exception raised in the constructor
+    private Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.empty();
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -1392,6 +1393,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             } else {
                 // Try to close gracefully.
                 final Timer closeTimer = time.timer(timeout);
+                clientTelemetryReporter.ifPresent(ClientTelemetryReporter::initiateClose);
+                closeTimer.update();
+
                 if (this.sender != null) {
                     this.sender.initiateClose();
                     closeTimer.update();
@@ -1406,7 +1410,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         closeTimer.update();
                     }
                 }
-                clientTelemetryReporter.ifPresent(reporter -> reporter.initiateClose(closeTimer.remainingMs()));
             }
         }
 

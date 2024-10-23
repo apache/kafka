@@ -102,7 +102,6 @@ import static java.time.Instant.ofEpochMilli;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.StoreQueryParameters.fromNameAndType;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getRunningStreams;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
@@ -120,7 +119,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Timeout(600)
 @Tag("integration")
-@SuppressWarnings("deprecation")
 public class QueryableStateIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(QueryableStateIntegrationTest.class);
 
@@ -243,7 +241,7 @@ public class QueryableStateIntegrationTest {
             kafkaStreams.close(ofSeconds(30));
         }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
-        CLUSTER.deleteAllTopicsAndWait(0L);
+        CLUSTER.deleteAllTopics();
     }
 
     /**
@@ -271,7 +269,7 @@ public class QueryableStateIntegrationTest {
 
         // Create a Windowed State Store that contains the word count for every 1 minute
         groupedByWord
-            .windowedBy(TimeWindows.of(ofMillis(WINDOW_SIZE)))
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(WINDOW_SIZE)))
             .count(Materialized.as(windowStoreName + "-" + inputTopic))
             .toStream((key, value) -> key.key())
             .to(windowOutputTopic, Produced.with(Serdes.String(), Serdes.Long()));
@@ -556,7 +554,7 @@ public class QueryableStateIntegrationTest {
         try {
             startApplicationAndWaitUntilRunning(streamsList, Duration.ofSeconds(60));
 
-            final Set<String> stores = mkSet(storeName + "-" + streamThree, windowStoreName + "-" + streamThree);
+            final Set<String> stores = Set.of(storeName + "-" + streamThree, windowStoreName + "-" + streamThree);
             verifyOffsetLagFetch(streamsList, stores, Arrays.asList(4, 4));
 
             waitUntilAtLeastNumRecordProcessed(outputTopicThree, 1);
@@ -641,7 +639,7 @@ public class QueryableStateIntegrationTest {
         // create stream threads
         final String storeName = "word-count-store";
         final String windowStoreName = "windowed-word-count-store";
-        final Set<String> stores = mkSet(storeName + "-" + streamThree, windowStoreName + "-" + streamThree);
+        final Set<String> stores = Set.of(storeName + "-" + streamThree, windowStoreName + "-" + streamThree);
         for (int i = 0; i < numThreads; i++) {
             final Properties props = (Properties) streamsConfiguration.clone();
             props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + i);
@@ -1000,7 +998,7 @@ public class QueryableStateIntegrationTest {
 
         final String windowStoreName = "windowed-count";
         s1.groupByKey()
-            .windowedBy(TimeWindows.of(ofMillis(WINDOW_SIZE)))
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(WINDOW_SIZE)))
             .count(Materialized.as(windowStoreName));
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         startApplicationAndWaitUntilRunning(kafkaStreams);

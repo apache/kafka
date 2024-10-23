@@ -21,7 +21,6 @@ import java.util.AbstractMap.SimpleImmutableEntry
 import java.util.{Collections, Properties}
 import java.util.Map.Entry
 import kafka.server.KafkaConfig.fromProps
-import kafka.server.QuotaType._
 import kafka.utils.TestUtils._
 import kafka.utils.CoreUtils._
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET
@@ -36,7 +35,8 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol.PLAINTEXT
 import org.apache.kafka.controller.ControllerRequestContextUtil
 import org.apache.kafka.server.common.{Features, MetadataVersion}
-import org.apache.kafka.server.config.QuotaConfigs
+import org.apache.kafka.server.config.QuotaConfig
+import org.apache.kafka.server.quota.QuotaType
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.params.ParameterizedTest
@@ -126,23 +126,23 @@ class ReplicationQuotasTest extends QuorumTestHarness {
           controllerServer.controller.incrementalAlterConfigs(
             ControllerRequestContextUtil.ANONYMOUS_CONTEXT,
             Map(new ConfigResource(BROKER, String.valueOf(brokerId)) -> Map(
-              QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG -> entry,
-              QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG -> entry).asJava).asJava,
+              QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG -> entry,
+              QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG -> entry).asJava).asJava,
             false
           ).get()
         } else {
           adminZkClient.changeBrokerConfig(Seq(brokerId),
             propsWith(
-              (QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, throttle.toString),
-              (QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, throttle.toString)
+              (QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, throttle.toString),
+              (QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, throttle.toString)
             ))
         }
       }
       //Either throttle the six leaders or the two followers
       val configEntry = if (leaderThrottle)
-        new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:100,1:101,2:102,3:103,4:104,5:105")
+        new ConfigEntry(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:100,1:101,2:102,3:103,4:104,5:105")
       else
-        new ConfigEntry(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:106,1:106,2:106,3:107,4:107,5:107")
+        new ConfigEntry(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:106,1:106,2:106,3:107,4:107,5:107")
 
       admin.incrementalAlterConfigs(
         Map(new ConfigResource(TOPIC, topic) -> Seq(new AlterConfigOp(configEntry, SET)).asJavaCollection).asJava
@@ -198,7 +198,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
     // In a short test the brokers can be read unfairly, so assert against the average
     val rateUpperBound = throttle * 1.1
     val rateLowerBound = throttle * 0.5
-    val rate = if (leaderThrottle) avRate(LeaderReplication, 100 to 105) else avRate(FollowerReplication, 106 to 107)
+    val rate = if (leaderThrottle) avRate(QuotaType.LEADER_REPLICATION, 100 to 105) else avRate(QuotaType.FOLLOWER_REPLICATION, 106 to 107)
     assertTrue(rate < rateUpperBound, s"Expected $rate < $rateUpperBound")
     assertTrue(rate > rateLowerBound, s"Expected $rate > $rateLowerBound")
   }
@@ -233,9 +233,9 @@ class ReplicationQuotasTest extends QuorumTestHarness {
       //Set the throttle to only limit leader
       val configs = Map(
         new ConfigResource(BROKER, "100") ->
-          Seq(new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, throttle.toString), SET)).asJavaCollection,
+          Seq(new AlterConfigOp(new ConfigEntry(QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, throttle.toString), SET)).asJavaCollection,
         new ConfigResource(TOPIC, topic) ->
-          Seq(new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:100"), SET)).asJavaCollection
+          Seq(new AlterConfigOp(new ConfigEntry(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:100"), SET)).asJavaCollection
       ).asJava
       admin.incrementalAlterConfigs(configs).all().get()
     }

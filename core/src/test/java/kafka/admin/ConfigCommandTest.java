@@ -79,8 +79,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import scala.collection.JavaConverters;
 import scala.collection.Seq;
+import scala.jdk.javaapi.CollectionConverters;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -417,6 +417,65 @@ public class ConfigCommandTest {
     }
 
     @Test
+    public void testEntityDefaultForType() {
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-default",
+            "--entity-type", "topics",
+            "--describe"
+        ));
+        assertThrows(IllegalArgumentException.class, createOpts::checkArgs);
+
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-default",
+            "--entity-type", "clients",
+            "--describe"
+        ));
+        createOpts.checkArgs();
+
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-default",
+            "--entity-type", "users",
+            "--describe"
+        ));
+        createOpts.checkArgs();
+
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-default",
+            "--entity-type", "brokers",
+            "--describe"
+        ));
+        createOpts.checkArgs();
+
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-default",
+            "--entity-type", "broker-loggers",
+            "--describe"
+        ));
+        assertThrows(IllegalArgumentException.class, createOpts::checkArgs);
+
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-default",
+            "--entity-type", "ips",
+            "--describe"
+        ));
+        createOpts.checkArgs();
+
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-default",
+            "--entity-type", "client-metrics",
+            "--describe"
+        ));
+        assertThrows(IllegalArgumentException.class, createOpts::checkArgs);
+
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-default",
+            "--entity-type", "groups",
+            "--describe"
+        ));
+        assertThrows(IllegalArgumentException.class, createOpts::checkArgs);
+    }
+
+    @Test
     public void testParseConfigsToBeAddedForAddConfigFile() throws IOException {
         String fileContents =
             "a=b\n" +
@@ -459,6 +518,7 @@ public class ConfigCommandTest {
         if (!zkConfig) {
             testExpectedEntityTypeNames(Collections.singletonList(ConfigType.TOPIC), Collections.singletonList("A"), connectOpts, "--entity-type", "topics", "--entity-name", "A");
             testExpectedEntityTypeNames(Collections.singletonList(ConfigType.IP), Collections.singletonList("1.2.3.4"), connectOpts, "--entity-name", "1.2.3.4", "--entity-type", "ips");
+            testExpectedEntityTypeNames(Collections.singletonList(ConfigType.CLIENT_METRICS), Collections.singletonList("A"), connectOpts, "--entity-type", "client-metrics", "--entity-name", "A");
             testExpectedEntityTypeNames(Collections.singletonList(ConfigType.GROUP), Collections.singletonList("A"), connectOpts, "--entity-type", "groups", "--entity-name", "A");
             testExpectedEntityTypeNames(Arrays.asList(ConfigType.USER, ConfigType.CLIENT), Arrays.asList("A", ""), connectOpts,
                 "--entity-type", "users", "--entity-type", "clients", "--entity-name", "A", "--entity-default");
@@ -474,6 +534,7 @@ public class ConfigCommandTest {
             testExpectedEntityTypeNames(Collections.singletonList(ConfigType.TOPIC), Collections.emptyList(), connectOpts, "--entity-type", "topics");
             testExpectedEntityTypeNames(Collections.singletonList(ConfigType.IP), Collections.emptyList(), connectOpts, "--entity-type", "ips");
             testExpectedEntityTypeNames(Collections.singletonList(ConfigType.GROUP), Collections.emptyList(), connectOpts, "--entity-type", "groups");
+            testExpectedEntityTypeNames(Collections.singletonList(ConfigType.CLIENT_METRICS), Collections.emptyList(), connectOpts, "--entity-type", "client-metrics");
         }
 
         testExpectedEntityTypeNames(Collections.singletonList(ConfigType.BROKER), Collections.singletonList("0"), connectOpts, "--entity-name", "0", "--entity-type", "brokers");
@@ -943,7 +1004,6 @@ public class ConfigCommandTest {
         });
     }
 
-    @SuppressWarnings("deprecation") // Added for Scala 2.12 compatibility for usages of JavaConverters
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void shouldAlterTopicConfig(boolean file) {
@@ -952,7 +1012,7 @@ public class ConfigCommandTest {
         addedConfigs.put("delete.retention.ms", "1000000");
         addedConfigs.put("min.insync.replicas", "2");
         if (file) {
-            File f = kafka.utils.TestUtils.tempPropertiesFile(JavaConverters.mapAsScalaMap(addedConfigs));
+            File f = kafka.utils.TestUtils.tempPropertiesFile(CollectionConverters.asScala(addedConfigs));
             filePath = f.getPath();
         }
 
@@ -1802,12 +1862,15 @@ public class ConfigCommandTest {
     @Test
     public void shouldAlterClientMetricsConfig() {
         Node node = new Node(1, "localhost", 9092);
-        verifyAlterClientMetricsConfig(node, "1", Arrays.asList("--entity-name", "1"));
+        verifyAlterClientMetricsConfig(node, "1", Arrays.asList("--entity-type", "client-metrics", "--entity-name", "1"));
+
+        // Test for the --client-metrics alias
+        node = new Node(1, "localhost", 9092);
+        verifyAlterClientMetricsConfig(node, "1", Arrays.asList("--client-metrics", "1"));
     }
 
     private void verifyAlterClientMetricsConfig(Node node, String resourceName, List<String> resourceOpts) {
         List<String> optsList = concat(Arrays.asList("--bootstrap-server", "localhost:9092",
-            "--entity-type", "client-metrics",
             "--alter",
             "--delete-config", "interval.ms",
             "--add-config", "metrics=org.apache.kafka.consumer.," +
@@ -1905,7 +1968,7 @@ public class ConfigCommandTest {
             "--add-config", "interval.ms=1000"));
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, alterOpts::checkArgs);
-        assertEquals("an entity name must be specified with --alter of client-metrics", exception.getMessage());
+        assertEquals("An entity name must be specified with --alter of client-metrics", exception.getMessage());
     }
 
     @Test
@@ -1918,6 +1981,15 @@ public class ConfigCommandTest {
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, alterOpts::checkArgs);
         assertEquals("Invalid entity type client-metrics, the entity type must be one of users, brokers with a --zookeeper argument", exception.getMessage());
+
+        // Test for the --client-metrics alias
+        alterOpts = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+                "--client-metrics", "sub",
+                "--alter",
+                "--add-config", "interval.ms=1000"));
+
+        exception = assertThrows(IllegalArgumentException.class, alterOpts::checkArgs);
+        assertEquals("Invalid entity type client-metrics, the entity type must be one of users, brokers with a --zookeeper argument", exception.getMessage());
     }
 
     @Test
@@ -1929,6 +2001,14 @@ public class ConfigCommandTest {
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, describeOpts::checkArgs);
         assertEquals("Invalid entity type client-metrics, the entity type must be one of users, brokers with a --zookeeper argument", exception.getMessage());
+
+        // Test for the --client-metrics alias
+        describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+                "--client-metrics", "sub",
+                "--describe"));
+
+        exception = assertThrows(IllegalArgumentException.class, describeOpts::checkArgs);
+        assertEquals("Invalid entity type client-metrics, the entity type must be one of users, brokers with a --zookeeper argument", exception.getMessage());
     }
 
     @Test
@@ -1939,8 +2019,17 @@ public class ConfigCommandTest {
             "--alter",
             "--add-config", "interval.ms=1000"));
 
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfigWithZk(null, alterOpts, DUMMY_ADMIN_ZK_CLIENT));
-        assertEquals("client-metrics is not a known entityType. Should be one of List(topics, clients, users, brokers, ips)", exception.getMessage());
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, alterOpts::checkArgs);
+        assertEquals("Invalid entity type client-metrics, the entity type must be one of users, brokers with a --zookeeper argument", exception.getMessage());
+
+        // Test for the --client-metrics alias
+        alterOpts = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+                "--client-metrics", "sub",
+                "--alter",
+                "--add-config", "interval.ms=1000"));
+
+        exception = assertThrows(IllegalArgumentException.class, alterOpts::checkArgs);
+        assertEquals("Invalid entity type client-metrics, the entity type must be one of users, brokers with a --zookeeper argument", exception.getMessage());
     }
 
     @Test
@@ -2014,13 +2103,9 @@ public class ConfigCommandTest {
     public void shouldDescribeGroupConfigWithoutEntityName() {
         ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
             "--entity-type", "groups",
-            "--entity-name", "group",
             "--describe"));
-        verifyDescribeGroupConfig(describeOpts, "group");
 
-        // Test for the --group alias
-        describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092", "--group", "groupUsingAlias", "--describe"));
-        verifyDescribeGroupConfig(describeOpts, "groupUsingAlias");
+        verifyDescribeGroupConfig(describeOpts, "group");
     }
 
     private void verifyDescribeGroupConfig(ConfigCommand.ConfigCommandOptions describeOpts, String resourceName) {
@@ -2057,7 +2142,7 @@ public class ConfigCommandTest {
             "--add-config", "consumer.heartbeat.interval.ms=6000"));
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, alterOpts::checkArgs);
-        assertEquals("an entity name must be specified with --alter of groups", exception.getMessage());
+        assertEquals("An entity name must be specified with --alter of groups", exception.getMessage());
     }
 
     @Test
@@ -2206,8 +2291,7 @@ public class ConfigCommandTest {
         }
     }
 
-    @SuppressWarnings({"deprecation"})
     private <T> Seq<T> seq(Collection<T> seq) {
-        return JavaConverters.asScalaIteratorConverter(seq.iterator()).asScala().toSeq();
+        return CollectionConverters.asScala(seq).toSeq();
     }
 }

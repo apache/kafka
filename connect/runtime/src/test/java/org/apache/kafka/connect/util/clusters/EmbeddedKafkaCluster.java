@@ -17,8 +17,6 @@
 package org.apache.kafka.connect.util.clusters;
 
 import kafka.server.BrokerServer;
-import kafka.testkit.KafkaClusterTestKit;
-import kafka.testkit.TestKitNodes;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
@@ -35,6 +33,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -48,6 +47,8 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.test.KafkaClusterTestKit;
+import org.apache.kafka.common.test.TestKitNodes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
@@ -88,9 +89,10 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
- * Setup an embedded Kafka KRaft cluster (using {@link kafka.testkit.KafkaClusterTestKit} internally) with the
+ * Setup an embedded Kafka KRaft cluster (using {@link org.apache.kafka.common.test.KafkaClusterTestKit} internally) with the
  * specified number of brokers and the specified broker properties. This can be used for integration tests and is
  * typically used in conjunction with {@link EmbeddedConnectCluster}. Additional Kafka client properties can also be
  * supplied if required. This class also provides various utility methods to easily create Kafka topics, produce data,
@@ -182,14 +184,24 @@ public class EmbeddedKafkaCluster {
         Map<String, Object> consumerConfig = Collections.singletonMap(GROUP_ID_CONFIG, consumerGroupId);
         String topic = "consumer-warmup-" + consumerGroupId;
 
-        createTopic(topic);
-        produce(topic, "warmup message key", "warmup message value");
+        try {
+            createTopic(topic);
+            produce(topic, "warmup message key", "warmup message value");
 
-        try (Consumer<?, ?> consumer = createConsumerAndSubscribeTo(consumerConfig, topic)) {
-            ConsumerRecords<?, ?> records = consumer.poll(Duration.ofMillis(GROUP_COORDINATOR_AVAILABILITY_DURATION_MS));
-            if (records.isEmpty()) {
-                throw new AssertionError("Failed to verify availability of group coordinator and produce/consume APIs on Kafka cluster in time");
+            try (Consumer<?, ?> consumer = createConsumerAndSubscribeTo(consumerConfig, topic)) {
+                ConsumerRecords<?, ?> records = consumer.poll(Duration.ofMillis(GROUP_COORDINATOR_AVAILABILITY_DURATION_MS));
+                if (records.isEmpty()) {
+                    throw new AssertionError("Failed to verify availability of group coordinator and/or consume APIs on Kafka cluster in time");
+                }
             }
+        } catch (Throwable e) {
+            fail(
+                    "The Kafka cluster used in this test was not able to start successfully in time. "
+                            + "If no recent changes have altered the behavior of Kafka brokers or clients, and this error "
+                            + "is not occurring frequently, it is probably the result of the testing machine being temporarily "
+                            + "overloaded and can be safely ignored.",
+                    e
+            );
         }
 
         try (Admin admin = createAdminClient()) {
@@ -452,6 +464,7 @@ public class EmbeddedKafkaCluster {
      */
     public ConsumerRecords<byte[], byte[]> consume(int n, long maxDuration, Map<String, Object> consumerProps, String... topics) {
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> records = new HashMap<>();
+        Map<TopicPartition, OffsetAndMetadata> nextOffsets = new HashMap<>();
         int consumedRecords = 0;
         try (KafkaConsumer<byte[], byte[]> consumer = createConsumerAndSubscribeTo(consumerProps, topics)) {
             final long startMillis = System.currentTimeMillis();
@@ -466,10 +479,12 @@ public class EmbeddedKafkaCluster {
                 for (TopicPartition partition: rec.partitions()) {
                     final List<ConsumerRecord<byte[], byte[]>> r = rec.records(partition);
                     records.computeIfAbsent(partition, t -> new ArrayList<>()).addAll(r);
+                    final ConsumerRecord<byte[], byte[]> lastRecord = r.get(r.size() - 1);
+                    nextOffsets.put(partition, new OffsetAndMetadata(lastRecord.offset() + 1, lastRecord.leaderEpoch(), ""));
                     consumedRecords += r.size();
                 }
                 if (consumedRecords >= n) {
-                    return new ConsumerRecords<>(records);
+                    return new ConsumerRecords<>(records, nextOffsets);
                 }
                 allowedDuration = maxDuration - (System.currentTimeMillis() - startMillis);
             }
@@ -524,6 +539,7 @@ public class EmbeddedKafkaCluster {
                         Function.identity(),
                         tp -> new ArrayList<>()
                 ));
+        Map<TopicPartition, OffsetAndMetadata> nextOffsets = new HashMap<>();
         try (Consumer<byte[], byte[]> consumer = createConsumer(consumerProps != null ? consumerProps : Collections.emptyMap())) {
             consumer.assign(topicPartitions);
 
@@ -547,12 +563,13 @@ public class EmbeddedKafkaCluster {
                         recordBatch.partitions().forEach(tp -> records.get(tp)
                                 .addAll(recordBatch.records(tp))
                         );
+                        nextOffsets.putAll(recordBatch.nextOffsets());
                     }
                 }
             }
         }
 
-        return new ConsumerRecords<>(records);
+        return new ConsumerRecords<>(records, nextOffsets);
     }
 
     public long endOffset(TopicPartition topicPartition) throws TimeoutException, InterruptedException, ExecutionException {
