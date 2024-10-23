@@ -1108,7 +1108,7 @@ public class SharePartition {
                 // limit the acquired records. The last offset shall be the batches last offset
                 // which falls under the max messages limit. As the max fetch records is the soft
                 // limit, the last offset can be higher than the max messages.
-                lastAcquiredOffset = findLastOffsetFromBatchWithRequestOffset(batches, firstAcquiredOffset + maxFetchRecords - 1);
+                lastAcquiredOffset = lastOffsetFromBatchWithRequestOffset(batches, firstAcquiredOffset + maxFetchRecords - 1);
             }
 
             // Schedule acquisition lock timeout for the batch.
@@ -1716,7 +1716,7 @@ public class SharePartition {
      * @param offset The request offset to find.
      * @return The last offset of the batch which contains the request offset, otherwise the request offset.
      */
-    private long findLastOffsetFromBatchWithRequestOffset(
+    private long lastOffsetFromBatchWithRequestOffset(
         Iterable<? extends RecordBatch> batches,
         long offset
     ) {
