@@ -235,6 +235,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
         // update the consumed offset
         final Map<TopicPartition, List<ConsumerRecord<K, V>>> results = new HashMap<>();
+        final Map<TopicPartition, OffsetAndMetadata> nextOffsetAndMetadata = new HashMap<>();
         final List<TopicPartition> toClear = new ArrayList<>();
 
         for (Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>> entry : this.records.entrySet()) {
@@ -253,6 +254,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
                         SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
                                 rec.offset() + 1, rec.leaderEpoch(), leaderAndEpoch);
                         subscriptions.position(entry.getKey(), newPosition);
+                        nextOffsetAndMetadata.put(entry.getKey(), new OffsetAndMetadata(rec.offset() + 1, rec.leaderEpoch(), ""));
                     }
                 }
                 toClear.add(entry.getKey());
@@ -260,7 +262,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         }
 
         toClear.forEach(records::remove);
-        return new ConsumerRecords<>(results);
+        return new ConsumerRecords<>(results, nextOffsetAndMetadata);
     }
 
     public synchronized void addRecord(ConsumerRecord<K, V> record) {

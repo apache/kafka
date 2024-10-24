@@ -35,8 +35,8 @@ import java.util.regex.Pattern
 import java.util.{Collections, Optional}
 import scala.collection.mutable.ListBuffer
 import scala.collection.Seq
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOptional
 
 /**
  * An append-only log for storing messages locally. The log is a sequence of LogSegments, each with a base offset.
@@ -415,7 +415,7 @@ class LocalLog(@volatile private var _dir: File,
     val startOffsetPosition = new OffsetPosition(fetchInfo.fetchOffsetMetadata.messageOffset,
       fetchInfo.fetchOffsetMetadata.relativePositionInSegment)
     val upperBoundOffset = segment.fetchUpperBoundOffset(startOffsetPosition, fetchSize).orElse(
-      segments.higherSegment(segment.baseOffset).asScala.map(s => s.baseOffset).getOrElse(logEndOffset))
+      segments.higherSegment(segment.baseOffset).toScala.map(s => s.baseOffset).getOrElse(logEndOffset))
 
     val abortedTransactions = ListBuffer.empty[FetchResponseData.AbortedTransaction]
     def accumulator(abortedTxns: Seq[AbortedTxn]): Unit = abortedTransactions ++= abortedTxns.map(_.asAbortedTransaction)

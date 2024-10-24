@@ -449,7 +449,7 @@ public class AsyncKafkaConsumerTest {
         );
         doAnswer(invocation -> {
             consumer.wakeup();
-            return Fetch.forPartition(tp, records, true);
+            return Fetch.forPartition(tp, records, true, new OffsetAndMetadata(4, Optional.of(0), ""));
         }).when(fetchCollector).collectFetch(Mockito.any(FetchBuffer.class));
         when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
         completeCommitSyncApplicationEventSuccessfully();
@@ -543,7 +543,7 @@ public class AsyncKafkaConsumerTest {
             new ConsumerRecord<>(topicName, partition, 2, "key1", "value1"),
             new ConsumerRecord<>(topicName, partition, 3, "key2", "value2")
         );
-        doReturn(Fetch.forPartition(tp, records, true))
+        doReturn(Fetch.forPartition(tp, records, true, new OffsetAndMetadata(4, Optional.of(0), "")))
             .when(fetchCollector).collectFetch(any(FetchBuffer.class));
         when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
         completeCommitSyncApplicationEventSuccessfully();
@@ -1703,7 +1703,7 @@ public class AsyncKafkaConsumerTest {
         final TopicPartition tp = new TopicPartition("topic", 0);
         final List<ConsumerRecord<String, String>> records = singletonList(
                 new ConsumerRecord<>("topic", 0, 2, "key1", "value1"));
-        doAnswer(invocation -> Fetch.forPartition(tp, records, true))
+        doAnswer(invocation -> Fetch.forPartition(tp, records, true, new OffsetAndMetadata(3, Optional.of(0), "")))
                 .when(fetchCollector)
                 .collectFetch(Mockito.any(FetchBuffer.class));
         when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
@@ -1748,6 +1748,7 @@ public class AsyncKafkaConsumerTest {
             new ConsumerRecord<>(topicName, partition, 2, "key1", "value1"),
             new ConsumerRecord<>(topicName, partition, 3, "key2", "value2")
         );
+        final OffsetAndMetadata nextOffsetAndMetadata = new OffsetAndMetadata(4, Optional.of(0), "");
 
         // On the first iteration, return no data; on the second, return two records
         doAnswer(invocation -> {
@@ -1755,13 +1756,15 @@ public class AsyncKafkaConsumerTest {
             consumer.subscriptions().assignFromSubscribed(Collections.singleton(tp));
             return Fetch.empty();
         }).doAnswer(invocation ->
-            Fetch.forPartition(tp, records, true)
+            Fetch.forPartition(tp, records, true, nextOffsetAndMetadata)
         ).when(fetchCollector).collectFetch(any(FetchBuffer.class));
         when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
 
         // And then poll for up to 10000ms, which should return 2 records without timing out
         ConsumerRecords<?, ?> returnedRecords = consumer.poll(Duration.ofMillis(10000));
         assertEquals(2, returnedRecords.count());
+        assertEquals(4, returnedRecords.nextOffsets().get(tp).offset());
+        assertEquals(Optional.of(0), returnedRecords.nextOffsets().get(tp).leaderEpoch());
 
         assertEquals(singleton(topicName), consumer.subscription());
         assertEquals(singleton(tp), consumer.assignment());

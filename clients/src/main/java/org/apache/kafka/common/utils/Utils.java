@@ -1526,11 +1526,6 @@ public final class Utils {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    public static <S> Iterator<S> covariantCast(Iterator<? extends S> iterator) {
-        return (Iterator<S>) iterator;
-    }
-
     /**
      * Checks if a string is null, empty or whitespace only.
      * @param str a string to be checked

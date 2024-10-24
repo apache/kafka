@@ -159,7 +159,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     METADATA_SNAPSHOT_SEARCH_STR = "%s/__cluster_metadata-0/*.checkpoint" % METADATA_LOG_DIR
     METADATA_FIRST_LOG = "%s/__cluster_metadata-0/00000000000000000000.log" % METADATA_LOG_DIR
     # Kafka Authorizer
-    ZK_ACL_AUTHORIZER = "kafka.security.authorizer.AclAuthorizer"
     KRAFT_ACL_AUTHORIZER = "org.apache.kafka.metadata.authorizer.StandardAuthorizer"
     HEAP_DUMP_FILE = os.path.join(PERSISTENT_ROOT, "kafka_heap_dump.bin")
     INTERBROKER_LISTENER_NAME = 'INTERNAL'
@@ -205,7 +204,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  allow_zk_with_kraft=False,
                  quorum_info_provider=None,
                  use_new_coordinator=None,
-                 dynamicRaftQuorum=False
+                 consumer_group_migration_policy=None,
+                 dynamicRaftQuorum=False,
                  ):
         """
         :param context: test context
@@ -267,6 +267,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :param bool allow_zk_with_kraft: if True, then allow a KRaft broker or controller to also use ZooKeeper
         :param quorum_info_provider: A function that takes this KafkaService as an argument and returns a ServiceQuorumInfo. If this is None, then the ServiceQuorumInfo is generated from the test context
         :param use_new_coordinator: When true, use the new implementation of the group coordinator as per KIP-848. If this is None, the default existing group coordinator is used.
+        :param consumer_group_migration_policy: The config that enables converting the non-empty classic group using the consumer embedded protocol to the non-empty consumer group using the consumer group protocol and vice versa.
         :param dynamicRaftQuorum: When true, the quorum uses kraft.version=1, controller_quorum_bootstrap_servers, and bootstraps the first controller using the standalone flag
         """
 
@@ -292,6 +293,15 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         
         # Assign the determined value.
         self.use_new_coordinator = use_new_coordinator
+
+        # Set consumer_group_migration_policy based on context and arguments.
+        if consumer_group_migration_policy is None:
+            arg_name = 'consumer_group_migration_policy'
+            if context.injected_args is not None:
+                consumer_group_migration_policy = context.injected_args.get(arg_name)
+            if consumer_group_migration_policy is None:
+                consumer_group_migration_policy = context.globals.get(arg_name)
+        self.consumer_group_migration_policy = consumer_group_migration_policy
 
         if num_nodes < 1:
             raise Exception("Must set a positive number of nodes: %i" % num_nodes)
@@ -762,6 +772,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         if self.use_new_coordinator is not None:
             override_configs[config_property.NEW_GROUP_COORDINATOR_ENABLE] = str(self.use_new_coordinator)
 
+        if self.consumer_group_migration_policy is not None:
+            override_configs[config_property.CONSUMER_GROUP_MIGRATION_POLICY] = str(self.consumer_group_migration_policy)
+
         for prop in self.server_prop_overrides:
             override_configs[prop[0]] = prop[1]
 
@@ -869,9 +882,12 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             cmd = "%s format --ignore-formatted --config %s --cluster-id %s" % (kafka_storage_script, KafkaService.CONFIG_FILE, config_property.CLUSTER_ID)
             if self.dynamicRaftQuorum:
                 cmd += " --feature kraft.version=1"
-                if not self.standalone_controller_bootstrapped and self.node_quorum_info.has_controller_role:
-                    cmd += " --standalone"
-                    self.standalone_controller_bootstrapped = True
+                if self.node_quorum_info.has_controller_role:
+                    if self.standalone_controller_bootstrapped:
+                        cmd += " --no-initial-controllers"
+                    else:
+                        cmd += " --standalone"
+                        self.standalone_controller_bootstrapped = True
             self.logger.info("Running log directory format command...\n%s" % cmd)
             node.account.ssh(cmd)
 

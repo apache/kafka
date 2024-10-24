@@ -43,8 +43,11 @@ jobs:
         pip install -r docker/requirements.txt
     - name: Build image and run tests
       working-directory: ./docker
+      env:
+        IMAGE_TYPE: ${{ github.event.inputs.image_type }}
+        KAFKA_URL: ${{ github.event.inputs.kafka_url }}
       run: |
-        python docker_build_test.py kafka/test -tag=test -type=${{ github.event.inputs.image_type }} -u=${{ github.event.inputs.kafka_url }}
+        python docker_build_test.py kafka/test -tag=test -type=$IMAGE_TYPE -u=$KAFKA_URL
     - name: Run CVE scan
       uses: aquasecurity/trivy-action@6e7b7d1fd3e4fef0c5fa8cce1229c54b2c9bd0d8 # v0.24.0
       with:

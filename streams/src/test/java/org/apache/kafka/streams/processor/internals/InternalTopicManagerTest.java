@@ -63,7 +63,6 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -362,8 +361,8 @@ public class InternalTopicManagerTest {
         final InternalTopicManager internalTopicManager =
                 new InternalTopicManager(time, mockAdminClient, new StreamsConfig(config));
         try {
-            final Set<String> topic1set = new HashSet<String>(Arrays.asList(topic1));
-            final Set<String> topic2set = new HashSet<String>(Arrays.asList(topic2));
+            final Set<String> topic1set = new HashSet<String>(Collections.singletonList(topic1));
+            final Set<String> topic2set = new HashSet<String>(Collections.singletonList(topic2));
 
             internalTopicManager.getNumPartitions(topic1set, topic2set);
 
@@ -374,8 +373,8 @@ public class InternalTopicManagerTest {
         mockAdminClient.timeoutNextRequest(1);
 
         try {
-            final Set<String> topic1set = new HashSet<String>(Arrays.asList(topic1));
-            final Set<String> topic2set = new HashSet<String>(Arrays.asList(topic2));
+            final Set<String> topic1set = new HashSet<String>(Collections.singletonList(topic1));
+            final Set<String> topic2set = new HashSet<String>(Collections.singletonList(topic2));
 
             internalTopicManager.getNumPartitions(topic1set, topic2set);
 

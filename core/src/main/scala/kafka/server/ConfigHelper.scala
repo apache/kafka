@@ -39,8 +39,8 @@ import org.apache.kafka.storage.internals.log.LogConfig
 
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Map, mutable}
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOptional
 
 class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepository: ConfigRepository) extends Logging {
 
@@ -188,7 +188,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
   def createGroupConfigEntry(groupConfig: GroupConfig, groupProps: Properties, includeSynonyms: Boolean, includeDocumentation: Boolean)
                             (name: String, value: Any): DescribeConfigsResponseData.DescribeConfigsResourceResult = {
     val allNames = brokerSynonyms(name)
-    val configEntryType = GroupConfig.configType(name).asScala
+    val configEntryType = GroupConfig.configType(name).toScala
     val isSensitive = KafkaConfig.maybeSensitive(configEntryType)
     val valueAsString = if (isSensitive) null else ConfigDef.convertToString(value, configEntryType.orNull)
     val allSynonyms = {
@@ -212,7 +212,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
 
   def createTopicConfigEntry(logConfig: LogConfig, topicProps: Properties, includeSynonyms: Boolean, includeDocumentation: Boolean)
                             (name: String, value: Any): DescribeConfigsResponseData.DescribeConfigsResourceResult = {
-    val configEntryType = LogConfig.configType(name).asScala
+    val configEntryType = LogConfig.configType(name).toScala
     val isSensitive = KafkaConfig.maybeSensitive(configEntryType)
     val valueAsString = if (isSensitive) null else ConfigDef.convertToString(value, configEntryType.orNull)
     val allSynonyms = {

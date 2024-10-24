@@ -158,4 +158,8 @@
     <allow pkg="org.apache.logging.log4j" />
     <allow pkg="org.apache.logging.log4j.core.config" />
   </subpackage>
+
+  <subpackage name="clients">
+    <allow pkg="org.apache.kafka.clients" />
+  </subpackage>
 </import-control>
