@@ -31,7 +31,7 @@ import org.apache.kafka.common.requests.{AbstractRequest, EnvelopeRequest, Envel
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.utils.MockTime
-import org.apache.kafka.server.ControllerRequestCompletionHandler
+import org.apache.kafka.server.common.ControllerRequestCompletionHandler
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito._

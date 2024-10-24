@@ -35,7 +35,7 @@ import org.apache.kafka.common.record.{FileRecords, MemoryRecords, RecordBatch, 
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{LogContext, MockTime, ProducerIdAndEpoch}
 import org.apache.kafka.common.{Node, TopicPartition}
-import org.apache.kafka.server.ProducerIdManager
+import org.apache.kafka.coordinator.transaction.ProducerIdManager
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion, RequestLocal, TransactionVersion}
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.storage.internals.log.{FetchDataInfo, LogConfig, LogOffsetMetadata}

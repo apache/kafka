@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server;
+package org.apache.kafka.coordinator.transaction;
 
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData;
@@ -24,6 +24,7 @@ import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.ProducerIdsBlock;
+import org.apache.kafka.server.common.serialization.NodeToControllerChannelManager;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -42,6 +43,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.apache.kafka.coordinator.transaction.RPCProducerIdManager.RETRY_BACKOFF_MS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -151,7 +153,7 @@ public class ProducerIdManagerTest {
         verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 0, 1), 0);
         verifyFailureWithoutGenerateProducerId(manager);
 
-        time.sleep(ProducerIdManager.RETRY_BACKOFF_MS);
+        time.sleep(RETRY_BACKOFF_MS);
         verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 1, 1), 1);
     }
 
@@ -175,7 +177,7 @@ public class ProducerIdManagerTest {
         verifyFailure(manager);
 
         assertThrows(CoordinatorLoadInProgressException.class, manager::generateProducerId);
-        time.sleep(ProducerIdManager.RETRY_BACKOFF_MS);
+        time.sleep(RETRY_BACKOFF_MS);
         verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 0, 1), 0);
     }
 

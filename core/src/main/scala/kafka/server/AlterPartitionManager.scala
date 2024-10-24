@@ -33,8 +33,8 @@ import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.requests.{AlterPartitionRequest, AlterPartitionResponse}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
-import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.serialization.NodeToControllerChannelManager
+import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, MetadataVersion}
 import org.apache.kafka.server.util.Scheduler
 
 import scala.collection.mutable

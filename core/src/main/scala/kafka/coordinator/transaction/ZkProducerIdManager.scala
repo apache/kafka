@@ -19,7 +19,7 @@ package kafka.coordinator.transaction
 import kafka.utils.Logging
 import kafka.zk.{KafkaZkClient, ProducerIdBlockZNode}
 import org.apache.kafka.common.KafkaException
-import org.apache.kafka.server.ProducerIdManager
+import org.apache.kafka.coordinator.transaction.ProducerIdManager
 import org.apache.kafka.server.common.ProducerIdsBlock
 
 object ZkProducerIdManager {
@@ -67,6 +67,7 @@ object ZkProducerIdManager {
 class ZkProducerIdManager(brokerId: Int, zkClient: KafkaZkClient) extends ProducerIdManager with Logging {
 
   this.logIdent = "[ZK ProducerId Manager " + brokerId + "]: "
+  val RETRY_BACKOFF_MS = 50
 
   private var currentProducerIdBlock: ProducerIdsBlock = ProducerIdsBlock.EMPTY
   private var nextProducerId: Long = _
@@ -97,5 +98,8 @@ class ZkProducerIdManager(brokerId: Int, zkClient: KafkaZkClient) extends Produc
       nextProducerId += 1
       nextProducerId - 1
     }
+  }
+
+  override def shutdown(): Unit = {
   }
 }

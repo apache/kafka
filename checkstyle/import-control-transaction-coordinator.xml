@@ -32,7 +32,11 @@
     <!-- anyone can use public classes -->
     <subpackage name="coordinator">
         <subpackage name="transaction">
-            <allow pkg="org.apache.kafka.common.config" />
+            <allow pkg="org.apache.kafka.server.common" />
+            <allow pkg="org.apache.kafka.clients" />
+            <allow pkg="org.apache.kafka.coordinator.transaction" />
+            <allow pkg="org.apache.kafka.common" />
+            <allow pkg="org.slf4j" />
             <subpackage name="generated">
                 <allow pkg="org.apache.kafka.common.protocol" />
                 <allow pkg="org.apache.kafka.common.errors" />

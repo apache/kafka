@@ -31,8 +31,8 @@ import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.queue.EventQueue.DeadlineFunction
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
-import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.serialization.NodeToControllerChannelManager
+import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, MetadataVersion}
 
 import scala.jdk.CollectionConverters._
 

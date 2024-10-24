@@ -22,8 +22,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{AddPartitionsToTxnResponse, TransactionResult}
 import org.apache.kafka.common.utils.{LogContext, MockTime, ProducerIdAndEpoch}
-import org.apache.kafka.coordinator.transaction.TransactionStateManagerConfig
-import org.apache.kafka.server.ProducerIdManager
+import org.apache.kafka.coordinator.transaction.{ProducerIdManager, TransactionStateManagerConfig}
 import org.apache.kafka.server.common.TransactionVersion
 import org.apache.kafka.server.common.TransactionVersion.{TV_0, TV_2}
 import org.apache.kafka.server.util.MockScheduler

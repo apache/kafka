@@ -938,8 +938,6 @@ project(':server') {
     compileOnly libs.reload4j
 
     testImplementation project(':clients').sourceSets.test.output
-    testImplementation project(':test-common')
-    testImplementation project(':test-common:test-common-api')
     testImplementation libs.mockitoCore
     testImplementation libs.junitJupiter
     testImplementation libs.slf4jReload4j
@@ -1656,10 +1654,15 @@ project(':transaction-coordinator') {
   dependencies {
     implementation libs.jacksonDatabind
     implementation project(':clients')
+    implementation project(':server-common')
+    implementation libs.slf4jApi
+
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-
     testRuntimeOnly runtimeTestLibs
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':test-common')
+    testImplementation project(':test-common:test-common-api')
 
     generator project(':generator')
   }

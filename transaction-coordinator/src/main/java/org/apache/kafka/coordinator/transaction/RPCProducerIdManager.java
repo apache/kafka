@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server;
+package org.apache.kafka.coordinator.transaction;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
@@ -23,7 +23,9 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AllocateProducerIdsRequest;
 import org.apache.kafka.common.requests.AllocateProducerIdsResponse;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.common.ControllerRequestCompletionHandler;
 import org.apache.kafka.server.common.ProducerIdsBlock;
+import org.apache.kafka.server.common.serialization.NodeToControllerChannelManager;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,7 +35,13 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
-public class RPCProducerIdManager extends ProducerIdManager {
+public class RPCProducerIdManager implements ProducerIdManager {
+
+    public static final int RETRY_BACKOFF_MS = 50;
+    // Once we reach this percentage of PIDs consumed from the current block, trigger a fetch of the next block
+    protected static final double PID_PREFETCH_THRESHOLD = 0.90;
+    protected static final int ITERATION_LIMIT = 3;
+    protected static final long NO_RETRY = -1L;
 
     private static final Logger log = LoggerFactory.getLogger(RPCProducerIdManager.class);
     private final String logPrefix;
@@ -44,7 +52,7 @@ public class RPCProducerIdManager extends ProducerIdManager {
     private final NodeToControllerChannelManager controllerChannel;
 
     // Visible for testing
-    public AtomicReference<ProducerIdsBlock> nextProducerIdBlock = new AtomicReference<>(null);
+    final AtomicReference<ProducerIdsBlock> nextProducerIdBlock = new AtomicReference<>(null);
     private final AtomicReference<ProducerIdsBlock> currentProducerIdBlock = new AtomicReference<>(ProducerIdsBlock.EMPTY);
     private final AtomicBoolean requestInFlight = new AtomicBoolean(false);
     private final AtomicLong backoffDeadlineMs = new AtomicLong(NO_RETRY);
@@ -63,20 +71,19 @@ public class RPCProducerIdManager extends ProducerIdManager {
 
 
     @Override
-    public Long generateProducerId() throws Exception {
-        Long result = null;
+    public Long generateProducerId() {
         var iteration = 0;
-        while (result == null) {
+        while (iteration <= ITERATION_LIMIT) {
             var claimNextId = currentProducerIdBlock.get().claimNextId();
             if (claimNextId.isPresent()) {
                 var nextProducerId = claimNextId.get();
                 // Check if we need to prefetch the next block
-                long prefetchTarget = currentProducerIdBlock.get().firstProducerId() +
+                var prefetchTarget = currentProducerIdBlock.get().firstProducerId() +
                         (long) (currentProducerIdBlock.get().size() * PID_PREFETCH_THRESHOLD);
                 if (nextProducerId == prefetchTarget) {
                     maybePrefetchNextBlock();
                 }
-                result = nextProducerId;
+                return nextProducerId;
             } else {
                 // Check the next block if current block is full
                 var block = nextProducerIdBlock.getAndSet(null);
@@ -84,18 +91,20 @@ public class RPCProducerIdManager extends ProducerIdManager {
                     // Return COORDINATOR_LOAD_IN_PROGRESS rather than REQUEST_TIMED_OUT since older clients treat the error as fatal
                     // when it should be retriable like COORDINATOR_LOAD_IN_PROGRESS.
                     maybeRequestNextBlock();
-                    throw  Errors.COORDINATOR_LOAD_IN_PROGRESS.exception("Producer ID block is full. Waiting for next block");
+                    throw Errors.COORDINATOR_LOAD_IN_PROGRESS.exception("Producer ID block is full. Waiting for next block");
                 } else {
                     currentProducerIdBlock.set(block);
                     requestInFlight.set(false);
                     iteration++;
                 }
             }
-            if (iteration == ITERATION_LIMIT) {
-                throw Errors.COORDINATOR_LOAD_IN_PROGRESS.exception("Producer ID block is full. Waiting for next block");
-            }
         }
-        return result;
+        throw Errors.COORDINATOR_LOAD_IN_PROGRESS.exception("Producer ID block is full. Waiting for next block");
+    }
+
+    @Override
+    public void shutdown() {
+        
     }
 
     private void maybePrefetchNextBlock() {

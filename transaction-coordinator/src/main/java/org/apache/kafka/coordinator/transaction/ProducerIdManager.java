@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server;
+package org.apache.kafka.coordinator.transaction;
 
 
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.common.serialization.NodeToControllerChannelManager;
 
 import java.util.function.Supplier;
 
@@ -28,23 +29,16 @@ import java.util.function.Supplier;
  * ProducerIds are managed by the controller. When requesting a new range of IDs, we are guaranteed to receive
  * a unique block.
  */
-public abstract class ProducerIdManager {
+public interface ProducerIdManager {
 
-    public static final int RETRY_BACKOFF_MS = 50;
-    // Once we reach this percentage of PIDs consumed from the current block, trigger a fetch of the next block
-    protected static final double PID_PREFETCH_THRESHOLD = 0.90;
-    protected static final int ITERATION_LIMIT = 3;
-    protected static final long NO_RETRY = -1L;
+    Long generateProducerId() throws Exception;
 
-    public abstract Long generateProducerId() throws Exception;
+    void shutdown();
 
-    public void shutdown() {
-    }
-
-    public static ProducerIdManager rpc(int brokerId,
-                                        Time time,
-                                        Supplier<Long> brokerEpochSupplier,
-                                        NodeToControllerChannelManager controllerChannel) {
+    static ProducerIdManager rpc(int brokerId,
+                                 Time time,
+                                 Supplier<Long> brokerEpochSupplier,
+                                 NodeToControllerChannelManager controllerChannel) {
         return new RPCProducerIdManager(brokerId, time, brokerEpochSupplier, controllerChannel);
     }
 }
