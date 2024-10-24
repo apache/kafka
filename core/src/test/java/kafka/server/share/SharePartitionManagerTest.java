@@ -102,6 +102,7 @@ import scala.Tuple2;
 import scala.collection.Seq;
 import scala.jdk.javaapi.CollectionConverters;
 
+import static kafka.server.share.DelayedShareFetchTest.mockTopicIdPartitionToReturnDataEqualToMinBytes;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -1034,6 +1035,13 @@ public class SharePartitionManagerTest {
             "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
             DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
         mockReplicaManagerDelayedShareFetch(replicaManager, delayedShareFetchPurgatory);
+        mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp0, 1);
+        mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp1, 1);
+        mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp2, 1);
+        mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp3, 1);
+        mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp4, 1);
+        mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp5, 1);
+        mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp6, 1);
 
         SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withReplicaManager(replicaManager)
@@ -1094,6 +1102,11 @@ public class SharePartitionManagerTest {
             "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
             DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
         mockReplicaManagerDelayedShareFetch(replicaManager, delayedShareFetchPurgatory);
+        mockReplicaManagerDelayedShareFetch(replicaManager, delayedShareFetchPurgatory);
+        mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp0, 1);
+        mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp1, 1);
+        mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp2, 1);
+        mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp3, 1);
 
         SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withTime(time)
@@ -1218,6 +1231,7 @@ public class SharePartitionManagerTest {
             "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
             DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
         mockReplicaManagerDelayedShareFetch(replicaManager, delayedShareFetchPurgatory);
+        mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp0, 1);
 
         SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withReplicaManager(replicaManager)
@@ -1649,6 +1663,8 @@ public class SharePartitionManagerTest {
                 "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
                 DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
         mockReplicaManagerDelayedShareFetch(replicaManager, delayedShareFetchPurgatory);
+        when(sp1.latestFetchOffsetMetadata()).thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
+        mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp1, 2);
 
         // Initially you cannot acquire records for both sp1 and sp2.
         when(sp1.maybeAcquireFetchLock()).thenReturn(true);
@@ -1838,6 +1854,8 @@ public class SharePartitionManagerTest {
                 "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
                 DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
         mockReplicaManagerDelayedShareFetch(replicaManager, delayedShareFetchPurgatory);
+        when(sp1.latestFetchOffsetMetadata()).thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
+        mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp1, 1);
 
         // Initially you cannot acquire records for both sp1 and sp2.
         when(sp1.maybeAcquireFetchLock()).thenReturn(true);
@@ -2236,7 +2254,7 @@ public class SharePartitionManagerTest {
     static Seq<Tuple2<TopicIdPartition, LogReadResult>> buildLogReadResult(Set<TopicIdPartition> topicIdPartitions) {
         List<Tuple2<TopicIdPartition, LogReadResult>> logReadResults = new ArrayList<>();
         topicIdPartitions.forEach(topicIdPartition -> logReadResults.add(new Tuple2<>(topicIdPartition, new LogReadResult(
-            new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
+            new FetchDataInfo(new LogOffsetMetadata(0, 0, 0), MemoryRecords.EMPTY),
             Option.empty(),
             -1L,
             -1L,

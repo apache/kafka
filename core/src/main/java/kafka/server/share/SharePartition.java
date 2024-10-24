@@ -34,6 +34,7 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
+import org.apache.kafka.server.share.fetch.FetchPartitionOffsetData;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
 import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
 import org.apache.kafka.server.share.persister.PartitionAllData;
@@ -49,6 +50,7 @@ import org.apache.kafka.server.share.persister.WriteShareGroupStateParameters;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
+import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -262,6 +264,11 @@ public class SharePartition {
     private long endOffset;
 
     /**
+     * We maintain the latest fetch offset metadata to estimate the minBytes requirement more efficiently.
+     */
+    private Optional<LogOffsetMetadata> latestFetchOffsetMetadata;
+
+    /**
      * The state epoch is used to track the version of the state of the share partition.
      */
     private int stateEpoch;
@@ -304,6 +311,7 @@ public class SharePartition {
         this.partitionState = SharePartitionState.EMPTY;
         this.replicaManager = replicaManager;
         this.groupConfigManager = groupConfigManager;
+        this.latestFetchOffsetMetadata = Optional.empty();
     }
 
     /**
@@ -517,13 +525,13 @@ public class SharePartition {
      * @param maxFetchRecords    The maximum number of records that should be acquired, this is a soft
      *                           limit and the method might acquire more records than the maxFetchRecords,
      *                           if the records are already part of the same fetch batch.
-     * @param fetchPartitionData The fetched records for the share partition.
+     * @param fetchPartitionOffsetData The fetched records for the share partition along with log offset metadata
      * @return The acquired records for the share partition.
      */
     public ShareAcquiredRecords acquire(
         String memberId,
         int maxFetchRecords,
-        FetchPartitionData fetchPartitionData
+        FetchPartitionOffsetData fetchPartitionOffsetData
     ) {
         log.trace("Received acquire request for share partition: {}-{} memberId: {}", groupId, topicIdPartition, memberId);
         if (maxFetchRecords <= 0) {
@@ -531,6 +539,8 @@ public class SharePartition {
             return ShareAcquiredRecords.empty();
         }
 
+        FetchPartitionData fetchPartitionData = fetchPartitionOffsetData.fetchPartitionData();
+        LogOffsetMetadata fetchOffsetMetadata = fetchPartitionOffsetData.logOffsetMetadata();
         RecordBatch lastBatch = fetchPartitionData.records.lastBatch().orElse(null);
         if (lastBatch == null) {
             // Nothing to acquire.
@@ -542,6 +552,8 @@ public class SharePartition {
         RecordBatch firstBatch = fetchPartitionData.records.batches().iterator().next();
         lock.writeLock().lock();
         try {
+            // Update the latest fetch offset metadata for any future queries.
+            this.latestFetchOffsetMetadata = Optional.of(fetchOffsetMetadata);
             long baseOffset = firstBatch.baseOffset();
             // Find the floor batch record for the request batch. The request batch could be
             // for a subset of the in-flight batch i.e. cached batch of offset 10-14 and request batch
@@ -1523,6 +1535,24 @@ public class SharePartition {
             lock.writeLock().unlock();
         }
         return Optional.empty();
+    }
+
+    protected void updateLatestFetchOffsetMetadata(LogOffsetMetadata fetchOffsetMetadata) {
+        lock.writeLock().lock();
+        try {
+            latestFetchOffsetMetadata = Optional.of(fetchOffsetMetadata);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    protected Optional<LogOffsetMetadata> latestFetchOffsetMetadata() {
+        lock.readLock().lock();
+        try {
+            return latestFetchOffsetMetadata;
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     // Visible for testing

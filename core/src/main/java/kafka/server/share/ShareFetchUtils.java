@@ -23,6 +23,7 @@ import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
+import org.apache.kafka.server.share.fetch.FetchPartitionOffsetData;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
 import org.apache.kafka.server.share.fetch.ShareFetchData;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
@@ -49,7 +50,7 @@ public class ShareFetchUtils {
      */
     static Map<TopicIdPartition, ShareFetchResponseData.PartitionData> processFetchResponse(
             ShareFetchData shareFetchData,
-            Map<TopicIdPartition, FetchPartitionData> responseData,
+            Map<TopicIdPartition, FetchPartitionOffsetData> responseData,
             SharePartitionManager sharePartitionManager,
             ReplicaManager replicaManager
     ) {
@@ -57,9 +58,9 @@ public class ShareFetchUtils {
 
         // Acquired records count for the share fetch request.
         int acquiredRecordsCount = 0;
-        for (Map.Entry<TopicIdPartition, FetchPartitionData> entry : responseData.entrySet()) {
+        for (Map.Entry<TopicIdPartition, FetchPartitionOffsetData> entry : responseData.entrySet()) {
             TopicIdPartition topicIdPartition = entry.getKey();
-            FetchPartitionData fetchPartitionData = entry.getValue();
+            FetchPartitionOffsetData fetchPartitionOffsetData = entry.getValue();
 
             SharePartition sharePartition = sharePartitionManager.sharePartition(shareFetchData.groupId(), topicIdPartition);
             if (sharePartition == null) {
@@ -68,6 +69,8 @@ public class ShareFetchUtils {
             }
             ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
                 .setPartitionIndex(topicIdPartition.partition());
+
+            FetchPartitionData fetchPartitionData = fetchPartitionOffsetData.fetchPartitionData();
 
             if (fetchPartitionData.error.code() != Errors.NONE.code()) {
                 partitionData
@@ -88,7 +91,7 @@ public class ShareFetchUtils {
                     partitionData.setErrorMessage(Errors.NONE.message());
                 }
             } else {
-                ShareAcquiredRecords shareAcquiredRecords = sharePartition.acquire(shareFetchData.memberId(), shareFetchData.maxFetchRecords() - acquiredRecordsCount, fetchPartitionData);
+                ShareAcquiredRecords shareAcquiredRecords = sharePartition.acquire(shareFetchData.memberId(), shareFetchData.maxFetchRecords() - acquiredRecordsCount, fetchPartitionOffsetData);
                 log.trace("Acquired records for topicIdPartition: {} with share fetch data: {}, records: {}",
                     topicIdPartition, shareFetchData, shareAcquiredRecords);
                 // Maybe, in the future, check if no records are acquired, and we want to retry

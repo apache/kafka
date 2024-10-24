@@ -46,6 +46,8 @@
 
       <subpackage name="fetch">
         <allow class="org.apache.kafka.server.storage.log.FetchParams"/>
+        <allow class="org.apache.kafka.storage.internals.log.LogOffsetMetadata" />
+        <allow class="org.apache.kafka.server.storage.log.FetchPartitionData" />
       </subpackage>
     </subpackage>
   </subpackage>
