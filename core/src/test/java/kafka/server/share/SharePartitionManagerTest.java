@@ -132,6 +132,7 @@ public class SharePartitionManagerTest {
     private static final int DEFAULT_RECORD_LOCK_DURATION_MS = 30000;
     private static final int MAX_DELIVERY_COUNT = 5;
     private static final short MAX_IN_FLIGHT_MESSAGES = 200;
+    private static final short MAX_FETCH_RECORDS = 500;
     private static final int DELAYED_SHARE_FETCH_MAX_WAIT_MS = 2000;
     private static final int DELAYED_SHARE_FETCH_TIMEOUT_MS = 3000;
     private static final FetchParams FETCH_PARAMS = new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(),
@@ -1641,7 +1642,8 @@ public class SharePartitionManagerTest {
                 groupId,
                 Uuid.randomUuid().toString(),
                 new CompletableFuture<>(),
-                partitionMaxBytes);
+                partitionMaxBytes,
+                100);
 
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
                 "TestShareFetch", mockTimer, mockReplicaManager.localBrokerId(),
@@ -1735,7 +1737,8 @@ public class SharePartitionManagerTest {
                 groupId,
                 Uuid.randomUuid().toString(),
                 new CompletableFuture<>(),
-                partitionMaxBytes);
+                partitionMaxBytes,
+                100);
 
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
                 "TestShareFetch", mockTimer, mockReplicaManager.localBrokerId(),
@@ -1826,7 +1829,8 @@ public class SharePartitionManagerTest {
                 groupId,
                 Uuid.randomUuid().toString(),
                 new CompletableFuture<>(),
-                partitionMaxBytes);
+                partitionMaxBytes,
+                100);
 
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
                 "TestShareFetch", mockTimer, mockReplicaManager.localBrokerId(),
@@ -1924,7 +1928,8 @@ public class SharePartitionManagerTest {
                 groupId,
                 Uuid.randomUuid().toString(),
                 new CompletableFuture<>(),
-                partitionMaxBytes);
+                partitionMaxBytes,
+                100);
 
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
                 "TestShareFetch", mockTimer, mockReplicaManager.localBrokerId(),
@@ -2458,6 +2463,7 @@ public class SharePartitionManagerTest {
                     timer,
                     MAX_DELIVERY_COUNT,
                     MAX_IN_FLIGHT_MESSAGES,
+                    MAX_FETCH_RECORDS,
                     persister,
                     mock(GroupConfigManager.class),
                     metrics);

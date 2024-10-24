@@ -139,6 +139,11 @@ public class SharePartitionManager implements AutoCloseable {
      */
     private final ShareGroupMetrics shareGroupMetrics;
 
+    /**
+     * The max fetch records is the maximum number of records that can be fetched by a share fetch request.
+     */
+    private final int maxFetchRecords;
+
     public SharePartitionManager(
         ReplicaManager replicaManager,
         Time time,
@@ -146,6 +151,7 @@ public class SharePartitionManager implements AutoCloseable {
         int defaultRecordLockDurationMs,
         int maxDeliveryCount,
         int maxInFlightMessages,
+        int maxFetchRecords,
         Persister persister,
         GroupConfigManager groupConfigManager,
         Metrics metrics
@@ -157,6 +163,7 @@ public class SharePartitionManager implements AutoCloseable {
             defaultRecordLockDurationMs,
             maxDeliveryCount,
             maxInFlightMessages,
+            maxFetchRecords,
             persister,
             groupConfigManager,
             metrics
@@ -171,6 +178,7 @@ public class SharePartitionManager implements AutoCloseable {
         int defaultRecordLockDurationMs,
         int maxDeliveryCount,
         int maxInFlightMessages,
+        int maxFetchRecords,
         Persister persister,
         GroupConfigManager groupConfigManager,
         Metrics metrics
@@ -184,6 +192,7 @@ public class SharePartitionManager implements AutoCloseable {
                 new SystemTimer("share-group-lock-timeout")),
             maxDeliveryCount,
             maxInFlightMessages,
+            maxFetchRecords,
             persister,
             groupConfigManager,
             metrics
@@ -200,6 +209,7 @@ public class SharePartitionManager implements AutoCloseable {
             Timer timer,
             int maxDeliveryCount,
             int maxInFlightMessages,
+            int maxFetchRecords,
             Persister persister,
             GroupConfigManager groupConfigManager,
             Metrics metrics
@@ -215,6 +225,7 @@ public class SharePartitionManager implements AutoCloseable {
         this.persister = persister;
         this.groupConfigManager = groupConfigManager;
         this.shareGroupMetrics = new ShareGroupMetrics(Objects.requireNonNull(metrics), time);
+        this.maxFetchRecords = maxFetchRecords;
     }
 
     /**
@@ -238,7 +249,7 @@ public class SharePartitionManager implements AutoCloseable {
                 partitionMaxBytes.keySet(), groupId, fetchParams);
 
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
-        processShareFetch(new ShareFetchData(fetchParams, groupId, memberId, future, partitionMaxBytes));
+        processShareFetch(new ShareFetchData(fetchParams, groupId, memberId, future, partitionMaxBytes, maxFetchRecords));
 
         return future;
     }
