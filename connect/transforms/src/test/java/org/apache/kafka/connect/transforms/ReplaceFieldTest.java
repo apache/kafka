@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.transforms;
 
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
@@ -34,6 +35,7 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ReplaceFieldTest {
     private final ReplaceField<SinkRecord> xformKey = new ReplaceField.Key<>();
@@ -197,5 +199,13 @@ public class ReplaceFieldTest {
 
         assertEquals(1, updatedKey.schema().fields().size());
         assertEquals(expectedValue, updatedKey.getWithoutDefault("optional_with_default"));
+    }
+
+    @Test
+    public void testInvalidConfig() {
+        final Map<String, String> props = new HashMap<>();
+        props.put("invalidConfig", "dont");
+
+        assertThrows(InvalidConfigurationException.class, () -> xform.configure(props));
     }
 }
