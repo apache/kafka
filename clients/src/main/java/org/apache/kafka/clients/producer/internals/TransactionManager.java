@@ -679,7 +679,7 @@ public class TransactionManager {
                 || exception instanceof UnsupportedVersionException) {
             transitionToFatalError(exception);
         } else if (isTransactional()) {
-            if (!isTransactionV2Enabled && canBumpEpoch() && !isCompleting()) {
+            if (canBumpEpoch() && !isCompleting()) {
                 epochBumpRequired = true;
             }
             transitionToAbortableError(exception);
@@ -1214,7 +1214,7 @@ public class TransactionManager {
         }
 
         void abortableErrorIfPossible(RuntimeException e) {
-            if (!isTransactionV2Enabled && canBumpEpoch()) {
+            if (canBumpEpoch()) {
                 epochBumpRequired = true;
                 abortableError(e);
             } else {

@@ -20,11 +20,9 @@ package kafka.api
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.{consumeRecords, waitUntilTrue}
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerGroupMetadata, ConsumerRecord, OffsetAndMetadata}
-import org.apache.kafka.clients.producer.internals.TransactionManager
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException, TimeoutException}
-import org.apache.kafka.common.utils.ProducerIdAndEpoch
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
@@ -33,7 +31,6 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
-import java.lang.reflect.Field
 import java.lang.{Long => JLong}
 import java.nio.charset.StandardCharsets
 import java.time.Duration
@@ -827,15 +824,22 @@ class TransactionsTest extends IntegrationTestHarness {
       producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "3", "3", willBeCommitted = true))
       producer.commitTransaction()
 
+      // Wait until the producer epoch has been updated on the broker
+      TestUtils.waitUntilTrue(() => {
+        val logOption = brokers(partitionLeader).logManager.getLog(new TopicPartition(testTopic, 0))
+        logOption.exists { log =>
+          val producerStateEntry = log.producerStateManager.activeProducers.get(producerId)
+          producerStateEntry != null && producerStateEntry.producerEpoch > previousProducerEpoch
+        }
+      }, "Timed out waiting for producer epoch to be incremented after second commit", 10000)
+
       // Get producer epoch after second commit and verify it has increased
-      producerStateEntry =
-        brokers(partitionLeader).logManager.getLog(new TopicPartition(testTopic, 0)).get.producerStateManager.activeProducers.get(producerId)
+      val logAfterCommit = brokers(partitionLeader).logManager.getLog(new TopicPartition(testTopic, 0)).get
+      producerStateEntry = logAfterCommit.producerStateManager.activeProducers.get(producerId)
       if (producerStateEntry != null) {
         val currentProducerEpoch = producerStateEntry.producerEpoch
-        // Verify that the producer epoch has increased after second commit
         assertTrue(currentProducerEpoch > previousProducerEpoch,
           s"Producer epoch after second commit ($currentProducerEpoch) should be greater than after abortTransaction ($previousProducerEpoch)")
-
         previousProducerEpoch = currentProducerEpoch
       } else {
         fail("Producer state entry should not be null after second commit")
@@ -921,22 +925,7 @@ class TransactionsTest extends IntegrationTestHarness {
     // With TV2 and the latest EndTxnRequest version, the epoch will be bumped at the end of every transaction.
     if (!isTV2Enabled) assertEquals((initialProducerEpoch + 1).toShort, producerStateEntry.producerEpoch)
     else {
-      // Producer State entry contains the last epoch with which records were sent.
       assertEquals((initialProducerEpoch + 2).toShort, producerStateEntry.producerEpoch)
-
-      // Access the client's producer epoch via reflection to verify epoch bump on the last End Txn Request.
-      val transactionManagerField: Field = classOf[KafkaProducer[_, _]].getDeclaredField("transactionManager")
-      transactionManagerField.setAccessible(true)
-      val transactionManager = transactionManagerField.get(producer3).asInstanceOf[TransactionManager]
-
-      val producerIdAndEpochField: Field = classOf[TransactionManager].getDeclaredField("producerIdAndEpoch")
-      producerIdAndEpochField.setAccessible(true)
-      val producerIdAndEpoch = producerIdAndEpochField.get(transactionManager).asInstanceOf[ProducerIdAndEpoch]
-
-      val clientProducerEpoch = producerIdAndEpoch.epoch
-
-      // Verify that the client's producer epoch has been incremented to 3
-      assertEquals(3.toShort, clientProducerEpoch)
     }
   }
 

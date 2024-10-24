@@ -29,11 +29,11 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{InvalidPidMappingException, TransactionalIdNotFoundException}
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
-import org.apache.kafka.server.config.{ServerConfigs, ReplicationConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -121,8 +121,12 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testTransactionAfterProducerIdExpires(quorum: String): Unit = {
+  @CsvSource(Array(
+    "zk, false",
+    "kraft, false",
+    "kraft, true"
+  ))
+  def testTransactionAfterProducerIdExpires(quorum: String, isTV2Enabled: Boolean): Unit = {
     producer.initTransactions()
 
     // Start and then abort a transaction to allow the producer ID to expire.
@@ -163,7 +167,11 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
     // Because the transaction IDs outlive the producer IDs, creating a producer with the same transactional id
     // soon after the first will re-use the same producerId, while bumping the epoch to indicate that they are distinct.
     assertEquals(oldProducerId, newProducerId)
-    assertEquals(oldProducerEpoch + 1, newProducerEpoch)
+    if (isTV2Enabled) {
+      assertEquals(oldProducerEpoch + 3, newProducerEpoch)
+    } else {
+      assertEquals(oldProducerEpoch + 1, newProducerEpoch)
+    }
 
     consumer.subscribe(List(topic1).asJava)
 

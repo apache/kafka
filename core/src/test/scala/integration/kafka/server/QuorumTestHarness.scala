@@ -346,11 +346,6 @@ abstract class QuorumTestHarness extends Logging {
     props.setProperty(ServerLogConfigs.LOG_DELETE_DELAY_MS_CONFIG, "1000")
     val config = new KafkaConfig(props)
 
-    val transactionVersion =
-      if (TestInfoUtils.isTransactionV2Enabled(testInfo)) {
-        TransactionVersion.TV_2.featureLevel()
-      } else TransactionVersion.TV_1.featureLevel()
-
     val formatter = new Formatter().
       setClusterId(Uuid.randomUuid().toString).
       setNodeId(nodeId)
@@ -359,7 +354,13 @@ abstract class QuorumTestHarness extends Logging {
     formatter.setUnstableFeatureVersionsEnabled(true)
     formatter.setControllerListenerName(config.controllerListenerNames.head)
     formatter.setMetadataLogDirectory(config.metadataLogDir)
+
+    val transactionVersion =
+      if (TestInfoUtils.isTransactionV2Enabled(testInfo)) {
+        TransactionVersion.TV_2.featureLevel()
+      } else TransactionVersion.TV_1.featureLevel()
     formatter.setFeatureLevel(TransactionVersion.FEATURE_NAME, transactionVersion)
+
     addFormatterSettings(formatter)
     formatter.run()
     val bootstrapMetadata = formatter.bootstrapMetadata()
