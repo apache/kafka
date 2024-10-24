@@ -21,7 +21,7 @@ import java.util
 import java.util.{Collections, Properties}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
-import kafka.utils.TestUtils
+import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils.{consumeRecords, createAdminClient}
 import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ConfigEntry, ProducerState}
 import org.apache.kafka.clients.consumer.Consumer
@@ -36,7 +36,7 @@ import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.MethodSource
 import org.opentest4j.AssertionFailedError
 
 import scala.collection.Seq
@@ -79,9 +79,9 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     super.tearDown()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testProducerIdExpirationWithNoTransactions(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testProducerIdExpirationWithNoTransactions(quorum: String, groupProtocol: String): Unit = {
     producer = TestUtils.createProducer(bootstrapServers(), enableIdempotence = true)
 
     // Send records to populate producer state cache.
@@ -103,9 +103,9 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     assertEquals(1, producerState.size)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testTransactionAfterTransactionIdExpiresButProducerIdRemains(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testTransactionAfterTransactionIdExpiresButProducerIdRemains(quorum: String, groupProtocol: String): Unit = {
     producer = TestUtils.createTransactionalProducer("transactionalProducer", brokers)
     producer.initTransactions()
 
@@ -151,9 +151,9 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDynamicProducerIdExpirationMs(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDynamicProducerIdExpirationMs(quorum: String, groupProtocol: String): Unit = {
     producer = TestUtils.createProducer(bootstrapServers(), enableIdempotence = true)
 
     // Send records to populate producer state cache.
