@@ -63,6 +63,8 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegexKey;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegexValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
@@ -121,6 +123,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         private GroupConfigManager groupConfigManager;
         private CoordinatorMetrics coordinatorMetrics;
         private TopicPartition topicPartition;
+        private GroupRegexManager groupRegexManager;
 
         public Builder(
             GroupCoordinatorConfig config,
@@ -197,6 +200,12 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             GroupCoordinatorMetricsShard metricsShard = ((GroupCoordinatorMetrics) coordinatorMetrics)
                 .newMetricsShard(snapshotRegistry, topicPartition);
 
+            groupRegexManager = new GroupRegexManager.Builder()
+                .withLogContext(logContext)
+                .withSnapshotRegistry(snapshotRegistry)
+                .withTimer(timer)
+                .build();
+
             GroupMetadataManager groupMetadataManager = new GroupMetadataManager.Builder()
                 .withLogContext(logContext)
                 .withSnapshotRegistry(snapshotRegistry)
@@ -217,6 +226,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 .withShareGroupSessionTimeout(config.shareGroupSessionTimeoutMs())
                 .withShareGroupHeartbeatInterval(config.shareGroupHeartbeatIntervalMs())
                 .withGroupCoordinatorMetricsShard(metricsShard)
+                .withGroupRegexManager(groupRegexManager)
                 .build();
 
             OffsetMetadataManager offsetMetadataManager = new OffsetMetadataManager.Builder()
@@ -760,6 +770,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param record        The record to apply to the state machine.
      * @throws RuntimeException
      */
+    @SuppressWarnings({"CyclomaticComplexity"})
     @Override
     public void replay(
         long offset,
@@ -869,6 +880,12 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 groupMetadataManager.replay(
                     (ShareGroupCurrentMemberAssignmentKey) key.message(),
                     (ShareGroupCurrentMemberAssignmentValue) Utils.messageOrNull(value)
+                );
+                break;
+            case 16:
+                groupMetadataManager.replay(
+                    (ConsumerGroupRegexKey) key.message(),
+                    (ConsumerGroupRegexValue) Utils.messageOrNull(value)
                 );
                 break;
 

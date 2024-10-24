@@ -29,6 +29,8 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegexKey;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegexValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
@@ -51,6 +53,7 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMe
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
+import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupRegex;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -882,6 +885,36 @@ public class GroupCoordinatorRecordHelpers {
                 (short) 14
             ),
             null // Tombstone
+        );
+    }
+
+    /**
+     * Creates a ConsumerGroupRegex record.
+     *
+     * @param key   The identifier for the regular expression (groupId and the regular expression).
+     * @param resolution The result of the evaluation of the regular expression.
+     * @return The record generated with the data contained in the parameters.
+     */
+    public static CoordinatorRecord newConsumerGroupRegexRecord(
+        ConsumerGroupRegex.RegexKey key,
+        ConsumerGroupRegex.Resolution resolution
+    ) {
+        List<String> topicNames = new ArrayList<>(resolution.matchingTopics());
+        Collections.sort(topicNames);
+        return new CoordinatorRecord(
+            new ApiMessageAndVersion(
+                new ConsumerGroupRegexKey()
+                    .setGroupId(key.groupId())
+                    .setRegex(key.pattern().toString()),
+                (short) 16
+            ),
+            new ApiMessageAndVersion(
+                new ConsumerGroupRegexValue()
+                    .setMatchingTopicsNames(topicNames)
+                    .setMetadataVersion(resolution.metadataVersion())
+                    .setMemberCount(resolution.memberCount()),
+                (short) 0
+            )
         );
     }
 
