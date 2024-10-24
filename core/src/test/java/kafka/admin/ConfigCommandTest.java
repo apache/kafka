@@ -41,7 +41,6 @@ import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.quota.ClientQuotaFilterComponent;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.common.utils.Sanitizer;
 import org.apache.kafka.server.config.ConfigType;
 import org.apache.kafka.test.TestUtils;
 
