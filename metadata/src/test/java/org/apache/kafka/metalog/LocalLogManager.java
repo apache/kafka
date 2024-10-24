@@ -52,6 +52,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -60,6 +61,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
+import java.util.Queue;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -453,6 +455,13 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         }
     }
 
+    private long lastOffset = -1;
+     /**
+     * A queue of prepared batches that have not been drained yet.
+     */
+    private final Queue<LocalBatch> preparedBatches = new LinkedList<>();
+
+
     private final Logger log;
 
     /**
@@ -509,6 +518,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         this.log = logContext.logger(LocalLogManager.class);
         this.nodeId = nodeId;
         this.shared = shared;
+        this.lastOffset = shared.prevOffset;
         this.maxReadOffset = shared.initialMaxReadOffset();
         this.eventQueue = new KafkaEventQueue(Time.SYSTEM, logContext,
                 threadNamePrefix, new ShutdownEvent());
@@ -725,6 +735,12 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         int epoch,
         List<ApiMessageAndVersion> batch
     ) {
+        if (!leader.isLeader(nodeId)) {
+            log.debug("prepareAppend(nodeId={}, epoch={}): the given node id does not " +
+                    "match the current leader id of {}.", nodeId, epoch, leader.leaderId());
+            throw new NotLeaderException("Append failed because the replication is not the current leader");
+        }
+
         if (batch.isEmpty()) {
             throw new IllegalArgumentException("Batch cannot be empty");
         }
@@ -732,12 +748,22 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         if (throwOnNextAppend.getAndSet(false)) {
             throw new BufferAllocationException("Test asked to fail the next prepareAppend");
         }
-
-        return shared.tryAppend(nodeId, epoch, batch);
+        long appendTimestamp = (shared.prevOffset + 1) * 10;
+        lastOffset += batch.size();
+        LocalRecordBatch recordBatch = new LocalRecordBatch(epoch, appendTimestamp, batch);
+        preparedBatches.add(recordBatch);
+        return lastOffset + 1;
     }
 
     @Override
-    public void schedulePreparedAppend() { }
+    public void schedulePreparedAppend() {
+        LocalBatch batch = preparedBatches.poll();
+        if (batch == null) {
+            return;
+        }
+        shared.tryAppend(nodeId, batch.epoch(), batch);
+
+    }
 
     @Override
     public void resign(int epoch) {
