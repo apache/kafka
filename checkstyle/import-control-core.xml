@@ -114,6 +114,7 @@
     <allow pkg="org.apache.kafka.clients.producer"/>
     <allow pkg="org.apache.kafka.coordinator.group"/>
     <allow pkg="org.apache.kafka.coordinator.transaction"/>
+    <allow pkg="org.apache.log4j" />
     <subpackage name="server">
       <allow pkg="kafka.test" />
     </subpackage>
