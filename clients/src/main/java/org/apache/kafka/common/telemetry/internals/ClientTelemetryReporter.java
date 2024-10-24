@@ -697,7 +697,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
         }
 
         private Optional<Builder<?>> createPushRequest(ClientTelemetrySubscription localSubscription, boolean terminating) {
-            byte[] payload;
+            MetricsData payload;
             try (MetricsEmitter emitter = new ClientTelemetryEmitter(localSubscription.selector(), localSubscription.deltaTemporality())) {
                 emitter.init();
                 kafkaMetricsCollector.collect(emitter);
@@ -715,7 +715,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 compressedPayload = ClientTelemetryUtils.compress(payload, compressionType);
             } catch (IOException e) {
                 log.info("Failed to compress telemetry payload for compression: {}, sending uncompressed data", compressionType);
-                compressedPayload = payload;
+                compressedPayload = payload.toByteArray();
                 compressionType = CompressionType.NONE;
             }
 
@@ -856,14 +856,14 @@ public class ClientTelemetryReporter implements MetricsReporter {
             }
         }
 
-        private byte[] createPayload(List<SinglePointMetric> emittedMetrics) {
+        private MetricsData createPayload(List<SinglePointMetric> emittedMetrics) {
             MetricsData.Builder builder = MetricsData.newBuilder();
             emittedMetrics.forEach(metric -> {
                 Metric m = metric.builder().build();
                 ResourceMetrics rm = buildMetric(m);
                 builder.addResourceMetrics(rm);
             });
-            return builder.build().toByteArray();
+            return builder.build();
         }
 
         // Visible for testing

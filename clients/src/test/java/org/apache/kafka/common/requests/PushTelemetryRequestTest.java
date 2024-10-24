@@ -70,8 +70,8 @@ public class PushTelemetryRequestTest {
     }
 
     private PushTelemetryRequest getPushTelemetryRequest(MetricsData metricsData, CompressionType compressionType) throws IOException {
+        byte[] compressedData = ClientTelemetryUtils.compress(metricsData, compressionType);
         byte[] data = metricsData.toByteArray();
-        byte[] compressedData = ClientTelemetryUtils.compress(data, compressionType);
         if (compressionType != CompressionType.NONE) {
             assertTrue(compressedData.length < data.length);
         } else {
