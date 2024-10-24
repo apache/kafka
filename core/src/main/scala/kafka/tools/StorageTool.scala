@@ -138,8 +138,6 @@ object StorageTool extends Logging {
       featureNamesAndLevels(_).foreachEntry {
         (k, v) => formatter.setFeatureLevel(k, v)
       })
-
-    namespace.getList("feature")
     Option(namespace.getString("initial_controllers")).
       foreach(v => formatter.setInitialControllers(DynamicVoters.parse(v)))
     if (namespace.getBoolean("standalone")) {
