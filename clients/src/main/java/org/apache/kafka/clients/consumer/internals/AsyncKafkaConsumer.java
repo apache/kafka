@@ -45,7 +45,6 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler
 import org.apache.kafka.clients.consumer.internals.events.CheckAndUpdatePositionsEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitOnCloseEvent;
-import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
@@ -119,7 +118,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -1218,6 +1216,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     private void close(Duration timeout, boolean swallowException) {
         log.trace("Closing the Kafka consumer");
+        boolean wasInterrupted = Thread.interrupted();
         AtomicReference<Throwable> firstException = new AtomicReference<>();
 
         // We are already closing with a timeout, don't allow wake-ups from here on.
@@ -1228,7 +1227,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         closeTimer.update();
         // Prepare shutting down the network thread
         swallow(log, Level.ERROR, "Failed to release assignment before closing consumer",
-            () -> releaseAssignmentAndLeaveGroup(closeTimer), firstException);
+            () -> releaseAssignmentAndLeaveGroup(closeTimer, wasInterrupted), firstException);
         swallow(log, Level.ERROR, "Failed invoking asynchronous commit callback.",
             () -> awaitPendingAsyncCommitsAndExecuteCommitCallbacks(closeTimer, false), firstException);
         if (applicationEventHandler != null)
@@ -1249,9 +1248,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         AppInfoParser.unregisterAppInfo(CONSUMER_JMX_PREFIX, clientId, metrics);
         log.debug("Kafka consumer has been closed");
         Throwable exception = firstException.get();
-        if (exception != null && !swallowException) {
+        if ((wasInterrupted || exception != null) && !swallowException) {
             if (exception instanceof InterruptException) {
                 throw (InterruptException) exception;
+            } else if (wasInterrupted) {
+                throw new InterruptException(new InterruptedException());
             }
             throw new KafkaException("Failed to close kafka consumer", exception);
         }
@@ -1263,7 +1264,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * 2. release assignment. This is done via a background unsubscribe event that will
      * trigger the callbacks, clear the assignment on the subscription state and send the leave group request to the broker
      */
-    private void releaseAssignmentAndLeaveGroup(final Timer timer) {
+    private void releaseAssignmentAndLeaveGroup(final Timer timer, final boolean wasInterrupted) {
         if (!groupMetadata.get().isPresent())
             return;
 
@@ -1276,10 +1277,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         UnsubscribeEvent unsubscribeEvent = new UnsubscribeEvent(calculateDeadlineMs(timer));
         applicationEventHandler.add(unsubscribeEvent);
         try {
-            // If users subscribe to an invalid topic name, they will get InvalidTopicException in error events,
-            // because network thread keeps trying to send MetadataRequest in the background.
-            // Ignore it to avoid unsubscribe failed.
-            processBackgroundEvents(unsubscribeEvent.future(), timer, e -> e instanceof InvalidTopicException);
+            waitForUnsubscribe(unsubscribeEvent.future(), wasInterrupted, timer);
             log.info("Completed releasing assignment and sending leave group to close consumer");
         } catch (TimeoutException e) {
             log.warn("Consumer triggered an unsubscribe event to leave the group but couldn't " +
@@ -1476,10 +1474,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     subscriptions.assignedPartitions());
 
             try {
-                // If users subscribe to an invalid topic name, they will get InvalidTopicException in error events,
-                // because network thread keeps trying to send MetadataRequest in the background.
-                // Ignore it to avoid unsubscribe failed.
-                processBackgroundEvents(unsubscribeEvent.future(), timer, e -> e instanceof InvalidTopicException);
+                waitForUnsubscribe(unsubscribeEvent.future(), false, timer);
                 log.info("Unsubscribed all topics or patterns and assigned partitions");
             } catch (TimeoutException e) {
                 log.error("Failed while waiting for the unsubscribe event to complete");
@@ -1740,7 +1735,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * could occur when processing the events. In such cases, the processor will take a reference to the first
      * error, continue to process the remaining events, and then throw the first error that occurred.
      */
-    private boolean processBackgroundEvents() {
+    boolean processBackgroundEvents() {
         AtomicReference<KafkaException> firstError = new AtomicReference<>();
 
         LinkedList<BackgroundEvent> events = new LinkedList<>();
@@ -1769,30 +1764,54 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     /**
-     * This method can be used by cases where the caller has an event that needs to both block for completion but
-     * also process background events. For some events, in order to fully process the associated logic, the
-     * {@link ConsumerNetworkThread background thread} needs assistance from the application thread to complete.
-     * If the application thread simply blocked on the event after submitting it, the processing would deadlock.
-     * The logic herein is basically a loop that performs two tasks in each iteration:
-     *
-     * <ol>
-     *     <li>Process background events, if any</li>
-     *     <li><em>Briefly</em> wait for {@link CompletableApplicationEvent an event} to complete</li>
-     * </ol>
+     * When unsubscribing, the application thread enqueues an {@link UnsubscribeEvent} on the application event queue.
+     * That event will eventually trigger the rebalancing logic in the background thread.
+     * Critically, as part of this rebalancing work, any
+     * {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection) rebalance listener callback} may need to be
+     * invoked.
      *
      * <p/>
      *
-     * Each iteration gives the application thread an opportunity to process background events, which may be
-     * necessary to complete the overall processing.
+     * There are a number of challenges that arise during this seemingly simple process:
      *
-     * <p/>
+     * <ul>
+     *     <li>
+     *         While most of the unsubscribe logic is performed on the background thread, the
+     *         {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection) rebalance listener callback} must be
+     *         executed on the application thread. This requires a delicate dance between the two threads that is
+     *         orchestrated via the {@link ConsumerRebalanceListenerCallbackNeededEvent} and
+     *         {@link ConsumerRebalanceListenerCallbackCompletedEvent} events.
+     *     </li>
+     *     <li>
+     *         The user may or may not be using a callback handler. This can be deduced by
+     *         {@link SubscriptionState#rebalanceListener() checking for rebalance listener}.
+     *     </li>
+     *     <li>
+     *         If, at the time of unsubscribe, the consumer does not have any partitions assigned, the background
+     *         thread will <em>not</em> enqueue a {@link ConsumerRebalanceListenerCallbackNeededEvent} to signal the
+     *         application thread to execute the
+     *         {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection) rebalance listener callback}. It's
+     *         technically possible to
+     *         {@link SubscriptionState#assignedPartitions() check if there are any partitions assigned} in the
+     *         application thread, but it's possible the assignment could change in the background thread. So the
+     *         application thread cannot blindly assume that a {@link ConsumerRebalanceListenerCallbackNeededEvent}
+     *         will appear in the background event queue even if a rebalance listener is in use.
+     *     </li>
+     *     <li>
+     *         The call to {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)} may take so long that
+     *         it exhausts the user-supplied {@link Timer} for the unsubscribe operation. This would lead to the
+     *         application thread throwing a timeout before the {@link UnsubscribeEvent} is completed successfully.
+     *     </li>
+     *     <li>
+     *         If, prior to the unsubscribe operation, the application thread was interrupted, it's important that
+     *         the interrupt flag be preserved for the
+     *         {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection) rebalance listener callback} to
+     *         maintain compatibility with the {@link ClassicKafkaConsumer}
+     *     </li>
+     * </ul>
      *
-     * As an example, take {@link #unsubscribe()}. To start unsubscribing, the application thread enqueues an
-     * {@link UnsubscribeEvent} on the application event queue. That event will eventually trigger the
-     * rebalancing logic in the background thread. Critically, as part of this rebalancing work, the
-     * {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)} callback needs to be invoked for any
-     * partitions the consumer owns. However,
-     * this callback must be executed on the application thread. To achieve this, the background thread enqueues a
+     *
+     * To achieve this, the background thread enqueues a
      * {@link ConsumerRebalanceListenerCallbackNeededEvent} on its background event queue. That event queue is
      * periodically queried by the application thread to see if there's work to be done. When the application thread
      * sees {@link ConsumerRebalanceListenerCallbackNeededEvent}, it is processed, and then a
@@ -1801,22 +1820,48 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * execution of the rebalancing logic. The rebalancing logic cannot complete until the
      * {@link ConsumerRebalanceListener} callback is performed.
      *
-     * @param future                    Event that contains a {@link CompletableFuture}; it is on this future that the
-     *                                  application thread will wait for completion
-     * @param timer                     Overall timer that bounds how long to wait for the event to complete
-     * @param ignoreErrorEventException Predicate to ignore background errors.
-     *                                  Any exceptions found while processing background events that match the predicate won't be propagated.
-     * @return {@code true} if the event completed within the timeout, {@code false} otherwise
+     * <p/>
+     *
+     * There is a conflict between the needs of the {@link ConsumerRebalanceListener} and internal event processing
+     * when it comes to handling the current thread's interrupt state. To maintain compatibility with the
+     * {@link ClassicKafkaConsumer}'s handling of rebalance listeners, the interrupt state for the current thread
+     * will be preserved when invoking callbacks. However, because of the internal use of {@link Future#get()} to
+     * wait for event responses, the current thread cannot exist in an interrupted state. The flag is cleared before
+     * handling events so that calls to {@link Future#get()} do not immediately throw {@link TimeoutException}s.
+     * This method will conditionally set the current thread's interrupted flag prior to processing background events
+     * so that if there are any rebalance listeners, the interrupt state will be preserved. Immediately after
+     * processing the background events, the thread's interrupted flag is cleared.
+     *
+     * @param future Future from {@link UnsubscribeEvent}
+     * @param wasInterrupted {@code true} if the current thread was previously interrupted, {@code false} otherwise
+     * @param timer Timer which constrains the runtime of the operation
      */
-    // Visible for testing
-    <T> T processBackgroundEvents(Future<T> future, Timer timer, Predicate<Exception> ignoreErrorEventException) {
+    void waitForUnsubscribe(final CompletableFuture<?> future, final boolean wasInterrupted, final Timer timer) {
+        // At this point, the unsubscribe process is on its way. The application thread has no direct way of knowing
+        // where the background thread is in its journey of unsubscribing, hence this loop...
         do {
+            // Depending on a number of variables (described in the method comments), a
+            // ConsumerRebalanceListenerCallbackNeededEvent may or may not appear in the background event queue.
+            // So there's really no choice but to process any events in the queue in case that event is waiting for
+            // the application thread to pick up and invoke the callback handler.
             boolean hadEvents = false;
+
             try {
-                hadEvents = processBackgroundEvents();
-            } catch (Exception e) {
-                if (!ignoreErrorEventException.test(e))
+                if (wasInterrupted)
+                    Thread.currentThread().interrupt();
+
+                try {
+                    hadEvents = processBackgroundEvents();
+                } catch (InvalidTopicException e) {
+                    // If users subscribe to an invalid topic name, they will get InvalidTopicException in error events,
+                    // because network thread keeps trying to send MetadataRequest in the background.
+                    // Ignore it to avoid unsubscribe failed.
+                } catch (Exception e) {
                     throw e;
+                }
+            } finally {
+                if (wasInterrupted)
+                    Thread.interrupted();
             }
 
             try {
@@ -1824,13 +1869,15 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     // If the event is done (either successfully or otherwise), go ahead and attempt to return
                     // without waiting. We use the ConsumerUtils.getResult() method here to handle the conversion
                     // of the exception types.
-                    return ConsumerUtils.getResult(future);
+                    ConsumerUtils.getResult(future);
+                    return;
                 } else if (!hadEvents) {
                     // If the above processing yielded no events, then let's sit tight for a bit to allow the
                     // background thread to either finish the task, or populate the background event
                     // queue with things to process in our next loop.
                     Timer pollInterval = time.timer(100L);
-                    return ConsumerUtils.getResult(future, pollInterval);
+                    ConsumerUtils.getResult(future, pollInterval);
+                    return;
                 }
             } catch (TimeoutException e) {
                 // Ignore this as we will retry the event until the timeout expires.
