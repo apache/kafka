@@ -136,7 +136,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
   private val isLeaderRecoverySupported = config.interBrokerProtocolVersion.isAtLeast(IBP_3_2_IV0)
 
   private val controllerId = config.brokerId
-  this.logIdent = s"[PartitionStateMachine controllerId=$controllerId] "
+  this.logIdent = s"[PartitionStateMachine controllerId=$controllerId controllerEpoch=${controllerContext.epoch}] "
 
   /**
    * Try to change the state of the given partitions to the given targetState, using the given
@@ -338,7 +338,12 @@ class ZkPartitionStateMachine(config: KafkaConfig,
 
       finished.foreach {
         case (partition, Left(e)) =>
-          logFailedStateChange(partition, partitionState(partition), OnlinePartition, e)
+          // Extract failure message, if present, to append to error log.
+          val failMsg = s"Failed to change state for partition $partition from ${partitionState(partition)} to $OnlinePartition"
+          e match {
+            case _:StateChangeFailedException => logger.error(s"$failMsg, reason: ${e.getMessage}")
+            case _ => logger.error(s"$failMsg: unknown exception: ", e)
+          }
         case (_, Right(_)) => // Ignore; success so no need to log failed state change
       }
 
