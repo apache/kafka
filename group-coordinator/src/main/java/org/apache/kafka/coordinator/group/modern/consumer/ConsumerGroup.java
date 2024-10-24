@@ -329,7 +329,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      * @param oldMember The member to remove.
      */
     private void removeStaticMember(ConsumerGroupMember oldMember) {
-        if (oldMember.instanceId() != null) {
+        if (oldMember != null && oldMember.instanceId() != null) {
             staticMembers.remove(oldMember.instanceId());
         }
     }
