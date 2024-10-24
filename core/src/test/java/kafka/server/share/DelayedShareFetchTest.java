@@ -73,8 +73,10 @@ import static org.mockito.Mockito.when;
 public class DelayedShareFetchTest {
     private static final int MAX_WAIT_MS = 5000;
     private static final int MAX_FETCH_RECORDS = 100;
-
-    private static Timer mockTimer;
+    private static final FetchParams FETCH_PARAMS = new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(),
+        FetchRequest.ORDINARY_CONSUMER_ID, -1, 500, 1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK,
+        Optional.empty(), true);
+    private Timer mockTimer;
 
     @BeforeEach
     public void setUp() {
@@ -107,10 +109,8 @@ public class DelayedShareFetchTest {
         when(sharePartitionManager.sharePartition(groupId, tp0)).thenReturn(sp0);
         when(sharePartitionManager.sharePartition(groupId, tp1)).thenReturn(sp1);
 
-        ShareFetchData shareFetchData = new ShareFetchData(
-                new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS,
-                        1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
-                new CompletableFuture<>(), partitionMaxBytes, MAX_FETCH_RECORDS);
+        ShareFetchData shareFetchData = new ShareFetchData(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
+            new CompletableFuture<>(), partitionMaxBytes, MAX_FETCH_RECORDS);
 
         when(sp0.canAcquireRecords()).thenReturn(false);
         when(sp1.canAcquireRecords()).thenReturn(false);
@@ -145,10 +145,8 @@ public class DelayedShareFetchTest {
         when(sharePartitionManager.sharePartition(groupId, tp0)).thenReturn(sp0);
         when(sharePartitionManager.sharePartition(groupId, tp1)).thenReturn(sp1);
 
-        ShareFetchData shareFetchData = new ShareFetchData(
-                new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS,
-                        1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
-                new CompletableFuture<>(), partitionMaxBytes, MAX_FETCH_RECORDS);
+        ShareFetchData shareFetchData = new ShareFetchData(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
+            new CompletableFuture<>(), partitionMaxBytes, MAX_FETCH_RECORDS);
 
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(false);
@@ -189,10 +187,8 @@ public class DelayedShareFetchTest {
         when(sharePartitionManager.sharePartition(groupId, tp0)).thenReturn(sp0);
         when(sharePartitionManager.sharePartition(groupId, tp1)).thenReturn(sp1);
 
-        ShareFetchData shareFetchData = new ShareFetchData(
-                new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS,
-                        1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
-                new CompletableFuture<>(), partitionMaxBytes, MAX_FETCH_RECORDS);
+        ShareFetchData shareFetchData = new ShareFetchData(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
+            new CompletableFuture<>(), partitionMaxBytes, MAX_FETCH_RECORDS);
 
         when(sp0.canAcquireRecords()).thenReturn(false);
         when(sp1.canAcquireRecords()).thenReturn(false);
@@ -232,10 +228,8 @@ public class DelayedShareFetchTest {
         when(sharePartitionManager.sharePartition(groupId, tp0)).thenReturn(sp0);
         when(sharePartitionManager.sharePartition(groupId, tp1)).thenReturn(sp1);
 
-        ShareFetchData shareFetchData = new ShareFetchData(
-                new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS,
-                        1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
-                new CompletableFuture<>(), partitionMaxBytes, MAX_FETCH_RECORDS);
+        ShareFetchData shareFetchData = new ShareFetchData(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
+            new CompletableFuture<>(), partitionMaxBytes, MAX_FETCH_RECORDS);
 
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(false);
@@ -273,10 +267,8 @@ public class DelayedShareFetchTest {
         when(sharePartitionManager.sharePartition(groupId, tp0)).thenReturn(sp0);
 
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future = new CompletableFuture<>();
-        ShareFetchData shareFetchData = new ShareFetchData(
-                new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS,
-                        1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
-                future, partitionMaxBytes, MAX_FETCH_RECORDS);
+        ShareFetchData shareFetchData = new ShareFetchData(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
+            future, partitionMaxBytes, MAX_FETCH_RECORDS);
 
         when(sp0.maybeAcquireFetchLock()).thenReturn(true);
         when(sp0.canAcquireRecords()).thenReturn(false);
@@ -328,9 +320,7 @@ public class DelayedShareFetchTest {
         when(sharePartitionManager1.sharePartition(groupId, tp1)).thenReturn(sp1);
         when(sharePartitionManager1.sharePartition(groupId, tp2)).thenReturn(sp2);
 
-        ShareFetchData shareFetchData1 = new ShareFetchData(
-            new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS,
-                1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
+        ShareFetchData shareFetchData1 = new ShareFetchData(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
             new CompletableFuture<>(), partitionMaxBytes1, MAX_FETCH_RECORDS);
 
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
@@ -357,9 +347,7 @@ public class DelayedShareFetchTest {
         Map<TopicIdPartition, Integer> partitionMaxBytes2 = new HashMap<>();
         partitionMaxBytes2.put(tp1, PARTITION_MAX_BYTES);
         partitionMaxBytes2.put(tp2, PARTITION_MAX_BYTES);
-        ShareFetchData shareFetchData2 = new ShareFetchData(
-            new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS,
-                1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
+        ShareFetchData shareFetchData2 = new ShareFetchData(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
             new CompletableFuture<>(), partitionMaxBytes2, MAX_FETCH_RECORDS);
 
         doAnswer(invocation -> buildLogReadResult(Collections.singleton(tp1))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
