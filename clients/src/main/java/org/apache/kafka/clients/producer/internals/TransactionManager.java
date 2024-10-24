@@ -764,7 +764,7 @@ public class TransactionManager {
                         // For the transactional producer, we bump the epoch if possible, otherwise we transition to a fatal error
                         String unackedMessagesErr = "The client hasn't received acknowledgment for some previously " +
                                 "sent messages and can no longer retry them. ";
-                        if (!isTransactionV2Enabled && canBumpEpoch()) {
+                        if (canBumpEpoch()) {
                             epochBumpRequired = true;
                             KafkaException exception = new KafkaException(unackedMessagesErr + "It is safe to abort " +
                                     "the transaction and continue.");
