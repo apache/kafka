@@ -283,6 +283,7 @@
 
   <subpackage name="tools">
     <allow pkg="org.apache.kafka.common"/>
+    <allow pkg="org.apache.kafka.metadata" />
     <allow pkg="org.apache.kafka.metadata.properties" />
     <allow pkg="org.apache.kafka.network" />
     <allow pkg="org.apache.kafka.server.util" />
@@ -316,6 +317,7 @@
     <allow pkg="org.apache.kafka.tools" />
     <allow pkg="org.apache.kafka.tools.api" />
     <allow pkg="org.apache.kafka.tools.filter" />
+    <allow pkg="org.apache.kafka.image" />
 
     <subpackage name="consumer">
       <allow pkg="org.apache.kafka.tools"/>

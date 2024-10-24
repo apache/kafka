@@ -84,7 +84,7 @@ import java.time.Duration
 import java.util
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.{Arrays, Collections, Optional, Properties}
+import java.util.{Collections, Optional, Properties}
 import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, mutable}
@@ -1294,9 +1294,11 @@ object TestUtils extends Logging {
     waitUntilTrue(() => brokers.forall(broker =>
       broker.config.logDirs.forall { logDir =>
         topicPartitions.forall { tp =>
-          !Arrays.asList(new File(logDir).list()).asScala.exists { partitionDirectoryName =>
-            partitionDirectoryName.startsWith(tp.topic + "-" + tp.partition) &&
-              partitionDirectoryName.endsWith(UnifiedLog.DeleteDirSuffix)
+          !util.Arrays.asList(new File(logDir).list()).asScala.exists { partitionDirectoryNames =>
+            partitionDirectoryNames.exists { directoryName =>
+              directoryName.startsWith(tp.topic + "-" + tp.partition) &&
+                directoryName.endsWith(UnifiedLog.DeleteDirSuffix)
+            }
           }
         }
       }
