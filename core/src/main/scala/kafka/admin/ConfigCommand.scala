@@ -299,7 +299,7 @@ object ConfigCommand extends Logging {
       val configsToBeAdded = opts.options.valueOf(opts.addConfig)
         .split("," + pattern)
         .map(_.split("""\s*=\s*""" + pattern, -1))
-      require(configsToBeAdded.forall(config => config.length == 2), "Invalid entity config: all configs to be added must be in the format \"key=val\".")
+      require(configsToBeAdded.forall(config => config.length == 2), "Invalid entity config: all configs to be added must be in the format \"key=val\" or  \"key=[val1,val2]\" to group values which contain commas.")
       //Create properties, parsing square brackets from values if necessary
       configsToBeAdded.foreach(pair => props.setProperty(pair(0).trim, pair(1).replaceAll("\\[?\\]?", "").trim))
     }
