@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collections;
@@ -32,7 +33,7 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KafkaClusterTestKitTest {
     @ParameterizedTest
@@ -88,7 +89,7 @@ public class KafkaClusterTestKitTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void testCreateClusterAndCloseWithMultipleLogDirs(boolean combined) {
+    public void testCreateClusterAndCloseWithMultipleLogDirs(boolean combined) throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
                 new TestKitNodes.Builder().
                         setNumBrokerNodes(5).
@@ -118,8 +119,23 @@ public class KafkaClusterTestKitTest {
                 String expected = combined ? String.format("combined_%d_0", controllerId) : String.format("controller_%d", controllerId);
                 assertEquals(expected, Paths.get(node.metadataDirectory()).getFileName().toString());
             });
-        } catch (Exception e) {
-            fail("failed to init cluster", e);
+        }
+    }
+
+    @Test
+    public void testCreateClusterWithSpecificBaseDir() throws Exception {
+        Path baseDirectory = TestUtils.tempDirectory().toPath();
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+                new TestKitNodes.Builder().
+                        setBaseDirectory(baseDirectory).
+                        setNumBrokerNodes(1).
+                        setCombined(true).
+                        setNumControllerNodes(1).build()).build()) {
+            assertEquals(cluster.nodes().baseDirectory(), baseDirectory.toFile().getAbsolutePath());
+            cluster.nodes().controllerNodes().values().forEach(controller ->
+                assertTrue(Paths.get(controller.metadataDirectory()).startsWith(baseDirectory)));
+            cluster.nodes().brokerNodes().values().forEach(broker ->
+                assertTrue(Paths.get(broker.metadataDirectory()).startsWith(baseDirectory)));
         }
     }
 }
