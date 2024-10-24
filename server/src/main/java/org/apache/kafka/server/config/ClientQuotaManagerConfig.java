@@ -31,10 +31,10 @@ public class ClientQuotaManagerConfig {
     }
 
     public ClientQuotaManagerConfig() {
-        this(QuotaConfigs.NUM_QUOTA_SAMPLES_DEFAULT, QuotaConfigs.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT);
+        this(QuotaConfig.NUM_QUOTA_SAMPLES_DEFAULT, QuotaConfig.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT);
     }
 
     public ClientQuotaManagerConfig(int numQuotaSamples) {
-        this(numQuotaSamples, QuotaConfigs.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT);
+        this(numQuotaSamples, QuotaConfig.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT);
     }
 }

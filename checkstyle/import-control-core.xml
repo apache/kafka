@@ -111,8 +111,10 @@
     <allow pkg="kafka.zk" />
     <allow pkg="org.apache.kafka.clients.admin"/>
     <allow pkg="org.apache.kafka.clients.consumer"/>
+    <allow pkg="org.apache.kafka.clients.producer"/>
     <allow pkg="org.apache.kafka.coordinator.group"/>
     <allow pkg="org.apache.kafka.coordinator.transaction"/>
+    <allow pkg="org.apache.log4j" />
     <subpackage name="server">
       <allow pkg="kafka.test" />
     </subpackage>
@@ -140,5 +142,9 @@
     <allow pkg="org.apache.commons" />
     <allow pkg="org.apache.directory" />
     <allow pkg="org.apache.mina.core.service" />
+  </subpackage>
+
+  <subpackage name="clients">
+    <allow pkg="org.apache.kafka.clients" />
   </subpackage>
 </import-control>

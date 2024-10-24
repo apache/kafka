@@ -41,8 +41,8 @@ import java.util.function.Supplier
 import java.util.{Collections, Properties}
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Map, Seq, Set, mutable}
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOptional
 import scala.util.control.Breaks._
 
 
@@ -238,7 +238,7 @@ class KRaftMetadataCache(
    * @return None if broker is not alive or if the broker does not have a listener named `listenerName`.
    */
   private def getAliveEndpoint(image: MetadataImage, id: Int, listenerName: ListenerName): Option[Node] = {
-    Option(image.cluster().broker(id)).flatMap(_.node(listenerName.value()).asScala)
+    Option(image.cluster().broker(id)).flatMap(_.node(listenerName.value()).toScala)
   }
 
   // errorUnavailableEndpoints exists to support v0 MetadataResponses
@@ -373,12 +373,12 @@ class KRaftMetadataCache(
 
   override def getAliveBrokerNode(brokerId: Int, listenerName: ListenerName): Option[Node] = {
     Option(_currentImage.cluster().broker(brokerId)).filterNot(_.fenced()).
-      flatMap(_.node(listenerName.value()).asScala)
+      flatMap(_.node(listenerName.value()).toScala)
   }
 
   override def getAliveBrokerNodes(listenerName: ListenerName): Seq[Node] = {
     _currentImage.cluster().brokers().values().asScala.filterNot(_.fenced()).
-      flatMap(_.node(listenerName.value()).asScala).toSeq
+      flatMap(_.node(listenerName.value()).toScala).toSeq
   }
 
   // Does NOT include offline replica metadata
@@ -478,7 +478,7 @@ class KRaftMetadataCache(
     val nodes = new util.HashMap[Integer, Node]
     image.cluster().brokers().values().forEach { broker =>
       if (!broker.fenced()) {
-        broker.node(listenerName.value()).asScala.foreach { node =>
+        broker.node(listenerName.value()).toScala.foreach { node =>
           nodes.put(broker.id(), node)
         }
       }

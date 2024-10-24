@@ -1799,6 +1799,7 @@ public class KafkaStreams implements AutoCloseable {
      *  Note that pause() can be called before start() in order to start a KafkaStreams instance
      *  in a manner where the processing is paused as described, but the consumers are started up.
      */
+    @SuppressWarnings("deprecation")
     public void pause() {
         if (topologyMetadata.hasNamedTopologies()) {
             for (final NamedTopology namedTopology : topologyMetadata.allNamedTopologies()) {
@@ -1812,6 +1813,7 @@ public class KafkaStreams implements AutoCloseable {
     /**
      * @return true when the KafkaStreams instance has its processing paused.
      */
+    @SuppressWarnings("deprecation")
     public boolean isPaused() {
         if (topologyMetadata.hasNamedTopologies()) {
             return topologyMetadata.allNamedTopologies().stream()
@@ -1825,6 +1827,7 @@ public class KafkaStreams implements AutoCloseable {
     /**
      * This method resumes processing for the KafkaStreams instance.
      */
+    @SuppressWarnings("deprecation")
     public void resume() {
         if (topologyMetadata.hasNamedTopologies()) {
             for (final NamedTopology namedTopology : topologyMetadata.allNamedTopologies()) {
@@ -1877,12 +1880,10 @@ public class KafkaStreams implements AutoCloseable {
         // (1) fan-out calls to threads
 
         // StreamThread for main/restore consumers and producer(s)
-        final Map<String, KafkaFuture<Uuid>> consumerFutures = new HashMap<>();
-        final Map<String, KafkaFuture<Map<String, KafkaFuture<Uuid>>>> producerFutures = new HashMap<>();
+        final Map<String, KafkaFuture<Uuid>> clientFutures = new HashMap<>();
         synchronized (changeThreadCount) {
             for (final StreamThread streamThread : threads) {
-                consumerFutures.putAll(streamThread.consumerClientInstanceIds(timeout));
-                producerFutures.put(streamThread.getName(), streamThread.producersClientInstanceIds(timeout));
+                clientFutures.putAll(streamThread.clientInstanceIds(timeout));
             }
         }
 
@@ -1907,14 +1908,14 @@ public class KafkaStreams implements AutoCloseable {
 
         // (3) collect client instance ids from threads
 
-        // (3a) collect consumers from StreamsThread
-        for (final Map.Entry<String, KafkaFuture<Uuid>> consumerFuture : consumerFutures.entrySet()) {
+        // (3a) collect consumers and producer from StreamsThread
+        for (final Map.Entry<String, KafkaFuture<Uuid>> clientFuture : clientFutures.entrySet()) {
             final Uuid instanceId = getOrThrowException(
-                consumerFuture.getValue(),
+                clientFuture.getValue(),
                 remainingTime.remainingMs(),
                 () -> String.format(
-                    "Could not retrieve consumer instance id for %s.",
-                    consumerFuture.getKey()
+                    "Could not retrieve consumer/producer instance id for %s.",
+                    clientFuture.getKey()
                 )
             );
             remainingTime.update(time.milliseconds());
@@ -1922,50 +1923,15 @@ public class KafkaStreams implements AutoCloseable {
             // could be `null` if telemetry is disabled on the consumer itself
             if (instanceId != null) {
                 clientInstanceIds.addConsumerInstanceId(
-                    consumerFuture.getKey(),
+                    clientFuture.getKey(),
                     instanceId
                 );
             } else {
-                log.debug(String.format("Telemetry is disabled for %s.", consumerFuture.getKey()));
+                log.debug(String.format("Telemetry is disabled for %s.", clientFuture.getKey()));
             }
         }
 
-        // (3b) collect producers from StreamsThread
-        for (final Map.Entry<String, KafkaFuture<Map<String, KafkaFuture<Uuid>>>> threadProducerFuture : producerFutures.entrySet()) {
-            final Map<String, KafkaFuture<Uuid>> streamThreadProducerFutures = getOrThrowException(
-                threadProducerFuture.getValue(),
-                remainingTime.remainingMs(),
-                () -> String.format(
-                    "Could not retrieve producer instance id for %s.",
-                    threadProducerFuture.getKey()
-                )
-            );
-            remainingTime.update(time.milliseconds());
-
-            for (final Map.Entry<String, KafkaFuture<Uuid>> producerFuture : streamThreadProducerFutures.entrySet()) {
-                final Uuid instanceId = getOrThrowException(
-                    producerFuture.getValue(),
-                    remainingTime.remainingMs(),
-                    () -> String.format(
-                        "Could not retrieve producer instance id for %s.",
-                        producerFuture.getKey()
-                    )
-                );
-                remainingTime.update(time.milliseconds());
-
-                // could be `null` if telemetry is disabled on the producer itself
-                if (instanceId != null) {
-                    clientInstanceIds.addProducerInstanceId(
-                        producerFuture.getKey(),
-                        instanceId
-                    );
-                } else {
-                    log.debug(String.format("Telemetry is disabled for %s.", producerFuture.getKey()));
-                }
-            }
-        }
-
-        // (3c) collect from GlobalThread
+        // (3b) collect from GlobalThread
         if (globalThreadFuture != null) {
             final Uuid instanceId = getOrThrowException(
                 globalThreadFuture,

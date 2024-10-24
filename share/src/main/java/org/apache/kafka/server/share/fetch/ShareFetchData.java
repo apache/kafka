@@ -34,19 +34,22 @@ public class ShareFetchData {
     private final String memberId;
     private final CompletableFuture<Map<TopicIdPartition, PartitionData>> future;
     private final Map<TopicIdPartition, Integer> partitionMaxBytes;
+    private final int maxFetchRecords;
 
     public ShareFetchData(
         FetchParams fetchParams,
         String groupId,
         String memberId,
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future,
-        Map<TopicIdPartition, Integer> partitionMaxBytes
+        Map<TopicIdPartition, Integer> partitionMaxBytes,
+        int maxFetchRecords
     ) {
         this.fetchParams = fetchParams;
         this.groupId = groupId;
         this.memberId = memberId;
         this.future = future;
         this.partitionMaxBytes = partitionMaxBytes;
+        this.maxFetchRecords = maxFetchRecords;
     }
 
     public String groupId() {
@@ -67,5 +70,9 @@ public class ShareFetchData {
 
     public FetchParams fetchParams() {
         return fetchParams;
+    }
+
+    public int maxFetchRecords() {
+        return maxFetchRecords;
     }
 }

@@ -43,9 +43,13 @@ TC_PATHS="tests/kafkatest/tests/client/pluggable_test.py::PluggableConsumerTest.
 ```
 TC_PATHS="tests/kafkatest/tests/streams/streams_upgrade_test.py::StreamsUpgradeTest.test_metadata_upgrade" _DUCKTAPE_OPTIONS='--parameters '\''{"from_version":"0.10.1.1","to_version":"2.6.0-SNAPSHOT"}'\' bash tests/docker/run_tests.sh
 ```
+* Run tests with a specific image name
+```
+image_name="ducker-ak-openjdk:17-buster" bash tests/docker/run_tests.sh
+```
 * Run tests with a different JVM
 ```
-bash tests/docker/ducker-ak up -j 'openjdk:11'; tests/docker/run_tests.sh
+bash tests/docker/ducker-ak up -j 'openjdk:17-buster'; tests/docker/run_tests.sh
 ```
 * Remove ducker-ak containers
 ```

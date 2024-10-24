@@ -44,7 +44,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.processingMode;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.producerClientId;
@@ -63,9 +62,7 @@ class ActiveTaskCreator {
     private final UUID processId;
     private final Logger log;
     private final Sensor createTaskSensor;
-    private final StreamsProducer threadProducer;
-    // TODO remove `taskProducers`
-    private final Map<TaskId, StreamsProducer> taskProducers = Collections.emptyMap();
+    private final StreamsProducer streamsProducer;
     private final ProcessingMode processingMode;
     private final boolean stateUpdaterEnabled;
     private final boolean processingThreadsEnabled;
@@ -105,7 +102,7 @@ class ActiveTaskCreator {
         final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
         final LogContext logContext = new LogContext(threadIdPrefix);
 
-        threadProducer = new StreamsProducer(
+        streamsProducer = new StreamsProducer(
             processingMode,
             producer(),
             logContext,
@@ -124,27 +121,12 @@ class ActiveTaskCreator {
         return clientSupplier.getProducer(producerConfig);
     }
 
-    public void reInitializeThreadProducer() {
-        threadProducer.resetProducer(producer());
+    public void reInitializeProducer() {
+        streamsProducer.resetProducer(producer());
     }
 
-    StreamsProducer streamsProducerForTask(final TaskId taskId) {
-        if (processingMode != EXACTLY_ONCE_ALPHA) {
-            throw new IllegalStateException("Expected EXACTLY_ONCE to be enabled, but the processing mode was " + processingMode);
-        }
-
-        final StreamsProducer taskProducer = taskProducers.get(taskId);
-        if (taskProducer == null) {
-            throw new IllegalStateException("Unknown TaskId: " + taskId);
-        }
-        return taskProducer;
-    }
-
-    StreamsProducer threadProducer() {
-        if (processingMode == EXACTLY_ONCE_ALPHA) {
-            throw new IllegalStateException("Expected AT_LEAST_ONCE or EXACTLY_ONCE_V2 to be enabled, but the processing mode was " + processingMode);
-        }
-        return threadProducer;
+    StreamsProducer streamsProducer() {
+        return streamsProducer;
     }
 
     // TODO: convert to StreamTask when we remove TaskManager#StateMachineTask with mocks
@@ -198,7 +180,7 @@ class ActiveTaskCreator {
         return new RecordCollectorImpl(
             logContext,
             taskId,
-            this.threadProducer,
+            streamsProducer,
             applicationConfig.productionExceptionHandler(),
             streamsMetrics,
             topology
@@ -274,28 +256,16 @@ class ActiveTaskCreator {
         return task;
     }
 
-    // TODO: rename and revisit test
-    void closeThreadProducerIfNeeded() {
+    void close() {
         try {
-            threadProducer.close();
+            streamsProducer.close();
         } catch (final RuntimeException e) {
             throw new StreamsException("Thread producer encounter error trying to close.", e);
         }
     }
 
-    void closeAndRemoveTaskProducerIfNeeded(final TaskId id) {
-        final StreamsProducer taskProducer = taskProducers.remove(id);
-        if (taskProducer != null) {
-            try {
-                taskProducer.close();
-            } catch (final RuntimeException e) {
-                throw new StreamsException("[" + id + "] task producer encounter error trying to close.", e, id);
-            }
-        }
-    }
-
     Map<MetricName, Metric> producerMetrics() {
-        return ClientUtils.producerMetrics(Collections.singleton(threadProducer));
+        return ClientUtils.producerMetrics(Collections.singleton(streamsProducer));
     }
 
     String producerClientIds() {
@@ -309,6 +279,6 @@ class ActiveTaskCreator {
     }
 
     public double totalProducerBlockedTime() {
-        return threadProducer.totalBlockedTime();
+        return streamsProducer.totalBlockedTime();
     }
 }

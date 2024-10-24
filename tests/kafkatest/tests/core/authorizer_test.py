@@ -44,8 +44,6 @@ class AuthorizerTest(Test):
 
     @cluster(num_nodes=4)
     @parametrize(metadata_quorum=quorum.isolated_kraft, authorizer_class=KafkaService.KRAFT_ACL_AUTHORIZER)
-    @parametrize(metadata_quorum=quorum.isolated_kraft, authorizer_class=KafkaService.ZK_ACL_AUTHORIZER)
-    @parametrize(metadata_quorum=quorum.zk, authorizer_class=KafkaService.ZK_ACL_AUTHORIZER)
     def test_authorizer(self, metadata_quorum, authorizer_class):
         topics = {"test_topic": {"partitions": 1, "replication-factor": 1}}
 
