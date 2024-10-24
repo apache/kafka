@@ -95,11 +95,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     private Optional<Integer> lastEpochSentOnCommit;
 
     /**
-     *  Latest member ID and epoch received via the {@link MemberStateListener#onMemberEpochUpdated(Optional, String)},
+     *  The member ID and latest member epoch received via the {@link MemberStateListener#onMemberEpochUpdated(Optional, String)},
      *  to be included in the OffsetFetch and OffsetCommit requests. This will have
      *  the latest memberEpoch values received from the broker.
      */
-    private final MemberInfo memberInfo;
+    final MemberInfo memberInfo;
 
     public CommitRequestManager(
             final Time time,
@@ -296,7 +296,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      * expires. Note that:
      * <ul>
      *     <li>Considers {@link Errors#STALE_MEMBER_EPOCH} as a retriable error, and will retry it
-     *     including the latest member ID and epoch received from the broker.</li>
+     *     including the member ID and latest member epoch received from the broker.</li>
      *     <li>Considers {@link Errors#UNKNOWN_TOPIC_OR_PARTITION} as a fatal error, and will not
      *     retry it although the error extends RetriableException. The reason is that if a topic
      *     or partition is deleted, revocation would not finish in time since the auto commit would keep retrying.</li>
@@ -565,7 +565,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     }
 
     /**
-     * Update latest member ID and epoch used by the member.
+     * Update latest member epoch used by the member.
      *
      * @param memberEpoch New member epoch received. To be included in the new request.
      * @param memberId Current member ID. To be included in the new request.
@@ -576,7 +576,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             log.info("Member {} won't include epoch in following offset " +
                 "commit/fetch requests because it has left the group.", memberInfo.memberId);
         }
-        memberInfo.memberId = memberId;
         memberInfo.memberEpoch = memberEpoch;
     }
 
@@ -943,10 +942,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             OffsetFetchRequest.Builder builder;
             // Building request without passing member ID/epoch to leave the logic to choose
             // default values when not present on the request builder.
-            builder = memberInfo.memberEpoch.map(integer -> new OffsetFetchRequest.Builder(
+            builder = memberInfo.memberEpoch.map(epoch -> new OffsetFetchRequest.Builder(
                             groupId,
                             memberInfo.memberId,
-                            integer,
+                            epoch,
                             true,
                             new ArrayList<>(this.requestedPartitions),
                             throwOnFetchStableOffsetUnsupported))

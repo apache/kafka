@@ -20,7 +20,7 @@ package org.apache.kafka.clients.consumer.internals;
 import java.util.Optional;
 
 /**
- * Listener for getting notified of member ID and epoch changes.
+ * Listener for getting notified of member epoch changes.
  */
 public interface MemberStateListener {
 

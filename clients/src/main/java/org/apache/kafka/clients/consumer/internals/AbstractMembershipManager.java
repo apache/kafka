@@ -176,7 +176,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     /**
      * Optional client telemetry reporter which sends client telemetry data to the broker. This
      * will be empty if the client telemetry feature is not enabled. This is provided to update
-     * the group member id label when the member joins the group.
+     * the group member id label when the consumer initializes.
      */
     protected final Optional<ClientTelemetryReporter> clientTelemetryReporter;
 
