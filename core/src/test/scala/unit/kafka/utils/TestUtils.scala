@@ -17,7 +17,6 @@
 package kafka.utils
 
 import com.yammer.metrics.core.{Histogram, Meter}
-import kafka.controller.ControllerEventManager
 import kafka.log._
 import kafka.network.RequestChannel
 import kafka.security.JaasTestUtils
@@ -28,14 +27,13 @@ import kafka.zk._
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer._
-import org.apache.kafka.clients.consumer.internals.AbstractCoordinator
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common._
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBindingFilter}
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
-import org.apache.kafka.common.errors.{KafkaStorageException, OperationNotAttemptedException, TopicExistsException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.errors.{OperationNotAttemptedException, TopicExistsException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.memory.MemoryPool
@@ -49,28 +47,24 @@ import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.utils.Utils.formatAddress
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.Time
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.LeaderAndIsr
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.network.metrics.RequestChannelMetrics
-import org.apache.kafka.queue.KafkaEventQueue
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ZkConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.server.util.timer.SystemTimer
-import org.apache.kafka.server.{ClientMetricsManager, ControllerRequestCompletionHandler}
+import org.apache.kafka.server.ControllerRequestCompletionHandler
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.apache.zookeeper.KeeperException.SessionExpiredException
-import org.apache.zookeeper.ZooDefs._
-import org.apache.zookeeper.data.ACL
 import org.junit.jupiter.api.Assertions._
 import org.mockito.ArgumentMatchers.{any, anyBoolean}
 import org.mockito.Mockito
@@ -157,15 +151,9 @@ object TestUtils extends Logging {
    */
   def tempFile(prefix: String, suffix: String): File = JTestUtils.tempFile(prefix, suffix)
 
-  /**
-   * Create a file with the given contents in the default temporary-file directory,
-   * using `kafka` as the prefix and `tmp` as the suffix to generate its name.
-   */
-  def tempFile(contents: String): File = JTestUtils.tempFile(contents)
-
   def tempPropertiesFile(properties: Map[String, String]): File = {
     val content = properties.map{case (k, v) => k + "=" + v}.mkString(System.lineSeparator())
-    tempFile(content)
+    JTestUtils.tempFile(content)
   }
 
   /**
@@ -175,15 +163,7 @@ object TestUtils extends Logging {
    * @param config The configuration of the server
    */
   def createServer(config: KafkaConfig, time: Time = Time.SYSTEM): KafkaServer = {
-    createServer(config, time, None)
-  }
-
-  def createServer(config: KafkaConfig, time: Time, threadNamePrefix: Option[String]): KafkaServer = {
-    createServer(config, time, threadNamePrefix, startup = true)
-  }
-
-  def createServer(config: KafkaConfig, time: Time, threadNamePrefix: Option[String], startup: Boolean): KafkaServer = {
-    createServer(config, time, threadNamePrefix, startup, enableZkApiForwarding = false)
+    createServer(config, time, None, startup = true, enableZkApiForwarding = false)
   }
 
   def createServer(config: KafkaConfig, time: Time, threadNamePrefix: Option[String],
@@ -192,9 +172,6 @@ object TestUtils extends Logging {
     if (startup) server.startup()
     server
   }
-
-  def boundPort(broker: KafkaBroker, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Int =
-    broker.boundPort(ListenerName.forSecurityProtocol(securityProtocol))
 
   /**
    * Create a test config for the provided parameters.
@@ -1211,22 +1188,6 @@ object TestUtils extends Logging {
     new MockAlterPartitionManager()
   }
 
-  def produceMessages[B <: KafkaBroker](
-      brokers: Seq[B],
-      records: Seq[ProducerRecord[Array[Byte], Array[Byte]]],
-      acks: Int = -1): Unit = {
-    val producer = createProducer(plaintextBootstrapServers(brokers), acks = acks)
-    try {
-      val futures = records.map(producer.send)
-      futures.foreach(_.get)
-    } finally {
-      producer.close()
-    }
-
-    val topics = records.map(_.topic).distinct
-    debug(s"Sent ${records.size} messages for topics ${topics.mkString(",")}")
-  }
-
   def generateAndProduceMessages[B <: KafkaBroker](
       brokers: Seq[B],
       topic: String,
@@ -1237,7 +1198,16 @@ object TestUtils extends Logging {
     val records = values.zipWithIndex.map { case (v, i) =>
       new ProducerRecord(topic, intSerializer.serialize(topic, i), v.getBytes)
     }
-    produceMessages(brokers, records, acks)
+    val producer = createProducer(plaintextBootstrapServers(brokers), acks = acks)
+    try {
+      val futures = records.map(producer.send)
+      futures.foreach(_.get)
+    } finally {
+      producer.close()
+    }
+
+    val topics = records.map(_.topic).distinct
+    debug(s"Sent ${records.size} messages for topics ${topics.mkString(",")}")
     values
   }
 
@@ -1305,26 +1275,6 @@ object TestUtils extends Logging {
     ), "Failed to hard-delete the delete directory")
   }
 
-  def causeLogDirFailure(failureType: LogDirFailureType, leaderBroker: KafkaBroker, partition: TopicPartition): File = {
-    // Make log directory of the partition on the leader broker inaccessible by replacing it with a file
-    val localLog = leaderBroker.replicaManager.localLogOrException(partition)
-    val logDir = localLog.dir.getParentFile
-    CoreUtils.swallow(Utils.delete(logDir), this)
-    Files.createFile(logDir.toPath)
-    assertTrue(logDir.isFile)
-
-    if (failureType == Roll) {
-      assertThrows(classOf[KafkaStorageException], () => leaderBroker.replicaManager.getLog(partition).get.roll())
-    } else if (failureType == Checkpoint) {
-      leaderBroker.replicaManager.checkpointHighWatermarks()
-    }
-
-    // Wait for ReplicaHighWatermarkCheckpoint to happen so that the log directory of the topic will be offline
-    waitUntilTrue(() => !leaderBroker.logManager.isLogDirOnline(logDir.getAbsolutePath), "Expected log directory offline", 3000L)
-    assertTrue(leaderBroker.replicaManager.localLog(partition).isEmpty)
-    logDir
-  }
-
   /**
    * Translate the given buffer into a string
    *
@@ -1348,107 +1298,6 @@ object TestUtils extends Logging {
       s"expected acls:${expected.mkString(newLine + "\t", newLine + "\t", newLine)}" +
         s"but got:${authorizer.acls(filter).asScala.map(_.entry).mkString(newLine + "\t", newLine + "\t", newLine)}",
         45000)
-  }
-
-
-  def waitAndVerifyAcl(expected: AccessControlEntry,
-                       authorizer: JAuthorizer,
-                       resource: ResourcePattern,
-                       accessControlEntryFilter: AccessControlEntryFilter = AccessControlEntryFilter.ANY): Unit = {
-    val newLine = scala.util.Properties.lineSeparator
-
-    val filter = new AclBindingFilter(resource.toFilter, accessControlEntryFilter)
-    waitUntilTrue(() => authorizer.acls(filter).asScala.map(_.entry).toSet.contains(expected),
-      s"expected to contain acl: $expected" +
-        s"but got:${authorizer.acls(filter).asScala.map(_.entry).mkString(newLine + "\t", newLine + "\t", newLine)}",
-      45000)
-  }
-
-  def waitAndVerifyRemovedAcl(expectedToRemoved: AccessControlEntry,
-                              authorizer: JAuthorizer,
-                              resource: ResourcePattern,
-                              accessControlEntryFilter: AccessControlEntryFilter = AccessControlEntryFilter.ANY): Unit = {
-    val newLine = scala.util.Properties.lineSeparator
-
-    val filter = new AclBindingFilter(resource.toFilter, accessControlEntryFilter)
-    waitUntilTrue(() => !authorizer.acls(filter).asScala.map(_.entry).toSet.contains(expectedToRemoved),
-      s"expected acl to be removed : $expectedToRemoved" +
-        s"but got:${authorizer.acls(filter).asScala.map(_.entry).mkString(newLine + "\t", newLine + "\t", newLine)}",
-      45000)
-  }
-
-  /**
-   * Verifies that this ACL is the secure one.
-   */
-  def isAclSecure(acl: ACL, sensitive: Boolean): Boolean = {
-    debug(s"ACL $acl")
-    acl.getPerms match {
-      case Perms.READ => !sensitive && acl.getId.getScheme == "world"
-      case Perms.ALL => acl.getId.getScheme == "sasl"
-      case _ => false
-    }
-  }
-
-  /**
-   * Verifies that the ACL corresponds to the unsecure one that
-   * provides ALL access to everyone (world).
-   */
-  def isAclUnsecure(acl: ACL): Boolean = {
-    debug(s"ACL $acl")
-    acl.getPerms match {
-      case Perms.ALL => acl.getId.getScheme == "world"
-      case _ => false
-    }
-  }
-
-  def secureZkPaths(zkClient: KafkaZkClient): Seq[String] = {
-    def subPaths(path: String): Seq[String] = {
-      if (zkClient.pathExists(path))
-        path +: zkClient.getChildren(path).map(c => path + "/" + c).flatMap(subPaths)
-      else
-        Seq.empty
-    }
-    val topLevelPaths = ZkData.SecureRootPaths ++ ZkData.SensitiveRootPaths
-    topLevelPaths.flatMap(subPaths)
-  }
-
-   /**
-    * To use this you pass in a sequence of functions that are your arrange/act/assert test on the SUT.
-    * They all run at the same time in the assertConcurrent method; the chances of triggering a multithreading code error,
-    * and thereby failing some assertion are greatly increased.
-    */
-  def assertConcurrent(message: String, functions: Seq[() => Any], timeoutMs: Int): Unit = {
-
-    def failWithTimeout(): Unit = {
-      fail(s"$message. Timed out, the concurrent functions took more than $timeoutMs milliseconds")
-    }
-
-    val numThreads = functions.size
-    val threadPool = Executors.newFixedThreadPool(numThreads)
-    val exceptions = ArrayBuffer[Throwable]()
-    try {
-      val runnables = functions.map { function =>
-        new Callable[Unit] {
-          override def call(): Unit = function()
-        }
-      }.asJava
-      val futures = threadPool.invokeAll(runnables, timeoutMs, TimeUnit.MILLISECONDS).asScala
-      futures.foreach { future =>
-        if (future.isCancelled)
-          failWithTimeout()
-        else
-          try future.get()
-          catch { case e: Exception =>
-            exceptions += e
-          }
-      }
-    } catch {
-      case _: InterruptedException => failWithTimeout()
-      case e: Throwable => exceptions += e
-    } finally {
-      threadPool.shutdownNow()
-    }
-    assertTrue(exceptions.isEmpty, s"$message failed with exception(s) $exceptions")
   }
 
   def consumeTopicRecords[K, V, B <: KafkaBroker](
@@ -1747,11 +1596,6 @@ object TestUtils extends Logging {
       KafkaYammerMetrics.defaultRegistry.removeMetric(metricName)
   }
 
-  def waitForAllReassignmentsToComplete(adminClient: Admin, pause: Long = 100L): Unit = {
-    waitUntilTrue(() => adminClient.listPartitionReassignments().reassignments().get().isEmpty,
-      s"There still are ongoing reassignments", pause = pause)
-  }
-
   /**
    * Find an Authorizer that we can call createAcls or deleteAcls on.
    */
@@ -1820,33 +1664,6 @@ object TestUtils extends Logging {
     )
     envelopRequest.requestDequeueTimeNanos = dequeueTimeNanos
     envelopRequest
-  }
-
-  def verifyNoUnexpectedThreads(context: String): Unit = {
-    // Threads which may cause transient failures in subsequent tests if not shutdown.
-    // These include threads which make connections to brokers and may cause issues
-    // when broker ports are reused (e.g. auto-create topics) as well as threads
-    // which reset static JAAS configuration.
-    val unexpectedThreadNames = Set(
-      ControllerEventManager.ControllerEventThreadName,
-      KafkaProducer.NETWORK_THREAD_PREFIX,
-      AdminClientUnitTestEnv.kafkaAdminClientNetworkThreadPrefix(),
-      AbstractCoordinator.HEARTBEAT_THREAD_PREFIX,
-      QuorumTestHarness.ZkClientEventThreadSuffix,
-      KafkaEventQueue.EVENT_HANDLER_THREAD_SUFFIX,
-      ClientMetricsManager.CLIENT_METRICS_REAPER_THREAD_NAME,
-      SystemTimer.SYSTEM_TIMER_THREAD_PREFIX,
-    )
-
-    def unexpectedThreads: Set[String] = {
-      val allThreads = Thread.getAllStackTraces.keySet.asScala.map(thread => thread.getName)
-      allThreads.filter(t => unexpectedThreadNames.exists(s => t.contains(s))).toSet
-    }
-
-    val (unexpected, _) = TestUtils.computeUntilTrue(unexpectedThreads)(_.isEmpty)
-    assertTrue(unexpected.isEmpty,
-      s"Found ${unexpected.size} unexpected threads during $context: " +
-        s"${unexpected.mkString("`", ",", "`")}")
   }
 
   class TestControllerRequestCompletionHandler(expectedResponse: Option[AbstractResponse] = None)
