@@ -295,15 +295,6 @@
     <suppress checks="JavaNCSS"
               files="(MetadataNodeManager).java"/>
 
-    <!-- Log4J-Appender -->
-    <suppress checks="CyclomaticComplexity"
-              files="KafkaLog4jAppender.java"/>
-
-    <suppress checks="NPathComplexity"
-              files="KafkaLog4jAppender.java"/>
-    <suppress checks="JavaNCSS"
-              files="RequestResponseTest.java"/>
-
     <!-- metadata -->
     <suppress checks="ClassDataAbstractionCoupling"
               files="(QuorumController|QuorumControllerTest|ReplicationControlManager|ReplicationControlManagerTest|ClusterControlManagerTest|KRaftMigrationDriverTest).java"/>
