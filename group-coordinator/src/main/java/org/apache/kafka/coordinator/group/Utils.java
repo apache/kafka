@@ -17,16 +17,19 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.hash.Murmur3;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerProtocolAssignment;
 import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentValue;
+import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -234,5 +237,21 @@ public class Utils {
         } else {
             return apiMessageAndVersion.message();
         }
+    }
+
+    public static long hashSubscriptionMetadata(Map<String, TopicMetadata> subscriptionMetadata) {
+        return subscriptionMetadata.values().stream().map(topicMetadata -> {
+            long topicMetadataHash = Murmur3.hash64(topicMetadata.name().getBytes(StandardCharsets.UTF_8));
+            topicMetadataHash = 63 * topicMetadataHash + Murmur3.hash64(topicMetadata.id().hashCode());
+            topicMetadataHash = 63 * topicMetadataHash + Murmur3.hash64(topicMetadata.numPartitions());
+            topicMetadataHash = 63 * topicMetadataHash + topicMetadata.partitionRacks().entrySet().stream().map(partitionEntry -> {
+                int partition = partitionEntry.getKey();
+                Set<String> racks = partitionEntry.getValue();
+                long partitionHash = Murmur3.hash64(partition);
+                partitionHash = 63 * partitionHash + racks.stream().map(rack -> Murmur3.hash64(rack.getBytes(StandardCharsets.UTF_8))).reduce(0L, Long::sum);
+                return partitionHash;
+            }).reduce(0L, Long::sum);
+            return topicMetadataHash;
+        }).reduce(0L, Long::sum);
     }
 }

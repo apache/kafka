@@ -42,6 +42,7 @@
     <allow pkg="org.apache.kafka.common" exact-match="true" />
     <allow pkg="org.apache.kafka.common.security" />
     <allow pkg="org.apache.kafka.common.serialization" />
+    <allow pkg="org.apache.kafka.common.hash" />
     <allow pkg="org.apache.kafka.common.utils" />
     <allow pkg="org.apache.kafka.common.errors" exact-match="true" />
     <allow pkg="org.apache.kafka.common.memory" />
@@ -78,6 +79,9 @@
             </subpackage>
             <subpackage name="generated">
                 <allow pkg="com.fasterxml.jackson" />
+            </subpackage>
+            <subpackage name="modern">
+                <allow pkg="org.apache.kafka.metadata" />
             </subpackage>
         </subpackage>
     </subpackage>

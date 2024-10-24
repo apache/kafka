@@ -27,8 +27,6 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataK
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
@@ -43,13 +41,10 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataValue;
-import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -127,68 +122,17 @@ public class GroupCoordinatorRecordHelpers {
     }
 
     /**
-     * Creates a ConsumerGroupPartitionMetadata record.
-     *
-     * @param groupId                   The consumer group id.
-     * @param newSubscriptionMetadata   The subscription metadata.
-     * @return The record.
-     */
-    public static CoordinatorRecord newConsumerGroupSubscriptionMetadataRecord(
-        String groupId,
-        Map<String, TopicMetadata> newSubscriptionMetadata
-    ) {
-        ConsumerGroupPartitionMetadataValue value = new ConsumerGroupPartitionMetadataValue();
-        newSubscriptionMetadata.forEach((topicName, topicMetadata) -> {
-            value.topics().add(new ConsumerGroupPartitionMetadataValue.TopicMetadata()
-                .setTopicId(topicMetadata.id())
-                .setTopicName(topicMetadata.name())
-                .setNumPartitions(topicMetadata.numPartitions())
-            );
-        });
-
-        return new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ConsumerGroupPartitionMetadataKey()
-                    .setGroupId(groupId),
-                (short) 4
-            ),
-            new ApiMessageAndVersion(
-                value,
-                (short) 0
-            )
-        );
-    }
-
-    /**
-     * Creates a ConsumerGroupPartitionMetadata tombstone.
-     *
-     * @param groupId   The consumer group id.
-     * @return The record.
-     */
-    public static CoordinatorRecord newConsumerGroupSubscriptionMetadataTombstoneRecord(
-        String groupId
-    ) {
-        return new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ConsumerGroupPartitionMetadataKey()
-                    .setGroupId(groupId),
-                (short) 4
-            ),
-            null // Tombstone.
-        );
-    }
-
-    /**
      * Creates a ConsumerGroupMetadata record.
      *
-     * @param groupId       The consumer group id.
-     * @param newGroupEpoch The consumer group epoch.
+     * @param groupId                     The consumer group id.
+     * @param newGroupEpoch               The consumer group epoch.
+     * @param newSubscriptionMetadataHash The hash of subscription metadata.
      * @return The record.
      */
     public static CoordinatorRecord newConsumerGroupEpochRecord(
         String groupId,
-        int newGroupEpoch
-    ) {
+        int newGroupEpoch,
+        long newSubscriptionMetadataHash) {
         return new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataKey()
@@ -197,7 +141,8 @@ public class GroupCoordinatorRecordHelpers {
             ),
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataValue()
-                    .setEpoch(newGroupEpoch),
+                    .setEpoch(newGroupEpoch)
+                    .setSubscriptionMetadataHash(newSubscriptionMetadataHash),
                 (short) 0
             )
         );
@@ -634,68 +579,17 @@ public class GroupCoordinatorRecordHelpers {
     }
 
     /**
-     * Creates a ShareGroupPartitionMetadata record.
-     *
-     * @param groupId                   The group id.
-     * @param newSubscriptionMetadata   The subscription metadata.
-     * @return The record.
-     */
-    public static CoordinatorRecord newShareGroupSubscriptionMetadataRecord(
-        String groupId,
-        Map<String, TopicMetadata> newSubscriptionMetadata
-    ) {
-        ShareGroupPartitionMetadataValue value = new ShareGroupPartitionMetadataValue();
-        newSubscriptionMetadata.forEach((topicName, topicMetadata) -> {
-            value.topics().add(new ShareGroupPartitionMetadataValue.TopicMetadata()
-                .setTopicId(topicMetadata.id())
-                .setTopicName(topicMetadata.name())
-                .setNumPartitions(topicMetadata.numPartitions())
-            );
-        });
-
-        return new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ShareGroupPartitionMetadataKey()
-                    .setGroupId(groupId),
-                (short) 9
-            ),
-            new ApiMessageAndVersion(
-                value,
-                (short) 0
-            )
-        );
-    }
-
-    /**
-     * Creates a ShareGroupPartitionMetadata tombstone.
-     *
-     * @param groupId   The group id.
-     * @return The record.
-     */
-    public static CoordinatorRecord newShareGroupSubscriptionMetadataTombstoneRecord(
-            String groupId
-    ) {
-        return new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ShareGroupPartitionMetadataKey()
-                    .setGroupId(groupId),
-                (short) 9
-            ),
-            null // Tombstone.
-        );
-    }
-
-    /**
      * Creates a ShareGroupMetadata record.
      *
-     * @param groupId       The group id.
-     * @param newGroupEpoch The group epoch.
+     * @param groupId                  The group id.
+     * @param newGroupEpoch            The group epoch.
+     * @param subscriptionMetadataHash
      * @return The record.
      */
     public static CoordinatorRecord newShareGroupEpochRecord(
         String groupId,
-        int newGroupEpoch
-    ) {
+        int newGroupEpoch,
+        long subscriptionMetadataHash) {
         return new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new ShareGroupMetadataKey()
@@ -704,7 +598,8 @@ public class GroupCoordinatorRecordHelpers {
             ),
             new ApiMessageAndVersion(
                 new ShareGroupMetadataValue()
-                    .setEpoch(newGroupEpoch),
+                    .setEpoch(newGroupEpoch)
+                    .setSubscriptionMetadataHash(subscriptionMetadataHash),
                 (short) 0
             )
         );

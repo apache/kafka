@@ -24,7 +24,7 @@ import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
-import org.apache.kafka.image.TopicsImage;
+import org.apache.kafka.image.MetadataImage;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -110,11 +110,6 @@ public class TargetAssignmentBuilder<T extends ModernGroupMember> {
     private Map<String, T> members = Collections.emptyMap();
 
     /**
-     * The subscription metadata.
-     */
-    private Map<String, TopicMetadata> subscriptionMetadata = Collections.emptyMap();
-
-    /**
      * The subscription type of the consumer group.
      */
     private SubscriptionType subscriptionType;
@@ -131,9 +126,9 @@ public class TargetAssignmentBuilder<T extends ModernGroupMember> {
     private Map<Uuid, Map<Integer, String>> invertedTargetAssignment = Collections.emptyMap();
 
     /**
-     * The topics image.
+     * The metadata image.
      */
-    private TopicsImage topicsImage = TopicsImage.EMPTY;
+    private MetadataImage metadataImage = MetadataImage.EMPTY;
 
     /**
      * The members which have been updated or deleted. Deleted members
@@ -211,19 +206,6 @@ public class TargetAssignmentBuilder<T extends ModernGroupMember> {
     }
 
     /**
-     * Adds the subscription metadata to use.
-     *
-     * @param subscriptionMetadata  The subscription metadata.
-     * @return This object.
-     */
-    public TargetAssignmentBuilder<T> withSubscriptionMetadata(
-        Map<String, TopicMetadata> subscriptionMetadata
-    ) {
-        this.subscriptionMetadata = subscriptionMetadata;
-        return this;
-    }
-
-    /**
      * Adds the subscription type in use.
      *
      * @param subscriptionType  Subscription type of the group.
@@ -263,15 +245,15 @@ public class TargetAssignmentBuilder<T extends ModernGroupMember> {
     }
 
     /**
-     * Adds the topics image.
+     * Adds the metadata image.
      *
-     * @param topicsImage    The topics image.
+     * @param metadataImage    The metadata image.
      * @return This object.
      */
-    public TargetAssignmentBuilder<T> withTopicsImage(
-        TopicsImage topicsImage
+    public TargetAssignmentBuilder<T> withMetadataImage(
+        MetadataImage metadataImage
     ) {
-        this.topicsImage = topicsImage;
+        this.metadataImage = metadataImage;
         return this;
     }
 
@@ -327,7 +309,7 @@ public class TargetAssignmentBuilder<T extends ModernGroupMember> {
      */
     public TargetAssignmentResult build() throws PartitionAssignorException {
         Map<String, MemberSubscriptionAndAssignmentImpl> memberSpecs = new HashMap<>();
-        TopicIds.TopicResolver topicResolver = new TopicIds.CachedTopicResolver(topicsImage);
+        TopicIds.TopicResolver topicResolver = new TopicIds.CachedTopicResolver(metadataImage.topics());
 
         // Prepare the member spec for all members.
         members.forEach((memberId, member) ->
@@ -361,15 +343,6 @@ public class TargetAssignmentBuilder<T extends ModernGroupMember> {
             }
         });
 
-        // Prepare the topic metadata.
-        Map<Uuid, TopicMetadata> topicMetadataMap = new HashMap<>();
-        subscriptionMetadata.forEach((topicName, topicMetadata) ->
-            topicMetadataMap.put(
-                topicMetadata.id(),
-                topicMetadata
-            )
-        );
-
         // Compute the assignment.
         GroupAssignment newGroupAssignment = assignor.assign(
             new GroupSpecImpl(
@@ -377,7 +350,7 @@ public class TargetAssignmentBuilder<T extends ModernGroupMember> {
                 subscriptionType,
                 invertedTargetAssignment
             ),
-            new SubscribedTopicDescriberImpl(topicMetadataMap)
+            new SubscribedTopicDescriberImpl(metadataImage)
         );
 
         // Compute delta from previous to new target assignment and create the
