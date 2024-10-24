@@ -177,7 +177,6 @@ public interface Task {
 
     void addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> records);
     default void updateNextOffsets(final TopicPartition partition, final OffsetAndMetadata offsetAndMetadata) {
-
     }
 
     default boolean process(final long wallClockTime) {
