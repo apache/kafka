@@ -73,7 +73,6 @@ tools:
     - 'trogdor/**'
     - 'vagrant/**'
     - 'committer-tools/**'
-    - 'log4j-appender/**'
     - 'shell/**'
 
 docs:
