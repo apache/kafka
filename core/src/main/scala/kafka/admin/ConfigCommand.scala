@@ -59,9 +59,6 @@ import scala.collection._
  * when describing or altering default configuration for users, clients, brokers, or ips, respectively.
  * Alternatively, --user-defaults, --client-defaults, --broker-defaults, or --ip-defaults may be specified in place of
  * --entity-type <users|clients|brokers|ips> --entity-default, respectively.
- *
- * For most use cases, this script communicates with a Kafka cluster (specified via the
- * `--bootstrap-server` option).
  */
 object ConfigCommand extends Logging {
 
