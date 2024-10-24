@@ -58,6 +58,7 @@ import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
+import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.controller.Controller;
 import org.apache.kafka.controller.ControllerRequestContext;
@@ -333,6 +334,14 @@ public class MockController implements Controller {
     public CompletableFuture<Map<ConfigResource, ResultOrError<Map<String, String>>>> describeConfigs(
         ControllerRequestContext context,
         Map<ConfigResource, Collection<String>> resources
+    ) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public CompletableFuture<Map<ClientQuotaEntity, Map<String, Double>>> describeClientQuotas(
+            ControllerRequestContext context,
+            ClientQuotaFilter quotaFilter
     ) {
         throw new UnsupportedOperationException();
     }

@@ -19,11 +19,14 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
+import org.apache.kafka.common.quota.ClientQuotaFilter;
+import org.apache.kafka.common.quota.ClientQuotaFilterComponent;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -40,13 +43,19 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.quota.ClientQuotaEntity.CLIENT_ID;
+import static org.apache.kafka.common.quota.ClientQuotaEntity.IP;
+import static org.apache.kafka.common.quota.ClientQuotaEntity.USER;
 import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 
 
@@ -122,6 +131,86 @@ public class ClientQuotaControlManager {
         });
 
         return ControllerResult.atomicOf(outputRecords, outputResults);
+    }
+
+    public Map<ClientQuotaEntity, Map<String, Double>> describeClientQuotas(
+            long lastCommittedOffset, ClientQuotaFilter quotaFilter) {
+        Map<ClientQuotaEntity, Map<String, Double>> results = new HashMap<>();
+        Map<String, String> exactMatch = new HashMap<>();
+        Set<String> typeMatch = new HashSet<>();
+
+        for (ClientQuotaFilterComponent component : quotaFilter.components()) {
+            validate(exactMatch, typeMatch, component.entityType(), component);
+
+            Optional<String> match = component.match();
+
+            if (match == null) {
+                exactMatch.put(component.entityType(), null);
+            } else if (component.match().isPresent()) {
+                exactMatch.put(component.entityType(), component.match().get());
+            } else {
+                typeMatch.add(component.entityType());
+            }
+        }
+
+        if (exactMatch.containsKey(IP) || typeMatch.contains(IP)) {
+            if ((exactMatch.containsKey(USER) || typeMatch.contains(USER)) ||
+                    (exactMatch.containsKey(CLIENT_ID) || typeMatch.contains(CLIENT_ID))) {
+                throw new InvalidRequestException("Invalid entity filter component " +
+                        "combination. IP filter component should not be used with " +
+                        "user or clientId filter component.");
+            }
+        }
+
+        for (Entry<ClientQuotaEntity, TimelineHashMap<String, Double>> entry : clientQuotaData.entrySet(lastCommittedOffset)) {
+            ClientQuotaEntity entity = entry.getKey();
+            TimelineHashMap<String, Double> quotaImage = entry.getValue();
+            if (matches(entity, exactMatch, typeMatch, quotaFilter.strict())) {
+                results.put(entity, new HashMap<>(quotaImage));
+            }
+        }
+
+        return results;
+    }
+
+    private static void validate(Map<String, String> exactMatch, Set<String> typeMatch, String s, ClientQuotaFilterComponent component) {
+        if (s.isEmpty()) {
+            throw new InvalidRequestException("Invalid empty entity type.");
+        } else if (exactMatch.containsKey(s) ||
+                typeMatch.contains(s)) {
+            throw new InvalidRequestException("Entity type " + s +
+                    " cannot appear more than once in the filter.");
+        }
+        if (!(s.equals(IP) || s.equals(USER) ||
+                s.equals(CLIENT_ID))) {
+            throw new UnsupportedVersionException("Unsupported entity type " +
+                    s);
+        }
+    }
+
+    private static boolean matches(ClientQuotaEntity entity,
+                                   Map<String, String> exactMatch,
+                                   Set<String> typeMatch,
+                                   boolean strict) {
+        if (strict) {
+            if (entity.entries().size() != exactMatch.size() + typeMatch.size()) {
+                return false;
+            }
+        }
+        for (Entry<String, String> entry : exactMatch.entrySet()) {
+            if (!entity.entries().containsKey(entry.getKey())) {
+                return false;
+            }
+            if (!Objects.equals(entity.entries().get(entry.getKey()), entry.getValue())) {
+                return false;
+            }
+        }
+        for (String type : typeMatch) {
+            if (!entity.entries().containsKey(type)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**

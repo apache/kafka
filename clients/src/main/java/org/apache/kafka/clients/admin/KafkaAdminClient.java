@@ -4207,7 +4207,7 @@ public class KafkaAdminClient extends AdminClient {
 
         final long now = time.milliseconds();
         runnable.call(new Call("describeClientQuotas", calcDeadlineMs(now, options.timeoutMs()),
-                new LeastLoadedNodeProvider()) {
+                new LeastLoadedBrokerOrActiveKController()) {
 
                 @Override
                 DescribeClientQuotasRequest.Builder createRequest(int timeoutMs) {
@@ -4238,7 +4238,7 @@ public class KafkaAdminClient extends AdminClient {
 
         final long now = time.milliseconds();
         runnable.call(new Call("alterClientQuotas", calcDeadlineMs(now, options.timeoutMs()),
-                new LeastLoadedNodeProvider()) {
+                new LeastLoadedBrokerOrActiveKController()) {
 
                 @Override
                 AlterClientQuotasRequest.Builder createRequest(int timeoutMs) {

@@ -23,10 +23,12 @@ import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
+import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.config.QuotaConfig;
+import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -96,6 +98,27 @@ public class ClientQuotaControlManagerTest {
         ControllerResult<Map<ClientQuotaEntity, ApiError>> result = manager.alterClientQuotas(alters);
         assertEquals(Errors.INVALID_REQUEST, result.response().get(entity).error());
         assertEquals(0, result.records().size());
+    }
+
+    @Test
+    public void testDescribeQuota() {
+        ClientQuotaControlManager manager = new ClientQuotaControlManager.Builder().build();
+
+        ClientQuotaEntity userEntity = userEntity("user-1");
+        List<ClientQuotaAlteration> alters = new ArrayList<>();
+        Map<ClientQuotaEntity, Map<String, Double>> quotaResult = Collections.singletonMap(userEntity,
+                Collections.singletonMap(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, 10000.0));
+
+
+        // Add one quota
+        entityQuotaToAlterations(userEntity, quotas(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, 10000.0), alters::add);
+        alterQuotas(alters, manager);
+        assertEquals(1, manager.clientQuotaData.get(userEntity).size());
+        assertEquals(10000.0, manager.clientQuotaData.get(userEntity).get(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG), 1e-6);
+
+        // Describe quota
+        Map<ClientQuotaEntity, Map<String, Double>> res = manager.describeClientQuotas(SnapshotRegistry.LATEST_EPOCH, ClientQuotaFilter.all());
+        assertEquals(res, quotaResult);
     }
 
     @Test
