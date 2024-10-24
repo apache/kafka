@@ -60,7 +60,7 @@ public class EosTestDriver extends SmokeTestUtil {
     private static final long MAX_IDLE_TIME_MS = 600000L;
 
     private static volatile boolean isRunning = true;
-    private static CountDownLatch terminated = new CountDownLatch(1);
+    private static final CountDownLatch TERMINATED = new CountDownLatch(1);
 
     private static int numRecordsProduced = 0;
 
@@ -74,7 +74,7 @@ public class EosTestDriver extends SmokeTestUtil {
             isRunning = false;
 
             try {
-                if (terminated.await(5L, TimeUnit.MINUTES)) {
+                if (TERMINATED.await(5L, TimeUnit.MINUTES)) {
                     System.out.println("Terminated");
                 } else {
                     System.out.println("Terminated with timeout");
@@ -167,7 +167,7 @@ public class EosTestDriver extends SmokeTestUtil {
             }
             System.out.flush();
         } finally {
-            terminated.countDown();
+            TERMINATED.countDown();
         }
     }
 
