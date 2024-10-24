@@ -434,6 +434,7 @@ class BrokerServer(
         config.shareGroupConfig.shareGroupRecordLockDurationMs,
         config.shareGroupConfig.shareGroupDeliveryCountLimit,
         config.shareGroupConfig.shareGroupPartitionMaxRecordLocks,
+        config.shareGroupConfig.shareFetchMaxFetchRecords,
         persister,
         groupConfigManager,
         metrics

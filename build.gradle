@@ -1323,9 +1323,6 @@ project(':core') {
     //By default gradle does not handle test dependencies between the sub-projects
     //This line is to include clients project test jar to dependant-testlibs
     from (project(':clients').testJar ) { "$buildDir/dependant-testlibs" }
-    // log4j-appender is not in core dependencies,
-    // so we add it to dependant-testlibs to avoid ClassNotFoundException in running kafka_log4j_appender.py
-    from (project(':log4j-appender').jar ) { "$buildDir/dependant-testlibs" }
     duplicatesStrategy 'exclude'
   }
 
@@ -3353,29 +3350,6 @@ project(':jmh-benchmarks') {
   javadoc {
      enabled = false
   }
-}
-
-project(':log4j-appender') {
-  base {
-    archivesName = "kafka-log4j-appender"
-  }
-
-  dependencies {
-    implementation project(':clients')
-    implementation libs.slf4jReload4j
-
-    testImplementation project(':clients').sourceSets.test.output
-    testImplementation libs.junitJupiter
-    testImplementation libs.hamcrest
-    testImplementation libs.mockitoCore
-
-    testRuntimeOnly libs.junitPlatformLanucher
-  }
-
-  javadoc {
-    enabled = false
-  }
-
 }
 
 project(':connect:api') {

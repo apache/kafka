@@ -20,7 +20,6 @@ import kafka.security.JaasTestUtils
 
 import java.util.Properties
 import kafka.utils._
-import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateDelegationTokenOptions, ScramCredentialInfo, UserScramCredentialAlteration, UserScramCredentialUpsertion, ScramMechanism => PublicScramMechanism}
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
@@ -60,12 +59,6 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
 
   override def configureSecurityBeforeServersStart(testInfo: TestInfo): Unit = {
     super.configureSecurityBeforeServersStart(testInfo)
-
-    if (!TestInfoUtils.isKRaft(testInfo)) {
-      zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
-      // Create broker admin credentials before starting brokers
-      createScramCredentials(zkConnect, kafkaPrincipal.getName, kafkaPassword)
-    }
   }
 
   // Create the admin credentials for KRaft as part of controller initialization
@@ -107,7 +100,7 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft"))
   def testCreateUserWithDelegationToken(quorum: String): Unit = {
     val privilegedAdminClient = Admin.create(privilegedAdminClientConfig)
     try {
@@ -124,7 +117,7 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-      startSasl(jaasSections(kafkaServerSaslMechanisms, Option(kafkaClientSaslMechanism), Both))
+      startSasl(jaasSections(kafkaServerSaslMechanisms, Option(kafkaClientSaslMechanism), KafkaSasl))
       super.setUp(testInfo)
       privilegedAdminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
   }
