@@ -736,4 +736,25 @@ Found problem:
       "SCRAM is only supported in metadata.version 3.5-IV2 or later.",
       assertThrows(classOf[FormatterException], () => runFormatCommand(stream, properties, arguments.toSeq)).getMessage)
   }
+
+  @Test
+  def testParseNameAndLevel(): Unit = {
+    assertEquals(("foo.bar", 56.toShort), StorageTool.parseNameAndLevel("foo.bar=56"))
+  }
+
+  @Test
+  def testParseNameAndLevelWithNoEquals(): Unit = {
+    assertEquals("Can't parse feature=level string kraft.version5: equals sign not found.",
+      assertThrows(classOf[RuntimeException],
+        () => StorageTool.parseNameAndLevel("kraft.version5")).
+          getMessage)
+  }
+
+  @Test
+  def testParseNameAndLevelWithNoNumber(): Unit = {
+    assertEquals("Can't parse feature=level string kraft.version=foo: unable to parse foo as a short.",
+      assertThrows(classOf[RuntimeException],
+        () => StorageTool.parseNameAndLevel("kraft.version=foo")).
+        getMessage)
+  }
 }

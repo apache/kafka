@@ -473,17 +473,17 @@ object StorageTool extends Logging {
     }
   }
 
-  private def parseNameAndLevel(input: String): (String, java.lang.Short) = {
+  def parseNameAndLevel(input: String): (String, java.lang.Short) = {
     val equalsIndex = input.indexOf("=")
     if (equalsIndex < 0)
-      throw new RuntimeException("Can't parse feature=level string " + input + ": equals   sign not found.")
+      throw new RuntimeException("Can't parse feature=level string " + input + ": equals sign not found.")
     val name = input.substring(0, equalsIndex).trim
     val levelString = input.substring(equalsIndex + 1).trim
     try {
       levelString.toShort
     } catch {
       case _: Throwable =>
-        throw new RuntimeException("Can't parse feature=level string " + input + ": " +    "unable to parse " + levelString + " as a short.")
+        throw new RuntimeException("Can't parse feature=level string " + input + ": " + "unable to parse " + levelString + " as a short.")
     }
     (name, levelString.toShort)
   }
