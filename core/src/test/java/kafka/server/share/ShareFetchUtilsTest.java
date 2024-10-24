@@ -399,25 +399,25 @@ public class ShareFetchUtilsTest {
             new SimpleRecord("2".getBytes(), "v".getBytes()),
             new SimpleRecord(null, "value".getBytes()));
 
-        FetchPartitionData fetchPartitionData1 = new FetchPartitionData(Errors.NONE, 0L, 0L,
-            records1, Optional.empty(), OptionalLong.empty(), Optional.empty(),
-            OptionalInt.empty(), false);
-        FetchPartitionData fetchPartitionData2 = new FetchPartitionData(Errors.NONE, 0L, 0L,
-            records1, Optional.empty(), OptionalLong.empty(), Optional.empty(),
-            OptionalInt.empty(), false);
+        FetchPartitionOffsetData fetchPartitionOffsetData1 = new FetchPartitionOffsetData(new FetchPartitionData(
+            Errors.NONE, 0L, 0L, records1, Optional.empty(), OptionalLong.empty(),
+            Optional.empty(), OptionalInt.empty(), false), mock(LogOffsetMetadata.class));
+        FetchPartitionOffsetData fetchPartitionOffsetData2 = new FetchPartitionOffsetData(new FetchPartitionData(
+            Errors.NONE, 0L, 0L, records1, Optional.empty(), OptionalLong.empty(),
+            Optional.empty(), OptionalInt.empty(), false), mock(LogOffsetMetadata.class));
 
-        when(sp0.acquire(memberId.toString(), 10, fetchPartitionData1)).thenReturn(
+        when(sp0.acquire(memberId.toString(), 10, fetchPartitionOffsetData1)).thenReturn(
             ShareAcquiredRecords.fromAcquiredRecords(new ShareFetchResponseData.AcquiredRecords()
                 .setFirstOffset(0).setLastOffset(1).setDeliveryCount((short) 1)));
-        when(sp1.acquire(memberId.toString(), 8, fetchPartitionData2)).thenReturn(
+        when(sp1.acquire(memberId.toString(), 8, fetchPartitionOffsetData2)).thenReturn(
             ShareAcquiredRecords.fromAcquiredRecords(new ShareFetchResponseData.AcquiredRecords()
                 .setFirstOffset(100).setLastOffset(103).setDeliveryCount((short) 1)));
 
         // Send the topic partitions in order so can validate if correct mock is called, accounting
         // the offset count for the acquired records from the previous share partition acquire.
-        Map<TopicIdPartition, FetchPartitionData> responseData1 = new LinkedHashMap<>();
-        responseData1.put(tp0, fetchPartitionData1);
-        responseData1.put(tp1, fetchPartitionData2);
+        Map<TopicIdPartition, FetchPartitionOffsetData> responseData1 = new LinkedHashMap<>();
+        responseData1.put(tp0, fetchPartitionOffsetData1);
+        responseData1.put(tp1, fetchPartitionOffsetData2);
 
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData1 =
             ShareFetchUtils.processFetchResponse(shareFetchData, responseData1, sharePartitionManager, replicaManager);
