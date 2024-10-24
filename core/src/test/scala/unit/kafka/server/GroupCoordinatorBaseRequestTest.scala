@@ -463,9 +463,10 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     (joinGroupResponseData.memberId, joinGroupResponseData.generationId)
   }
 
-  protected def joinConsumerGroupWithNewProtocol(groupId: String): (String, Int) = {
+  protected def joinConsumerGroupWithNewProtocol(groupId: String, memberId: String = ""): (String, Int) = {
     val consumerGroupHeartbeatResponseData = consumerGroupHeartbeat(
       groupId = groupId,
+      memberId = memberId,
       rebalanceTimeoutMs = 5 * 60 * 1000,
       subscribedTopicNames = List("foo"),
       topicPartitions = List.empty
@@ -473,11 +474,11 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     (consumerGroupHeartbeatResponseData.memberId, consumerGroupHeartbeatResponseData.memberEpoch)
   }
 
-  protected def joinConsumerGroup(groupId: String, useNewProtocol: Boolean): (String, Int) = {
+  protected def joinConsumerGroup(groupId: String, useNewProtocol: Boolean, memberId: String = ""): (String, Int) = {
     if (useNewProtocol) {
       // Note that we heartbeat only once to join the group and assume
       // that the test will complete within the session timeout.
-      joinConsumerGroupWithNewProtocol(groupId)
+      joinConsumerGroupWithNewProtocol(groupId, memberId)
     } else {
       // Note that we don't heartbeat and assume that the test will
       // complete within the session timeout.
@@ -577,7 +578,8 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     serverAssignor: String = null,
     subscribedTopicNames: List[String] = null,
     topicPartitions: List[ConsumerGroupHeartbeatRequestData.TopicPartitions] = null,
-    expectedError: Errors = Errors.NONE
+    expectedError: Errors = Errors.NONE,
+    version: Short = ApiKeys.CONSUMER_GROUP_HEARTBEAT.latestVersion(isUnstableApiEnabled)
   ): ConsumerGroupHeartbeatResponseData = {
     val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
       new ConsumerGroupHeartbeatRequestData()
@@ -591,7 +593,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
         .setServerAssignor(serverAssignor)
         .setTopicPartitions(topicPartitions.asJava),
       true
-    ).build()
+    ).build(version)
 
     // Send the request until receiving a successful response. There is a delay
     // here because the group coordinator is loaded in the background.
@@ -606,7 +608,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
 
   protected def shareGroupHeartbeat(
     groupId: String,
-    memberId: String = "",
+    memberId: String = Uuid.randomUuid.toString,
     memberEpoch: Int = 0,
     rackId: String = null,
     subscribedTopicNames: List[String] = null,

@@ -602,10 +602,17 @@ public class GroupMetadataManagerTestContext {
     public CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> consumerGroupHeartbeat(
         ConsumerGroupHeartbeatRequestData request
     ) {
+        return this.consumerGroupHeartbeat(request, ApiKeys.CONSUMER_GROUP_HEARTBEAT.latestVersion());
+    }
+
+    public CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> consumerGroupHeartbeat(
+            ConsumerGroupHeartbeatRequestData request,
+            short apiVersion
+    ) {
         RequestContext context = new RequestContext(
             new RequestHeader(
                 ApiKeys.CONSUMER_GROUP_HEARTBEAT,
-                ApiKeys.CONSUMER_GROUP_HEARTBEAT.latestVersion(),
+                apiVersion,
                 DEFAULT_CLIENT_ID,
                 0
             ),

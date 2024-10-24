@@ -168,7 +168,7 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
             // GroupId - always sent
             data.setGroupId(shareMembershipManager.groupId());
 
-            // MemberId - always sent, empty until it has been received from the coordinator
+            // MemberId - always sent, it will be generated at Consumer startup.
             data.setMemberId(shareMembershipManager.memberId());
 
             // MemberEpoch - always sent

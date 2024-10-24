@@ -16,6 +16,7 @@
  */
 package kafka.server
 
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.test.api.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.common.test.api.ClusterTestExtensions
@@ -75,7 +76,7 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
 
     // Join the consumer group. Note that we don't heartbeat here so we must use
     // a session long enough for the duration of the test.
-    val (memberId, memberEpoch) = joinConsumerGroup("grp", useNewProtocol)
+    val (memberId, memberEpoch) = joinConsumerGroup("grp", useNewProtocol, Uuid.randomUuid.toString)
 
     // Start from version 1 because version 0 goes to ZK.
     for (version <- 1 to ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)) {
