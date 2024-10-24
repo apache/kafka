@@ -244,7 +244,7 @@ public abstract class AbstractResetIntegrationTest {
         final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
         streams.close();
 
-        assertEquals(resultRerun, result);
+        assertEquals(result, resultRerun);
 
         waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT);
         cleanGlobal(false, null, null, appID);
@@ -312,7 +312,7 @@ public abstract class AbstractResetIntegrationTest {
             final List<KeyValue<Long, String>> resultIntermediate = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(props, INTERMEDIATE_USER_TOPIC, 21);
 
             for (int i = 0; i < 10; i++) {
-                assertEquals(resultIntermediate.get(i), resultIntermediate.get(i + 11));
+                assertEquals(resultIntermediate.get(i + 11), resultIntermediate.get(i));
             }
             assertEquals(badMessage, resultIntermediate.get(10));
         }
