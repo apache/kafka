@@ -362,9 +362,8 @@ public class CompositeReadOnlyWindowStoreTest {
         secondUnderlying.put("b", "b", 10L);
         secondUnderlying.put("c", "c", 10L);
         final List<KeyValue<Windowed<String>, String>> results =
-            StreamsTestUtils.toList(windowStore.fetch("a", null, ofEpochMilli(0), ofEpochMilli(10)));
+            StreamsTestUtils.toList(windowStore.fetch("b", null, ofEpochMilli(0), ofEpochMilli(10)));
         assertThat(results, equalTo(Arrays.asList(
-            KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
             KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"),
             KeyValue.pair(new Windowed<>("c", new TimeWindow(10, 10 + WINDOW_SIZE)), "c"))));
     }
@@ -377,11 +376,10 @@ public class CompositeReadOnlyWindowStoreTest {
         secondUnderlying.put("b", "b", 10L);
         secondUnderlying.put("c", "c", 10L);
         final List<KeyValue<Windowed<String>, String>> results =
-            StreamsTestUtils.toList(windowStore.fetch(null, "c", ofEpochMilli(0), ofEpochMilli(10)));
+            StreamsTestUtils.toList(windowStore.fetch(null, "b", ofEpochMilli(0), ofEpochMilli(10)));
         assertThat(results, equalTo(Arrays.asList(
             KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
-            KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"),
-            KeyValue.pair(new Windowed<>("c", new TimeWindow(10, 10 + WINDOW_SIZE)), "c"))));
+            KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"))));
     }
 
     @Test
@@ -407,9 +405,8 @@ public class CompositeReadOnlyWindowStoreTest {
         secondUnderlying.put("b", "b", 10L);
         secondUnderlying.put("c", "c", 10L);
         final List<KeyValue<Windowed<String>, String>> results =
-            StreamsTestUtils.toList(windowStore.backwardFetch("a", null, ofEpochMilli(0), ofEpochMilli(10)));
+            StreamsTestUtils.toList(windowStore.backwardFetch("b", null, ofEpochMilli(0), ofEpochMilli(10)));
         assertThat(results, equalTo(Arrays.asList(
-            KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
             KeyValue.pair(new Windowed<>("c", new TimeWindow(10, 10 + WINDOW_SIZE)), "c"),
             KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"))));
     }
@@ -422,10 +419,9 @@ public class CompositeReadOnlyWindowStoreTest {
         secondUnderlying.put("b", "b", 10L);
         secondUnderlying.put("c", "c", 10L);
         final List<KeyValue<Windowed<String>, String>> results =
-            StreamsTestUtils.toList(windowStore.backwardFetch(null, "c", ofEpochMilli(0), ofEpochMilli(10)));
+            StreamsTestUtils.toList(windowStore.backwardFetch(null, "b", ofEpochMilli(0), ofEpochMilli(10)));
         assertThat(results, equalTo(Arrays.asList(
             KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
-            KeyValue.pair(new Windowed<>("c", new TimeWindow(10, 10 + WINDOW_SIZE)), "c"),
             KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b")
             )));
     }
