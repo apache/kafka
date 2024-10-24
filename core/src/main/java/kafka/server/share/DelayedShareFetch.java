@@ -27,6 +27,7 @@ import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.server.share.fetch.FetchPartitionOffsetData;
 import org.apache.kafka.server.share.fetch.ShareFetchData;
+import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 import org.apache.kafka.storage.internals.log.LogOffsetSnapshot;
@@ -221,24 +222,56 @@ public class DelayedShareFetch extends DelayedOperation {
     private boolean isMinBytesSatisfied(Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData) {
         try {
             AtomicLong accumulatedSize = new AtomicLong(0);
-            topicPartitionData.forEach((topicIdPartition, partitionData) -> {
+            for (Map.Entry<TopicIdPartition, FetchRequest.PartitionData> entry : topicPartitionData.entrySet()) {
+                TopicIdPartition topicIdPartition = entry.getKey();
+                FetchRequest.PartitionData partitionData = entry.getValue();
                 Partition partition = replicaManager.getPartitionOrException(topicIdPartition.topicPartition());
                 LogOffsetSnapshot offsetSnapshot = partition.fetchOffsetSnapshot(Optional.empty(), true);
                 // The FetchIsolation type that we use for share fetch is FetchIsolation.HIGH_WATERMARK. In the future, we can
                 // extend it other FetchIsolation types.
-                LogOffsetMetadata endOffsetMetadata = offsetSnapshot.highWatermark;
+                FetchIsolation isolationType = shareFetchData.fetchParams().isolation;
+                LogOffsetMetadata endOffsetMetadata;
+                if (isolationType == FetchIsolation.LOG_END)
+                    endOffsetMetadata = offsetSnapshot.logEndOffset;
+                else if (isolationType == FetchIsolation.HIGH_WATERMARK)
+                    endOffsetMetadata = offsetSnapshot.highWatermark;
+                else
+                    endOffsetMetadata = offsetSnapshot.lastStableOffset;
+
+                if (endOffsetMetadata == LogOffsetMetadata.UNKNOWN_OFFSET_METADATA)
+                    return false;
+
                 SharePartition sharePartition = sharePartitionManager.sharePartition(shareFetchData.groupId(), topicIdPartition);
                 if (sharePartition == null) {
                     log.error("Encountered null share partition for groupId={}, topicIdPartition={}. Skipping it.", shareFetchData.groupId(), topicIdPartition);
-                    return;
+                    continue;
+                }
+                if (sharePartition.latestFetchOffsetMetadata() == null) {
+                    // we take the partition fetch size as upper bound when accumulating the bytes.
+                    long bytesAvailable = Math.min(endOffsetMetadata.relativePositionInSegment, partitionData.maxBytes);
+                    accumulatedSize.addAndGet(bytesAvailable);
+                    continue;
                 }
 
-                // we take the partition fetch size as upper bound when accumulating the bytes (skip if a throttled partition)
-                long bytesAvailable = sharePartition.latestFetchOffsetMetadata() == null ?
-                    Math.min(endOffsetMetadata.relativePositionInSegment, partitionData.maxBytes) :
-                    Math.min(endOffsetMetadata.positionDiff(sharePartition.latestFetchOffsetMetadata()), partitionData.maxBytes);
-                accumulatedSize.addAndGet(bytesAvailable);
-            });
+                LogOffsetMetadata fetchOffsetMetadata = sharePartition.latestFetchOffsetMetadata();
+                if (fetchOffsetMetadata.messageOffset > endOffsetMetadata.messageOffset) {
+                    log.debug("Satisfying delayed share fetch request for group {}, member {} since it is fetching later segments of " +
+                        "topicIdPartition {}", shareFetchData.groupId(), shareFetchData.memberId(), topicIdPartition);
+                    return true;
+                } else if (fetchOffsetMetadata.messageOffset < endOffsetMetadata.messageOffset) {
+                    if (fetchOffsetMetadata.onOlderSegment(endOffsetMetadata)) {
+                        // This can happen when the fetch operation is falling behind the current segment or the partition
+                        // has just rolled a new segment.
+                        log.debug("Satisfying delayed share fetch request for group {}, member {} immediately since it is fetching older " +
+                            "segments of topicIdPartition {}", shareFetchData.groupId(), shareFetchData.memberId(), topicIdPartition);
+                        return true;
+                    } else if (fetchOffsetMetadata.onSameSegment(endOffsetMetadata)) {
+                        // we take the partition fetch size as upper bound when accumulating the bytes.
+                        long bytesAvailable = Math.min(endOffsetMetadata.positionDiff(sharePartition.latestFetchOffsetMetadata()), partitionData.maxBytes);
+                        accumulatedSize.addAndGet(bytesAvailable);
+                    }
+                }
+            }
             return accumulatedSize.get() >= shareFetchData.fetchParams().minBytes;
         } catch (Exception e) {
             // Ideally we should complete the share fetch request's future exceptionally in this case from tryComplete itself.
