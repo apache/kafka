@@ -17,7 +17,6 @@
 package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
 
 import org.junit.jupiter.api.Test;
 
@@ -33,11 +32,13 @@ public class TopicMetadataTest {
     @Test
     public void testAttributes() {
         Uuid topicId = Uuid.randomUuid();
-        TopicMetadata topicMetadata = new TopicMetadata(topicId, "foo", 15);
+        Map<Integer, Set<String>> partitionRacks = mkMapOfPartitionRacks(15);
+        TopicMetadata topicMetadata = new TopicMetadata(topicId, "foo", 15, partitionRacks);
 
         assertEquals(topicId, topicMetadata.id());
         assertEquals("foo", topicMetadata.name());
         assertEquals(15, topicMetadata.numPartitions());
+        assertEquals(partitionRacks, topicMetadata.partitionRacks());
     }
 
     @Test
@@ -54,21 +55,5 @@ public class TopicMetadataTest {
 
         assertEquals(new TopicMetadata(topicId, "foo", 15), topicMetadata);
         assertNotEquals(new TopicMetadata(topicId, "foo", 5), topicMetadata);
-    }
-
-    @Test
-    public void testFromRecord() {
-        Uuid topicId = Uuid.randomUuid();
-        String topicName = "foo";
-
-        ConsumerGroupPartitionMetadataValue.TopicMetadata record = new ConsumerGroupPartitionMetadataValue.TopicMetadata()
-            .setTopicId(topicId)
-            .setTopicName(topicName)
-            .setNumPartitions(15);
-
-        assertEquals(
-            new TopicMetadata(topicId, topicName, 15),
-            TopicMetadata.fromRecord(record)
-        );
     }
 }

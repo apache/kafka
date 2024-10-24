@@ -28,6 +28,7 @@ import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineInteger;
+import org.apache.kafka.timeline.TimelineLong;
 import org.apache.kafka.timeline.TimelineObject;
 
 import java.util.Collections;
@@ -35,6 +36,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
@@ -85,9 +87,9 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     protected final TimelineHashMap<String, Integer> subscribedTopicNames;
 
     /**
-     * The metadata associated with each subscribed topic name.
+     * The hash of subscribed TopicMetadata
      */
-    protected final TimelineHashMap<String, TopicMetadata> subscribedTopicMetadata;
+    protected TimelineLong subscriptionMetadataHash;
 
     /**
      * The group's subscription type.
@@ -134,7 +136,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
         this.groupEpoch = new TimelineInteger(snapshotRegistry);
         this.members = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicNames = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.subscribedTopicMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.subscriptionMetadataHash = new TimelineLong(snapshotRegistry);
         this.subscriptionType = new TimelineObject<>(snapshotRegistry, HOMOGENEOUS);
         this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -349,23 +351,19 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     }
 
     /**
-     * @return An immutable Map of subscription metadata for
-     *         each topic that the consumer group is subscribed to.
+     * @return The hash of subscribed TopicMetadata.
      */
-    public Map<String, TopicMetadata> subscriptionMetadata() {
-        return Collections.unmodifiableMap(subscribedTopicMetadata);
+    public long subscriptionMetadataHash() {
+        return subscriptionMetadataHash.get();
     }
 
     /**
-     * Updates the subscription metadata. This replaces the previous one.
+     * Updates the subscription metadata hash.
      *
-     * @param subscriptionMetadata The new subscription metadata.
+     * @param hash The new hash.
      */
-    public void setSubscriptionMetadata(
-        Map<String, TopicMetadata> subscriptionMetadata
-    ) {
-        this.subscribedTopicMetadata.clear();
-        this.subscribedTopicMetadata.putAll(subscriptionMetadata);
+    public void setSubscriptionMetadataHash(long hash) {
+        this.subscriptionMetadataHash.set(hash);
     }
 
     /**
@@ -388,10 +386,25 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
         subscribedTopicNames.forEach((topicName, count) -> {
             TopicImage topicImage = topicsImage.getTopic(topicName);
             if (topicImage != null) {
+                Map<Integer, Set<String>> partitionRacks = new HashMap<>(topicImage.partitions().size());
+                topicImage.partitions().forEach((partition, partitionRegistration) -> {
+                    Set<String> racks = new HashSet<>();
+                    for (int replica : partitionRegistration.replicas) {
+                        Optional<String> rackOptional = clusterImage.broker(replica).rack();
+                        // Only add the rack if it is available for the broker/replica.
+                        rackOptional.ifPresent(racks::add);
+                    }
+                    // If rack information is unavailable for all replicas of this partition,
+                    // no corresponding entry will be stored for it in the map.
+                    if (!racks.isEmpty())
+                        partitionRacks.put(partition, racks);
+                });
+
                 newSubscriptionMetadata.put(topicName, new TopicMetadata(
                     topicImage.id(),
                     topicImage.name(),
-                    topicImage.partitions().size()
+                    topicImage.partitions().size(),
+                    partitionRacks
                 ));
             }
         });

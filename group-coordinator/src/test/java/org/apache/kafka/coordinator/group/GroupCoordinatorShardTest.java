@@ -78,6 +78,7 @@ import static org.apache.kafka.coordinator.common.runtime.TestUtil.requestContex
 import static org.apache.kafka.coordinator.group.GroupCoordinatorShard.CLASSIC_GROUP_SIZE_COUNTER_KEY;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorShard.DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorShard.GROUP_EXPIRATION_KEY;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -526,12 +527,12 @@ public class GroupCoordinatorShardTest {
         ConsumerGroupPartitionMetadataKey key = new ConsumerGroupPartitionMetadataKey();
         ConsumerGroupPartitionMetadataValue value = new ConsumerGroupPartitionMetadataValue();
 
-        coordinator.replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new CoordinatorRecord(
+        // ConsumerGroupPartitionMetadataKey/Value is deprecated after 4.0.
+        // Replay deprecated message should not throw exception.
+        assertDoesNotThrow(() -> coordinator.replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new CoordinatorRecord(
             new ApiMessageAndVersion(key, (short) 4),
             new ApiMessageAndVersion(value, (short) 0)
-        ));
-
-        verify(groupMetadataManager, times(1)).replay(key, value);
+        )));
     }
 
     @Test
