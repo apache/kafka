@@ -60,7 +60,7 @@ public class CombinedKeySchema<KO, K> {
         foreignKeyDeserializer = foreignKeyDeserializer == null ? (Deserializer<KO>) context.keySerde().deserializer() : foreignKeyDeserializer;
     }
 
-    Bytes toBytes(final KO foreignKey, final K primaryKey) {
+    public Bytes toBytes(final KO foreignKey, final K primaryKey) {
         //The serialization format - note that primaryKeySerialized may be null, such as when a prefixScan
         //key is being created.
         //{Integer.BYTES foreignKeyLength}{foreignKeySerialized}{Optional-primaryKeySerialized}
@@ -94,7 +94,18 @@ public class CombinedKeySchema<KO, K> {
         return new CombinedKey<>(foreignKey, primaryKey);
     }
 
-    Bytes prefixBytes(final KO key) {
+    public K deserializePrimaryKeyFromBytes(final Bytes data) {
+        //Only deserialize the primary key when the foreign key is not required to not waste cpu time.
+        //{Integer.BYTES foreignKeyLength}{skipped foreignKeySerialized}{Optional-primaryKeySerialized}
+        final byte[] dataArray = data.get();
+        final int foreignKeyLength = ByteBuffer.wrap(dataArray).getInt();
+
+        final byte[] primaryKeyRaw = new byte[dataArray.length - foreignKeyLength - Integer.BYTES];
+        System.arraycopy(dataArray, Integer.BYTES + foreignKeyLength, primaryKeyRaw, 0, primaryKeyRaw.length);
+        return primaryKeyDeserializer.deserialize(primaryKeySerdeTopic, primaryKeyRaw);
+    }
+
+    public Bytes prefixBytes(final KO key) {
         //The serialization format. Note that primaryKeySerialized is not required/used in this function.
         //{Integer.BYTES foreignKeyLength}{foreignKeySerialized}{Optional-primaryKeySerialized}
 

@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.internals.Change;
@@ -35,8 +36,6 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.nio.ByteBuffer;
 
 public class ForeignTableJoinProcessorSupplier<K, KO, VO> implements
     ProcessorSupplier<KO, Change<VO>, K, SubscriptionResponseWrapper<VO>> {
@@ -111,34 +110,26 @@ public class ForeignTableJoinProcessorSupplier<K, KO, VO> implements
                 return;
             }
 
-            final Bytes prefixBytes = keySchema.prefixBytes(record.key());
+            final Bytes foreignKeyBytes = keySchema.prefixBytes(record.key());
 
             //Perform the prefixScan and propagate the results
             try (final KeyValueIterator<Bytes, ValueAndTimestamp<SubscriptionWrapper<K>>> prefixScanResults =
-                     subscriptionStore.range(prefixBytes, Bytes.increment(prefixBytes))) {
+                     subscriptionStore.prefixScan(foreignKeyBytes, new BytesSerializer())) {
 
                 while (prefixScanResults.hasNext()) {
                     final KeyValue<Bytes, ValueAndTimestamp<SubscriptionWrapper<K>>> next = prefixScanResults.next();
-                    // have to check the prefix because the range end is inclusive :(
-                    if (prefixEquals(next.key.get(), prefixBytes.get())) {
-                        final CombinedKey<KO, K> combinedKey = keySchema.fromBytes(next.key);
-                        context().forward(
-                            record.withKey(combinedKey.primaryKey())
-                                .withValue(new SubscriptionResponseWrapper<>(
-                                    next.value.value().hash(),
-                                    record.value().newValue,
-                                    next.value.value().primaryPartition()))
-                        );
-                    }
+                    final K primaryKey = keySchema.deserializePrimaryKeyFromBytes(next.key);
+                    final SubscriptionResponseWrapper<VO> subscriptionResponse = new SubscriptionResponseWrapper<>(
+                        next.value.value().hash(),
+                        record.value().newValue,
+                        next.value.value().primaryPartition()
+                    );
+                    context().forward(
+                        record.withKey(primaryKey)
+                              .withValue(subscriptionResponse)
+                    );
                 }
             }
-        }
-
-        private boolean prefixEquals(final byte[] x, final byte[] y) {
-            final int min = Math.min(x.length, y.length);
-            final ByteBuffer xSlice = ByteBuffer.wrap(x, 0, min);
-            final ByteBuffer ySlice = ByteBuffer.wrap(y, 0, min);
-            return xSlice.equals(ySlice);
         }
     }
 }
