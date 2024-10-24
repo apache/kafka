@@ -109,16 +109,17 @@ public class ShareFetchRequest extends AbstractRequest {
                 });
             }
 
+            Builder builder = new Builder(data, true);
             // And finally, forget the topic-partitions that are no longer in the session
             if (!forget.isEmpty()) {
                 data.setForgottenTopicsData(new ArrayList<>());
-                updateForgottenData(forget, data);
+                builder.updateForgottenData(forget);
             }
 
-            return new Builder(data, true);
+            return builder;
         }
 
-        public static void updateForgottenData(List<TopicIdPartition> forget, ShareFetchRequestData data) {
+        public void updateForgottenData(List<TopicIdPartition> forget) {
             Map<Uuid, List<Integer>> forgetMap = new HashMap<>();
             for (TopicIdPartition tip : forget) {
                 List<Integer> partList = forgetMap.computeIfAbsent(tip.topicId(), k -> new ArrayList<>());

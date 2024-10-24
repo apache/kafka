@@ -55,6 +55,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
@@ -93,7 +94,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     private boolean closing = false;
     private final CompletableFuture<Void> closeFuture;
     private boolean isAcknowledgementCommitCallbackRegistered = false;
-    private final Map<Uuid, String> forgottenTopicNames = new HashMap<>();
+    private final Map<IdAndPartition, String> forgottenTopicNames = new HashMap<>();
 
     ShareConsumeRequestManager(final Time time,
                                final LogContext logContext,
@@ -201,7 +202,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                             partitionsToForgetMap.putIfAbsent(node, new ArrayList<>());
                             partitionsToForgetMap.get(node).add(tip);
 
-                            forgottenTopicNames.putIfAbsent(tip.topicId(), tip.topic());
+                            forgottenTopicNames.putIfAbsent(new IdAndPartition(tip.topicId(), tip.partition()), tip.topic());
                             fetchedPartitions.add(tip);
                             log.debug("Added fetch request for partition {} to node {}", tip, node.id());
                         }
@@ -214,12 +215,12 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         for (Map.Entry<Node, ShareSessionHandler> entry : handlerMap.entrySet()) {
             builderMap.put(entry.getKey(), entry.getValue().newShareFetchBuilder(groupId, fetchConfig));
             Node node = entry.getKey();
-            ShareFetchRequestData data = builderMap.get(entry.getKey()).data();
+            ShareFetchRequest.Builder builder = builderMap.get(entry.getKey());
             if (partitionsToForgetMap.containsKey(node)) {
-                if (data.forgottenTopicsData() == null) {
-                    data.setForgottenTopicsData(new ArrayList<>());
+                if (builder.data().forgottenTopicsData() == null) {
+                    builder.data().setForgottenTopicsData(new ArrayList<>());
                 }
-                ShareFetchRequest.Builder.updateForgottenData(partitionsToForgetMap.get(node), data);
+                builder.updateForgottenData(partitionsToForgetMap.get(node));
             }
         }
 
@@ -635,7 +636,9 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     topicResponse.partitions().forEach(partition ->
                             responseData.put(new TopicIdPartition(topicResponse.topicId(),
                                     partition.partitionIndex(),
-                                    metadata.topicNames().getOrDefault(topicResponse.topicId(), forgottenTopicNames.remove(topicResponse.topicId()))), partition)));
+                                    metadata.topicNames().getOrDefault(topicResponse.topicId(),
+                                            forgottenTopicNames.remove(new IdAndPartition(topicResponse.topicId(), partition.partitionIndex())))), partition))
+            );
 
             final Set<TopicPartition> partitions = responseData.keySet().stream().map(TopicIdPartition::topicPartition).collect(Collectors.toSet());
             final ShareFetchMetricsAggregator shareFetchMetricsAggregator = new ShareFetchMetricsAggregator(metricsManager, partitions);
@@ -1212,6 +1215,38 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
     Tuple<AcknowledgeRequestState> requestStates(int nodeId) {
         return acknowledgeRequestStates.get(nodeId);
+    }
+
+    static class IdAndPartition {
+        private final Uuid topicId;
+        private final int partitionIndex;
+
+        IdAndPartition(Uuid topicId, int partitionIndex) {
+            this.topicId = topicId;
+            this.partitionIndex = partitionIndex;
+        }
+
+        int getPartitionIndex() {
+            return partitionIndex;
+        }
+
+        Uuid getTopicId() {
+            return topicId;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(topicId, partitionIndex);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            IdAndPartition that = (IdAndPartition) o;
+            return Objects.equals(topicId, that.topicId) &&
+                    Objects.equals(partitionIndex, that.partitionIndex);
+        }
     }
 
     public enum AcknowledgeRequestType {
