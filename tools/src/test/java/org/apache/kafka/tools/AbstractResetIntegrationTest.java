@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.integration;
+package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
@@ -41,7 +41,6 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.test.TestUtils;
-import org.apache.kafka.tools.StreamsResetter;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
@@ -60,8 +59,7 @@ import java.util.stream.Collectors;
 
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(600)
@@ -246,7 +244,7 @@ public abstract class AbstractResetIntegrationTest {
         final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
         streams.close();
 
-        assertThat(resultRerun, equalTo(result));
+        assertEquals(resultRerun, result);
 
         waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT);
         cleanGlobal(false, null, null, appID);
@@ -306,17 +304,17 @@ public abstract class AbstractResetIntegrationTest {
         final List<KeyValue<Long, Long>> resultRerun2 = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC_2_RERUN, 40);
         streams.close();
 
-        assertThat(resultRerun, equalTo(result));
-        assertThat(resultRerun2, equalTo(result2));
+        assertEquals(result, resultRerun);
+        assertEquals(result2, resultRerun2);
 
         if (!useRepartitioned) {
             final Properties props = TestUtils.consumerConfig(cluster.bootstrapServers(), appID + "-result-consumer", LongDeserializer.class, StringDeserializer.class, commonClientConfig);
             final List<KeyValue<Long, String>> resultIntermediate = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(props, INTERMEDIATE_USER_TOPIC, 21);
 
             for (int i = 0; i < 10; i++) {
-                assertThat(resultIntermediate.get(i), equalTo(resultIntermediate.get(i + 11)));
+                assertEquals(resultIntermediate.get(i), resultIntermediate.get(i + 11));
             }
-            assertThat(resultIntermediate.get(10), equalTo(badMessage));
+            assertEquals(badMessage, resultIntermediate.get(10));
         }
 
         waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT);
