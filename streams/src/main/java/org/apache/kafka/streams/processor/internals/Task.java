@@ -176,6 +176,9 @@ public interface Task {
     // runtime methods (using in RUNNING state)
 
     void addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> records);
+    default void updateNextOffsets(final TopicPartition partition, final OffsetAndMetadata offsetAndMetadata) {
+
+    }
 
     default boolean process(final long wallClockTime) {
         return false;

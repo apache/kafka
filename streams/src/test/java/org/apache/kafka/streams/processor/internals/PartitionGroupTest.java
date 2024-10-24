@@ -44,7 +44,6 @@ import org.apache.log4j.Level;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 
-
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
