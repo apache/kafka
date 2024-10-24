@@ -1453,7 +1453,7 @@ public class AsyncKafkaConsumerTest {
             final String expectedMemberId = "memberId";
             groupMetadataUpdateListener.onMemberEpochUpdated(
                 Optional.of(expectedMemberEpoch),
-                Optional.of(expectedMemberId)
+                expectedMemberId
             );
             final ConsumerGroupMetadata newGroupMetadata = consumer.groupMetadata();
             assertEquals(oldGroupMetadata.groupId(), newGroupMetadata.groupId());
@@ -1473,7 +1473,7 @@ public class AsyncKafkaConsumerTest {
             consumer.subscribe(singletonList("topic"));
             final int memberEpoch = 42;
             final String memberId = "memberId";
-            groupMetadataUpdateListener.onMemberEpochUpdated(Optional.of(memberEpoch), Optional.of(memberId));
+            groupMetadataUpdateListener.onMemberEpochUpdated(Optional.of(memberEpoch), memberId);
             final ConsumerGroupMetadata groupMetadata = consumer.groupMetadata();
             assertNotEquals(JoinGroupRequest.UNKNOWN_GENERATION_ID, groupMetadata.generationId());
             assertNotEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, groupMetadata.memberId());

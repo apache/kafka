@@ -223,13 +223,13 @@ public class ShareMembershipManagerTest {
         MemberStateListener listener = mock(MemberStateListener.class);
         membershipManager.registerStateListener(listener);
         mockStableMember(membershipManager);
-        verify(listener).onMemberEpochUpdated(Optional.of(MEMBER_EPOCH), Optional.of(membershipManager.memberId));
+        verify(listener).onMemberEpochUpdated(Optional.of(MEMBER_EPOCH), membershipManager.memberId);
         clearInvocations(listener);
 
         // Transition to FAILED before getting member ID/epoch
         membershipManager.transitionToFatal();
         assertEquals(MemberState.FATAL, membershipManager.state());
-        verify(listener).onMemberEpochUpdated(Optional.empty(), Optional.empty());
+        verify(listener).onMemberEpochUpdated(Optional.empty(), membershipManager.memberId);
     }
 
     @Test
@@ -238,14 +238,14 @@ public class ShareMembershipManagerTest {
         MemberStateListener listener = mock(MemberStateListener.class);
         membershipManager.registerStateListener(listener);
         mockStableMember(membershipManager);
-        verify(listener).onMemberEpochUpdated(Optional.of(MEMBER_EPOCH), Optional.of(membershipManager.memberId));
+        verify(listener).onMemberEpochUpdated(Optional.of(MEMBER_EPOCH), membershipManager.memberId);
         clearInvocations(listener);
 
         mockLeaveGroup();
         membershipManager.leaveGroup();
         verify(subscriptionState).unsubscribe();
         assertEquals(MemberState.LEAVING, membershipManager.state());
-        verify(listener).onMemberEpochUpdated(Optional.empty(), Optional.empty());
+        verify(listener).onMemberEpochUpdated(Optional.empty(), membershipManager.memberId);
     }
 
     @Test
@@ -260,7 +260,7 @@ public class ShareMembershipManagerTest {
                 .setMemberId(membershipManager.memberId())
                 .setMemberEpoch(epoch)));
 
-        verify(listener).onMemberEpochUpdated(Optional.of(epoch), Optional.of(membershipManager.memberId));
+        verify(listener).onMemberEpochUpdated(Optional.of(epoch), membershipManager.memberId);
         clearInvocations(listener);
 
         membershipManager.onHeartbeatSuccess(createShareGroupHeartbeatResponse(new ShareGroupHeartbeatResponseData()

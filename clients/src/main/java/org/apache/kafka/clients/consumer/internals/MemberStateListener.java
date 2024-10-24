@@ -25,13 +25,13 @@ import java.util.Optional;
 public interface MemberStateListener {
 
     /**
-     * Called whenever member ID or epoch change with new values received from the broker or
+     * Called whenever epoch change with new values received from the broker or
      * cleared if the member is not part of the group anymore (when it gets fenced, leaves the
      * group or fails).
      *
      * @param memberEpoch New member epoch received from the broker. Empty if the member is
      *                    not part of the group anymore.
-     * @param memberId    Current member ID. Empty if the member is not part of the group.
+     * @param memberId    Current member ID. It won't change until the process terminated.
      */
-    void onMemberEpochUpdated(Optional<Integer> memberEpoch, Optional<String> memberId);
+    void onMemberEpochUpdated(Optional<Integer> memberEpoch, String memberId);
 }

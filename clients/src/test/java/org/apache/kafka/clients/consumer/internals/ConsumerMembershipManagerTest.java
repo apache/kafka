@@ -250,13 +250,13 @@ public class ConsumerMembershipManagerTest {
         MemberStateListener listener = mock(MemberStateListener.class);
         membershipManager.registerStateListener(listener);
         mockStableMember(membershipManager);
-        verify(listener).onMemberEpochUpdated(Optional.of(MEMBER_EPOCH), Optional.of(membershipManager.memberId()));
+        verify(listener).onMemberEpochUpdated(Optional.of(MEMBER_EPOCH), membershipManager.memberId);
         clearInvocations(listener);
 
         // Transition to FAILED before getting member ID/epoch
         membershipManager.transitionToFatal();
         assertEquals(MemberState.FATAL, membershipManager.state());
-        verify(listener).onMemberEpochUpdated(Optional.empty(), Optional.empty());
+        verify(listener).onMemberEpochUpdated(Optional.empty(), membershipManager.memberId);
     }
 
     @Test
@@ -266,14 +266,14 @@ public class ConsumerMembershipManagerTest {
         MemberStateListener listener = mock(MemberStateListener.class);
         membershipManager.registerStateListener(listener);
         mockStableMember(membershipManager);
-        verify(listener).onMemberEpochUpdated(Optional.of(MEMBER_EPOCH), Optional.of(membershipManager.memberId));
+        verify(listener).onMemberEpochUpdated(Optional.of(MEMBER_EPOCH), membershipManager.memberId);
         clearInvocations(listener);
 
         mockLeaveGroup();
         membershipManager.leaveGroup();
         verify(subscriptionState).unsubscribe();
         assertEquals(MemberState.LEAVING, membershipManager.state());
-        verify(listener).onMemberEpochUpdated(Optional.empty(), Optional.empty());
+        verify(listener).onMemberEpochUpdated(Optional.empty(), membershipManager.memberId);
     }
 
     @Test
@@ -289,7 +289,7 @@ public class ConsumerMembershipManagerTest {
                 .setMemberId(memberId)
                 .setMemberEpoch(epoch)));
 
-        verify(listener).onMemberEpochUpdated(Optional.of(epoch), Optional.of(memberId));
+        verify(listener).onMemberEpochUpdated(Optional.of(epoch), memberId);
         clearInvocations(listener);
 
         membershipManager.onHeartbeatSuccess(createConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
@@ -347,7 +347,7 @@ public class ConsumerMembershipManagerTest {
         completeCallback(callbackEvent, membershipManager);
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
         assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH, membershipManager.memberEpoch());
-        verify(membershipManager).notifyEpochChange(Optional.empty(), Optional.empty());
+        verify(membershipManager).notifyEpochChange(Optional.empty(), membershipManager.memberId);
         assertTrue(membershipManager.shouldSkipHeartbeat());
     }
 

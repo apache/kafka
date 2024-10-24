@@ -442,7 +442,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         MemberState previousState = state;
         transitionTo(MemberState.FATAL);
         log.error("Member {} with epoch {} transitioned to fatal state", memberIdInfoForLog(), memberEpoch);
-        notifyEpochChange(Optional.empty(), Optional.empty());
+        notifyEpochChange(Optional.empty(), memberId);
 
         if (previousState == MemberState.UNSUBSCRIBED) {
             log.debug("Member {} with epoch {} got fatal error from the broker but it already " +
@@ -631,10 +631,10 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
     /**
      * Call all listeners that are registered to get notified when the member epoch is updated.
-     * This also includes the latest member ID in the notification. If the member fails or leaves
-     * the group, this will be invoked with empty epoch and member ID.
+     * This also includes the member ID in the notification. If the member fails or leaves
+     * the group, this will be invoked with empty epoch.
      */
-    void notifyEpochChange(Optional<Integer> epoch, Optional<String> memberId) {
+    void notifyEpochChange(Optional<Integer> epoch, String memberId) {
         stateUpdatesListeners.forEach(stateListener -> stateListener.onMemberEpochUpdated(epoch, memberId));
     }
 
@@ -1247,9 +1247,9 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         // at startup, and it will remain unchanged for its entire lifetime.
         if (newEpochReceived) {
             if (memberEpoch > 0) {
-                notifyEpochChange(Optional.of(memberEpoch), Optional.ofNullable(memberId));
+                notifyEpochChange(Optional.of(memberEpoch), memberId);
             } else {
-                notifyEpochChange(Optional.empty(), Optional.empty());
+                notifyEpochChange(Optional.empty(), memberId);
             }
         }
     }

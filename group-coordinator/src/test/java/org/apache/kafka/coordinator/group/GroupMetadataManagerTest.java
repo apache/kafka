@@ -172,20 +172,28 @@ public class GroupMetadataManagerTest {
             .build();
         Exception ex;
 
-        // GroupId must be present in all requests.
+        // MemberId must be present in all requests.
         ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()));
+        assertEquals("MemberId can't be empty.", ex.getMessage());
+
+        // GroupId must be present in all requests.
+        ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setMemberId(memberId)));
         assertEquals("GroupId can't be empty.", ex.getMessage());
 
         // GroupId can't be all whitespaces.
         ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
+                .setMemberId(memberId)
                 .setGroupId("   ")));
         assertEquals("GroupId can't be empty.", ex.getMessage());
 
         // RebalanceTimeoutMs must be present in the first request (epoch == 0).
         ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
+                .setMemberId(memberId)
                 .setGroupId("foo")
                 .setMemberEpoch(0)));
         assertEquals("RebalanceTimeoutMs must be provided in first request.", ex.getMessage());
@@ -193,6 +201,7 @@ public class GroupMetadataManagerTest {
         // TopicPartitions must be present and empty in the first request (epoch == 0).
         ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
+                .setMemberId(memberId)
                 .setGroupId("foo")
                 .setMemberEpoch(0)
                 .setRebalanceTimeoutMs(5000)));
@@ -201,20 +210,12 @@ public class GroupMetadataManagerTest {
         // SubscribedTopicNames must be present and empty in the first request (epoch == 0).
         ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
+                .setMemberId(memberId)
                 .setGroupId("foo")
                 .setMemberEpoch(0)
                 .setRebalanceTimeoutMs(5000)
                 .setTopicPartitions(Collections.emptyList())));
         assertEquals("SubscribedTopicNames must be set in first request.", ex.getMessage());
-
-        ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
-            new ConsumerGroupHeartbeatRequestData()
-                .setGroupId("foo")
-                .setMemberEpoch(0)
-                .setRebalanceTimeoutMs(5000)
-                .setTopicPartitions(Collections.emptyList())
-                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))));
-        assertEquals("MemberId can't be empty.", ex.getMessage());
 
         // MemberId must be non-empty in all requests
         ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
@@ -272,6 +273,7 @@ public class GroupMetadataManagerTest {
         // Regex not supported for now. This test will evolve to actually validate the regex when it's supported
         ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
+                .setMemberId(Uuid.randomUuid().toString())
                 .setGroupId("foo")
                 .setMemberEpoch(0)
                 .setRebalanceTimeoutMs(5000)
@@ -14009,20 +14011,29 @@ public class GroupMetadataManagerTest {
             .build();
         Exception ex;
 
-        // GroupId must be present in all requests.
+        // MemberId must be present in all requests.
         ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
-            new ShareGroupHeartbeatRequestData()));
+                new ShareGroupHeartbeatRequestData()));
+        assertEquals("MemberId can't be empty.", ex.getMessage());
+
+        // GroupId must be present in all requests.
+        String memberId = Uuid.randomUuid().toString();
+        ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setMemberId(memberId)));
         assertEquals("GroupId can't be empty.", ex.getMessage());
 
         // GroupId can't be all whitespaces.
         ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
+                .setMemberId(memberId)
                 .setGroupId("   ")));
         assertEquals("GroupId can't be empty.", ex.getMessage());
 
         // SubscribedTopicNames must be present and empty in the first request (epoch == 0).
         ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
+                .setMemberId(memberId)
                 .setGroupId("foo")
                 .setMemberEpoch(0)));
         assertEquals("SubscribedTopicNames must be set in first request.", ex.getMessage());
@@ -14038,8 +14049,8 @@ public class GroupMetadataManagerTest {
         // RackId must be non-empty if provided in all requests.
         ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
+                .setMemberId(memberId)
                 .setGroupId("foo")
-                .setMemberId(Uuid.randomUuid().toString())
                 .setMemberEpoch(1)
                 .setRackId("")));
         assertEquals("RackId can't be empty.", ex.getMessage());
