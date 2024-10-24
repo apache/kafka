@@ -344,7 +344,7 @@
     <suppress checks="CyclomaticComplexity"
               files="(LogLoader|LogValidator|RemoteLogManagerConfig|RemoteLogManager).java"/>
     <suppress checks="NPathComplexity"
-              files="(LogLoader|LogValidator|RemoteLogManager|RemoteIndexCache).java"/>
+              files="(LocalLog|LogLoader|LogValidator|RemoteLogManager|RemoteIndexCache).java"/>
     <suppress checks="ParameterNumber"
               files="(LogAppendInfo|LogLoader|RemoteLogManagerConfig).java"/>
 
