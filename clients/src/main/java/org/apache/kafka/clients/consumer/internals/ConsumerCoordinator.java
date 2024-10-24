@@ -143,8 +143,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             this.requestedGeneration = generationAtRequestTime;
         }
 
-        private boolean sameRequest(final Set<TopicPartition> currentRequest, final Generation currentGeneration) {
-            return Objects.equals(requestedGeneration, currentGeneration) && requestedPartitions.equals(currentRequest);
+        private boolean sameOrSubsetRequest(final Set<TopicPartition> currentRequest, final Generation currentGeneration) {
+            return Objects.equals(requestedGeneration, currentGeneration) && requestedPartitions.containsAll(currentRequest);
         }
     }
 
@@ -925,7 +925,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         final Generation generationForOffsetRequest = generationIfStable();
         if (pendingCommittedOffsetRequest != null &&
-            !pendingCommittedOffsetRequest.sameRequest(partitions, generationForOffsetRequest)) {
+            !pendingCommittedOffsetRequest.sameOrSubsetRequest(partitions, generationForOffsetRequest)) {
             // if we were waiting for a different request, then just clear it.
             pendingCommittedOffsetRequest = null;
         }
