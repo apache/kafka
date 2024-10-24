@@ -117,7 +117,6 @@ versions += [
   opentelemetryProto: "1.0.0-alpha",
   protobuf: "3.25.5", // a dependency of opentelemetryProto
   pcollections: "4.0.1",
-  reload4j: "1.2.25",
   rocksDB: "7.9.2",
   // When updating the scalafmt version please also update the version field in checkstyle/.scalafmt.conf. scalafmt now
   // has the version field as mandatory in its configuration, see
@@ -219,13 +218,11 @@ libs += [
   pcollections: "org.pcollections:pcollections:$versions.pcollections",
   opentelemetryProto: "io.opentelemetry.proto:opentelemetry-proto:$versions.opentelemetryProto",
   protobuf: "com.google.protobuf:protobuf-java:$versions.protobuf",
-  reload4j: "ch.qos.reload4j:reload4j:$versions.reload4j",
   rocksDBJni: "org.rocksdb:rocksdbjni:$versions.rocksDB",
   scalaLibrary: "org.scala-lang:scala-library:$versions.scala",
   scalaLogging: "com.typesafe.scala-logging:scala-logging_$versions.baseScala:$versions.scalaLogging",
   scalaReflect: "org.scala-lang:scala-reflect:$versions.scala",
   slf4jApi: "org.slf4j:slf4j-api:$versions.slf4j",
-  slf4jReload4j: "org.slf4j:slf4j-reload4j:$versions.slf4j",
   snappy: "org.xerial.snappy:snappy-java:$versions.snappy",
   swaggerAnnotations: "io.swagger.core.v3:swagger-annotations:$swaggerVersion",
   swaggerJaxrs2: "io.swagger.core.v3:swagger-jaxrs2:$swaggerVersion",

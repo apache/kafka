@@ -164,7 +164,6 @@ allprojects {
           // ZooKeeper (potentially older and containing CVEs)
           libs.nettyHandler,
           libs.nettyTransportNativeEpoll,
-          libs.reload4j,
           libs.log4j2Api,
           libs.log4j2Core,
           libs.log4j1Bridge2Api
@@ -1084,7 +1083,7 @@ project(':core') {
       implementation libs.dropwizardMetrics
       exclude module: 'slf4j-log4j12'
       exclude module: 'log4j'
-      // Both Kafka and Zookeeper use slf4j. ZooKeeper moved from log4j to logback in v3.8.0, but Kafka relies on reload4j.
+      // Both Kafka and Zookeeper use slf4j. ZooKeeper moved from log4j to logback in v3.8.0.
       // We are removing Zookeeper's dependency on logback so we have a singular logging backend.
       exclude module: 'logback-classic'
       exclude module: 'logback-core'
@@ -1155,9 +1154,6 @@ project(':core') {
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.compileClasspath) {
-      include('reload4j*jar')
-    }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
     }
@@ -2564,7 +2560,9 @@ project(':trogdor') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.mockitoCore
 
-    testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.log4j2Api
+    testRuntimeOnly libs.log4j2Core
+    testRuntimeOnly libs.log4j1Bridge2Api
     testRuntimeOnly libs.junitPlatformLanucher
   }
 
