@@ -180,8 +180,10 @@ public class ShareCompletedFetch {
 
         try {
             int recordsInBatch = 0;
-            while (recordsInBatch < maxRecords) {
-                lastRecord = nextFetchedRecord(checkCrcs);
+            boolean currentBatchHasMoreRecords = false;
+
+            while (recordsInBatch < maxRecords || currentBatchHasMoreRecords) {
+                currentBatchHasMoreRecords = nextFetchedRecord(checkCrcs);
                 if (lastRecord == null) {
                     // Any remaining acquired records are gaps
                     while (nextAcquired != null) {
@@ -323,14 +325,22 @@ public class ShareCompletedFetch {
                         + ". The record has been released.", e);
     }
 
-    private Record nextFetchedRecord(final boolean checkCrcs) {
+    /**
+     * Scans for the next record in the available batches, skipping control records
+     *
+     * @param checkCrcs Whether to check the CRC of fetched records
+     *
+     * @return true if the current batch has more records, else false
+     */
+    private boolean nextFetchedRecord(final boolean checkCrcs) {
         while (true) {
             if (records == null || !records.hasNext()) {
                 maybeCloseRecordStream();
 
                 if (!batches.hasNext()) {
                     drain();
-                    return null;
+                    lastRecord = null;
+                    break;
                 }
 
                 currentBatch = batches.next();
@@ -343,10 +353,13 @@ public class ShareCompletedFetch {
 
                 // control records are not returned to the user
                 if (!currentBatch.isControlBatch()) {
-                    return record;
+                    lastRecord = record;
+                    break;
                 }
             }
         }
+
+        return records != null && records.hasNext();
     }
 
     private Optional<Integer> maybeLeaderEpoch(final int leaderEpoch) {
