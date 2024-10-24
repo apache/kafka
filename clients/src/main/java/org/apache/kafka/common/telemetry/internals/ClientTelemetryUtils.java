@@ -191,12 +191,11 @@ public class ClientTelemetryUtils {
         return CompressionType.NONE;
     }
 
-    public static byte[] compress(byte[] raw, CompressionType compressionType) throws IOException {
+    public static byte[] compress(MetricsData metrics, CompressionType compressionType) throws IOException {
         try (ByteBufferOutputStream compressedOut = new ByteBufferOutputStream(512)) {
             Compression compression = Compression.of(compressionType).build();
             try (OutputStream out = compression.wrapForOutput(compressedOut, RecordBatch.CURRENT_MAGIC_VALUE)) {
-                out.write(raw);
-                out.flush();
+                metrics.writeTo(out);
             }
             compressedOut.buffer().flip();
             return Utils.toArray(compressedOut.buffer());
