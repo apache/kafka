@@ -161,7 +161,7 @@ public class DelayedShareFetchTest {
 
         // We are testing the case when the share partition is getting fetched for the first time, hence we are using 1
         // as the file position, so it doesn't satisfy the minBytes(2).
-        when(sp0.latestFetchOffsetMetadata()).thenReturn(new LogOffsetMetadata(0, 1, 0));
+        when(sp0.latestFetchOffsetMetadata()).thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
         LogOffsetMetadata hwmOffsetMetadata = new LogOffsetMetadata(1, 1, 1);
         mockTopicIdPartitionFetchBytes(replicaManager, tp0, hwmOffsetMetadata);
 
@@ -213,7 +213,7 @@ public class DelayedShareFetchTest {
         // functionality to give the file position difference as 1 byte, so it doesn't satisfy the minBytes(2).
         LogOffsetMetadata hwmOffsetMetadata = mock(LogOffsetMetadata.class);
         when(hwmOffsetMetadata.positionDiff(any())).thenReturn(1);
-        when(sp0.latestFetchOffsetMetadata()).thenReturn(mock(LogOffsetMetadata.class));
+        when(sp0.latestFetchOffsetMetadata()).thenReturn(Optional.of(mock(LogOffsetMetadata.class)));
         mockTopicIdPartitionFetchBytes(replicaManager, tp0, hwmOffsetMetadata);
 
         DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
@@ -261,7 +261,7 @@ public class DelayedShareFetchTest {
             ShareAcquiredRecords.fromAcquiredRecords(new ShareFetchResponseData.AcquiredRecords().setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)));
         doAnswer(invocation -> buildLogReadResult(Collections.singleton(tp0))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
-        when(sp0.latestFetchOffsetMetadata()).thenReturn(new LogOffsetMetadata(0, 1, 0));
+        when(sp0.latestFetchOffsetMetadata()).thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
         mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp0, 1);
         DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetchData)
@@ -551,7 +551,7 @@ public class DelayedShareFetchTest {
         // Since minBytes calculation throws an exception and returns true, tryComplete should return true.
         assertTrue(delayedShareFetch.tryComplete());
         assertTrue(delayedShareFetch.isCompleted());
-        Mockito.verify(replicaManager, times(2)).readFromLog(
+        Mockito.verify(replicaManager, times(1)).readFromLog(
             any(), any(), any(ReplicaQuota.class), anyBoolean());
         Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(any(), any());
     }

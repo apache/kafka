@@ -41,7 +41,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import scala.Option;
@@ -61,6 +60,7 @@ public class DelayedShareFetch extends DelayedOperation {
     private final ReplicaManager replicaManager;
 
     private Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionDataFromTryComplete;
+    private Map<TopicIdPartition, FetchPartitionOffsetData> logReadResponseFromTryComplete;
     private final SharePartitionManager sharePartitionManager;
 
     DelayedShareFetch(
@@ -109,7 +109,11 @@ public class DelayedShareFetch extends DelayedOperation {
                 topicPartitionData, shareFetchData.groupId(), shareFetchData.fetchParams());
 
         try {
-            Map<TopicIdPartition, FetchPartitionOffsetData> responseData = readFromLog(topicPartitionData);
+            Map<TopicIdPartition, FetchPartitionOffsetData> responseData;
+            if (logReadResponseFromTryComplete == null || logReadResponseFromTryComplete.isEmpty())
+                responseData = readFromLog(topicPartitionData);
+            else
+                responseData = logReadResponseFromTryComplete;
             Map<TopicIdPartition, ShareFetchResponseData.PartitionData> result =
                 ShareFetchUtils.processFetchResponse(shareFetchData, responseData, sharePartitionManager, replicaManager);
             shareFetchData.future().complete(result);
@@ -144,9 +148,14 @@ public class DelayedShareFetch extends DelayedOperation {
         Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData = acquirablePartitions();
 
         if (!topicPartitionData.isEmpty()) {
-            maybeUpdateFetchOffsetMetadataForTopicPartitions(topicPartitionData);
+            MaybeUpdateFetchOffsetMetadataResult maybeUpdateFetchOffsetMetadataResult =
+                maybeUpdateFetchOffsetMetadataForTopicPartitions(topicPartitionData);
             if (isMinBytesSatisfied(topicPartitionData)) {
                 topicPartitionDataFromTryComplete = topicPartitionData;
+                if (maybeUpdateFetchOffsetMetadataResult.isFetchOffsetMetadataUpdated
+                    && maybeUpdateFetchOffsetMetadataResult.replicaManagerReadResponse != null
+                    && !maybeUpdateFetchOffsetMetadataResult.replicaManagerReadResponse.isEmpty())
+                    logReadResponseFromTryComplete = maybeUpdateFetchOffsetMetadataResult.replicaManagerReadResponse;
                 return forceComplete();
             }
             log.debug("minBytes is not satisfied for the share fetch request for group {}, member {}, " +
@@ -204,7 +213,8 @@ public class DelayedShareFetch extends DelayedOperation {
 
     // In case, fetch offset metadata doesn't exist for any topic partition in the list of topic partitions, we do a
     // replicaManager.readFromLog to populate the offset metadata.
-    private void maybeUpdateFetchOffsetMetadataForTopicPartitions(Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData) {
+    private MaybeUpdateFetchOffsetMetadataResult maybeUpdateFetchOffsetMetadataForTopicPartitions(Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData) {
+        boolean isFetchOffsetMetadataUpdated = false;
         Map<TopicIdPartition, FetchPartitionOffsetData> replicaManagerReadResponseData = null;
         for (Map.Entry<TopicIdPartition, FetchRequest.PartitionData> entry : topicPartitionData.entrySet()) {
             TopicIdPartition topicIdPartition = entry.getKey();
@@ -213,7 +223,7 @@ public class DelayedShareFetch extends DelayedOperation {
                 log.error("Encountered null share partition for groupId={}, topicIdPartition={}. Skipping it.", shareFetchData.groupId(), topicIdPartition);
                 continue;
             }
-            if (sharePartition.latestFetchOffsetMetadata() == null) {
+            if (sharePartition.latestFetchOffsetMetadata().isEmpty()) {
                 if (replicaManagerReadResponseData == null) {
                     replicaManagerReadResponseData = readFromLog(topicPartitionData);
                 }
@@ -224,12 +234,14 @@ public class DelayedShareFetch extends DelayedOperation {
                     continue;
                 }
                 sharePartition.updateLatestFetchOffsetMetadata(fetchPartitionOffsetData.logOffsetMetadata());
+                isFetchOffsetMetadataUpdated = true;
             }
         }
+        return new MaybeUpdateFetchOffsetMetadataResult(isFetchOffsetMetadataUpdated, replicaManagerReadResponseData);
     }
 
     private boolean isMinBytesSatisfied(Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData) {
-        AtomicLong accumulatedSize = new AtomicLong(0);
+        long accumulatedSize = 0;
         try {
             for (Map.Entry<TopicIdPartition, FetchRequest.PartitionData> entry : topicPartitionData.entrySet()) {
                 TopicIdPartition topicIdPartition = entry.getKey();
@@ -252,13 +264,13 @@ public class DelayedShareFetch extends DelayedOperation {
 
                 SharePartition sharePartition = sharePartitionManager.sharePartition(shareFetchData.groupId(), topicIdPartition);
                 if (sharePartition == null) {
-                    log.error("Encountered null share partition for groupId={}, topicIdPartition={}. Skipping it.", shareFetchData.groupId(), topicIdPartition);
-                    continue;
+                    return true;
                 }
 
-                LogOffsetMetadata fetchOffsetMetadata = sharePartition.latestFetchOffsetMetadata();
-                if (fetchOffsetMetadata == null || fetchOffsetMetadata == LogOffsetMetadata.UNKNOWN_OFFSET_METADATA)
+                Optional<LogOffsetMetadata> optionalFetchOffsetMetadata = sharePartition.latestFetchOffsetMetadata();
+                if (optionalFetchOffsetMetadata.isEmpty() || optionalFetchOffsetMetadata.get() == LogOffsetMetadata.UNKNOWN_OFFSET_METADATA)
                     continue;
+                LogOffsetMetadata fetchOffsetMetadata = optionalFetchOffsetMetadata.get();
 
                 if (fetchOffsetMetadata.messageOffset > endOffsetMetadata.messageOffset) {
                     log.debug("Satisfying delayed share fetch request for group {}, member {} since it is fetching later segments of " +
@@ -273,12 +285,12 @@ public class DelayedShareFetch extends DelayedOperation {
                         return true;
                     } else if (fetchOffsetMetadata.onSameSegment(endOffsetMetadata)) {
                         // we take the partition fetch size as upper bound when accumulating the bytes.
-                        long bytesAvailable = Math.min(endOffsetMetadata.positionDiff(sharePartition.latestFetchOffsetMetadata()), partitionData.maxBytes);
-                        accumulatedSize.addAndGet(bytesAvailable);
+                        long bytesAvailable = Math.min(endOffsetMetadata.positionDiff(fetchOffsetMetadata), partitionData.maxBytes);
+                        accumulatedSize += bytesAvailable;
                     }
                 }
             }
-            return accumulatedSize.get() >= shareFetchData.fetchParams().minBytes;
+            return accumulatedSize >= shareFetchData.fetchParams().minBytes;
         } catch (Exception e) {
             // Ideally we should complete the share fetch request's future exceptionally in this case from tryComplete itself.
             // A function that can be utilized is handleFetchException in an in-flight PR https://github.com/apache/kafka/pull/16842.
@@ -321,5 +333,15 @@ public class DelayedShareFetch extends DelayedOperation {
             }
             sharePartition.releaseFetchLock();
         });
+    }
+
+    static final class MaybeUpdateFetchOffsetMetadataResult {
+        private final boolean isFetchOffsetMetadataUpdated;
+        private final Map<TopicIdPartition, FetchPartitionOffsetData> replicaManagerReadResponse;
+
+        MaybeUpdateFetchOffsetMetadataResult(boolean isFetchOffsetMetadataUpdated, Map<TopicIdPartition, FetchPartitionOffsetData> replicaManagerReadResponse) {
+            this.isFetchOffsetMetadataUpdated = isFetchOffsetMetadataUpdated;
+            this.replicaManagerReadResponse = replicaManagerReadResponse;
+        }
     }
 }

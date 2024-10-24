@@ -1052,17 +1052,16 @@ public class SharePartitionManagerTest {
 
         doAnswer(invocation -> buildLogReadResult(partitionMaxBytes.keySet())).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
-        // There is 1 extra readFromLog call in order to update the latestFetchOffsetMetadata of share partition.
+        sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, partitionMaxBytes);
+        Mockito.verify(replicaManager, times(1)).readFromLog(
+            any(), any(), any(ReplicaQuota.class), anyBoolean());
+
         sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, partitionMaxBytes);
         Mockito.verify(replicaManager, times(2)).readFromLog(
             any(), any(), any(ReplicaQuota.class), anyBoolean());
 
         sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, partitionMaxBytes);
         Mockito.verify(replicaManager, times(3)).readFromLog(
-            any(), any(), any(ReplicaQuota.class), anyBoolean());
-
-        sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, partitionMaxBytes);
-        Mockito.verify(replicaManager, times(4)).readFromLog(
             any(), any(), any(ReplicaQuota.class), anyBoolean());
 
         Map<MetricName, Consumer<Double>> expectedMetrics = new HashMap<>();
@@ -1242,10 +1241,9 @@ public class SharePartitionManagerTest {
         doAnswer(invocation -> buildLogReadResult(partitionMaxBytes.keySet())).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
         sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, partitionMaxBytes);
-        // 1. Since the nextFetchOffset does not point to endOffset + 1, i.e. some of the records in the cachedState are AVAILABLE,
+        // Since the nextFetchOffset does not point to endOffset + 1, i.e. some of the records in the cachedState are AVAILABLE,
         // even though the maxInFlightMessages limit is exceeded, replicaManager.readFromLog should be called
-        // 2. There is 1 extra readFromLog call in order to update the latestFetchOffsetMetadata of share partition.
-        Mockito.verify(replicaManager, times(2)).readFromLog(
+        Mockito.verify(replicaManager, times(1)).readFromLog(
             any(), any(), any(ReplicaQuota.class), anyBoolean());
     }
 
@@ -1665,7 +1663,7 @@ public class SharePartitionManagerTest {
                 "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
                 DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
         mockReplicaManagerDelayedShareFetch(replicaManager, delayedShareFetchPurgatory);
-        when(sp1.latestFetchOffsetMetadata()).thenReturn(new LogOffsetMetadata(0, 1, 0));
+        when(sp1.latestFetchOffsetMetadata()).thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
         mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp1, 2);
 
         // Initially you cannot acquire records for both sp1 and sp2.
@@ -1856,7 +1854,7 @@ public class SharePartitionManagerTest {
                 "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
                 DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
         mockReplicaManagerDelayedShareFetch(replicaManager, delayedShareFetchPurgatory);
-        when(sp1.latestFetchOffsetMetadata()).thenReturn(new LogOffsetMetadata(0, 1, 0));
+        when(sp1.latestFetchOffsetMetadata()).thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
         mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp1, 1);
 
         // Initially you cannot acquire records for both sp1 and sp2.

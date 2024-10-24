@@ -264,6 +264,11 @@ public class SharePartition {
     private long endOffset;
 
     /**
+     * We maintain the latest fetch offset metadata to estimate the minBytes requirement more efficiently.
+     */
+    private Optional<LogOffsetMetadata> latestFetchOffsetMetadata;
+
+    /**
      * The state epoch is used to track the version of the state of the share partition.
      */
     private int stateEpoch;
@@ -278,12 +283,6 @@ public class SharePartition {
      * availability due to acquisition lock timeout.
      */
     private final ReplicaManager replicaManager;
-
-    /**
-     * We maintain the latest fetch offset metadata in order to know the last segment position that has been fetched
-     * for the share partition.
-     */
-    private LogOffsetMetadata latestFetchOffsetMetadata;
 
     SharePartition(
         String groupId,
@@ -312,6 +311,7 @@ public class SharePartition {
         this.partitionState = SharePartitionState.EMPTY;
         this.replicaManager = replicaManager;
         this.groupConfigManager = groupConfigManager;
+        this.latestFetchOffsetMetadata = Optional.empty();
     }
 
     /**
@@ -553,7 +553,7 @@ public class SharePartition {
         lock.writeLock().lock();
         try {
             // Update the latest fetch offset metadata for any future queries.
-            this.latestFetchOffsetMetadata = fetchOffsetMetadata;
+            this.latestFetchOffsetMetadata = Optional.of(fetchOffsetMetadata);
             long baseOffset = firstBatch.baseOffset();
             // Find the floor batch record for the request batch. The request batch could be
             // for a subset of the in-flight batch i.e. cached batch of offset 10-14 and request batch
@@ -1540,13 +1540,13 @@ public class SharePartition {
     protected void updateLatestFetchOffsetMetadata(LogOffsetMetadata fetchOffsetMetadata) {
         lock.writeLock().lock();
         try {
-            latestFetchOffsetMetadata = fetchOffsetMetadata;
+            latestFetchOffsetMetadata = Optional.of(fetchOffsetMetadata);
         } finally {
             lock.writeLock().unlock();
         }
     }
 
-    protected LogOffsetMetadata latestFetchOffsetMetadata() {
+    protected Optional<LogOffsetMetadata> latestFetchOffsetMetadata() {
         lock.readLock().lock();
         try {
             return latestFetchOffsetMetadata;
