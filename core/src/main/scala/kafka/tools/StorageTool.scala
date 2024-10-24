@@ -134,6 +134,12 @@ object StorageTool extends Logging {
       case None => Option(config.originals.get(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG)).
         foreach(v => formatter.setReleaseVersion(MetadataVersion.fromVersionString(v.toString)))
     }
+    Option(namespace.getList[String]("feature")).foreach(
+      featureNamesAndLevels(_).foreachEntry {
+        (k, v) => formatter.setFeatureLevel(k, v)
+      })
+
+    namespace.getList("feature")
     Option(namespace.getString("initial_controllers")).
       foreach(v => formatter.setInitialControllers(DynamicVoters.parse(v)))
     if (namespace.getBoolean("standalone")) {
@@ -465,5 +471,28 @@ object StorageTool extends Logging {
         0
       }
     }
+  }
+
+  private def parseNameAndLevel(input: String): (String, java.lang.Short) = {
+    val equalsIndex = input.indexOf("=")
+    if (equalsIndex < 0)
+      throw new RuntimeException("Can't parse feature=level string " + input + ": equals   sign not found.")
+    val name = input.substring(0, equalsIndex).trim
+    val levelString = input.substring(equalsIndex + 1).trim
+    try {
+      levelString.toShort
+    } catch {
+      case _: Throwable =>
+        throw new RuntimeException("Can't parse feature=level string " + input + ": " +    "unable to parse " + levelString + " as a short.")
+    }
+    (name, levelString.toShort)
+  }
+
+  def featureNamesAndLevels(features: java.util.List[String]): Map[String, java.lang.Short] = {
+    features.asScala.map { (feature: String) =>
+      // Ensure the feature exists
+      val nameAndLevel = parseNameAndLevel(feature)
+      (nameAndLevel._1, nameAndLevel._2)
+    }.toMap
   }
 }
