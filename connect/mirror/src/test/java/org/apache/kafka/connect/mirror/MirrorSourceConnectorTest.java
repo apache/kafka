@@ -132,13 +132,31 @@ public class MirrorSourceConnectorTest {
     public void testNoCycles() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
             new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter());
+        assertFalse(connector.shouldReplicateTopic("source.topic1"), "should not allow cycles");
         assertFalse(connector.shouldReplicateTopic("target.topic1"), "should not allow cycles");
         assertFalse(connector.shouldReplicateTopic("target.source.topic1"), "should not allow cycles");
         assertFalse(connector.shouldReplicateTopic("source.target.topic1"), "should not allow cycles");
         assertFalse(connector.shouldReplicateTopic("target.source.target.topic1"), "should not allow cycles");
         assertFalse(connector.shouldReplicateTopic("source.target.source.topic1"), "should not allow cycles");
         assertTrue(connector.shouldReplicateTopic("topic1"), "should allow anything else");
-        assertTrue(connector.shouldReplicateTopic("source.topic1"), "should allow anything else");
+        assertTrue(connector.shouldReplicateTopic("othersource.topic1"), "should allow anything else");
+        assertTrue(connector.shouldReplicateTopic("othertarget.topic1"), "should allow anything else");
+        assertTrue(connector.shouldReplicateTopic("other.another.topic1"), "should allow anything else");
+
+        final IdentityReplicationPolicy identityReplicationPolicy = new IdentityReplicationPolicy();
+        final HashMap<String, String> props = new HashMap<>();
+        props.put("source.cluster.alias", "source");
+        identityReplicationPolicy.configure(props);
+        connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+            identityReplicationPolicy, x -> true, x -> true);
+        assertTrue(connector.shouldReplicateTopic("source.topic1"), "should not consider this a cycle");
+        assertTrue(connector.shouldReplicateTopic("target.topic1"), "should not consider this a cycle");
+        assertTrue(connector.shouldReplicateTopic("target.source.topic1"), "should not consider this a cycle");
+        assertTrue(connector.shouldReplicateTopic("source.target.topic1"), "should not consider this a cycle");
+        assertTrue(connector.shouldReplicateTopic("topic1"), "should not consider this a cycle");
+        assertTrue(connector.shouldReplicateTopic("othersource.topic1"), "should not consider this a cycle");
+        assertTrue(connector.shouldReplicateTopic("othertarget.topic1"), "should not consider this a cycle");
+        assertTrue(connector.shouldReplicateTopic("other.another.topic1"), "should not consider this a cycle");
     }
 
     @Test
