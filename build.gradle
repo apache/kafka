@@ -938,6 +938,7 @@ project(':server') {
     compileOnly libs.reload4j
 
     testImplementation project(':clients').sourceSets.test.output
+
     testImplementation libs.mockitoCore
     testImplementation libs.junitJupiter
     testImplementation libs.slf4jReload4j
@@ -1659,10 +1660,10 @@ project(':transaction-coordinator') {
 
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    testRuntimeOnly runtimeTestLibs
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':test-common')
     testImplementation project(':test-common:test-common-api')
+    testRuntimeOnly runtimeTestLibs
 
     generator project(':generator')
   }
