@@ -46,7 +46,7 @@ class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testMultipleBrokerMechanisms(quorum: String): Unit = {
     val plainSaslProducer = createProducer()
     val plainSaslConsumer = createConsumer()

@@ -16,7 +16,7 @@
  */
 package kafka.server
 
-import kafka.utils.TestUtils
+import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.NewPartitionReassignment
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, RangeAssignor}
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -29,7 +29,7 @@ import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{Disabled, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.MethodSource
 
 import java.util
 import java.util.{Collections, Properties}
@@ -56,10 +56,10 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
       .map(KafkaConfig.fromProps(_, overridingProps))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   @Timeout(15)
-  def testFollowerCompleteDelayedFetchesOnReplication(quorum: String): Unit = {
+  def testFollowerCompleteDelayedFetchesOnReplication(quorum: String, groupProtocol: String): Unit = {
     // Create a topic with 2 replicas where broker 0 is the leader and 1 is the follower.
     val admin = createAdminClient()
     val partitionLeaders = TestUtils.createTopicWithAdmin(
@@ -101,9 +101,9 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testFetchFromLeaderWhilePreferredReadReplicaIsUnavailable(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testFetchFromLeaderWhilePreferredReadReplicaIsUnavailable(quorum: String, groupProtocol: String): Unit = {
     // Create a topic with 2 replicas where broker 0 is the leader and 1 is the follower.
     val admin = createAdminClient()
     TestUtils.createTopicWithAdmin(
@@ -129,9 +129,9 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     assertEquals(-1, getPreferredReplica)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testFetchFromFollowerWithRoll(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testFetchFromFollowerWithRoll(quorum: String, groupProtocol: String): Unit = {
     // Create a topic with 2 replicas where broker 0 is the leader and 1 is the follower.
     val admin = createAdminClient()
     TestUtils.createTopicWithAdmin(
@@ -181,9 +181,9 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
   }
 
   @Disabled
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testRackAwareRangeAssignor(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testRackAwareRangeAssignor(quorum: String, groupProtocol: String): Unit = {
     val partitionList = brokers.indices.toList
 
     val topicWithAllPartitionsOnAllRacks = "topicWithAllPartitionsOnAllRacks"

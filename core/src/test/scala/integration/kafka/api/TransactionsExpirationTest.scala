@@ -81,7 +81,7 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testBumpTransactionalEpochAfterInvalidProducerIdMapping(quorum: String): Unit = {
     producer.initTransactions()
 
@@ -121,7 +121,7 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testTransactionAfterProducerIdExpires(quorum: String): Unit = {
     producer.initTransactions()
 

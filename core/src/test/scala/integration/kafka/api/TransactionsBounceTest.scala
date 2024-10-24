@@ -78,14 +78,14 @@ class TransactionsBounceTest extends IntegrationTestHarness {
 
   @nowarn("cat=deprecation")
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testWithGroupId(quorum: String): Unit = {
     testBrokerFailure((producer, groupId, consumer) =>
       producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, groupId))
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testWithGroupMetadata(quorum: String): Unit = {
     testBrokerFailure((producer, _, consumer) =>
       producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumer.groupMetadata()))
