@@ -40,7 +40,7 @@ public class DefaultConfigPropertyFilter implements ConfigPropertyFilter {
                                                                    + "message\\.timestamp\\.difference\\.max\\.ms, "
                                                                    + "message\\.timestamp\\.type, "
                                                                    + "unclean\\.leader\\.election\\.enable, "
-                                                                   + "min\\.insync\\.replicas";
+                                                                   + "min\\.insync\\.replicas,";
     private Pattern excludePattern = MirrorUtils.compilePatternList(CONFIG_PROPERTIES_EXCLUDE_DEFAULT);
     private String useDefaultsFrom = USE_DEFAULTS_FROM_DEFAULT;
 

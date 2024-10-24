@@ -450,7 +450,7 @@ public class MirrorSourceConnectorTest {
 
         Map<String, Long> expectedPartitionCounts = new HashMap<>();
         expectedPartitionCounts.put("source.topic", 1L);
-        Map<String, String> configMap = MirrorSourceConnector.configToMap(topicConfig);
+        Map<String, String> configMap = connector.configToMap(topicConfig);
         assertEquals(2, configMap.size(), "configMap has incorrect size");
 
         Map<String, NewTopic> expectedNewTopics = new HashMap<>();
