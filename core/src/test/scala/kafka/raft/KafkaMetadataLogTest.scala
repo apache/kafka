@@ -116,6 +116,31 @@ final class KafkaMetadataLogTest {
   }
 
   @Test
+  def testOutOfOrderEpoch(): Unit = {
+    val log = buildMetadataLog(tempDir, mockTime)
+    val recordFoo = new SimpleRecord("foo".getBytes())
+    val currentEpoch = 3
+    val initialOffset = log.endOffset().offset
+    log.appendAsLeader(
+      MemoryRecords.withRecords(initialOffset, CompressionType.NONE, currentEpoch, recordFoo),
+      currentEpoch
+    )
+
+    // Out order epoch should throw an exception
+    assertThrows(
+      classOf[RuntimeException],
+      () => {
+        log.appendAsLeader(
+          MemoryRecords.withRecords(
+            initialOffset + 1, CompressionType.NONE, currentEpoch - 1, recordFoo
+          ),
+          currentEpoch - 1
+        )
+      }
+    )
+  }
+
+  @Test
   def testCreateSnapshot(): Unit = {
     val numberOfRecords = 10
     val epoch = 1

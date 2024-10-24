@@ -279,6 +279,9 @@ public class MockLog implements ReplicatedLog {
 
     @Override
     public LogAppendInfo appendAsLeader(Records records, int epoch) {
+        if (epoch < lastFetchedEpoch()) {
+            throw new IllegalArgumentException("Attempt to append records with stale epoch");
+        }
         return append(records, OptionalInt.of(epoch));
     }
 

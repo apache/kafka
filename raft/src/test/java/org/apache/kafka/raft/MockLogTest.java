@@ -181,6 +181,29 @@ public class MockLogTest {
     }
 
     @Test
+    public void testOutOfOrderEpoch() {
+        SimpleRecord recordFoo = new SimpleRecord("foo".getBytes());
+        final int currentEpoch = 3;
+        final long initialOffset = log.endOffset().offset;
+
+        log.appendAsLeader(
+                MemoryRecords.withRecords(initialOffset, CompressionType.NONE, currentEpoch, recordFoo),
+                currentEpoch
+        );
+
+        // Out order epoch should throw an exception
+        assertThrows(
+                RuntimeException.class,
+                () -> {
+                    log.appendAsLeader(
+                            MemoryRecords.withRecords(initialOffset + 1, CompressionType.NONE, currentEpoch - 1, recordFoo),
+                            currentEpoch - 1
+                    );
+                }
+        );
+    }
+
+    @Test
     public void testAppendControlRecord() {
         final long initialOffset = 0;
         final int currentEpoch = 3;
