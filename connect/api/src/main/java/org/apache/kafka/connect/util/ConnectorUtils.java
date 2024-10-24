@@ -59,4 +59,35 @@ public class ConnectorUtils {
 
         return result;
     }
+
+    /**
+     * Groups elements into a specified number of groups in a round-robin fashion.
+     *
+     * @param <T> The type of elements in the input list.
+     * @param elements The list of elements to be grouped.
+     * @param numGroups The number of groups to divide the elements into.
+     * @return A list of lists, where each inner list represents a group.
+     */
+    public static <T> List<List<T>> groupElementsRoundRobin(List<T> elements, int numGroups) {
+        if (elements == null) {
+            throw new IllegalArgumentException("Elements must not be null.");
+        }
+
+        if (numGroups <= 0) {
+            throw new IllegalArgumentException("Number of groups must be positive.");
+        }
+
+        List<List<T>> result = new ArrayList<>(numGroups);
+        for (int i = 0; i < numGroups; i++) {
+            result.add(new ArrayList<>());
+        }
+
+        int groupNumber = 0;
+        for (T element : elements) {
+            result.get(groupNumber).add(element);
+            groupNumber = (groupNumber + 1) % numGroups;
+        }
+
+        return result;
+    }
 }
