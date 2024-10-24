@@ -3462,7 +3462,7 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
         KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata,
                 new RoundRobinAssignor(), true, groupInstanceId);
         consumer.subscribe(singletonList(topic));
-
+        TopicPartition tp = new TopicPartition("test", 0);
 
         client.enableBlockingUntilWakeup(1);
         ExecutorService service = Executors.newSingleThreadExecutor();
@@ -3470,6 +3470,24 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
         try {
             TimeUnit.SECONDS.sleep(1);
             assertThrows(ConcurrentModificationException.class, () -> consumer.poll(Duration.ZERO));
+            assertThrows(ConcurrentModificationException.class, () -> consumer.assignment());
+            assertThrows(ConcurrentModificationException.class, () -> consumer.subscription());
+            assertThrows(ConcurrentModificationException.class, () -> consumer.subscribe(Collections.emptyList()));
+            assertThrows(ConcurrentModificationException.class, () -> consumer.unsubscribe());
+            assertThrows(ConcurrentModificationException.class, () -> consumer.commitSync());
+            assertThrows(ConcurrentModificationException.class, () -> consumer.commitAsync());
+            assertThrows(ConcurrentModificationException.class, () -> consumer.seek(tp, 0));
+            assertThrows(ConcurrentModificationException.class, () -> consumer.seekToBeginning(Collections.singleton(tp)));
+            assertThrows(ConcurrentModificationException.class, () -> consumer.seekToEnd(Collections.singleton(tp)));
+            assertThrows(ConcurrentModificationException.class, () -> consumer.position(tp));
+            assertThrows(ConcurrentModificationException.class, () -> consumer.committed(Collections.singleton(tp)));
+            assertThrows(ConcurrentModificationException.class, () -> consumer.listTopics());
+            assertThrows(ConcurrentModificationException.class, () -> consumer.paused());
+            assertThrows(ConcurrentModificationException.class, () -> consumer.resume(Collections.emptyList()));
+            assertThrows(ConcurrentModificationException.class, () -> consumer.offsetsForTimes(Collections.emptyMap(), Duration.ZERO));
+            assertThrows(ConcurrentModificationException.class, () -> consumer.beginningOffsets(Collections.emptyList(), Duration.ZERO));
+            assertThrows(ConcurrentModificationException.class, () -> consumer.endOffsets(Collections.emptyList(), Duration.ZERO));
+            assertThrows(ConcurrentModificationException.class, () -> consumer.currentLag(tp));
             client.wakeup();
             consumer.wakeup();
         } finally {
