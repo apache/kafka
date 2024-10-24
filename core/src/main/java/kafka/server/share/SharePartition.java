@@ -1537,8 +1537,22 @@ public class SharePartition {
         return Optional.empty();
     }
 
+    protected void updateLatestFetchOffsetMetadata(LogOffsetMetadata fetchOffsetMetadata) {
+        lock.writeLock().lock();
+        try {
+            latestFetchOffsetMetadata = fetchOffsetMetadata;
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
     protected LogOffsetMetadata latestFetchOffsetMetadata() {
-        return latestFetchOffsetMetadata;
+        lock.readLock().lock();
+        try {
+            return latestFetchOffsetMetadata;
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     // Visible for testing
