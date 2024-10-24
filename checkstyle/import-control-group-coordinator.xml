@@ -80,6 +80,9 @@
             <subpackage name="generated">
                 <allow pkg="com.fasterxml.jackson" />
             </subpackage>
+            <subpackage name="modern">
+                <allow pkg="org.apache.kafka.metadata" />
+            </subpackage>
         </subpackage>
     </subpackage>
 

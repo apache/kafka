@@ -1787,22 +1787,18 @@ public class GroupMetadataManager {
         );
 
         int groupEpoch = group.groupEpoch();
-        boolean hasComputeSubscriptionMetadata = false;
-        Map<String, TopicMetadata> subscriptionMetadata = Map.of();
-        Map<String, Integer> subscribedTopicNamesMap;
         SubscriptionType subscriptionType = group.subscriptionType();
 
         if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
             // The subscription metadata is updated in two cases:
             // 1) The member has updated its subscriptions;
             // 2) The refresh deadline has been reached.
-            subscribedTopicNamesMap = group.computeSubscribedTopicNames(member, updatedMember);
-            subscriptionMetadata = group.computeSubscriptionMetadata(
+            Map<String, Integer> subscribedTopicNamesMap = group.computeSubscribedTopicNames(member, updatedMember);
+            Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
                 subscribedTopicNamesMap,
                 metadataImage.topics(),
                 metadataImage.cluster()
             );
-            hasComputeSubscriptionMetadata = true;
 
             int numMembers = group.numMembers();
             if (!group.hasMember(updatedMember.memberId()) && !group.hasStaticMember(updatedMember.instanceId())) {
@@ -1839,22 +1835,11 @@ public class GroupMetadataManager {
         final Assignment targetAssignment;
 
         if (groupEpoch > group.assignmentEpoch()) {
-            if (!hasComputeSubscriptionMetadata) {
-                // TargetAssignmentBuilder only prepare data for SubscribedTopicDescriberImpl which is in subscriptionMetadata.
-                // To avoid topic metadata not found, compute subscriptionMetadata before updateTargetAssignment.
-                subscribedTopicNamesMap = group.computeSubscribedTopicNames(member, updatedMember);
-                subscriptionMetadata = group.computeSubscriptionMetadata(
-                    subscribedTopicNamesMap,
-                    metadataImage.topics(),
-                    metadataImage.cluster()
-                );
-            }
             targetAssignment = updateTargetAssignment(
                 group,
                 groupEpoch,
                 member,
                 updatedMember,
-                subscriptionMetadata,
                 subscriptionType,
                 records
             );
@@ -1965,9 +1950,6 @@ public class GroupMetadataManager {
         }
 
         int groupEpoch = group.groupEpoch();
-        boolean hasComputeSubscriptionMetadata = false;
-        Map<String, TopicMetadata> subscriptionMetadata = Map.of();
-        Map<String, Integer> subscribedTopicNamesMap;
         SubscriptionType subscriptionType = group.subscriptionType();
         final ConsumerProtocolSubscription subscription = deserializeSubscription(protocols);
 
@@ -2000,13 +1982,12 @@ public class GroupMetadataManager {
             // The subscription metadata is updated in two cases:
             // 1) The member has updated its subscriptions;
             // 2) The refresh deadline has been reached.
-            subscribedTopicNamesMap = group.computeSubscribedTopicNames(member, updatedMember);
-            subscriptionMetadata = group.computeSubscriptionMetadata(
+            Map<String, Integer> subscribedTopicNamesMap = group.computeSubscribedTopicNames(member, updatedMember);
+            Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
                 subscribedTopicNamesMap,
                 metadataImage.topics(),
                 metadataImage.cluster()
             );
-            hasComputeSubscriptionMetadata = true;
 
             int numMembers = group.numMembers();
             if (!group.hasMember(updatedMember.memberId()) && !group.hasStaticMember(updatedMember.instanceId())) {
@@ -2043,22 +2024,11 @@ public class GroupMetadataManager {
         final Assignment targetAssignment;
 
         if (groupEpoch > group.assignmentEpoch()) {
-            if (!hasComputeSubscriptionMetadata) {
-                // TargetAssignmentBuilder only prepare data for SubscribedTopicDescriberImpl which is in subscriptionMetadata.
-                // To avoid topic metadata not found, compute subscriptionMetadata before updateTargetAssignment.
-                subscribedTopicNamesMap = group.computeSubscribedTopicNames(member, updatedMember);
-                subscriptionMetadata = group.computeSubscriptionMetadata(
-                    subscribedTopicNamesMap,
-                    metadataImage.topics(),
-                    metadataImage.cluster()
-                );
-            }
             targetAssignment = updateTargetAssignment(
                 group,
                 groupEpoch,
                 member,
                 updatedMember,
-                subscriptionMetadata,
                 subscriptionType,
                 records
             );
@@ -2182,22 +2152,18 @@ public class GroupMetadataManager {
         );
 
         int groupEpoch = group.groupEpoch();
-        boolean hasComputeSubscriptionMetadata = false;
-        Map<String, TopicMetadata> subscriptionMetadata = Map.of();
-        Map<String, Integer> subscribedTopicNamesMap;
         SubscriptionType subscriptionType = group.subscriptionType();
 
         if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
             // The subscription metadata is updated in two cases:
             // 1) The member has updated its subscriptions;
             // 2) The refresh deadline has been reached.
-            subscribedTopicNamesMap = group.computeSubscribedTopicNames(member, updatedMember);
-            subscriptionMetadata = group.computeSubscriptionMetadata(
+            Map<String, Integer> subscribedTopicNamesMap = group.computeSubscribedTopicNames(member, updatedMember);
+            Map<String, TopicMetadata>  subscriptionMetadata = group.computeSubscriptionMetadata(
                 subscribedTopicNamesMap,
                 metadataImage.topics(),
                 metadataImage.cluster()
             );
-            hasComputeSubscriptionMetadata = true;
 
             int numMembers = group.numMembers();
             if (!group.hasMember(updatedMember.memberId())) {
@@ -2231,21 +2197,10 @@ public class GroupMetadataManager {
         final Assignment targetAssignment;
 
         if (groupEpoch > group.assignmentEpoch()) {
-            if (!hasComputeSubscriptionMetadata) {
-                // TargetAssignmentBuilder only prepare data for SubscribedTopicDescriberImpl which is in subscriptionMetadata.
-                // To avoid topic metadata not found, compute subscriptionMetadata before updateTargetAssignment.
-                subscribedTopicNamesMap = group.computeSubscribedTopicNames(member, updatedMember);
-                subscriptionMetadata = group.computeSubscriptionMetadata(
-                    subscribedTopicNamesMap,
-                    metadataImage.topics(),
-                    metadataImage.cluster()
-                );
-            }
             targetAssignment = updateTargetAssignment(
                 group,
                 groupEpoch,
                 updatedMember,
-                subscriptionMetadata,
                 subscriptionType,
                 records
             );
@@ -2579,13 +2534,12 @@ public class GroupMetadataManager {
     /**
      * Updates the target assignment according to the updated member and subscription metadata.
      *
-     * @param group                 The ConsumerGroup.
-     * @param groupEpoch            The group epoch.
-     * @param member                The existing member.
-     * @param updatedMember         The updated member.
-     * @param subscriptionMetadata  The subscription metadata.
-     * @param subscriptionType      The group subscription type.
-     * @param records               The list to accumulate any new records.
+     * @param group            The ConsumerGroup.
+     * @param groupEpoch       The group epoch.
+     * @param member           The existing member.
+     * @param updatedMember    The updated member.
+     * @param subscriptionType The group subscription type.
+     * @param records          The list to accumulate any new records.
      * @return The new target assignment.
      */
     private Assignment updateTargetAssignment(
@@ -2593,7 +2547,6 @@ public class GroupMetadataManager {
         int groupEpoch,
         ConsumerGroupMember member,
         ConsumerGroupMember updatedMember,
-        Map<String, TopicMetadata> subscriptionMetadata,
         SubscriptionType subscriptionType,
         List<CoordinatorRecord> records
     ) {
@@ -2606,11 +2559,10 @@ public class GroupMetadataManager {
                 new TargetAssignmentBuilder<ConsumerGroupMember>(group.groupId(), groupEpoch, consumerGroupAssignors.get(preferredServerAssignor))
                     .withMembers(group.members())
                     .withStaticMembers(group.staticMembers())
-                    .withSubscriptionMetadata(subscriptionMetadata)
                     .withSubscriptionType(subscriptionType)
                     .withTargetAssignment(group.targetAssignment())
                     .withInvertedTargetAssignment(group.invertedTargetAssignment())
-                    .withTopicsImage(metadataImage.topics())
+                    .withMetadataImage(metadataImage)
                     .addOrUpdateMember(updatedMember.memberId(), updatedMember);
 
             // If the instance id was associated to a different member, it means that the
@@ -2652,19 +2604,17 @@ public class GroupMetadataManager {
     /**
      * Updates the target assignment according to the updated member and subscription metadata.
      *
-     * @param group                 The ShareGroup.
-     * @param groupEpoch            The group epoch.
-     * @param updatedMember         The updated member.
-     * @param subscriptionMetadata  The subscription metadata.
-     * @param subscriptionType      The group subscription type.
-     * @param records               The list to accumulate any new records.
+     * @param group            The ShareGroup.
+     * @param groupEpoch       The group epoch.
+     * @param updatedMember    The updated member.
+     * @param subscriptionType The group subscription type.
+     * @param records          The list to accumulate any new records.
      * @return The new target assignment.
      */
     private Assignment updateTargetAssignment(
         ShareGroup group,
         int groupEpoch,
         ShareGroupMember updatedMember,
-        Map<String, TopicMetadata> subscriptionMetadata,
         SubscriptionType subscriptionType,
         List<CoordinatorRecord> records
     ) {
@@ -2672,11 +2622,10 @@ public class GroupMetadataManager {
             TargetAssignmentBuilder<ShareGroupMember> assignmentResultBuilder =
                 new TargetAssignmentBuilder<ShareGroupMember>(group.groupId(), groupEpoch, shareGroupAssignor)
                     .withMembers(group.members())
-                    .withSubscriptionMetadata(subscriptionMetadata)
                     .withSubscriptionType(subscriptionType)
                     .withTargetAssignment(group.targetAssignment())
                     .withInvertedTargetAssignment(group.invertedTargetAssignment())
-                    .withTopicsImage(metadataImage.topics())
+                    .withMetadataImage(metadataImage)
                     .withTargetAssignmentRecordBuilder(GroupCoordinatorRecordHelpers::newShareGroupTargetAssignmentRecord)
                     .withTargetAssignmentEpochRecordBuilder(GroupCoordinatorRecordHelpers::newShareGroupTargetAssignmentEpochRecord)
                     .addOrUpdateMember(updatedMember.memberId(), updatedMember);

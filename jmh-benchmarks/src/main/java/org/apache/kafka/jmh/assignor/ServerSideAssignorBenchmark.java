@@ -31,9 +31,8 @@ import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
 import org.apache.kafka.coordinator.group.modern.TopicIds;
-import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
-import org.apache.kafka.image.TopicsImage;
+import org.apache.kafka.image.MetadataImage;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -125,9 +124,7 @@ public class ServerSideAssignorBenchmark {
 
     private List<String> allTopicNames = Collections.emptyList();
 
-    private Map<String, TopicMetadata> subscriptionMetadata = Collections.emptyMap();
-
-    private TopicsImage topicsImage = TopicsImage.EMPTY;
+    private MetadataImage metadataImage = MetadataImage.EMPTY;
 
     private TopicIds.TopicResolver topicResolver;
 
@@ -151,16 +148,10 @@ public class ServerSideAssignorBenchmark {
         allTopicNames = AssignorBenchmarkUtils.createTopicNames(topicCount);
 
         int partitionsPerTopic = (memberCount * partitionsToMemberRatio) / topicCount;
-        subscriptionMetadata = AssignorBenchmarkUtils.createSubscriptionMetadata(
-            allTopicNames,
-            partitionsPerTopic
-        );
+        metadataImage = AssignorBenchmarkUtils.createMetadataImage(allTopicNames, partitionsPerTopic);
+        topicResolver = new TopicIds.CachedTopicResolver(metadataImage.topics());
 
-        topicsImage = AssignorBenchmarkUtils.createTopicsImage(subscriptionMetadata);
-        topicResolver = new TopicIds.CachedTopicResolver(topicsImage);
-
-        Map<Uuid, TopicMetadata> topicMetadata = AssignorBenchmarkUtils.createTopicMetadata(subscriptionMetadata);
-        subscribedTopicDescriber = new SubscribedTopicDescriberImpl(topicMetadata);
+        subscribedTopicDescriber = new SubscribedTopicDescriberImpl(metadataImage);
     }
 
     private Map<String, ConsumerGroupMember> createMembers() {

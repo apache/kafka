@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
@@ -24,7 +25,7 @@ import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
-import org.apache.kafka.coordinator.group.modern.TopicMetadata;
+import org.apache.kafka.image.MetadataImage;
 
 import org.junit.jupiter.api.Test;
 
@@ -61,9 +62,7 @@ public class SimpleAssignorTest {
 
     @Test
     public void testAssignWithEmptyMembers() {
-        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Collections.emptyMap()
-        );
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(MetadataImage.EMPTY);
 
         GroupSpec groupSpec = new GroupSpecImpl(
             Collections.emptyMap(),
@@ -82,14 +81,10 @@ public class SimpleAssignorTest {
     @Test
     public void testAssignWithNoSubscribedTopic() {
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Collections.singletonMap(
-                TOPIC_1_UUID,
-                new TopicMetadata(
-                    TOPIC_1_UUID,
-                    TOPIC_1_NAME,
-                    3
-                )
-            )
+            new MetadataImageBuilder()
+                .addTopic(TOPIC_1_UUID, TOPIC_1_NAME, 3)
+                .addRacks()
+                .build()
         );
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = Collections.singletonMap(
@@ -119,14 +114,10 @@ public class SimpleAssignorTest {
     @Test
     public void testAssignWithSubscribedToNonExistentTopic() {
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Collections.singletonMap(
-                TOPIC_1_UUID,
-                new TopicMetadata(
-                    TOPIC_1_UUID,
-                    TOPIC_1_NAME,
-                    3
-                )
-            )
+            new MetadataImageBuilder()
+                .addTopic(TOPIC_1_UUID, TOPIC_1_NAME, 3)
+                .addRacks()
+                .build()
         );
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = Collections.singletonMap(
@@ -151,18 +142,6 @@ public class SimpleAssignorTest {
 
     @Test
     public void testAssignWithTwoMembersAndTwoTopicsHomogeneous() {
-        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put(TOPIC_1_UUID, new TopicMetadata(
-            TOPIC_1_UUID,
-            TOPIC_1_NAME,
-            3
-        ));
-        topicMetadata.put(TOPIC_3_UUID, new TopicMetadata(
-            TOPIC_3_UUID,
-            TOPIC_3_NAME,
-            2
-        ));
-
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
         members.put(MEMBER_A, new MemberSubscriptionAndAssignmentImpl(
@@ -184,7 +163,13 @@ public class SimpleAssignorTest {
             HOMOGENEOUS,
             Collections.emptyMap()
         );
-        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
+            new MetadataImageBuilder()
+                .addTopic(TOPIC_1_UUID, TOPIC_1_NAME, 3)
+                .addTopic(TOPIC_3_UUID, TOPIC_3_NAME, 2)
+                .addRacks()
+                .build()
+        );
 
         GroupAssignment computedAssignment = assignor.assign(
             groupSpec,
@@ -206,24 +191,6 @@ public class SimpleAssignorTest {
 
     @Test
     public void testAssignWithThreeMembersThreeTopicsHeterogeneous() {
-        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put(TOPIC_1_UUID, new TopicMetadata(
-            TOPIC_1_UUID,
-            TOPIC_1_NAME,
-            3
-        ));
-
-        topicMetadata.put(TOPIC_2_UUID, new TopicMetadata(
-            TOPIC_2_UUID,
-            "topic2",
-            3
-        ));
-        topicMetadata.put(TOPIC_3_UUID, new TopicMetadata(
-            TOPIC_3_UUID,
-            TOPIC_3_NAME,
-            2
-        ));
-
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
         members.put(MEMBER_A, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
@@ -252,7 +219,14 @@ public class SimpleAssignorTest {
             HETEROGENEOUS,
             Collections.emptyMap()
         );
-        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
+            new MetadataImageBuilder()
+                .addTopic(TOPIC_1_UUID, TOPIC_1_NAME, 3)
+                .addTopic(TOPIC_2_UUID, "topic2", 3)
+                .addTopic(TOPIC_3_UUID, TOPIC_3_NAME, 2)
+                .addRacks()
+                .build()
+        );
 
         GroupAssignment computedAssignment = assignor.assign(
             groupSpec,
@@ -277,19 +251,6 @@ public class SimpleAssignorTest {
 
     @Test
     public void testAssignWithOneMemberNoAssignedTopicHeterogeneous() {
-        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put(TOPIC_1_UUID, new TopicMetadata(
-            TOPIC_1_UUID,
-            TOPIC_1_NAME,
-            3
-        ));
-
-        topicMetadata.put(TOPIC_2_UUID, new TopicMetadata(
-            TOPIC_2_UUID,
-            "topic2",
-            2
-        ));
-
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
         members.put(MEMBER_A, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
@@ -310,7 +271,13 @@ public class SimpleAssignorTest {
             HETEROGENEOUS,
             Collections.emptyMap()
         );
-        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
+            new MetadataImageBuilder()
+                .addTopic(TOPIC_1_UUID, TOPIC_1_NAME, 3)
+                .addTopic(TOPIC_2_UUID, "topic2", 2)
+                .addRacks()
+                .build()
+        );
 
         GroupAssignment computedAssignment = assignor.assign(
             groupSpec,
