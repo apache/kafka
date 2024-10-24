@@ -1428,6 +1428,46 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
+     * Add the provided application metric for subscription.
+     * This metric will be added to this client's metrics
+     * that are available for subscription and sent as
+     * telemetry data to the broker.
+     * The provided metric must map to an OTLP metric data point
+     * type in the OpenTelemetry v1 metrics protobuf message types.
+     * Specifically, the metric should be one of the following:
+     * <ul>
+     *  <li>
+     *     `Sum`: Monotonic total count meter (Counter). Suitable for metrics like total number of X, e.g., total bytes sent.
+     *  </li>
+     *  <li>
+     *     `Gauge`: Non-monotonic current value meter (UpDownCounter). Suitable for metrics like current value of Y, e.g., current queue count.
+     *  </li>
+     * </ul>
+     * Metrics not matching these types are silently ignored.
+     * Executing this method for a previously registered metric is a benign operation and results in updating that metrics entry.
+     *
+     * @param metric The application metric to register
+     */
+    @Override
+    public void registerMetricForSubscription(KafkaMetric metric) {
+        delegate.registerMetricForSubscription(metric);
+    }
+
+    /**
+     * Remove the provided application metric for subscription.
+     * This metric is removed from this client's metrics
+     * and will not be available for subscription any longer.
+     * Executing this method with a metric that has not been registered is a
+     * benign operation and does not result in any action taken (no-op).
+     *
+     * @param metric The application metric to remove
+     */
+    @Override
+    public void unregisterMetricFromSubscription(KafkaMetric metric) {
+        delegate.unregisterMetricFromSubscription(metric);
+    }
+
+    /**
      * Get the set of partitions that were previously paused by a call to {@link #pause(Collection)}.
      *
      * @return The set of paused partitions
@@ -1705,15 +1745,5 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     boolean updateAssignmentMetadataIfNeeded(final Timer timer) {
         return delegate.updateAssignmentMetadataIfNeeded(timer);
-    }
-
-    @Override
-    public void registerMetricForSubscription(KafkaMetric metric) {
-        throw new UnsupportedOperationException("not implemented");
-    }
-
-    @Override
-    public void unregisterMetricFromSubscription(KafkaMetric metric) {
-        throw new UnsupportedOperationException("not implemented");
     }
 }

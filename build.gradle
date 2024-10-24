@@ -2627,7 +2627,7 @@ project(':streams') {
   }
 
   dependencies {
-    api project(':clients')
+    api project(path: ':clients', configuration: 'shadow')
     // `org.rocksdb.Options` is part of Kafka Streams public api via `RocksDBConfigSetter`
     api libs.rocksDBJni
 

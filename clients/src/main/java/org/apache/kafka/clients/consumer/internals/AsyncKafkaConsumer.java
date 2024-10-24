@@ -647,12 +647,18 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public void registerMetricForSubscription(KafkaMetric metric) {
-        throw new UnsupportedOperationException("not implemented");
+        if (clientTelemetryReporter.isPresent()) {
+            ClientTelemetryReporter reporter = clientTelemetryReporter.get();
+            reporter.metricChange(metric);
+        }
     }
 
     @Override
     public void unregisterMetricFromSubscription(KafkaMetric metric) {
-        throw new UnsupportedOperationException("not implemented");
+        if (clientTelemetryReporter.isPresent()) {
+            ClientTelemetryReporter reporter = clientTelemetryReporter.get();
+            reporter.metricRemoval(metric);
+        }
     }
 
     /**

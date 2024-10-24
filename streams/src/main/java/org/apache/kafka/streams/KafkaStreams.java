@@ -53,6 +53,7 @@ import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.UnknownStateStoreException;
 import org.apache.kafka.streams.internals.ClientInstanceIdsImpl;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
+import org.apache.kafka.streams.internals.metrics.StreamsClientMetricsDelegatingReporter;
 import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
@@ -1011,6 +1012,9 @@ public class KafkaStreams implements AutoCloseable {
         log.info("Kafka Streams commit ID: {}", ClientMetrics.commitId());
 
         metrics = createMetrics(applicationConfigs, time, clientId);
+        final StreamsClientMetricsDelegatingReporter reporter = new StreamsClientMetricsDelegatingReporter(adminClient, clientId);
+        metrics.addReporter(reporter);
+        
         streamsMetrics = new StreamsMetricsImpl(
             metrics,
             clientId,
