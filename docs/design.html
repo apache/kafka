@@ -273,7 +273,7 @@
     will not result in duplicate entries in the log. To achieve this, the broker assigns each producer an ID and deduplicates messages using a sequence number that is sent by the producer along with every message.
     Also beginning with 0.11.0.0, the producer supports the ability to send messages atomically to multiple topic partitions using transactions, so that either all messages are successfully written or none of them are.
     <p>
-    Not all use cases require such strong guarantees. For uses which are latency-sensitive, we allow the producer to specify the durability level it desires. If the producer specifies that it wants to wait on the message
+    Not all use cases require such strong guarantees. For use cases which are latency-sensitive, we allow the producer to specify the durability level it desires. If the producer specifies that it wants to wait on the message
     being committed, this can take on the order of 10 ms. However the producer can also specify that it wants to perform the send completely asynchronously or that it wants to wait only until the leader (but not
     necessarily the followers) have the message.
     <p>
