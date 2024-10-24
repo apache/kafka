@@ -20,6 +20,7 @@ import java.io.File
 import java.util.concurrent.CompletableFuture
 import kafka.log.UnifiedLog
 import kafka.metrics.KafkaMetricsReporter
+import kafka.server.ServerSocketFactory.KafkaServerSocketFactory
 import kafka.utils.{CoreUtils, Logging, Mx4jLoader, VerifiableProperties}
 import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
 import org.apache.kafka.common.internals.Topic
@@ -73,6 +74,7 @@ class KafkaRaftServer(
     CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig.voters)),
     QuorumConfig.parseBootstrapServers(config.quorumConfig.bootstrapServers),
     new StandardFaultHandlerFactory(),
+    KafkaServerSocketFactory.INSTANCE,
   )
 
   private val broker: Option[BrokerServer] = if (config.processRoles.contains(ProcessRole.BrokerRole)) {

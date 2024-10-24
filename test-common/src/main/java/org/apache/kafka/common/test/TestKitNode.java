@@ -17,6 +17,8 @@
 
 package org.apache.kafka.common.test;
 
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 
 import java.util.Map;
@@ -33,6 +35,12 @@ public interface TestKitNode {
 
     default Set<String> logDataDirectories() {
         return initialMetaPropertiesEnsemble().logDirProps().keySet();
+    }
+
+    default Uuid metadataDirectoryId() {
+        MetaProperties props = initialMetaPropertiesEnsemble().logDirProps().get(
+            initialMetaPropertiesEnsemble().metadataLogDir().get());
+        return props.directoryId().get();
     }
 
     MetaPropertiesEnsemble initialMetaPropertiesEnsemble();

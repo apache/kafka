@@ -34,12 +34,13 @@ import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.Controller;
-import org.apache.kafka.metadata.bootstrap.BootstrapDirectory;
-import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
+import org.apache.kafka.metadata.storage.Formatter;
 import org.apache.kafka.network.SocketServerConfigs;
+import org.apache.kafka.raft.DynamicVoters;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.config.KRaftConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.fault.FaultHandler;
@@ -50,6 +51,7 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.event.Level;
 
 import java.io.File;
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -147,10 +149,12 @@ public class KafkaClusterTestKit implements AutoCloseable {
         private final TestKitNodes nodes;
         private final Map<String, Object> configProps = new HashMap<>();
         private final SimpleFaultHandlerFactory faultHandlerFactory = new SimpleFaultHandlerFactory();
+        private final PreboundSocketFactoryManager socketFactoryManager = new PreboundSocketFactoryManager();
         private final String brokerListenerName;
         private final String controllerListenerName;
         private final String brokerSecurityProtocol;
         private final String controllerSecurityProtocol;
+
 
         public Builder(TestKitNodes nodes) {
             this.nodes = nodes;
@@ -165,7 +169,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             return this;
         }
 
-        private KafkaConfig createNodeConfig(TestKitNode node) {
+        private KafkaConfig createNodeConfig(TestKitNode node) throws IOException {
             TestKitNode brokerNode = nodes.brokerNodes().get(node.id());
             TestKitNode controllerNode = nodes.controllerNodes().get(node.id());
 
@@ -201,13 +205,18 @@ public class KafkaClusterTestKit implements AutoCloseable {
             props.putIfAbsent(INTER_BROKER_LISTENER_NAME_CONFIG, brokerListenerName);
             props.putIfAbsent(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, controllerListenerName);
 
-            // Note: we can't accurately set controller.quorum.voters yet, since we don't
-            // yet know what ports each controller will pick.  Set it to a dummy string
-            // for now as a placeholder.
-            String uninitializedQuorumVotersString = nodes.controllerNodes().keySet().stream().
-                    map(n -> String.format("%d@0.0.0.0:0", n)).
-                    collect(Collectors.joining(","));
-            props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, uninitializedQuorumVotersString);
+            StringBuilder quorumVoterStringBuilder = new StringBuilder();
+            String prefix = "";
+            for (int nodeId : nodes.controllerNodes().keySet()) {
+                quorumVoterStringBuilder.append(prefix).
+                    append(nodeId).
+                    append("@").
+                    append("localhost").
+                    append(":").
+                    append(socketFactoryManager.getOrCreatePortForListener(nodeId, "CONTROLLER"));
+                prefix = ",";
+            }
+            props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, quorumVoterStringBuilder.toString());
 
             // reduce log cleaner offset map memory usage
             props.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, "2097152");
@@ -236,6 +245,9 @@ public class KafkaClusterTestKit implements AutoCloseable {
             try {
                 baseDirectory = new File(nodes.baseDirectory());
                 for (TestKitNode node : nodes.controllerNodes().values()) {
+                    socketFactoryManager.getOrCreatePortForListener(node.id(), "CONTROLLER");
+                }
+                for (TestKitNode node : nodes.controllerNodes().values()) {
                     setupNodeDirectories(baseDirectory, node.metadataDirectory(), Collections.emptyList());
                     SharedServer sharedServer = new SharedServer(
                         createNodeConfig(node),
@@ -244,7 +256,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         new Metrics(),
                         connectFutureManager.future,
                         Collections.emptyList(),
-                        faultHandlerFactory
+                        faultHandlerFactory,
+                        socketFactoryManager.getOrCreateSocketFactory(node.id())
                     );
                     ControllerServer controller = null;
                     try {
@@ -268,18 +281,20 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     jointServers.put(node.id(), sharedServer);
                 }
                 for (TestKitNode node : nodes.brokerNodes().values()) {
-                    SharedServer sharedServer = jointServers.computeIfAbsent(
-                        node.id(),
-                        id -> new SharedServer(
+                    SharedServer sharedServer = jointServers.get(node.id());
+                    if (sharedServer == null) {
+                        sharedServer = new SharedServer(
                             createNodeConfig(node),
                             node.initialMetaPropertiesEnsemble(),
                             Time.SYSTEM,
                             new Metrics(),
                             connectFutureManager.future,
                             Collections.emptyList(),
-                            faultHandlerFactory
-                        )
-                    );
+                            faultHandlerFactory,
+                            socketFactoryManager.getOrCreateSocketFactory(node.id())
+                        );
+                        jointServers.put(node.id(), sharedServer);
+                    }
                     BrokerServer broker = null;
                     try {
                         broker = new BrokerServer(sharedServer);
@@ -301,6 +316,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 if (baseDirectory != null) {
                     Utils.delete(baseDirectory);
                 }
+                socketFactoryManager.close();
                 throw e;
             }
             return new KafkaClusterTestKit(
@@ -309,7 +325,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     brokers,
                     connectFutureManager,
                     baseDirectory,
-                    faultHandlerFactory);
+                    faultHandlerFactory,
+                    socketFactoryManager);
         }
 
         private String listeners(int node) {
@@ -352,6 +369,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
     private final ControllerQuorumVotersFutureManager controllerQuorumVotersFutureManager;
     private final File baseDirectory;
     private final SimpleFaultHandlerFactory faultHandlerFactory;
+    private final PreboundSocketFactoryManager socketFactoryManager;
 
     private KafkaClusterTestKit(
         TestKitNodes nodes,
@@ -359,7 +377,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
         Map<Integer, BrokerServer> brokers,
         ControllerQuorumVotersFutureManager controllerQuorumVotersFutureManager,
         File baseDirectory,
-        SimpleFaultHandlerFactory faultHandlerFactory
+        SimpleFaultHandlerFactory faultHandlerFactory,
+        PreboundSocketFactoryManager socketFactoryManager
     ) {
         /*
           Number of threads = Total number of brokers + Total number of controllers + Total number of Raft Managers
@@ -374,6 +393,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
         this.controllerQuorumVotersFutureManager = controllerQuorumVotersFutureManager;
         this.baseDirectory = baseDirectory;
         this.faultHandlerFactory = faultHandlerFactory;
+        this.socketFactoryManager = socketFactoryManager;
     }
 
     public void format() throws Exception {
@@ -407,22 +427,44 @@ public class KafkaClusterTestKit implements AutoCloseable {
         boolean writeMetadataDirectory
     ) {
         try {
-            MetaPropertiesEnsemble.Copier copier =
-                new MetaPropertiesEnsemble.Copier(MetaPropertiesEnsemble.EMPTY);
-            for (Entry<String, MetaProperties> entry : ensemble.logDirProps().entrySet()) {
-                String logDir = entry.getKey();
-                if (writeMetadataDirectory || (!ensemble.metadataLogDir().equals(Optional.of(logDir)))) {
-                    log.trace("Adding {} to the list of directories to format.", logDir);
-                    copier.setLogDirProps(logDir, entry.getValue());
-                }
+            Formatter formatter = new Formatter();
+            formatter.setNodeId(ensemble.nodeId().getAsInt());
+            formatter.setClusterId(ensemble.clusterId().get());
+            if (writeMetadataDirectory) {
+                formatter.setDirectories(ensemble.logDirProps().keySet());
+            } else {
+                formatter.setDirectories(ensemble.logDirProps().keySet().stream().
+                    filter(d -> !ensemble.metadataLogDir().get().equals(d)).
+                    collect(Collectors.toSet()));
             }
-            copier.setPreWriteHandler((logDir, isNew, metaProperties) -> {
-                log.info("Formatting {}.", logDir);
-                Files.createDirectories(Paths.get(logDir));
-                BootstrapDirectory bootstrapDirectory = new BootstrapDirectory(logDir, Optional.empty());
-                bootstrapDirectory.writeBinaryFile(nodes.bootstrapMetadata());
-            });
-            copier.writeLogDirChanges();
+            if (formatter.directories().isEmpty()) {
+                return;
+            }
+            formatter.setReleaseVersion(nodes.bootstrapMetadata().metadataVersion());
+            formatter.setFeatureLevel(KRaftVersion.FEATURE_NAME,
+                nodes.bootstrapMetadata().featureLevel(KRaftVersion.FEATURE_NAME));
+            formatter.setUnstableFeatureVersionsEnabled(true);
+            formatter.setIgnoreFormatted(false);
+            formatter.setControllerListenerName("CONTROLLER");
+            if (writeMetadataDirectory) {
+                formatter.setMetadataLogDirectory(ensemble.metadataLogDir().get());
+            } else {
+                formatter.setMetadataLogDirectory(Optional.empty());
+            }
+            if (nodes.bootstrapMetadata().featureLevel(KRaftVersion.FEATURE_NAME) > 0) {
+                StringBuilder dynamicVotersBuilder = new StringBuilder();
+                String prefix = "";
+                for (TestKitNode controllerNode : nodes.controllerNodes().values()) {
+                    int port = socketFactoryManager.
+                        getOrCreatePortForListener(controllerNode.id(), "CONTROLLER");
+                    dynamicVotersBuilder.append(prefix);
+                    prefix = ",";
+                    dynamicVotersBuilder.append(String.format("%d@localhost:%d:%s",
+                        controllerNode.id(), port, controllerNode.metadataDirectoryId()));
+                }
+                formatter.setInitialControllers(DynamicVoters.parse(dynamicVotersBuilder.toString()));
+            }
+            formatter.run();
         } catch (Exception e) {
             throw new RuntimeException("Failed to format node " + ensemble.nodeId(), e);
         }
@@ -640,6 +682,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             throw e;
         } finally {
             ThreadUtils.shutdownExecutorServiceQuietly(executorService, 5, TimeUnit.MINUTES);
+            socketFactoryManager.close();
         }
         waitForAllThreads();
         faultHandlerFactory.fatalFaultHandler().maybeRethrowFirstException();

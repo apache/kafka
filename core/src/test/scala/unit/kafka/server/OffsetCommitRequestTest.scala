@@ -17,10 +17,11 @@
 package kafka.server
 
 import org.apache.kafka.common.test.api.ClusterInstance
-import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
+import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterFeature, ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.common.test.api.ClusterTestExtensions
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.server.common.Features
 import org.junit.jupiter.api.Assertions.fail
 import org.junit.jupiter.api.extension.ExtendWith
 
@@ -32,6 +33,10 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
     serverProperties = Array(
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    ),
+    features = Array(
+      new ClusterFeature(feature = Features.TRANSACTION_VERSION, version = 2),
+      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
     )
   )
   def testOffsetCommitWithNewConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {

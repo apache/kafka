@@ -162,7 +162,8 @@ class ControllerServer(
         metrics,
         time,
         credentialProvider,
-        apiVersionManager)
+        apiVersionManager,
+        sharedServer.socketFactory)
 
       val listenerInfo = ListenerInfo
         .create(config.effectiveAdvertisedControllerListeners.map(_.toJava).asJava)

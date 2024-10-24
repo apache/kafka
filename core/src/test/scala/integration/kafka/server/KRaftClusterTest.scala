@@ -1389,8 +1389,7 @@ class KRaftClusterTest {
         setName("num.io.threads").
         setValue("9"), 0.toShort))
     val cluster = new KafkaClusterTestKit.Builder(
-      new TestKitNodes.Builder().
-        setBootstrapMetadata(BootstrapMetadata.fromRecords(bootstrapRecords, "testRecords")).
+      new TestKitNodes.Builder(BootstrapMetadata.fromRecords(bootstrapRecords, "testRecords")).
         setNumBrokerNodes(1).
         setNumControllerNodes(1).build()).
       build()
