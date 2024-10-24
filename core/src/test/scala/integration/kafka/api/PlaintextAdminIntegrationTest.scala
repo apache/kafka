@@ -41,7 +41,7 @@ import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig, SslConfig
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter}
-import org.apache.kafka.common.requests.{DeleteRecordsRequest}
+import org.apache.kafka.common.requests.DeleteRecordsRequest
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -53,6 +53,7 @@ import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
 import org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS
+import org.apache.log4j.PropertyConfigurator
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
@@ -93,7 +94,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   override def tearDown(): Unit = {
     // Due to the fact that log4j is not re-initialized across tests, changing a logger's log level persists
     // across test classes. We need to clean up the changes done after testing.
-    resetLogging
+    resetLogging()
     super.tearDown()
   }
 
@@ -3559,5 +3560,18 @@ object PlaintextAdminIntegrationTest {
     assertEquals("snappy", configs.get(topicResource2).get(TopicConfig.COMPRESSION_TYPE_CONFIG).value)
 
     assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, configs.get(brokerResource).get(ServerConfigs.COMPRESSION_TYPE_CONFIG).value)
+  }
+
+  /**
+   * Resets the logging configuration after the test.
+   */
+  def resetLogging(): Unit = {
+    org.apache.log4j.LogManager.resetConfiguration()
+    val stream = this.getClass.getResourceAsStream("/log4j.properties")
+    try {
+      PropertyConfigurator.configure(stream)
+    } finally {
+      stream.close()
+    }
   }
 }
