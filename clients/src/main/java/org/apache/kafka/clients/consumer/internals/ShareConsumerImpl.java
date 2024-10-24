@@ -80,7 +80,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -518,13 +517,11 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                         throw new IllegalArgumentException("Topic collection to subscribe to cannot contain null or empty topic");
                 }
 
-                log.info("Subscribed to topic(s): {}", String.join(", ", topics));
-                if (subscriptions.subscribeToShareGroup(new HashSet<>(topics)))
-                    metadata.requestUpdateForNewTopics();
-
                 // Trigger subscribe event to effectively join the group if not already part of it,
                 // or just send the new subscription to the broker.
-                applicationEventHandler.add(new ShareSubscriptionChangeEvent());
+                applicationEventHandler.addAndGet(new ShareSubscriptionChangeEvent(topics));
+
+                log.info("Subscribed to topics: {}", String.join(", ", topics));
             }
         } finally {
             release();
@@ -538,12 +535,11 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     public void unsubscribe() {
         acquireAndEnsureOpen();
         try {
-            Timer timer = time.timer(Long.MAX_VALUE);
+            Timer timer = time.timer(defaultApiTimeoutMs);
             ShareUnsubscribeEvent unsubscribeApplicationEvent = new ShareUnsubscribeEvent(calculateDeadlineMs(timer));
-            applicationEventHandler.add(unsubscribeApplicationEvent);
-            log.info("Unsubscribing all topics");
+            applicationEventHandler.addAndGet(unsubscribeApplicationEvent);
 
-            subscriptions.unsubscribe();
+            log.info("Unsubscribed all topics");
         } finally {
             release();
         }
@@ -584,7 +580,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 final ShareFetch<K, V> fetch = pollForFetches(timer);
                 if (!fetch.isEmpty()) {
                     currentFetch = fetch;
-                    return new ConsumerRecords<>(fetch.records());
+                    return new ConsumerRecords<>(fetch.records(), Map.of());
                 }
 
                 metadata.maybeThrowAnyException();

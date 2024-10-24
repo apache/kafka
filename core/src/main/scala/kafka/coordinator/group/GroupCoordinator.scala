@@ -18,7 +18,6 @@ package kafka.coordinator.group
 
 import java.util.{OptionalInt, Properties}
 import java.util.concurrent.atomic.AtomicBoolean
-import kafka.common.OffsetAndMetadata
 import kafka.server._
 import kafka.utils.Logging
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition}
@@ -32,7 +31,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.coordinator.group.{Group, OffsetConfig}
+import org.apache.kafka.coordinator.group.{Group, OffsetAndMetadata, OffsetConfig}
 import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.storage.internals.log.VerificationGuard
@@ -428,7 +427,7 @@ private[group] class GroupCoordinator(
             s"for pending member with memberId=$memberId")
         }
 
-        debug(s"Pending dynamic member with id $memberId joins group ${group.groupId} in " +
+        info(s"Pending dynamic member with id $memberId joins group ${group.groupId} in " +
           s"${group.currentState} state. Adding to the group now.")
         addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, memberId, None,
           clientId, clientHost, protocolType, protocols, group, responseCallback, reason)

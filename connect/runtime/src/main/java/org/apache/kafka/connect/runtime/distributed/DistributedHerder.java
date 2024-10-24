@@ -255,6 +255,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
      * @param uponShutdown       any {@link AutoCloseable} objects that should be closed when this herder is {@link #stop() stopped},
      *                           after all services and resources owned by this herder are stopped
      */
+    @SuppressWarnings("this-escape")
     public DistributedHerder(DistributedConfig config,
                              Time time,
                              Worker worker,
@@ -272,6 +273,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     // visible for testing
+    @SuppressWarnings("this-escape")
     DistributedHerder(DistributedConfig config,
                       Worker worker,
                       String workerId,

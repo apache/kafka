@@ -78,13 +78,10 @@ public class StreamsMetadataState {
     }
 
     public String toString(final String indent) {
-        final StringBuilder builder = new StringBuilder();
-        builder.append(indent).append("GlobalMetadata: ").append(allMetadata).append("\n");
-        builder.append(indent).append("GlobalStores: ").append(globalStores).append("\n");
-        builder.append(indent).append("My HostInfo: ").append(thisHost).append("\n");
-        builder.append(indent).append("PartitionsByTopic: ").append(partitionsByTopic).append("\n");
-
-        return builder.toString();
+        return indent + "GlobalMetadata: " + allMetadata + "\n" +
+                indent + "GlobalStores: " + globalStores + "\n" +
+                indent + "My HostInfo: " + thisHost + "\n" +
+                indent + "PartitionsByTopic: " + partitionsByTopic + "\n";
     }
 
     /**
@@ -384,9 +381,6 @@ public class StreamsMetadataState {
                         );
                         activeStoresOnHost.addAll(getStoresOnHost(storeToSourceTopics, activePartitionsOnHost));
                     }
-
-                    // TODO KAFKA-13281: when we add support for global stores with named topologies we will
-                    //  need to add the global stores to the activeStoresOnHost set
 
                     final Set<TopicPartition> standbyPartitionsOnHost = new HashSet<>();
                     final Set<String> standbyStoresOnHost = new HashSet<>();

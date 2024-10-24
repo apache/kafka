@@ -55,12 +55,12 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.toList;
 import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -582,7 +582,7 @@ public abstract class AbstractSessionBytesStoreTest {
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                  sessionStore.findSessions("a", "aa", 10, 0)
         ) {
-            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(2L))));
+            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(Collections.singletonList(2L))));
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
@@ -638,7 +638,7 @@ public abstract class AbstractSessionBytesStoreTest {
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                  sessionStore.backwardFindSessions("a", "aa", 10, 0)
         ) {
-            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(2L))));
+            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(Collections.singletonList(2L))));
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
@@ -994,7 +994,7 @@ public abstract class AbstractSessionBytesStoreTest {
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                      sessionStore.findSessions("p", systemTime - 2 * RETENTION_PERIOD, systemTime - RETENTION_PERIOD)
         ) {
-            assertEquals(mkSet(2L), valuesToSet(iterator));
+            assertEquals(Set.of(2L), valuesToSet(iterator));
         }
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                      sessionStore.backwardFindSessions("p", systemTime - 5 * RETENTION_PERIOD, systemTime - 4 * RETENTION_PERIOD)
@@ -1009,17 +1009,17 @@ public abstract class AbstractSessionBytesStoreTest {
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                      sessionStore.findSessions("p", "r", systemTime - RETENTION_PERIOD, systemTime - RETENTION_PERIOD / 2)
         ) {
-            assertEquals(valuesToSet(iterator), mkSet(2L, 3L, 4L));
+            assertEquals(valuesToSet(iterator), Set.of(2L, 3L, 4L));
         }
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                      sessionStore.findSessions("p", "r", systemTime - 2 * RETENTION_PERIOD, systemTime - RETENTION_PERIOD)
         ) {
-            assertEquals(valuesToSet(iterator), mkSet(2L, 3L, 4L));
+            assertEquals(valuesToSet(iterator), Set.of(2L, 3L, 4L));
         }
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
                      sessionStore.backwardFindSessions("p", "r", systemTime - 2 * RETENTION_PERIOD, systemTime - RETENTION_PERIOD)
         ) {
-            assertEquals(valuesToSet(iterator), mkSet(2L, 3L, 4L));
+            assertEquals(valuesToSet(iterator), Set.of(2L, 3L, 4L));
         }
     }
 }

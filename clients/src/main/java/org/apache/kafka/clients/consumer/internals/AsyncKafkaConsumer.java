@@ -100,6 +100,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -712,7 +713,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                             + "since the consumer's position has advanced for at least one topic partition");
                     }
 
-                    return interceptors.onConsume(new ConsumerRecords<>(fetch.records()));
+                    return interceptors.onConsume(new ConsumerRecords<>(fetch.records(), fetch.nextOffsets()));
                 }
                 // We will wait for retryBackoffMs
             } while (timer.notExpired());
@@ -1068,12 +1069,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             }
 
             try {
-                return applicationEventHandler.addAndGet(listOffsetsEvent)
-                    .entrySet()
-                    .stream()
-                    .collect(Collectors.toMap(
-                        Map.Entry::getKey,
-                        entry -> entry.getValue().buildOffsetAndTimestamp()));
+                Map<TopicPartition, OffsetAndTimestampInternal> offsets = applicationEventHandler.addAndGet(listOffsetsEvent);
+                Map<TopicPartition, OffsetAndTimestamp> results = new HashMap<>(offsets.size());
+                offsets.forEach((k, v) -> results.put(k, v != null ? v.buildOffsetAndTimestamp() : null));
+                return results;
             } catch (TimeoutException e) {
                 throw new TimeoutException("Failed to get offsets by times in " + timeout.toMillis() + "ms");
             }

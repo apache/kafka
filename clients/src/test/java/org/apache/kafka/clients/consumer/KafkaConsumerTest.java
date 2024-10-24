@@ -290,6 +290,8 @@ public class KafkaConsumerTest {
         assertEquals(records.count(), 5);
         assertEquals(records.partitions(), Collections.singleton(tp0));
         assertEquals(records.records(tp0).size(), 5);
+        assertEquals(records.nextOffsets().size(), 1);
+        assertEquals(records.nextOffsets().get(tp0), new OffsetAndMetadata(5, Optional.empty(), ""));
     }
 
     // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
@@ -310,6 +312,8 @@ public class KafkaConsumerTest {
         assertEquals(invalidRecordNumber - 1, records.records(tp0).size());
         long lastOffset = records.records(tp0).get(records.records(tp0).size() - 1).offset();
         assertEquals(invalidRecordNumber - 2, lastOffset);
+        assertEquals(records.nextOffsets().size(), 1);
+        assertEquals(records.nextOffsets().get(tp0), new OffsetAndMetadata(lastOffset + 1, Optional.empty(), ""));
 
         RecordDeserializationException rde = assertThrows(RecordDeserializationException.class, () -> consumer.poll(Duration.ZERO));
         assertEquals(invalidRecordOffset, rde.offset());
@@ -800,6 +804,8 @@ public class KafkaConsumerTest {
         ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ofMillis(1));
         assertEquals(5, records.count());
         assertEquals(55L, consumer.position(tp0));
+        assertEquals(records.nextOffsets().size(), 1);
+        assertEquals(records.nextOffsets().get(tp0), new OffsetAndMetadata(55L, Optional.empty(), ""));
     }
 
     // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
@@ -831,6 +837,8 @@ public class KafkaConsumerTest {
         ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ofMillis(0));
         assertEquals(5, records.count());
         assertEquals(55L, consumer.position(tp0));
+        assertEquals(records.nextOffsets().size(), 1);
+        assertEquals(records.nextOffsets().get(tp0), new OffsetAndMetadata(55L, Optional.empty(), ""));
 
         // after coordinator found, consumer should be able to commit the offset successfully
         client.prepareResponse(offsetCommitResponse(Collections.singletonMap(tp0, Errors.NONE)));
@@ -891,6 +899,8 @@ public class KafkaConsumerTest {
         ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ofMillis(1));
         assertEquals(5, records.count());
         assertEquals(singleton(tp0), records.partitions());
+        assertEquals(records.nextOffsets().size(), 1);
+        assertEquals(records.nextOffsets().get(tp0), new OffsetAndMetadata(records.records(tp0).get(records.count() - 1).offset() + 1, Optional.empty(), ""));
     }
 
     private void initMetadata(MockClient mockClient, Map<String, Integer> partitionCounts) {
@@ -1105,7 +1115,7 @@ public class KafkaConsumerTest {
 
         // fetch offset for one topic
         client.prepareResponseFrom(offsetResponse(Utils.mkMap(Utils.mkEntry(tp0, offset1), Utils.mkEntry(tp1, -1L)), Errors.NONE), coordinator);
-        final Map<TopicPartition, OffsetAndMetadata> committed = consumer.committed(Utils.mkSet(tp0, tp1));
+        final Map<TopicPartition, OffsetAndMetadata> committed = consumer.committed(Set.of(tp0, tp1));
         assertEquals(2, committed.size());
         assertEquals(offset1, committed.get(tp0).offset());
         assertNull(committed.get(tp1));
@@ -1244,6 +1254,8 @@ public class KafkaConsumerTest {
         @SuppressWarnings("unchecked")
         ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ZERO);
         assertEquals(5, records.count());
+        assertEquals(records.nextOffsets().size(), 1);
+        assertEquals(records.nextOffsets().get(tp0), new OffsetAndMetadata(5, Optional.empty(), ""));
         // Increment time asynchronously to clear timeouts in closing the consumer
         final ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
         exec.scheduleAtFixedRate(() -> time.sleep(sessionTimeoutMs), 0L, 10L, TimeUnit.MILLISECONDS);
@@ -1303,6 +1315,7 @@ public class KafkaConsumerTest {
         @SuppressWarnings("unchecked")
         ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ZERO);
         assertEquals(0, records.count());
+        assertEquals(records.nextOffsets().size(), 0);
     }
 
     /**
@@ -1402,6 +1415,9 @@ public class KafkaConsumerTest {
         assertEquals(101, records.count());
         assertEquals(2L, consumer.position(tp0));
         assertEquals(100L, consumer.position(t3p0));
+        assertEquals(records.nextOffsets().size(), 2);
+        assertEquals(records.nextOffsets().get(tp0), new OffsetAndMetadata(2, Optional.empty(), ""));
+        assertEquals(records.nextOffsets().get(t3p0), new OffsetAndMetadata(100, Optional.empty(), ""));
 
         // verify that the offset commits occurred as expected
         assertTrue(commitReceived.get());
@@ -1590,6 +1606,8 @@ public class KafkaConsumerTest {
 
         assertEquals(1, records.count());
         assertEquals(11L, consumer.position(tp0));
+        assertEquals(records.nextOffsets().size(), 1);
+        assertEquals(records.nextOffsets().get(tp0), new OffsetAndMetadata(11L, Optional.empty(), ""));
 
         // mock the offset commit response for to be revoked partitions
         AtomicBoolean commitReceived = prepareOffsetCommitResponse(client, coordinator, tp0, 11);
@@ -1647,6 +1665,8 @@ public class KafkaConsumerTest {
         ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ofMillis(1));
         assertEquals(1, records.count());
         assertEquals(11L, consumer.position(tp0));
+        assertEquals(records.nextOffsets().size(), 1);
+        assertEquals(records.nextOffsets().get(tp0), new OffsetAndMetadata(11L, Optional.empty(), ""));
 
         // new manual assignment
         consumer.assign(singleton(t2p0));
@@ -1679,7 +1699,7 @@ public class KafkaConsumerTest {
         Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
 
         // manual assignment
-        Set<TopicPartition> partitions = Utils.mkSet(tp0, tp1);
+        Set<TopicPartition> partitions = Set.of(tp0, tp1);
         consumer.assign(partitions);
         // verify consumer's assignment
         assertEquals(partitions, consumer.assignment());
@@ -1940,6 +1960,7 @@ public class KafkaConsumerTest {
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
         final ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ZERO);
         assertFalse(records.isEmpty());
+        assertFalse(records.nextOffsets().isEmpty());
     }
 
     private void consumerCloseTest(GroupProtocol groupProtocol,
@@ -2278,11 +2299,11 @@ public class KafkaConsumerTest {
         // a poll with non-zero milliseconds would complete three round-trips (discover, join, sync)
         TestUtils.waitForCondition(() -> {
             consumer.poll(Duration.ofMillis(100L));
-            return consumer.assignment().equals(Utils.mkSet(tp0, t2p0));
+            return consumer.assignment().equals(Set.of(tp0, t2p0));
         }, "Does not complete rebalance in time");
 
-        assertEquals(Utils.mkSet(topic, topic2), consumer.subscription());
-        assertEquals(Utils.mkSet(tp0, t2p0), consumer.assignment());
+        assertEquals(Set.of(topic, topic2), consumer.subscription());
+        assertEquals(Set.of(tp0, t2p0), consumer.assignment());
 
         // prepare a response of the outstanding fetch so that we have data available on the next poll
         Map<TopicPartition, FetchInfo> fetches1 = new HashMap<>();
@@ -2296,6 +2317,9 @@ public class KafkaConsumerTest {
         assertEquals(11, records.count());
         assertEquals(1L, consumer.position(tp0));
         assertEquals(10L, consumer.position(t2p0));
+        assertEquals(records.nextOffsets().size(), 2);
+        assertEquals(records.nextOffsets().get(tp0), new OffsetAndMetadata(1L, Optional.empty(), ""));
+        assertEquals(records.nextOffsets().get(t2p0), new OffsetAndMetadata(10L, Optional.empty(), ""));
 
         // prepare the next response of the prefetch
         fetches1.clear();
@@ -2307,8 +2331,8 @@ public class KafkaConsumerTest {
         consumer.subscribe(Arrays.asList(topic, topic3), getConsumerRebalanceListener(consumer));
 
         // verify that subscription has changed but assignment is still unchanged
-        assertEquals(Utils.mkSet(topic, topic3), consumer.subscription());
-        assertEquals(Utils.mkSet(tp0, t2p0), consumer.assignment());
+        assertEquals(Set.of(topic, topic3), consumer.subscription());
+        assertEquals(Set.of(tp0, t2p0), consumer.assignment());
 
         // mock the offset commit response for to be revoked partitions
         Map<TopicPartition, Long> partitionOffsets1 = new HashMap<>();
@@ -2324,10 +2348,12 @@ public class KafkaConsumerTest {
         client.respondFrom(fetchResponse(fetches1), node);
 
         // verify that the fetch still occurred as expected
-        assertEquals(Utils.mkSet(topic, topic3), consumer.subscription());
+        assertEquals(Set.of(topic, topic3), consumer.subscription());
         assertEquals(Collections.singleton(tp0), consumer.assignment());
         assertEquals(1, records.count());
         assertEquals(2L, consumer.position(tp0));
+        assertEquals(records.nextOffsets().size(), 1);
+        assertEquals(records.nextOffsets().get(tp0), new OffsetAndMetadata(2L, Optional.empty(), ""));
 
         // verify that the offset commits occurred as expected
         assertTrue(commitReceived.get());
@@ -2340,10 +2366,12 @@ public class KafkaConsumerTest {
         records = consumer.poll(Duration.ZERO);
 
         // should not finish the response yet
-        assertEquals(Utils.mkSet(topic, topic3), consumer.subscription());
+        assertEquals(Set.of(topic, topic3), consumer.subscription());
         assertEquals(Collections.singleton(tp0), consumer.assignment());
         assertEquals(1, records.count());
         assertEquals(3L, consumer.position(tp0));
+        assertEquals(records.nextOffsets().size(), 1);
+        assertEquals(records.nextOffsets().get(tp0), new OffsetAndMetadata(3L, Optional.empty(), ""));
 
         fetches1.clear();
         fetches1.put(tp0, new FetchInfo(3, 1));
@@ -2353,17 +2381,20 @@ public class KafkaConsumerTest {
         client.respondFrom(syncGroupResponse(Arrays.asList(tp0, t3p0), Errors.NONE), coordinator);
 
         AtomicInteger count = new AtomicInteger(0);
+        AtomicReference<ConsumerRecords<String, String>> recs1 = new AtomicReference<>();
         TestUtils.waitForCondition(() -> {
-            ConsumerRecords<String, String> recs = consumer.poll(Duration.ofMillis(100L));
-            return consumer.assignment().equals(Utils.mkSet(tp0, t3p0)) && count.addAndGet(recs.count()) == 1;
+            recs1.set(consumer.poll(Duration.ofMillis(100L)));
+            return consumer.assignment().equals(Set.of(tp0, t3p0)) && count.addAndGet(recs1.get().count()) == 1;
 
         }, "Does not complete rebalance in time");
 
         // should have t3 but not sent yet the t3 records
-        assertEquals(Utils.mkSet(topic, topic3), consumer.subscription());
-        assertEquals(Utils.mkSet(tp0, t3p0), consumer.assignment());
+        assertEquals(Set.of(topic, topic3), consumer.subscription());
+        assertEquals(Set.of(tp0, t3p0), consumer.assignment());
         assertEquals(4L, consumer.position(tp0));
         assertEquals(0L, consumer.position(t3p0));
+        assertEquals(recs1.get().nextOffsets().size(), 1);
+        assertEquals(recs1.get().nextOffsets().get(tp0), new OffsetAndMetadata(4L, Optional.empty(), ""));
 
         fetches1.clear();
         fetches1.put(tp0, new FetchInfo(4, 1));
@@ -2371,14 +2402,18 @@ public class KafkaConsumerTest {
         client.respondFrom(fetchResponse(fetches1), node);
 
         count.set(0);
+        AtomicReference<ConsumerRecords<String, String>> recs2 = new AtomicReference<>();
         TestUtils.waitForCondition(() -> {
-            ConsumerRecords<String, String> recs = consumer.poll(Duration.ofMillis(100L));
-            return count.addAndGet(recs.count()) == 101;
+            recs2.set(consumer.poll(Duration.ofMillis(100L)));
+            return count.addAndGet(recs2.get().count()) == 101;
 
         }, "Does not complete rebalance in time");
 
         assertEquals(5L, consumer.position(tp0));
         assertEquals(100L, consumer.position(t3p0));
+        assertEquals(recs2.get().nextOffsets().size(), 2);
+        assertEquals(recs2.get().nextOffsets().get(tp0), new OffsetAndMetadata(5L, Optional.empty(), ""));
+        assertEquals(recs2.get().nextOffsets().get(t3p0), new OffsetAndMetadata(100L, Optional.empty(), ""));
 
         client.requests().clear();
         consumer.unsubscribe();
@@ -2511,6 +2546,8 @@ public class KafkaConsumerTest {
         final ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ofMillis(1));
         assertEquals(5, records.count());
         assertEquals(55L, consumer.position(tp0));
+        assertEquals(records.nextOffsets().size(), 1);
+        assertEquals(records.nextOffsets().get(tp0), new OffsetAndMetadata(55L, Optional.empty(), ""));
 
         // correct lag result
         assertEquals(OptionalLong.of(45L), consumer.currentLag(tp0));
