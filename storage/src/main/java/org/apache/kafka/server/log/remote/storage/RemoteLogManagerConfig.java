@@ -104,7 +104,7 @@ public final class RemoteLogManagerConfig {
         (name, value) -> { 
             if ((int) value < -1 || (int) value == 0) throw new ConfigException(name, value, "Value can be -1 or greater than 0"); 
         },
-        () -> REMOTE_LOG_MANAGER_THREAD_POOL_FALLBACK
+        () -> "[-1,1,...]"
     );
 
     public static final String REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP = "remote.log.manager.copier.thread.pool.size";
