@@ -14,25 +14,23 @@
 # limitations under the License.
 
 # the types of metadata quorums we support
-zk = 'ZK' # ZooKeeper, used before/during the KIP-500 bridge release(s)
 combined_kraft = 'COMBINED_KRAFT' # combined Controllers in KRaft mode, used during/after the KIP-500 bridge release(s)
 isolated_kraft = 'ISOLATED_KRAFT' # isolated Controllers in KRaft mode, used during/after the KIP-500 bridge release(s)
 
 # How we will parameterize tests that exercise all quorum styles
 #   [“ZK”, “ISOLATED_KRAFT”, "COMBINED_KRAFT"] during the KIP-500 bridge release(s)
 #   [“ISOLATED_KRAFT”, "COMBINED_KRAFT”] after the KIP-500 bridge release(s)
-all = [zk, isolated_kraft, combined_kraft]
+all = [isolated_kraft, combined_kraft]
 # How we will parameterize tests that exercise all KRaft quorum styles
 all_kraft = [isolated_kraft, combined_kraft]
 # How we will parameterize tests that are unrelated to upgrades:
 #   [“ZK”] before the KIP-500 bridge release(s)
 #   [“ZK”, “ISOLATED_KRAFT”] during the KIP-500 bridge release(s) and in preview releases
 #   [“ISOLATED_KRAFT”] after the KIP-500 bridge release(s)
-all_non_upgrade = [zk, isolated_kraft]
+all_non_upgrade = [isolated_kraft]
 
 def for_test(test_context):
-    # A test uses ZooKeeper if it doesn't specify a metadata quorum or if it explicitly specifies ZooKeeper
-    default_quorum_type = zk
+    default_quorum_type = isolated_kraft
     arg_name = 'metadata_quorum'
     retval = default_quorum_type if not test_context.injected_args else test_context.injected_args.get(arg_name, default_quorum_type)
     if retval not in all:
@@ -59,9 +57,7 @@ class ServiceQuorumInfo:
         The service for which this instance exposes quorum-related
         information
     quorum_type : str
-        COMBINED_KRAFT, ISOLATED_KRAFT, or ZK
-    using_zk : bool
-        True iff quorum_type==ZK
+        COMBINED_KRAFT or ISOLATED_KRAFT
     using_kraft : bool
         False iff quorum_type==ZK
     has_brokers : bool
@@ -88,14 +84,12 @@ class ServiceQuorumInfo:
             given Kafka service is being instantiated
         """
 
-        if quorum_type != zk and kafka.zk and not kafka.allow_zk_with_kraft:
-            raise Exception("Cannot use ZooKeeper while specifying a KRaft metadata quorum unless explicitly allowing it")
         if kafka.isolated_kafka and quorum_type != isolated_kraft:
             raise Exception("Cannot specify an isolated Kafka service unless using an isolated KRaft metadata quorum (should not happen)")
 
         self.kafka = kafka
         self.quorum_type = quorum_type
-        self.using_zk = quorum_type == zk
+        self.using_zk = False
         self.using_kraft = not self.using_zk
         self.has_brokers = self.using_kraft and not kafka.isolated_kafka
         self.has_controllers = quorum_type == combined_kraft or kafka.isolated_kafka

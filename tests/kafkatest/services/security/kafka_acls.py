@@ -37,7 +37,7 @@ class ACLs:
 
         for operation in ['ClusterAction'] + additional_cluster_operations_to_grant:
             cmd = "%(cmd_prefix)s --add --cluster --operation=%(operation)s --allow-principal=%(principal)s" % {
-                'cmd_prefix': kafka.kafka_acls_cmd_with_optional_security_settings(node, force_use_zk_connection, security_protocol),
+                'cmd_prefix': kafka.kafka_acls_cmd_with_optional_security_settings(node, security_protocol),
                 'operation': operation,
                 'principal': principal
             }
