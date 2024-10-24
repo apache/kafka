@@ -511,7 +511,7 @@ public class TopologyTestDriver implements Closeable {
             task.initializeIfNeeded();
             task.completeRestoration(noOpResetter -> { });
             task.processorContext().setRecordContext(null);
-            for (TopicPartition tp: task.inputPartitions()) {
+            for (final TopicPartition tp: task.inputPartitions()) {
                 task.updateNextOffsets(tp, new OffsetAndMetadata(0, Optional.empty(), ""));
             }
         } else {
