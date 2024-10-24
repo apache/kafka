@@ -3086,7 +3086,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   def testIncrementalAlterConfigsForLog4jLogLevels(quorum: String): Unit = {
     client = createAdminClient
 
-    val ancestorLogger = "kafka";
+    val ancestorLogger = "kafka"
     val initialLoggerConfig = describeBrokerLoggers()
     val initialKafkaLogLevel = initialLoggerConfig.get("kafka").value()
     assertEquals(initialKafkaLogLevel, initialLoggerConfig.get("kafka.server.ControllerServer").value())
