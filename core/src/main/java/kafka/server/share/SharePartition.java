@@ -1884,16 +1884,15 @@ public class SharePartition {
                     // Even if write share group state RPC call fails, we will still go ahead with the state transition.
                     // Update the cached state and start and end offsets after releasing the acquisition lock on timeout.
                     maybeUpdateCachedStateAndOffsets();
-
-                    // If we have an acquisition lock timeout for a share-partition, then we should check if
-                    // there is a pending share fetch request for the share-partition and complete it.
-                    DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId(), topicIdPartition.partition());
-                    replicaManager.completeDelayedShareFetchRequest(delayedShareFetchKey);
                 });
             }
         } finally {
             lock.writeLock().unlock();
         }
+        // If we have an acquisition lock timeout for a share-partition, then we should check if
+        // there is a pending share fetch request for the share-partition and complete it.
+        DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId(), topicIdPartition.partition());
+        replicaManager.completeDelayedShareFetchRequest(delayedShareFetchKey);
     }
 
     private void releaseAcquisitionLockOnTimeoutForCompleteBatch(InFlightBatch inFlightBatch,
