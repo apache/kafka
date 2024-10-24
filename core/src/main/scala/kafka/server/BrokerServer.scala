@@ -23,7 +23,7 @@ import kafka.log.LogManager
 import kafka.log.remote.RemoteLogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
-import kafka.server.metadata.{AclPublisher, BrokerMetadataPublisher, ClientQuotaMetadataManager, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher}
+import kafka.server.metadata.{AclPublisher, BrokerMetadataPublisher, ClientQuotaMetadataManager, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher, ShareCoordinatorMetadataCacheHelperImpl}
 import kafka.server.share.SharePartitionManager
 import kafka.utils.CoreUtils
 import org.apache.kafka.common.config.ConfigException
@@ -46,7 +46,7 @@ import org.apache.kafka.server.{AssignmentsManager, BrokerFeatures, ClientMetric
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, TopicIdPartition}
 import org.apache.kafka.server.config.ConfigType
-import org.apache.kafka.server.share.persister.{NoOpShareStatePersister, Persister}
+import org.apache.kafka.server.share.persister.{DefaultStatePersister, NoOpShareStatePersister, Persister, PersisterStateManager}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.{ClientMetricsReceiverPlugin, KafkaYammerMetrics}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
@@ -124,7 +124,7 @@ class BrokerServer(
 
   var transactionCoordinator: TransactionCoordinator = _
 
-  var shareCoordinator: Option[ShareCoordinator] = _
+  var shareCoordinator: Option[ShareCoordinator] = None
 
   var clientToControllerChannelManager: NodeToControllerChannelManager = _
 
@@ -356,7 +356,11 @@ class BrokerServer(
       /* initializing the groupConfigManager */
       groupConfigManager = new GroupConfigManager(config.groupCoordinatorConfig.extractGroupConfigMap(config.shareGroupConfig))
 
+      /* create share coordinator */
       shareCoordinator = createShareCoordinator()
+
+      /* create persister */
+      persister = createShareStatePersister()
 
       groupCoordinator = createGroupCoordinator()
 
@@ -423,8 +427,6 @@ class BrokerServer(
         config.shareGroupConfig.shareGroupMaxGroups * config.groupCoordinatorConfig.shareGroupMaxSize,
         KafkaServer.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS)
 
-      persister = NoOpShareStatePersister.getInstance()
-
       sharePartitionManager = new SharePartitionManager(
         replicaManager,
         time,
@@ -435,7 +437,7 @@ class BrokerServer(
         config.shareGroupConfig.shareFetchMaxFetchRecords,
         persister,
         groupConfigManager,
-        new Metrics()
+        metrics
       )
 
       // Create the request processor objects.
@@ -646,33 +648,68 @@ class BrokerServer(
   }
 
   private def createShareCoordinator(): Option[ShareCoordinator] = {
-    if (!config.shareGroupConfig.isShareGroupEnabled) {
-      return None
-    }
-    val time = Time.SYSTEM
-    val timer = new SystemTimerReaper(
-      "share-coordinator-reaper",
-      new SystemTimer("share-coordinator")
-    )
+    if (config.shareGroupConfig.isShareGroupEnabled &&
+      config.shareGroupConfig.shareGroupPersisterClassName().nonEmpty) {
+      val time = Time.SYSTEM
+      val timer = new SystemTimerReaper(
+        "share-coordinator-reaper",
+        new SystemTimer("share-coordinator")
+      )
 
-    val serde = new ShareCoordinatorRecordSerde
-    val loader = new CoordinatorLoaderImpl[CoordinatorRecord](
-      time,
-      replicaManager,
-      serde,
-      config.shareCoordinatorConfig.shareCoordinatorLoadBufferSize()
-    )
-    val writer = new CoordinatorPartitionWriter(
-      replicaManager
-    )
-    Some(new ShareCoordinatorService.Builder(config.brokerId, config.shareCoordinatorConfig)
-      .withTimer(timer)
-      .withTime(time)
-      .withLoader(loader)
-      .withWriter(writer)
-      .withCoordinatorRuntimeMetrics(new ShareCoordinatorRuntimeMetrics(metrics))
-      .withCoordinatorMetrics(new ShareCoordinatorMetrics(metrics))
-      .build())
+      val serde = new ShareCoordinatorRecordSerde
+      val loader = new CoordinatorLoaderImpl[CoordinatorRecord](
+        time,
+        replicaManager,
+        serde,
+        config.shareCoordinatorConfig.shareCoordinatorLoadBufferSize()
+      )
+      val writer = new CoordinatorPartitionWriter(
+        replicaManager
+      )
+      Some(new ShareCoordinatorService.Builder(config.brokerId, config.shareCoordinatorConfig)
+        .withTimer(timer)
+        .withTime(time)
+        .withLoader(loader)
+        .withWriter(writer)
+        .withCoordinatorRuntimeMetrics(new ShareCoordinatorRuntimeMetrics(metrics))
+        .withCoordinatorMetrics(new ShareCoordinatorMetrics(metrics))
+        .build())
+    } else {
+      None
+    }
+  }
+
+  private def createShareStatePersister(): Persister = {
+    if (config.shareGroupConfig.isShareGroupEnabled &&
+      config.shareGroupConfig.shareGroupPersisterClassName.nonEmpty) {
+      val klass = Utils.loadClass(config.shareGroupConfig.shareGroupPersisterClassName, classOf[Object]).asInstanceOf[Class[Persister]]
+
+      if (klass.getName.equals(classOf[DefaultStatePersister].getName)) {
+        klass.getConstructor(classOf[PersisterStateManager])
+          .newInstance(
+            new PersisterStateManager(
+              NetworkUtils.buildNetworkClient("Persister", config, metrics, Time.SYSTEM, new LogContext(s"[Persister broker=${config.brokerId}]")),
+              new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.get.partitionFor(key), config.interBrokerListenerName),
+              Time.SYSTEM,
+              new SystemTimerReaper(
+                "persister-state-manager-reaper",
+                new SystemTimer("persister")
+              )
+            )
+          )
+      } else if (klass.getName.equals(classOf[NoOpShareStatePersister].getName)) {
+        info("Using no op persister")
+        new NoOpShareStatePersister()
+      } else {
+        error("Unknown persister specified. Persister is only factory pluggable!")
+        throw new IllegalArgumentException("Unknown persiser specified " + config.shareGroupConfig.shareGroupPersisterClassName)
+      }
+    } else {
+      // in case share coordinator not enabled or
+      // persister class name deliberately empty (key=)
+      info("Using no op persister")
+      new NoOpShareStatePersister()
+    }
   }
 
   protected def createRemoteLogManager(): Option[RemoteLogManager] = {
@@ -778,8 +815,12 @@ class BrokerServer(
 
       if (socketServer != null)
         CoreUtils.swallow(socketServer.shutdown(), this)
+
       Utils.closeQuietly(brokerTopicStats, "broker topic stats")
       Utils.closeQuietly(sharePartitionManager, "share partition manager")
+
+      if (persister != null)
+        CoreUtils.swallow(persister.stop(), this)
 
       isShuttingDown.set(false)
 

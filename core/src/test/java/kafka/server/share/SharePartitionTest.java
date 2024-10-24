@@ -5127,7 +5127,8 @@ public class SharePartitionTest {
         private int defaultAcquisitionLockTimeoutMs = 30000;
         private int maxDeliveryCount = MAX_DELIVERY_COUNT;
         private int maxInflightMessages = MAX_IN_FLIGHT_MESSAGES;
-        private Persister persister = NoOpShareStatePersister.getInstance();
+
+        private Persister persister = new NoOpShareStatePersister();
         private final ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
         private GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
 

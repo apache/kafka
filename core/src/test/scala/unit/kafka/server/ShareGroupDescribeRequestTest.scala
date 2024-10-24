@@ -40,7 +40,9 @@ import scala.jdk.CollectionConverters._
 
 @Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
-@ClusterTestDefaults(types = Array(Type.KRAFT), brokers = 1)
+@ClusterTestDefaults(types = Array(Type.KRAFT), brokers = 1, serverProperties = Array(
+  new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "")
+))
 @Tag("integration")
 class ShareGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
