@@ -1874,10 +1874,11 @@ project(':clients') {
     testImplementation libs.log4j2Api
     testImplementation libs.log4j2Core
     testImplementation libs.log4j1Bridge2Api
-    testImplementation libs.bndlib
     testImplementation libs.spotbugs
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
+
+    testCompileOnly libs.bndlib
 
     testRuntimeOnly libs.jacksonDatabind
     testRuntimeOnly libs.jacksonJDK8Datatypes
@@ -2631,10 +2632,10 @@ project(':streams') {
     implementation libs.slf4jApi
     implementation libs.jacksonAnnotations
     implementation libs.jacksonDatabind
-    implementation libs.bndlib
 
     // testCompileOnly prevents streams from exporting a dependency on test-utils, which would cause a dependency cycle
     testCompileOnly project(':streams:test-utils')
+    testCompileOnly libs.bndlib
 
     testImplementation project(':metadata')
     testImplementation project(':clients').sourceSets.test.output
@@ -3511,7 +3512,6 @@ project(':connect:runtime') {
     implementation libs.log4j2Api
     implementation libs.log4j2Core
     implementation libs.log4j1Bridge2Api
-    implementation libs.bndlib
     implementation libs.spotbugs
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
     implementation libs.jacksonAnnotations
@@ -3527,6 +3527,8 @@ project(':connect:runtime') {
     implementation libs.classgraph
     implementation libs.mavenArtifact
     implementation libs.swaggerAnnotations
+
+    compileOnly libs.bndlib
 
     // We use this library to generate OpenAPI docs for the REST API, but we don't want or need it at compile
     // or run time. So, we add it to a separate configuration, which we use later on during docs generation
@@ -3550,6 +3552,8 @@ project(':connect:runtime') {
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter
     testImplementation libs.httpclient
+
+    testCompileOnly libs.bndlib
 
     testRuntimeOnly libs.bcpkix
     testRuntimeOnly runtimeTestLibs
