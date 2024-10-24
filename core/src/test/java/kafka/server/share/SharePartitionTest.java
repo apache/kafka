@@ -61,7 +61,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
-import scala.Option;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -77,6 +76,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+
+import scala.Option;
 
 import static kafka.server.share.SharePartition.EMPTY_MEMBER_ID;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
@@ -199,7 +200,7 @@ public class SharePartitionTest {
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                 PartitionFactory.newPartitionAllData(
                     0, PartitionFactory.DEFAULT_STATE_EPOCH,
-                    PartitionFactory.DEFAULT_START_OFFSET,
+                    PartitionFactory.UNINITIALIZED_START_OFFSET,
                     PartitionFactory.DEFAULT_ERROR_CODE,
                     PartitionFactory.DEFAULT_ERR_MESSAGE,
                     Collections.emptyList())))));
@@ -242,7 +243,7 @@ public class SharePartitionTest {
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                 PartitionFactory.newPartitionAllData(
                     0, PartitionFactory.DEFAULT_STATE_EPOCH,
-                    PartitionFactory.DEFAULT_START_OFFSET,
+                    PartitionFactory.UNINITIALIZED_START_OFFSET,
                     PartitionFactory.DEFAULT_ERROR_CODE,
                     PartitionFactory.DEFAULT_ERR_MESSAGE,
                     Collections.emptyList())))));
@@ -285,7 +286,7 @@ public class SharePartitionTest {
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                 PartitionFactory.newPartitionAllData(
                     0, PartitionFactory.DEFAULT_STATE_EPOCH,
-                    PartitionFactory.DEFAULT_START_OFFSET,
+                    PartitionFactory.UNINITIALIZED_START_OFFSET,
                     PartitionFactory.DEFAULT_ERROR_CODE,
                     PartitionFactory.DEFAULT_ERR_MESSAGE,
                     Collections.emptyList())))));
@@ -294,7 +295,7 @@ public class SharePartitionTest {
         GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
         GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
         Mockito.when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
-        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(GroupConfig.ShareGroupAutoOffsetReset.UNKNOWN);
+        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(GroupConfig.ShareGroupAutoOffsetReset.NONE);
 
         ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
 
@@ -328,7 +329,7 @@ public class SharePartitionTest {
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                 PartitionFactory.newPartitionAllData(
                     0, PartitionFactory.DEFAULT_STATE_EPOCH,
-                    PartitionFactory.DEFAULT_START_OFFSET,
+                    PartitionFactory.UNINITIALIZED_START_OFFSET,
                     PartitionFactory.DEFAULT_ERROR_CODE,
                     PartitionFactory.DEFAULT_ERR_MESSAGE,
                     Collections.emptyList())))));

@@ -386,35 +386,11 @@ public class SharePartition {
                     return;
                 }
 
-                // Set the state epoch and end offset from the persisted state.
-                if (partitionData.startOffset() != PartitionFactory.DEFAULT_START_OFFSET) {
-                    startOffset = partitionData.startOffset();
-                } else {
-                    GroupConfig.ShareGroupAutoOffsetReset offsetResetStrategy;
-                    if (groupConfigManager.groupConfig(groupId).isPresent()) {
-                        offsetResetStrategy = groupConfigManager.groupConfig(groupId).get().shareAutoOffsetReset();
-                        if (offsetResetStrategy == GroupConfig.ShareGroupAutoOffsetReset.UNKNOWN) {
-                            offsetResetStrategy = GroupConfig.defaultShareAutoOffsetReset();
-                        }
-                    } else {
-                        offsetResetStrategy = GroupConfig.defaultShareAutoOffsetReset();
-                    }
-
-                    if (offsetResetStrategy == GroupConfig.ShareGroupAutoOffsetReset.EARLIEST) {
-                        try {
-                            startOffset = offsetForEarliestTimestamp(topicIdPartition, replicaManager);
-                        } catch (Exception e) {
-                            completeInitializationWithException(future, e);
-                            return;
-                        }
-                    } else {
-                        try {
-                            startOffset = offsetForLatestTimestamp(topicIdPartition, replicaManager);
-                        } catch (Exception e) {
-                            completeInitializationWithException(future, e);
-                            return;
-                        }
-                    }
+                try {
+                    setStartOffsetDuringInitialization(partitionData);
+                } catch (Exception e) {
+                    completeInitializationWithException(future, e);
+                    return;
                 }
                 stateEpoch = partitionData.stateEpoch();
 
@@ -1920,6 +1896,29 @@ public class SharePartition {
             updateResult.updateAcquisitionLockTimeoutTask(null);
             if (updateResult.state != RecordState.ARCHIVED) {
                 findNextFetchOffset.set(true);
+            }
+        }
+    }
+
+    private void setStartOffsetDuringInitialization(PartitionAllData partitionData) throws Exception {
+        // Set the state epoch and end offset from the persisted state.
+        if (partitionData.startOffset() != PartitionFactory.UNINITIALIZED_START_OFFSET) {
+            startOffset = partitionData.startOffset();
+        } else {
+            GroupConfig.ShareGroupAutoOffsetReset offsetResetStrategy;
+            if (groupConfigManager.groupConfig(groupId).isPresent()) {
+                offsetResetStrategy = groupConfigManager.groupConfig(groupId).get().shareAutoOffsetReset();
+                if (offsetResetStrategy == GroupConfig.ShareGroupAutoOffsetReset.NONE) {
+                    offsetResetStrategy = GroupConfig.defaultShareAutoOffsetReset();
+                }
+            } else {
+                offsetResetStrategy = GroupConfig.defaultShareAutoOffsetReset();
+            }
+
+            if (offsetResetStrategy == GroupConfig.ShareGroupAutoOffsetReset.EARLIEST) {
+                startOffset = offsetForEarliestTimestamp(topicIdPartition, replicaManager);
+            } else {
+                startOffset = offsetForLatestTimestamp(topicIdPartition, replicaManager);
             }
         }
     }

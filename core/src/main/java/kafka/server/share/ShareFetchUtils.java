@@ -50,6 +50,7 @@ public class ShareFetchUtils {
      * Process the replica manager fetch response to create share fetch response. The response is created
      * by acquiring records from the share partition.
      */
+    // Visible for testing
     static Map<TopicIdPartition, ShareFetchResponseData.PartitionData> processFetchResponse(
             ShareFetchData shareFetchData,
             Map<TopicIdPartition, FetchPartitionData> responseData,
@@ -130,6 +131,6 @@ public class ShareFetchUtils {
         Option<FileRecords.TimestampAndOffset> timestampAndOffset = replicaManager.fetchOffsetForTimestamp(
             topicIdPartition.topicPartition(), ListOffsetsRequest.LATEST_TIMESTAMP, new Some<>(IsolationLevel.READ_UNCOMMITTED),
             Optional.empty(), true).timestampAndOffsetOpt();
-        return timestampAndOffset.get().offset;
+        return timestampAndOffset.isEmpty() ? (long) 0 : timestampAndOffset.get().offset;
     }
 }

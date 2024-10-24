@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 
 import java.util.Locale;
@@ -33,6 +34,7 @@ import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
+import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 /**
  * Group configuration related parameters and supporting methods like validation, etc. are
@@ -100,6 +102,7 @@ public class GroupConfig extends AbstractConfig {
         .define(SHARE_AUTO_OFFSET_RESET_CONFIG,
             STRING,
             SHARE_AUTO_OFFSET_RESET_DEFAULT,
+            in(Utils.enumOptions(ShareGroupAutoOffsetReset.class)),
             MEDIUM,
             SHARE_AUTO_OFFSET_RESET_DOC);
 
@@ -197,7 +200,7 @@ public class GroupConfig extends AbstractConfig {
             throw new InvalidConfigurationException(SHARE_SESSION_TIMEOUT_MS_CONFIG + " must be greater than " +
                 SHARE_HEARTBEAT_INTERVAL_MS_CONFIG);
         }
-        if (ShareGroupAutoOffsetReset.forStrategy(shareAutoOffsetReset) == ShareGroupAutoOffsetReset.UNKNOWN) {
+        if (ShareGroupAutoOffsetReset.valueOf(shareAutoOffsetReset.toUpperCase(Locale.ROOT)) == ShareGroupAutoOffsetReset.NONE) {
             throw new InvalidConfigurationException(SHARE_AUTO_OFFSET_RESET_CONFIG + " must be " +
                 ShareGroupAutoOffsetReset.LATEST + " or " + ShareGroupAutoOffsetReset.EARLIEST);
         }
@@ -227,7 +230,7 @@ public class GroupConfig extends AbstractConfig {
      * The default share group auto offset reset strategy.
      */
     public static ShareGroupAutoOffsetReset defaultShareAutoOffsetReset() {
-        return ShareGroupAutoOffsetReset.forStrategy(SHARE_AUTO_OFFSET_RESET_DEFAULT);
+        return ShareGroupAutoOffsetReset.valueOf(SHARE_AUTO_OFFSET_RESET_DEFAULT.toUpperCase(Locale.ROOT));
     }
 
     /**
@@ -269,34 +272,15 @@ public class GroupConfig extends AbstractConfig {
      * The share group auto offset reset strategy.
      */
     public ShareGroupAutoOffsetReset shareAutoOffsetReset() {
-        return ShareGroupAutoOffsetReset.forStrategy(shareAutoOffsetReset);
+        return ShareGroupAutoOffsetReset.valueOf(shareAutoOffsetReset.toUpperCase(Locale.ROOT));
     }
 
     public enum ShareGroupAutoOffsetReset {
-        LATEST("latest"),
-        EARLIEST("earliest"),
-        UNKNOWN("unknown");
-
-        private final String strategy;
-
-        ShareGroupAutoOffsetReset(String strategy) {
-            this.strategy = strategy;
-        }
+        LATEST, EARLIEST, NONE;
 
         @Override
         public String toString() {
-            return strategy;
-        }
-
-        public static ShareGroupAutoOffsetReset forStrategy(String strategy) {
-            switch (strategy.toLowerCase(Locale.ROOT)) {
-                case "latest":
-                    return LATEST;
-                case "earliest":
-                    return EARLIEST;
-                default:
-                    return UNKNOWN;
-            }
+            return super.toString().toLowerCase(Locale.ROOT);
         }
     }
 }
