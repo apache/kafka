@@ -324,8 +324,6 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
             final long timeMs;
             final String apiName;
-            final String msg;
-            final boolean isTraceEnabled = log.isTraceEnabled();
 
             switch (localState) {
                 case SUBSCRIPTION_IN_PROGRESS:
@@ -337,15 +335,15 @@ public class ClientTelemetryReporter implements MetricsReporter {
                     */
                     apiName = (localState == ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS) ? ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS.name : ApiKeys.PUSH_TELEMETRY.name;
                     timeMs = requestTimeoutMs;
-                    msg = isTraceEnabled ? "" : String.format("the remaining wait time for the %s network API request, as specified by %s", apiName, CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG);
+                    log.trace("For telemetry state {}, returning the value {} ms; the remaining wait time for the {} network API request, as specified by {}", localState, timeMs, apiName, CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG);
                     break;
                 case TERMINATING_PUSH_IN_PROGRESS:
                     timeMs = Long.MAX_VALUE;
-                    msg = isTraceEnabled ? "" : "the terminating push is in progress, disabling telemetry for further requests";
+                    log.trace("For telemetry state {}, returning the value {} ms; the terminating push is in progress, disabling telemetry for further requests", localState, timeMs);
                     break;
                 case TERMINATING_PUSH_NEEDED:
                     timeMs = 0;
-                    msg = isTraceEnabled ? "" : String.format("the client should try to submit the final %s network API request ASAP before closing", ApiKeys.PUSH_TELEMETRY.name);
+                    log.trace("For telemetry state {}, returning the value {} ms; the client should try to submit the final {} network API request ASAP before closing", localState, timeMs, ApiKeys.PUSH_TELEMETRY.name);
                     break;
                 case SUBSCRIPTION_NEEDED:
                 case PUSH_NEEDED:
@@ -353,18 +351,14 @@ public class ClientTelemetryReporter implements MetricsReporter {
                     long timeRemainingBeforeRequest = localLastRequestMs + localIntervalMs - nowMs;
                     if (timeRemainingBeforeRequest <= 0) {
                         timeMs = 0;
-                        msg = isTraceEnabled ? "" : String.format("the wait time before submitting the next %s network API request has elapsed", apiName);
+                        log.trace("For telemetry state {}, returning the value {} ms; the wait time before submitting the next {} network API request has elapsed", localState, timeMs, apiName);
                     } else {
                         timeMs = timeRemainingBeforeRequest;
-                        msg = isTraceEnabled ? "" : String.format("the client will wait before submitting the next %s network API request", apiName);
+                        log.trace("For telemetry state {}, returning the value {} ms; the client will wait before submitting the next {} network API request", localState, timeMs, apiName);
                     }
                     break;
                 default:
                     throw new IllegalStateException("Unknown telemetry state: " + localState);
-            }
-
-            if (isTraceEnabled) {
-                log.trace("For telemetry state {}, returning the value {} ms; {}", localState, timeMs, msg);
             }
             return timeMs;
         }
