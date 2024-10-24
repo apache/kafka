@@ -1234,9 +1234,7 @@ public class InternalStreamsBuilderTest {
             return currentNode;
         }
         for (final GraphNode child: currentNode.children()) {
-            if (!visited.contains(child)) {
-                visited.add(child);
-            }
+            visited.add(child);
             final GraphNode result = getNodeByType(child, clazz, visited);
             if (result != null) {
                 return result;

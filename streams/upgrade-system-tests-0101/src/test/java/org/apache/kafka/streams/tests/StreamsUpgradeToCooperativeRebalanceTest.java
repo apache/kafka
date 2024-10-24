@@ -66,7 +66,7 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
             @Override
             public void apply(final String key, final String value) {
                 if (recordCounter++ % reportInterval == 0) {
-                    System.out.println(String.format("%sProcessed %d records so far", upgradePhase, recordCounter));
+                    System.out.printf("%sProcessed %d records so far%n", upgradePhase, recordCounter);
                     System.out.flush();
                 }
             }
@@ -81,7 +81,7 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             streams.close();
-            System.out.println(String.format("%sCOOPERATIVE-REBALANCE-TEST-CLIENT-CLOSED", upgradePhase));
+            System.out.printf("%sCOOPERATIVE-REBALANCE-TEST-CLIENT-CLOSED%n", upgradePhase);
             System.out.flush();
         }));
     }
