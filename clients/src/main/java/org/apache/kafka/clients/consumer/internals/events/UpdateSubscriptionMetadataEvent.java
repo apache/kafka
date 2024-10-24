@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-public class UpdateSubscriptionMetadataEvent extends  CompletableApplicationEvent<Void> {
+public class UpdateSubscriptionMetadataEvent extends CompletableApplicationEvent<Void> {
 
     public UpdateSubscriptionMetadataEvent(final long deadlineMs) {
         super(Type.UPDATE_SUBSCRIPTION_METADATA, deadlineMs);

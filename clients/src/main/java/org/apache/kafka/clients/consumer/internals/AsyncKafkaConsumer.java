@@ -1592,6 +1592,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         applicationEventHandler.addAndGet(new UpdateSubscriptionMetadataEvent(calculateDeadlineMs(timer)));
         processBackgroundEvents();
 
+        timer.update();
         return updateFetchPositions(timer);
     }
 
@@ -1667,7 +1668,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             if (pattern == null || pattern.toString().isEmpty())
                 throw new IllegalArgumentException("Topic pattern to subscribe to cannot be " + (pattern == null ?
                     "null" : "empty"));
-            applicationEventHandler.addAndGet(new TopicPatternSubscriptionChangeEvent(pattern, listener, calculateDeadlineMs(time.timer(defaultApiTimeoutMs))));
+            log.info("Subscribed to pattern: '{}'", pattern);
+            applicationEventHandler.addAndGet(new TopicPatternSubscriptionChangeEvent(
+                pattern, listener, calculateDeadlineMs(time.timer(defaultApiTimeoutMs))));
         } finally {
             release();
         }
@@ -1697,7 +1700,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 }
 
                 fetchBuffer.retainAll(currentTopicPartitions);
-                applicationEventHandler.addAndGet(new TopicSubscriptionChangeEvent(new HashSet<>(topics), listener, calculateDeadlineMs(time.timer(defaultApiTimeoutMs))));
+                log.info("Subscribed to topic(s): {}", String.join(", ", topics));
+                applicationEventHandler.addAndGet(new TopicSubscriptionChangeEvent(
+                    new HashSet<>(topics), listener, calculateDeadlineMs(time.timer(defaultApiTimeoutMs))));
             }
         } finally {
             release();

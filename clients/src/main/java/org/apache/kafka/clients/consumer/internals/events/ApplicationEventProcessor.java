@@ -256,7 +256,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      * it is already a member.
      */
     private void process(final TopicSubscriptionChangeEvent event) {
-        log.info("Subscribed to topic(s): {}", String.join(", ", event.topics()));
         if (subscriptions.subscribe(event.topics(), event.listener()))
             this.metadataVersionSnapshot = metadata.requestUpdateForNewTopics();
 
@@ -277,13 +276,16 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      * it is already a member.
      */
     private void process(final TopicPatternSubscriptionChangeEvent event) {
-        log.info("Subscribed to pattern: '{}'", event.pattern());
         subscriptions.subscribe(event.pattern(), event.listener());
         metadata.requestUpdateForNewTopics();
         updatePatternSubscription(metadata.fetch());
         event.future().complete(null);
     }
 
+    /**
+     * Process event that checks whether there is new assignment which matches subscribed pattern.
+     * If there is new assignment, this will make the consumer send the updated subscription.
+     */
     private void process(final UpdateSubscriptionMetadataEvent event) {
         if (this.metadataVersionSnapshot < metadata.updateVersion()) {
             this.metadataVersionSnapshot = metadata.updateVersion();
