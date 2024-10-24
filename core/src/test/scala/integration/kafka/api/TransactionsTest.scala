@@ -807,7 +807,6 @@ class TransactionsTest extends IntegrationTestHarness {
         brokers(partitionLeader).logManager.getLog(new TopicPartition(testTopic, 0)).get.producerStateManager.activeProducers.get(producerId)
       if (producerStateEntry != null) {
         val currentProducerEpoch = producerStateEntry.producerEpoch
-        // Verify that the producer epoch has increased after abortTransaction
         assertTrue(currentProducerEpoch > previousProducerEpoch,
           s"Producer epoch after abortTransaction ($currentProducerEpoch) should be greater than after first commit ($previousProducerEpoch)")
         // Update previousProducerEpoch
