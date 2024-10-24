@@ -41,7 +41,6 @@ import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Collections;
@@ -704,12 +703,11 @@ public class ClientTelemetryReporter implements MetricsReporter {
         }
 
         private Optional<Builder<?>> createPushRequest(ClientTelemetrySubscription localSubscription, boolean terminating) {
-            byte[] payload;
+            MetricsData payload;
             try (MetricsEmitter emitter = new ClientTelemetryEmitter(localSubscription.selector(), localSubscription.deltaTemporality())) {
                 emitter.init();
                 kafkaMetricsCollector.collect(emitter);
-                MetricsData payloadMetricsData = createPayload(emitter.emittedMetrics());
-                payload = compressPayload(payloadMetricsData);
+                payload = createPayload(emitter.emittedMetrics());
             } catch (Exception e) {
                 log.warn("Error constructing client telemetry payload: ", e);
                 // Update last accessed time for push request to be retried on next interval.
@@ -723,7 +721,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 compressedPayload = ClientTelemetryUtils.compress(payload, compressionType);
             } catch (IOException e) {
                 log.info("Failed to compress telemetry payload for compression: {}, sending uncompressed data", compressionType);
-                compressedPayload = payload;
+                compressedPayload = payload.toByteArray();
                 compressionType = CompressionType.NONE;
             }
 
@@ -872,12 +870,6 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 builder.addResourceMetrics(rm);
             });
             return builder.build();
-        }
-
-        private byte[] compressPayload(MetricsData payload) throws IOException {
-            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-            payload.writeTo(outputStream);
-            return outputStream.toByteArray();
         }
 
         // Visible for testing
