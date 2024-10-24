@@ -32,6 +32,7 @@ import org.apache.kafka.common.errors.FencedStateEpochException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidShareSessionEpochException;
+import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.ShareSessionNotFoundException;
@@ -103,8 +104,6 @@ import scala.Option;
 import scala.Tuple2;
 import scala.collection.Seq;
 import scala.jdk.javaapi.CollectionConverters;
-import scala.util.Either;
-import scala.util.Right;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -152,8 +151,8 @@ public class SharePartitionManagerTest {
         mockTimer = new SystemTimerReaper("sharePartitionManagerTestReaper",
             new SystemTimer("sharePartitionManagerTestTimer"));
         mockReplicaManager = mock(ReplicaManager.class);
-        Either<Errors, Partition> partition = mockPartition();
-        when(mockReplicaManager.getPartitionOrError(Mockito.any())).thenReturn(partition);
+        Partition partition = mockPartition();
+        when(mockReplicaManager.getPartitionOrException(Mockito.any())).thenReturn(partition);
     }
 
     @AfterEach
@@ -2172,19 +2171,41 @@ public class SharePartitionManagerTest {
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         Map<TopicIdPartition, Integer> partitionMaxBytes = Collections.singletonMap(tp0, PARTITION_MAX_BYTES);
 
+        // Send map to check no share partition is created.
+        Map<SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
+        // Validate when partition is not the leader.
+        Partition partition = mock(Partition.class);
+        when(partition.isLeader()).thenReturn(false);
+
         ReplicaManager replicaManager = mock(ReplicaManager.class);
-        when(replicaManager.getPartitionOrError(Mockito.any())).thenThrow(new NotLeaderOrFollowerException("Exception"));
+        // First check should throw KafkaStorageException, second check should return partition which
+        // is not leader.
+        when(replicaManager.getPartitionOrException(any()))
+            .thenThrow(new KafkaStorageException("Exception"))
+            .thenReturn(partition);
         SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withReplicaManager(replicaManager)
+            .withPartitionCacheMap(partitionCacheMap)
             .build();
 
+        // Validate when exception is thrown.
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
             sharePartitionManager.fetchMessages(groupId, Uuid.randomUuid().toString(), FETCH_PARAMS, partitionMaxBytes);
         TestUtils.waitForCondition(
             future::isDone,
             DELAYED_SHARE_FETCH_TIMEOUT_MS,
             () -> "Processing for delayed share fetch request not finished.");
+        validateShareFetchFutureException(future, tp0, Errors.KAFKA_STORAGE_ERROR);
+        assertTrue(partitionCacheMap.isEmpty());
+
+        // Validate when partition is not leader.
+        future = sharePartitionManager.fetchMessages(groupId, Uuid.randomUuid().toString(), FETCH_PARAMS, partitionMaxBytes);
+        TestUtils.waitForCondition(
+            future::isDone,
+            DELAYED_SHARE_FETCH_TIMEOUT_MS,
+            () -> "Processing for delayed share fetch request not finished.");
         validateShareFetchFutureException(future, tp0, Errors.NOT_LEADER_OR_FOLLOWER);
+        assertTrue(partitionCacheMap.isEmpty());
     }
 
     @Test
@@ -2348,12 +2369,12 @@ public class SharePartitionManagerTest {
         assertEquals(expectedValidSet, actualValidPartitions);
     }
 
-    private Either<Errors, Partition> mockPartition() {
-        Partition partition = Mockito.mock(Partition.class);
-        Mockito.when(partition.isLeader()).thenReturn(true);
-        Mockito.when(partition.getLeaderEpoch()).thenReturn(1);
+    private Partition mockPartition() {
+        Partition partition = mock(Partition.class);
+        when(partition.isLeader()).thenReturn(true);
+        when(partition.getLeaderEpoch()).thenReturn(1);
 
-        return new Right<>(partition);
+        return partition;
     }
 
     private void validateShareFetchFutureException(CompletableFuture<Map<TopicIdPartition, PartitionData>> future,

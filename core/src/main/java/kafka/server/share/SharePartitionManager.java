@@ -16,7 +16,6 @@
  */
 package kafka.server.share;
 
-import kafka.cluster.Partition;
 import kafka.server.ReplicaManager;
 
 import org.apache.kafka.clients.consumer.AcknowledgeType;
@@ -73,7 +72,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import scala.jdk.javaapi.CollectionConverters;
-import scala.util.Either;
 
 /**
  * The SharePartitionManager is responsible for managing the SharePartitions and ShareSessions.
@@ -280,7 +278,7 @@ public class SharePartitionManager implements AutoCloseable {
                 CompletableFuture<Errors> future = new CompletableFuture<>();
                 sharePartition.acknowledge(memberId, acknowledgePartitionBatches).whenComplete((result, throwable) -> {
                     if (throwable != null) {
-                        handleSharePartitionException(sharePartitionKey, throwable);
+                        handleFencedSharePartitionException(sharePartitionKey, throwable);
                         future.complete(Errors.forException(throwable));
                         return;
                     }
@@ -353,7 +351,7 @@ public class SharePartitionManager implements AutoCloseable {
                 CompletableFuture<Errors> future = new CompletableFuture<>();
                 sharePartition.releaseAcquiredRecords(memberId).whenComplete((result, throwable) -> {
                     if (throwable != null) {
-                        handleSharePartitionException(sharePartitionKey, throwable);
+                        handleFencedSharePartitionException(sharePartitionKey, throwable);
                         future.complete(Errors.forException(throwable));
                         return;
                     }
@@ -517,8 +515,8 @@ public class SharePartitionManager implements AutoCloseable {
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future,
         Throwable throwable
     ) {
-        topicIdPartitions.forEach(topicIdPartition -> handleSharePartitionException(sharePartitionKey(groupId, topicIdPartition), throwable));
-        maybeCompleteShareFetchExceptionally(future, topicIdPartitions, throwable);
+        topicIdPartitions.forEach(topicIdPartition -> handleFencedSharePartitionException(sharePartitionKey(groupId, topicIdPartition), throwable));
+        maybeCompleteShareFetchWithException(future, topicIdPartitions, throwable);
     }
 
     /**
@@ -612,7 +610,7 @@ public class SharePartitionManager implements AutoCloseable {
             // the share partition. But skip the processing for other share partitions in the request
             // as this situation is not expected.
             log.error("Error processing share fetch request", e);
-            maybeCompleteShareFetchExceptionally(shareFetchData.future(), shareFetchData.partitionMaxBytes().keySet(), e);
+            maybeCompleteShareFetchWithException(shareFetchData.future(), shareFetchData.partitionMaxBytes().keySet(), e);
         }
     }
 
@@ -620,7 +618,7 @@ public class SharePartitionManager implements AutoCloseable {
         return partitionCacheMap.computeIfAbsent(sharePartitionKey,
                 k -> {
                     long start = time.hiResClockMs();
-                    int leaderEpoch = leaderEpoch(sharePartitionKey.topicIdPartition().topicPartition());
+                    int leaderEpoch = ShareFetchUtils.leaderEpoch(replicaManager, sharePartitionKey.topicIdPartition().topicPartition());
                     SharePartition partition = new SharePartition(
                             sharePartitionKey.groupId(),
                             sharePartitionKey.topicIdPartition(),
@@ -658,10 +656,10 @@ public class SharePartitionManager implements AutoCloseable {
         // The server should not be in this state, so log the error on broker and surface the same
         // to the client. The broker should not be in this state, investigate the root cause of the error.
         log.error("Error initializing share partition with key {}", sharePartitionKey, throwable);
-        maybeCompleteShareFetchExceptionally(future, Collections.singletonList(topicIdPartition), throwable);
+        maybeCompleteShareFetchWithException(future, Collections.singletonList(topicIdPartition), throwable);
     }
 
-    private void handleSharePartitionException(
+    private void handleFencedSharePartitionException(
         SharePartitionKey sharePartitionKey,
         Throwable throwable
     ) {
@@ -674,29 +672,13 @@ public class SharePartitionManager implements AutoCloseable {
         }
     }
 
-    private void maybeCompleteShareFetchExceptionally(CompletableFuture<Map<TopicIdPartition, PartitionData>> future,
+    private void maybeCompleteShareFetchWithException(CompletableFuture<Map<TopicIdPartition, PartitionData>> future,
         Collection<TopicIdPartition> topicIdPartitions, Throwable throwable) {
         if (!future.isDone()) {
             Errors error = Errors.forException(throwable);
             future.complete(topicIdPartitions.stream().collect(Collectors.toMap(
                 tp -> tp, tp -> new PartitionData().setErrorCode(error.code()).setErrorMessage(error.message()))));
         }
-    }
-
-    private int leaderEpoch(TopicPartition tp) {
-        Either<Errors, Partition> partitionOrError = replicaManager.getPartitionOrError(tp);
-        if (partitionOrError.isLeft()) {
-            log.debug("Failed to get partition leader for topic partition: {}-{} due to error: {}",
-                tp.topic(), tp.partition(), partitionOrError.left().get());
-            throw partitionOrError.left().get().exception();
-        }
-
-        Partition partition = partitionOrError.right().get();
-        if (!partition.isLeader()) {
-            log.debug("The broker is not the leader for topic partition: {}-{}", tp.topic(), tp.partition());
-            throw new NotLeaderOrFollowerException();
-        }
-        return partition.getLeaderEpoch();
     }
 
     private SharePartitionKey sharePartitionKey(String groupId, TopicIdPartition topicIdPartition) {

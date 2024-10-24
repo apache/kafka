@@ -16,9 +16,12 @@
  */
 package kafka.server.share;
 
+import kafka.cluster.Partition;
 import kafka.server.ReplicaManager;
 
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.FileRecords;
@@ -127,5 +130,14 @@ public class ShareFetchUtils {
                 topicIdPartition.topicPartition(), ListOffsetsRequest.EARLIEST_TIMESTAMP, Option.empty(),
                 Optional.empty(), true).timestampAndOffsetOpt();
         return timestampAndOffset.isEmpty() ? (long) 0 : timestampAndOffset.get().offset;
+    }
+
+    static int leaderEpoch(ReplicaManager replicaManager, TopicPartition tp) {
+        Partition partition = replicaManager.getPartitionOrException(tp);
+        if (!partition.isLeader()) {
+            log.debug("The broker is not the leader for topic partition: {}-{}", tp.topic(), tp.partition());
+            throw new NotLeaderOrFollowerException();
+        }
+        return partition.getLeaderEpoch();
     }
 }
