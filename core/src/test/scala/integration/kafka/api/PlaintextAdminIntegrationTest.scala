@@ -29,7 +29,7 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils._
-import kafka.utils.{Log4jController, TestUtils}
+import kafka.utils.{Log4jController, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.HostResolver
 import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
 import org.apache.kafka.clients.admin._
@@ -57,7 +57,7 @@ import org.apache.log4j.PropertyConfigurator
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{Arguments, MethodSource, ValueSource}
 import org.slf4j.LoggerFactory
 
 import java.util.AbstractMap.SimpleImmutableEntry
@@ -1514,27 +1514,34 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(expectedLEO, brokers.head.replicaManager.localLog(topicPartition).get.logEndOffset)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testOffsetsForTimesAfterDeleteRecords(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testOffsetsForTimesAfterDeleteRecords(quorum: String, groupProtocol: String): Unit = {
     createTopic(topic, numPartitions = 2, replicationFactor = brokerCount)
 
     client = createAdminClient
 
-    val consumer = createConsumer()
+    val props = new Properties()
+    val consumer = createConsumer(configOverrides = props)
     subscribeAndWaitForAssignment(topic, consumer)
 
     val producer = createProducer()
     sendRecords(producer, 10, topicPartition)
-    assertEquals(0L, consumer.offsetsForTimes(Map(topicPartition -> JLong.valueOf(0L)).asJava).get(topicPartition).offset())
+    var returnedOffsets = consumer.offsetsForTimes(Map(topicPartition -> JLong.valueOf(0L)).asJava)
+    assertTrue(returnedOffsets.containsKey(topicPartition))
+    assertEquals(0L, returnedOffsets.get(topicPartition).offset())
 
     var result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(5L)).asJava)
     result.all.get
-    assertEquals(5L, consumer.offsetsForTimes(Map(topicPartition -> JLong.valueOf(0L)).asJava).get(topicPartition).offset())
+    returnedOffsets = consumer.offsetsForTimes(Map(topicPartition -> JLong.valueOf(0L)).asJava)
+    assertTrue(returnedOffsets.containsKey(topicPartition))
+    assertEquals(5L, returnedOffsets.get(topicPartition).offset())
 
     result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(DeleteRecordsRequest.HIGH_WATERMARK)).asJava)
     result.all.get
-    assertNull(consumer.offsetsForTimes(Map(topicPartition -> JLong.valueOf(0L)).asJava).get(topicPartition))
+    returnedOffsets = consumer.offsetsForTimes(Map(topicPartition -> JLong.valueOf(0L)).asJava)
+    assertTrue(returnedOffsets.containsKey(topicPartition))
+    assertNull(returnedOffsets.get(topicPartition))
   }
 
   @ParameterizedTest
@@ -3560,6 +3567,13 @@ object PlaintextAdminIntegrationTest {
     assertEquals("snappy", configs.get(topicResource2).get(TopicConfig.COMPRESSION_TYPE_CONFIG).value)
 
     assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, configs.get(brokerResource).get(ServerConfigs.COMPRESSION_TYPE_CONFIG).value)
+  }
+
+  def getTestQuorumAndGroupProtocolParametersAll() : java.util.stream.Stream[Arguments] = {
+    util.Arrays.stream(Array(
+      Arguments.of("kraft", "classic"),
+      Arguments.of("kraft", "consumer")
+    ))
   }
 
   /**
