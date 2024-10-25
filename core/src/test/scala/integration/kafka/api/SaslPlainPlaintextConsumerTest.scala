@@ -14,14 +14,17 @@ package kafka.api
 
 import kafka.security.JaasTestUtils
 import kafka.utils.TestUtils
-import kafka.utils.TestUtils.{isAclUnsecure, secureZkPaths}
+import kafka.zk.{KafkaZkClient, ZkData}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.server.config.ZkConfigs
+import org.apache.zookeeper.ZooDefs.Perms
+import org.apache.zookeeper.data.ACL
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api._
 
 import java.util.Locale
+import scala.collection.Seq
 
 @Timeout(600)
 class SaslPlainPlaintextConsumerTest extends BaseConsumerTest with SaslSetup {
@@ -63,5 +66,28 @@ class SaslPlainPlaintextConsumerTest extends BaseConsumerTest with SaslSetup {
         acls.foreach(isAclUnsecure)
       }
     })
+  }
+
+  def secureZkPaths(zkClient: KafkaZkClient): Seq[String] = {
+    def subPaths(path: String): Seq[String] = {
+      if (zkClient.pathExists(path))
+        path +: zkClient.getChildren(path).map(c => path + "/" + c).flatMap(subPaths)
+      else
+        Seq.empty
+    }
+    val topLevelPaths = ZkData.SecureRootPaths ++ ZkData.SensitiveRootPaths
+    topLevelPaths.flatMap(subPaths)
+  }
+
+  /**
+   * Verifies that the ACL corresponds to the unsecure one that
+   * provides ALL access to everyone (world).
+   */
+  def isAclUnsecure(acl: ACL): Boolean = {
+    debug(s"ACL $acl")
+    acl.getPerms match {
+      case Perms.ALL => acl.getId.getScheme == "world"
+      case _ => false
+    }
   }
 }

@@ -86,7 +86,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
     controllerServer.shutdown()
     controllerServer.awaitShutdown()
 
-    TestUtils.causeLogDirFailure(Checkpoint, leaderServer, partition)
+    causeLogDirFailure(Checkpoint, leaderServer, partition)
 
     TestUtils.waitUntilTrue(() => leaderServer.brokerState == BrokerState.SHUTTING_DOWN,
       s"Expected broker to be in NOT_RUNNING state but was ${leaderServer.brokerState}", 15000)
@@ -188,7 +188,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
     val leaderServerId = producer.partitionsFor(topic).asScala.find(_.partition() == 0).get.leader().id()
     val leaderServer = brokers.find(_.config.brokerId == leaderServerId).get
 
-    TestUtils.causeLogDirFailure(failureType, leaderServer, partition)
+    causeLogDirFailure(failureType, leaderServer, partition)
 
     // send() should fail due to either KafkaStorageException or NotLeaderOrFollowerException
     val e = assertThrows(classOf[ExecutionException], () => producer.send(record).get(6000, TimeUnit.MILLISECONDS))
@@ -213,7 +213,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
     producer.send(record).get()
     TestUtils.consumeRecords(consumer, 1)
 
-    val failedLogDir = TestUtils.causeLogDirFailure(failureType, originalLeaderServer, partition)
+    val failedLogDir = causeLogDirFailure(failureType, originalLeaderServer, partition)
 
     TestUtils.waitUntilTrue(() => {
       // ProduceResponse may contain KafkaStorageException and trigger metadata update
@@ -253,6 +253,26 @@ class LogDirFailureTest extends IntegrationTestHarness {
   private def subscribeAndWaitForAssignment(topic: String, consumer: Consumer[Array[Byte], Array[Byte]]): Unit = {
     consumer.subscribe(Collections.singletonList(topic))
     TestUtils.pollUntilTrue(consumer, () => !consumer.assignment.isEmpty, "Expected non-empty assignment")
+  }
+
+  def causeLogDirFailure(failureType: LogDirFailureType, leaderBroker: KafkaBroker, partition: TopicPartition): File = {
+    // Make log directory of the partition on the leader broker inaccessible by replacing it with a file
+    val localLog = leaderBroker.replicaManager.localLogOrException(partition)
+    val logDir = localLog.dir.getParentFile
+    CoreUtils.swallow(Utils.delete(logDir), this)
+    Files.createFile(logDir.toPath)
+    assertTrue(logDir.isFile)
+
+    if (failureType == Roll) {
+      assertThrows(classOf[KafkaStorageException], () => leaderBroker.replicaManager.getLog(partition).get.roll())
+    } else if (failureType == Checkpoint) {
+      leaderBroker.replicaManager.checkpointHighWatermarks()
+    }
+
+    // Wait for ReplicaHighWatermarkCheckpoint to happen so that the log directory of the topic will be offline
+    waitUntilTrue(() => !leaderBroker.logManager.isLogDirOnline(logDir.getAbsolutePath), "Expected log directory offline", 3000L)
+    assertTrue(leaderBroker.replicaManager.localLog(partition).isEmpty)
+    logDir
   }
 
 }
