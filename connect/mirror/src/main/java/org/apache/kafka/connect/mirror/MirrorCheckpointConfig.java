@@ -76,6 +76,9 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
     public static final String OFFSET_SYNCS_SOURCE_ADMIN_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "source-admin";
     public static final String OFFSET_SYNCS_TARGET_ADMIN_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "target-admin";
     public static final String CHECKPOINTS_TARGET_CONSUMER_ROLE = "checkpoints-target-consumer";
+    public static final String REVERSE_CHECKPOINTING_ENABLED = "reverse.checkpointing.enabled";
+    private static final String REVERSE_CHECKPOINTING_ENABLED_DOC = "Whether to enable reverse checkpointing. Reverse checkpointing requires that there is an opposite, active flow, and that the ReplicationPolicy can correctly identify the upstream cluster of replica topics.";
+    public static final boolean REVERSE_CHECKPOINTING_ENABLED_DEFAULT = false;
 
     public MirrorCheckpointConfig(Map<String, String> props) {
         super(CONNECTOR_CONFIG_DEF, props);
@@ -160,6 +163,29 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
 
     Duration consumerPollTimeout() {
         return Duration.ofMillis(getLong(CONSUMER_POLL_TIMEOUT_MILLIS));
+    }
+
+    boolean reverseCheckpointingEnabled() {
+        return getBoolean(REVERSE_CHECKPOINTING_ENABLED);
+    }
+
+    String reverseOffsetSyncsTopic() {
+        String otherClusterAlias = SOURCE_CLUSTER_ALIAS_DEFAULT.equals(offsetSyncsTopicLocation())
+                ? sourceClusterAlias()
+                : targetClusterAlias();
+        return replicationPolicy().offsetSyncsTopic(otherClusterAlias);
+    }
+
+    Map<String, Object> reverseOffsetSyncsTopicConsumerConfig() {
+        return SOURCE_CLUSTER_ALIAS_DEFAULT.equals(offsetSyncsTopicLocation())
+                ? targetConsumerConfig(OFFSET_SYNCS_TARGET_CONSUMER_ROLE)
+                : sourceConsumerConfig(OFFSET_SYNCS_SOURCE_CONSUMER_ROLE);
+    }
+
+    Map<String, Object> reverseOffsetSyncsTopicAdminConfig() {
+        return SOURCE_CLUSTER_ALIAS_DEFAULT.equals(offsetSyncsTopicLocation())
+                ? targetAdminConfig(OFFSET_SYNCS_TARGET_ADMIN_ROLE)
+                : sourceAdminConfig(OFFSET_SYNCS_SOURCE_ADMIN_ROLE);
     }
 
     public static Map<String, String> validate(Map<String, String> configs) {
@@ -262,7 +288,13 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
                         ConfigDef.Type.CLASS,
                         TOPIC_FILTER_CLASS_DEFAULT,
                         ConfigDef.Importance.LOW,
-                        TOPIC_FILTER_CLASS_DOC);
+                        TOPIC_FILTER_CLASS_DOC)
+                .define(
+                        REVERSE_CHECKPOINTING_ENABLED,
+                        ConfigDef.Type.BOOLEAN,
+                        REVERSE_CHECKPOINTING_ENABLED_DEFAULT,
+                        ConfigDef.Importance.MEDIUM,
+                        REVERSE_CHECKPOINTING_ENABLED_DOC);
     }
 
     protected static final ConfigDef CONNECTOR_CONFIG_DEF = defineCheckpointConfig(new ConfigDef(BASE_CONNECTOR_CONFIG_DEF));
