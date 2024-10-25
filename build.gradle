@@ -307,6 +307,20 @@ subprojects {
     }
   }
 
+  def modulesNeedingJava17 = [
+      ":core", ":coordinator-common", ":generator", ":group-coordinator",
+      ":metadata", ":raft", ":server", ":server-common", ":share", ":storage",
+      ":share-coordinator", ":test-common", ":tools", ":transaction-coordinator"
+  ]
+
+  if (modulesNeedingJava17.any { project.path.startsWith(it) }) {
+    java {
+      toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+      }
+    }
+  }
+
   tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
     options.compilerArgs << "-Xlint:all"
