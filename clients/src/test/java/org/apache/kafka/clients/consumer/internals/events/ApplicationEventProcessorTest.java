@@ -128,6 +128,8 @@ public class ApplicationEventProcessorTest {
 
     private static Stream<Arguments> applicationEvents() {
         return Stream.of(
+                Arguments.of(new PollEvent(100)),
+                Arguments.of(new CreateFetchRequestsEvent(calculateDeadlineMs(12345, 100))),
                 Arguments.of(new AsyncCommitEvent(new HashMap<>())),
                 Arguments.of(new SyncCommitEvent(new HashMap<>(), 500)),
                 Arguments.of(new CheckAndUpdatePositionsEvent(500)),
