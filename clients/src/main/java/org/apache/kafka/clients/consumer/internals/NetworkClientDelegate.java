@@ -27,6 +27,7 @@ import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
+import org.apache.kafka.clients.consumer.internals.metrics.KafkaConsumerMetrics;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
@@ -69,6 +70,7 @@ public class NetworkClientDelegate implements AutoCloseable {
     private final int requestTimeoutMs;
     private final Queue<UnsentRequest> unsentRequests;
     private final long retryBackoffMs;
+    private final Optional<KafkaConsumerMetrics> kafkaConsumerMetrics;
 
     public NetworkClientDelegate(
             final Time time,
@@ -76,7 +78,8 @@ public class NetworkClientDelegate implements AutoCloseable {
             final LogContext logContext,
             final KafkaClient client,
             final Metadata metadata,
-            final BackgroundEventHandler backgroundEventHandler) {
+            final BackgroundEventHandler backgroundEventHandler,
+            final Optional<KafkaConsumerMetrics> kafkaConsumerMetrics) {
         this.time = time;
         this.client = client;
         this.metadata = metadata;
@@ -85,6 +88,7 @@ public class NetworkClientDelegate implements AutoCloseable {
         this.unsentRequests = new ArrayDeque<>();
         this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+        this.kafkaConsumerMetrics = kafkaConsumerMetrics;
     }
 
     // Visible for testing
@@ -170,6 +174,7 @@ public class NetworkClientDelegate implements AutoCloseable {
         Iterator<UnsentRequest> iterator = unsentRequests.iterator();
         while (iterator.hasNext()) {
             UnsentRequest unsent = iterator.next();
+            kafkaConsumerMetrics.ifPresent(metrics -> metrics.recordUnsentRequestsQueueTime(currentTimeMs - unsent.enqueuedMs()));
             unsent.timer.update(currentTimeMs);
             if (unsent.timer.isExpired()) {
                 iterator.remove();
@@ -267,7 +272,9 @@ public class NetworkClientDelegate implements AutoCloseable {
     public void add(final UnsentRequest r) {
         Objects.requireNonNull(r);
         r.setTimer(this.time, this.requestTimeoutMs);
+        r.setEnqueuedMs(this.time.milliseconds());
         unsentRequests.add(r);
+        kafkaConsumerMetrics.ifPresent(metrics -> metrics.recordUnsentRequestsQueueSize(unsentRequests.size()));
     }
 
     public static class PollResult {
@@ -300,6 +307,7 @@ public class NetworkClientDelegate implements AutoCloseable {
         private final Optional<Node> node; // empty if random node can be chosen
 
         private Timer timer;
+        private long enqueuedMs;
 
         public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder,
                              final Optional<Node> node) {
@@ -315,6 +323,14 @@ public class NetworkClientDelegate implements AutoCloseable {
 
         Timer timer() {
             return timer;
+        }
+
+        void setEnqueuedMs(final long enqueuedMs) {
+            this.enqueuedMs = enqueuedMs;
+        }
+
+        long enqueuedMs() {
+            return enqueuedMs;
         }
 
         CompletableFuture<ClientResponse> future() {
@@ -412,7 +428,8 @@ public class NetworkClientDelegate implements AutoCloseable {
                                                            final Metrics metrics,
                                                            final Sensor throttleTimeSensor,
                                                            final ClientTelemetrySender clientTelemetrySender,
-                                                           final BackgroundEventHandler backgroundEventHandler) {
+                                                           final BackgroundEventHandler backgroundEventHandler,
+                                                           final Optional<KafkaConsumerMetrics> kafkaConsumerMetrics) {
         return new CachedSupplier<NetworkClientDelegate>() {
             @Override
             protected NetworkClientDelegate create() {
@@ -426,7 +443,7 @@ public class NetworkClientDelegate implements AutoCloseable {
                         metadata,
                         throttleTimeSensor,
                         clientTelemetrySender);
-                return new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler);
+                return new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler, kafkaConsumerMetrics);
             }
         };
     }

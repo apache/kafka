@@ -1431,7 +1431,7 @@ public class ShareConsumeRequestManagerTest {
         properties.setProperty(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, String.valueOf(requestTimeoutMs));
         properties.setProperty(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, String.valueOf(retryBackoffMs));
         ConsumerConfig config = new ConsumerConfig(properties);
-        networkClientDelegate = spy(new TestableNetworkClientDelegate(time, config, logContext, client, metadata, new BackgroundEventHandler(new LinkedBlockingQueue<>())));
+        networkClientDelegate = spy(new TestableNetworkClientDelegate(time, config, logContext, client, metadata, new BackgroundEventHandler(new LinkedBlockingQueue<>(), Optional.empty())));
     }
 
     private class TestableShareConsumeRequestManager<K, V> extends ShareConsumeRequestManager {
@@ -1484,7 +1484,7 @@ public class ShareConsumeRequestManagerTest {
                                              KafkaClient client,
                                              Metadata metadata,
                                              BackgroundEventHandler backgroundEventHandler) {
-            super(time, config, logContext, client, metadata, backgroundEventHandler);
+            super(time, config, logContext, client, metadata, backgroundEventHandler, Optional.empty());
         }
 
         @Override
@@ -1580,7 +1580,7 @@ public class ShareConsumeRequestManagerTest {
         List<Map<TopicIdPartition, Acknowledgements>> completedAcknowledgements;
 
         public TestableBackgroundEventHandler(List<Map<TopicIdPartition, Acknowledgements>> completedAcknowledgements) {
-            super(new LinkedBlockingQueue<>());
+            super(new LinkedBlockingQueue<>(), Optional.empty());
             this.completedAcknowledgements = completedAcknowledgements;
         }
 

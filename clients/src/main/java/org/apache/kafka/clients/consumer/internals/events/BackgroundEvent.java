@@ -37,6 +37,7 @@ public abstract class BackgroundEvent {
      * {@link #equals(Object)} and can be used in log messages when debugging.
      */
     private final Uuid id;
+    private long enqueuedMs;
 
     protected BackgroundEvent(Type type) {
         this.type = Objects.requireNonNull(type);
@@ -49,6 +50,14 @@ public abstract class BackgroundEvent {
 
     public Uuid id() {
         return id;
+    }
+
+    public void setEnqueuedMs(long enqueuedMs) {
+        this.enqueuedMs = enqueuedMs;
+    }
+
+    public long enqueuedMs() {
+        return enqueuedMs;
     }
 
     @Override

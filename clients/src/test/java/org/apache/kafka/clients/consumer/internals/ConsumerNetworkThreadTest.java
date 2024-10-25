@@ -16,9 +16,13 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
+import org.apache.kafka.clients.consumer.internals.events.PollEvent;
+import org.apache.kafka.clients.consumer.internals.metrics.KafkaConsumerMetrics;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -82,7 +86,8 @@ public class ConsumerNetworkThreadTest {
                 applicationEventReaper,
                 () -> applicationEventProcessor,
                 () -> networkClientDelegate,
-                () -> requestManagers
+                () -> requestManagers,
+            Optional.empty()
         );
     }
 
@@ -198,5 +203,58 @@ public class ConsumerNetworkThreadTest {
         when(networkClientDelegate.hasAnyPendingRequests()).thenReturn(true).thenReturn(true).thenReturn(false);
         consumerNetworkThread.cleanup();
         verify(networkClientDelegate, times(2)).poll(anyLong(), anyLong());
+    }
+
+    @Test
+    public void testRunOnceRecordTimeBetweenNetworkThreadPoll() {
+        try (Metrics metrics = new Metrics();
+             KafkaConsumerMetrics kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer", GroupProtocol.CONSUMER);
+             ConsumerNetworkThread consumerNetworkThread = new ConsumerNetworkThread(
+                     new LogContext(),
+                     time,
+                     applicationEventsQueue,
+                     applicationEventReaper,
+                     () -> applicationEventProcessor,
+                     () -> networkClientDelegate,
+                     () -> requestManagers,
+                     Optional.of(kafkaConsumerMetrics)
+             )) {
+            consumerNetworkThread.initializeResources();
+
+            consumerNetworkThread.runOnce();
+            time.sleep(10);
+            consumerNetworkThread.runOnce();
+            assertTrue((double) metrics.metric(metrics.metricName("time-between-network-thread-poll-avg", "consumer-metrics")).metricValue() > 0);
+            assertTrue((double) metrics.metric(metrics.metricName("time-between-network-thread-poll-max", "consumer-metrics")).metricValue() > 0);
+        }
+    }
+
+    @Test
+    public void testRunOnceRecordApplicationEventQueueSizeAndApplicationEventQueueTime() {
+        try (Metrics metrics = new Metrics();
+             KafkaConsumerMetrics kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer", GroupProtocol.CONSUMER);
+             ConsumerNetworkThread consumerNetworkThread = new ConsumerNetworkThread(
+                     new LogContext(),
+                     time,
+                     applicationEventsQueue,
+                     applicationEventReaper,
+                     () -> applicationEventProcessor,
+                     () -> networkClientDelegate,
+                     () -> requestManagers,
+                     Optional.of(kafkaConsumerMetrics)
+             )) {
+            consumerNetworkThread.initializeResources();
+
+            PollEvent event = new PollEvent(0);
+            event.setEnqueuedMs(time.milliseconds());
+            applicationEventsQueue.add(event);
+            kafkaConsumerMetrics.recordApplicationEventQueueSize(1);
+
+            time.sleep(10);
+            consumerNetworkThread.runOnce();
+            assertEquals(0, (double) metrics.metric(metrics.metricName("application-event-queue-size", "consumer-metrics")).metricValue());
+            assertTrue((double) metrics.metric(metrics.metricName("application-event-queue-time-avg", "consumer-metrics")).metricValue() > 0);
+            assertTrue((double) metrics.metric(metrics.metricName("application-event-queue-time-max", "consumer-metrics")).metricValue() > 0);
+        }
     }
 }

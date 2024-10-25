@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
+import org.apache.kafka.clients.consumer.internals.metrics.KafkaConsumerMetrics;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.utils.LogContext;
@@ -31,6 +32,7 @@ import org.slf4j.Logger;
 import java.io.Closeable;
 import java.time.Duration;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Future;
 import java.util.function.Supplier;
@@ -42,9 +44,11 @@ import java.util.function.Supplier;
 public class ApplicationEventHandler implements Closeable {
 
     private final Logger log;
+    private final Time time;
     private final BlockingQueue<ApplicationEvent> applicationEventQueue;
     private final ConsumerNetworkThread networkThread;
     private final IdempotentCloser closer = new IdempotentCloser();
+    private final Optional<KafkaConsumerMetrics> kafkaConsumerMetrics;
 
     public ApplicationEventHandler(final LogContext logContext,
                                    final Time time,
@@ -52,16 +56,20 @@ public class ApplicationEventHandler implements Closeable {
                                    final CompletableEventReaper applicationEventReaper,
                                    final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
                                    final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
-                                   final Supplier<RequestManagers> requestManagersSupplier) {
+                                   final Supplier<RequestManagers> requestManagersSupplier,
+                                   final Optional<KafkaConsumerMetrics> kafkaConsumerMetrics) {
         this.log = logContext.logger(ApplicationEventHandler.class);
+        this.time = time;
         this.applicationEventQueue = applicationEventQueue;
+        this.kafkaConsumerMetrics = kafkaConsumerMetrics;
         this.networkThread = new ConsumerNetworkThread(logContext,
                 time,
                 applicationEventQueue,
                 applicationEventReaper,
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
-                requestManagersSupplier);
+                requestManagersSupplier,
+                kafkaConsumerMetrics);
         this.networkThread.start();
     }
 
@@ -73,7 +81,9 @@ public class ApplicationEventHandler implements Closeable {
      */
     public void add(final ApplicationEvent event) {
         Objects.requireNonNull(event, "ApplicationEvent provided to add must be non-null");
+        event.setEnqueuedMs(time.milliseconds());
         applicationEventQueue.add(event);
+        kafkaConsumerMetrics.ifPresent(metrics -> metrics.recordApplicationEventQueueSize(applicationEventQueue.size()));
         wakeupNetworkThread();
     }
 
