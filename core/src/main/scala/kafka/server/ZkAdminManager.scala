@@ -186,7 +186,7 @@ class ZkAdminManager(val config: KafkaConfig,
 
         val assignments = if (topic.assignments.isEmpty) {
           CoreUtils.replicaToBrokerAssignmentAsScala(AdminUtils.assignReplicasToBrokers(
-            brokers.asJavaCollection, resolvedNumPartitions, resolvedReplicationFactor))
+            brokers.toList.sortBy(_.id).asJavaCollection, resolvedNumPartitions, resolvedReplicationFactor))
         } else {
           val assignments = new mutable.HashMap[Int, Seq[Int]]
           // Note: we don't check that replicaAssignment contains unknown brokers - unlike in add-partitions case,
