@@ -94,6 +94,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 public class ShareConsumerTest {
     private KafkaClusterTestKit cluster;
     private final TopicPartition tp = new TopicPartition("topic", 0);
+    private final TopicPartition tp2 = new TopicPartition("topic2", 0);
     private final TopicPartition warmupTp = new TopicPartition("warmup", 0);
 
     @BeforeEach
@@ -121,6 +122,7 @@ public class ShareConsumerTest {
         cluster.waitForActiveController();
         cluster.waitForReadyBrokers();
         createTopic("topic");
+        createTopic("topic2");
         warmup();
     }
 
@@ -237,6 +239,45 @@ public class ShareConsumerTest {
         assertEquals(1, records.count());
         shareConsumer.close();
         producer.close();
+    }
+
+    @Test
+    public void testAcknowledgementSentOnSubscriptionChange() throws ExecutionException, InterruptedException {
+        Map<TopicPartition, Set<Long>> partitionOffsetsMap = new HashMap<>();
+        Map<TopicPartition, Exception> partitionExceptionMap = new HashMap<>();
+
+        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
+        KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
+        producer.send(record);
+        ProducerRecord<byte[], byte[]> record2 = new ProducerRecord<>(tp2.topic(), tp2.partition(), null, "key".getBytes(), "value".getBytes());
+        producer.send(record2).get();
+        KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
+        shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgeCommitCallback(partitionOffsetsMap, partitionExceptionMap));
+
+        shareConsumer.subscribe(Collections.singleton(tp.topic()));
+
+        ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(100));
+        assertEquals(1, records.count());
+
+        shareConsumer.subscribe(Collections.singletonList(tp2.topic()));
+
+        // Waiting for heartbeat to propagate the subscription change.
+        Thread.sleep(6000);
+
+        records = shareConsumer.poll(Duration.ofMillis(500));
+        assertEquals(1, records.count());
+
+        producer.send(record2).get();
+
+        //Starting the 3rd poll to invoke the callback
+        shareConsumer.poll(Duration.ofMillis(500));
+
+        // Verifying if the callback was invoked for the partitions in the old subscription.
+        assertTrue(partitionExceptionMap.containsKey(tp));
+        assertNull(partitionExceptionMap.get(tp));
+
+        producer.close();
+        shareConsumer.close();
     }
 
     @Test
