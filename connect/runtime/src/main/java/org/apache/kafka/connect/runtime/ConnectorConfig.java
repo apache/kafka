@@ -28,6 +28,7 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.errors.ToleranceType;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.reporter.ErrorRecordReporter;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.transforms.Transformation;
@@ -67,6 +68,7 @@ public class ConnectorConfig extends AbstractConfig {
     private static final Logger log = LoggerFactory.getLogger(ConnectorConfig.class);
 
     protected static final String COMMON_GROUP = "Common";
+    protected static final String ERROR_RECORD_REPORTERS_GROUP = "Error record reporters";
     protected static final String TRANSFORMS_GROUP = "Transforms";
     protected static final String PREDICATES_GROUP = "Predicates";
     protected static final String ERROR_GROUP = "Error Handling";
@@ -125,6 +127,10 @@ public class ConnectorConfig extends AbstractConfig {
                     + "This property is deprecated and will be removed in an upcoming major release.";
     public static final boolean TASKS_MAX_ENFORCE_DEFAULT = true;
     private static final String TASKS_MAX_ENFORCE_DISPLAY = "Enforce tasks max";
+
+    public static final String ERRORS_RECORD_REPORTERS_CONFIG = "errors.reporters";
+    private static final String ERRORS_RECORD_REPORTERS_DOC = "Aliases for the error reporters to be used for reporting of errors.";
+    private static final String ERRORS_RECORD_REPORTERS_DISPLAY = "Error Reporters";
 
     public static final String TRANSFORMS_CONFIG = "transforms";
     private static final String TRANSFORMS_DOC = "Aliases for the transformations to be applied to records.";
@@ -210,6 +216,9 @@ public class ConnectorConfig extends AbstractConfig {
                 .define(KEY_CONVERTER_CLASS_CONFIG, Type.CLASS, null, KEY_CONVERTER_CLASS_VALIDATOR, Importance.LOW, KEY_CONVERTER_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, KEY_CONVERTER_CLASS_DISPLAY)
                 .define(VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS, null, VALUE_CONVERTER_CLASS_VALIDATOR, Importance.LOW, VALUE_CONVERTER_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, VALUE_CONVERTER_CLASS_DISPLAY)
                 .define(HEADER_CONVERTER_CLASS_CONFIG, Type.CLASS, HEADER_CONVERTER_CLASS_DEFAULT, HEADER_CONVERTER_CLASS_VALIDATOR, Importance.LOW, HEADER_CONVERTER_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, HEADER_CONVERTER_CLASS_DISPLAY)
+                .define(ERRORS_RECORD_REPORTERS_CONFIG, Type.LIST, Collections.emptyList(), Importance.LOW, ERRORS_RECORD_REPORTERS_DOC,
+                        ERROR_RECORD_REPORTERS_GROUP, ++orderInGroup, Width.LONG, ERRORS_RECORD_REPORTERS_DISPLAY
+                )
                 .define(TRANSFORMS_CONFIG, Type.LIST, Collections.emptyList(), aliasValidator("transformation"), Importance.LOW, TRANSFORMS_DOC, TRANSFORMS_GROUP, ++orderInGroup, Width.LONG, TRANSFORMS_DISPLAY)
                 .define(PREDICATES_CONFIG, Type.LIST, Collections.emptyList(), aliasValidator("predicate"), Importance.LOW, PREDICATES_DOC, PREDICATES_GROUP, ++orderInGroup, Width.LONG, PREDICATES_DISPLAY)
                 .define(CONFIG_RELOAD_ACTION_CONFIG, Type.STRING, CONFIG_RELOAD_ACTION_RESTART,
@@ -295,6 +304,27 @@ public class ConnectorConfig extends AbstractConfig {
         return getBoolean(TASKS_MAX_ENFORCE_CONFIG);
     }
 
+    public <R> List<ErrorRecordReporter<R>> errorRecordReporters() {
+        final List<String> errorRecordReporterAliases = getList(ERRORS_RECORD_REPORTERS_CONFIG);
+
+        final List<ErrorRecordReporter<R>> errorRecordReporters = new ArrayList<>(errorRecordReporterAliases.size());
+        for (String alias : errorRecordReporterAliases) {
+            final String prefix = ERRORS_RECORD_REPORTERS_CONFIG + "." + alias + ".";
+
+            try {
+                @SuppressWarnings("unchecked")
+                final ErrorRecordReporter<R> errorRecordReporter = Utils.newInstance(getClass(prefix + "type"), ErrorRecordReporter.class);
+                Map<String, Object> configs = originalsWithPrefix(prefix);
+                errorRecordReporter.configure(configs);
+                errorRecordReporters.add(errorRecordReporter);
+            } catch (Exception e) {
+                throw new ConnectException(e);
+            }
+        }
+
+        return errorRecordReporters;
+    }
+
     /**
      * Returns the initialized list of {@link TransformationStage} which apply the
      * {@link Transformation transformations} and {@link Predicate predicates}
@@ -339,6 +369,19 @@ public class ConnectorConfig extends AbstractConfig {
     @SuppressWarnings({"rawtypes", "unchecked"})
     public static ConfigDef enrich(Plugins plugins, ConfigDef baseConfigDef, Map<String, String> props, boolean requireFullConfig) {
         ConfigDef newDef = new ConfigDef(baseConfigDef);
+        new EnrichablePlugin<ErrorRecordReporter<?>>("Error Reporter", ERRORS_RECORD_REPORTERS_CONFIG,
+                ERROR_RECORD_REPORTERS_GROUP, (Class) ErrorRecordReporter.class, props, requireFullConfig) {
+            @Override
+            protected Set<PluginDesc<ErrorRecordReporter<?>>> plugins() {
+                return plugins.errorRecordReporters();
+            }
+
+            @Override
+            protected ConfigDef config(ErrorRecordReporter<?> errorRecordReporter) {
+                return new ConfigDef();
+            }
+        }.enrich(newDef);
+
         new EnrichablePlugin<Transformation<?>>("Transformation", TRANSFORMS_CONFIG, TRANSFORMS_GROUP, (Class) Transformation.class,
                 props, requireFullConfig) {
 

@@ -47,6 +47,7 @@ import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
+import org.apache.kafka.connect.reporter.ErrorRecordReporter;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.ClusterConfigState;
@@ -226,7 +227,7 @@ public class ErrorHandlingTaskTest {
         LogReporter<ConsumerRecord<byte[], byte[]>> reporter = new LogReporter.Sink(taskId, connConfig(reportProps), errorHandlingMetrics);
 
         RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator = operator();
-        createSinkTask(initialState, retryWithToleranceOperator, singletonList(reporter));
+        createSinkTask(initialState, retryWithToleranceOperator, singletonList(reporter), Collections.emptyList());
 
         // valid json
         ConsumerRecord<byte[], byte[]> record1 = new ConsumerRecord<>(
@@ -340,7 +341,7 @@ public class ErrorHandlingTaskTest {
         LogReporter<SourceRecord> reporter = new LogReporter.Source(taskId, connConfig(reportProps), errorHandlingMetrics);
 
         RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator = operator();
-        createSourceTask(initialState, retryWithToleranceOperator, singletonList(reporter), badConverter());
+        createSourceTask(initialState, retryWithToleranceOperator, singletonList(reporter), Collections.emptyList(), badConverter());
 
         // valid json
         Schema valSchema = SchemaBuilder.struct().field("val", Schema.INT32_SCHEMA).build();
@@ -428,7 +429,7 @@ public class ErrorHandlingTaskTest {
     }
 
     private void createSinkTask(TargetState initialState, RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator,
-                                List<ErrorReporter<ConsumerRecord<byte[], byte[]>>> errorReporters) {
+                                List<ErrorReporter<ConsumerRecord<byte[], byte[]>>> errorReporters, List<ErrorRecordReporter<ConsumerRecord<byte[], byte[]>>> errorRecordReporters) {
         JsonConverter converter = new JsonConverter();
         Map<String, Object> oo = workerConfig.originalsWithPrefix("value.converter.");
         oo.put("converter.type", "value");
@@ -443,7 +444,7 @@ public class ErrorHandlingTaskTest {
             ClusterConfigState.EMPTY, metrics, converter, converter, errorHandlingMetrics,
             headerConverter, sinkTransforms, consumer, pluginLoader, time,
             retryWithToleranceOperator, workerErrantRecordReporter,
-                statusBackingStore, () -> errorReporters);
+                statusBackingStore, () -> errorReporters, () -> errorRecordReporters);
     }
 
     private void createSourceTask(TargetState initialState, RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator, List<ErrorReporter<SourceRecord>> errorReporters) {
@@ -453,7 +454,7 @@ public class ErrorHandlingTaskTest {
         oo.put("schemas.enable", "false");
         converter.configure(oo);
 
-        createSourceTask(initialState, retryWithToleranceOperator, errorReporters, converter);
+        createSourceTask(initialState, retryWithToleranceOperator, errorReporters, Collections.emptyList(), converter);
     }
 
     private Converter badConverter() {
@@ -466,7 +467,7 @@ public class ErrorHandlingTaskTest {
     }
 
     private void createSourceTask(TargetState initialState, RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator,
-                                  List<ErrorReporter<SourceRecord>> errorReporters, Converter converter) {
+                                  List<ErrorReporter<SourceRecord>> errorReporters, List<ErrorRecordReporter<SourceRecord>> errorRecordReporters, Converter converter) {
         TransformationChain<SourceRecord, SourceRecord> sourceTransforms = new TransformationChain<>(singletonList(
                 new TransformationStage<>(new FaultyPassthrough<SourceRecord>())), retryWithToleranceOperator);
 
@@ -478,7 +479,7 @@ public class ErrorHandlingTaskTest {
                 offsetReader, offsetWriter, offsetStore, workerConfig,
                 ClusterConfigState.EMPTY, metrics, pluginLoader, time,
                 retryWithToleranceOperator,
-                statusBackingStore, Runnable::run, () -> errorReporters));
+                statusBackingStore, Runnable::run, () -> errorReporters, () -> errorRecordReporters));
 
     }
 

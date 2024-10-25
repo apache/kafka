@@ -25,6 +25,7 @@ import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.sink.SinkTask;
+import org.apache.kafka.connect.reporter.ErrorRecordReporter;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -71,6 +72,7 @@ public class WorkerTaskTest {
     @Mock private RetryWithToleranceOperator<Object> retryWithToleranceOperator;
     @Mock private TransformationChain<Object, SourceRecord> transformationChain;
     @Mock private Supplier<List<ErrorReporter<Object>>> errorReportersSupplier;
+    @Mock private Supplier<List<ErrorRecordReporter<Object>>> errorRecordReportersSupplier;
 
     @BeforeEach
     public void setup() {
@@ -87,7 +89,7 @@ public class WorkerTaskTest {
         ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
 
         WorkerTask<Object, SourceRecord> workerTask = new TestWorkerTask(taskId, statusListener, TargetState.STARTED, loader, metrics, errorHandlingMetrics,
-                retryWithToleranceOperator, transformationChain, errorReportersSupplier, Time.SYSTEM, statusBackingStore);
+                retryWithToleranceOperator, transformationChain, errorReportersSupplier, errorRecordReportersSupplier, Time.SYSTEM, statusBackingStore);
         workerTask.initialize(TASK_CONFIG);
         workerTask.run();
         workerTask.stop();
@@ -102,7 +104,7 @@ public class WorkerTaskTest {
         ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
 
         WorkerTask<Object, SourceRecord> workerTask = new TestWorkerTask(taskId, statusListener, TargetState.STARTED, loader, metrics, errorHandlingMetrics,
-                retryWithToleranceOperator, transformationChain, errorReportersSupplier, Time.SYSTEM, statusBackingStore) {
+                retryWithToleranceOperator, transformationChain, errorReportersSupplier, errorRecordReportersSupplier, Time.SYSTEM, statusBackingStore) {
 
             @Override
             public void initializeAndStart() {
@@ -129,7 +131,7 @@ public class WorkerTaskTest {
         final CountDownLatch stopped = new CountDownLatch(1);
 
         WorkerTask<Object, SourceRecord> workerTask = new TestWorkerTask(taskId, statusListener, TargetState.STARTED, loader, metrics, errorHandlingMetrics,
-                retryWithToleranceOperator, transformationChain, errorReportersSupplier, Time.SYSTEM, statusBackingStore) {
+                retryWithToleranceOperator, transformationChain, errorReportersSupplier, errorRecordReportersSupplier, Time.SYSTEM, statusBackingStore) {
 
             @Override
             public void execute() {
@@ -166,7 +168,7 @@ public class WorkerTaskTest {
         ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
 
         WorkerTask<Object, SourceRecord> workerTask = new TestWorkerTask(taskId, statusListener, TargetState.STARTED, loader, metrics, errorHandlingMetrics,
-                retryWithToleranceOperator, transformationChain, errorReportersSupplier, Time.SYSTEM, statusBackingStore);
+                retryWithToleranceOperator, transformationChain, errorReportersSupplier, errorRecordReportersSupplier, Time.SYSTEM, statusBackingStore);
 
         List<ErrorReporter<Object>> errorReporters = new ArrayList<>();
         when(errorReportersSupplier.get()).thenReturn(errorReporters);
@@ -180,7 +182,7 @@ public class WorkerTaskTest {
         ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
 
         WorkerTask<Object, SourceRecord> workerTask = new TestWorkerTask(taskId, statusListener, TargetState.STARTED, loader, metrics, errorHandlingMetrics,
-                retryWithToleranceOperator, transformationChain, errorReportersSupplier, Time.SYSTEM, statusBackingStore);
+                retryWithToleranceOperator, transformationChain, errorReportersSupplier, errorRecordReportersSupplier, Time.SYSTEM, statusBackingStore);
         when(errorReportersSupplier.get()).thenThrow(new ConnectException("Failed to create error reporters"));
 
         assertThrows(ConnectException.class, workerTask::doStart);
@@ -191,7 +193,7 @@ public class WorkerTaskTest {
         ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
 
         WorkerTask<Object, SourceRecord> workerTask = new TestWorkerTask(taskId, statusListener, TargetState.STARTED, loader, metrics, errorHandlingMetrics,
-                retryWithToleranceOperator, transformationChain, errorReportersSupplier, Time.SYSTEM, statusBackingStore);
+                retryWithToleranceOperator, transformationChain, errorReportersSupplier, errorRecordReportersSupplier, Time.SYSTEM, statusBackingStore);
 
         workerTask.doClose();
 
@@ -204,7 +206,7 @@ public class WorkerTaskTest {
         ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
 
         WorkerTask<Object, SourceRecord> workerTask = new TestWorkerTask(taskId, statusListener, TargetState.STARTED, loader, metrics, errorHandlingMetrics,
-                retryWithToleranceOperator, transformationChain, errorReportersSupplier, Time.SYSTEM, statusBackingStore) {
+                retryWithToleranceOperator, transformationChain, errorReportersSupplier, errorRecordReportersSupplier, Time.SYSTEM, statusBackingStore) {
             @Override
             protected void close() {
                 throw new ConnectException("Failure during close");
@@ -297,9 +299,10 @@ public class WorkerTaskTest {
                               RetryWithToleranceOperator<Object> retryWithToleranceOperator,
                               TransformationChain<Object, SourceRecord> transformationChain,
                               Supplier<List<ErrorReporter<Object>>> errorReporterSupplier,
+                              Supplier<List<ErrorRecordReporter<Object>>> errorRecordReporterSupplier,
                               Time time, StatusBackingStore statusBackingStore) {
             super(id, statusListener, initialState, loader, connectMetrics, errorHandlingMetrics,
-                    retryWithToleranceOperator, transformationChain, errorReporterSupplier, time, statusBackingStore);
+                    retryWithToleranceOperator, transformationChain, errorReporterSupplier, errorRecordReporterSupplier, time, statusBackingStore);
         }
 
         @Override

@@ -50,6 +50,7 @@ import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
+import org.apache.kafka.connect.reporter.ErrorRecordReporter;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
@@ -193,17 +194,18 @@ public class WorkerSinkTaskTest {
     }
 
     private void createTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter) {
-        createTask(initialState, keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.noopOperator(), Collections::emptyList);
+        createTask(initialState, keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.noopOperator(), Collections::emptyList, Collections::emptyList);
     }
 
     private void createTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter,
                             RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator,
-                            Supplier<List<ErrorReporter<ConsumerRecord<byte[], byte[]>>>> errorReportersSupplier) {
+                            Supplier<List<ErrorReporter<ConsumerRecord<byte[], byte[]>>>> errorReportersSupplier,
+                            Supplier<List<ErrorRecordReporter<ConsumerRecord<byte[], byte[]>>>> errorRecordReportersSupplier) {
         workerTask = new WorkerSinkTask(
                 taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics,
                 keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
                 transformationChain, consumer, pluginLoader, time,
-                retryWithToleranceOperator, null, statusBackingStore, errorReportersSupplier);
+                retryWithToleranceOperator, null, statusBackingStore, errorReportersSupplier, errorRecordReportersSupplier);
     }
 
     @AfterEach
@@ -1758,7 +1760,7 @@ public class WorkerSinkTaskTest {
                 taskId, sinkTask, statusListener, TargetState.PAUSED, workerConfig, ClusterConfigState.EMPTY, metrics,
                 keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
                 transformationChain, mockConsumer, pluginLoader, time,
-                RetryWithToleranceOperatorTest.noopOperator(), null, statusBackingStore, Collections::emptyList);
+                RetryWithToleranceOperatorTest.noopOperator(), null, statusBackingStore, Collections::emptyList, Collections::emptyList);
         mockConsumer.updateBeginningOffsets(
                 new HashMap<TopicPartition, Long>() {{
                     put(TOPIC_PARTITION, 0L);
