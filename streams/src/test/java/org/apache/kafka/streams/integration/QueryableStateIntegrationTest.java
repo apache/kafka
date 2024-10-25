@@ -59,7 +59,6 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
-
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -103,6 +102,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.StoreQueryParameters.fromNameAndType;
+import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.REPLACE_THREAD;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getRunningStreams;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
@@ -1032,14 +1032,14 @@ public class QueryableStateIntegrationTest {
 
         final KeyValue<String, String> hello = KeyValue.pair("hello", "hello");
         IntegrationTestUtils.produceKeyValuesSynchronously(
-                streamThree,
-                Arrays.asList(hello, hello, hello, hello, hello, hello, hello, hello),
-                TestUtils.producerConfig(
-                        CLUSTER.bootstrapServers(),
-                        StringSerializer.class,
-                        StringSerializer.class,
-                        new Properties()),
-                mockTime);
+            streamThree,
+            Arrays.asList(hello, hello, hello, hello, hello, hello, hello, hello),
+            TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                StringSerializer.class,
+                StringSerializer.class,
+                new Properties()),
+            mockTime);
 
         final int maxWaitMs = 30000;
 
@@ -1073,8 +1073,8 @@ public class QueryableStateIntegrationTest {
 
     }
 
+
     @Test
-    @Deprecated //A single thread should no longer die
     public void shouldAllowToQueryAfterThreadDied() throws Exception {
         final AtomicBoolean beforeFailure = new AtomicBoolean(true);
         final AtomicBoolean failed = new AtomicBoolean(false);
@@ -1097,7 +1097,7 @@ public class QueryableStateIntegrationTest {
 
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
-        kafkaStreams.setUncaughtExceptionHandler((t, e) -> failed.set(true));
+        kafkaStreams.setUncaughtExceptionHandler(exception -> REPLACE_THREAD);
 
         startApplicationAndWaitUntilRunning(kafkaStreams);
 
@@ -1135,11 +1135,6 @@ public class QueryableStateIntegrationTest {
                 new Properties()),
             mockTime);
 
-        TestUtils.waitForCondition(
-            failed::get,
-            maxWaitMs,
-            "wait for thread to fail");
-
         final ReadOnlyKeyValueStore<String, String> store2 =
             IntegrationTestUtils.getStore(storeName, kafkaStreams, keyValueStore());
 
@@ -1150,8 +1145,8 @@ public class QueryableStateIntegrationTest {
                     || "12125".equals(store2.get("a")))
                     &&
                     ("34".equals(store2.get("b"))
-                    || "344".equals(store2.get("b"))
-                    || "3434".equals(store2.get("b"))),
+                        || "344".equals(store2.get("b"))
+                        || "3434".equals(store2.get("b"))),
                 maxWaitMs,
                 "wait for agg to be <a,125>||<a,1225>||<a,12125> and <b,34>||<b,344>||<b,3434>");
         } catch (final Throwable t) {

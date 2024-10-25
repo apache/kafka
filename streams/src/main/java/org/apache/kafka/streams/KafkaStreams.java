@@ -185,7 +185,6 @@ public class KafkaStreams implements AutoCloseable {
     GlobalStreamThread globalStreamThread;
     protected StateDirectory stateDirectory = null;
     private KafkaStreams.StateListener stateListener;
-    private boolean oldHandler;
     private BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler;
     private final Object changeThreadCount = new Object();
 
@@ -430,32 +429,6 @@ public class KafkaStreams implements AutoCloseable {
         }
     }
 
-    /**
-     * Set the handler invoked when an internal {@link StreamsConfig#NUM_STREAM_THREADS_CONFIG stream thread} abruptly
-     * terminates due to an uncaught exception.
-     *
-     * @param uncaughtExceptionHandler the uncaught exception handler for all internal threads; {@code null} deletes the current handler
-     * @throws IllegalStateException if this {@code KafkaStreams} instance has already been started.
-     *
-     * @deprecated Since 2.8.0. Use {@link KafkaStreams#setUncaughtExceptionHandler(StreamsUncaughtExceptionHandler)} instead.
-     *
-     */
-    @Deprecated
-    public void setUncaughtExceptionHandler(final Thread.UncaughtExceptionHandler uncaughtExceptionHandler) {
-        synchronized (stateLock) {
-            if (state.hasNotStarted()) {
-                oldHandler = true;
-                processStreamThread(thread -> thread.setUncaughtExceptionHandler(uncaughtExceptionHandler));
-
-                if (globalStreamThread != null) {
-                    globalStreamThread.setUncaughtExceptionHandler(uncaughtExceptionHandler);
-                }
-            } else {
-                throw new IllegalStateException("Can only set UncaughtExceptionHandler before calling start(). " +
-                    "Current state is: " + state);
-            }
-        }
-    }
 
     /**
      * Set the handler invoked when an internal {@link StreamsConfig#NUM_STREAM_THREADS_CONFIG stream thread}
@@ -499,21 +472,6 @@ public class KafkaStreams implements AutoCloseable {
         }
     }
 
-    private void defaultStreamsUncaughtExceptionHandler(final Throwable throwable, final boolean skipThreadReplacement) {
-        if (oldHandler) {
-            threads.remove(Thread.currentThread());
-            if (throwable instanceof RuntimeException) {
-                throw (RuntimeException) throwable;
-            } else if (throwable instanceof Error) {
-                throw (Error) throwable;
-            } else {
-                throw new RuntimeException("Unexpected checked exception caught in the uncaught exception handler", throwable);
-            }
-        } else {
-            handleStreamsUncaughtException(throwable, t -> SHUTDOWN_CLIENT, skipThreadReplacement);
-        }
-    }
-
     private void replaceStreamThread(final Throwable throwable) {
         if (globalStreamThread != null && Thread.currentThread().getName().equals(globalStreamThread.getName())) {
             log.warn("The global thread cannot be replaced. Reverting to shutting down the client.");
@@ -537,10 +495,7 @@ public class KafkaStreams implements AutoCloseable {
                                                 final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler,
                                                 final boolean skipThreadReplacement) {
         final StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse action = streamsUncaughtExceptionHandler.handle(throwable);
-        if (oldHandler) {
-            log.warn("Stream's new uncaught exception handler is set as well as the deprecated old handler." +
-                    "The old handler will be ignored as long as a new handler is set.");
-        }
+
         switch (action) {
             case REPLACE_THREAD:
                 if (!skipThreadReplacement) {
@@ -1030,9 +985,7 @@ public class KafkaStreams implements AutoCloseable {
             parseHostInfo(applicationConfigs.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)),
             logContext
         );
-
-        oldHandler = false;
-        streamsUncaughtExceptionHandler = this::defaultStreamsUncaughtExceptionHandler;
+        streamsUncaughtExceptionHandler = (throwable, skipThreadReplacement) -> handleStreamsUncaughtException(throwable, t -> SHUTDOWN_CLIENT, skipThreadReplacement);
         delegatingStateRestoreListener = new DelegatingStateRestoreListener();
         delegatingStandbyUpdateListener = new DelegatingStandbyUpdateListener();
 
@@ -1053,7 +1006,7 @@ public class KafkaStreams implements AutoCloseable {
                 time,
                 globalThreadId,
                 delegatingStateRestoreListener,
-                exception -> defaultStreamsUncaughtExceptionHandler(exception, false)
+                exception -> handleStreamsUncaughtException(exception, t -> SHUTDOWN_CLIENT, false)
             );
             globalThreadState = globalStreamThread.state();
         }
@@ -1398,7 +1351,7 @@ public class KafkaStreams implements AutoCloseable {
      * However, if you have global stores in your topology, this method blocks until all global stores are restored.
      * As a consequence, any fatal exception that happens during processing is by default only logged.
      * If you want to be notified about dying threads, you can
-     * {@link #setUncaughtExceptionHandler(Thread.UncaughtExceptionHandler) register an uncaught exception handler}
+     * {@link #setUncaughtExceptionHandler(StreamsUncaughtExceptionHandler) register an uncaught exception handler}
      * before starting the {@code KafkaStreams} instance.
      * <p>
      * Note, for brokers with version {@code 0.9.x} or lower, the broker version cannot be checked.
