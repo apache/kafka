@@ -318,6 +318,18 @@ subprojects {
     options.compilerArgs << "-Werror"
     options.release = minJavaVersion
     addParametersForTests(name, options)
+
+    // Todo: Do we need to separate some components to not require JDK 17? For example,
+    // streams had to be bumped becuase of the dependency on tools.
+    // - Apply JDK 17 requirement to connect and MM2 runtime because Jetty 12.x requires
+    // JDK 17+.
+    // - Tools has a dependency on 'connect-runtime' so it must also be JDK 17
+    // - Streams has a dependency on 'tools' and jmh-bnechmarks has a dependency streams.
+    if (project.path.startsWith(":connect")
+      || project.name.equals("tools") || project.path.startsWith(":streams")
+      || project.name.equals("jmh-benchmarks")) {
+      options.release = 17
+    }
   }
 
   if (shouldPublish) {
@@ -1838,7 +1850,7 @@ project(':generator') {
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
-    implementation libs.jacksonJaxrsJsonProvider
+    implementation libs.jacksonJakartarsJsonProvider
     testImplementation libs.junitJupiter
 
     testRuntimeOnly libs.junitPlatformLanucher
@@ -1878,7 +1890,7 @@ project(':clients') {
     compileOnly libs.jose4j          // for SASL/OAUTHBEARER JWT validation; only used by broker
 
     testImplementation libs.bcpkix
-    testImplementation libs.jacksonJaxrsJsonProvider
+    testImplementation libs.jacksonJakartarsJsonProvider
     testImplementation libs.jose4j
     testImplementation libs.junitJupiter
     testImplementation libs.reload4j
@@ -1948,6 +1960,12 @@ project(':clients') {
 
   clean.doFirst {
     delete "$buildDir/kafka/"
+  }
+
+  // TODO: For now set clients to Java 11 here to avoid warnings
+  // this will need to be cleaned up
+  tasks.withType(JavaCompile) {
+    options.release = 11
   }
 
   task processMessages(type:JavaExec) {
@@ -2468,7 +2486,7 @@ project(':tools') {
     implementation libs.joptSimple
 
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
-    implementation libs.jacksonJaxrsJsonProvider
+    implementation libs.jacksonJakartarsJsonProvider
 
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
@@ -2534,14 +2552,20 @@ project(':trogdor') {
     implementation libs.slf4jApi
     runtimeOnly libs.reload4j
 
-    implementation libs.jacksonJaxrsJsonProvider
+    implementation libs.jacksonJakartarsJsonProvider
     implementation libs.jerseyContainerServlet
     implementation libs.jerseyHk2
     implementation libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
     implementation libs.activation // Jersey dependency that was available in the JDK before Java 9
-    implementation libs.jettyServer
-    implementation libs.jettyServlet
-    implementation libs.jettyServlets
+    implementation (libs.jettyServer) {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    implementation (libs.jettyServlet) {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    implementation (libs.jettyServlets) {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
 
     testImplementation project(':clients')
     testImplementation libs.junitJupiter
@@ -2586,7 +2610,7 @@ project(':shell') {
     implementation project(':raft')
 
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
-    implementation libs.jacksonJaxrsJsonProvider
+    implementation libs.jacksonJakartarsJsonProvider
 
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
@@ -3358,7 +3382,7 @@ project(':connect:api') {
     api project(':clients')
     implementation libs.slf4jApi
     runtimeOnly libs.reload4j
-    implementation libs.jaxrsApi
+    implementation libs.jakartaRsApi
 
     testImplementation libs.junitJupiter
     testImplementation project(':clients').sourceSets.test.output
@@ -3481,15 +3505,23 @@ project(':connect:runtime') {
     implementation libs.reload4j
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
     implementation libs.jacksonAnnotations
-    implementation libs.jacksonJaxrsJsonProvider
+    implementation libs.jacksonJakartarsJsonProvider
     implementation libs.jerseyContainerServlet
     implementation libs.jerseyHk2
     implementation libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
     implementation libs.activation // Jersey dependency that was available in the JDK before Java 9
-    implementation libs.jettyServer
-    implementation libs.jettyServlet
-    implementation libs.jettyServlets
-    implementation libs.jettyClient
+    implementation (libs.jettyServer) {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    implementation (libs.jettyServlet) {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    implementation (libs.jettyServlets) {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    implementation (libs.jettyClient) {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
     implementation libs.classgraph
     implementation libs.mavenArtifact
     implementation libs.swaggerAnnotations
@@ -3652,7 +3684,7 @@ project(':connect:basic-auth-extension') {
     implementation project(':connect:api')
     implementation libs.slf4jApi
     runtimeOnly libs.reload4j
-    implementation libs.jaxrsApi
+    implementation libs.jakartaRsApi
     implementation libs.jaxAnnotationApi
 
     testImplementation libs.bcpkix
@@ -3698,15 +3730,23 @@ project(':connect:mirror') {
     implementation libs.slf4jApi
     runtimeOnly libs.reload4j
     implementation libs.jacksonAnnotations
-    implementation libs.jacksonJaxrsJsonProvider
+    implementation libs.jacksonJakartarsJsonProvider
     implementation libs.jerseyContainerServlet
     implementation libs.jerseyHk2
     implementation libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
     implementation libs.activation // Jersey dependency that was available in the JDK before Java 9
-    implementation libs.jettyServer
-    implementation libs.jettyServlet
-    implementation libs.jettyServlets
-    implementation libs.jettyClient
+    implementation (libs.jettyServer) {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    implementation (libs.jettyServlet) {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    implementation (libs.jettyServlets) {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    implementation (libs.jettyClient) {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
     implementation libs.swaggerAnnotations
 
     testImplementation libs.junitJupiter

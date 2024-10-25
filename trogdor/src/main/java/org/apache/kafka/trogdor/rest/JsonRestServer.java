@@ -21,20 +21,19 @@ import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.trogdor.common.JsonUtil;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
+import com.fasterxml.jackson.jakarta.rs.json.JacksonJsonProvider;
 
+import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
+import org.eclipse.jetty.ee10.servlet.ServletHolder;
 import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.CustomRequestLog;
 import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.server.Slf4jRequestLogWriter;
+import org.eclipse.jetty.server.handler.ContextHandlerCollection;
 import org.eclipse.jetty.server.handler.DefaultHandler;
-import org.eclipse.jetty.server.handler.HandlerCollection;
-import org.eclipse.jetty.server.handler.RequestLogHandler;
 import org.eclipse.jetty.server.handler.StatisticsHandler;
-import org.eclipse.jetty.servlet.ServletContextHandler;
-import org.eclipse.jetty.servlet.ServletHolder;
 import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.servlet.ServletContainer;
 import org.slf4j.Logger;
@@ -102,14 +101,13 @@ public class JsonRestServer {
         context.setContextPath("/");
         context.addServlet(servletHolder, "/*");
 
-        RequestLogHandler requestLogHandler = new RequestLogHandler();
         Slf4jRequestLogWriter slf4jRequestLogWriter = new Slf4jRequestLogWriter();
         slf4jRequestLogWriter.setLoggerName(JsonRestServer.class.getCanonicalName());
         CustomRequestLog requestLog = new CustomRequestLog(slf4jRequestLogWriter, CustomRequestLog.EXTENDED_NCSA_FORMAT + " %{ms}T");
-        requestLogHandler.setRequestLog(requestLog);
+        jettyServer.setRequestLog(requestLog);
 
-        HandlerCollection handlers = new HandlerCollection();
-        handlers.setHandlers(new Handler[]{context, new DefaultHandler(), requestLogHandler});
+        ContextHandlerCollection handlers = new ContextHandlerCollection();
+        handlers.setHandlers(new Handler[]{context, new DefaultHandler()});
         StatisticsHandler statsHandler = new StatisticsHandler();
         statsHandler.setHandler(handlers);
         jettyServer.setHandler(statsHandler);

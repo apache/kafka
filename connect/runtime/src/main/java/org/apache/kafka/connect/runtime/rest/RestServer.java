@@ -28,8 +28,12 @@ import org.apache.kafka.connect.runtime.health.ConnectClusterStateImpl;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectExceptionMapper;
 import org.apache.kafka.connect.runtime.rest.util.SSLUtils;
 
-import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
+import com.fasterxml.jackson.jakarta.rs.json.JacksonJsonProvider;
 
+import org.eclipse.jetty.ee10.servlet.FilterHolder;
+import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
+import org.eclipse.jetty.ee10.servlet.ServletHolder;
+import org.eclipse.jetty.ee10.servlets.HeaderFilter;
 import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.CustomRequestLog;
 import org.eclipse.jetty.server.Handler;
@@ -37,12 +41,8 @@ import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.server.Slf4jRequestLogWriter;
 import org.eclipse.jetty.server.handler.ContextHandlerCollection;
+import org.eclipse.jetty.server.handler.CrossOriginHandler;
 import org.eclipse.jetty.server.handler.StatisticsHandler;
-import org.eclipse.jetty.servlet.FilterHolder;
-import org.eclipse.jetty.servlet.ServletContextHandler;
-import org.eclipse.jetty.servlet.ServletHolder;
-import org.eclipse.jetty.servlets.CrossOriginFilter;
-import org.eclipse.jetty.servlets.HeaderFilter;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.glassfish.hk2.utilities.Binder;
 import org.glassfish.hk2.utilities.binding.AbstractBinder;
@@ -60,12 +60,13 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import javax.servlet.DispatcherType;
-import javax.ws.rs.core.UriBuilder;
+import jakarta.servlet.DispatcherType;
+import jakarta.ws.rs.core.UriBuilder;
 
 /**
  * Embedded server for the REST API that provides the control plane for Kafka Connect workers.
@@ -189,6 +190,9 @@ public abstract class RestServer {
 
         connector.setPort(port);
 
+        // TODO: do we need this?
+        connector.setIdleTimeout(requestTimeout.timeoutMs());
+
         return connector;
     }
 
@@ -263,20 +267,21 @@ public abstract class RestServer {
             ServletHolder adminServletHolder = new ServletHolder(new ServletContainer(adminResourceConfig));
             adminContext.setContextPath("/");
             adminContext.addServlet(adminServletHolder, "/*");
-            adminContext.setVirtualHosts(new String[]{"@" + ADMIN_SERVER_CONNECTOR_NAME});
+            adminContext.setVirtualHosts(List.of("@" + ADMIN_SERVER_CONNECTOR_NAME));
             contextHandlers.add(adminContext);
         }
 
         String allowedOrigins = config.allowedOrigins();
         if (!Utils.isBlank(allowedOrigins)) {
-            FilterHolder filterHolder = new FilterHolder(new CrossOriginFilter());
-            filterHolder.setName("cross-origin");
-            filterHolder.setInitParameter(CrossOriginFilter.ALLOWED_ORIGINS_PARAM, allowedOrigins);
+            CrossOriginHandler crossOriginHandler = new CrossOriginHandler();
+            crossOriginHandler.setAllowedOriginPatterns(Set.of(allowedOrigins.split(",")));
             String allowedMethods = config.allowedMethods();
             if (!Utils.isBlank(allowedMethods)) {
-                filterHolder.setInitParameter(CrossOriginFilter.ALLOWED_METHODS_PARAM, allowedMethods);
+                crossOriginHandler.setAllowedMethods(Set.of(allowedMethods.split(",")));
             }
-            context.addFilter(filterHolder, "/*", EnumSet.of(DispatcherType.REQUEST));
+            // Setting to true matches the previously used CrossOriginFilter
+            crossOriginHandler.setDeliverPreflightRequests(true);
+            context.insertHandler(crossOriginHandler);
         }
 
         String headerConfig = config.responseHeaders();
