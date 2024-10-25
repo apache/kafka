@@ -18,8 +18,7 @@ package kafka.coordinator.transaction
 
 import kafka.zk.{KafkaZkClient, ProducerIdBlockZNode}
 import org.apache.kafka.common.KafkaException
-import org.apache.kafka.server.common.ProducerIdsBlock
-import org.apache.kafka.server.common.serialization.NodeToControllerChannelManager
+import org.apache.kafka.server.common.{NodeToControllerChannelManager, ProducerIdsBlock}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentCaptor

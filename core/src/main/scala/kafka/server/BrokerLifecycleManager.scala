@@ -30,8 +30,7 @@ import org.apache.kafka.metadata.{BrokerState, VersionRange}
 import org.apache.kafka.queue.EventQueue.DeadlineFunction
 import org.apache.kafka.common.utils.{ExponentialBackoff, LogContext, Time}
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
-import org.apache.kafka.server.common.ControllerRequestCompletionHandler
-import org.apache.kafka.server.common.serialization.NodeToControllerChannelManager
+import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 
 import java.util.{Comparator, OptionalLong}
 import scala.collection.mutable

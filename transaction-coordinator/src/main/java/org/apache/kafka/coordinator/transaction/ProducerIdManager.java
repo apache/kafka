@@ -18,7 +18,7 @@ package org.apache.kafka.coordinator.transaction;
 
 
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.server.common.serialization.NodeToControllerChannelManager;
+import org.apache.kafka.server.common.NodeToControllerChannelManager;
 
 import java.util.function.Supplier;
 

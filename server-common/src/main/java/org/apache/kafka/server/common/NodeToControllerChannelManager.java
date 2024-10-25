@@ -15,11 +15,10 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.common.serialization;
+package org.apache.kafka.server.common;
 
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.requests.AbstractRequest;
-import org.apache.kafka.server.common.ControllerRequestCompletionHandler;
 
 import java.util.Optional;
 

@@ -31,7 +31,7 @@ import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.authorizer.Authorizer
-import org.apache.kafka.server.common.serialization.NodeToControllerChannelManager
+import org.apache.kafka.server.common.NodeToControllerChannelManager
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats

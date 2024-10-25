@@ -41,7 +41,7 @@ import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.server.common.ControllerRequestCompletionHandler;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.TopicIdPartition;
-import org.apache.kafka.server.common.serialization.NodeToControllerChannelManager;
+import org.apache.kafka.server.common.NodeToControllerChannelManager;
 import org.apache.kafka.test.TestUtils;
 
 import com.yammer.metrics.core.Gauge;

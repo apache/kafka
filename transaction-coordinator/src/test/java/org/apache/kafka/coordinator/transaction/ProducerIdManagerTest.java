@@ -24,7 +24,7 @@ import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.ProducerIdsBlock;
-import org.apache.kafka.server.common.serialization.NodeToControllerChannelManager;
+import org.apache.kafka.server.common.NodeToControllerChannelManager;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
