@@ -575,6 +575,8 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     MetadataVersion.MINIMUM_KRAFT_VERSION
   }
 
+  def followerFetchLastTieredOffsetEnable: java.lang.Boolean = getBoolean(ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG);
+
   /** ********* Controlled shutdown configuration ***********/
   val controlledShutdownMaxRetries = getInt(ServerConfigs.CONTROLLED_SHUTDOWN_MAX_RETRIES_CONFIG)
   val controlledShutdownRetryBackoffMs = getLong(ServerConfigs.CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS_CONFIG)

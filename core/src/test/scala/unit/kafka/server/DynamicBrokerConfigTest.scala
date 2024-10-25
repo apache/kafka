@@ -998,6 +998,31 @@ class DynamicBrokerConfigTest {
     verifyNoMoreInteractions(remoteLogManager)
   }
 
+  @Test
+  def testEnableFollowerFetchLastTieredOffset(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 9092)
+    val config = KafkaConfig.fromProps(props)
+    val serverMock: KafkaBroker = mock(classOf[KafkaBroker])
+
+    Mockito.when(serverMock.config).thenReturn(config)
+
+    config.dynamicConfig.initialize(None, None)
+    config.dynamicConfig.addBrokerReconfigurable(new DynamicReplicationConfig(serverMock))
+
+    assertEquals(ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_DEFAULT,
+      config.followerFetchLastTieredOffsetEnable)
+
+    // Update default config
+    props.put(ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG, "true")
+    config.dynamicConfig.updateDefaultConfig(props)
+    assertTrue(config.followerFetchLastTieredOffsetEnable)
+
+    // Update per broker config
+    props.put(ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG, "false")
+    config.dynamicConfig.updateBrokerConfig(0, props)
+    assertFalse(config.followerFetchLastTieredOffsetEnable)
+  }
+
   def verifyIncorrectLogLocalRetentionProps(logLocalRetentionMs: Long,
                                             retentionMs: Long,
                                             logLocalRetentionBytes: Long,
