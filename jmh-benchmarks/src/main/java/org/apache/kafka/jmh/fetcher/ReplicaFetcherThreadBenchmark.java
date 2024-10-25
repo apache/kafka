@@ -45,6 +45,7 @@ import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition;
@@ -255,7 +256,11 @@ public class ReplicaFetcherThreadBenchmark {
         fetcher.addPartitions(initialFetchStates);
         // force a pass to move partitions to fetching state. We do this in the setup phase
         // so that we do not measure this time as part of the steady state work
-        fetcher.doWork();
+        try {
+            fetcher.doWork();
+        } catch (NotLeaderOrFollowerException ignored) {
+            // ignore error for topic partitions
+        }
         // handle response to engage the incremental fetch session handler
         ((RemoteLeaderEndPoint) fetcher.leader()).fetchSessionHandler().handleResponse(FetchResponse.of(Errors.NONE, 0, 999, initialFetched), ApiKeys.FETCH.latestVersion());
     }
@@ -271,7 +276,11 @@ public class ReplicaFetcherThreadBenchmark {
 
     @Benchmark
     public long testFetcher() {
-        fetcher.doWork();
+        try {
+            fetcher.doWork();
+        } catch (NotLeaderOrFollowerException ignored) {
+            // ignore error for topic partitions
+        }
         return fetcher.fetcherStats().requestRate().count();
     }
 
