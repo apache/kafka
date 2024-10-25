@@ -28,6 +28,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
@@ -3688,6 +3689,44 @@ public class TransactionManagerTest {
         assertInstanceOf(TransactionAbortableException.class, sendOffsetsResult.error());
 
         assertAbortableError(TransactionAbortableException.class);
+    }
+
+    @Test
+    public void testBatchesReceivedAfterAbortableError() {
+        doInitTransactions();
+        transactionManager.beginTransaction();
+
+        ProducerBatch batch = writeIdempotentBatchWithValue(transactionManager, tp1, "first");
+
+        // The producer's connection to the broker is tenuous, so this mimics the catch block for ApiException in
+        // KafkaProducer.doSend().
+        transactionManager.maybeTransitionToErrorState(new DisconnectException("test"));
+
+        // The above error is bubbled up to the user who then aborts the transaction...
+        TransactionalRequestResult result = transactionManager.beginAbort();
+
+        // The transaction manager handles the abort internally and re-initializes the epoch
+        short bumpedEpoch = epoch + 1;
+        prepareInitPidResponse(Errors.NONE, false, producerId, bumpedEpoch);
+        runUntil(result::isCompleted);
+
+        // This mimics a slower produce response that receives the timeout on the client after the above rollback
+        // has completed. The failed batch should not attempt to change the state since it's stale.
+        transactionManager.handleFailedBatch(batch, new TimeoutException(), false);
+    }
+
+    @Test
+    public void testBatchesReceivedAfterFatalError() {
+        doInitTransactions();
+        transactionManager.beginTransaction();
+
+        ProducerBatch batch = writeIdempotentBatchWithValue(transactionManager, tp1, "first");
+
+        // This mimics something that causes the transaction manager to enter its FATAL_ERROR state.
+        transactionManager.transitionToFatalError(Errors.PRODUCER_FENCED.exception());
+
+        // However, even with this failure, the failed batch should not attempt to update to ABORTABLE_ERROR.
+        transactionManager.handleFailedBatch(batch, new TimeoutException(), false);
     }
 
     @Test
