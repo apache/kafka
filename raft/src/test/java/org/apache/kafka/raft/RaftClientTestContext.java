@@ -1736,6 +1736,17 @@ public final class RaftClientTestContext {
     }
 
     AddRaftVoterRequestData addVoterRequest(
+            ReplicaKey voter,
+            Endpoints endpoints
+    ) {
+        return addVoterRequest(
+                clusterId,
+                voter,
+                endpoints
+        );
+    }
+
+    AddRaftVoterRequestData addVoterRequest(
         int timeoutMs,
         ReplicaKey voter,
         Endpoints endpoints
@@ -1745,6 +1756,18 @@ public final class RaftClientTestContext {
             timeoutMs,
             voter,
             endpoints
+        );
+    }
+
+    AddRaftVoterRequestData addVoterRequest(
+            String clusterId,
+            ReplicaKey voter,
+            Endpoints endpoints
+    ) {
+        return RaftUtil.addVoterRequest(
+                clusterId,
+                voter,
+                endpoints
         );
     }
 

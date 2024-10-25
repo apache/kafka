@@ -2097,12 +2097,38 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             );
         }
 
+        if (data.timeoutMs() < 0) {
+            return completedFuture(
+                new AddRaftVoterResponseData()
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorMessage(
+                        String.format(
+                            "Add voter request contains an invalid timeout: \"%d\" it must be non-negative",
+                            data.timeoutMs()
+                        )
+                    )
+            );
+        }
+
         Optional<ReplicaKey> newVoter = RaftUtil.addVoterRequestVoterKey(data);
         if (!newVoter.isPresent() || !newVoter.get().directoryId().isPresent()) {
             return completedFuture(
                 new AddRaftVoterResponseData()
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("Add voter request didn't include a valid voter")
+            );
+        }
+
+        AddRaftVoterRequestData.ListenerCollection listeners = data.listeners();
+        boolean containsInvalidListener = listeners.stream().anyMatch(listener ->
+                listener.name().isEmpty() || listener.port() < 0 || listener.port() > 65535 || listener.host().isEmpty()
+        );
+
+        if (containsInvalidListener) {
+            return completedFuture(
+                new AddRaftVoterResponseData()
+                        .setErrorCode(Errors.INVALID_REQUEST.code())
+                        .setErrorMessage("Add voter request contains invalid listener")
             );
         }
 
@@ -2227,6 +2253,22 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
         Optional<ReplicaKey> voter = RaftUtil.updateVoterRequestVoterKey(data);
         if (!voter.isPresent() || !voter.get().directoryId().isPresent()) {
+            return completedFuture(
+                RaftUtil.updateVoterResponse(
+                    Errors.INVALID_REQUEST,
+                    requestMetadata.listenerName(),
+                    quorum.leaderAndEpoch(),
+                    quorum.leaderEndpoints()
+                )
+            );
+        }
+
+        UpdateRaftVoterRequestData.ListenerCollection listeners = data.listeners();
+        boolean containsInvalidListener = listeners.stream().anyMatch(listener ->
+                listener.name().isEmpty() || listener.port() < 0 || listener.port() > 65535 || listener.host().isEmpty()
+        );
+
+        if (containsInvalidListener) {
             return completedFuture(
                 RaftUtil.updateVoterResponse(
                     Errors.INVALID_REQUEST,

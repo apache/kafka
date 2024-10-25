@@ -44,6 +44,7 @@ import org.apache.kafka.snapshot.SnapshotWriterReaderTest;
 
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Constructor;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -808,6 +809,67 @@ public class KafkaRaftClientReconfigTest {
         );
         context.pollUntilResponse();
         context.assertSentAddVoterResponse(Errors.REQUEST_TIMED_OUT);
+    }
+
+    @Test
+    public void testAddVoterInvalidListeners() throws Exception {
+        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey follower = replicaKey(local.id() + 1, true);
+
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+                .withKip853Rpc(true)
+                .withBootstrapSnapshot(Optional.of(voters))
+                .withUnknownLeader(3)
+                .build();
+
+        context.becomeLeader();
+
+        ReplicaKey newVoter = replicaKey(local.id() + 2, true);
+
+        Constructor<InetSocketAddress> constructor = InetSocketAddress.class.getDeclaredConstructor(int.class, String.class);
+        constructor.setAccessible(true);
+        InetSocketAddress invalidPortAddress = constructor.newInstance(-1, "");
+
+        Endpoints newListeners = Endpoints.fromInetSocketAddresses(
+                Collections.singletonMap(context.channel.listenerName(), invalidPortAddress)
+        );
+
+        // invalid listener is rejected.
+        context.deliverRequest(context.addVoterRequest(newVoter, newListeners));
+        context.pollUntilResponse();
+        context.assertSentAddVoterResponse(Errors.INVALID_REQUEST);
+    }
+
+    @Test
+    public void testAddVoterInvalidTimeouts() throws Exception {
+        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey follower = replicaKey(local.id() + 1, true);
+
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+                .withKip853Rpc(true)
+                .withBootstrapSnapshot(Optional.of(voters))
+                .withUnknownLeader(3)
+                .build();
+        context.becomeLeader();
+
+        ReplicaKey newVoter = replicaKey(local.id() + 2, true);
+
+        InetSocketAddress newAddress = InetSocketAddress.createUnresolved(
+                "localhost",
+                9990 + newVoter.id()
+        );
+        Endpoints newListeners = Endpoints.fromInetSocketAddresses(
+                Collections.singletonMap(context.channel.listenerName(), newAddress)
+        );
+
+        // invalid timeout is rejected.
+        context.deliverRequest(context.addVoterRequest(-1, newVoter, newListeners));
+        context.pollUntilResponse();
+        context.assertSentAddVoterResponse(Errors.INVALID_REQUEST);
     }
 
     @Test
@@ -1588,6 +1650,49 @@ public class KafkaRaftClientReconfigTest {
 
         // follower should still be a voter in the latest voter set
         assertTrue(context.client.quorum().isVoter(follower));
+    }
+
+    @Test
+    public void testUpdateVoterInvalidListeners() throws Exception {
+        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        ReplicaKey follower = replicaKey(local.id() + 1, true);
+
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+                .withKip853Rpc(true)
+                .withBootstrapSnapshot(Optional.of(voters))
+                .withUnknownLeader(3)
+                .build();
+
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
+
+        Constructor<InetSocketAddress> constructor = InetSocketAddress.class.getDeclaredConstructor(int.class, String.class);
+        constructor.setAccessible(true);
+        InetSocketAddress invalidPortAddress = constructor.newInstance(9990 + follower.id(), "");
+
+        Endpoints newListeners = Endpoints.fromInetSocketAddresses(
+                Collections.singletonMap(context.channel.listenerName(), invalidPortAddress)
+        );
+
+        context.deliverRequest(
+                context.updateVoterRequest(
+                        context.clusterId,
+                        follower,
+                        epoch,
+                        Features.KRAFT_VERSION.supportedVersionRange(),
+                        newListeners
+                )
+        );
+
+        // invalid listener is rejected.
+        context.pollUntilResponse();
+        context.assertSentUpdateVoterResponse(
+                Errors.INVALID_REQUEST,
+                OptionalInt.of(local.id()),
+                epoch
+        );
     }
 
     @Test

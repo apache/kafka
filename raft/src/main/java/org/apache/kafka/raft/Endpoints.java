@@ -29,6 +29,7 @@ import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.network.ListenerName;
 
+import java.lang.reflect.Field;
 import java.net.InetSocketAddress;
 import java.util.Collection;
 import java.util.Collections;
@@ -102,6 +103,27 @@ public final class Endpoints {
         }
 
         return leaderEndpoints;
+    }
+
+    // mock invalid listener.
+    public AddRaftVoterRequestData.ListenerCollection buildTestAddVoterRequest() {
+        AddRaftVoterRequestData.ListenerCollection listeners =
+                new AddRaftVoterRequestData.ListenerCollection(endpoints.size());
+        for (Map.Entry<ListenerName, InetSocketAddress> entry : endpoints.entrySet()) {
+            AddRaftVoterRequestData.Listener listener = new AddRaftVoterRequestData.Listener();
+            listener.setName(entry.getKey().value());
+            listener.setHost(entry.getValue().getHostString());
+            Class<?> clazz = listener.getClass();
+            try {
+                Field port = clazz.getDeclaredField("port");
+                port.setAccessible(true);
+                port.setInt(listener, -1);
+            } catch (NoSuchFieldException | IllegalAccessException e) {
+                throw new RuntimeException(e);
+            }
+            listeners.add(listener);
+        }
+        return listeners;
     }
 
     public AddRaftVoterRequestData.ListenerCollection toAddVoterRequest() {

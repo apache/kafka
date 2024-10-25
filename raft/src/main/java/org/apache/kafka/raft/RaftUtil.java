@@ -526,6 +526,19 @@ public class RaftUtil {
     }
 
     public static AddRaftVoterRequestData addVoterRequest(
+            String clusterId,
+            ReplicaKey voter,
+            Endpoints listeners
+    ) {
+        return new AddRaftVoterRequestData()
+                .setClusterId(clusterId)
+                .setTimeoutMs(Integer.MAX_VALUE)
+                .setVoterId(voter.id())
+                .setVoterDirectoryId(voter.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
+                .setListeners(listeners.buildTestAddVoterRequest());
+    }
+
+    public static AddRaftVoterRequestData addVoterRequest(
         String clusterId,
         int timeoutMs,
         ReplicaKey voter,
