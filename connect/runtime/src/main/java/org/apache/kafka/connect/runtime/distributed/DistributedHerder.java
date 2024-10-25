@@ -580,12 +580,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         SecretKey key;
         long expiration;
         synchronized (this) {
-            // This happens on startup; the snapshot contains the session key,
-            // but no callback in the config update listener has been fired for it yet.
-            if (sessionKey == null && configState.sessionKey() != null) {
-                sessionKey = configState.sessionKey().key();
-                keyExpiration = configState.sessionKey().creationTimestamp() + keyRotationIntervalMs;
-            }
             key = sessionKey;
             expiration = keyExpiration;
         }

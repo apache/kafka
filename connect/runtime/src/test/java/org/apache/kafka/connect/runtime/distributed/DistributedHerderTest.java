@@ -3026,6 +3026,8 @@ public class DistributedHerderTest {
 
         startBackgroundHerder();
 
+        configUpdateListener.onSessionKeyUpdate(configState.sessionKey());
+
         FutureCallback<Void> fencing = new FutureCallback<>();
         herder.fenceZombieSourceTasks(CONN1, fencing);
 
@@ -3087,6 +3089,7 @@ public class DistributedHerderTest {
         expectHerderShutdown();
 
         startBackgroundHerder();
+        configUpdateListener.onSessionKeyUpdate(sessionKey);
 
         FutureCallback<Void> fencing = new FutureCallback<>();
         herder.fenceZombieSourceTasks(CONN1, fencing);
@@ -3129,6 +3132,7 @@ public class DistributedHerderTest {
         expectHerderShutdown();
 
         startBackgroundHerder();
+        configUpdateListener.onSessionKeyUpdate(sessionKey);
 
         FutureCallback<Void> fencing = new FutureCallback<>();
         herder.fenceZombieSourceTasks(CONN1, fencing);
@@ -3187,6 +3191,7 @@ public class DistributedHerderTest {
         expectHerderShutdown();
 
         startBackgroundHerder();
+        configUpdateListener.onSessionKeyUpdate(sessionKey);
 
         FutureCallback<Void> fencing = new FutureCallback<>();
         herder.fenceZombieSourceTasks(CONN1, fencing);
@@ -3285,6 +3290,7 @@ public class DistributedHerderTest {
         expectHerderShutdown();
 
         startBackgroundHerder();
+        configUpdateListener.onSessionKeyUpdate(sessionKey);
 
         List<FutureCallback<Void>> stackedFencingRequests = new ArrayList<>();
         tasksPerConnector.forEach((connector, numStackedRequests) -> {

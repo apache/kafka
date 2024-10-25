@@ -59,9 +59,11 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.mockito.stubbing.Answer;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -74,6 +76,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
+
+import javax.crypto.spec.SecretKeySpec;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
@@ -148,6 +152,11 @@ public class KafkaConfigBackingStoreTest {
             Collections.singletonMap("config-key-two", "config-value-two"),
             Collections.singletonMap("config-key-three", "config-value-three")
     );
+    private static final List<SessionKey> SESSION_KEYS = Arrays.asList(
+            new SessionKey(new SecretKeySpec("key1".getBytes(StandardCharsets.UTF_8), "alg1"), 1L),
+            new SessionKey(new SecretKeySpec("key2".getBytes(StandardCharsets.UTF_8), "alg1"), 2L),
+            new SessionKey(new SecretKeySpec("key3".getBytes(StandardCharsets.UTF_8), "alg2"), 3L)
+    );
     private static final List<Struct> TASK_CONFIG_STRUCTS = Arrays.asList(
             new Struct(KafkaConfigBackingStore.TASK_CONFIGURATION_V0).put("properties", SAMPLE_CONFIGS.get(0)),
             new Struct(KafkaConfigBackingStore.TASK_CONFIGURATION_V0).put("properties", SAMPLE_CONFIGS.get(1))
@@ -176,6 +185,11 @@ public class KafkaConfigBackingStoreTest {
     private static final List<Struct> CONNECTOR_TASK_COUNT_RECORD_STRUCTS = Arrays.asList(
             new Struct(KafkaConfigBackingStore.TASK_COUNT_RECORD_V0).put("task-count", 6),
             new Struct(KafkaConfigBackingStore.TASK_COUNT_RECORD_V0).put("task-count", 9)
+    );
+    private static final List<Struct> SESSION_KEY_STRUCTS = Arrays.asList(
+            sessionKeyStruct(SESSION_KEYS.get(0)),
+            sessionKeyStruct(SESSION_KEYS.get(1)),
+            sessionKeyStruct(SESSION_KEYS.get(2))
     );
 
     // The exact format doesn't matter here since both conversions are mocked
@@ -220,6 +234,13 @@ public class KafkaConfigBackingStoreTest {
 
     private final MockTime time = new MockTime();
     private long logOffset = 0;
+
+    private static Struct sessionKeyStruct(SessionKey sessionKey) {
+        return new Struct(KafkaConfigBackingStore.SESSION_KEY_V0)
+                .put("key", Base64.getEncoder().encodeToString(sessionKey.key().getEncoded()))
+                .put("algorithm", sessionKey.key().getAlgorithm())
+                .put("creation-timestamp", sessionKey.creationTimestamp());
+    }
 
     private void createStore() {
         config = Mockito.spy(new DistributedConfig(props));
@@ -652,6 +673,7 @@ public class KafkaConfigBackingStoreTest {
 
     @Test
     public void testRestore() {
+        // TODO: Add a session key or two to this
         // Restoring data should notify only of the latest values after loading is complete. This also validates
         // that inconsistent state is ignored.
 
@@ -815,6 +837,46 @@ public class KafkaConfigBackingStoreTest {
         assertEquals(Collections.EMPTY_SET, configState.inconsistentConnectors());
 
         // Shouldn't see any callbacks since this is during startup
+        configStorage.stop();
+        verify(configLog).stop();
+    }
+
+    @Test
+    public void testRestoreSessionKeys()  {
+        // Unlike with other record types, listeners are always notified of session keys,
+        // even during startup
+
+        String sessionKeyKey = KafkaConfigBackingStore.SESSION_KEY_KEY;
+
+        List<ConsumerRecord<String, byte[]>> existingRecords = Arrays.asList(
+                new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, sessionKeyKey,
+                        CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty()),
+                new ConsumerRecord<>(TOPIC, 0, 1, 0L, TimestampType.CREATE_TIME, 0, 0, sessionKeyKey,
+                        CONFIGS_SERIALIZED.get(1), new RecordHeaders(), Optional.empty()),
+                new ConsumerRecord<>(TOPIC, 0, 2, 0L, TimestampType.CREATE_TIME, 0, 0, sessionKeyKey,
+                        CONFIGS_SERIALIZED.get(2), new RecordHeaders(), Optional.empty()));
+        LinkedHashMap<byte[], Struct> deserialized = new LinkedHashMap<>();
+        deserialized.put(CONFIGS_SERIALIZED.get(0), SESSION_KEY_STRUCTS.get(0));
+        deserialized.put(CONFIGS_SERIALIZED.get(1), SESSION_KEY_STRUCTS.get(1));
+        deserialized.put(CONFIGS_SERIALIZED.get(2), SESSION_KEY_STRUCTS.get(2));
+        logOffset = 3;
+        expectStart(existingRecords, deserialized);
+        when(configLog.partitionCount()).thenReturn(1);
+
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
+        verifyConfigure();
+        configStorage.start();
+
+        ClusterConfigState configState = configStorage.snapshot();
+        assertEquals(3, configState.offset());
+        // We should only see the last-read key in the snapshot
+        assertEquals(SESSION_KEYS.get(2), configState.sessionKey());
+
+        // But the listener should have been notified of every session key, even during startup
+        for (int i = 0; i < 3; i++) {
+            verify(configUpdateListener).onSessionKeyUpdate(SESSION_KEYS.get(i));
+        }
+
         configStorage.stop();
         verify(configLog).stop();
     }
