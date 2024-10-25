@@ -374,6 +374,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             return;
         }
 
+        // Updating subscription here so that both invokePartitionRevoked and invokePartitionAssigned has access to the latest subscription
+        subscriptions.assignFromSubscribed(assignedPartitions);
+        
         final AtomicReference<Exception> firstException = new AtomicReference<>(null);
         SortedSet<TopicPartition> addedPartitions = new TreeSet<>(COMPARATOR);
         addedPartitions.addAll(assignedPartitions);
@@ -418,8 +421,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // Reschedule the auto commit starting from now
         if (autoCommitEnabled)
             this.nextAutoCommitTimer.updateAndReset(autoCommitIntervalMs);
-
-        subscriptions.assignFromSubscribed(assignedPartitions);
 
         // Add partitions that were not previously owned but are now assigned
         firstException.compareAndSet(null, rebalanceListenerInvoker.invokePartitionsAssigned(addedPartitions));
