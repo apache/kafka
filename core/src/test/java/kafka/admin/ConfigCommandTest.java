@@ -1312,6 +1312,7 @@ public class ConfigCommandTest {
                 return describeResult;
             }
 
+            @SuppressWarnings("deprecation")
             @Override
             public synchronized AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options) {
                 assertEquals(1, configs.size());
