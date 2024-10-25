@@ -493,7 +493,7 @@ class DeleteTopicTest extends QuorumTestHarness {
       overridingProps.put(ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, false.toString)
       if (implementation != null)
         implementation.shutdown()
-      implementation = newKRaftQuorum(overridingProps)
+      implementation = newKRaftQuorum(new EmptyTestInfo(), overridingProps)
     }
 
     brokers = createTestTopicAndCluster(topic, deleteTopicEnabled = false)

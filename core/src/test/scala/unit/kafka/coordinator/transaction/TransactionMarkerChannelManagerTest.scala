@@ -33,6 +33,8 @@ import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.util.RequestAndCompletionHandler
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.ArgumentMatchers.any
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.Mockito.{clearInvocations, mock, mockConstruction, times, verify, verifyNoMoreInteractions, when}
@@ -112,9 +114,22 @@ class TransactionMarkerChannelManagerTest {
     }
   }
 
-  @Test
-  def shouldOnlyWriteTxnCompletionOnce(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def shouldOnlyWriteTxnCompletionOnce(isTransactionV2Enabled: Boolean): Unit = {
     mockCache()
+
+    // Adjust txn metadata based on the transaction version.
+    // When using TV2, the epoch is bumped in the prepareAbort/prepareCommit
+    // phase of the end txn request.
+    // This should be reflected in the metadata before prepareComplete is called.
+    if (isTransactionV2Enabled) {
+      txnMetadata2.clientTransactionVersion = TransactionVersion.TV_2
+      txnMetadata2.producerEpoch = (producerEpoch + 1).toShort
+      txnMetadata2.lastProducerEpoch = producerEpoch
+    } else {
+      txnMetadata2.clientTransactionVersion = TransactionVersion.TV_1
+    }
 
     val expectedTransition = txnMetadata2.prepareComplete(time.milliseconds())
 
@@ -418,9 +433,22 @@ class TransactionMarkerChannelManagerTest {
     assertEquals(0, channelManager.queueForBroker(broker2.id).get.totalNumMarkers(txnTopicPartition2))
   }
 
-  @Test
-  def shouldCompleteAppendToLogOnEndTxnWhenSendMarkersSucceed(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def shouldCompleteAppendToLogOnEndTxnWhenSendMarkersSucceed(isTransactionV2Enabled : Boolean): Unit = {
     mockCache()
+
+    // Adjust txn metadata based on the transaction version.
+    // When using TV2, the epoch is bumped in the prepareAbort/prepareCommit
+    // phase of the end txn request.
+    // This should be reflected in the metadata before prepareComplete is called.
+    if (isTransactionV2Enabled) {
+      txnMetadata2.clientTransactionVersion = TransactionVersion.TV_2
+      txnMetadata2.producerEpoch = (producerEpoch + 1).toShort
+      txnMetadata2.lastProducerEpoch = producerEpoch
+    } else {
+      txnMetadata2.clientTransactionVersion = TransactionVersion.TV_1
+    }
 
     when(metadataCache.getPartitionLeaderEndpoint(
       ArgumentMatchers.eq(partition1.topic),
@@ -524,9 +552,22 @@ class TransactionMarkerChannelManagerTest {
     assertEquals(PrepareCommit, txnMetadata2.state)
   }
 
-  @Test
-  def shouldRetryAppendToLogOnEndTxnWhenCoordinatorNotAvailableError(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def shouldRetryAppendToLogOnEndTxnWhenCoordinatorNotAvailableError(isTransactionV2Enabled: Boolean): Unit = {
     mockCache()
+
+    // Adjust txn metadata based on the transaction version.
+    // When using TV2, the epoch is bumped in the prepareAbort/prepareCommit
+    // phase of the end txn request.
+    // This should be reflected in the metadata before prepareComplete is called.
+    if (isTransactionV2Enabled) {
+      txnMetadata2.clientTransactionVersion = TransactionVersion.TV_2
+      txnMetadata2.producerEpoch = (producerEpoch + 1).toShort
+      txnMetadata2.lastProducerEpoch = producerEpoch
+    } else {
+      txnMetadata2.clientTransactionVersion = TransactionVersion.TV_1
+    }
 
     when(metadataCache.getPartitionLeaderEndpoint(
       ArgumentMatchers.eq(partition1.topic),
