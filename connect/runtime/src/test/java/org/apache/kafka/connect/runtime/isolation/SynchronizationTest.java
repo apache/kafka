@@ -456,12 +456,15 @@ public class SynchronizationTest {
         }
     }
 
+    @SuppressWarnings("removal")
     private static ThreadFactory threadFactoryWithNamedThreads(String threadPrefix) {
         AtomicInteger threadNumber = new AtomicInteger(1);
         return r -> {
             // This is essentially Executors.defaultThreadFactory except with
             // custom thread names so in order to filter by thread names when debugging
-            Thread t = new Thread(Thread.currentThread().getThreadGroup(), r,
+            SecurityManager s = System.getSecurityManager();
+            Thread t = new Thread((s != null) ? s.getThreadGroup() :
+                Thread.currentThread().getThreadGroup(), r,
                 threadPrefix + threadNumber.getAndIncrement(),
                 0);
             if (t.isDaemon()) {
