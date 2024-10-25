@@ -22,12 +22,14 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.connect.storage.ConverterConfig;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Map;
 
 /**
  * Configuration options for {@link JsonConverter} instances.
  */
+@SuppressWarnings("this-escape")
 public class JsonConverterConfig extends ConverterConfig {
 
     public static final String SCHEMAS_ENABLE_CONFIG = "schemas.enable";
@@ -39,6 +41,11 @@ public class JsonConverterConfig extends ConverterConfig {
     public static final int SCHEMAS_CACHE_SIZE_DEFAULT = 1000;
     private static final String SCHEMAS_CACHE_SIZE_DOC = "The maximum number of schemas that can be cached in this converter instance.";
     private static final String SCHEMAS_CACHE_SIZE_DISPLAY = "Schema Cache Size";
+
+    public static final String SCHEMA_CONTENT_CONFIG = "schema.content";
+    public static final String SCHEMA_CONTENT_DEFAULT = null;
+    private static final String SCHEMA_CONTENT_DOC = "When set, this is used as the schema for all messages. Otherwise, the schema will should be in the contents of each message.";
+    private static final String SCHEMA_CONTENT_DISPLAY = "Schema Content";
 
     public static final String DECIMAL_FORMAT_CONFIG = "decimal.format";
     public static final String DECIMAL_FORMAT_DEFAULT = DecimalFormat.BASE64.name();
@@ -61,6 +68,8 @@ public class JsonConverterConfig extends ConverterConfig {
                       orderInGroup++, Width.MEDIUM, SCHEMAS_ENABLE_DISPLAY);
         CONFIG.define(SCHEMAS_CACHE_SIZE_CONFIG, Type.INT, SCHEMAS_CACHE_SIZE_DEFAULT, Importance.HIGH, SCHEMAS_CACHE_SIZE_DOC, group,
                       orderInGroup++, Width.MEDIUM, SCHEMAS_CACHE_SIZE_DISPLAY);
+        CONFIG.define(SCHEMA_CONTENT_CONFIG, Type.STRING, SCHEMA_CONTENT_DEFAULT, Importance.HIGH, SCHEMA_CONTENT_DOC, group, 
+                      orderInGroup++, Width.MEDIUM, SCHEMA_CONTENT_DISPLAY);
 
         group = "Serialization";
         orderInGroup = 0;
@@ -86,14 +95,16 @@ public class JsonConverterConfig extends ConverterConfig {
     private final int schemaCacheSize;
     private final DecimalFormat decimalFormat;
     private final boolean replaceNullWithDefault;
+    private final byte[] schemaContent;
 
-    @SuppressWarnings("this-escape")
     public JsonConverterConfig(Map<String, ?> props) {
         super(CONFIG, props);
         this.schemasEnabled = getBoolean(SCHEMAS_ENABLE_CONFIG);
         this.schemaCacheSize = getInt(SCHEMAS_CACHE_SIZE_CONFIG);
         this.decimalFormat = DecimalFormat.valueOf(getString(DECIMAL_FORMAT_CONFIG).toUpperCase(Locale.ROOT));
         this.replaceNullWithDefault = getBoolean(REPLACE_NULL_WITH_DEFAULT_CONFIG);
+        String schemaContentStr = getString(SCHEMA_CONTENT_CONFIG);
+        this.schemaContent = schemaContentStr == null ? null : schemaContentStr.getBytes(StandardCharsets.UTF_8);
     }
 
     /**
@@ -129,6 +140,18 @@ public class JsonConverterConfig extends ConverterConfig {
      */
     public boolean replaceNullWithDefault() {
         return replaceNullWithDefault;
+    }
+
+    /**
+     * If a default schema is provided in the converter config, this will be
+     * used for all messages.
+     * 
+     * This is only relevant if schemas are enabled.
+     *
+     * @return Schema Contents, will return null if no value is provided
+     */
+    public byte[] schemaContent() {
+        return schemaContent;
     }
 
 }
