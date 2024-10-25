@@ -324,6 +324,31 @@ public class TaskManager {
         }
     }
 
+    private Map<Task, Set<TopicPartition>> assignStartupTasks(final Map<TaskId, Set<TopicPartition>> tasksToAssign,
+                                                              final String threadLogPrefix,
+                                                              final TopologyMetadata topologyMetadata,
+                                                              final ChangelogRegister changelogReader) {
+        if (stateDirectory.hasStartupTasks()) {
+            final Map<Task, Set<TopicPartition>> assignedTasks = new HashMap<>(tasksToAssign.size());
+            for (final Map.Entry<TaskId, Set<TopicPartition>> entry : tasksToAssign.entrySet()) {
+                final TaskId taskId = entry.getKey();
+                final Task task = stateDirectory.removeStartupTask(taskId);
+                if (task != null) {
+                    // replace our dummy values with the real ones, now we know our thread and assignment
+                    final Set<TopicPartition> inputPartitions = entry.getValue();
+                    task.stateManager().assignToStreamThread(new LogContext(threadLogPrefix), changelogReader, inputPartitions);
+                    task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(taskId));
+
+                    assignedTasks.put(task, inputPartitions);
+                }
+            }
+
+            return assignedTasks;
+        } else {
+            return Collections.emptyMap();
+        }
+    }
+
     /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      * @throws StreamsException fatal error while creating / initializing the task
@@ -453,6 +478,15 @@ public class TaskManager {
                                                 final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
                                                 final Map<Task, Set<TopicPartition>> tasksToRecycle,
                                                 final Set<Task> tasksToCloseClean) {
+        final Map<Task, Set<TopicPartition>> startupStandbyTasksToRecycle = assignStartupTasks(activeTasksToCreate, logPrefix, topologyMetadata, changelogReader);
+        final Map<Task, Set<TopicPartition>> startupStandbyTasksToUse = assignStartupTasks(standbyTasksToCreate, logPrefix, topologyMetadata, changelogReader);
+
+        // recycle the startup standbys to active
+        tasks.addStandbyTasks(startupStandbyTasksToRecycle.keySet());
+
+        // use startup Standbys as real Standby tasks
+        tasks.addStandbyTasks(startupStandbyTasksToUse.keySet());
+
         for (final Task task : tasks.allTasks()) {
             final TaskId taskId = task.id();
             if (activeTasksToCreate.containsKey(taskId)) {
@@ -507,6 +541,7 @@ public class TaskManager {
                                              final Set<Task> tasksToCloseClean,
                                              final Map<TaskId, RuntimeException> failedTasks) {
         handleTasksPendingInitialization();
+        handleStartupTaskReuse(activeTasksToCreate, standbyTasksToCreate, failedTasks);
         handleRestoringAndUpdatingTasks(activeTasksToCreate, standbyTasksToCreate, failedTasks);
         handleRunningAndSuspendedTasks(activeTasksToCreate, standbyTasksToCreate, tasksToRecycle, tasksToCloseClean);
     }
@@ -515,6 +550,34 @@ public class TaskManager {
         // All tasks pending initialization are not part of the usual bookkeeping
         for (final Task task : tasks.drainPendingTasksToInit()) {
             closeTaskClean(task, Collections.emptySet(), Collections.emptyMap());
+        }
+    }
+
+    private void handleStartupTaskReuse(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
+                                        final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
+                                        final Map<TaskId, RuntimeException> failedTasks) {
+        final Map<Task, Set<TopicPartition>> startupStandbyTasksToRecycle = assignStartupTasks(activeTasksToCreate, logPrefix, topologyMetadata, changelogReader);
+        final Map<Task, Set<TopicPartition>> startupStandbyTasksToUse = assignStartupTasks(standbyTasksToCreate, logPrefix, topologyMetadata, changelogReader);
+
+        // recycle the startup standbys to active, and remove them from the set of actives that need to be created
+        if (!startupStandbyTasksToRecycle.isEmpty()) {
+            final Set<Task> tasksToCloseDirty = new HashSet<>();
+            for (final Map.Entry<Task, Set<TopicPartition>> entry : startupStandbyTasksToRecycle.entrySet()) {
+                final Task task = entry.getKey();
+                recycleTaskFromStateUpdater(task, entry.getValue(), tasksToCloseDirty, failedTasks);
+                activeTasksToCreate.remove(task.id());
+            }
+
+            // if any standby tasks failed to recycle, close them dirty
+            tasksToCloseDirty.forEach(task ->
+                closeTaskDirty(task, false)
+            );
+        }
+
+        // use startup Standbys as real Standby tasks
+        if (!startupStandbyTasksToUse.isEmpty()) {
+            tasks.addPendingTasksToInit(startupStandbyTasksToUse.keySet());
+            startupStandbyTasksToUse.keySet().forEach(task -> standbyTasksToCreate.remove(task.id()));
         }
     }
 
