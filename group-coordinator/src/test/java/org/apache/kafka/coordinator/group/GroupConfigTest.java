@@ -57,8 +57,6 @@ public class GroupConfigTest {
                 assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2");
             } else if (GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2");
-            } else {
-                assertPropertyInvalid(name, "not_a_number", "-1");
             }
         });
     }
@@ -124,6 +122,11 @@ public class GroupConfigTest {
         // Check for invalid shareRecordLockDurationMs, > MAX
         props.put(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, "70000");
         doTestInvalidProps(props);
+        props = createValidGroupConfig();
+
+        // Check for invalid shareAutoOffsetReset
+        props.put(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "hello");
+        doTestInvalidProps(props);
     }
 
     private void doTestInvalidProps(Properties props) {
@@ -138,6 +141,7 @@ public class GroupConfigTest {
         defaultValue.put(GroupConfig.SHARE_SESSION_TIMEOUT_MS_CONFIG, "10");
         defaultValue.put(GroupConfig.SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, "10");
         defaultValue.put(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, "2000");
+        defaultValue.put(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "latest");
 
         Properties props = new Properties();
         props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "20");
@@ -148,6 +152,7 @@ public class GroupConfigTest {
         assertEquals(10, config.getInt(GroupConfig.SHARE_HEARTBEAT_INTERVAL_MS_CONFIG));
         assertEquals(10, config.getInt(GroupConfig.SHARE_SESSION_TIMEOUT_MS_CONFIG));
         assertEquals(2000, config.getInt(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG));
+        assertEquals("latest", config.getString(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG));
     }
 
     @Test
@@ -165,6 +170,7 @@ public class GroupConfigTest {
         props.put(GroupConfig.SHARE_SESSION_TIMEOUT_MS_CONFIG, "45000");
         props.put(GroupConfig.SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, "5000");
         props.put(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, "30000");
+        props.put(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "latest");
         return props;
     }
 

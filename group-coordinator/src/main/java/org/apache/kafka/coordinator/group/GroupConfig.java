@@ -21,8 +21,10 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -31,6 +33,8 @@ import java.util.Set;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
+import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
+import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 /**
  * Group configuration related parameters and supporting methods like validation, etc. are
@@ -48,6 +52,10 @@ public class GroupConfig extends AbstractConfig {
 
     public static final String SHARE_RECORD_LOCK_DURATION_MS_CONFIG = "share.record.lock.duration.ms";
 
+    public static final String SHARE_AUTO_OFFSET_RESET_CONFIG = "share.auto.offset.reset";
+    public static final String SHARE_AUTO_OFFSET_RESET_DEFAULT = ShareGroupAutoOffsetReset.LATEST.toString();
+    public static final String SHARE_AUTO_OFFSET_RESET_DOC = "The strategy to initialize the share-partition start offset.";
+
     public final int consumerSessionTimeoutMs;
 
     public final int consumerHeartbeatIntervalMs;
@@ -57,6 +65,8 @@ public class GroupConfig extends AbstractConfig {
     public final int shareHeartbeatIntervalMs;
 
     public final int shareRecordLockDurationMs;
+
+    public final String shareAutoOffsetReset;
 
     private static final ConfigDef CONFIG = new ConfigDef()
         .define(CONSUMER_SESSION_TIMEOUT_MS_CONFIG,
@@ -88,7 +98,13 @@ public class GroupConfig extends AbstractConfig {
             ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_DEFAULT,
             atLeast(1000),
             MEDIUM,
-            ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_DOC);
+            ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_DOC)
+        .define(SHARE_AUTO_OFFSET_RESET_CONFIG,
+            STRING,
+            SHARE_AUTO_OFFSET_RESET_DEFAULT,
+            in(Utils.enumOptions(ShareGroupAutoOffsetReset.class)),
+            MEDIUM,
+            SHARE_AUTO_OFFSET_RESET_DOC);
 
     @SuppressWarnings("this-escape")
     public GroupConfig(Map<?, ?> props) {
@@ -98,6 +114,7 @@ public class GroupConfig extends AbstractConfig {
         this.shareSessionTimeoutMs = getInt(SHARE_SESSION_TIMEOUT_MS_CONFIG);
         this.shareHeartbeatIntervalMs = getInt(SHARE_HEARTBEAT_INTERVAL_MS_CONFIG);
         this.shareRecordLockDurationMs = getInt(SHARE_RECORD_LOCK_DURATION_MS_CONFIG);
+        this.shareAutoOffsetReset = getString(SHARE_AUTO_OFFSET_RESET_CONFIG);
     }
 
     public static ConfigDef configDef() {
@@ -134,6 +151,7 @@ public class GroupConfig extends AbstractConfig {
         int shareHeartbeatInterval = (Integer) valueMaps.get(SHARE_HEARTBEAT_INTERVAL_MS_CONFIG);
         int shareSessionTimeout = (Integer) valueMaps.get(SHARE_SESSION_TIMEOUT_MS_CONFIG);
         int shareRecordLockDurationMs = (Integer) valueMaps.get(SHARE_RECORD_LOCK_DURATION_MS_CONFIG);
+        String shareAutoOffsetReset = (String) valueMaps.get(SHARE_AUTO_OFFSET_RESET_CONFIG);
         if (consumerHeartbeatInterval < groupCoordinatorConfig.consumerGroupMinHeartbeatIntervalMs()) {
             throw new InvalidConfigurationException(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG + " must be greater than or equal to " +
                 GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG);
@@ -182,6 +200,10 @@ public class GroupConfig extends AbstractConfig {
             throw new InvalidConfigurationException(SHARE_SESSION_TIMEOUT_MS_CONFIG + " must be greater than " +
                 SHARE_HEARTBEAT_INTERVAL_MS_CONFIG);
         }
+        if (ShareGroupAutoOffsetReset.valueOf(shareAutoOffsetReset.toUpperCase(Locale.ROOT)) == ShareGroupAutoOffsetReset.NONE) {
+            throw new InvalidConfigurationException(SHARE_AUTO_OFFSET_RESET_CONFIG + " must be " +
+                ShareGroupAutoOffsetReset.LATEST + " or " + ShareGroupAutoOffsetReset.EARLIEST);
+        }
     }
 
     /**
@@ -202,6 +224,13 @@ public class GroupConfig extends AbstractConfig {
         props.putAll(defaults);
         props.putAll(overrides);
         return new GroupConfig(props);
+    }
+
+    /**
+     * The default share group auto offset reset strategy.
+     */
+    public static ShareGroupAutoOffsetReset defaultShareAutoOffsetReset() {
+        return ShareGroupAutoOffsetReset.valueOf(SHARE_AUTO_OFFSET_RESET_DEFAULT.toUpperCase(Locale.ROOT));
     }
 
     /**
@@ -237,5 +266,21 @@ public class GroupConfig extends AbstractConfig {
      */
     public int shareRecordLockDurationMs() {
         return shareRecordLockDurationMs;
+    }
+
+    /**
+     * The share group auto offset reset strategy.
+     */
+    public ShareGroupAutoOffsetReset shareAutoOffsetReset() {
+        return ShareGroupAutoOffsetReset.valueOf(shareAutoOffsetReset.toUpperCase(Locale.ROOT));
+    }
+
+    public enum ShareGroupAutoOffsetReset {
+        LATEST, EARLIEST, NONE;
+
+        @Override
+        public String toString() {
+            return super.toString().toLowerCase(Locale.ROOT);
+        }
     }
 }
