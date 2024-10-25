@@ -727,9 +727,9 @@ class TransactionsTest extends IntegrationTestHarness {
       producer.beginTransaction()
       producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "2", willBeCommitted = false))
 
-      killBroker(partitionLeader)
+      killBroker(partitionLeader) // kill the partition leader to prevent the batch from being submitted
       val failedFuture = producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "3", "3", willBeCommitted = false))
-      Thread.sleep(6000)
+      Thread.sleep(6000) // Wait for the record to time out
       restartDeadBrokers()
 
       org.apache.kafka.test.TestUtils.assertFutureThrows(failedFuture, classOf[TimeoutException])
