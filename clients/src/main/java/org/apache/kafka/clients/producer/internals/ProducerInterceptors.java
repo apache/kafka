@@ -21,6 +21,8 @@ import org.apache.kafka.clients.producer.ProducerInterceptor;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.RecordBatch;
 
 import org.slf4j.Logger;
@@ -82,11 +84,12 @@ public class ProducerInterceptors<K, V> implements Closeable {
      * @param metadata The metadata for the record that was sent (i.e. the partition and offset).
      *                 If an error occurred, metadata will only contain valid topic and maybe partition.
      * @param exception The exception thrown during processing of this record. Null if no error occurred.
+     * @param headers The headers for the record that was sent
      */
-    public void onAcknowledgement(RecordMetadata metadata, Exception exception) {
+    public void onAcknowledgement(RecordMetadata metadata, Exception exception, Headers headers) {
         for (ProducerInterceptor<K, V> interceptor : this.interceptors) {
             try {
-                interceptor.onAcknowledgement(metadata, exception);
+                interceptor.onAcknowledgement(metadata, exception, headers);
             } catch (Exception e) {
                 // do not propagate interceptor exceptions, just log
                 log.warn("Error executing interceptor onAcknowledgement callback", e);
@@ -96,7 +99,7 @@ public class ProducerInterceptors<K, V> implements Closeable {
 
     /**
      * This method is called when sending the record fails in {@link ProducerInterceptor#onSend
-     * (ProducerRecord)} method. This method calls {@link ProducerInterceptor#onAcknowledgement(RecordMetadata, Exception)}
+     * (ProducerRecord)} method. This method calls {@link ProducerInterceptor#onAcknowledgement(RecordMetadata, Exception, Headers)}
      * method for each interceptor
      *
      * @param record The record from client
@@ -107,14 +110,21 @@ public class ProducerInterceptors<K, V> implements Closeable {
     public void onSendError(ProducerRecord<K, V> record, TopicPartition interceptTopicPartition, Exception exception) {
         for (ProducerInterceptor<K, V> interceptor : this.interceptors) {
             try {
+                Headers headers = record != null ? record.headers() : null;
+                if (headers instanceof RecordHeaders) {
+                    // make a copy of the headers to make sure it is read-only
+                    RecordHeaders recordHeaders = (RecordHeaders) headers;
+                    headers = new RecordHeaders(recordHeaders);
+                    ((RecordHeaders) headers).setReadOnly();
+                }
                 if (record == null && interceptTopicPartition == null) {
-                    interceptor.onAcknowledgement(null, exception);
+                    interceptor.onAcknowledgement(null, exception, headers);
                 } else {
                     if (interceptTopicPartition == null) {
                         interceptTopicPartition = extractTopicPartition(record);
                     }
                     interceptor.onAcknowledgement(new RecordMetadata(interceptTopicPartition, -1, -1,
-                                    RecordBatch.NO_TIMESTAMP, -1, -1), exception);
+                                    RecordBatch.NO_TIMESTAMP, -1, -1), exception, headers);
                 }
             } catch (Exception e) {
                 // do not propagate interceptor exceptions, just log
