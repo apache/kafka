@@ -29,11 +29,11 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{AddPartitionsToTxnResponse, TransactionResult}
 import org.apache.kafka.common.utils.{LogContext, ProducerIdAndEpoch, Time}
+import org.apache.kafka.coordinator.transaction.ProducerIdManager
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.util.Scheduler
 
 import scala.jdk.CollectionConverters._
-import scala.util.{Failure, Success}
 
 object TransactionCoordinator {
 
@@ -115,11 +115,10 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     if (transactionalId == null) {
       // if the transactional id is null, then always blindly accept the request
       // and return a new producerId from the producerId manager
-      producerIdManager.generateProducerId() match {
-        case Success(producerId) =>
-          responseCallback(InitProducerIdResult(producerId, producerEpoch = 0, Errors.NONE))
-        case Failure(exception) =>
-          responseCallback(initTransactionError(Errors.forException(exception)))
+      try {
+        responseCallback(InitProducerIdResult(producerIdManager.generateProducerId(), producerEpoch = 0, Errors.NONE))
+      } catch {
+        case e: Exception => responseCallback(initTransactionError(Errors.forException(e)))
       }
     } else if (transactionalId.isEmpty) {
       // if transactional id is empty then return error as invalid request. This is
@@ -131,23 +130,21 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     } else {
       val coordinatorEpochAndMetadata = txnManager.getTransactionState(transactionalId).flatMap {
         case None =>
-          producerIdManager.generateProducerId() match {
-            case Success(producerId) =>
-              val createdMetadata = new TransactionMetadata(transactionalId = transactionalId,
-                producerId = producerId,
-                previousProducerId = RecordBatch.NO_PRODUCER_ID,
-                nextProducerId = RecordBatch.NO_PRODUCER_ID,
-                producerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
-                lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
-                txnTimeoutMs = transactionTimeoutMs,
-                state = Empty,
-                topicPartitions = collection.mutable.Set.empty[TopicPartition],
-                txnLastUpdateTimestamp = time.milliseconds(),
-                clientTransactionVersion = TransactionVersion.TV_0)
-              txnManager.putTransactionStateIfNotExists(createdMetadata)
-
-            case Failure(exception) =>
-              Left(Errors.forException(exception))
+          try {
+            val createdMetadata = new TransactionMetadata(transactionalId = transactionalId,
+              producerId = producerIdManager.generateProducerId(),
+              previousProducerId = RecordBatch.NO_PRODUCER_ID,
+              nextProducerId = RecordBatch.NO_PRODUCER_ID,
+              producerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
+              lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
+              txnTimeoutMs = transactionTimeoutMs,
+              state = Empty,
+              topicPartitions = collection.mutable.Set.empty[TopicPartition],
+              txnLastUpdateTimestamp = time.milliseconds(),
+              clientTransactionVersion = TransactionVersion.TV_0)
+            txnManager.putTransactionStateIfNotExists(createdMetadata)
+          } catch {
+            case e: Exception => Left(Errors.forException(e))
           }
 
         case Some(epochAndTxnMetadata) => Right(epochAndTxnMetadata)
@@ -245,13 +242,11 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
             // If the epoch is exhausted and the expected epoch (if provided) matches it, generate a new producer ID
             if (txnMetadata.isProducerEpochExhausted &&
                 expectedProducerIdAndEpoch.forall(_.epoch == txnMetadata.producerEpoch)) {
-
-              producerIdManager.generateProducerId() match {
-                case Success(producerId) =>
-                  Right(txnMetadata.prepareProducerIdRotation(producerId, transactionTimeoutMs, time.milliseconds(),
-                    expectedProducerIdAndEpoch.isDefined))
-                case Failure(exception) =>
-                  Left(Errors.forException(exception))
+              try {
+                Right(txnMetadata.prepareProducerIdRotation(producerIdManager.generateProducerId(), transactionTimeoutMs, time.milliseconds(),
+                  expectedProducerIdAndEpoch.isDefined))
+              } catch {
+                case e: Exception => Left(Errors.forException(e))
               }
             } else {
               txnMetadata.prepareIncrementProducerEpoch(transactionTimeoutMs, expectedProducerIdAndEpoch.map(_.epoch),
@@ -572,11 +567,10 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                 // Maybe allocate new producer ID if we are bumping epoch and epoch is exhausted
                 val nextProducerIdOrErrors =
                   if (clientTransactionVersion.supportsEpochBump() && !txnMetadata.pendingState.contains(PrepareEpochFence) && txnMetadata.isProducerEpochExhausted) {
-                    producerIdManager.generateProducerId() match {
-                      case Success(newProducerId) =>
-                        Right(newProducerId)
-                      case Failure(exception) =>
-                        Left(Errors.forException(exception))
+                    try {
+                      Right(producerIdManager.generateProducerId())
+                    } catch {
+                      case e: Exception => Left(Errors.forException(e))
                     }
                   } else {
                     Right(RecordBatch.NO_PRODUCER_ID)
@@ -593,7 +587,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
 
                 nextProducerIdOrErrors.flatMap {
                   nextProducerId =>
-                    Right(coordinatorEpoch, txnMetadata.prepareAbortOrCommit(nextState, clientTransactionVersion, nextProducerId, time.milliseconds()))
+                    Right(coordinatorEpoch, txnMetadata.prepareAbortOrCommit(nextState, clientTransactionVersion, nextProducerId.asInstanceOf[Long], time.milliseconds()))
                 }
               case CompleteCommit =>
                 if (txnMarkerResult == TransactionResult.COMMIT)

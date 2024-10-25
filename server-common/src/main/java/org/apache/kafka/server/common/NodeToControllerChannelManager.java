@@ -15,16 +15,25 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server;
+package org.apache.kafka.server.common;
 
-import org.apache.kafka.clients.RequestCompletionHandler;
+import org.apache.kafka.clients.NodeApiVersions;
+import org.apache.kafka.common.requests.AbstractRequest;
 
-public interface ControllerRequestCompletionHandler extends RequestCompletionHandler {
+import java.util.Optional;
 
-    /**
-     * Fire when the request transmission time passes the caller defined deadline on the channel queue.
-     * It covers the total waiting time including retries which might be the result of individual request timeout.
-     */
-    void onTimeout();
+public interface NodeToControllerChannelManager {
 
+    void start();
+
+    void shutdown();
+
+    Optional<NodeApiVersions> controllerApiVersions();
+
+    void sendRequest(
+        AbstractRequest.Builder<? extends AbstractRequest> request,
+        ControllerRequestCompletionHandler callback
+    );
+
+    long getTimeoutMs();
 }

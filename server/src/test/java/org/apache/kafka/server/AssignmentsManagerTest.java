@@ -38,8 +38,10 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.server.common.ControllerRequestCompletionHandler;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.TopicIdPartition;
+import org.apache.kafka.server.common.NodeToControllerChannelManager;
 import org.apache.kafka.test.TestUtils;
 
 import com.yammer.metrics.core.Gauge;

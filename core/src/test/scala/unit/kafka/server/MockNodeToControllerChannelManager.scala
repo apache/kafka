@@ -19,7 +19,7 @@ package kafka.server
 import org.apache.kafka.clients.{ClientResponse, MockClient, NodeApiVersions}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.AbstractRequest
-import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
+import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.apache.kafka.server.util.MockTime
 
 import java.util.Optional
