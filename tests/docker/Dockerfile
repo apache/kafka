@@ -46,14 +46,14 @@ RUN if [ "$KAFKA_MODE" = "native" ]; then \
 
 FROM $jdk_version
 
-MAINTAINER Apache Kafka dev@kafka.apache.org
+LABEL maintainer="Apache Kafka dev@kafka.apache.org"
 VOLUME ["/opt/kafka-dev"]
 
 # Set the timezone.
 ENV TZ="/usr/share/zoneinfo/America/Los_Angeles"
 
 # Do not ask for confirmations when running apt-get, etc.
-ENV DEBIAN_FRONTEND noninteractive
+ENV DEBIAN_FRONTEND=noninteractive
 
 # Set the ducker.creator label so that we know that this is a ducker image.  This will make it
 # visible to 'ducker purge'.  The ducker.creator label also lets us know what UNIX user built this
@@ -154,4 +154,4 @@ RUN useradd -u $UID -ms /bin/bash ducker \
 
 USER ducker
 
-CMD sudo service ssh start && tail -f /dev/null
+CMD ["sh", "-c", "sudo service ssh start && tail -f /dev/null"]
