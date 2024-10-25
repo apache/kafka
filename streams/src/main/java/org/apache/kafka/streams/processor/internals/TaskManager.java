@@ -1805,16 +1805,32 @@ public class TaskManager {
      */
     void addRecordsToTasks(final ConsumerRecords<byte[], byte[]> records) {
         for (final TopicPartition partition : records.partitions()) {
-            final Task activeTask = tasks.activeTasksForInputPartition(partition);
-
-            if (activeTask == null) {
-                log.error("Unable to locate active task for received-record partition {}. Current tasks: {}",
-                    partition, toString(">"));
-                throw new NullPointerException("Task was unexpectedly missing for partition " + partition);
-            }
-
+            final Task activeTask = getActiveTask(partition);
             activeTask.addRecords(partition, records.records(partition));
         }
+    }
+
+    /**
+     * Update the next offsets for each task
+     *
+     * @param nextOffsets A map of offsets keyed by partition
+     */
+    void updateNextOffsets(final Map<TopicPartition, OffsetAndMetadata> nextOffsets) {
+        for (final Map.Entry<TopicPartition, OffsetAndMetadata> entry : nextOffsets.entrySet()) {
+            final Task activeTask = getActiveTask(entry.getKey());
+            activeTask.updateNextOffsets(entry.getKey(), entry.getValue());
+        }
+    }
+
+    private Task getActiveTask(final TopicPartition partition) {
+        final Task activeTask = tasks.activeTasksForInputPartition(partition);
+
+        if (activeTask == null) {
+            log.error("Unable to locate active task for received-record partition {}. Current tasks: {}",
+                partition, toString(">"));
+            throw new NullPointerException("Task was unexpectedly missing for partition " + partition);
+        }
+        return activeTask;
     }
 
     private void maybeLockTasks(final Set<TaskId> ids) {
