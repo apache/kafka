@@ -47,6 +47,8 @@ import org.apache.kafka.common.requests.VoteResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
+import org.apache.kafka.raft.utils.FetchRpc;
+import org.apache.kafka.raft.utils.FetchSnapshotRpc;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -284,7 +286,7 @@ public class KafkaNetworkChannelTest {
                 return VoteRequest.singletonRequest(topicPartition, clusterId, leaderEpoch, leaderId, lastEpoch, 329);
 
             case FETCH:
-                FetchRequestData request = RaftUtil.singletonFetchRequest(topicPartition, topicId, fetchPartition ->
+                FetchRequestData request = FetchRpc.singletonFetchRequest(topicPartition, topicId, fetchPartition ->
                     fetchPartition
                         .setCurrentLeaderEpoch(5)
                         .setFetchOffset(333)
@@ -294,7 +296,7 @@ public class KafkaNetworkChannelTest {
                 return request;
 
             case FETCH_SNAPSHOT:
-                return RaftUtil.singletonFetchSnapshotRequest(
+                return FetchSnapshotRpc.singletonFetchSnapshotRequest(
                     clusterId,
                     ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID),
                     topicPartition,

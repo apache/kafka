@@ -26,8 +26,8 @@ import org.apache.kafka.raft.NetworkChannel;
 import org.apache.kafka.raft.RaftMessageQueue;
 import org.apache.kafka.raft.RaftRequest;
 import org.apache.kafka.raft.RaftResponse;
-import org.apache.kafka.raft.RaftUtil;
 import org.apache.kafka.raft.RequestManager;
+import org.apache.kafka.raft.utils.ApiMessageUtils;
 
 import org.slf4j.Logger;
 
@@ -89,7 +89,7 @@ public final class DefaultRequestSender  implements RequestSender {
             if (exception != null) {
                 ApiKeys api = ApiKeys.forId(request.apiKey());
                 Errors error = Errors.forException(exception);
-                ApiMessage errorResponse = RaftUtil.errorResponse(api, error);
+                ApiMessage errorResponse = ApiMessageUtils.parseErrorResponse(api, error);
 
                 response = new RaftResponse.Inbound(
                     correlationId,

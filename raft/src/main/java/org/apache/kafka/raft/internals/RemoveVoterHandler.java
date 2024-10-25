@@ -23,9 +23,9 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.LeaderState;
 import org.apache.kafka.raft.LogOffsetMetadata;
-import org.apache.kafka.raft.RaftUtil;
 import org.apache.kafka.raft.ReplicaKey;
 import org.apache.kafka.raft.VoterSet;
+import org.apache.kafka.raft.utils.VoteRpc;
 import org.apache.kafka.server.common.KRaftVersion;
 
 import org.slf4j.Logger;
@@ -82,7 +82,7 @@ public final class RemoveVoterHandler {
         // Check if there are any pending voter change requests
         if (leaderState.isOperationPending(currentTimeMs)) {
             return CompletableFuture.completedFuture(
-                RaftUtil.removeVoterResponse(
+                VoteRpc.removeVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
                     "Request timed out waiting for leader to handle previous voter change request"
                 )
@@ -93,7 +93,7 @@ public final class RemoveVoterHandler {
         Optional<Long> highWatermark = leaderState.highWatermark().map(LogOffsetMetadata::offset);
         if (!highWatermark.isPresent()) {
             return CompletableFuture.completedFuture(
-                RaftUtil.removeVoterResponse(
+                VoteRpc.removeVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
                     "Request timed out waiting for leader to establish HWM and fence previous voter changes"
                 )
@@ -104,7 +104,7 @@ public final class RemoveVoterHandler {
         KRaftVersion kraftVersion = partitionState.lastKraftVersion();
         if (!kraftVersion.isReconfigSupported()) {
             return CompletableFuture.completedFuture(
-                RaftUtil.removeVoterResponse(
+                VoteRpc.removeVoterResponse(
                     Errors.UNSUPPORTED_VERSION,
                     String.format(
                         "Cluster doesn't support removing voter because the %s feature is %s",
@@ -119,7 +119,7 @@ public final class RemoveVoterHandler {
         Optional<LogHistory.Entry<VoterSet>> votersEntry = partitionState.lastVoterSetEntry();
         if (!votersEntry.isPresent() || votersEntry.get().offset() >= highWatermark.get()) {
             return CompletableFuture.completedFuture(
-                RaftUtil.removeVoterResponse(
+                VoteRpc.removeVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
                     String.format(
                         "Request timed out waiting for voters to commit the latest voter change at %s with HWM %d",
@@ -134,7 +134,7 @@ public final class RemoveVoterHandler {
         Optional<VoterSet> newVoters = votersEntry.get().value().removeVoter(voterKey);
         if (!newVoters.isPresent()) {
             return CompletableFuture.completedFuture(
-                RaftUtil.removeVoterResponse(
+                VoteRpc.removeVoterResponse(
                     Errors.VOTER_NOT_FOUND,
                     String.format(
                         "Cannot remove voter %s from the set of voters %s",
