@@ -346,12 +346,12 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
 
     // Since the state change was successfully written to the log, unset the flag for a failed epoch fence
     hasFailedEpochFence = false
-    val (updatedProducerId, updatedProducerEpoch) =
+    val (updatedProducerId, updatedProducerEpoch, updatedLastProducerEpoch) =
       // If we overflowed on epoch bump, we have to set it as the producer ID now the marker has been written.
       if (clientTransactionVersion.supportsEpochBump() && nextProducerId != RecordBatch.NO_PRODUCER_ID) {
-        (nextProducerId, 0.toShort)
+        (nextProducerId, 0.toShort, producerEpoch)
       } else {
-        (producerId, producerEpoch)
+        (producerId, producerEpoch, lastProducerEpoch)
       }
     prepareTransitionTo(newState, updatedProducerId, RecordBatch.NO_PRODUCER_ID, updatedProducerEpoch, lastProducerEpoch, txnTimeoutMs, Set.empty[TopicPartition],
       txnStartTimestamp, updateTimestamp, clientTransactionVersion)
