@@ -121,7 +121,7 @@ ext {
   }
 
   runtimeTestLibs = [
-    libs.slf4jReload4j,
+    libs.slf4jLog4j2,
     libs.junitPlatformLanucher,
   ]
 }
@@ -164,8 +164,9 @@ allprojects {
           // ZooKeeper (potentially older and containing CVEs)
           libs.nettyHandler,
           libs.nettyTransportNativeEpoll,
-          // be explicit about the reload4j version instead of relying on the transitive versions
-          libs.reload4j
+          libs.log4j2Api,
+          libs.log4j2Core,
+          libs.log4j1Bridge2Api
         )
       }
     }
@@ -935,13 +936,15 @@ project(':server') {
 
     implementation libs.slf4jApi
 
-    compileOnly libs.reload4j
+    compileOnly libs.log4j2Api
+    compileOnly libs.log4j2Core
+    compileOnly libs.log4j1Bridge2Api
 
     testImplementation project(':clients').sourceSets.test.output
 
     testImplementation libs.mockitoCore
     testImplementation libs.junitJupiter
-    testImplementation libs.slf4jReload4j
+    testImplementation libs.slf4jLog4j2
 
     testRuntimeOnly libs.junitPlatformLanucher
   }
@@ -996,7 +999,7 @@ project(':share') {
     implementation libs.slf4jApi
 
     testImplementation libs.junitJupiter
-    testImplementation libs.slf4jReload4j
+    testImplementation libs.slf4jLog4j2
 
     testRuntimeOnly libs.junitPlatformLanucher
   }
@@ -1080,15 +1083,16 @@ project(':core') {
       implementation libs.dropwizardMetrics
       exclude module: 'slf4j-log4j12'
       exclude module: 'log4j'
-      // Both Kafka and Zookeeper use slf4j. ZooKeeper moved from log4j to logback in v3.8.0, but Kafka relies on reload4j.
+      // Both Kafka and Zookeeper use slf4j. ZooKeeper moved from log4j to logback in v3.8.0.
       // We are removing Zookeeper's dependency on logback so we have a singular logging backend.
       exclude module: 'logback-classic'
       exclude module: 'logback-core'
     }
     // ZooKeeperMain depends on commons-cli but declares the dependency as `provided`
     implementation libs.commonsCli
-
-    compileOnly libs.reload4j
+    implementation libs.log4j2Core
+    implementation libs.log4j2Api
+    implementation libs.log4j1Bridge2Api
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':group-coordinator').sourceSets.test.output
@@ -1118,7 +1122,7 @@ project(':core') {
     testImplementation libs.apachedsMavibotPartition
     testImplementation libs.apachedsJdbmPartition
     testImplementation libs.junitJupiter
-    testImplementation libs.slf4jReload4j
+    testImplementation libs.slf4jLog4j2
     testImplementation libs.caffeine
 
     testRuntimeOnly libs.junitPlatformLanucher
@@ -1150,9 +1154,6 @@ project(':core') {
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.compileClasspath) {
-      include('reload4j*jar')
-    }
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
     }
@@ -1365,11 +1366,13 @@ project(':metadata') {
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
     implementation libs.metrics
-    compileOnly libs.reload4j
+    compileOnly libs.log4j2Api
+    compileOnly libs.log4j2Core
+    compileOnly libs.log4j1Bridge2Api
     testImplementation libs.junitJupiter
     testImplementation libs.jqwik
     testImplementation libs.mockitoCore
-    testImplementation libs.slf4jReload4j
+    testImplementation libs.slf4jLog4j2
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':raft').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
@@ -1569,7 +1572,7 @@ project(':test-common') {
     implementation libs.slf4jApi
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    
+
     testRuntimeOnly runtimeTestLibs
   }
 
@@ -1881,9 +1884,14 @@ project(':clients') {
     testImplementation libs.jacksonJaxrsJsonProvider
     testImplementation libs.jose4j
     testImplementation libs.junitJupiter
-    testImplementation libs.reload4j
+    testImplementation libs.log4j2Api
+    testImplementation libs.log4j2Core
+    testImplementation libs.log4j1Bridge2Api
+    testImplementation libs.spotbugs
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
+
+    testCompileOnly libs.bndlib
 
     testRuntimeOnly libs.jacksonDatabind
     testRuntimeOnly libs.jacksonJDK8Datatypes
@@ -2464,7 +2472,11 @@ project(':tools') {
     implementation libs.jacksonDataformatCsv
     implementation libs.jacksonJDK8Datatypes
     implementation libs.slf4jApi
-    implementation libs.slf4jReload4j
+    implementation libs.slf4jLog4j2
+    implementation libs.log4j2Api
+    implementation libs.log4j2Core
+    implementation libs.log4j1Bridge2Api
+    implementation libs.spotbugs
     implementation libs.joptSimple
 
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
@@ -2492,7 +2504,6 @@ project(':tools') {
     testImplementation(libs.jfreechart) {
       exclude group: 'junit', module: 'junit'
     }
-    testImplementation libs.reload4j
     testImplementation libs.apachedsCoreApi
     testImplementation libs.apachedsInterceptorKerberos
     testImplementation libs.apachedsProtocolShared
@@ -2532,7 +2543,9 @@ project(':trogdor') {
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
     implementation libs.slf4jApi
-    runtimeOnly libs.reload4j
+    runtimeOnly libs.log4j2Api
+    runtimeOnly libs.log4j2Core
+    runtimeOnly libs.log4j1Bridge2Api
 
     implementation libs.jacksonJaxrsJsonProvider
     implementation libs.jerseyContainerServlet
@@ -2548,7 +2561,10 @@ project(':trogdor') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.mockitoCore
 
-    testRuntimeOnly runtimeTestLibs
+    testRuntimeOnly libs.log4j2Api
+    testRuntimeOnly libs.log4j2Core
+    testRuntimeOnly libs.log4j1Bridge2Api
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   javadoc {
@@ -2637,6 +2653,7 @@ project(':streams') {
 
     // testCompileOnly prevents streams from exporting a dependency on test-utils, which would cause a dependency cycle
     testCompileOnly project(':streams:test-utils')
+    testCompileOnly libs.bndlib
 
     testImplementation project(':metadata')
     testImplementation project(':clients').sourceSets.test.output
@@ -2650,7 +2667,9 @@ project(':streams') {
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':server')
-    testImplementation libs.reload4j
+    testImplementation libs.log4j2Api
+    testImplementation libs.log4j2Core
+    testImplementation libs.log4j1Bridge2Api
     testImplementation libs.junitJupiter
     testImplementation libs.bcpkix
     testImplementation libs.hamcrest
@@ -2883,7 +2902,7 @@ project(':streams:examples') {
 
     implementation project(':streams')
 
-    implementation libs.slf4jReload4j
+    implementation libs.slf4jLog4j2
 
     testImplementation project(':streams:test-utils')
     testImplementation project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
@@ -3313,7 +3332,7 @@ project(':jmh-benchmarks') {
     implementation libs.jacksonDatabind
     implementation libs.metrics
     implementation libs.mockitoCore
-    implementation libs.slf4jReload4j
+    implementation libs.slf4jLog4j2
     implementation libs.scalaLibrary
   }
 
@@ -3357,7 +3376,9 @@ project(':connect:api') {
   dependencies {
     api project(':clients')
     implementation libs.slf4jApi
-    runtimeOnly libs.reload4j
+    runtimeOnly libs.log4j2Api
+    runtimeOnly libs.log4j2Core
+    runtimeOnly libs.log4j1Bridge2Api
     implementation libs.jaxrsApi
 
     testImplementation libs.junitJupiter
@@ -3393,7 +3414,9 @@ project(':connect:transforms') {
     api project(':connect:api')
 
     implementation libs.slf4jApi
-    runtimeOnly libs.reload4j
+    runtimeOnly libs.log4j2Api
+    runtimeOnly libs.log4j2Core
+    runtimeOnly libs.log4j1Bridge2Api
 
     testImplementation libs.junitJupiter
 
@@ -3433,7 +3456,9 @@ project(':connect:json') {
     api libs.jacksonAfterburner
 
     implementation libs.slf4jApi
-    runtimeOnly libs.reload4j
+    runtimeOnly libs.log4j2Api
+    runtimeOnly libs.log4j2Core
+    runtimeOnly libs.log4j1Bridge2Api
 
     testImplementation libs.junitJupiter
 
@@ -3478,7 +3503,10 @@ project(':connect:runtime') {
     api project(':connect:transforms')
 
     implementation libs.slf4jApi
-    implementation libs.reload4j
+    implementation libs.log4j2Api
+    implementation libs.log4j2Core
+    implementation libs.log4j1Bridge2Api
+    implementation libs.spotbugs
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
     implementation libs.jacksonAnnotations
     implementation libs.jacksonJaxrsJsonProvider
@@ -3493,6 +3521,8 @@ project(':connect:runtime') {
     implementation libs.classgraph
     implementation libs.mavenArtifact
     implementation libs.swaggerAnnotations
+
+    compileOnly libs.bndlib
 
     // We use this library to generate OpenAPI docs for the REST API, but we don't want or need it at compile
     // or run time. So, we add it to a separate configuration, which we use later on during docs generation
@@ -3516,6 +3546,8 @@ project(':connect:runtime') {
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter
     testImplementation libs.httpclient
+
+    testCompileOnly libs.bndlib
 
     testRuntimeOnly libs.bcpkix
     testRuntimeOnly runtimeTestLibs
@@ -3611,10 +3643,13 @@ project(':connect:file') {
   dependencies {
     implementation project(':connect:api')
     implementation libs.slf4jApi
-    runtimeOnly libs.reload4j
+    runtimeOnly libs.log4j2Api
+    runtimeOnly libs.log4j2Core
+    runtimeOnly libs.log4j1Bridge2Api
 
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
+
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':connect:runtime')
     testImplementation project(':connect:runtime').sourceSets.test.output
@@ -3651,7 +3686,9 @@ project(':connect:basic-auth-extension') {
   dependencies {
     implementation project(':connect:api')
     implementation libs.slf4jApi
-    runtimeOnly libs.reload4j
+    runtimeOnly libs.log4j2Api
+    runtimeOnly libs.log4j2Core
+    runtimeOnly libs.log4j1Bridge2Api
     implementation libs.jaxrsApi
     implementation libs.jaxAnnotationApi
 
@@ -3696,7 +3733,9 @@ project(':connect:mirror') {
     implementation libs.argparse4j
     implementation libs.jacksonAnnotations
     implementation libs.slf4jApi
-    runtimeOnly libs.reload4j
+    runtimeOnly libs.log4j2Api
+    runtimeOnly libs.log4j2Core
+    runtimeOnly libs.log4j1Bridge2Api
     implementation libs.jacksonAnnotations
     implementation libs.jacksonJaxrsJsonProvider
     implementation libs.jerseyContainerServlet
@@ -3710,7 +3749,10 @@ project(':connect:mirror') {
     implementation libs.swaggerAnnotations
 
     testImplementation libs.junitJupiter
-    testImplementation libs.reload4j
+    testImplementation libs.log4j2Api
+    testImplementation libs.log4j2Core
+    testImplementation libs.log4j1Bridge2Api
+    testImplementation libs.bndlib
     testImplementation libs.mockitoCore
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':connect:runtime').sourceSets.test.output
@@ -3778,7 +3820,9 @@ project(':connect:mirror-client') {
   dependencies {
     implementation project(':clients')
     implementation libs.slf4jApi
-    runtimeOnly libs.reload4j
+    runtimeOnly libs.log4j2Api
+    runtimeOnly libs.log4j2Core
+    runtimeOnly libs.log4j1Bridge2Api
 
     testImplementation libs.junitJupiter
     testImplementation project(':clients').sourceSets.test.output

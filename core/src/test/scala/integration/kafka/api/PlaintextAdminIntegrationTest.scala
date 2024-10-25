@@ -53,9 +53,9 @@ import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
 import org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS
-import org.apache.log4j.PropertyConfigurator
+import org.apache.logging.log4j.core.config.Configurator
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
+import org.junit.jupiter.api.{BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource, ValueSource}
 import org.slf4j.LoggerFactory
@@ -86,16 +86,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
+    Configurator.reconfigure();
     brokerLoggerConfigResource = new ConfigResource(
       ConfigResource.Type.BROKER_LOGGER, brokers.head.config.brokerId.toString)
-  }
-
-  @AfterEach
-  override def tearDown(): Unit = {
-    // Due to the fact that log4j is not re-initialized across tests, changing a logger's log level persists
-    // across test classes. We need to clean up the changes done after testing.
-    resetLogging()
-    super.tearDown()
   }
 
   @ParameterizedTest
@@ -3189,6 +3182,27 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
+  def testIncrementalAlterConfigsForLog4jLogLevelsCanSetToRootLogger(quorum: String): Unit = {
+    client = createAdminClient
+    val initialLoggerConfig = describeBrokerLoggers()
+    val initialRootLogLevel = initialLoggerConfig.get(Log4jController.ROOT_LOGGER).value()
+    val newRootLogLevel = LogLevelConfig.DEBUG_LOG_LEVEL
+
+    val alterRootLoggerEntry = Seq(
+      new AlterConfigOp(new ConfigEntry(Log4jController.ROOT_LOGGER, newRootLogLevel), AlterConfigOp.OpType.SET)
+    ).asJavaCollection
+
+    alterBrokerLoggers(alterRootLoggerEntry, validateOnly = true)
+    val validatedRootLoggerConfig = describeBrokerLoggers()
+    assertEquals(initialRootLogLevel, validatedRootLoggerConfig.get(Log4jController.ROOT_LOGGER).value())
+
+    alterBrokerLoggers(alterRootLoggerEntry)
+    val changedRootLoggerConfig = describeBrokerLoggers()
+    assertEquals(newRootLogLevel, changedRootLoggerConfig.get(Log4jController.ROOT_LOGGER).value())
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
   def testIncrementalAlterConfigsForLog4jLogLevelsCannotResetRootLogger(quorum: String): Unit = {
     client = createAdminClient
     val deleteRootLoggerEntry = Seq(
@@ -3574,18 +3588,5 @@ object PlaintextAdminIntegrationTest {
       Arguments.of("kraft", "classic"),
       Arguments.of("kraft", "consumer")
     ))
-  }
-
-  /**
-   * Resets the logging configuration after the test.
-   */
-  def resetLogging(): Unit = {
-    org.apache.log4j.LogManager.resetConfiguration()
-    val stream = this.getClass.getResourceAsStream("/log4j.properties")
-    try {
-      PropertyConfigurator.configure(stream)
-    } finally {
-      stream.close()
-    }
   }
 }

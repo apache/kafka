@@ -21,6 +21,7 @@ IF [%1] EQU [] (
 
 SetLocal
 IF ["%KAFKA_LOG4J_OPTS%"] EQU [""] (
+    echo DEPRECATED: using log4j 1.x configuration. To use log4j 2.x configuration, run with: 'set KAFKA_LOG4J_OPTS=-Dlog4j.configurationFile=file:%~dp0../../config/log4j2.properties'
     set KAFKA_LOG4J_OPTS=-Dlog4j.configuration=file:%~dp0../../config/log4j.properties
 )
 IF ["%KAFKA_HEAP_OPTS%"] EQU [""] (
