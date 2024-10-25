@@ -354,6 +354,10 @@ class ZkMetadataCache(
     metadataSnapshot.aliveBrokers.values.flatMap(_.getNode(listenerName))
   }
 
+  override def getBrokerNodes(listenerName: ListenerName): Iterable[Node] = {
+    getAliveBrokerNodes(listenerName)
+  }
+
   def getTopicId(topicName: String): Uuid = {
     metadataSnapshot.topicIds.getOrElse(topicName, Uuid.ZERO_UUID)
   }

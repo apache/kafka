@@ -69,6 +69,28 @@ public class ClusterToolTest {
         }
     }
 
+    @ClusterTest(brokers = 1, types = {Type.KRAFT, Type.CO_KRAFT})
+    public void testListEndpointsWithBootstrapServer(ClusterInstance clusterInstance) {
+        String output = ToolsTestUtils.captureStandardOut(() ->
+                assertDoesNotThrow(() -> ClusterTool.execute("list-endpoints", "--bootstrap-server", clusterInstance.bootstrapServers())));
+        String port = clusterInstance.bootstrapServers().split(":")[1];
+        int id = clusterInstance.brokerIds().iterator().next();
+        String format = "%-10s %-9s %-10s %-10s %-10s %-15s%n%-10s %-9s %-10s %-10s %-10s %-6s";
+        String expected = String.format(format, "ID", "HOST", "PORT", "RACK", "STATE", "ENDPOINT_TYPE", id, "localhost", port, "null", "unfenced", "broker");
+        assertTrue(output.equals(expected));
+    }
+
+    @ClusterTest(brokers = 1, types = {Type.KRAFT, Type.CO_KRAFT})
+    public void testListEndpointsArgumentWithBootstrapServer(ClusterInstance clusterInstance) {
+        String output = ToolsTestUtils.captureStandardOut(() ->
+                assertDoesNotThrow(() -> ClusterTool.execute("list-endpoints", "--bootstrap-server", clusterInstance.bootstrapServers()), "--include-fenced-brokers"));
+        String port = clusterInstance.bootstrapServers().split(":")[1];
+        int id = clusterInstance.brokerIds().iterator().next();
+        String format = "%-10s %-9s %-10s %-10s %-10s %-15s%n%-10s %-9s %-10s %-10s %-10s %-6s";
+        String expected = String.format(format, "ID", "HOST", "PORT", "RACK", "STATE", "ENDPOINT_TYPE", id, "localhost", port, "null", "unfenced", "broker");
+        assertTrue(output.equals(expected));
+    }
+
     @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT})
     public void testClusterIdWithBootstrapController(ClusterInstance clusterInstance) {
         String output = ToolsTestUtils.captureStandardOut(() ->
@@ -89,6 +111,25 @@ public class ClusterToolTest {
         assertEquals(UnsupportedEndpointTypeException.class, exception.getCause().getClass());
         assertEquals("This Admin API is not yet supported when communicating directly with " +
                 "the controller quorum.", exception.getCause().getMessage());
+    }
+
+    @ClusterTest(brokers = 3, types = {Type.KRAFT, Type.CO_KRAFT})
+    public void testListEndpointsWithBootstrapController(ClusterInstance clusterInstance) {
+        String output = ToolsTestUtils.captureStandardOut(() ->
+                assertDoesNotThrow(() -> ClusterTool.execute("list-endpoints", "--bootstrap-controller", clusterInstance.bootstrapControllers())));
+        String port = clusterInstance.bootstrapControllers().split(":")[1];
+        int id = clusterInstance.controllerIds().iterator().next();
+        String format = "%-10s %-9s %-10s %-10s %-15s%n%-10s %-9s %-10s %-10s %-10s";
+        String expected = String.format(format, "ID", "HOST", "PORT", "RACK", "ENDPOINT_TYPE", id, "localhost", port, "null", "controller");
+        assertTrue(output.equals(expected));
+    }
+
+    @ClusterTest(brokers = 3, types = {Type.KRAFT, Type.CO_KRAFT})
+    public void testListEndpointsArgumentWithBootstrapController(ClusterInstance clusterInstance) {
+        RuntimeException exception =
+                assertThrows(RuntimeException.class,
+                        () -> ClusterTool.execute("list-endpoints", "--bootstrap-controller", clusterInstance.bootstrapControllers(), "--include-fenced-brokers"));
+        assertEquals("Cannot use --include-fenced-brokers with command list-endpoints", exception.getMessage());
     }
 
     @Test

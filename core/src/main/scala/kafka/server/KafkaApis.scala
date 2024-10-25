@@ -3607,12 +3607,17 @@ class KafkaApis(val requestChannel: RequestChannel,
       clusterId,
       () => {
         val brokers = new DescribeClusterResponseData.DescribeClusterBrokerCollection()
-        metadataCache.getAliveBrokerNodes(request.context.listenerName).foreach { node =>
+        val describeClusterRequest = request.body[DescribeClusterRequest]
+        metadataCache.getBrokerNodes(request.context.listenerName).foreach { node =>
+          if (node.isFenced && !describeClusterRequest.data().includeFencedBrokers()) {
+          } else {
           brokers.add(new DescribeClusterResponseData.DescribeClusterBroker().
             setBrokerId(node.id).
             setHost(node.host).
             setPort(node.port).
-            setRack(node.rack))
+            setRack(node.rack).
+            setIsFenced(node.isFenced))
+          }
         }
         brokers
       },

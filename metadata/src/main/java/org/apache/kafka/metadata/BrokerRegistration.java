@@ -233,7 +233,7 @@ public class BrokerRegistration {
         if (endpoint == null) {
             return Optional.empty();
         }
-        return Optional.of(new Node(id, endpoint.host(), endpoint.port(), rack.orElse(null)));
+        return Optional.of(new Node(id, endpoint.host(), endpoint.port(), rack.orElse(null), fenced));
     }
 
     public Map<String, VersionRange> supportedFeatures() {

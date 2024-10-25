@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.tools;
 
+import java.util.Collection;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.DescribeClusterOptions;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
@@ -36,6 +39,7 @@ import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
+import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
 
 public class ClusterTool {
 
@@ -68,7 +72,9 @@ public class ClusterTool {
                 .help("Get information about the ID of a cluster.");
         Subparser unregisterParser = subparsers.addParser("unregister")
                 .help("Unregister a broker.");
-        for (Subparser subpparser : Arrays.asList(clusterIdParser, unregisterParser)) {
+        Subparser listEndpoints= subparsers.addParser("list-endpoints")
+                .help("List endpoints");
+        for (Subparser subpparser : Arrays.asList(clusterIdParser, unregisterParser, listEndpoints)) {
             MutuallyExclusiveGroup connectionOptions = subpparser.addMutuallyExclusiveGroup().required(true);
             connectionOptions.addArgument("--bootstrap-server", "-b")
                     .action(store())
@@ -85,6 +91,9 @@ public class ClusterTool {
                 .action(store())
                 .required(true)
                 .help("The ID of the broker to unregister.");
+        listEndpoints.addArgument("--include-fenced-brokers")
+                .action(storeTrue())
+                .help("Whether to include fenced brokers when listing broker endpoints");
 
         Namespace namespace = parser.parseArgsOrFail(args);
         String command = namespace.getString("command");
@@ -105,6 +114,17 @@ public class ClusterTool {
             case "unregister": {
                 try (Admin adminClient = Admin.create(properties)) {
                     unregisterCommand(System.out, adminClient, namespace.getInt("id"));
+                }
+                break;
+            }
+            case "list-endpoints": {
+                try (Admin adminClient = Admin.create(properties)) {
+                    boolean includeFencedBrokers = Optional.of(namespace.getBoolean("include_fenced_brokers")).orElse(false);
+                    boolean listControllerEndpoints = namespace.getString("bootstrap_controller") != null;
+                    if (includeFencedBrokers && listControllerEndpoints) {
+                        throw new RuntimeException("Cannot use --include-fenced-brokers with command " + command);
+                    }
+                    listEndpoints(System.out, adminClient, listControllerEndpoints, includeFencedBrokers);
                 }
                 break;
             }
@@ -133,6 +153,46 @@ public class ClusterTool {
             } else {
                 throw ee;
             }
+        }
+    }
+
+    static void listEndpoints(PrintStream stream, Admin adminClient, boolean listControllerEndpoints, boolean includeFencedBrokers) throws Exception {
+        try {
+            DescribeClusterOptions option = new DescribeClusterOptions().includeFencedBrokers(includeFencedBrokers);
+            Collection<Node> nodes = adminClient.describeCluster(option).nodes().get();
+
+            String maxHostLength = String.valueOf(nodes.stream().map(node -> node.host().length()).max(Integer::compareTo).orElse(100));
+            String maxRackLength = String.valueOf(nodes.stream().filter(node -> node.hasRack()).map(node -> node.rack().length()).max(Integer::compareTo).orElse(10));
+
+            if (listControllerEndpoints) {
+                String format = "%-10s %-" + maxHostLength + "s %-10s %-"+ maxRackLength +"s %-15s%n";
+                stream.printf(format, "ID", "HOST", "PORT", "RACK", "ENDPOINT_TYPE");
+                nodes.stream().forEach(node -> stream.printf(format,
+                        node.idString(),
+                        node.host(),
+                        node.port(),
+                        node.rack(),
+                        "controller"
+                ));
+            } else {
+                String format = "%-10s %-" + maxHostLength + "s %-10s %-"+ maxRackLength +"s %-10s %-15s%n";
+                stream.printf(format, "ID", "HOST", "PORT", "RACK", "STATE", "ENDPOINT_TYPE");
+                nodes.stream().forEach(node -> stream.printf(format,
+                        node.idString(),
+                        node.host(),
+                        node.port(),
+                        node.rack(),
+                        node.isFenced() ? "fenced" : "unfenced",
+                        "broker"
+                ));
+            }
+        } catch (ExecutionException ee) {
+                Throwable cause = ee.getCause();
+                if (cause instanceof UnsupportedVersionException) {
+                    stream.println(ee.getCause().getMessage());
+                } else {
+                    throw ee;
+                }
         }
     }
 }

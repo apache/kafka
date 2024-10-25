@@ -2935,6 +2935,24 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    public void testDescribeClusterHandleUnsupportedVersionForIncludingFencedBrokers() {
+        ApiVersion describeClusterV1 = new ApiVersion()
+                .setApiKey(ApiKeys.DESCRIBE_CLUSTER.id)
+                .setMinVersion((short) 0)
+                .setMaxVersion((short) 1);
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(Collections.singletonList(describeClusterV1)));
+
+            env.kafkaClient().prepareUnsupportedVersionResponse(
+                    request -> request instanceof DescribeClusterRequest);
+
+            final DescribeClusterResult result = env.adminClient().describeCluster(new DescribeClusterOptions().includeFencedBrokers(true));
+            TestUtils.assertFutureThrows(result.nodes(),
+                    UnsupportedVersionException.class, "Including fenced broker endpoints is not supported with version 1");
+        }
+    }
+
+    @Test
     public void testListConsumerGroups() throws Exception {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(4, 0),
                 AdminClientConfig.RETRIES_CONFIG, "2")) {
