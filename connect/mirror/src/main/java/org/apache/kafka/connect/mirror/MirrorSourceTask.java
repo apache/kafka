@@ -25,6 +25,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Headers;
@@ -150,6 +151,9 @@ public class MirrorSourceTask extends SourceTask {
             }
         } catch (WakeupException e) {
             return null;
+        } catch (SchemaException e) {
+            log.error("Failure during poll.", e);
+            throw e;
         } catch (KafkaException e) {
             log.warn("Failure during poll.", e);
             return null;
