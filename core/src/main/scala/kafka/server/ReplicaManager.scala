@@ -470,14 +470,18 @@ class ReplicaManager(val config: KafkaConfig,
     })
   }
 
-  private def completeDelayedOperationsWhenNotPartitionLeader(topicPartition: TopicPartition, topicId: Option[Uuid]): Unit = {
+  private def completeDelayedOperationsWhenNotPartitionLeader(topicPartition: TopicPartition, topicId: Option[Uuid],
+                                                              isStopReplica: Boolean): Unit = {
     val topicPartitionOperationKey = TopicPartitionOperationKey(topicPartition)
     delayedProducePurgatory.checkAndComplete(topicPartitionOperationKey)
-    delayedFetchPurgatory.checkAndComplete(topicPartitionOperationKey)
-    delayedRemoteFetchPurgatory.checkAndComplete(topicPartitionOperationKey)
-    delayedRemoteListOffsetsPurgatory.checkAndComplete(topicPartitionOperationKey)
-    if (topicId.isDefined) delayedShareFetchPurgatory.checkAndComplete(
-      new DelayedShareFetchPartitionKey(topicId.get, topicPartition.partition()))
+    // We support fetch from follower now, So only 'stop reply' requires the following things
+    if (isStopReplica) {
+      delayedFetchPurgatory.checkAndComplete(topicPartitionOperationKey)
+      delayedRemoteFetchPurgatory.checkAndComplete(topicPartitionOperationKey)
+      delayedRemoteListOffsetsPurgatory.checkAndComplete(topicPartitionOperationKey)
+      if (topicId.isDefined) delayedShareFetchPurgatory.checkAndComplete(
+        new DelayedShareFetchPartitionKey(topicId.get, topicPartition.partition()))
+    }
   }
 
   /**
@@ -658,7 +662,7 @@ class ReplicaManager(val config: KafkaConfig,
       }
       // If we were the leader, we may have some operations still waiting for completion.
       // We force completion to prevent them from timing out.
-      completeDelayedOperationsWhenNotPartitionLeader(topicPartition, topicId)
+      completeDelayedOperationsWhenNotPartitionLeader(topicPartition, topicId, isStopReplica = true)
     }
 
     // Third delete the logs and checkpoint.
@@ -2494,7 +2498,7 @@ class ReplicaManager(val config: KafkaConfig,
         s"epoch $controllerEpoch with correlation id $correlationId for ${partitionsToMakeFollower.size} partitions")
 
       partitionsToMakeFollower.foreach { partition =>
-        completeDelayedOperationsWhenNotPartitionLeader(partition.topicPartition, partition.topicId)
+        completeDelayedOperationsWhenNotPartitionLeader(partition.topicPartition, partition.topicId, isStopReplica = false)
       }
 
       if (isShuttingDown.get()) {
@@ -3073,7 +3077,7 @@ class ReplicaManager(val config: KafkaConfig,
       stateChangeLogger.info(s"Started fetchers as part of become-follower for ${partitionsToStartFetching.size} partitions")
 
       partitionsToStartFetching.foreach{ case (topicPartition, partition) =>
-        completeDelayedOperationsWhenNotPartitionLeader(topicPartition, partition.topicId)}
+        completeDelayedOperationsWhenNotPartitionLeader(topicPartition, partition.topicId, isStopReplica = false)}
 
       updateLeaderAndFollowerMetrics(followerTopicSet)
     }
