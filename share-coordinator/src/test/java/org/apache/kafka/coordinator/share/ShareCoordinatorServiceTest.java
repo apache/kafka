@@ -269,6 +269,9 @@ class ShareCoordinatorServiceTest {
                 )))
             );
 
+        when(runtime.scheduleWriteOperation(any(), any(), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+
         when(runtime.scheduleReadOperation(
             ArgumentMatchers.eq("read-share-group-state"),
             ArgumentMatchers.eq(new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0)),
@@ -585,6 +588,9 @@ class ShareCoordinatorServiceTest {
         Uuid topicId = Uuid.randomUuid();
         int partition = 0;
 
+        when(runtime.scheduleWriteOperation(any(), any(), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+
         when(runtime.scheduleReadOperation(any(), any(), any()))
             .thenReturn(FutureUtils.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception()));
 
@@ -607,5 +613,53 @@ class ShareCoordinatorServiceTest {
                     ))
             ).get(5, TimeUnit.SECONDS)
         );
+    }
+
+    @Test
+    public void testReadStateCallFailedDueToLeaderEpochUpdateFail() throws InterruptedException, ExecutionException, TimeoutException {
+        CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        ShareCoordinatorService service = new ShareCoordinatorService(
+            new LogContext(),
+            ShareCoordinatorConfigTest.createConfig(ShareCoordinatorConfigTest.testConfigMap()),
+            runtime,
+            new ShareCoordinatorMetrics(),
+            Time.SYSTEM
+        );
+
+        service.startup(() -> 1);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 0;
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("write-share-group-state"),
+            ArgumentMatchers.eq(new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0)),
+            any(),
+            any()))
+            .thenReturn(FutureUtils.failedFuture(Errors.FENCED_LEADER_EPOCH.exception()));
+
+        assertEquals(new ReadShareGroupStateResponseData()
+                .setResults(Collections.singletonList(new ReadShareGroupStateResponseData.ReadStateResult()
+                    .setTopicId(topicId)
+                    .setPartitions(Collections.singletonList(new ReadShareGroupStateResponseData.PartitionResult()
+                        .setPartition(partition)
+                        .setErrorCode(Errors.FENCED_LEADER_EPOCH.code())
+                        .setErrorMessage("Unable to update leader epoch during read request: The leader epoch in the request is older than the epoch on the broker."))))),
+            service.readState(
+                requestContext(ApiKeys.READ_SHARE_GROUP_STATE),
+                new ReadShareGroupStateRequestData().setGroupId(groupId)
+                    .setTopics(Collections.singletonList(new ReadShareGroupStateRequestData.ReadStateData()
+                        .setTopicId(topicId)
+                        .setPartitions(Collections.singletonList(new ReadShareGroupStateRequestData.PartitionData()
+                            .setPartition(partition)
+                            .setLeaderEpoch(1)
+                        ))
+                    ))
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        verify(runtime, times(1)).scheduleWriteOperation(any(), any(), any(), any());
+        verify(runtime, times(0)).scheduleReadOperation(any(), any(), any());
     }
 }

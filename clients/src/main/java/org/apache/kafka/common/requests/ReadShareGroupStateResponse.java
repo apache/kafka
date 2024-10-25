@@ -31,6 +31,8 @@ import java.util.Map;
 
 public class ReadShareGroupStateResponse extends AbstractResponse {
     private final ReadShareGroupStateResponseData data;
+    public static final ReadShareGroupStateResponseData EMPTY_READ_RESPONSE_DATA = new ReadShareGroupStateResponseData()
+        .setResults(Collections.emptyList());
 
     public ReadShareGroupStateResponse(ReadShareGroupStateResponseData data) {
         super(ApiKeys.READ_SHARE_GROUP_STATE);
