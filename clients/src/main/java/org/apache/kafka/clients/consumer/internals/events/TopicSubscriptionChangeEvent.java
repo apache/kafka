@@ -14,33 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 
 import java.util.Optional;
+import java.util.Set;
 
-/**
- * Application event indicating that the subscription state has changed, triggered when a user
- * calls the subscribe API. This will make the consumer join a consumer group if not part of it
- * yet, or just send the updated subscription to the broker if it's already a member of the group.
- */
-public abstract class SubscriptionChangeEvent extends CompletableApplicationEvent<Void> {
-
-    private final Optional<ConsumerRebalanceListener> listener;
-
-    public SubscriptionChangeEvent(final Type type, final Optional<ConsumerRebalanceListener> listener, final long deadlineMs) {
-        super(type, deadlineMs);
-        this.listener = listener;
+public class TopicSubscriptionChangeEvent extends SubscriptionChangeEvent {
+    private final Set<String> topics;
+    public TopicSubscriptionChangeEvent(final Set<String> topics, final Optional<ConsumerRebalanceListener> listener, final long deadlineMs) {
+        super(Type.TOPIC_SUBSCRIPTION_CHANGE, listener, deadlineMs);
+        this.topics = topics;
     }
 
-    public Optional<ConsumerRebalanceListener> listener() {
-        return listener;
+    public Set<String> topics() {
+        return topics;
     }
 
     @Override
-    protected String toStringBase() {
-        return super.toStringBase() + ", listener=" + listener;
+    public String toStringBase() {
+        return super.toStringBase() + ", topics=" + topics;
     }
 }

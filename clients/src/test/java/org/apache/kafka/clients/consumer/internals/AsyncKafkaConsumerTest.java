@@ -47,10 +47,10 @@ import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetOffsetEvent;
 import org.apache.kafka.clients.consumer.internals.events.SeekUnvalidatedEvent;
-import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
+import org.apache.kafka.clients.consumer.internals.events.TopicPatternSubscriptionChangeEvent;
+import org.apache.kafka.clients.consumer.internals.events.TopicSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeEvent;
-import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.Node;
@@ -135,7 +135,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeast;
-import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -491,46 +490,10 @@ public class AsyncKafkaConsumerTest {
             }
         };
 
+        completeTopicSubscriptionChangeEventSuccessfully();
         consumer.subscribe(Collections.singletonList(topicName), listener);
         consumer.poll(Duration.ZERO);
         assertTrue(callbackExecuted.get());
-    }
-
-    @Test
-    public void testSubscriptionRegexEvalOnPollOnlyIfMetadataChanges() {
-        SubscriptionState subscriptions = mock(SubscriptionState.class);
-        Cluster cluster = mock(Cluster.class);
-
-        consumer = newConsumer(
-                mock(FetchBuffer.class),
-                mock(ConsumerInterceptors.class),
-                mock(ConsumerRebalanceListenerInvoker.class),
-                subscriptions,
-                "group-id",
-                "client-id");
-
-        final String topicName = "foo";
-        final int partition = 3;
-        final TopicPartition tp = new TopicPartition(topicName, partition);
-        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
-        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
-        doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
-        doReturn(cluster).when(metadata).fetch();
-        doReturn(Collections.singleton(topicName)).when(cluster).topics();
-
-        consumer.subscribe(Pattern.compile("f*"));
-        verify(metadata).requestUpdateForNewTopics();
-        verify(subscriptions).matchesSubscribedPattern(topicName);
-        clearInvocations(subscriptions);
-
-        when(subscriptions.hasPatternSubscription()).thenReturn(true);
-        consumer.poll(Duration.ZERO);
-        verify(subscriptions, never()).matchesSubscribedPattern(topicName);
-
-        when(metadata.updateVersion()).thenReturn(2);
-        when(subscriptions.hasPatternSubscription()).thenReturn(true);
-        consumer.poll(Duration.ZERO);
-        verify(subscriptions).matchesSubscribedPattern(topicName);
     }
 
     @Test
@@ -881,6 +844,7 @@ public class AsyncKafkaConsumerTest {
             subscriptions,
             "group-id",
             "client-id");
+        completeTopicSubscriptionChangeEventSuccessfully();
         consumer.subscribe(singleton("topic"), mock(ConsumerRebalanceListener.class));
         subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
         completeSeekUnvalidatedEventSuccessfully();
@@ -899,6 +863,7 @@ public class AsyncKafkaConsumerTest {
             subscriptions,
             "group-id",
             "client-id");
+        completeTopicSubscriptionChangeEventSuccessfully();
         consumer.subscribe(singleton("topic"), mock(ConsumerRebalanceListener.class));
         subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
         completeSeekUnvalidatedEventSuccessfully();
@@ -1319,10 +1284,20 @@ public class AsyncKafkaConsumerTest {
     public void testSubscribeGeneratesEvent() {
         consumer = newConsumer();
         String topic = "topic1";
+        completeTopicSubscriptionChangeEventSuccessfully();
         consumer.subscribe(singletonList(topic));
         assertEquals(singleton(topic), consumer.subscription());
         assertTrue(consumer.assignment().isEmpty());
-        verify(applicationEventHandler).add(ArgumentMatchers.isA(SubscriptionChangeEvent.class));
+        verify(applicationEventHandler).addAndGet(ArgumentMatchers.isA(TopicSubscriptionChangeEvent.class));
+    }
+
+    @Test
+    public void testSubscribePatternGeneratesEvent() {
+        consumer = newConsumer();
+        Pattern pattern = Pattern.compile("topic.*");
+        completeTopicPatternSubscriptionChangeEventSuccessfully();
+        consumer.subscribe(pattern);
+        verify(applicationEventHandler).addAndGet(ArgumentMatchers.isA(TopicPatternSubscriptionChangeEvent.class));
     }
 
     @Test
@@ -1519,6 +1494,7 @@ public class AsyncKafkaConsumerTest {
                 lostError
         );
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        completeTopicSubscriptionChangeEventSuccessfully();
         consumer.subscribe(Collections.singletonList("topic"), consumerRebalanceListener);
         SortedSet<TopicPartition> partitions = Collections.emptySortedSet();
 
@@ -1708,6 +1684,7 @@ public class AsyncKafkaConsumerTest {
                 .collectFetch(Mockito.any(FetchBuffer.class));
         when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
 
+        completeTopicSubscriptionChangeEventSuccessfully();
         consumer.subscribe(singletonList("topic1"));
         consumer.poll(Duration.ofMillis(100));
         verify(applicationEventHandler).add(any(PollEvent.class));
@@ -1737,6 +1714,7 @@ public class AsyncKafkaConsumerTest {
     public void testLongPollWaitIsLimited() {
         consumer = newConsumer();
         String topicName = "topic1";
+        completeTopicSubscriptionChangeEventSuccessfully();
         consumer.subscribe(singletonList(topicName));
 
         assertEquals(singleton(topicName), consumer.subscription());
@@ -1891,6 +1869,7 @@ public class AsyncKafkaConsumerTest {
     void testReaperInvokedInPoll() {
         consumer = newConsumer();
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        completeTopicSubscriptionChangeEventSuccessfully();
         consumer.subscribe(Collections.singletonList("topic"));
         when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
         consumer.poll(Duration.ZERO);
@@ -2052,6 +2031,24 @@ public class AsyncKafkaConsumerTest {
             event.future().complete(null);
             return null;
         }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(AssignmentChangeEvent.class));
+    }
+
+    private void completeTopicSubscriptionChangeEventSuccessfully() {
+        doAnswer(invocation -> {
+            TopicSubscriptionChangeEvent event = invocation.getArgument(0);
+            consumer.subscriptions().subscribe(event.topics(), event.listener());
+            event.future().complete(null);
+            return null;
+        }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(TopicSubscriptionChangeEvent.class));
+    }
+
+    private void completeTopicPatternSubscriptionChangeEventSuccessfully() {
+        doAnswer(invocation -> {
+            TopicPatternSubscriptionChangeEvent event = invocation.getArgument(0);
+            consumer.subscriptions().subscribe(event.pattern(), event.listener());
+            event.future().complete(null);
+            return null;
+        }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(TopicPatternSubscriptionChangeEvent.class));
     }
 
     private void completeSeekUnvalidatedEventSuccessfully() {
