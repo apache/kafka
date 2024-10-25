@@ -713,6 +713,29 @@ public class RemoteLogManager implements Closeable {
         return Optional.empty();
     }
 
+    public Optional<FileRecords.TimestampAndOffset> findOffsetWithMaxTimestamp(TopicPartition tp) throws RemoteStorageException, IOException {
+        Uuid topicId = topicIdByPartitionMap.get(tp);
+        if (topicId == null) {
+            return Optional.empty();
+        }
+
+        TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, tp);
+        Iterator<RemoteLogSegmentMetadata> iterator = remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition);
+        Optional<RemoteLogSegmentMetadata> rlsMetadataWithMaxTimestamp = Optional.empty();
+        while (iterator.hasNext()) {
+            RemoteLogSegmentMetadata rlsMetadata = iterator.next();
+            if (!rlsMetadataWithMaxTimestamp.isPresent() || rlsMetadata.maxTimestampMs() > rlsMetadataWithMaxTimestamp.get().maxTimestampMs()) {
+                rlsMetadataWithMaxTimestamp = Optional.of(rlsMetadata);
+            }
+        }
+
+        if (rlsMetadataWithMaxTimestamp.isPresent()) {
+            RemoteLogSegmentMetadata rlsMetadata = rlsMetadataWithMaxTimestamp.get();
+            return lookupTimestamp(rlsMetadata, rlsMetadata.maxTimestampMs(), rlsMetadata.startOffset());
+        }
+        return Optional.empty();
+    }
+
     private abstract static class CancellableRunnable implements Runnable {
         private volatile boolean cancelled = false;
 
