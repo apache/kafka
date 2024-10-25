@@ -86,10 +86,10 @@ class StreamsRelationalSmokeTest(KafkaTest):
 
     @cluster(num_nodes=8)
     @matrix(crash=[False, True],
-            processing_guarantee=['exactly_once', 'exactly_once_v2'],
-            metadata_quorum=[quorum.isolated_kraft])
-    def test_streams(self, crash, processing_guarantee, metadata_quorum):
+            metadata_quorum=[quorum.combined_kraft])
+    def test_streams(self, crash, metadata_quorum):
         driver = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "driver", "ignored", "ignored")
+        processing_guarantee='exactly_once_v2'
 
         LOG_FILE = driver.LOG_FILE  # this is the same for all instances of the service, so we can just declare a "constant"
 
