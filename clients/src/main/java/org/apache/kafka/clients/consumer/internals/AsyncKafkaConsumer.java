@@ -250,7 +250,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final AtomicBoolean asyncCommitFenced;
     // Last triggered async commit future. Used to wait until all previous async commits are completed.
     // We only need to keep track of the last one, since they are guaranteed to complete in order.
-    private CompletableFuture<Void> lastPendingAsyncCommit = null;
+    private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> lastPendingAsyncCommit = null;
 
     // currentThread holds the threadId of the current thread accessing the AsyncKafkaConsumer
     // and is used to prevent multithreaded access
@@ -744,18 +744,22 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public void commitAsync(OffsetCommitCallback callback) {
-        commitAsync(subscriptions.allConsumed(), callback);
+        commitAsync(Optional.empty(), callback);
     }
 
     @Override
     public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
+        commitAsync(Optional.of(offsets), callback);
+    }
+
+    private void commitAsync(Optional<Map<TopicPartition, OffsetAndMetadata>> offsets, OffsetCommitCallback callback) {
         acquireAndEnsureOpen();
         try {
             AsyncCommitEvent asyncCommitEvent = new AsyncCommitEvent(offsets);
-            lastPendingAsyncCommit = commit(asyncCommitEvent).whenComplete((r, t) -> {
+            lastPendingAsyncCommit = commit(asyncCommitEvent).whenComplete((committedOffsets, t) -> {
 
                 if (t == null) {
-                    offsetCommitCallbackInvoker.enqueueInterceptorInvocation(offsets);
+                    offsetCommitCallbackInvoker.enqueueInterceptorInvocation(committedOffsets);
                 }
 
                 if (t instanceof FencedInstanceIdException) {
@@ -764,28 +768,24 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
                 if (callback == null) {
                     if (t != null) {
-                        log.error("Offset commit with offsets {} failed", offsets, t);
+                        log.error("Offset commit with offsets {} failed", committedOffsets, t);
                     }
                     return;
                 }
 
-                offsetCommitCallbackInvoker.enqueueUserCallbackInvocation(callback, offsets, (Exception) t);
+                offsetCommitCallbackInvoker.enqueueUserCallbackInvocation(callback, committedOffsets, (Exception) t);
             });
         } finally {
             release();
         }
     }
 
-    private CompletableFuture<Void> commit(final CommitEvent commitEvent) {
+    private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> commit(final CommitEvent commitEvent) {
         maybeThrowInvalidGroupIdException();
         maybeThrowFencedInstanceException();
         offsetCommitCallbackInvoker.executeCallbacks();
 
-        Map<TopicPartition, OffsetAndMetadata> offsets = commitEvent.offsets();
-        log.debug("Committing offsets: {}", offsets);
-        offsets.forEach(this::updateLastSeenEpochIfNewer);
-
-        if (offsets.isEmpty()) {
+        if (commitEvent.offsets().isPresent() && commitEvent.offsets().get().isEmpty()) {
             return CompletableFuture.completedFuture(null);
         }
 
@@ -825,7 +825,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             } else {
                 log.info("Seeking to offset {} for partition {}", offset, partition);
             }
-            updateLastSeenEpochIfNewer(partition, offsetAndMetadata);
+            ConsumerUtils.maybeUpdateLastSeenEpochIfNewer(metadata, Collections.singletonMap(partition, offsetAndMetadata));
 
             Timer timer = time.timer(defaultApiTimeoutMs);
             SeekUnvalidatedEvent seekUnvalidatedEventEvent = new SeekUnvalidatedEvent(
@@ -912,7 +912,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             wakeupTrigger.setActiveTask(event.future());
             try {
                 final Map<TopicPartition, OffsetAndMetadata> committedOffsets = applicationEventHandler.addAndGet(event);
-                committedOffsets.forEach(this::updateLastSeenEpochIfNewer);
+                ConsumerUtils.maybeUpdateLastSeenEpochIfNewer(metadata, committedOffsets);
                 return committedOffsets;
             } catch (TimeoutException e) {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the last " +
@@ -1315,28 +1315,32 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      */
     @Override
     public void commitSync(final Duration timeout) {
-        commitSync(subscriptions.allConsumed(), timeout);
+        commitSync(Optional.empty(), timeout);
     }
 
     @Override
     public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets) {
-        commitSync(offsets, Duration.ofMillis(defaultApiTimeoutMs));
+        commitSync(Optional.of(offsets), Duration.ofMillis(defaultApiTimeoutMs));
     }
 
     @Override
     public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets, Duration timeout) {
+        commitSync(Optional.of(offsets), timeout);
+    }
+
+    private void commitSync(Optional<Map<TopicPartition, OffsetAndMetadata>> offsets, Duration timeout) {
         acquireAndEnsureOpen();
         long commitStart = time.nanoseconds();
         try {
             SyncCommitEvent syncCommitEvent = new SyncCommitEvent(offsets, calculateDeadlineMs(time, timeout));
-            CompletableFuture<Void> commitFuture = commit(syncCommitEvent);
+            CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> commitFuture = commit(syncCommitEvent);
 
             Timer requestTimer = time.timer(timeout.toMillis());
             awaitPendingAsyncCommitsAndExecuteCommitCallbacks(requestTimer, true);
 
             wakeupTrigger.setActiveTask(commitFuture);
-            ConsumerUtils.getResult(commitFuture, requestTimer);
-            interceptors.onCommit(offsets);
+            Map<TopicPartition, OffsetAndMetadata> committedOffsets = ConsumerUtils.getResult(commitFuture, requestTimer);
+            interceptors.onCommit(committedOffsets);
         } finally {
             wakeupTrigger.clearTask();
             kafkaConsumerMetrics.recordCommitSync(time.nanoseconds() - commitStart);
@@ -1599,11 +1603,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      */
     private boolean isCommittedOffsetsManagementEnabled() {
         return groupMetadata.get().isPresent();
-    }
-
-    private void updateLastSeenEpochIfNewer(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata) {
-        if (offsetAndMetadata != null)
-            offsetAndMetadata.leaderEpoch().ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(topicPartition, epoch));
     }
 
     @Override

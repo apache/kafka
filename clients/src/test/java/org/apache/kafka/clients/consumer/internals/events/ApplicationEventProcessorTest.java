@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerHeartbeatRequestManager;
@@ -42,7 +43,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -52,8 +52,10 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -128,8 +130,6 @@ public class ApplicationEventProcessorTest {
 
     private static Stream<Arguments> applicationEvents() {
         return Stream.of(
-                Arguments.of(new AsyncCommitEvent(new HashMap<>())),
-                Arguments.of(new SyncCommitEvent(new HashMap<>(), 500)),
                 Arguments.of(new CheckAndUpdatePositionsEvent(500)),
                 Arguments.of(new TopicMetadataEvent("topic", Long.MAX_VALUE)),
                 Arguments.of(new AssignmentChangeEvent(12345, 12345, Collections.emptyList())));
@@ -242,6 +242,130 @@ public class ApplicationEventProcessorTest {
         verify(membershipManager).onSubscriptionUpdated();
         // verify member state doesn't transition to JOINING.
         verify(membershipManager, never()).onConsumerPoll();
+    }
+
+    @Test
+    public void testSyncCommitEventWithOffsets() {
+        final long deadlineMs = 12345;
+        TopicPartition tp = new TopicPartition("topic", 0);
+        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(tp, new OffsetAndMetadata(10, Optional.of(1), null));
+        SyncCommitEvent event = new SyncCommitEvent(Optional.of(offsets), deadlineMs);
+
+        setupProcessor(true);
+        doReturn(true).when(metadata).updateLastSeenEpochIfNewer(tp, 1);
+        doReturn(CompletableFuture.completedFuture(null)).when(commitRequestManager).commitSync(offsets, deadlineMs);
+
+        processor.process(event);
+        verify(subscriptionState, never()).allConsumed();
+        verify(metadata).updateLastSeenEpochIfNewer(tp, 1);
+        verify(commitRequestManager).commitSync(offsets, deadlineMs);
+        Map<TopicPartition, OffsetAndMetadata> committedOffsets = assertDoesNotThrow(() -> event.future().get());
+        assertEquals(offsets, committedOffsets);
+    }
+
+    @Test
+    public void testSyncCommitEventWithEmptyOffsets() {
+        SyncCommitEvent event = new SyncCommitEvent(Optional.of(Collections.emptyMap()), 12345);
+
+        setupProcessor(true);
+
+        processor.process(event);
+        Map<TopicPartition, OffsetAndMetadata> committedOffsets = assertDoesNotThrow(() -> event.future().get());
+        assertTrue(committedOffsets.isEmpty());
+    }
+
+    @Test
+    public void testSyncCommitEventWithAllConsumed() {
+        final long deadlineMs = 12345;
+        TopicPartition tp = new TopicPartition("topic", 0);
+        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(tp, new OffsetAndMetadata(10, Optional.of(1), null));
+        SyncCommitEvent event = new SyncCommitEvent(Optional.empty(), deadlineMs);
+
+        setupProcessor(true);
+        doReturn(offsets).when(subscriptionState).allConsumed();
+        doReturn(true).when(metadata).updateLastSeenEpochIfNewer(tp, 1);
+        doReturn(CompletableFuture.completedFuture(null)).when(commitRequestManager).commitSync(offsets, deadlineMs);
+
+        processor.process(event);
+        verify(subscriptionState).allConsumed();
+        verify(metadata).updateLastSeenEpochIfNewer(tp, 1);
+        verify(commitRequestManager).commitSync(offsets, deadlineMs);
+        Map<TopicPartition, OffsetAndMetadata> committedOffsets = assertDoesNotThrow(() -> event.future().get());
+        assertEquals(offsets, committedOffsets);
+    }
+
+    @Test
+    public void testSyncCommitEventWithEmptyAllConsumed() {
+        SyncCommitEvent event = new SyncCommitEvent(Optional.empty(), 12345);
+
+        setupProcessor(true);
+        doReturn(Collections.emptyMap()).when(subscriptionState).allConsumed();
+
+        processor.process(event);
+        verify(subscriptionState).allConsumed();
+        Map<TopicPartition, OffsetAndMetadata> committedOffsets = assertDoesNotThrow(() -> event.future().get());
+        assertTrue(committedOffsets.isEmpty());
+    }
+
+    @Test
+    public void testAsyncCommitEventWithOffsets() {
+        TopicPartition tp = new TopicPartition("topic", 0);
+        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(tp, new OffsetAndMetadata(10, Optional.of(1), null));
+        AsyncCommitEvent event = new AsyncCommitEvent(Optional.of(offsets));
+
+        setupProcessor(true);
+        doReturn(true).when(metadata).updateLastSeenEpochIfNewer(tp, 1);
+        doReturn(CompletableFuture.completedFuture(null)).when(commitRequestManager).commitAsync(offsets);
+
+        processor.process(event);
+        verify(subscriptionState, never()).allConsumed();
+        verify(metadata).updateLastSeenEpochIfNewer(tp, 1);
+        verify(commitRequestManager).commitAsync(offsets);
+        Map<TopicPartition, OffsetAndMetadata> committedOffsets = assertDoesNotThrow(() -> event.future().get());
+        assertEquals(offsets, committedOffsets);
+    }
+
+    @Test
+    public void testAsyncCommitEventWithEmptyOffsets() {
+        AsyncCommitEvent event = new AsyncCommitEvent(Optional.of(Collections.emptyMap()));
+
+        setupProcessor(true);
+
+        processor.process(event);
+        Map<TopicPartition, OffsetAndMetadata> committedOffsets = assertDoesNotThrow(() -> event.future().get());
+        assertTrue(committedOffsets.isEmpty());
+    }
+
+    @Test
+    public void testAsyncCommitEventWithAllConsumed() {
+        TopicPartition tp = new TopicPartition("topic", 0);
+        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(tp, new OffsetAndMetadata(10, Optional.of(1), null));
+        AsyncCommitEvent event = new AsyncCommitEvent(Optional.empty());
+
+        setupProcessor(true);
+        doReturn(offsets).when(subscriptionState).allConsumed();
+        doReturn(true).when(metadata).updateLastSeenEpochIfNewer(tp, 1);
+        doReturn(CompletableFuture.completedFuture(null)).when(commitRequestManager).commitAsync(offsets);
+
+        processor.process(event);
+        verify(subscriptionState).allConsumed();
+        verify(metadata).updateLastSeenEpochIfNewer(tp, 1);
+        verify(commitRequestManager).commitAsync(offsets);
+        Map<TopicPartition, OffsetAndMetadata> committedOffsets = assertDoesNotThrow(() -> event.future().get());
+        assertEquals(offsets, committedOffsets);
+    }
+
+    @Test
+    public void testAsyncCommitEventWithEmptyAllConsumed() {
+        AsyncCommitEvent event = new AsyncCommitEvent(Optional.empty());
+
+        setupProcessor(true);
+        doReturn(Collections.emptyMap()).when(subscriptionState).allConsumed();
+
+        processor.process(event);
+        verify(subscriptionState).allConsumed();
+        Map<TopicPartition, OffsetAndMetadata> committedOffsets = assertDoesNotThrow(() -> event.future().get());
+        assertTrue(committedOffsets.isEmpty());
     }
 
     private List<NetworkClientDelegate.UnsentRequest> mockCommitResults() {
