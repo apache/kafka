@@ -871,12 +871,6 @@ class UnifiedLog(@volatile var logStartOffset: Long,
             }
           }
 
-          // check messages set size may be exceed config.segmentSize
-          if (validRecords.sizeInBytes > config.segmentSize) {
-            throw new RecordBatchTooLargeException(s"Message batch size is ${validRecords.sizeInBytes} bytes in append " +
-              s"to partition $topicPartition, which exceeds the maximum configured segment size of ${config.segmentSize}.")
-          }
-
           // maybe roll the log if this segment is full
           val segment = maybeRoll(validRecords.sizeInBytes, appendInfo)
 

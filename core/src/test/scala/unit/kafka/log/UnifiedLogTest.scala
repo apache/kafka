@@ -1807,21 +1807,6 @@ class UnifiedLogTest {
     }
   }
 
-  /**
-   *  MessageSet size shouldn't exceed the config.segmentSize, check that it is properly enforced by
-   * appending a message set larger than the config.segmentSize setting and checking that an exception is thrown.
-   */
-  @Test
-  def testMessageSetSizeCheck(): Unit = {
-    val messageSet = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("You".getBytes), new SimpleRecord("bethe".getBytes))
-    // append messages to log
-    val configSegmentSize = messageSet.sizeInBytes - 1
-    val logConfig = LogTestUtils.createLogConfig(segmentBytes = configSegmentSize)
-    val log = createLog(logDir, logConfig)
-
-    assertThrows(classOf[RecordBatchTooLargeException], () => log.appendAsLeader(messageSet, leaderEpoch = 0))
-  }
-
   @Test
   def testCompactedTopicConstraints(): Unit = {
     val keyedMessage = new SimpleRecord("and here it is".getBytes, "this message has a key".getBytes)
