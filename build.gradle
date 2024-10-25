@@ -113,11 +113,22 @@ ext {
 
   commitId = determineCommitId()
 
-  addParametersForTests = { name, options ->
+  configureJavaCompiler = { name, options ->
     // -parameters generates arguments with parameter names in TestInfo#getDisplayName.
     // ref: https://github.com/junit-team/junit5/blob/4c0dddad1b96d4a20e92a2cd583954643ac56ac0/junit-jupiter-params/src/main/java/org/junit/jupiter/params/ParameterizedTest.java#L161-L164
-    if (name == "compileTestJava" || name == "compileTestScala")
+    if (name == "compileTestJava" || name == "compileTestScala") {
       options.compilerArgs << "-parameters"
+    } else if (name == "compileJava" || name == "compileScala") {
+      options.compilerArgs << "-Xlint:all"
+      if (!project.path.startsWith(":connect") && !project.path.startsWith(":storage"))
+        options.compilerArgs << "-Xlint:-rawtypes"
+      options.compilerArgs << "-encoding" << "UTF-8"
+      options.compilerArgs << "-Xlint:-rawtypes"
+      options.compilerArgs << "-Xlint:-serial"
+      options.compilerArgs << "-Xlint:-try"
+      options.compilerArgs << "-Werror"
+      options.compilerArgs += ["--release", String.valueOf(minJavaVersion)]
+    }
   }
 
   runtimeTestLibs = [
@@ -308,16 +319,7 @@ subprojects {
   }
 
   tasks.withType(JavaCompile) {
-    options.encoding = 'UTF-8'
-    options.compilerArgs << "-Xlint:all"
-    // temporary exclusions until all the warnings are fixed
-    if (!project.path.startsWith(":connect") && !project.path.startsWith(":storage"))
-      options.compilerArgs << "-Xlint:-rawtypes"
-    options.compilerArgs << "-Xlint:-serial"
-    options.compilerArgs << "-Xlint:-try"
-    options.compilerArgs << "-Werror"
-    options.release = minJavaVersion
-    addParametersForTests(name, options)
+    configureJavaCompiler(name, options)
   }
 
   if (shouldPublish) {
@@ -771,7 +773,7 @@ subprojects {
     scalaCompileOptions.additionalParameters += ["-release", String.valueOf(minJavaVersion)]
     options.compilerArgs += ["--release", String.valueOf(minJavaVersion)]
 
-    addParametersForTests(name, options)
+    configureJavaCompiler(name, options)
 
     configure(scalaCompileOptions.forkOptions) {
       memoryMaximumSize = defaultMaxHeapSize
