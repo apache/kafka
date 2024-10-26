@@ -119,7 +119,12 @@ abstract class DelayedOperation(delayMs: Long,
   /**
    * Thread-safe variant of tryComplete()
    */
-  private[server] def safeTryComplete(): Boolean = inLock(lock)(tryComplete())
+  private[server] def safeTryComplete(): Boolean = inLock(lock) {
+    if (isCompleted)
+      false
+    else
+      tryComplete()
+  }
 
   /*
    * run() method defines a task that is executed on timeout

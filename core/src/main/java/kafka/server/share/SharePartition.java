@@ -1844,6 +1844,7 @@ public class SharePartition {
     }
 
     private void releaseAcquisitionLockOnTimeout(String memberId, long firstOffset, long lastOffset) {
+        List<PersisterStateBatch> stateBatches;
         lock.writeLock().lock();
         try {
             Map.Entry<Long, InFlightBatch> floorOffset = cachedState.floorEntry(firstOffset);
@@ -1851,7 +1852,7 @@ public class SharePartition {
                 log.error("Base offset {} not found for share partition: {}-{}", firstOffset, groupId, topicIdPartition);
                 return;
             }
-            List<PersisterStateBatch> stateBatches = new ArrayList<>();
+            stateBatches = new ArrayList<>();
             NavigableMap<Long, InFlightBatch> subMap = cachedState.subMap(floorOffset.getKey(), true, lastOffset, true);
             for (Map.Entry<Long, InFlightBatch> entry : subMap.entrySet()) {
                 InFlightBatch inFlightBatch = entry.getValue();
@@ -1882,15 +1883,18 @@ public class SharePartition {
                     // Even if write share group state RPC call fails, we will still go ahead with the state transition.
                     // Update the cached state and start and end offsets after releasing the acquisition lock on timeout.
                     maybeUpdateCachedStateAndOffsets();
-
-                    // If we have an acquisition lock timeout for a share-partition, then we should check if
-                    // there is a pending share fetch request for the share-partition and complete it.
-                    DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId(), topicIdPartition.partition());
-                    replicaManager.completeDelayedShareFetchRequest(delayedShareFetchKey);
                 });
             }
         } finally {
             lock.writeLock().unlock();
+        }
+
+        // Skip null check for stateBatches, it should always be initialized if reached here.
+        if (!stateBatches.isEmpty()) {
+            // If we have an acquisition lock timeout for a share-partition, then we should check if
+            // there is a pending share fetch request for the share-partition and complete it.
+            DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId(), topicIdPartition.partition());
+            replicaManager.completeDelayedShareFetchRequest(delayedShareFetchKey);
         }
     }
 
