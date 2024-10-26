@@ -189,7 +189,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      *
      * <ol>
      *     <li>
-     *         Iterate through the {@link RequestManager} list and invoke {@link RequestManager#pollOnClose()}
+     *         Iterate through the {@link RequestManager} list and invoke {@link RequestManager#pollOnClose(long)}
      *         to get the {@link NetworkClientDelegate.UnsentRequest} list and the poll time for the network poll
      *     </li>
      *     <li>
