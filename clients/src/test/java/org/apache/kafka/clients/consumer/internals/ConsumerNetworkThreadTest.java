@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
@@ -51,6 +52,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -69,17 +71,25 @@ public class ConsumerNetworkThreadTest {
     private final AsyncConsumerMetrics asyncConsumerMetrics;
 
     ConsumerNetworkThreadTest() {
+        LogContext logContext = new LogContext();
+        this.time = new MockTime();
         this.networkClientDelegate = mock(NetworkClientDelegate.class);
-        this.requestManagers = mock(RequestManagers.class);
         this.offsetsRequestManager = mock(OffsetsRequestManager.class);
         this.heartbeatRequestManager = mock(ConsumerHeartbeatRequestManager.class);
         this.coordinatorRequestManager = mock(CoordinatorRequestManager.class);
         this.applicationEventProcessor = mock(ApplicationEventProcessor.class);
         this.applicationEventReaper = mock(CompletableEventReaper.class);
-        this.time = new MockTime();
         this.applicationEventQueue = new LinkedBlockingQueue<>();
         this.asyncConsumerMetrics = mock(AsyncConsumerMetrics.class);
-        LogContext logContext = new LogContext();
+        this.requestManagers = spy(new RequestManagers(logContext,
+                offsetsRequestManager,
+                mock(TopicMetadataRequestManager.class),
+                mock(FetchRequestManager.class),
+                Optional.of(coordinatorRequestManager),
+                Optional.of(mock(CommitRequestManager.class)),
+                Optional.of(heartbeatRequestManager),
+                Optional.of(mock(ConsumerMembershipManager.class))));
+
 
         this.consumerNetworkThread = new ConsumerNetworkThread(
                 logContext,
@@ -150,7 +160,7 @@ public class ConsumerNetworkThreadTest {
         TestUtils.waitForCondition(isStarted,
                 "The consumer network thread did not start within " + DEFAULT_MAX_WAIT_MS + " ms");
 
-        consumerNetworkThread.close(Duration.ofMillis(DEFAULT_MAX_WAIT_MS));
+        consumerNetworkThread.close(Duration.ofMillis(DEFAULT_MAX_WAIT_MS), CloseOptions.GroupMembershipOperation.DEFAULT);
 
         TestUtils.waitForCondition(isClosed,
                 "The consumer network thread did not stop within " + DEFAULT_MAX_WAIT_MS + " ms");

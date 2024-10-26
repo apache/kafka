@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.MockClient;
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
@@ -129,6 +130,10 @@ public class AbstractCoordinatorTest {
     }
 
     private void setupCoordinator(int retryBackoffMs, int retryBackoffMaxMs, int rebalanceTimeoutMs, Optional<String> groupInstanceId) {
+        setupCoordinator(retryBackoffMs, retryBackoffMaxMs, rebalanceTimeoutMs, groupInstanceId, groupInstanceId.isEmpty());
+    }
+
+    private void setupCoordinator(int retryBackoffMs, int retryBackoffMaxMs, int rebalanceTimeoutMs, Optional<String> groupInstanceId, boolean leaveOnClose) {
         LogContext logContext = new LogContext();
         this.mockTime = new MockTime();
         ConsumerMetadata metadata = new ConsumerMetadata(retryBackoffMs, retryBackoffMaxMs, 60 * 60 * 1000L,
@@ -156,7 +161,7 @@ public class AbstractCoordinatorTest {
                                                                         groupInstanceId,
                                                                         retryBackoffMs,
                                                                         retryBackoffMaxMs,
-                                                                        groupInstanceId.isEmpty());
+                                                                        leaveOnClose);
         this.coordinator = new DummyCoordinator(rebalanceConfig,
                                                 consumerClient,
                                                 metrics,
@@ -1093,8 +1098,22 @@ public class AbstractCoordinatorTest {
         checkLeaveGroupRequestSent(Optional.of("groupInstanceId"));
     }
 
-    private void checkLeaveGroupRequestSent(Optional<String> groupInstanceId) {
-        setupCoordinator(RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS, Integer.MAX_VALUE, groupInstanceId);
+    @Test
+    public void testLeaveGroupSentWithGroupInstanceIdUnSetAndDifferentGroupMembershipOperation() {
+        checkLeaveGroupRequestSent(Optional.empty(), CloseOptions.GroupMembershipOperation.DEFAULT, true);
+        checkLeaveGroupRequestSent(Optional.empty(), CloseOptions.GroupMembershipOperation.LEAVE_GROUP, true);
+        checkLeaveGroupRequestSent(Optional.empty(), CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP, true);
+        checkLeaveGroupRequestSent(Optional.of("groupInstanceId"), CloseOptions.GroupMembershipOperation.DEFAULT, true);
+        checkLeaveGroupRequestSent(Optional.of("groupInstanceId"), CloseOptions.GroupMembershipOperation.LEAVE_GROUP, true);
+        checkLeaveGroupRequestSent(Optional.of("groupInstanceId"), CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP, true);
+    }
+
+    private void checkLeaveGroupRequestSent(Optional<String> groupInstanceId)  {
+        checkLeaveGroupRequestSent(groupInstanceId, CloseOptions.GroupMembershipOperation.DEFAULT, groupInstanceId.isEmpty());
+    }
+
+    private void checkLeaveGroupRequestSent(Optional<String> groupInstanceId, CloseOptions.GroupMembershipOperation operation, boolean leaveOnClose) {
+        setupCoordinator(RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS, Integer.MAX_VALUE, groupInstanceId, leaveOnClose);
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
@@ -1111,12 +1130,13 @@ public class AbstractCoordinatorTest {
 
         try {
             coordinator.ensureActiveGroup();
-            coordinator.close();
-            if (coordinator.isDynamicMember()) {
+            coordinator.close(new MockTime().timer(0), operation);
+            if (CloseOptions.GroupMembershipOperation.LEAVE_GROUP == operation ||
+                (CloseOptions.GroupMembershipOperation.DEFAULT == operation && coordinator.isDynamicMember())) {
                 fail("Expected leavegroup to raise an error.");
             }
         } catch (RuntimeException exception) {
-            if (coordinator.isDynamicMember()) {
+            if (CloseOptions.GroupMembershipOperation.LEAVE_GROUP == operation || coordinator.isDynamicMember()) {
                 assertEquals(exception, e);
             } else {
                 fail("Coordinator with group.instance.id set shouldn't send leave group request.");
@@ -1204,7 +1224,7 @@ public class AbstractCoordinatorTest {
         }, leaveGroupResponse);
 
         coordinator.ensureActiveGroup();
-        return coordinator.maybeLeaveGroup(leaveReason);
+        return coordinator.maybeLeaveGroup(CloseOptions.GroupMembershipOperation.DEFAULT, leaveReason);
     }
 
     @Test

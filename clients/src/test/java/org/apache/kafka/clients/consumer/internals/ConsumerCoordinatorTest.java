@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
@@ -230,7 +231,7 @@ public abstract class ConsumerCoordinatorTest {
     @AfterEach
     public void teardown() {
         this.metrics.close();
-        this.coordinator.close(time.timer(0));
+        this.coordinator.close(time.timer(0), CloseOptions.GroupMembershipOperation.DEFAULT);
     }
 
     @Test
@@ -1797,7 +1798,7 @@ public abstract class ConsumerCoordinatorTest {
             return validateLeaveGroup(groupId, consumerId, leaveRequest);
         }, new LeaveGroupResponse(
             new LeaveGroupResponseData().setErrorCode(Errors.NONE.code())));
-        coordinator.close(time.timer(0));
+        coordinator.close(time.timer(0), CloseOptions.GroupMembershipOperation.DEFAULT);
         assertTrue(received.get());
     }
 
@@ -1812,7 +1813,7 @@ public abstract class ConsumerCoordinatorTest {
             LeaveGroupRequest leaveRequest = (LeaveGroupRequest) body;
             return validateLeaveGroup(groupId, consumerId, leaveRequest);
         }, new LeaveGroupResponse(new LeaveGroupResponseData().setErrorCode(Errors.NONE.code())));
-        coordinator.maybeLeaveGroup("test maybe leave group");
+        coordinator.maybeLeaveGroup(CloseOptions.GroupMembershipOperation.DEFAULT, "test maybe leave group");
         assertTrue(received.get());
 
         AbstractCoordinator.Generation generation = coordinator.generationIfStable();
@@ -1856,7 +1857,7 @@ public abstract class ConsumerCoordinatorTest {
             return validateLeaveGroup(groupId, consumerId, leaveRequest);
         }, new LeaveGroupResponse(new LeaveGroupResponseData().setErrorCode(Errors.NONE.code())));
 
-        coordinator.maybeLeaveGroup("pending member leaves");
+        coordinator.maybeLeaveGroup(CloseOptions.GroupMembershipOperation.DEFAULT, "pending member leaves");
         assertTrue(received.get());
     }
 
@@ -2572,7 +2573,7 @@ public abstract class ConsumerCoordinatorTest {
         client.prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
                 .setErrorCode(Errors.NONE.code())));
         subscriptions.unsubscribe();
-        coordinator.maybeLeaveGroup("test commit after leave");
+        coordinator.maybeLeaveGroup(CloseOptions.GroupMembershipOperation.DEFAULT, "test commit after leave");
         subscriptions.assignFromUser(singleton(t1p));
 
         // the client should not reuse generation/memberId from auto-subscribed generation
@@ -3548,7 +3549,7 @@ public abstract class ConsumerCoordinatorTest {
             assertEquals(memberId, coordinator.generation().memberId);
 
             // Imitating heartbeat thread that clears generation data.
-            coordinator.maybeLeaveGroup("Clear generation data.");
+            coordinator.maybeLeaveGroup(CloseOptions.GroupMembershipOperation.DEFAULT, "Clear generation data.");
 
             assertEquals(AbstractCoordinator.Generation.NO_GENERATION, coordinator.generation());
 
@@ -3785,7 +3786,7 @@ public abstract class ConsumerCoordinatorTest {
             // Run close on a different thread. Coordinator is locked by this thread, so it is
             // not safe to use the coordinator from the main thread until the task completes.
             Future<?> future = executor.submit(
-                () -> coordinator.close(time.timer(Math.min(closeTimeoutMs, requestTimeoutMs))));
+                () -> coordinator.close(time.timer(Math.min(closeTimeoutMs, requestTimeoutMs)), CloseOptions.GroupMembershipOperation.DEFAULT));
             // Wait for close to start. If coordinator is known, wait for close to queue
             // at least one request. Otherwise, sleep for a short time.
             if (!coordinatorUnknown)
@@ -4080,7 +4081,7 @@ public abstract class ConsumerCoordinatorTest {
 
     private void createRackAwareCoordinator(String rackId, MockPartitionAssignor assignor) {
         metrics.close();
-        coordinator.close(time.timer(0));
+        coordinator.close(time.timer(0), CloseOptions.GroupMembershipOperation.DEFAULT);
 
         metrics = new Metrics(time);
 

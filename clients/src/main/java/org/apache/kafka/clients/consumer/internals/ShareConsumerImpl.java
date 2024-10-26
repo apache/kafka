@@ -23,6 +23,7 @@ import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.AcknowledgementCommitCallback;
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -875,7 +876,11 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         swallow(log, Level.ERROR, "Failed invoking acknowledgement commit callback",
                 this::handleCompletedAcknowledgements, firstException);
         if (applicationEventHandler != null)
-            closeQuietly(() -> applicationEventHandler.close(Duration.ofMillis(closeTimer.remainingMs())), "Failed shutting down network thread", firstException);
+            closeQuietly(
+                () -> applicationEventHandler.close(Duration.ofMillis(closeTimer.remainingMs()),
+                    CloseOptions.GroupMembershipOperation.DEFAULT),
+                "Failed shutting down network thread", firstException
+            );
         closeTimer.update();
 
         // close() can be called from inside one of the constructors. In that case, it's possible that neither

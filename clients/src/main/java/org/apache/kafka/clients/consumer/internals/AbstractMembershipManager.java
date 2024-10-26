@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceMetricsManager;
@@ -201,6 +202,14 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
     private final boolean autoCommitEnabled;
 
+    /**
+     * Indicate the operation on consumer group membership that the consumer will perform when leaving the group.
+     * The property should remain {@code GroupMembershipOperation.DEFAULT} until the consumer is closing.
+     *
+     * @see CloseOptions.GroupMembershipOperation
+     */
+    protected CloseOptions.GroupMembershipOperation leaveGroupOperation = CloseOptions.GroupMembershipOperation.DEFAULT;
+
     AbstractMembershipManager(String groupId,
                               SubscriptionState subscriptions,
                               ConsumerMetadata metadata,
@@ -274,6 +283,24 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     public int memberEpoch() {
         return memberEpoch;
     }
+
+    /**
+     * @return the operation the consumer will perform on leaving the group.
+     *
+     * @see CloseOptions.GroupMembershipOperation
+     */
+    public CloseOptions.GroupMembershipOperation leaveGroupOperation() {
+        return leaveGroupOperation;
+    }
+
+    /**
+     * Sets the operation on consumer group membership that the consumer will perform when closing.
+     * The {@link AbstractMembershipManager#leaveGroupOperation} should remain {@code GroupMembershipOperation.DEFAULT}
+     * until the consumer is closed.
+     *
+     * @param operation the operation to be performed on close
+     */
+    public abstract void leaveGroupOperationOnClose(CloseOptions.GroupMembershipOperation operation);
 
     /**
      * Update member info and transition member state based on a successful heartbeat response.

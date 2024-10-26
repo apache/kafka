@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.metrics.ShareRebalanceMetricsManager;
 import org.apache.kafka.common.Uuid;
@@ -116,6 +117,14 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
      */
     public String rackId() {
         return rackId;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void leaveGroupOperationOnClose(CloseOptions.GroupMembershipOperation operation) {
+        this.leaveGroupOperation = CloseOptions.GroupMembershipOperation.LEAVE_GROUP;
     }
 
     /**

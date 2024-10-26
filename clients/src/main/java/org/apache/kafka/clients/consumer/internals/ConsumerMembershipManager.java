@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
@@ -188,11 +189,11 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     }
 
     /**
-     * @return Instance ID used by the member when joining the group. If non-empty, it will indicate that
-     * this is a static member.
+     * {@inheritDoc}
      */
-    public Optional<String> groupInstanceId() {
-        return groupInstanceId;
+    @Override
+    public void leaveGroupOperationOnClose(CloseOptions.GroupMembershipOperation operation) {
+        this.leaveGroupOperation = operation;
     }
 
     /**
@@ -398,6 +399,34 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
         }
     }
 
+    @Override
+    public boolean isLeavingGroup() {
+        CloseOptions.GroupMembershipOperation leaveGroupOperation = leaveGroupOperation();
+        if (CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP == leaveGroupOperation) {
+            return false;
+        }
+
+        MemberState state = state();
+        boolean isLeavingState = state == MemberState.PREPARE_LEAVING || state == MemberState.LEAVING;
+
+        // Default operation: both static and dynamic consumers will send a leave heartbeat
+        boolean hasLeaveOperation = CloseOptions.GroupMembershipOperation.DEFAULT == leaveGroupOperation ||
+            // Leave operation: both static and dynamic consumers will send a leave heartbeat
+            CloseOptions.GroupMembershipOperation.LEAVE_GROUP == leaveGroupOperation ||
+            // Remain in group: only static consumers will send a leave heartbeat, while dynamic members will not
+            groupInstanceId().isPresent();
+
+        return isLeavingState && hasLeaveOperation;
+    }
+
+    /**
+     * @return Instance ID used by the member when joining the group. If non-empty, it will indicate that
+     * this is a static member.
+     */
+    public Optional<String> groupInstanceId() {
+        return groupInstanceId;
+    }
+
     /**
      * Enqueue a {@link ConsumerRebalanceListenerCallbackNeededEvent} to trigger the execution of the
      * appropriate {@link ConsumerRebalanceListener} {@link ConsumerRebalanceListenerMethodName method} on the
@@ -469,8 +498,14 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
      */
     @Override
     public int leaveGroupEpoch() {
+        if (CloseOptions.GroupMembershipOperation.LEAVE_GROUP.equals(leaveGroupOperation)) {
+            return ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
+        } else if (CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP.equals(leaveGroupOperation)) {
+            return ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
+        }
+
         return groupInstanceId.isPresent() ?
-                ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH :
-                ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
+            ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH :
+            ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
     }
 }
