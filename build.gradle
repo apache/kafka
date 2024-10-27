@@ -118,6 +118,7 @@ ext {
     // ref: https://github.com/junit-team/junit5/blob/4c0dddad1b96d4a20e92a2cd583954643ac56ac0/junit-jupiter-params/src/main/java/org/junit/jupiter/params/ParameterizedTest.java#L161-L164
     if (name == "compileTestJava" || name == "compileTestScala") {
       options.compilerArgs << "-parameters"
+      options.compilerArgs += ["--release", String.valueOf(minJavaVersion)]
     } else if (name == "compileJava" || name == "compileScala") {
       options.compilerArgs << "-Xlint:all"
       if (!project.path.startsWith(":connect") && !project.path.startsWith(":storage"))
