@@ -54,7 +54,7 @@ class PerformanceServiceTest(Test):
         version = KafkaVersion(version)
         self.kafka = KafkaService(
             self.test_context, 1,
-            self.zk, topics={self.topic: {'partitions': 1, 'replication-factor': 1}}, version=version)
+            self.zk, topics={self.topic: {'partitions': 1, 'replication-factor': 1}}, version=DEV_BRANCH)
         self.kafka.start()
 
         # check basic run of producer performance
