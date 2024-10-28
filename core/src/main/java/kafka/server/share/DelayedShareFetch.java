@@ -135,12 +135,9 @@ public class DelayedShareFetch extends DelayedOperation {
             // then we should check if there is a pending share fetch request for the topic-partition and complete it.
             // We add the action to delayed actions queue to avoid an infinite call stack, which could happen if
             // we directly call delayedShareFetchPurgatory.checkAndComplete
-            replicaManager.addToActionQueue(() -> {
-                topicPartitionData.keySet().forEach(topicIdPartition ->
-                    replicaManager.completeDelayedShareFetchRequest(
-                        new DelayedShareFetchGroupKey(shareFetchData.groupId(), topicIdPartition.topicId(), topicIdPartition.partition())));
-                return BoxedUnit.UNIT;
-            });
+            replicaManager.addToActionQueue(() -> topicPartitionData.keySet().forEach(topicIdPartition ->
+                replicaManager.completeDelayedShareFetchRequest(
+                    new DelayedShareFetchGroupKey(shareFetchData.groupId(), topicIdPartition.topicId(), topicIdPartition.partition()))));
         }
     }
 
