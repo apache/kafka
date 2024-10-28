@@ -15,6 +15,7 @@
 
 import os
 
+from kafkatest.services.kafka.util import fix_opts_for_new_jvm
 from kafkatest.services.performance import PerformanceService
 from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.version import get_version, V_3_4_0, DEV_BRANCH
@@ -86,7 +87,8 @@ class EndToEndLatencyService(PerformanceService):
                 'zk_connect': self.kafka.zk_connect_setting(),
             })
 
-        cmd = "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % EndToEndLatencyService.LOG4J_CONFIG
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % EndToEndLatencyService.LOG4J_CONFIG
         if node.version.consumer_supports_bootstrap_server():
             cmd += "KAFKA_OPTS=%(kafka_opts)s %(kafka_run_class)s %(java_class_name)s " % args
             cmd += "%(bootstrap_servers)s %(topic)s %(num_records)d %(acks)d %(message_bytes)d %(config_file)s" % args

@@ -16,6 +16,7 @@
 
 import os
 
+from kafkatest.services.kafka.util import fix_opts_for_new_jvm
 from kafkatest.services.performance import PerformanceService
 from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.version import DEV_BRANCH, V_2_0_0, LATEST_0_10_0
@@ -123,7 +124,8 @@ class ConsumerPerformanceService(PerformanceService):
         return args
 
     def start_cmd(self, node):
-        cmd = "export LOG_DIR=%s;" % ConsumerPerformanceService.LOG_DIR
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "export LOG_DIR=%s;" % ConsumerPerformanceService.LOG_DIR
         cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\";" % ConsumerPerformanceService.LOG4J_CONFIG
         cmd += " %s" % self.path.script("kafka-consumer-perf-test.sh", node)
