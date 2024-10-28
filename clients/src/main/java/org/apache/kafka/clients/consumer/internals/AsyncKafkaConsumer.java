@@ -50,6 +50,7 @@ import org.apache.kafka.clients.consumer.internals.events.CompletableEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
+import org.apache.kafka.clients.consumer.internals.events.CreateFetchRequestsEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsEvent;
@@ -708,6 +709,14 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 updateAssignmentMetadataIfNeeded(timer);
                 final Fetch<K, V> fetch = pollForFetches(timer);
                 if (!fetch.isEmpty()) {
+                    // before returning the fetched records, we can send off the next round of fetches
+                    // and avoid block waiting for their responses to enable pipelining while the user
+                    // is handling the fetched records.
+                    //
+                    // NOTE: since the consumed position has already been updated, we must not allow
+                    // wakeups or any other errors to be triggered prior to returning the fetched records.
+                    sendPrefetches(timer);
+
                     if (fetch.records().isEmpty()) {
                         log.trace("Returning empty records from `poll()` "
                             + "since the consumer's position has advanced for at least one topic partition");
@@ -1519,6 +1528,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             return fetch;
         }
 
+        // send any new fetches (won't resend pending fetches)
+        sendFetches(timer);
+
         // We do not want to be stuck blocking in poll if we are missing some positions
         // since the offset lookup may be backing off after a failure
 
@@ -1604,6 +1616,63 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private void updateLastSeenEpochIfNewer(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata) {
         if (offsetAndMetadata != null)
             offsetAndMetadata.leaderEpoch().ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(topicPartition, epoch));
+    }
+
+    /**
+     * This method signals the background thread to {@link CreateFetchRequestsEvent create fetch requests}.
+     *
+     * <p/>
+     *
+     * This method takes the following steps to maintain compatibility with the {@link ClassicKafkaConsumer} method
+     * of the same name:
+     *
+     * <ul>
+     *     <li>
+     *         The method will wait for confirmation of the request creation before continuing.
+     *     </li>
+     *     <li>
+     *         The method will throw exceptions encountered during request creation to the user <b>immediately</b>.
+     *     </li>
+     *     <li>
+     *         The method will suppress {@link TimeoutException}s that occur while waiting for the confirmation.
+     *         Timeouts during request creation are a byproduct of this consumer's thread communication mechanisms.
+     *         That exception type isn't thrown in the request creation step of the {@link ClassicKafkaConsumer}.
+     *         Additionally, timeouts will not impact the logic of {@link #pollForFetches(Timer) blocking requests}
+     *         as it can handle requests that are created after the timeout.
+     *     </li>
+     * </ul>
+     *
+     * @param timer Timer used to bound how long the consumer waits for the requests to be created, which in practice
+     *              is used to avoid using {@link Long#MAX_VALUE} to wait "forever"
+     */
+    private void sendFetches(Timer timer) {
+        try {
+            applicationEventHandler.addAndGet(new CreateFetchRequestsEvent(calculateDeadlineMs(timer)));
+        } catch (TimeoutException e) {
+            // Can be ignored, per above comments.
+        }
+    }
+
+    /**
+     * This method signals the background thread to {@link CreateFetchRequestsEvent create fetch requests} for the
+     * pre-fetch case, i.e. right before {@link #poll(Duration)} exits. In the pre-fetch case, the application thread
+     * will not wait for confirmation of the request creation before continuing.
+     *
+     * <p/>
+     *
+     * At the point this method is called, {@link KafkaConsumer#poll(Duration)} has data ready to return to the user,
+     * which means the consumed position was already updated. In order to prevent potential gaps in records, this
+     * method is designed to suppress all exceptions.
+     *
+     * @param timer Provides an upper bound for the event and its {@link CompletableFuture future}
+     */
+    private void sendPrefetches(Timer timer) {
+        try {
+            applicationEventHandler.add(new CreateFetchRequestsEvent(calculateDeadlineMs(timer)));
+        } catch (Throwable t) {
+            // Any unexpected errors will be logged for troubleshooting, but not thrown.
+            log.warn("An unexpected error occurred while pre-fetching data in Consumer.poll(), but was suppressed", t);
+        }
     }
 
     @Override

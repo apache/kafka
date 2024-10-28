@@ -2566,11 +2566,6 @@ public class KafkaConsumerTest {
         consumer.assign(singleton(tp0));
         consumer.seek(tp0, 50L);
 
-        // For AsyncKafkaConsumer, FetchRequestManager sends FetchRequest in background thread.
-        // Wait for the first fetch request to avoid ListOffsetResponse mismatch.
-        TestUtils.waitForCondition(() -> groupProtocol == GroupProtocol.CLASSIC || requestGenerated(client, ApiKeys.FETCH),
-                "No fetch request sent");
-
         client.prepareResponse(request -> request instanceof ListOffsetsRequest, listOffsetsResponse(singletonMap(tp0, 90L)));
         assertEquals(singletonMap(tp0, 90L), consumer.endOffsets(Collections.singleton(tp0)));
         // correct lag result should be returned as well

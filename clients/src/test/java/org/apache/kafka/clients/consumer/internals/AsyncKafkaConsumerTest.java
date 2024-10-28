@@ -40,6 +40,7 @@ import org.apache.kafka.clients.consumer.internals.events.CompletableApplication
 import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
+import org.apache.kafka.clients.consumer.internals.events.CreateFetchRequestsEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsEvent;
@@ -1711,6 +1712,7 @@ public class AsyncKafkaConsumerTest {
         consumer.subscribe(singletonList("topic1"));
         consumer.poll(Duration.ofMillis(100));
         verify(applicationEventHandler).add(any(PollEvent.class));
+        verify(applicationEventHandler).add(any(CreateFetchRequestsEvent.class));
     }
 
     private Properties requiredConsumerConfigAndGroupId(final String groupId) {
