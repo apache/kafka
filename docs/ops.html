@@ -1969,72 +1969,72 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
   <tr>
     <td>Current State</td>
     <td>The current state of this member; possible values are leader, candidate, voted, follower, unattached, observer.</td>
-    <td>kafka.server:type=raft-metrics,name=current-state</td>
+    <td>kafka.server:type=raft-metrics</td>
   </tr>
   <tr>
     <td>Current Leader</td>
     <td>The current quorum leader's id; -1 indicates unknown.</td>
-    <td>kafka.server:type=raft-metrics,name=current-leader</td>
+    <td>kafka.server:type=raft-metrics</td>
   </tr>
   <tr>
     <td>Current Voted</td>
     <td>The current voted leader's id; -1 indicates not voted for anyone.</td>
-    <td>kafka.server:type=raft-metrics,name=current-vote</td>
+    <td>kafka.server:type=raft-metrics</td>
   </tr>
   <tr>
     <td>Current Epoch</td>
     <td>The current quorum epoch.</td>
-    <td>kafka.server:type=raft-metrics,name=current-epoch</td>
+    <td>kafka.server:type=raft-metrics</td>
   </tr>
   <tr>
     <td>High Watermark</td>
     <td>The high watermark maintained on this member; -1 if it is unknown.</td>
-    <td>kafka.server:type=raft-metrics,name=high-watermark</td>
+    <td>kafka.server:type=raft-metrics</td>
   </tr>
   <tr>
     <td>Log End Offset</td>
     <td>The current raft log end offset.</td>
-    <td>kafka.server:type=raft-metrics,name=log-end-offset</td>
+    <td>kafka.server:type=raft-metrics</td>
   </tr>
   <tr>
     <td>Number of Unknown Voter Connections</td>
     <td>Number of unknown voters whose connection information is not cached. This value of this metric is always 0.</td>
-    <td>kafka.server:type=raft-metrics,name=number-unknown-voter-connections</td>
+    <td>kafka.server:type=raft-metrics</td>
   </tr>
   <tr>
     <td>Average Commit Latency</td>
     <td>The average time in milliseconds to commit an entry in the raft log.</td>
-    <td>kafka.server:type=raft-metrics,name=commit-latency-avg</td>
+    <td>kafka.server:type=raft-metrics</td>
   </tr>
   <tr>
     <td>Maximum Commit Latency</td>
     <td>The maximum time in milliseconds to commit an entry in the raft log.</td>
-    <td>kafka.server:type=raft-metrics,name=commit-latency-max</td>
+    <td>kafka.server:type=raft-metrics</td>
   </tr>
   <tr>
     <td>Average Election Latency</td>
     <td>The average time in milliseconds spent on electing a new leader.</td>
-    <td>kafka.server:type=raft-metrics,name=election-latency-avg</td>
+    <td>kafka.server:type=raft-metrics</td>
   </tr>
   <tr>
     <td>Maximum Election Latency</td>
     <td>The maximum time in milliseconds spent on electing a new leader.</td>
-    <td>kafka.server:type=raft-metrics,name=election-latency-max</td>
+    <td>kafka.server:type=raft-metrics</td>
   </tr>
   <tr>
     <td>Fetch Records Rate</td>
     <td>The average number of records fetched from the leader of the raft quorum.</td>
-    <td>kafka.server:type=raft-metrics,name=fetch-records-rate</td>
+    <td>kafka.server:type=raft-metrics</td>
   </tr>
   <tr>
     <td>Append Records Rate</td>
     <td>The average number of records appended per sec by the leader of the raft quorum.</td>
-    <td>kafka.server:type=raft-metrics,name=append-records-rate</td>
+    <td>kafka.server:type=raft-metrics</td>
   </tr>
   <tr>
     <td>Average Poll Idle Ratio</td>
     <td>The average fraction of time the client's poll() is idle as opposed to waiting for the user code to process records.</td>
-    <td>kafka.server:type=raft-metrics,name=poll-idle-ratio-avg</td>
+    <td>kafka.server:type=raft-metrics</td>
   </tr>
   <tr>
     <td>Current Metadata Version</td>
@@ -2208,27 +2208,27 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
   <tr>
     <td>Last Applied Record Offset</td>
     <td>The offset of the last record from the cluster metadata partition that was applied by the broker</td>
-    <td>kafka.server:type=broker-metadata-metrics,name=last-applied-record-offset</td>
+    <td>kafka.server:type=broker-metadata-metrics</td>
   </tr>
   <tr>
     <td>Last Applied Record Timestamp</td>
     <td>The timestamp of the last record from the cluster metadata partition that was applied by the broker.</td>
-    <td>kafka.server:type=broker-metadata-metrics,name=last-applied-record-timestamp</td>
+    <td>kafka.server:type=broker-metadata-metrics</td>
   </tr>
   <tr>
     <td>Last Applied Record Lag Ms</td>
     <td>The difference between now and the timestamp of the last record from the cluster metadata partition that was applied by the broker</td>
-    <td>kafka.server:type=broker-metadata-metrics,name=last-applied-record-lag-ms</td>
+    <td>kafka.server:type=broker-metadata-metrics</td>
   </tr>
   <tr>
     <td>Metadata Load Error Count</td>
     <td>The number of errors encountered by the BrokerMetadataListener while loading the metadata log and generating a new MetadataDelta based on it.</td>
-    <td>kafka.server:type=broker-metadata-metrics,name=metadata-load-error-count</td>
+    <td>kafka.server:type=broker-metadata-metrics</td>
   </tr>
   <tr>
     <td>Metadata Apply Error Count</td>
     <td>The number of errors encountered by the BrokerMetadataPublisher while applying a new MetadataImage based on the latest MetadataDelta.</td>
-    <td>kafka.server:type=broker-metadata-metrics,name=metadata-apply-error-count</td>
+    <td>kafka.server:type=broker-metadata-metrics</td>
   </tr>
   </tbody>
 </table>
