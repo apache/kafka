@@ -168,7 +168,6 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
     @Override
     public void onLoaded(MetadataImage newImage) {
-        this.metadataImage = newImage;
         coordinatorMetrics.activateMetricsShard(metricsShard);
     }
 

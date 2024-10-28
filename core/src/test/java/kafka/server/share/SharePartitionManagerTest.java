@@ -1238,7 +1238,7 @@ public class SharePartitionManagerTest {
         Timer timer = Mockito.mock(SystemTimerReaper.class);
         Persister persister = Mockito.mock(Persister.class);
         SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
-                .withTimer(timer).withShareGroupPersister(persister).build();
+            .withTimer(timer).withShareGroupPersister(persister).build();
 
         // Verify that 0 calls are made to timer.close() and persister.stop().
         Mockito.verify(timer, times(0)).close();
@@ -2270,7 +2270,7 @@ public class SharePartitionManagerTest {
         private Time time = new MockTime();
         private ShareSessionCache cache = new ShareSessionCache(10, 1000);
         private Map<SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
-        private Persister persister = NoOpShareStatePersister.getInstance();
+        private Persister persister = new NoOpShareStatePersister();
         private Timer timer = new MockTimer();
         private Metrics metrics = new Metrics();
 

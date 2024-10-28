@@ -42,6 +42,8 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorShardBuilderSuppli
 import org.apache.kafka.coordinator.common.runtime.MultiThreadedEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics;
+import org.apache.kafka.image.MetadataDelta;
+import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.config.ShareCoordinatorConfig;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.share.SharePartitionKey;
@@ -200,6 +202,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
 
     @Override
     public int partitionFor(String key) {
+        throwIfNotActive();
         return Utils.abs(key.hashCode()) % numPartitions;
     }
 
@@ -513,6 +516,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
 
     @Override
     public void onElection(int partitionIndex, int partitionLeaderEpoch) {
+        throwIfNotActive();
         runtime.scheduleLoadOperation(
             new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, partitionIndex),
             partitionLeaderEpoch
@@ -521,10 +525,17 @@ public class ShareCoordinatorService implements ShareCoordinator {
 
     @Override
     public void onResignation(int partitionIndex, OptionalInt partitionLeaderEpoch) {
+        throwIfNotActive();
         runtime.scheduleUnloadOperation(
             new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, partitionIndex),
             partitionLeaderEpoch
         );
+    }
+
+    @Override
+    public void onNewMetadataImage(MetadataImage newImage, MetadataDelta delta) {
+        throwIfNotActive();
+        this.runtime.onNewMetadataImage(newImage, delta);
     }
 
     private TopicPartition topicPartitionFor(SharePartitionKey key) {
@@ -533,5 +544,11 @@ public class ShareCoordinatorService implements ShareCoordinator {
 
     private static <P> boolean isEmpty(List<P> list) {
         return list == null || list.isEmpty();
+    }
+
+    private void throwIfNotActive() {
+        if (!isActive.get()) {
+            throw Errors.COORDINATOR_NOT_AVAILABLE.exception();
+        }
     }
 }

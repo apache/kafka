@@ -92,7 +92,7 @@ class ShareCoordinatorShardTest {
             );
             when(metadataImage.topics().getTopic((Uuid) any())).thenReturn(mock(TopicImage.class));
             when(metadataImage.topics().getPartition(any(), anyInt())).thenReturn(mock(PartitionRegistration.class));
-            shard.onLoaded(metadataImage);
+            shard.onNewMetadataImage(metadataImage, null);
             return shard;
         }
 
@@ -357,7 +357,7 @@ class ShareCoordinatorShardTest {
     @Test
     public void testWriteNullMetadataImage() {
         ShareCoordinatorShard shard = new ShareCoordinatorShardBuilder().build();
-        shard.onLoaded(null);
+        shard.onNewMetadataImage(null, null);
 
         SharePartitionKey shareCoordinatorKey = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, PARTITION);
 
@@ -590,7 +590,7 @@ class ShareCoordinatorShardTest {
 
         writeAndReplayDefaultRecord(shard);
 
-        shard.onLoaded(null);
+        shard.onNewMetadataImage(null, null);
 
         SharePartitionKey shareCoordinatorKey = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, PARTITION);
 

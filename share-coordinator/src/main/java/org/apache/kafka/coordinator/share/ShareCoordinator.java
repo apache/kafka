@@ -22,6 +22,8 @@ import org.apache.kafka.common.message.ReadShareGroupStateResponseData;
 import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
 import org.apache.kafka.common.message.WriteShareGroupStateResponseData;
 import org.apache.kafka.common.requests.RequestContext;
+import org.apache.kafka.image.MetadataDelta;
+import org.apache.kafka.image.MetadataImage;
 
 import java.util.OptionalInt;
 import java.util.Properties;
@@ -91,4 +93,15 @@ public interface ShareCoordinator {
      * @param partitionLeaderEpoch - Leader epoch of the partition (internal topic). Empty optional means deleted.
      */
     void onResignation(int partitionIndex, OptionalInt partitionLeaderEpoch);
+
+    /**
+     * A new metadata image is available.
+     *
+     * @param newImage  The new metadata image.
+     * @param delta     The metadata delta.
+     */
+    void onNewMetadataImage(
+        MetadataImage newImage,
+        MetadataDelta delta
+    );
 }
