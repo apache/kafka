@@ -3770,7 +3770,7 @@ customized state stores; for built-in state stores, currently we have:
 
   <p>In KRaft mode, specific Kafka servers are selected to be controllers (unlike the ZooKeeper-based mode, where any server can become the Controller). The servers selected to be controllers will participate in the metadata quorum. Each controller is either an active or a hot standby for the current active controller.</p>
 
-  <p>A Kafka admin will typically select 3 or 5 servers for this role, depending on factors like cost and the number of concurrent failures your system should withstand without availability impact. A majority of the controllers must be alive in order to maintain availability. With 3 controllers, the cluster can tolerate 1 controller failure; with 5 controllers, the cluster can tolerate 2 controller failures.</p>
+  <p>A Kafka admin will typically select 3 servers for this role, depending on factors like cost and the number of concurrent failures your system should withstand without availability impact. A majority of the controllers must be alive in order to maintain availability. With 3 controllers, the cluster can tolerate 1 controller failure; for configurations with more than 3 controllers, see <a href="#kraft_deployment">Deploying Considerations</a> for more details.</p>
 
   <p>All of the servers in a Kafka cluster discover the active controller using the <code>controller.quorum.bootstrap.servers</code> property. All the controllers should be enumerated in this property. Each controller is identified with their <code>host</code> and <code>port</code> information. For example:</p>
 
