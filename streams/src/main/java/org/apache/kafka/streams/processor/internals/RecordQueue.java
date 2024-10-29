@@ -30,6 +30,7 @@ import org.apache.kafka.streams.processor.internals.metrics.TopicMetrics;
 import org.slf4j.Logger;
 
 import java.util.ArrayDeque;
+import java.util.Optional;
 
 import static org.apache.kafka.streams.processor.internals.ClientUtils.consumerRecordSizeInBytes;
 
@@ -179,6 +180,17 @@ public class RecordQueue {
 
     public Long headRecordOffset() {
         return headRecord == null ? null : headRecord.offset();
+    }
+
+    /**
+     * Returns the leader epoch of the head record if it exists
+     *
+     * @return An Optional containing the leader epoch of the head record, or null if the queue is empty. The Optional.empty()
+     * is reserved for the case  when the leader epoch is not set for head record of the queue.
+     */
+    @SuppressWarnings("OptionalAssignedToNull")
+    public Optional<Integer> headRecordLeaderEpoch() {
+        return headRecord == null ? null : headRecord.leaderEpoch();
     }
 
     /**
