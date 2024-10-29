@@ -61,7 +61,7 @@ jobs:
       - name: Setup Gradle
         uses: ./.github/actions/setup-gradle
         with:
-          java-version: 21
+          java-version: 23
           gradle-cache-read-only: ${{ inputs.gradle-cache-read-only }}
           gradle-cache-write-only: ${{ inputs.gradle-cache-write-only }}
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
@@ -85,13 +85,11 @@ jobs:
           compression-level: 9
           if-no-files-found: ignore
       - name: Annotate checkstyle errors
-        # Avoid duplicate annotations, only run on java 21
         if: failure()
         run: python .github/scripts/checkstyle.py
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
       - name: Annotate Rat errors
-        # Avoid duplicate annotations, only run on java 21
         if: failure()
         run: python .github/scripts/rat.py
         env:
@@ -178,7 +176,7 @@ jobs:
           THREAD_DUMP_URL: ${{ steps.thread-dump-upload-artifact.outputs.artifact-url }}
           GRADLE_EXIT_CODE: ${{ steps.junit-test.outputs.exitcode }}
       - name: Archive Test Catalog
-        if: ${{ always() && matrix.java == '21' }}
+        if: ${{ always() && matrix.java == '23' }}
         uses: actions/upload-artifact@v4
         with:
           name: test-catalog
