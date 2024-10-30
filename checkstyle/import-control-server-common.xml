@@ -72,6 +72,7 @@
 
         <subpackage name="common">
             <allow pkg="org.apache.kafka.server.common" />
+            <allow pkg="org.apache.kafka.clients" />
         </subpackage>
 
         <subpackage name="immutable">

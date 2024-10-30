@@ -22,7 +22,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{AddPartitionsToTxnResponse, TransactionResult}
 import org.apache.kafka.common.utils.{LogContext, MockTime, ProducerIdAndEpoch}
-import org.apache.kafka.coordinator.transaction.TransactionStateManagerConfig
+import org.apache.kafka.coordinator.transaction.{ProducerIdManager, TransactionStateManagerConfig}
 import org.apache.kafka.server.common.TransactionVersion
 import org.apache.kafka.server.common.TransactionVersion.{TV_0, TV_2}
 import org.apache.kafka.server.util.MockScheduler
@@ -36,7 +36,6 @@ import org.mockito.Mockito.{mock, times, verify, when}
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
-import scala.util.Success
 
 class TransactionCoordinatorTest {
 
@@ -77,7 +76,7 @@ class TransactionCoordinatorTest {
   private def mockPidGenerator(): Unit = {
     when(pidGenerator.generateProducerId()).thenAnswer(_ => {
       nextPid += 1
-      Success(nextPid - 1)
+      nextPid - 1
     })
   }
 
@@ -1079,7 +1078,7 @@ class TransactionCoordinatorTest {
       RecordBatch.NO_PRODUCER_EPOCH, (Short.MaxValue - 1).toShort, (Short.MaxValue - 2).toShort, txnTimeoutMs, Empty, partitions, time.milliseconds, time.milliseconds, TV_0)
 
     when(pidGenerator.generateProducerId())
-      .thenReturn(Success(producerId + 1))
+      .thenReturn(producerId + 1)
 
     when(transactionManager.validateTransactionTimeoutMs(anyInt()))
       .thenReturn(true)
@@ -1120,7 +1119,7 @@ class TransactionCoordinatorTest {
       RecordBatch.NO_PRODUCER_EPOCH, (Short.MaxValue - 1).toShort, (Short.MaxValue - 2).toShort, txnTimeoutMs, Empty, partitions, time.milliseconds, time.milliseconds, TV_0)
 
     when(pidGenerator.generateProducerId())
-      .thenReturn(Success(producerId + 1))
+      .thenReturn(producerId + 1)
 
     when(transactionManager.validateTransactionTimeoutMs(anyInt()))
       .thenReturn(true)
@@ -1392,7 +1391,7 @@ class TransactionCoordinatorTest {
   private def validateIncrementEpochAndUpdateMetadata(state: TransactionState, transactionVersion: Short): Unit = {
     val clientTransactionVersion = TransactionVersion.fromFeatureLevel(transactionVersion)
     when(pidGenerator.generateProducerId())
-      .thenReturn(Success(producerId))
+      .thenReturn(producerId)
 
     when(transactionManager.validateTransactionTimeoutMs(anyInt()))
       .thenReturn(true)

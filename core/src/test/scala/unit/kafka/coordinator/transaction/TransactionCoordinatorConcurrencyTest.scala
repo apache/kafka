@@ -35,6 +35,7 @@ import org.apache.kafka.common.record.{FileRecords, MemoryRecords, RecordBatch, 
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{LogContext, MockTime, ProducerIdAndEpoch}
 import org.apache.kafka.common.{Node, TopicPartition}
+import org.apache.kafka.coordinator.transaction.ProducerIdManager
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion, RequestLocal, TransactionVersion}
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.storage.internals.log.{FetchDataInfo, LogConfig, LogOffsetMetadata}
@@ -46,7 +47,6 @@ import org.mockito.Mockito.{mock, when}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, mutable}
-import scala.util.Success
 
 class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest[Transaction] {
   private val nTransactions = nThreads * 10
@@ -106,9 +106,9 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     val pidGenerator: ProducerIdManager = mock(classOf[ProducerIdManager])
     when(pidGenerator.generateProducerId())
       .thenAnswer(_ => if (bumpProducerId) {
-        Success(producerId + 1)
+        producerId + 1
       } else {
-        Success(producerId)
+        producerId
       })
     val networkClient: NetworkClient = mock(classOf[NetworkClient])
     txnMarkerChannelManager = new TransactionMarkerChannelManager(
