@@ -162,7 +162,7 @@ Multi Node Cluster
             - The inter broker listener advertised by the brokers is exposed on container's hostname. This is done so that brokers can find each other in docker network.
         - PLAINTEXT_HOST is supposed to be listener accessible to the clients.
             - The port advertised for host machine is done on localhost, as this is the hostname (in this example) that client will use to connect with kafka running inside docker container.
-        - Here we take advantage of hostname set for each broker and set the listner accordingly.
+        - Here we take advantage of hostname set for each broker and set the listener accordingly.
         - To run the example:-
         ```
         # Run from root of the repo
