@@ -3823,8 +3823,64 @@ In the replica description 0@controller-0:1234:3Db5QLSqSZieL3rJBUUegA, 0 is the 
 
   <h4 class="anchor-heading"><a id="kraft_reconfig" class="anchor-link"></a><a href="#kraft_reconfig">Controller membership changes</a></h4>
 
+  <h5 class="anchor-heading"><a id="static_versus_dynamic_kraft_quorums" class="anchor-link"></a><a href="#static_versus_dynamic_kraft_quorums">Static versus Dynamic KRaft Quorums</a></h5>
+  There are two ways to run KRaft: the old way using static controller quorums, and the new way
+  using KIP-853 dynamic controller quorums.<p>
+
+  When using a static quorum, the configuration file for each broker and controller must specify
+  the IDs, hostnames, and ports of all controllers in <code>controller.quorum.voters</code>.<p>
+
+  In contrast, when using a dynamic quorum, you should set
+  <code>controller.quorum.bootstrap.servers</code> instead. This configuration key need not
+  contain all the controllers, but it should contain as many as possible so that all the servers
+  can locate the quorum. In other words, its function is much like the
+  <code>bootstrap.servers</code> configuration used by Kafka clients.<p>
+
+  If you are not sure whether you are using static or dynamic quorums, you can determine this by
+  running something like the following:<p>
+
+<pre><code class="language-bash">
+  $ bin/kafka-features.sh --bootstrap-controller localhost:9093 describe
+</code></pre><p>
+
+  If the <code>kraft.version</code> field is level 0 or absent, you are using a static quorum. If
+  it is 1 or above, you are using a dynamic quorum. For example, here is an example of a static
+  quorum:<p/>
+<pre><code class="language-bash">
+Feature: kraft.version  SupportedMinVersion: 0  SupportedMaxVersion: 1  FinalizedVersionLevel: 0 Epoch: 5
+Feature: metadata.version       SupportedMinVersion: 3.0-IV1    SupportedMaxVersion: 3.9-IV0 FinalizedVersionLevel: 3.9-IV0  Epoch: 5
+</code></pre><p/>
+
+  Here is another example of a static quorum:<p/>
+<pre><code class="language-bash">
+Feature: metadata.version       SupportedMinVersion: 3.0-IV1    SupportedMaxVersion: 3.8-IV0 FinalizedVersionLevel: 3.8-IV0  Epoch: 5
+</code></pre><p/>
+
+  Here is an example of a dynamic quorum:<p/>
+<pre><code class="language-bash">
+Feature: kraft.version  SupportedMinVersion: 0  SupportedMaxVersion: 1  FinalizedVersionLevel: 1 Epoch: 5
+Feature: metadata.version       SupportedMinVersion: 3.0-IV1    SupportedMaxVersion: 3.9-IV0 FinalizedVersionLevel: 3.9-IV0  Epoch: 5
+</code></pre><p/>
+
+  The static versus dynamic nature of the quorum is determined at the time of formatting.
+  Specifically, the quorum will be formatted as dynamic if <code>controller.quorum.voters</code> is
+  <b>not</b> present, and if the software version is Apache Kafka 3.9 or newer. If you have
+  followed the instructions earlier in this document, you will get a dynamic quorum.<p>
+
+  If you would like the formatting process to fail if a dynamic quorum cannot be achieved, format your
+  controllers using the <code>--feature kraft.version=1</code>. (Note that you should not supply
+  this flag when formatting brokers -- only when formatting controllers.)<p>
+
+<pre><code class="language-bash">
+  $ bin/kafka-storage.sh format -t KAFKA_CLUSTER_ID --feature kraft.version=1 -c controller_static.properties
+  Cannot set kraft.version to 1 unless KIP-853 configuration is present. Try removing the --feature flag for kraft.version.
+</code></pre><p>
+
+  Note: Currently it is <b>not</b> possible to convert clusters using a static controller quorum to
+  use a dynamic controller quorum. This function will be supported in the future release.
+
   <h5 class="anchor-heading"><a id="kraft_reconfig_add" class="anchor-link"></a><a href="#kraft_reconfig_add">Add New Controller</a></h5>
-  If the KRaft Controller cluster already exists, the cluster can be expanded by first provisioning a new controller using the <a href="#kraft_storage_observers">kafka-storage.sh tool</a> and starting the controller.
+  If a dynamic controller cluster already exists, it can be expanded by first provisioning a new controller using the <a href="#kraft_storage_observers">kafka-storage.sh tool</a> and starting the controller.
 
   After starting the controller, the replication to the new controller can be monitored using the <code>bin/kafka-metadata-quorum.sh describe --replication</code> command. Once the new controller has caught up to the active controller, it can be added to the cluster using the <code>bin/kafka-metadata-quorum.sh add-controller</code> command.
 
@@ -3835,7 +3891,7 @@ In the replica description 0@controller-0:1234:3Db5QLSqSZieL3rJBUUegA, 0 is the 
   <pre><code class="language-bash">$ bin/kafka-metadata-quorum.sh --command-config controller.properties --bootstrap-controller localhost:9092 add-controller</code></pre>
 
   <h5 class="anchor-heading"><a id="kraft_reconfig_remove" class="anchor-link"></a><a href="#kraft_reconfig_remove">Remove Controller</a></h5>
-  If the KRaft Controller cluster already exists, the cluster can be shrunk using the <code>bin/kafka-metadata-quorum.sh remove-controller</code> command. Until KIP-996: Pre-vote has been implemented and released, it is recommended to shutdown the controller that will be removed before running the remove-controller command.
+  If the dynamic controller cluster already exists, it can be shrunk using the <code>bin/kafka-metadata-quorum.sh remove-controller</code> command. Until KIP-996: Pre-vote has been implemented and released, it is recommended to shutdown the controller that will be removed before running the remove-controller command.
 
   When using broker endpoints use the --bootstrap-server flag:
   <pre><code class="language-bash">$ bin/kafka-metadata-quorum.sh --bootstrap-server localhost:9092 remove-controller --controller-id &lt;id&gt; --controller-directory-id &lt;directory-id&gt;</code></pre>
