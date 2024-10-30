@@ -193,8 +193,9 @@ jobs:
           if-no-files-found: ignore
 
   update-test-catalog:
+    name: Update Test Catalog
     needs: test
-    if: always()
+    if: ${{ always() && !inputs.is-public-fork }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -212,7 +213,7 @@ jobs:
         with:
           name: test-catalog
           path: test-catalog
-      - name: Update Test Catalog
+      - name: Push Test Catalog
         # Git user.name and user.email come from https://github.com/actions/checkout?tab=readme-ov-file#push-a-commit-using-the-built-in-token
         run: |
           pwd
