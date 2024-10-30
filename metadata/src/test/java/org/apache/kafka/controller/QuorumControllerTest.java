@@ -628,9 +628,9 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder -> {
-                    controllerBuilder.setMaxIdleIntervalNs(OptionalLong.of(maxIdleIntervalNs));
-                }).
+                setControllerBuilderInitializer(controllerBuilder ->
+                    controllerBuilder.setMaxIdleIntervalNs(OptionalLong.of(maxIdleIntervalNs))
+                ).
                 build()
         ) {
             ListenerCollection listeners = new ListenerCollection();
@@ -1388,10 +1388,10 @@ public class QuorumControllerTest {
 
         ControllerResult<Void> result = ActivationRecordsGenerator.generate(
             msg -> { },
-            !stateInLog.isPresent(),
+            stateInLog.isEmpty(),
             -1L,
             BootstrapMetadata.fromVersion(metadataVersion, "test"),
-            stateInLog.orElseGet(() -> ZkMigrationState.NONE),
+            stateInLog.orElse(ZkMigrationState.NONE),
             metadataVersion);
         RecordTestUtils.replayAll(featureControlManager, result.records());
         return featureControlManager;

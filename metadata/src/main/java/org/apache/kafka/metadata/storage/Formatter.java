@@ -52,7 +52,6 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.internals.Topic.CLUSTER_METADATA_TOPIC_PARTITION;
 import static org.apache.kafka.server.common.KRaftVersion.KRAFT_VERSION_0;
@@ -212,10 +211,7 @@ public class Formatter {
     }
 
     boolean hasDynamicQuorum() {
-        if (initialControllers.isPresent()) {
-            return true;
-        }
-        return false;
+        return initialControllers.isPresent();
     }
 
     public BootstrapMetadata bootstrapMetadata() {
@@ -296,8 +292,7 @@ public class Formatter {
             if (!featureName.equals(MetadataVersion.FEATURE_NAME)) {
                 if (!nameToSupportedFeature.containsKey(featureName)) {
                     throw new FormatterException("Unsupported feature: " + featureName +
-                            ". Supported features are: " + nameToSupportedFeature.keySet().stream().
-                            collect(Collectors.joining(", ")));
+                            ". Supported features are: " + String.join(", ", nameToSupportedFeature.keySet()));
                 }
             }
             newFeatureLevels.put(featureName, level);
@@ -474,7 +469,7 @@ public class Formatter {
         ) {
             if (!logDir.equals(metadataLogDirectory)) {
                 return LOG_DIRECTORY;
-            } else if (!initialControllers.isPresent()) {
+            } else if (initialControllers.isEmpty()) {
                 return STATIC_METADATA_DIRECTORY;
             } else if (initialControllers.get().voters().containsKey(nodeId)) {
                 return DYNAMIC_METADATA_VOTER_DIRECTORY;

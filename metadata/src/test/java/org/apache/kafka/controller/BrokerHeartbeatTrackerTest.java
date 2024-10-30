@@ -22,8 +22,6 @@ import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -40,17 +38,11 @@ public class BrokerHeartbeatTrackerTest {
         return new BrokerHeartbeatTracker(time, 10_000_000);
     }
 
-    private static final Set<BrokerIdAndEpoch> TEST_BROKERS;
-
-    static {
-        Set<BrokerIdAndEpoch> brokers = new HashSet<>();
-        Arrays.asList(
-            new BrokerIdAndEpoch(0, 0L),
-            new BrokerIdAndEpoch(1, 100L),
-            new BrokerIdAndEpoch(2, 200L)
-        ).forEach(brokers::add);
-        TEST_BROKERS = Collections.unmodifiableSet(brokers);
-    }
+    private static final Set<BrokerIdAndEpoch> TEST_BROKERS = Set.of(
+        new BrokerIdAndEpoch(0, 0L),
+        new BrokerIdAndEpoch(1, 100L),
+        new BrokerIdAndEpoch(2, 200L)
+    );
 
     @Test
     public void testUpdateContactTime() {

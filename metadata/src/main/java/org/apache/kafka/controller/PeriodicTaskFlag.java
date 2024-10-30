@@ -24,5 +24,5 @@ enum PeriodicTaskFlag {
     /**
      * Set if we want to log the name and execution time on each run.
      */
-    VERBOSE;
+    VERBOSE
 }

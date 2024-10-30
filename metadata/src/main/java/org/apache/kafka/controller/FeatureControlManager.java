@@ -177,10 +177,9 @@ public class FeatureControlManager {
         List<ApiMessageAndVersion> records =
                 BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
 
-        Map<String, Short> proposedUpdatedVersions = new HashMap<>();
-        finalizedVersions.forEach(proposedUpdatedVersions::put);
+        Map<String, Short> proposedUpdatedVersions = new HashMap<>(finalizedVersions);
         proposedUpdatedVersions.put(MetadataVersion.FEATURE_NAME, metadataVersion.get().featureLevel());
-        updates.forEach(proposedUpdatedVersions::put);
+        proposedUpdatedVersions.putAll(updates);
 
         for (Entry<String, Short> entry : updates.entrySet()) {
             ApiError error = updateFeature(entry.getKey(), entry.getValue(),

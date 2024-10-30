@@ -416,7 +416,7 @@ public class PartitionChangeBuilder {
 
         Optional<PartitionReassignmentReplicas.CompletedReassignment> completedReassignmentOpt =
             reassignmentReplicas.maybeCompleteReassignment(targetIsr);
-        if (!completedReassignmentOpt.isPresent()) {
+        if (completedReassignmentOpt.isEmpty()) {
             return;
         }
 

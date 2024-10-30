@@ -507,14 +507,7 @@ public final class QuorumController implements Controller {
             EnumSet<ControllerOperationFlag> flags = EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME);
             queue.scheduleDeferred(tag,
                 new EarliestDeadlineFunction(deadlineNs),
-                new ControllerWriteEvent<>(tag,
-                    new ControllerWriteOperation<Void>() {
-                        @Override
-                        public ControllerResult<Void> generateRecordsAndResult() {
-                            return op.get();
-                        }
-                    },
-                    flags));
+                new ControllerWriteEvent<>(tag, op::get, flags));
         }
 
         @Override
@@ -549,14 +542,14 @@ public final class QuorumController implements Controller {
             deltaUs = OptionalLong.empty();
         }
         EventHandlerExceptionInfo info = EventHandlerExceptionInfo.
-                fromInternal(exception, () -> latestController());
+                fromInternal(exception, this::latestController);
         int epoch = curClaimEpoch;
         if (epoch == -1) {
             epoch = offsetControl.lastCommittedEpoch();
         }
         String failureMessage = info.failureMessage(epoch, deltaUs,
                 isActiveController(), offsetControl.lastCommittedOffset());
-        if (info.isTimeoutException() && (!deltaUs.isPresent())) {
+        if (info.isTimeoutException() && (deltaUs.isEmpty())) {
             controllerMetrics.incrementOperationsTimedOut();
         }
         if (info.isFault()) {
@@ -709,7 +702,7 @@ public final class QuorumController implements Controller {
          * A flag that signifies that this operation should not update the event queue time metric.
          * We use this when the event was not appended to the queue.
          */
-        DOES_NOT_UPDATE_QUEUE_TIME;
+        DOES_NOT_UPDATE_QUEUE_TIME
     }
 
     interface ControllerWriteOperation<T> {
@@ -787,7 +780,7 @@ public final class QuorumController implements Controller {
                 // a read after all, and not a read + write.  However, this read was done
                 // from the latest in-memory state, which might contain uncommitted data.
                 OptionalLong maybeOffset = deferredEventQueue.highestPendingOffset();
-                if (!maybeOffset.isPresent()) {
+                if (maybeOffset.isEmpty()) {
                     // If the purgatory is empty, there are no pending operations and no
                     // uncommitted state.  We can complete immediately.
                     resultAndOffset = ControllerResultAndOffset.of(-1, result);
@@ -1455,12 +1448,12 @@ public final class QuorumController implements Controller {
     /**
      * Tracks the scheduling state for partition leader balancing operations.
      */
-    private ImbalanceSchedule imbalancedScheduled = ImbalanceSchedule.DEFERRED;
+    private final ImbalanceSchedule imbalancedScheduled = ImbalanceSchedule.DEFERRED;
 
     /**
      * Tracks the scheduling state for unclean leader election operations.
      */
-    private ImbalanceSchedule uncleanScheduled = ImbalanceSchedule.DEFERRED;
+    private final ImbalanceSchedule uncleanScheduled = ImbalanceSchedule.DEFERRED;
 
     /**
      * The bootstrap metadata to use for initialization if needed.
@@ -1966,7 +1959,7 @@ public final class QuorumController implements Controller {
                     // processBrokerHeartbeat, which covers that case.
                     OptionalLong offsetForRegisterBrokerRecord =
                             clusterControl.registerBrokerRecordOffset(brokerId);
-                    if (!offsetForRegisterBrokerRecord.isPresent()) {
+                    if (offsetForRegisterBrokerRecord.isEmpty()) {
                         throw new StaleBrokerEpochException(
                             String.format("Receive a heartbeat from broker %d before registration", brokerId));
                     }
@@ -2001,12 +1994,9 @@ public final class QuorumController implements Controller {
         Map<String, Short> controllerFeatures = new HashMap<>(featureControl.finalizedFeatures(Long.MAX_VALUE).featureMap());
         controllerFeatures.put(KRaftVersion.FEATURE_NAME, raftClient.kraftVersion().featureLevel());
         return appendWriteEvent("registerBroker", context.deadlineNs(),
-            () -> {
-                ControllerResult<BrokerRegistrationReply> result = clusterControl.
-                    registerBroker(request, offsetControl.nextWriteOffset(),
-                        new FinalizedControllerFeatures(controllerFeatures, Long.MAX_VALUE));
-                return result;
-            },
+            () -> clusterControl.
+                registerBroker(request, offsetControl.nextWriteOffset(),
+                    new FinalizedControllerFeatures(controllerFeatures, Long.MAX_VALUE)),
             EnumSet.noneOf(ControllerOperationFlag.class));
     }
 
@@ -2144,9 +2134,9 @@ public final class QuorumController implements Controller {
     @Override
     public CompletableFuture<Void> waitForReadyBrokers(int minBrokers) {
         final CompletableFuture<Void> future = new CompletableFuture<>();
-        appendControlEvent("waitForReadyBrokers", () -> {
-            clusterControl.addReadyBrokersFuture(future, minBrokers);
-        });
+        appendControlEvent("waitForReadyBrokers", () ->
+            clusterControl.addReadyBrokersFuture(future, minBrokers)
+        );
         return future;
     }
 

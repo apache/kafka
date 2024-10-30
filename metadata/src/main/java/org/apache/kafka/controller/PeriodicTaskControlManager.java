@@ -206,7 +206,7 @@ class PeriodicTaskControlManager {
             long nextDelayTimeNs = nextDelayTimeNs(task, immediate, error);
             long nextRunTimeNs = time.nanoseconds() + nextDelayTimeNs;
             log.trace("rescheduling {} in {} ns (immediate = {}, error = {})",
-                    task.name(), nextDelayTimeNs, immediate);
+                    task.name(), nextDelayTimeNs, immediate, error);
             queueAccessor.scheduleDeferred(task.name(),
                     nextRunTimeNs,
                     new PeriodicTaskOperation(task));
