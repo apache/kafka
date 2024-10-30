@@ -238,9 +238,9 @@
         </li>
     </ul>
 
-<h4><a id="upgrade_3_8_0" href="#upgrade_3_8_0">Upgrading to 3.8.0 from any version 0.8.x through 3.7.x</a></h4>
+<h4><a id="upgrade_3_8_1" href="#upgrade_3_8_1">Upgrading to 3.8.1 from any version 0.8.x through 3.7.x</a></h4>
 
-    <h5><a id="upgrade_380_zk" href="#upgrade_380_zk">Upgrading ZooKeeper-based clusters</a></h5>
+    <h5><a id="upgrade_381_zk" href="#upgrade_381_zk">Upgrading ZooKeeper-based clusters</a></h5>
     <p><b>If you are upgrading from a version prior to 2.1.x, please see the note in step 5 below about the change to the schema used to store consumer offsets.
         Once you have changed the inter.broker.protocol.version to the latest version, it will not be possible to downgrade to a version prior to 2.1.</b></p>
 
@@ -300,6 +300,19 @@
             after 3.2.x has a boolean parameter that indicates if there are metadata changes (i.e. <code>IBP_3_3_IV3(7, "3.3", "IV3", true)</code> means this version has metadata changes).
             Given your current and target versions, a downgrade is only possible if there are no metadata changes in the versions between.</li>
     </ol>
+
+    <h5><a id="upgrade_381_notable" href="#upgrade_381_notable">Notable changes in 3.8.1</a></h5>
+    <ul>
+        <li>In case you run your Kafka clusters with no execution permission for the <code>/tmp</code> partition, Kafka will not work properly. It might either refuse to start or fail
+            when producing and consuming messages. This is due to the compression libraries <code>zstd-jni</code> and <code>snappy</code>.
+            To remediate this problem you need to pass the following JVM flags to Kafka <code>ZstdTempFolder</code> and <code>org.xerial.snappy.tempdir</code> pointing to a directory with execution permissions.
+            For example, this could be done via the <code>KAFKA_OPTS</code> environment variable like follows: <code>export KAFKA_OPTS="-DZstdTempFolder=/opt/kafka/tmp -Dorg.xerial.snappy.tempdir=/opt/kafka/tmp"</code>.
+            This is a known issue for version 3.8.0.
+        </li>
+        <li>In 3.8.0 the <code>kafka.utils.Thottler</code> metric was accidentally renamed to <code>org.apache.kafka.storage.internals.utils.Throttler</code>.
+            This change has been reverted and the metric is now named <code>kafka.utils.Thottler</code> again.
+        </li>
+    </ul>
 
     <h5><a id="upgrade_380_notable" href="#upgrade_380_notable">Notable changes in 3.8.0</a></h5>
     <ul>
