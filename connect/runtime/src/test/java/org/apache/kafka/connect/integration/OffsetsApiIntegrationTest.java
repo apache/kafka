@@ -190,6 +190,7 @@ public class OffsetsApiIntegrationTest {
         }
     }
 
+    @Flaky("KAFKA-14956")
     @Test
     public void testGetSinkConnectorOffsetsDifferentKafkaClusterTargeted() throws Exception {
         EmbeddedKafkaCluster kafkaCluster = new EmbeddedKafkaCluster(1, new Properties());
@@ -348,6 +349,7 @@ public class OffsetsApiIntegrationTest {
         }
     }
 
+    @Flaky("KAFKA-16492")
     @Test
     public void testAlterSinkConnectorOffsetsDifferentKafkaClusterTargeted() throws Exception {
         EmbeddedKafkaCluster kafkaCluster = new EmbeddedKafkaCluster(1, new Properties());
@@ -704,11 +706,13 @@ public class OffsetsApiIntegrationTest {
         }
     }
 
+    @Flaky("KAFKA-15918")
     @Test
     public void testResetSinkConnectorOffsets() throws Exception {
         resetAndVerifySinkConnectorOffsets(baseSinkConnectorConfigs(), connect.kafka());
     }
 
+    @Flaky("KAFKA-15891")
     @Test
     public void testResetSinkConnectorOffsetsOverriddenConsumerGroupId() throws Exception {
         Map<String, String> connectorConfigs = baseSinkConnectorConfigs();

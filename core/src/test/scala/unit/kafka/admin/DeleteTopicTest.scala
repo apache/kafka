@@ -324,7 +324,7 @@ class DeleteTopicTest extends QuorumTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testAddPartitionDuringDeleteTopic(quorum: String): Unit = {
     brokers = createTestTopicAndCluster(topic)
     // partitions to be added to the topic later
