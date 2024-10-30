@@ -76,9 +76,9 @@ public class DelayedShareFetchTest {
     private static final int MAX_FETCH_RECORDS = 100;
     private static final FetchParams FETCH_PARAMS = new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(),
         FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS, 1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK,
-        Optional.empty());
+        Optional.empty(), true);
 
-    private static Timer mockTimer;
+    private Timer mockTimer;
 
     @BeforeEach
     public void setUp() {

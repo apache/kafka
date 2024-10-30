@@ -4249,7 +4249,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         fetchMinBytes,
         fetchMaxBytes,
         FetchIsolation.HIGH_WATERMARK,
-        clientMetadata
+        clientMetadata,
+        true
       )
 
       // call the share partition manager to fetch messages from the local replica.

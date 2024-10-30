@@ -26,10 +26,12 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.FencedStateEpochException;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -336,7 +338,7 @@ public class SharePartitionTest {
         result = sharePartition.maybeInitialize();
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, InvalidRequestException.class);
+        assertFutureThrows(result, GroupIdNotFoundException.class);
         assertEquals(SharePartitionState.FAILED, sharePartition.partitionState());
 
         // Mock UNKNOWN_TOPIC_OR_PARTITION error.
@@ -350,7 +352,7 @@ public class SharePartitionTest {
         result = sharePartition.maybeInitialize();
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, InvalidRequestException.class);
+        assertFutureThrows(result, UnknownTopicOrPartitionException.class);
         assertEquals(SharePartitionState.FAILED, sharePartition.partitionState());
 
         // Mock FENCED_STATE_EPOCH error.
@@ -541,7 +543,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquireSingleRecord() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         MemoryRecords records = memoryRecords(1);
 
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
@@ -564,7 +566,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquireMultipleRecords() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         MemoryRecords records = memoryRecords(5, 10);
 
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
@@ -587,7 +589,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquireWithMaxFetchRecords() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         // Less-number of records than max fetch records.
         MemoryRecords records = memoryRecords(5);
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
@@ -631,7 +633,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquireWithMultipleBatchesAndMaxFetchRecords() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         // Create 3 batches of records.
         ByteBuffer buffer = ByteBuffer.allocate(4096);
@@ -665,7 +667,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquireMultipleRecordsWithOverlapAndNewBatch() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         MemoryRecords records = memoryRecords(5, 0);
 
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
@@ -694,7 +696,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquireSameBatchAgain() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         MemoryRecords records = memoryRecords(5, 10);
 
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
@@ -736,7 +738,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquireWithEmptyFetchRecords() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
             MAX_FETCH_RECORDS,
@@ -750,13 +752,13 @@ public class SharePartitionTest {
 
     @Test
     public void testNextFetchOffsetInitialState() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         assertEquals(0, sharePartition.nextFetchOffset());
     }
 
     @Test
     public void testNextFetchOffsetWithCachedStateAcquired() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         sharePartition.acquire(
             MEMBER_ID,
             MAX_FETCH_RECORDS,
@@ -767,7 +769,7 @@ public class SharePartitionTest {
 
     @Test
     public void testNextFetchOffsetWithFindAndCachedStateEmpty() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         sharePartition.findNextFetchOffset(true);
         assertTrue(sharePartition.findNextFetchOffset());
         assertEquals(0, sharePartition.nextFetchOffset());
@@ -776,7 +778,7 @@ public class SharePartitionTest {
 
     @Test
     public void testNextFetchOffsetWithFindAndCachedState() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         sharePartition.findNextFetchOffset(true);
         assertTrue(sharePartition.findNextFetchOffset());
         sharePartition.acquire(
@@ -808,7 +810,10 @@ public class SharePartitionTest {
 
     @Test
     public void testCanAcquireRecordsWithCachedDataAndLimitReached() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(1).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxInflightMessages(1)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
         sharePartition.acquire(
             MEMBER_ID,
             MAX_FETCH_RECORDS,
@@ -833,7 +838,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeSingleRecordBatch() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         MemoryRecords records1 = memoryRecords(1, 0);
         MemoryRecords records2 = memoryRecords(1, 1);
@@ -872,7 +877,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeMultipleRecordBatch() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         MemoryRecords records = memoryRecords(10, 5);
 
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
@@ -896,7 +901,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeMultipleRecordBatchWithGapOffsets() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         MemoryRecords records1 = memoryRecords(2, 5);
         // Untracked gap of 3 offsets from 7-9.
         MemoryRecordsBuilder recordsBuilder = memoryRecordsBuilder(5, 10);
@@ -959,7 +964,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeMultipleSubsetRecordBatchWithGapOffsets() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         MemoryRecords records1 = memoryRecords(2, 5);
         // Untracked gap of 3 offsets from 7-9.
         MemoryRecordsBuilder recordsBuilder = memoryRecordsBuilder(2, 10);
@@ -1031,7 +1036,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeOutOfRangeCachedData() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         // Acknowledge a batch when cache is empty.
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(
             MEMBER_ID,
@@ -1061,7 +1066,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeOutOfRangeCachedDataFirstBatch() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         // Create data for the batch with offsets 0-4.
         MemoryRecords records = memoryRecords(5, 0);
@@ -1114,7 +1119,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeWithAnotherMember() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         MemoryRecords records = memoryRecords(5, 5);
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
@@ -1137,7 +1142,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeWhenOffsetNotAcquired() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         MemoryRecords records = memoryRecords(5, 5);
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
@@ -1190,7 +1195,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeRollbackWithFullBatchError() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         MemoryRecords records1 = memoryRecords(5, 5);
         MemoryRecords records2 = memoryRecords(5, 10);
         MemoryRecords records3 = memoryRecords(5, 15);
@@ -1243,7 +1248,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeRollbackWithSubsetError() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         MemoryRecords records1 = memoryRecords(5, 5);
         MemoryRecords records2 = memoryRecords(5, 10);
         MemoryRecords records3 = memoryRecords(5, 15);
@@ -1298,7 +1303,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquireReleasedRecord() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         MemoryRecords records = memoryRecords(5, 10);
 
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
@@ -1343,7 +1348,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquireReleasedRecordMultipleBatches() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         // First fetch request with 5 records starting from offset 10.
         MemoryRecords records1 = memoryRecords(5, 10);
         // Second fetch request with 5 records starting from offset 15.
@@ -1506,7 +1511,10 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquisitionLockForAcquiringSingleRecord() throws InterruptedException {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(1),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
@@ -1527,7 +1535,10 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquisitionLockForAcquiringMultipleRecords() throws InterruptedException {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5, 10),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
@@ -1548,7 +1559,10 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquisitionLockForAcquiringMultipleRecordsWithOverlapAndNewBatch() throws InterruptedException {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5, 0),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -1580,7 +1594,10 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquisitionLockForAcquiringSameBatchAgain() throws InterruptedException {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5, 10),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -1609,7 +1626,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquisitionLockOnAcknowledgingSingleRecordBatch() throws InterruptedException {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 10, 0, memoryRecords(1, 0),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -1643,7 +1660,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquisitionLockOnAcknowledgingMultipleRecordBatch() throws InterruptedException {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -1674,7 +1691,10 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquisitionLockOnAcknowledgingMultipleRecordBatchWithGapOffsets() throws InterruptedException {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
         MemoryRecords records1 = memoryRecords(2, 5);
         // Untracked gap of 3 offsets from 7-9.
         MemoryRecordsBuilder recordsBuilder = memoryRecordsBuilder(5, 10);
@@ -1728,7 +1748,10 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquisitionLockForAcquiringSubsetBatchAgain() throws InterruptedException {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(8, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -1794,7 +1817,10 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquisitionLockOnAcknowledgingMultipleSubsetRecordBatchWithGapOffsets() throws InterruptedException {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
         MemoryRecords records1 = memoryRecords(2, 5);
         // Untracked gap of 3 offsets from 7-9.
         MemoryRecordsBuilder recordsBuilder = memoryRecordsBuilder(2, 10);
@@ -1892,9 +1918,10 @@ public class SharePartitionTest {
     @Test
     public void testAcquisitionLockTimeoutCauseMaxDeliveryCountExceed() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder()
-                .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
-                .withMaxDeliveryCount(2) // Only 2 delivery attempts will be made before archiving the records
-                .build();
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2) // Only 2 delivery attempts will be made before archiving the records
+            .withState(SharePartitionState.ACTIVE)
+            .build();
 
         // Adding memoryRecords(10, 0) in the sharePartition to make sure that SPSO doesn't move forward when delivery count of records2
         // exceed the max delivery count.
@@ -1944,9 +1971,10 @@ public class SharePartitionTest {
     @Test
     public void testAcquisitionLockTimeoutCauseSPSOMoveForward() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder()
-                .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
-                .withMaxDeliveryCount(2) // Only 2 delivery attempts will be made before archiving the records
-                .build();
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2) // Only 2 delivery attempts will be made before archiving the records
+            .withState(SharePartitionState.ACTIVE)
+            .build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(10, 0),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -2020,9 +2048,10 @@ public class SharePartitionTest {
     @Test
     public void testAcquisitionLockTimeoutCauseSPSOMoveForwardAndClearCachedState() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder()
-                .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
-                .withMaxDeliveryCount(2) // Only 2 delivery attempts will be made before archiving the records
-                .build();
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2) // Only 2 delivery attempts will be made before archiving the records
+            .withState(SharePartitionState.ACTIVE)
+            .build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(10, 0),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -2060,7 +2089,10 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeAfterAcquisitionLockTimeout() throws InterruptedException {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -2097,7 +2129,10 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquisitionLockAfterDifferentAcknowledges() throws InterruptedException {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -2155,8 +2190,9 @@ public class SharePartitionTest {
         Persister persister = Mockito.mock(Persister.class);
         mockPersisterReadStateMethod(persister);
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister)
-                .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
-                .build();
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
 
         // Mock persister writeState method so that sharePartition.isWriteShareGroupStateSuccessful() returns false.
         WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
@@ -2187,8 +2223,9 @@ public class SharePartitionTest {
         Persister persister = Mockito.mock(Persister.class);
         mockPersisterReadStateMethod(persister);
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister)
-                .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
-                .build();
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
 
         // Mock persister writeState method so that sharePartition.isWriteShareGroupStateSuccessful() returns true for acknowledge to pass.
         WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
@@ -2237,7 +2274,7 @@ public class SharePartitionTest {
 
     @Test
     public void testReleaseSingleRecordBatch() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 10, 0, memoryRecords(1, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -2256,7 +2293,7 @@ public class SharePartitionTest {
 
     @Test
     public void testReleaseMultipleRecordBatch() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -2275,7 +2312,7 @@ public class SharePartitionTest {
 
     @Test
     public void testReleaseMultipleAcknowledgedRecordBatch() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         MemoryRecords records0 = memoryRecords(5, 0);
         MemoryRecords records1 = memoryRecords(2, 5);
         // Untracked gap of 3 offsets from 7-9.
@@ -2308,7 +2345,7 @@ public class SharePartitionTest {
 
     @Test
     public void testReleaseAcknowledgedMultipleSubsetRecordBatch() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         MemoryRecords records1 = memoryRecords(2, 5);
 
         // Untracked gap of 3 offsets from 7-9.
@@ -2365,7 +2402,7 @@ public class SharePartitionTest {
 
     @Test
     public void testReleaseAcquiredRecordsWithAnotherMember() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         MemoryRecords records1 = memoryRecords(1, 5);
         // Untracked gap of 3 offsets from 7-9.
         MemoryRecordsBuilder recordsBuilder = memoryRecordsBuilder(2, 10);
@@ -2438,7 +2475,7 @@ public class SharePartitionTest {
 
     @Test
     public void testReleaseAcquiredRecordsWithAnotherMemberAndSubsetAcknowledged() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         MemoryRecords records1 = memoryRecords(2, 5);
         // Untracked gap of 3 offsets from 7-9.
         MemoryRecordsBuilder recordsBuilder = memoryRecordsBuilder(2, 10);
@@ -2517,7 +2554,7 @@ public class SharePartitionTest {
 
     @Test
     public void testReleaseAcquiredRecordsForEmptyCachedData() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         // Release a batch when cache is empty.
         CompletableFuture<Void> releaseResult = sharePartition.releaseAcquiredRecords(MEMBER_ID);
         assertNull(releaseResult.join());
@@ -2528,7 +2565,7 @@ public class SharePartitionTest {
 
     @Test
     public void testReleaseAcquiredRecordsAfterDifferentAcknowledges() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
 
@@ -2554,7 +2591,10 @@ public class SharePartitionTest {
 
     @Test
     public void testMaxDeliveryCountLimitExceededForRecordsSubsetAfterReleaseAcquiredRecords() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withMaxDeliveryCount(2).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxDeliveryCount(2)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 40, 3, memoryRecords(10, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -2584,7 +2624,10 @@ public class SharePartitionTest {
 
     @Test
     public void testMaxDeliveryCountLimitExceededForRecordsSubsetAfterReleaseAcquiredRecordsSubset() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withMaxDeliveryCount(2).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxDeliveryCount(2)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
         // First fetch request with 5 records starting from offset 10.
         MemoryRecords records1 = memoryRecords(5, 10);
         // Second fetch request with 5 records starting from offset 15.
@@ -2657,7 +2700,10 @@ public class SharePartitionTest {
 
     @Test
     public void testMaxDeliveryCountLimitExceededForRecordsSubsetCacheCleared() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withMaxDeliveryCount(2).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxDeliveryCount(2)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
         // First fetch request with 5 records starting from offset 10.
         MemoryRecords records1 = memoryRecords(5, 10);
         // Second fetch request with 5 records starting from offset 15.
@@ -2708,7 +2754,7 @@ public class SharePartitionTest {
 
     @Test
     public void testReleaseAcquiredRecordsSubsetWithAnotherMember() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS,
                 new FetchPartitionData(Errors.NONE, 30, 0, memoryRecords(7, 5),
@@ -2738,7 +2784,10 @@ public class SharePartitionTest {
     public void testReleaseBatchWithWriteShareGroupStateFailure() {
         Persister persister = Mockito.mock(Persister.class);
         mockPersisterReadStateMethod(persister);
-        SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
 
         // Mock persister writeState method so that sharePartition.isWriteShareGroupStateSuccessful() returns false.
         WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
@@ -2753,7 +2802,7 @@ public class SharePartitionTest {
 
         CompletableFuture<Void> releaseResult = sharePartition.releaseAcquiredRecords(MEMBER_ID);
         assertTrue(releaseResult.isCompletedExceptionally());
-        assertFutureThrows(releaseResult, InvalidRequestException.class);
+        assertFutureThrows(releaseResult, GroupIdNotFoundException.class);
 
         // Due to failure in writeShareGroupState, the cached state should not be updated.
         assertEquals(1, sharePartition.cachedState().size());
@@ -2765,7 +2814,10 @@ public class SharePartitionTest {
     public void testReleaseOffsetWithWriteShareGroupStateFailure() {
         Persister persister = Mockito.mock(Persister.class);
         mockPersisterReadStateMethod(persister);
-        SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
 
         // Mock persister writeState method so that sharePartition.isWriteShareGroupStateSuccessful() returns true for acknowledge to pass.
         WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
@@ -2789,7 +2841,7 @@ public class SharePartitionTest {
 
         CompletableFuture<Void> releaseResult = sharePartition.releaseAcquiredRecords(MEMBER_ID);
         assertTrue(releaseResult.isCompletedExceptionally());
-        assertFutureThrows(releaseResult, InvalidRequestException.class);
+        assertFutureThrows(releaseResult, GroupIdNotFoundException.class);
 
         // Due to failure in writeShareGroupState, the cached state should not be updated.
         assertEquals(1, sharePartition.cachedState().size());
@@ -2810,7 +2862,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquisitionLockOnReleasingMultipleRecordBatch() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -2832,7 +2884,10 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquisitionLockOnReleasingAcknowledgedMultipleSubsetRecordBatchWithGapOffsets() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
         MemoryRecords records1 = memoryRecords(2, 5);
         // Untracked gap of 3 offsets from 7-9.
         MemoryRecordsBuilder recordsBuilder = memoryRecordsBuilder(2, 10);
@@ -2908,7 +2963,7 @@ public class SharePartitionTest {
     @Test
     public void testLsoMovementOnInitializationSharePartition() {
         // LSO is at 0.
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         sharePartition.updateCacheAndOffsets(0);
         assertEquals(0, sharePartition.nextFetchOffset());
         assertEquals(0, sharePartition.startOffset());
@@ -2923,7 +2978,7 @@ public class SharePartitionTest {
 
     @Test
     public void testLsoMovementForArchivingBatches() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -2991,7 +3046,7 @@ public class SharePartitionTest {
 
     @Test
     public void testLsoMovementForArchivingOffsets() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -3043,7 +3098,7 @@ public class SharePartitionTest {
 
     @Test
     public void testLsoMovementForArchivingOffsetsWithStartAndEndBatchesNotFullMatches() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -3083,7 +3138,7 @@ public class SharePartitionTest {
 
     @Test
     public void testLsoMovementForArchivingOffsetsWithStartOffsetNotFullMatches() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -3123,7 +3178,7 @@ public class SharePartitionTest {
 
     @Test
     public void testLsoMovementForArchivingOffsetsWithStartOffsetNotFullMatchesPostAcceptAcknowledgement() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -3173,7 +3228,7 @@ public class SharePartitionTest {
 
     @Test
     public void testLsoMovementForArchivingOffsetsWithStartOffsetNotFullMatchesPostReleaseAcknowledgement() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2), Optional.empty(),
                 OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
@@ -3221,7 +3276,7 @@ public class SharePartitionTest {
 
     @Test
     public void testLsoMovementToEndOffset() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2), Optional.empty(),
                 OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
@@ -3255,7 +3310,7 @@ public class SharePartitionTest {
 
     @Test
     public void testLsoMovementToEndOffsetWhereEndOffsetIsAvailable() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2), Optional.empty(),
                 OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
@@ -3290,7 +3345,7 @@ public class SharePartitionTest {
 
     @Test
     public void testLsoMovementAheadOfEndOffsetPostAcknowledgment() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2), Optional.empty(),
                 OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
@@ -3324,7 +3379,7 @@ public class SharePartitionTest {
 
     @Test
     public void testLsoMovementAheadOfEndOffset() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2), Optional.empty(),
                 OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
@@ -3348,7 +3403,7 @@ public class SharePartitionTest {
 
     @Test
     public void testLsoMovementWithGapsInCachedStateMap() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         MemoryRecords records1 = memoryRecords(5, 2);
         // Gap of 7-9.
@@ -3383,7 +3438,7 @@ public class SharePartitionTest {
 
     @Test
     public void testLsoMovementWithGapsInCachedStateMapAndAcknowledgedBatch() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         MemoryRecords records1 = memoryRecords(5, 2);
         // Gap of 7-9.
@@ -3415,7 +3470,7 @@ public class SharePartitionTest {
 
     @Test
     public void testLsoMovementPostGapsInAcknowledgments() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         MemoryRecords records1 = memoryRecords(2, 5);
         // Untracked gap of 3 offsets from 7-9.
@@ -3463,7 +3518,7 @@ public class SharePartitionTest {
 
     @Test
     public void testReleaseAcquiredRecordsBatchesPostStartOffsetMovement() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -3550,7 +3605,7 @@ public class SharePartitionTest {
 
     @Test
     public void testReleaseAcquiredRecordsBatchesPostStartOffsetMovementToStartOfBatch() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -3581,7 +3636,7 @@ public class SharePartitionTest {
 
     @Test
     public void testReleaseAcquiredRecordsBatchesPostStartOffsetMovementToMiddleOfBatch() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -3619,7 +3674,9 @@ public class SharePartitionTest {
     @Test
     public void testAcquisitionLockTimeoutForBatchesPostStartOffsetMovement() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder()
-                .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -3702,7 +3759,9 @@ public class SharePartitionTest {
     @Test
     public void testAcquisitionLockTimeoutForBatchesPostStartOffsetMovementToStartOfBatch() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder()
-                .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -3732,7 +3791,9 @@ public class SharePartitionTest {
     @Test
     public void testAcquisitionLockTimeoutForBatchesPostStartOffsetMovementToMiddleOfBatch() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder()
-                .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -3816,7 +3877,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeBatchAndOffsetPostLsoMovement() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -3875,7 +3936,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeBatchPostLsoMovement() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -3935,7 +3996,9 @@ public class SharePartitionTest {
     @Test
     public void testLsoMovementThenAcquisitionLockTimeoutThenAcknowledge() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder()
-                .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -3985,7 +4048,10 @@ public class SharePartitionTest {
 
     @Test
     public void testLsoMovementThenAcquisitionLockTimeoutThenAcknowledgeBatchLastOffsetAheadOfStartOffsetBatch() throws InterruptedException {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(2, 1),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -4062,7 +4128,7 @@ public class SharePartitionTest {
         WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
         Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(null);
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
-        CompletableFuture<Void> result = sharePartition.writeShareGroupState(Mockito.anyList());
+        CompletableFuture<Void> result = sharePartition.writeShareGroupState(anyList());
         assertTrue(result.isCompletedExceptionally());
         assertFutureThrows(result, IllegalStateException.class);
     }
@@ -4077,7 +4143,7 @@ public class SharePartitionTest {
         // TopicsData is empty.
         Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.emptyList());
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
-        CompletableFuture<Void> writeResult = sharePartition.writeShareGroupState(Mockito.anyList());
+        CompletableFuture<Void> writeResult = sharePartition.writeShareGroupState(anyList());
         assertTrue(writeResult.isCompletedExceptionally());
         assertFutureThrows(writeResult, IllegalStateException.class);
 
@@ -4086,7 +4152,7 @@ public class SharePartitionTest {
                 new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.emptyList()),
                 new TopicData<>(Uuid.randomUuid(), Collections.emptyList())));
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
-        writeResult = sharePartition.writeShareGroupState(Mockito.anyList());
+        writeResult = sharePartition.writeShareGroupState(anyList());
         assertTrue(writeResult.isCompletedExceptionally());
         assertFutureThrows(writeResult, IllegalStateException.class);
 
@@ -4094,7 +4160,7 @@ public class SharePartitionTest {
         Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
                 new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.emptyList())));
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
-        writeResult = sharePartition.writeShareGroupState(Mockito.anyList());
+        writeResult = sharePartition.writeShareGroupState(anyList());
         assertTrue(writeResult.isCompletedExceptionally());
         assertFutureThrows(writeResult, IllegalStateException.class);
 
@@ -4103,7 +4169,7 @@ public class SharePartitionTest {
                 new TopicData<>(Uuid.randomUuid(), Collections.singletonList(
                         PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
-        writeResult = sharePartition.writeShareGroupState(Mockito.anyList());
+        writeResult = sharePartition.writeShareGroupState(anyList());
         assertTrue(writeResult.isCompletedExceptionally());
         assertFutureThrows(writeResult, IllegalStateException.class);
 
@@ -4113,7 +4179,7 @@ public class SharePartitionTest {
                         PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message()),
                         PartitionFactory.newPartitionErrorData(1, Errors.NONE.code(), Errors.NONE.message())))));
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
-        writeResult = sharePartition.writeShareGroupState(Mockito.anyList());
+        writeResult = sharePartition.writeShareGroupState(anyList());
         assertTrue(writeResult.isCompletedExceptionally());
         assertFutureThrows(writeResult, IllegalStateException.class);
 
@@ -4122,7 +4188,7 @@ public class SharePartitionTest {
                 new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
                         PartitionFactory.newPartitionErrorData(1, Errors.NONE.code(), Errors.NONE.message())))));
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
-        writeResult = sharePartition.writeShareGroupState(Mockito.anyList());
+        writeResult = sharePartition.writeShareGroupState(anyList());
         assertTrue(writeResult.isCompletedExceptionally());
         assertFutureThrows(writeResult, IllegalStateException.class);
     }
@@ -4134,7 +4200,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(FutureUtils.failedFuture(new RuntimeException("Write exception")));
-        CompletableFuture<Void> writeResult = sharePartition.writeShareGroupState(Mockito.anyList());
+        CompletableFuture<Void> writeResult = sharePartition.writeShareGroupState(anyList());
         assertTrue(writeResult.isCompletedExceptionally());
         assertFutureThrows(writeResult, IllegalStateException.class);
     }
@@ -4151,7 +4217,7 @@ public class SharePartitionTest {
                         PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
-        CompletableFuture<Void> result = sharePartition.writeShareGroupState(Mockito.anyList());
+        CompletableFuture<Void> result = sharePartition.writeShareGroupState(anyList());
         assertNull(result.join());
         assertFalse(result.isCompletedExceptionally());
     }
@@ -4160,7 +4226,10 @@ public class SharePartitionTest {
     public void testWriteShareGroupStateFailure() {
         Persister persister = Mockito.mock(Persister.class);
         mockPersisterReadStateMethod(persister);
-        SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
         // Mock Write state RPC to return error response, NOT_COORDINATOR.
         WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
         Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
@@ -4168,7 +4237,7 @@ public class SharePartitionTest {
                         PartitionFactory.newPartitionErrorData(0, Errors.NOT_COORDINATOR.code(), Errors.NOT_COORDINATOR.message())))));
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
-        CompletableFuture<Void> result = sharePartition.writeShareGroupState(Mockito.anyList());
+        CompletableFuture<Void> result = sharePartition.writeShareGroupState(anyList());
         assertTrue(result.isCompletedExceptionally());
         assertFutureThrows(result, CoordinatorNotAvailableException.class);
 
@@ -4178,7 +4247,7 @@ public class SharePartitionTest {
                 PartitionFactory.newPartitionErrorData(0, Errors.COORDINATOR_NOT_AVAILABLE.code(), Errors.COORDINATOR_NOT_AVAILABLE.message())))));
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
-        result = sharePartition.writeShareGroupState(Mockito.anyList());
+        result = sharePartition.writeShareGroupState(anyList());
         assertTrue(result.isCompletedExceptionally());
         assertFutureThrows(result, CoordinatorNotAvailableException.class);
 
@@ -4188,7 +4257,7 @@ public class SharePartitionTest {
                 PartitionFactory.newPartitionErrorData(0, Errors.COORDINATOR_LOAD_IN_PROGRESS.code(), Errors.COORDINATOR_LOAD_IN_PROGRESS.message())))));
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
-        result = sharePartition.writeShareGroupState(Mockito.anyList());
+        result = sharePartition.writeShareGroupState(anyList());
         assertTrue(result.isCompletedExceptionally());
         assertFutureThrows(result, CoordinatorNotAvailableException.class);
 
@@ -4198,9 +4267,9 @@ public class SharePartitionTest {
                 PartitionFactory.newPartitionErrorData(0, Errors.GROUP_ID_NOT_FOUND.code(), Errors.GROUP_ID_NOT_FOUND.message())))));
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
-        result = sharePartition.writeShareGroupState(Mockito.anyList());
+        result = sharePartition.writeShareGroupState(anyList());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, InvalidRequestException.class);
+        assertFutureThrows(result, GroupIdNotFoundException.class);
 
         // Mock Write state RPC to return error response, UNKNOWN_TOPIC_OR_PARTITION.
         Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
@@ -4208,9 +4277,9 @@ public class SharePartitionTest {
                 PartitionFactory.newPartitionErrorData(0, Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), Errors.UNKNOWN_TOPIC_OR_PARTITION.message())))));
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
-        result = sharePartition.writeShareGroupState(Mockito.anyList());
+        result = sharePartition.writeShareGroupState(anyList());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, InvalidRequestException.class);
+        assertFutureThrows(result, UnknownTopicOrPartitionException.class);
 
         // Mock Write state RPC to return error response, FENCED_STATE_EPOCH.
         Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
@@ -4218,7 +4287,7 @@ public class SharePartitionTest {
                 PartitionFactory.newPartitionErrorData(0, Errors.FENCED_STATE_EPOCH.code(), Errors.FENCED_STATE_EPOCH.message())))));
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
-        result = sharePartition.writeShareGroupState(Mockito.anyList());
+        result = sharePartition.writeShareGroupState(anyList());
         assertTrue(result.isCompletedExceptionally());
         assertFutureThrows(result, FencedStateEpochException.class);
 
@@ -4228,7 +4297,7 @@ public class SharePartitionTest {
                 PartitionFactory.newPartitionErrorData(0, Errors.FENCED_LEADER_EPOCH.code(), Errors.FENCED_LEADER_EPOCH.message())))));
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
-        result = sharePartition.writeShareGroupState(Mockito.anyList());
+        result = sharePartition.writeShareGroupState(anyList());
         assertTrue(result.isCompletedExceptionally());
         assertFutureThrows(result, NotLeaderOrFollowerException.class);
 
@@ -4238,14 +4307,14 @@ public class SharePartitionTest {
                 PartitionFactory.newPartitionErrorData(0, Errors.UNKNOWN_SERVER_ERROR.code(), Errors.UNKNOWN_SERVER_ERROR.message())))));
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
-        result = sharePartition.writeShareGroupState(Mockito.anyList());
+        result = sharePartition.writeShareGroupState(anyList());
         assertTrue(result.isCompletedExceptionally());
         assertFutureThrows(result, UnknownServerException.class);
     }
 
     @Test
     public void testWriteShareGroupStateWithNoOpShareStatePersister() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         List<PersisterStateBatch> stateBatches = Arrays.asList(
                 new PersisterStateBatch(5L, 10L, RecordState.AVAILABLE.id, (short) 2),
                 new PersisterStateBatch(11L, 15L, RecordState.ARCHIVED.id, (short) 3));
@@ -4257,7 +4326,7 @@ public class SharePartitionTest {
 
     @Test
     public void testMaybeUpdateCachedStateWhenAcknowledgementTypeAccept() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0,  memoryRecords(250, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -4279,7 +4348,7 @@ public class SharePartitionTest {
 
     @Test
     public void testMaybeUpdateCachedStateWhenAcknowledgementTypeReject() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(250, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -4301,7 +4370,7 @@ public class SharePartitionTest {
 
     @Test
     public void testMaybeUpdateCachedStateWhenAcknowledgementTypeRelease() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(250, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -4324,7 +4393,10 @@ public class SharePartitionTest {
 
     @Test
     public void testMaybeUpdateCachedStateWhenAcknowledgementsFromBeginningForBatchSubset() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(20).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxInflightMessages(20)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -4351,7 +4423,10 @@ public class SharePartitionTest {
 
     @Test
     public void testMaybeUpdateCachedStateWhenAcknowledgementsFromBeginningForEntireBatch() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(20).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxInflightMessages(20)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
@@ -4377,7 +4452,10 @@ public class SharePartitionTest {
 
     @Test
     public void testMaybeUpdateCachedStateWhenAcknowledgementsInBetween() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(20).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxInflightMessages(20)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -4407,7 +4485,10 @@ public class SharePartitionTest {
 
     @Test
     public void testMaybeUpdateCachedStateWhenAllRecordsInCachedStateAreAcknowledged() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(20).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxInflightMessages(20)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(15, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -4430,7 +4511,10 @@ public class SharePartitionTest {
 
     @Test
     public void testMaybeUpdateCachedStateMultipleAcquisitionsAndAcknowledgements() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(100).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxInflightMessages(100)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(20, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -4501,7 +4585,7 @@ public class SharePartitionTest {
 
     @Test
     public void testCanAcquireRecordsReturnsTrue() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         assertEquals(0, sharePartition.startOffset());
         assertEquals(0, sharePartition.endOffset());
@@ -4517,7 +4601,7 @@ public class SharePartitionTest {
 
     @Test
     public void testCanAcquireRecordsChangeResponsePostAcknowledgement() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         assertEquals(0, sharePartition.startOffset());
         assertEquals(0, sharePartition.endOffset());
@@ -4546,7 +4630,7 @@ public class SharePartitionTest {
 
     @Test
     public void testCanAcquireRecordsAfterReleaseAcknowledgement() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(150, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -4576,7 +4660,7 @@ public class SharePartitionTest {
 
     @Test
     public void testCanAcquireRecordsAfterArchiveAcknowledgement() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(150, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -4605,7 +4689,7 @@ public class SharePartitionTest {
 
     @Test
     public void testCanAcquireRecordsAfterAcceptAcknowledgement() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(150, 0),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -4635,7 +4719,10 @@ public class SharePartitionTest {
     public void testAcknowledgeBatchWithWriteShareGroupStateFailure() {
         Persister persister = Mockito.mock(Persister.class);
         mockPersisterReadStateMethod(persister);
-        SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
 
         // Mock persister writeState method so that sharePartition.isWriteShareGroupStateSuccessful() returns false.
         WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
@@ -4651,7 +4738,7 @@ public class SharePartitionTest {
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(MEMBER_ID,
                 Collections.singletonList(new ShareAcknowledgementBatch(5, 14, Collections.singletonList((byte) 1))));
         assertTrue(ackResult.isCompletedExceptionally());
-        assertFutureThrows(ackResult, InvalidRequestException.class);
+        assertFutureThrows(ackResult, UnknownTopicOrPartitionException.class);
 
         // Due to failure in writeShareGroupState, the cached state should not be updated.
         assertEquals(1, sharePartition.cachedState().size());
@@ -4663,7 +4750,10 @@ public class SharePartitionTest {
     public void testAcknowledgeOffsetWithWriteShareGroupStateFailure() {
         Persister persister = Mockito.mock(Persister.class);
         mockPersisterReadStateMethod(persister);
-        SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
 
         // Mock persister writeState method so that sharePartition.isWriteShareGroupStateSuccessful() returns false.
         WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
@@ -4700,7 +4790,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeSubsetWithAnotherMember() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 30, 0, memoryRecords(7, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -4718,7 +4808,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeWithAnotherMemberRollbackBatchError() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -4755,7 +4845,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeWithAnotherMemberRollbackSubsetError() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -4792,7 +4882,10 @@ public class SharePartitionTest {
 
     @Test
     public void testMaxDeliveryCountLimitExceededForRecordBatch() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withMaxDeliveryCount(2).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxDeliveryCount(2)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
         MemoryRecords records = memoryRecords(10, 5);
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, records,
@@ -4818,7 +4911,10 @@ public class SharePartitionTest {
 
     @Test
     public void testMaxDeliveryCountLimitExceededForRecordsSubset() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withMaxDeliveryCount(2).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxDeliveryCount(2)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
         // First fetch request with 5 records starting from offset 10.
         MemoryRecords records1 = memoryRecords(5, 10);
         // Second fetch request with 5 records starting from offset 15.
@@ -4859,7 +4955,10 @@ public class SharePartitionTest {
 
     @Test
     public void testMaxDeliveryCountLimitExceededForRecordsSubsetAndCachedStateNotCleared() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withMaxDeliveryCount(2).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxDeliveryCount(2)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
         // First fetch request with 5 records starting from offset 0.
         MemoryRecords records1 = memoryRecords(5, 0);
 
@@ -4892,7 +4991,7 @@ public class SharePartitionTest {
 
     @Test
     public void testNextFetchOffsetPostAcquireAndAcknowledgeFunctionality() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         MemoryRecords records1 = memoryRecords(10, 0);
         String memberId1 = "memberId-1";
         String memberId2 = "memberId-2";
@@ -4928,7 +5027,10 @@ public class SharePartitionTest {
 
     @Test
     public void testNextFetchOffsetWithMultipleConsumers() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(100).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxInflightMessages(100)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
         MemoryRecords records1 = memoryRecords(3, 0);
         String memberId1 = MEMBER_ID;
         String memberId2 = "member-2";
@@ -4959,7 +5061,9 @@ public class SharePartitionTest {
 
     @Test
     public void testNumberOfWriteCallsOnUpdates() {
-        SharePartition sharePartition = Mockito.spy(SharePartitionBuilder.builder().build());
+        SharePartition sharePartition = Mockito.spy(SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .build());
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 10, 0, memoryRecords(5, 2),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -4978,7 +5082,7 @@ public class SharePartitionTest {
 
     @Test
     public void testReacquireSubsetWithAnotherMember() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         MemoryRecords records1 = memoryRecords(5, 5);
 
         sharePartition.acquire(MEMBER_ID, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 30, 0, records1,
@@ -5131,6 +5235,7 @@ public class SharePartitionTest {
         private Persister persister = new NoOpShareStatePersister();
         private final ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
         private GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        private SharePartitionState state = SharePartitionState.EMPTY;
 
         private SharePartitionBuilder withMaxInflightMessages(int maxInflightMessages) {
             this.maxInflightMessages = maxInflightMessages;
@@ -5157,13 +5262,18 @@ public class SharePartitionTest {
             return this;
         }
 
+        private SharePartitionBuilder withState(SharePartitionState state) {
+            this.state = state;
+            return this;
+        }
+
         public static SharePartitionBuilder builder() {
             return new SharePartitionBuilder();
         }
 
         public SharePartition build() {
-            return new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, maxInflightMessages, maxDeliveryCount,
-                    defaultAcquisitionLockTimeoutMs, mockTimer, MOCK_TIME, persister, replicaManager, groupConfigManager);
+            return new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 0, maxInflightMessages, maxDeliveryCount,
+                    defaultAcquisitionLockTimeoutMs, mockTimer, MOCK_TIME, persister, replicaManager, groupConfigManager, state);
         }
     }
 }
