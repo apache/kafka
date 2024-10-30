@@ -191,3 +191,34 @@ jobs:
           path: ~/.gradle/build-scan-data
           compression-level: 9
           if-no-files-found: ignore
+
+  update-test-catalog:
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Test Catalog
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true  # Needed to commit and push later
+          ref: test-catalog
+      - name: Reset Catalog
+        run: |
+          rm -rf test-catalog
+      - name: Download Test Catalog
+        uses: actions/download-artifact@v4
+        with:
+          name: test-catalog
+          path: test-catalog
+      - name: Update Test Catalog
+        # Git user.name and user.email come from https://github.com/actions/checkout?tab=readme-ov-file#push-a-commit-using-the-built-in-token
+        run: |
+          pwd
+          ls -R
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add test-catalog
+          git diff --quiet && git diff --staged --quiet || git commit -m 'Update test catalog data for GHA workflow run ${{ github.run_id }}'
+          git push
