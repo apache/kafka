@@ -1016,7 +1016,7 @@ class DynamicClientQuotaCallback(
 
   override def reconfigurableConfigs(): util.Set[String] = {
     val configs = new util.HashSet[String]()
-    quotaManagers.clientQuotaCallback.foreach {
+    quotaManagers.clientQuotaCallback.ifPresent {
       case callback: Reconfigurable => configs.addAll(callback.reconfigurableConfigs)
       case _ =>
     }
@@ -1024,18 +1024,17 @@ class DynamicClientQuotaCallback(
   }
 
   override def validateReconfiguration(configs: util.Map[String, _]): Unit = {
-    quotaManagers.clientQuotaCallback.foreach {
+    quotaManagers.clientQuotaCallback.ifPresent {
       case callback: Reconfigurable => callback.validateReconfiguration(configs)
       case _ =>
     }
   }
 
   override def reconfigure(configs: util.Map[String, _]): Unit = {
-    quotaManagers.clientQuotaCallback.foreach {
+    quotaManagers.clientQuotaCallback.ifPresent {
       case callback: Reconfigurable =>
         serverConfig.dynamicConfig.maybeReconfigure(callback, serverConfig.dynamicConfig.currentKafkaConfig, configs)
-        true
-      case _ => false
+      case _ =>
     }
   }
 }

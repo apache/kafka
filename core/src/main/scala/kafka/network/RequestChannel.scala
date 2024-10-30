@@ -73,7 +73,7 @@ object RequestChannel extends Logging {
     @volatile var messageConversionsTimeNanos: Long = 0L
     @volatile var apiThrottleTimeMs: Long = 0L
     @volatile var temporaryMemoryBytes: Long = 0L
-    @volatile var recordNetworkThreadTimeCallback: Option[Long => Unit] = None
+    @volatile var recordNetworkThreadTimeCallback: Option[java.util.function.Consumer[java.lang.Long]] = None
     @volatile var callbackRequestDequeueTimeNanos: Option[Long] = None
     @volatile var callbackRequestCompleteTimeNanos: Option[Long] = None
 
@@ -247,7 +247,7 @@ object RequestChannel extends Logging {
       // The time recorded here is the time spent on the network thread for receiving this request
       // and sending the response. Note that for the first request on a connection, the time includes
       // the total time spent on authentication, which may be significant for SASL/SSL.
-      recordNetworkThreadTimeCallback.foreach(record => record(networkThreadTimeNanos))
+      recordNetworkThreadTimeCallback.foreach(record => record.accept(networkThreadTimeNanos))
 
       if (isRequestLoggingEnabled) {
         val desc = RequestConvertToJson.requestDescMetrics(header, requestLog.toJava, response.responseLog.toJava,
@@ -270,6 +270,10 @@ object RequestChannel extends Logging {
             buffer = null
           }
       }
+    }
+
+    def setRecordNetworkThreadTimeCallback(callback: java.util.function.Consumer[java.lang.Long]): Unit = {
+      recordNetworkThreadTimeCallback = Some(callback)
     }
 
     override def toString: String = s"Request(processor=$processor, " +

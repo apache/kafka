@@ -109,7 +109,7 @@ public class DelayedShareFetch extends DelayedOperation {
                     topicPartitionData.entrySet().stream().map(entry ->
                         new Tuple2<>(entry.getKey(), entry.getValue())).collect(Collectors.toList())
                 ),
-                QuotaFactory.UnboundedQuota$.MODULE$,
+                QuotaFactory.UNBOUNDED_QUOTA,
                 true);
 
             Map<TopicIdPartition, FetchPartitionData> responseData = new HashMap<>();

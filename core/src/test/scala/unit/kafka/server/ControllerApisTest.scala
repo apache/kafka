@@ -73,7 +73,7 @@ import java.util
 import java.util.Collections.{singleton, singletonList, singletonMap}
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit}
 import java.util.concurrent.atomic.AtomicReference
-import java.util.{Collections, Properties}
+import java.util.{Collections, Optional, Properties}
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
@@ -127,7 +127,7 @@ class ControllerApisTest {
   private val raftManager: RaftManager[ApiMessageAndVersion] = mock(classOf[RaftManager[ApiMessageAndVersion]])
   private val metadataCache: KRaftMetadataCache = MetadataCache.kRaftMetadataCache(0, () => KRaftVersion.KRAFT_VERSION_0)
 
-  private val quotasNeverThrottleControllerMutations = QuotaManagers(
+  private val quotasNeverThrottleControllerMutations = new QuotaManagers(
     clientQuotaManager,
     clientQuotaManager,
     clientRequestQuotaManager,
@@ -135,9 +135,9 @@ class ControllerApisTest {
     replicaQuotaManager,
     replicaQuotaManager,
     replicaQuotaManager,
-    None)
+    Optional.empty())
 
-  private val quotasAlwaysThrottleControllerMutations = QuotaManagers(
+  private val quotasAlwaysThrottleControllerMutations = new QuotaManagers(
     clientQuotaManager,
     clientQuotaManager,
     clientRequestQuotaManager,
@@ -145,7 +145,7 @@ class ControllerApisTest {
     replicaQuotaManager,
     replicaQuotaManager,
     replicaQuotaManager,
-    None)
+    Optional.empty())
 
   private var controllerApis: ControllerApis = _
 

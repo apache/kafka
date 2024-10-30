@@ -19,7 +19,7 @@ package kafka.server
 import kafka.cluster.Partition
 import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
-import kafka.server.QuotaFactory.UnboundedQuota
+import kafka.server.QuotaFactory.UNBOUNDED_QUOTA
 import kafka.server.epoch.util.MockBlockingSender
 import kafka.server.metadata.ZkMetadataCache
 import kafka.utils.TestUtils
@@ -332,7 +332,7 @@ class ReplicaFetcherThreadTest {
       config,
       failedPartitions,
       replicaManager,
-      UnboundedQuota,
+      UNBOUNDED_QUOTA,
       mockNetwork
     )
     thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), 0L), t1p1 -> initialFetchState(Some(topicId1), 0L)))

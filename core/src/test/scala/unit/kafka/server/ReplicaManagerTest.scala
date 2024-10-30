@@ -24,7 +24,7 @@ import kafka.log.{LogManager, LogManagerTest, UnifiedLog}
 import kafka.log.remote.RemoteLogManager
 import org.apache.kafka.server.log.remote.quota.RLMQuotaManagerConfig.INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS
 import org.apache.kafka.server.log.remote.quota.RLMQuotaMetrics
-import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
+import kafka.server.QuotaFactory.{QuotaManagers, UNBOUNDED_QUOTA}
 import kafka.server.epoch.util.MockBlockingSender
 import kafka.server.share.DelayedShareFetch
 import kafka.utils.TestUtils.waitUntilTrue
@@ -3311,7 +3311,7 @@ class ReplicaManagerTest {
     maxWaitMs: Long = 0,
     minBytes: Int = 1,
     maxBytes: Int = 1024 * 1024,
-    quota: ReplicaQuota = UnboundedQuota,
+    quota: ReplicaQuota = UNBOUNDED_QUOTA,
     isolation: FetchIsolation = FetchIsolation.LOG_END,
     clientMetadata: Option[ClientMetadata] = None
   ): Unit = {
@@ -4031,7 +4031,7 @@ class ReplicaManagerTest {
 
       val params = new FetchParams(ApiKeys.FETCH.latestVersion, replicaId, 1, 1000, 0, 100, FetchIsolation.LOG_END, None.asJava)
       // when reading log, it'll throw OffsetOutOfRangeException, which will be handled separately
-      val result = replicaManager.readFromLog(params, Seq(tidp0 -> new PartitionData(topicId, 1, 0, 100000, Optional.of[Integer](leaderEpoch), Optional.of[Integer](leaderEpoch))), UnboundedQuota, false)
+      val result = replicaManager.readFromLog(params, Seq(tidp0 -> new PartitionData(topicId, 1, 0, 100000, Optional.of[Integer](leaderEpoch), Optional.of[Integer](leaderEpoch))), UNBOUNDED_QUOTA, false)
 
       if (isFromFollower) {
         // expect OFFSET_MOVED_TO_TIERED_STORAGE error returned if it's from follower, since the data is already available in remote log
@@ -4099,7 +4099,7 @@ class ReplicaManagerTest {
       }
 
       // when reading log, it'll throw OffsetOutOfRangeException, which will be handled separately
-      replicaManager.fetchMessages(params, Seq(tidp0 -> new PartitionData(topicId, fetchOffset, 0, 100000, Optional.of[Integer](leaderEpoch), Optional.of[Integer](leaderEpoch))), UnboundedQuota, fetchCallback)
+      replicaManager.fetchMessages(params, Seq(tidp0 -> new PartitionData(topicId, fetchOffset, 0, 100000, Optional.of[Integer](leaderEpoch), Optional.of[Integer](leaderEpoch))), UNBOUNDED_QUOTA, fetchCallback)
 
       val remoteStorageFetchInfoArg: ArgumentCaptor[RemoteStorageFetchInfo] = ArgumentCaptor.forClass(classOf[RemoteStorageFetchInfo])
       if (isFromFollower) {
@@ -4198,7 +4198,7 @@ class ReplicaManagerTest {
 
       // create 5 asyncRead tasks, which should enqueue 3 task
       for (i <- 1 to 5)
-        replicaManager.fetchMessages(params, Seq(tidp0 -> new PartitionData(topicId, fetchOffset, 0, 100000, Optional.of[Integer](leaderEpoch), Optional.of[Integer](leaderEpoch))), UnboundedQuota, fetchCallback)
+        replicaManager.fetchMessages(params, Seq(tidp0 -> new PartitionData(topicId, fetchOffset, 0, 100000, Optional.of[Integer](leaderEpoch), Optional.of[Integer](leaderEpoch))), UNBOUNDED_QUOTA, fetchCallback)
 
       // wait until at least 2 task submitted to use all the available threads
       queueLatch.await(5000, TimeUnit.MILLISECONDS)
@@ -4308,7 +4308,7 @@ class ReplicaManagerTest {
       }).when(spyRLM).read(any())
 
       val curExpiresPerSec = DelayedRemoteFetchMetrics.expiredRequestMeter.count()
-      replicaManager.fetchMessages(params, Seq(tidp0 -> new PartitionData(topicId, fetchOffset, 0, 100000, Optional.of[Integer](leaderEpoch), Optional.of[Integer](leaderEpoch))), UnboundedQuota, fetchCallback)
+      replicaManager.fetchMessages(params, Seq(tidp0 -> new PartitionData(topicId, fetchOffset, 0, 100000, Optional.of[Integer](leaderEpoch), Optional.of[Integer](leaderEpoch))), UNBOUNDED_QUOTA, fetchCallback)
       // advancing the clock to expire the delayed remote fetch
       timer.advanceClock(2000L)
 
@@ -6823,7 +6823,7 @@ class ReplicaManagerTest {
       replicaManager.readFromLog(
         params,
         Seq(new TopicIdPartition(topicId, 0, topic) -> new PartitionData(topicId, 1, 0, 100000, Optional.of[Integer](leaderEpoch), Optional.of(leaderEpoch))),
-        UnboundedQuota,
+        UNBOUNDED_QUOTA,
         readFromPurgatory = false)
     } finally {
       replicaManager.shutdown(checkpointHW = false)

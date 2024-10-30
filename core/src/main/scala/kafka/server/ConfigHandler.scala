@@ -22,7 +22,6 @@ import java.util.{Collections, Properties}
 import kafka.controller.KafkaController
 import kafka.log.UnifiedLog
 import kafka.network.ConnectionQuotas
-import kafka.server.Constants._
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.server.config.{QuotaConfig, ReplicationConfigs, ZooKeeperInternals}
@@ -132,7 +131,7 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     def updateThrottledList(prop: String, quotaManager: ReplicationQuotaManager): Unit = {
       if (topicConfig.containsKey(prop) && topicConfig.getProperty(prop).nonEmpty) {
         val partitions = parseThrottledPartitions(topicConfig, kafkaConfig.brokerId, prop)
-        quotaManager.markThrottled(topic, partitions)
+        quotaManager.markThrottled(topic, partitions.map(Integer.valueOf).asJava)
         debug(s"Setting $prop on broker ${kafkaConfig.brokerId} for topic: $topic and partitions $partitions")
       } else {
         quotaManager.removeThrottle(topic)
@@ -152,7 +151,7 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     ThrottledReplicaListValidator.ensureValidString(prop, configValue)
     configValue match {
       case "" => Seq()
-      case "*" => AllReplicas
+      case "*" => ReplicationQuotaManager.ALL_REPLICAS.asScala.map(_.toInt).toSeq
       case _ => configValue.trim
         .split(",")
         .map(_.split(":"))

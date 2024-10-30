@@ -80,7 +80,7 @@ class LocalLeaderEndPointTest extends Logging {
     replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
     replicaManager.getPartitionOrException(topicPartition)
       .localLogOrException
-    endPoint = new LocalLeaderEndPoint(sourceBroker, config, replicaManager, QuotaFactory.UnboundedQuota)
+    endPoint = new LocalLeaderEndPoint(sourceBroker, config, replicaManager, QuotaFactory.UNBOUNDED_QUOTA)
   }
 
   @AfterEach

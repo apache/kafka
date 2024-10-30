@@ -39,7 +39,7 @@ class ReplicationQuotaManagerTest {
   @Test
   def shouldThrottleOnlyDefinedReplicas(): Unit = {
     val quota = new ReplicationQuotaManager(new ReplicationQuotaManagerConfig(), metrics, QuotaType.FETCH, time)
-    quota.markThrottled("topic1", Seq(1, 2, 3))
+    quota.markThrottled("topic1", java.util.List.of(1, 2, 3))
 
     assertTrue(quota.isThrottled(tp1(1)))
     assertTrue(quota.isThrottled(tp1(2)))

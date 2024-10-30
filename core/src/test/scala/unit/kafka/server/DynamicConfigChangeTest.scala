@@ -20,7 +20,6 @@ import kafka.cluster.Partition
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.UnifiedLog
 import kafka.log.remote.RemoteLogManager
-import kafka.server.Constants._
 import kafka.utils.TestUtils.random
 import kafka.utils._
 import kafka.zk.ConfigEntityChangeNotificationZNode
@@ -689,7 +688,7 @@ class DynamicConfigChangeUnitTest {
     val result = configHandler.parseThrottledPartitions(props, 102, QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG)
 
     //Then
-    assertEquals(AllReplicas, result)
+    assertEquals(ReplicationQuotaManager.ALL_REPLICAS.asScala.map(_.toInt).toSeq, result)
   }
 
   @Test
@@ -700,7 +699,7 @@ class DynamicConfigChangeUnitTest {
         102, QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG)
     }
     val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null, null)
-    assertEquals(AllReplicas, parse(configHandler, "* "))
+    assertEquals(ReplicationQuotaManager.ALL_REPLICAS.asScala.map(_.toInt).toSeq, parse(configHandler, "* "))
     assertEquals(Seq(), parse(configHandler, " "))
     assertEquals(Seq(6), parse(configHandler, "6:102"))
     assertEquals(Seq(6), parse(configHandler, "6:102 "))

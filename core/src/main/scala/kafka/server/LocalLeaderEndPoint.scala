@@ -18,7 +18,7 @@
 package kafka.server
 
 import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
-import kafka.server.QuotaFactory.UnboundedQuota
+import kafka.server.QuotaFactory.UNBOUNDED_QUOTA
 import kafka.utils.Logging
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.message.FetchResponseData
@@ -105,7 +105,7 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
     replicaManager.fetchMessages(
       params = fetchParams,
       fetchInfos = fetchData.asScala.toSeq,
-      quota = UnboundedQuota,
+      quota = UNBOUNDED_QUOTA,
       responseCallback = processResponseCallback
     )
 

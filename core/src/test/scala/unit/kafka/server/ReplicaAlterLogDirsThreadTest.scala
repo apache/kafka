@@ -19,7 +19,7 @@ package kafka.server
 import kafka.cluster.Partition
 import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
-import kafka.server.QuotaFactory.UnboundedQuota
+import kafka.server.QuotaFactory.UNBOUNDED_QUOTA
 import kafka.server.ReplicaAlterLogDirsThread.ReassignmentState
 import kafka.server.metadata.ZkMetadataCache
 import kafka.utils.{DelayedItem, TestUtils}
@@ -531,7 +531,7 @@ class ReplicaAlterLogDirsThreadTest {
     when(replicaManager.fetchMessages(
       params = ArgumentMatchers.eq(expectedFetchParams),
       fetchInfos = ArgumentMatchers.eq(Seq(topicIdPartition -> requestData)),
-      quota = ArgumentMatchers.eq(UnboundedQuota),
+      quota = ArgumentMatchers.eq(UNBOUNDED_QUOTA),
       responseCallback = callbackCaptor.capture(),
     )).thenAnswer(_ => {
       callbackCaptor.getValue.apply(Seq((topicIdPartition, responseData)))
