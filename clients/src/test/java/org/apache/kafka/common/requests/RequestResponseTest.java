@@ -3872,7 +3872,7 @@ public class RequestResponseTest {
             .setSubscriptionId(1)
             .setTerminating(false)
             .setCompressionType(CompressionType.ZSTD.id)
-            .setMetrics("test-metrics".getBytes(StandardCharsets.UTF_8))
+            .setMetrics(ByteBuffer.wrap("test-metrics".getBytes(StandardCharsets.UTF_8)))
         ).build(version);
     }
 

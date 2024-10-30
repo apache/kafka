@@ -88,7 +88,7 @@ public class PushTelemetryRequest extends AbstractRequest {
     public ByteBuffer metricsData() {
         CompressionType cType = CompressionType.forId(this.data.compressionType());
         return (cType == CompressionType.NONE) ?
-            ByteBuffer.wrap(this.data.metrics()) : ClientTelemetryUtils.decompress(this.data.metrics(), cType);
+            this.data.metrics() : ClientTelemetryUtils.decompress(this.data.metrics(), cType);
     }
 
     public static PushTelemetryRequest parse(ByteBuffer buffer, short version) {

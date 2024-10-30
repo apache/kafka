@@ -134,12 +134,12 @@ public class ClientTelemetryUtilsTest {
     public void testCompressDecompress(CompressionType compressionType) throws IOException {
         MetricsData metricsData = getMetricsData();
         byte[] raw = metricsData.toByteArray();
-        byte[] compressed = ClientTelemetryUtils.compress(metricsData, compressionType);
+        ByteBuffer compressed = ClientTelemetryUtils.compress(metricsData, compressionType);
         assertNotNull(compressed);
         if (compressionType != CompressionType.NONE) {
-            assertTrue(compressed.length < raw.length);
+            assertTrue(compressed.limit() < raw.length);
         } else {
-            assertArrayEquals(raw, compressed);
+            assertArrayEquals(raw, Utils.toArray(compressed));
         }
         ByteBuffer decompressed = ClientTelemetryUtils.decompress(compressed, compressionType);
         assertNotNull(decompressed);
