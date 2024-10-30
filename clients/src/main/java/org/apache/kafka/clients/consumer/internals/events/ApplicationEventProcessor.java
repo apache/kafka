@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.internals.OffsetAndTimestampInternal;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManager;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
+import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicIdPartition;
@@ -38,6 +39,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
@@ -53,6 +55,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     private final ConsumerMetadata metadata;
     private final SubscriptionState subscriptions;
     private final RequestManagers requestManagers;
+    private int metadataVersionSnapshot;
 
     public ApplicationEventProcessor(final LogContext logContext,
                                      final RequestManagers requestManagers,
@@ -62,6 +65,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         this.requestManagers = requestManagers;
         this.metadata = metadata;
         this.subscriptions = subscriptions;
+        this.metadataVersionSnapshot = metadata.updateVersion();
     }
 
     @SuppressWarnings({"CyclomaticComplexity"})
@@ -108,8 +112,16 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 process((CheckAndUpdatePositionsEvent) event);
                 return;
 
-            case SUBSCRIPTION_CHANGE:
-                process((SubscriptionChangeEvent) event);
+            case TOPIC_SUBSCRIPTION_CHANGE:
+                process((TopicSubscriptionChangeEvent) event);
+                return;
+
+            case TOPIC_PATTERN_SUBSCRIPTION_CHANGE:
+                process((TopicPatternSubscriptionChangeEvent) event);
+                return;
+
+            case UPDATE_SUBSCRIPTION_METADATA:
+                process((UpdatePatternSubscriptionEvent) event);
                 return;
 
             case UNSUBSCRIBE:
@@ -248,16 +260,57 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     /**
-     * Process event that indicates that the subscription changed. This will make the
+     * Process event that indicates that the subscription topics changed. This will make the
      * consumer join the group if it is not part of it yet, or send the updated subscription if
-     * it is already a member.
+     * it is already a member on the next poll.
      */
-    private void process(final SubscriptionChangeEvent ignored) {
+    private void process(final TopicSubscriptionChangeEvent event) {
         if (!requestManagers.consumerHeartbeatRequestManager.isPresent()) {
             log.warn("Group membership manager not present when processing a subscribe event");
+            event.future().complete(null);
             return;
         }
-        requestManagers.consumerHeartbeatRequestManager.get().membershipManager().onSubscriptionUpdated();
+
+        try {
+            if (subscriptions.subscribe(event.topics(), event.listener()))
+                this.metadataVersionSnapshot = metadata.requestUpdateForNewTopics();
+
+            // Join the group if not already part of it, or just send the new subscription to the broker on the next poll.
+            requestManagers.consumerHeartbeatRequestManager.get().membershipManager().onSubscriptionUpdated();
+            event.future().complete(null);
+        } catch (Exception e) {
+            event.future().completeExceptionally(e);
+        }
+    }
+
+    /**
+     * Process event that indicates that the subscription topic pattern changed. This will make the
+     * consumer join the group if it is not part of it yet, or send the updated subscription if
+     * it is already a member on the next poll.
+     */
+    private void process(final TopicPatternSubscriptionChangeEvent event) {
+        try {
+            subscriptions.subscribe(event.pattern(), event.listener());
+            metadata.requestUpdateForNewTopics();
+            updatePatternSubscription(metadata.fetch());
+            event.future().complete(null);
+        } catch (Exception e) {
+            event.future().completeExceptionally(e);
+        }
+    }
+
+    /**
+     * Process event that re-evaluates the subscribed regular expression using the latest topics from metadata, only if metadata changed.
+     * This will make the consumer send the updated subscription on the next poll.
+     */
+    private void process(final UpdatePatternSubscriptionEvent event) {
+        if (this.metadataVersionSnapshot < metadata.updateVersion()) {
+            this.metadataVersionSnapshot = metadata.updateVersion();
+            if (subscriptions.hasPatternSubscription()) {
+                updatePatternSubscription(metadata.fetch());
+            }
+        }
+        event.future().complete(null);
     }
 
     /**
@@ -480,5 +533,33 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         } catch (Exception e) {
             event.future().completeExceptionally(e);
         }
+    }
+
+    /**
+     * This function evaluates the regex that the consumer subscribed to
+     * against the list of topic names from metadata, and updates
+     * the list of topics in subscription state accordingly
+     *
+     * @param cluster Cluster from which we get the topics
+     */
+    private void updatePatternSubscription(Cluster cluster) {
+        if (requestManagers.consumerHeartbeatRequestManager.isEmpty()) {
+            log.warn("Group membership manager not present when processing a subscribe event");
+            return;
+        }
+        final Set<String> topicsToSubscribe = cluster.topics().stream()
+            .filter(subscriptions::matchesSubscribedPattern)
+            .collect(Collectors.toSet());
+        if (subscriptions.subscribeFromPattern(topicsToSubscribe)) {
+            this.metadataVersionSnapshot = metadata.requestUpdateForNewTopics();
+
+            // Join the group if not already part of it, or just send the new subscription to the broker on the next poll.
+            requestManagers.consumerHeartbeatRequestManager.get().membershipManager().onSubscriptionUpdated();
+        }
+    }
+
+    // Visible for testing
+    int metadataVersionSnapshot() {
+        return metadataVersionSnapshot;
     }
 }

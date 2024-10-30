@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerHeartbeatRequestManager;
@@ -24,11 +25,13 @@ import org.apache.kafka.clients.consumer.internals.ConsumerMembershipManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.CoordinatorRequestManager;
 import org.apache.kafka.clients.consumer.internals.FetchRequestManager;
+import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 import org.apache.kafka.clients.consumer.internals.OffsetsRequestManager;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.clients.consumer.internals.TopicMetadataRequestManager;
+import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -46,12 +49,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -62,6 +68,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -71,7 +78,7 @@ public class ApplicationEventProcessorTest {
     private final ConsumerHeartbeatRequestManager heartbeatRequestManager = mock(ConsumerHeartbeatRequestManager.class);
     private final ConsumerMembershipManager membershipManager = mock(ConsumerMembershipManager.class);
     private final OffsetsRequestManager offsetsRequestManager = mock(OffsetsRequestManager.class);
-    private final SubscriptionState subscriptionState = mock(SubscriptionState.class);
+    private SubscriptionState subscriptionState = mock(SubscriptionState.class);
     private final ConsumerMetadata metadata = mock(ConsumerMetadata.class);
     private ApplicationEventProcessor processor;
 
@@ -235,15 +242,122 @@ public class ApplicationEventProcessorTest {
     }
 
     @Test
-    public void testSubscriptionChangeEvent() {
-        SubscriptionChangeEvent event = new SubscriptionChangeEvent();
+    public void testTopicSubscriptionChangeEvent() {
+        Set<String> topics = Set.of("topic1", "topic2");
+        Optional<ConsumerRebalanceListener> listener = Optional.of(new MockRebalanceListener());
+        TopicSubscriptionChangeEvent event = new TopicSubscriptionChangeEvent(topics, listener, 12345);
 
         setupProcessor(true);
+        when(subscriptionState.subscribe(topics, listener)).thenReturn(true);
+        when(metadata.requestUpdateForNewTopics()).thenReturn(1);
         when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
         processor.process(event);
+
+        verify(subscriptionState).subscribe(topics, listener);
+        verify(metadata).requestUpdateForNewTopics();
+        assertEquals(1, processor.metadataVersionSnapshot());
         verify(membershipManager).onSubscriptionUpdated();
         // verify member state doesn't transition to JOINING.
         verify(membershipManager, never()).onConsumerPoll();
+        assertDoesNotThrow(() -> event.future().get());
+    }
+
+    @Test
+    public void testTopicSubscriptionChangeEventWithIllegalSubscriptionState() {
+        subscriptionState = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        Optional<ConsumerRebalanceListener> listener = Optional.of(new MockRebalanceListener());
+        TopicSubscriptionChangeEvent event = new TopicSubscriptionChangeEvent(
+            Set.of("topic1", "topic2"), listener, 12345);
+
+        subscriptionState.subscribe(Pattern.compile("topic.*"), listener);
+        setupProcessor(true);
+        when(metadata.requestUpdateForNewTopics()).thenReturn(1);
+        when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
+        processor.process(event);
+
+        ExecutionException e = assertThrows(ExecutionException.class, () -> event.future().get());
+        assertInstanceOf(IllegalStateException.class, e.getCause());
+        assertEquals("Subscription to topics, partitions and pattern are mutually exclusive", e.getCause().getMessage());
+    }
+
+    @Test
+    public void testTopicPatternSubscriptionChangeEvent() {
+        Pattern pattern = Pattern.compile("topic.*");
+        Set<String> topics = Set.of("topic.1", "topic.2");
+        Optional<ConsumerRebalanceListener> listener = Optional.of(new MockRebalanceListener());
+        TopicPatternSubscriptionChangeEvent event = new TopicPatternSubscriptionChangeEvent(pattern, listener, 12345);
+
+        setupProcessor(true);
+
+        Cluster cluster = mock(Cluster.class);
+        when(metadata.fetch()).thenReturn(cluster);
+        when(cluster.topics()).thenReturn(topics);
+        when(subscriptionState.matchesSubscribedPattern("topic.1")).thenReturn(true);
+        when(subscriptionState.matchesSubscribedPattern("topic.2")).thenReturn(true);
+        when(subscriptionState.subscribeFromPattern(topics)).thenReturn(true);
+        when(metadata.requestUpdateForNewTopics()).thenReturn(1);
+        when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
+        processor.process(event);
+
+        verify(subscriptionState).subscribe(pattern, listener);
+        verify(subscriptionState).subscribeFromPattern(topics);
+        verify(metadata, times(2)).requestUpdateForNewTopics();
+        assertEquals(1, processor.metadataVersionSnapshot());
+        verify(membershipManager).onSubscriptionUpdated();
+        // verify member state doesn't transition to JOINING.
+        verify(membershipManager, never()).onConsumerPoll();
+        assertDoesNotThrow(() -> event.future().get());
+    }
+
+    @Test
+    public void testTopicPatternSubscriptionChangeEventWithIllegalSubscriptionState() {
+        subscriptionState = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        Optional<ConsumerRebalanceListener> listener = Optional.of(new MockRebalanceListener());
+        TopicPatternSubscriptionChangeEvent event = new TopicPatternSubscriptionChangeEvent(
+            Pattern.compile("topic.*"), listener, 12345);
+
+        setupProcessor(true);
+
+        subscriptionState.subscribe(Set.of("topic.1", "topic.2"), listener);
+        processor.process(event);
+
+        ExecutionException e = assertThrows(ExecutionException.class, () -> event.future().get());
+        assertInstanceOf(IllegalStateException.class, e.getCause());
+        assertEquals("Subscription to topics, partitions and pattern are mutually exclusive", e.getCause().getMessage());
+    }
+
+    @Test
+    public void testUpdatePatternSubscriptionEventOnlyTakesEffectWhenMetadataHasNewVersion() {
+        UpdatePatternSubscriptionEvent event1 = new UpdatePatternSubscriptionEvent(12345);
+
+        setupProcessor(true);
+
+        when(metadata.updateVersion()).thenReturn(0);
+
+        processor.process(event1);
+        verify(subscriptionState, never()).hasPatternSubscription();
+        assertDoesNotThrow(() -> event1.future().get());
+
+        Cluster cluster = mock(Cluster.class);
+        Set<String> topics = Set.of("topic.1", "topic.2");
+        when(metadata.updateVersion()).thenReturn(1);
+        when(subscriptionState.hasPatternSubscription()).thenReturn(true);
+        when(metadata.fetch()).thenReturn(cluster);
+        when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
+        when(cluster.topics()).thenReturn(topics);
+        when(subscriptionState.matchesSubscribedPattern("topic.1")).thenReturn(true);
+        when(subscriptionState.matchesSubscribedPattern("topic.2")).thenReturn(true);
+        when(subscriptionState.subscribeFromPattern(topics)).thenReturn(true);
+        when(metadata.requestUpdateForNewTopics()).thenReturn(1);
+
+        UpdatePatternSubscriptionEvent event2 = new UpdatePatternSubscriptionEvent(12345);
+        processor.process(event2);
+        verify(metadata).requestUpdateForNewTopics();
+        verify(subscriptionState).hasPatternSubscription();
+        verify(subscriptionState).subscribeFromPattern(topics);
+        assertEquals(1, processor.metadataVersionSnapshot());
+        verify(membershipManager).onSubscriptionUpdated();
+        assertDoesNotThrow(() -> event2.future().get());
     }
 
     private List<NetworkClientDelegate.UnsentRequest> mockCommitResults() {

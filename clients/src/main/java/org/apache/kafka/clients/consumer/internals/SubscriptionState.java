@@ -302,7 +302,7 @@ public class SubscriptionState {
      * Check whether pattern subscription is in use.
      *
      */
-    synchronized boolean hasPatternSubscription() {
+    public synchronized boolean hasPatternSubscription() {
         return this.subscriptionType == SubscriptionType.AUTO_PATTERN;
     }
 
@@ -324,7 +324,7 @@ public class SubscriptionState {
      *
      * @return true if pattern subscription is in use and the topic matches the subscribed pattern, false otherwise
      */
-    synchronized boolean matchesSubscribedPattern(String topic) {
+    public synchronized boolean matchesSubscribedPattern(String topic) {
         Pattern pattern = this.subscribedPattern;
         if (hasPatternSubscription() && pattern != null)
             return pattern.matcher(topic).matches();
