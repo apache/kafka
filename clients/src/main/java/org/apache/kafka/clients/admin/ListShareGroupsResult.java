@@ -40,7 +40,7 @@ public class ListShareGroupsResult {
         this.all = new KafkaFutureImpl<>();
         this.valid = new KafkaFutureImpl<>();
         this.errors = new KafkaFutureImpl<>();
-        future.thenApply((KafkaFuture.BaseFunction<Collection<Object>, Void>) results -> {
+        future.thenApply(results -> {
             ArrayList<Throwable> curErrors = new ArrayList<>();
             ArrayList<ShareGroupListing> curValid = new ArrayList<>();
             for (Object resultObject : results) {
