@@ -1289,7 +1289,7 @@ class KRaftClusterTest {
             () => admin.createTopics(newTopics).all().get())
         assertNotNull(executionException.getCause)
         assertEquals(classOf[PolicyViolationException], executionException.getCause.getClass)
-        assertEquals("Unable to perform excessively large batch operation.",
+        assertEquals("Excessively large number of partitions per request.",
           executionException.getCause.getMessage)
       } finally {
         admin.close()
