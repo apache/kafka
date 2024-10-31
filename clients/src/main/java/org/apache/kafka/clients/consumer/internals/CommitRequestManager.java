@@ -95,10 +95,9 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     private Optional<Integer> lastEpochSentOnCommit;
 
     /**
-     *  Latest member ID and epoch received via the {@link #onMemberEpochUpdated(Optional, Optional)},
-     *  to be included in the OffsetFetch and OffsetCommit requests if present. This will have
-     *  the latest values received from the broker, or empty of the member is not part of the
-     *  group anymore.
+     *  The member ID and latest member epoch received via the {@link MemberStateListener#onMemberEpochUpdated(Optional, String)},
+     *  to be included in the OffsetFetch and OffsetCommit requests. This will have
+     *  the latest memberEpoch received from the broker.
      */
     private final MemberInfo memberInfo;
 
@@ -297,7 +296,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      * expires. Note that:
      * <ul>
      *     <li>Considers {@link Errors#STALE_MEMBER_EPOCH} as a retriable error, and will retry it
-     *     including the latest member ID and epoch received from the broker.</li>
+     *     including the member ID and latest member epoch received from the broker.</li>
      *     <li>Considers {@link Errors#UNKNOWN_TOPIC_OR_PARTITION} as a fatal error, and will not
      *     retry it although the error extends RetriableException. The reason is that if a topic
      *     or partition is deleted, revocation would not finish in time since the auto commit would keep retrying.</li>
@@ -340,7 +339,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     } else {
                         // Make sure the auto-commit is retried with the latest offsets
                         log.debug("Member {} will retry auto-commit of latest offsets after receiving retriable error {}",
-                            memberInfo.memberId.orElse("undefined"),
+                            memberInfo.memberId,
                             error.getMessage());
                         requestAttempt.offsets = subscriptions.allConsumed();
                         requestAttempt.resetFuture();
@@ -566,16 +565,16 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     }
 
     /**
-     * Update latest member ID and epoch used by the member.
+     * Update latest member epoch used by the member.
      *
      * @param memberEpoch New member epoch received. To be included in the new request.
      * @param memberId Current member ID. To be included in the new request.
      */
     @Override
-    public void onMemberEpochUpdated(Optional<Integer> memberEpoch, Optional<String> memberId) {
-        if (!memberEpoch.isPresent() && memberInfo.memberEpoch.isPresent()) {
-            log.info("Member {} won't include member id and epoch in following offset " +
-                "commit/fetch requests because it has left the group.", memberInfo.memberId.orElse("unknown"));
+    public void onMemberEpochUpdated(Optional<Integer> memberEpoch, String memberId) {
+        if (memberEpoch.isEmpty() && memberInfo.memberEpoch.isPresent()) {
+            log.info("Member {} won't include epoch in following offset " +
+                "commit/fetch requests because it has left the group.", memberInfo.memberId);
         }
         memberInfo.memberId = memberId;
         memberInfo.memberEpoch = memberEpoch;
@@ -684,9 +683,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     .setGroupId(this.groupId)
                     .setGroupInstanceId(groupInstanceId.orElse(null))
                     .setTopics(new ArrayList<>(requestTopicDataMap.values()));
-            if (memberInfo.memberId.isPresent()) {
-                data = data.setMemberId(memberInfo.memberId.get());
-            }
+            data = data.setMemberId(memberInfo.memberId);
             if (memberInfo.memberEpoch.isPresent()) {
                 data = data.setGenerationIdOrMemberEpoch(memberInfo.memberEpoch.get());
                 lastEpochSentOnCommit = memberInfo.memberEpoch;
@@ -759,7 +756,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                         return;
                     } else if (error == Errors.STALE_MEMBER_EPOCH) {
                         log.error("OffsetCommit failed for member {} with stale member epoch error. Last epoch sent: {}",
-                            memberInfo.memberId.orElse("undefined"),
+                            memberInfo.memberId,
                             lastEpochSentOnCommit.isPresent() ? lastEpochSentOnCommit.get() : "undefined");
                         future.completeExceptionally(error.exception());
                         return;
@@ -943,24 +940,21 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
         public NetworkClientDelegate.UnsentRequest toUnsentRequest() {
 
-            OffsetFetchRequest.Builder builder;
-            if (memberInfo.memberId.isPresent() && memberInfo.memberEpoch.isPresent()) {
-                builder = new OffsetFetchRequest.Builder(
-                        groupId,
-                        memberInfo.memberId.get(),
-                        memberInfo.memberEpoch.get(),
-                        true,
-                        new ArrayList<>(this.requestedPartitions),
-                        throwOnFetchStableOffsetUnsupported);
-            } else {
+            OffsetFetchRequest.Builder builder = memberInfo.memberEpoch.
+                map(epoch -> new OffsetFetchRequest.Builder(
+                    groupId,
+                    memberInfo.memberId,
+                    epoch,
+                    true,
+                    new ArrayList<>(this.requestedPartitions),
+                    throwOnFetchStableOffsetUnsupported))
                 // Building request without passing member ID/epoch to leave the logic to choose
                 // default values when not present on the request builder.
-                builder = new OffsetFetchRequest.Builder(
-                        groupId,
-                        true,
-                        new ArrayList<>(this.requestedPartitions),
-                        throwOnFetchStableOffsetUnsupported);
-            }
+                .orElseGet(() -> new OffsetFetchRequest.Builder(
+                    groupId,
+                    true,
+                    new ArrayList<>(this.requestedPartitions),
+                    throwOnFetchStableOffsetUnsupported));
             return buildRequestWithResponseHandling(builder);
         }
 
@@ -1293,17 +1287,12 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     }
 
     static class MemberInfo {
-        Optional<String> memberId;
-        Optional<Integer> memberEpoch;
-
-        MemberInfo() {
-            this.memberId = Optional.empty();
-            this.memberEpoch = Optional.empty();
-        }
+        String memberId = "";
+        Optional<Integer> memberEpoch = Optional.empty();
 
         @Override
         public String toString() {
-            return "memberId=" + memberId.orElse("undefined") +
+            return "memberId=" + memberId +
                     ", memberEpoch=" + (memberEpoch.isPresent() ? memberEpoch.get() : "undefined");
         }
     }

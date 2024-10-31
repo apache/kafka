@@ -1450,7 +1450,7 @@ public class ShareConsumeRequestManagerTest {
             super(time, logContext, groupId, metadata, subscriptions, fetchConfig, shareFetchBuffer,
                     backgroundEventHandler, metricsManager, retryBackoffMs, 1000);
             this.shareFetchCollector = fetchCollector;
-            onMemberEpochUpdated(Optional.empty(), Optional.of(Uuid.randomUuid().toString()));
+            onMemberEpochUpdated(Optional.empty(), Uuid.randomUuid().toString());
         }
 
         private ShareFetch<K, V> collectFetch() {

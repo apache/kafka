@@ -21,7 +21,7 @@ import org.apache.kafka.common.test.api.RaftClusterInvocationContext.RaftCluster
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.waitForAllPartitionsMetadata
 import org.apache.kafka.clients.admin.{Admin, NewPartitions}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.message.{ShareGroupHeartbeatRequestData, ShareGroupHeartbeatResponseData}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ShareGroupHeartbeatRequest, ShareGroupHeartbeatResponse}
@@ -77,6 +77,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     var shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
+        .setMemberId(Uuid.randomUuid.toString)
         .setMemberEpoch(0)
         .setSubscribedTopicNames(List("foo").asJava),
       true
@@ -169,6 +170,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     var shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
+        .setMemberId(Uuid.randomUuid.toString)
         .setMemberEpoch(0)
         .setSubscribedTopicNames(List("foo").asJava),
       true
@@ -187,6 +189,16 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     assertNotNull(memberId1)
     assertEquals(1, shareGroupHeartbeatResponse.data.memberEpoch)
     assertEquals(new ShareGroupHeartbeatResponseData.Assignment(), shareGroupHeartbeatResponse.data.assignment)
+
+    // The second member request to join the group.
+    shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
+      new ShareGroupHeartbeatRequestData()
+        .setGroupId("grp")
+        .setMemberId(Uuid.randomUuid.toString)
+        .setMemberEpoch(0)
+        .setSubscribedTopicNames(List("foo").asJava),
+      true
+    ).build()
 
     // Send the second member request until receiving a successful response.
     TestUtils.waitUntilTrue(() => {
@@ -302,6 +314,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     var shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
+        .setMemberId(Uuid.randomUuid.toString)
         .setMemberEpoch(0)
         .setSubscribedTopicNames(List("foo").asJava),
       true
@@ -412,6 +425,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     var shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
+        .setMemberId(Uuid.randomUuid.toString)
         .setMemberEpoch(0)
         .setSubscribedTopicNames(List("foo", "bar", "baz").asJava),
       true
@@ -603,6 +617,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     var shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
+        .setMemberId(Uuid.randomUuid.toString)
         .setMemberEpoch(0)
         .setSubscribedTopicNames(List("foo").asJava),
       true
@@ -770,6 +785,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     var shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
+        .setMemberId(Uuid.randomUuid.toString)
         .setMemberEpoch(0)
         .setSubscribedTopicNames(List("foo").asJava),
       true

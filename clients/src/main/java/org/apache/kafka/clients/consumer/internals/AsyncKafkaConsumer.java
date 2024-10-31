@@ -631,14 +631,15 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         );
     }
 
-    private void updateGroupMetadata(final Optional<Integer> memberEpoch, final Optional<String> memberId) {
-        groupMetadata.updateAndGet(
-            oldGroupMetadataOptional -> oldGroupMetadataOptional.map(
-                oldGroupMetadata -> new ConsumerGroupMetadata(
-                    oldGroupMetadata.groupId(),
-                    memberEpoch.orElse(oldGroupMetadata.generationId()),
-                    memberId.orElse(oldGroupMetadata.memberId()),
-                    oldGroupMetadata.groupInstanceId()
+    private void updateGroupMetadata(final Optional<Integer> memberEpoch, final String memberId) {
+        memberEpoch.ifPresent(epoch -> groupMetadata.updateAndGet(
+                oldGroupMetadataOptional -> oldGroupMetadataOptional.map(
+                    oldGroupMetadata -> new ConsumerGroupMetadata(
+                        oldGroupMetadata.groupId(),
+                        memberEpoch.orElse(oldGroupMetadata.generationId()),
+                        memberId,
+                        oldGroupMetadata.groupInstanceId()
+                    )
                 )
             )
         );

@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
@@ -143,7 +144,7 @@ public class CommitRequestManagerTest {
                 OptionalDouble.of(0),
                 metrics);
 
-        commitRequestManager.onMemberEpochUpdated(Optional.of(1), Optional.empty());
+        commitRequestManager.onMemberEpochUpdated(Optional.of(1), Uuid.randomUuid().toString());
         Set<TopicPartition> requestedPartitions = Collections.singleton(new TopicPartition("topic-1", 1));
 
         CommitRequestManager.OffsetFetchRequestState offsetFetchRequestState = commitRequestManager.createOffsetFetchRequest(requestedPartitions, 0);
@@ -1028,7 +1029,7 @@ public class CommitRequestManagerTest {
         // Mock member has new a valid epoch.
         int newEpoch = 8;
         String memberId = "member1";
-        commitRequestManager.onMemberEpochUpdated(Optional.of(newEpoch), Optional.of(memberId));
+        commitRequestManager.onMemberEpochUpdated(Optional.of(newEpoch), memberId);
 
         // Receive error when member already has a newer member epoch. Request should be retried.
         completeOffsetFetchRequestWithError(commitRequestManager, partitions, Errors.STALE_MEMBER_EPOCH);
@@ -1066,7 +1067,7 @@ public class CommitRequestManagerTest {
             commitRequestManager.fetchOffsets(partitions, deadlineMs);
 
         // Mock member not having a valid epoch anymore (left/failed/fenced).
-        commitRequestManager.onMemberEpochUpdated(Optional.empty(), Optional.empty());
+        commitRequestManager.onMemberEpochUpdated(Optional.empty(), Uuid.randomUuid().toString());
 
         // Receive error when member is not in the group anymore. Request should fail.
         completeOffsetFetchRequestWithError(commitRequestManager, partitions, Errors.STALE_MEMBER_EPOCH);
@@ -1103,7 +1104,7 @@ public class CommitRequestManagerTest {
         String memberId = "member1";
         if (error == Errors.STALE_MEMBER_EPOCH) {
             // Mock member has new a valid epoch
-            commitRequestManager.onMemberEpochUpdated(Optional.of(newEpoch), Optional.of(memberId));
+            commitRequestManager.onMemberEpochUpdated(Optional.of(newEpoch), memberId);
         }
 
         completeOffsetCommitRequestWithError(commitRequestManager, error);
@@ -1155,21 +1156,21 @@ public class CommitRequestManagerTest {
 
         int initialEpoch = 1;
         String memberId = "member1";
-        commitRequestManager.onMemberEpochUpdated(Optional.of(initialEpoch), Optional.of(memberId));
+        commitRequestManager.onMemberEpochUpdated(Optional.of(initialEpoch), memberId);
 
         // Send request with epoch 1
         completeOffsetCommitRequestWithError(commitRequestManager, Errors.STALE_MEMBER_EPOCH);
         assertEquals(initialEpoch, commitRequestManager.lastEpochSentOnCommit().orElse(null));
 
         // Receive new epoch. Last epoch sent should change only when sending out the next request
-        commitRequestManager.onMemberEpochUpdated(Optional.of(initialEpoch + 1), Optional.of(memberId));
+        commitRequestManager.onMemberEpochUpdated(Optional.of(initialEpoch + 1), memberId);
         assertEquals(initialEpoch, commitRequestManager.lastEpochSentOnCommit().get());
         time.sleep(retryBackoffMs);
         completeOffsetCommitRequestWithError(commitRequestManager, Errors.STALE_MEMBER_EPOCH);
         assertEquals(initialEpoch + 1, commitRequestManager.lastEpochSentOnCommit().orElse(null));
 
         // Receive empty epochs
-        commitRequestManager.onMemberEpochUpdated(Optional.empty(), Optional.empty());
+        commitRequestManager.onMemberEpochUpdated(Optional.empty(), memberId);
         time.sleep(retryBackoffMs * 2);
         completeOffsetCommitRequestWithError(commitRequestManager, Errors.STALE_MEMBER_EPOCH);
         assertFalse(commitRequestManager.lastEpochSentOnCommit().isPresent());

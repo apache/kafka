@@ -207,7 +207,7 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
             // GroupId - always sent
             data.setGroupId(membershipManager.groupId());
 
-            // MemberId - always sent, empty until it has been received from the coordinator
+            // MemberId - always sent, it will be generated at Consumer startup.
             data.setMemberId(membershipManager.memberId());
 
             // MemberEpoch - always sent

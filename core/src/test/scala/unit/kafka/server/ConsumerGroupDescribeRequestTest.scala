@@ -20,7 +20,7 @@ import org.apache.kafka.common.test.api.ClusterInstance
 import org.apache.kafka.common.test.api._
 import org.apache.kafka.common.test.api.ClusterTestExtensions
 import kafka.utils.TestUtils
-import org.apache.kafka.common.ConsumerGroupState
+import org.apache.kafka.common.{ConsumerGroupState, Uuid}
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData.{Assignment, DescribedGroup, TopicPartitions}
 import org.apache.kafka.common.message.{ConsumerGroupDescribeRequestData, ConsumerGroupDescribeResponseData, ConsumerGroupHeartbeatResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -102,6 +102,7 @@ class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCo
     TestUtils.waitUntilTrue(() => {
       grp1Member1Response = consumerGroupHeartbeat(
         groupId = "grp-1",
+        memberId = Uuid.randomUuid().toString,
         rebalanceTimeoutMs = timeoutMs,
         subscribedTopicNames = List("bar"),
         topicPartitions = List.empty

@@ -847,8 +847,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     }
 
     @Override
-    public void onMemberEpochUpdated(Optional<Integer> memberEpochOpt, Optional<String> memberIdOpt) {
-        memberIdOpt.ifPresent(s -> memberId = Uuid.fromString(s));
+    public void onMemberEpochUpdated(Optional<Integer> memberEpochOpt, String memberId) {
+        this.memberId = Uuid.fromString(memberId);
     }
 
     /**

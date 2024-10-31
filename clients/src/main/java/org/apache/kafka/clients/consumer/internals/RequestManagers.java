@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryProvider;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -32,6 +33,7 @@ import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
 
@@ -213,10 +215,18 @@ public class RequestManagers implements Closeable {
                             commitRequestManager,
                             metadata,
                             logContext,
-                            clientTelemetryReporter,
                             backgroundEventHandler,
                             time,
                             metrics);
+
+                    // Update the group member ID label in the client telemetry reporter.
+                    // According to KIP-1082, the consumer will generate the member ID as the incarnation ID of the process.
+                    // Therefore, we can update the group member ID during initialization.
+                    if (clientTelemetryReporter.isPresent()) {
+                        clientTelemetryReporter.get()
+                            .updateMetricsLabels(Map.of(ClientTelemetryProvider.GROUP_MEMBER_ID, membershipManager.memberId()));
+                    }
+
                     membershipManager.registerStateListener(commitRequestManager);
                     membershipManager.registerStateListener(applicationThreadMemberStateListener);
                     heartbeatRequestManager = new ConsumerHeartbeatRequestManager(
@@ -292,9 +302,15 @@ public class RequestManagers implements Closeable {
                         null,
                         subscriptions,
                         metadata,
-                        clientTelemetryReporter,
-                        time,
+                    time,
                         metrics);
+
+                // Update the group member ID label in the client telemetry reporter.
+                // According to KIP-1082, the consumer will generate the member ID as the incarnation ID of the process.
+                // Therefore, we can update the group member ID during initialization.
+                clientTelemetryReporter.ifPresent(telemetryReporter -> telemetryReporter
+                    .updateMetricsLabels(Map.of(ClientTelemetryProvider.GROUP_MEMBER_ID, shareMembershipManager.memberId())));
+
                 ShareHeartbeatRequestManager shareHeartbeatRequestManager = new ShareHeartbeatRequestManager(
                         logContext,
                         time,
