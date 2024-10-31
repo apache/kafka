@@ -215,11 +215,17 @@ jobs:
           path: test-catalog
       - name: Push Test Catalog
         # Git user.name and user.email come from https://github.com/actions/checkout?tab=readme-ov-file#push-a-commit-using-the-built-in-token
+        env:
+          COMMIT_MSG: |
+            Update test catalog data for GHA workflow run ${{ github.run_id }}
+            
+            Commit: https://github.com/apache/kafka/commit/${{ github.sha }}
+            GitHub Run: https://github.com/apache/kafka/actions/runs/${{ github.run_id }}
         run: |
           pwd
           ls -R
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add test-catalog
-          git diff --quiet && git diff --staged --quiet || git commit -m 'Update test catalog data for GHA workflow run ${{ github.run_id }}'
+          git diff --quiet && git diff --staged --quiet || git commit -m "$COMMIT_MSG"
           git push
