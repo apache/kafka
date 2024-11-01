@@ -35,6 +35,50 @@ on:
         type: boolean
 
 jobs:
+  load-catalog:
+    runs-on: ubuntu-latest
+    name: Load Test Catalog
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout test-catalog
+        uses: actions/checkout@v4
+        with:
+          ref: 'test-catalog'
+          persist-credentials: false
+          fetch-depth: 100  # Needs to be large enough to ensure we can fetch N days ago
+          path: test-catalog
+
+      - name: Checkout catalog at earlier date
+        run: |
+          cd test-catalog
+          SHA=$(git rev-list -1 --before 7.days.ago origin/test-catalog)
+          echo $SHA
+          git switch --detach $SHA
+          git show --no-patch
+
+      - name: Setup Python
+        uses: ./.github/actions/setup-python
+
+      # Prior to this step, we don't expect any errors. For the rest of this "load-catalog" job, we need to ensure
+      # we do not fail as this will fail the overall workflow.
+      - name: Combine Catalog into single file
+        id: combine-catalog
+        continue-on-error: true
+        run: |
+          python .github/scripts/format-test-catalog.py --path "test-catalog/test-catalog/**/*.yaml"
+
+      - name: Archive Combined Test Catalog
+        if: steps.combine-catalog.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: combined-test-catalog
+          path: combined-test-catalog.txt
+          compression-level: 9
+
   validate:
     runs-on: ubuntu-latest
     name: Compile and Check Java
@@ -55,9 +99,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+      - name: Setup Python
+        uses: ./.github/actions/setup-python
       - name: Setup Gradle
         uses: ./.github/actions/setup-gradle
         with:
@@ -96,7 +139,7 @@ jobs:
           GITHUB_WORKSPACE: ${{ github.workspace }}
 
   test:
-    needs: validate
+    needs: [validate, load-catalog]
     if: ${{ ! needs.validate.outputs.is-draft }}
     runs-on: ubuntu-latest
     strategy:
@@ -109,10 +152,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - run: pip install -r .github/scripts/requirements.txt
+      - name: Setup Python
+        uses: ./.github/actions/setup-python
       - name: Setup Gradle
         uses: ./.github/actions/setup-gradle
         with:
@@ -120,6 +161,15 @@ jobs:
           gradle-cache-read-only: ${{ inputs.gradle-cache-read-only }}
           gradle-cache-write-only: ${{ inputs.gradle-cache-write-only }}
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
+
+      # If the load-catalog job failed, we won't be able to download the artifact. Since we don't want this to fail
+      # the overall workflow, so we'll continue here without a test catalog.
+      - name: Load Test Catalog
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: combined-test-catalog
+
       - name: Test
         # Gradle flags
         # --build-cache:  Let Gradle restore the build cache
