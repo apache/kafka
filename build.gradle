@@ -2652,16 +2652,6 @@ project(':streams') {
 
     testImplementation project(':metadata')
     testImplementation project(':clients').sourceSets.test.output
-    testImplementation project(':server')
-    testImplementation project(':core')
-    testImplementation project(':tools')
-    testImplementation project(':test-common')
-    testImplementation project(':storage')
-    testImplementation project(':group-coordinator')
-    testImplementation project(':transaction-coordinator')
-    testImplementation project(':server-common')
-    testImplementation project(':server-common').sourceSets.test.output
-    testImplementation project(':server')
     testImplementation libs.reload4j
     testImplementation libs.junitJupiter
     testImplementation libs.bcpkix
@@ -2669,7 +2659,6 @@ project(':streams') {
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testImplementation libs.junitPlatformSuiteEngine // supports suite test
-    testImplementation project(':group-coordinator')
 
     testRuntimeOnly project(':streams:test-utils')
     testRuntimeOnly runtimeTestLibs
@@ -2761,6 +2750,7 @@ project(':streams') {
   task testAll(
     dependsOn: [
             ':streams:test',
+            ':streams:integration-tests',
             ':streams:test-utils:test',
             ':streams:streams-scala:test',
             ':streams:upgrade-system-tests-0100:test',
@@ -2803,18 +2793,12 @@ project(':streams:streams-scala') {
     api project(':streams')
 
     api libs.scalaLibrary
-    testImplementation project(':group-coordinator')
-    testImplementation project(':core')
-    testImplementation project(':test-common')
-    testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':streams').sourceSets.test.output
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':streams:test-utils')
 
     testImplementation libs.junitJupiter
-    testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
-    testImplementation libs.hamcrest
     testRuntimeOnly runtimeTestLibs
   }
 
@@ -2844,6 +2828,58 @@ project(':streams:streams-scala') {
       target '**/*.scala'
       scalafmt("$versions.scalafmt").configFile('../../checkstyle/.scalafmt.conf').scalaMajorVersion(versions.baseScala)
       licenseHeaderFile '../../checkstyle/java.header', 'package'
+    }
+  }
+}
+
+project(':streams:integration-tests') {
+  apply plugin: 'scala'
+
+  base {
+    archivesName = "kafka-streams-integration-tests"
+  }
+
+  dependencies {
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':group-coordinator')
+    testImplementation project(':server')
+    testImplementation project(':server-common')
+    testImplementation project(':server-common').sourceSets.test.output
+    testImplementation project(':storage')
+    testImplementation project(':streams').sourceSets.test.output
+    testImplementation project(':streams:streams-scala')
+    testImplementation project(':test-common')
+    testImplementation project(':tools')
+    testImplementation project(':transaction-coordinator')
+    testImplementation libs.bcpkix
+    testImplementation libs.hamcrest
+    testImplementation libs.junitJupiter
+    testImplementation libs.junitPlatformSuiteEngine // supports suite test
+    testImplementation libs.mockitoCore
+    testImplementation libs.reload4j
+    testImplementation libs.slf4jApi
+    testImplementation project(':streams:test-utils')
+
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  sourceSets {
+    // Set java/scala source folders in the `scala` block to enable joint compilation
+    main {
+      java {
+        srcDirs = []
+      }
+      scala {
+        srcDirs = []
+      }
+    }
+    test {
+      java {
+        srcDirs = []
+      }
+      scala {
+        srcDirs = ["src/test/java", "src/test/scala"]
+      }
     }
   }
 }
