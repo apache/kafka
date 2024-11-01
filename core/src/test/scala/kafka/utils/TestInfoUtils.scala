@@ -67,4 +67,12 @@ object TestInfoUtils {
     else
       None
   }
+
+  /**
+   * Returns whether transaction version 2 is enabled.
+   * When no parameter is provided, the default returned is true.
+   */
+  def isTransactionV2Enabled(testInfo: TestInfo): Boolean = {
+    !testInfo.getDisplayName.contains("isTV2Enabled=false")
+  }
 }

@@ -347,13 +347,18 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
     // Since the state change was successfully written to the log, unset the flag for a failed epoch fence
     hasFailedEpochFence = false
     val (updatedProducerId, updatedProducerEpoch) =
-      // If we overflowed on epoch bump, we have to set it as the producer ID now the marker has been written.
+      // In the prepareComplete transition for the overflow case, the lastProducerEpoch is kept at MAX-1,
+      // which is the last epoch visible to the client.
+      // Internally, however, during the transition between prepareAbort/prepareCommit and prepareComplete, the producer epoch
+      // reaches MAX but the client only sees the transition as MAX-1 followed by 0.
+      // When an epoch overflow occurs, we set the producerId to nextProducerId and reset the epoch to 0,
+      // but lastProducerEpoch remains MAX-1 to maintain consistency with what the client last saw.
       if (clientTransactionVersion.supportsEpochBump() && nextProducerId != RecordBatch.NO_PRODUCER_ID) {
         (nextProducerId, 0.toShort)
       } else {
         (producerId, producerEpoch)
       }
-    prepareTransitionTo(newState, updatedProducerId, RecordBatch.NO_PRODUCER_ID, updatedProducerEpoch, producerEpoch, txnTimeoutMs, Set.empty[TopicPartition],
+    prepareTransitionTo(newState, updatedProducerId, RecordBatch.NO_PRODUCER_ID, updatedProducerEpoch, lastProducerEpoch, txnTimeoutMs, Set.empty[TopicPartition],
       txnStartTimestamp, updateTimestamp, clientTransactionVersion)
   }
 
@@ -526,16 +531,47 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
     }
   }
 
+  /**
+   * Validates the producer epoch and ID based on transaction state and version.
+   *
+   * Logic:
+   * * 1. **Overflow Case in Transactions V2:**
+   * *    - During overflow (epoch reset to 0), we compare both `lastProducerEpoch` values since it
+   * *      does not change during completion.
+   * *    - For PrepareComplete, the producer ID has been updated. We ensure that the `prevProducerID`
+   * *      in the transit metadata matches the current producer ID, confirming the change.
+   * *
+   * * 2. **Epoch Bump Case in Transactions V2:**
+   * *    - For PrepareCommit or PrepareAbort, the producer epoch has been bumped. We ensure the `lastProducerEpoch`
+   * *      in transit metadata matches the current producer epoch, confirming the bump.
+   * *    - We also verify that the producer ID remains the same.
+   * *
+   * * 3. **Other Cases:**
+   * *    - For other states and versions, check if the producer epoch and ID match the current values.
+   *
+   * @param transitMetadata       The transaction transition metadata containing state, producer epoch, and ID.
+   * @return true if the producer epoch and ID are valid; false otherwise.
+   */
   private def validProducerEpoch(transitMetadata: TxnTransitMetadata): Boolean = {
     val isAtLeastTransactionsV2 = transitMetadata.clientTransactionVersion.supportsEpochBump()
-    val isOverflowComplete = isAtLeastTransactionsV2 && (transitMetadata.txnState == CompleteCommit || transitMetadata.txnState == CompleteAbort) && transitMetadata.producerEpoch == 0
-    val transitEpoch =
-      if (isOverflowComplete || (isAtLeastTransactionsV2 && (transitMetadata.txnState == PrepareCommit || transitMetadata.txnState == PrepareAbort)))
-        transitMetadata.lastProducerEpoch
-      else
-        transitMetadata.producerEpoch
-    val transitProducerId = if (isOverflowComplete) transitMetadata.prevProducerId else transitMetadata.producerId
-    transitEpoch == producerEpoch && transitProducerId == producerId
+    val txnState = transitMetadata.txnState
+    val transitProducerEpoch = transitMetadata.producerEpoch
+    val transitProducerId = transitMetadata.producerId
+    val transitLastProducerEpoch = transitMetadata.lastProducerEpoch
+
+    (isAtLeastTransactionsV2, txnState, transitProducerEpoch) match {
+      case (true, CompleteCommit | CompleteAbort, epoch) if epoch == 0.toShort =>
+        transitLastProducerEpoch == lastProducerEpoch &&
+          transitMetadata.prevProducerId == producerId
+
+      case (true, PrepareCommit | PrepareAbort, _) =>
+        transitLastProducerEpoch == producerEpoch &&
+          transitProducerId == producerId
+
+      case _ =>
+        transitProducerEpoch == producerEpoch &&
+          transitProducerId == producerId
+    }
   }
 
   private def validProducerEpochBump(transitMetadata: TxnTransitMetadata): Boolean = {

@@ -25,11 +25,11 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException, TimeoutException}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
-import org.apache.kafka.server.config.{ServerConfigs, ReplicationConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
 import java.lang.{Long => JLong}
 import java.nio.charset.StandardCharsets
@@ -697,8 +697,11 @@ class TransactionsTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testBumpTransactionalEpoch(quorum: String): Unit = {
+  @CsvSource(Array(
+    "zk, false",
+    "kraft, false"
+  ))
+  def testBumpTransactionalEpochWithTV2Disabled(quorum: String, isTV2Enabled: Boolean): Unit = {
     val producer = createTransactionalProducer("transactionalProducer",
       deliveryTimeoutMs = 5000, requestTimeoutMs = 5000)
     val consumer = transactionalConsumers.head
@@ -759,10 +762,102 @@ class TransactionsTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testFailureToFenceEpoch(quorum: String): Unit = {
+  @CsvSource(Array("kraft, true"))
+  def testBumpTransactionalEpochWithTV2Enabled(quorum: String, isTV2Enabled: Boolean): Unit = {
+    val producer = createTransactionalProducer("transactionalProducer",
+      deliveryTimeoutMs = 5000, requestTimeoutMs = 5000)
+    val consumer = transactionalConsumers.head
+
+    try {
+      // Create a topic with RF=1 so that a single broker failure will render it unavailable
+      val testTopic = "test-topic"
+      createTopic(testTopic, numPartitions, 1, new Properties)
+      val partitionLeader = TestUtils.waitUntilLeaderIsKnown(brokers, new TopicPartition(testTopic, 0))
+
+      producer.initTransactions()
+
+      // First transaction: commit
+      producer.beginTransaction()
+      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "4", "4", willBeCommitted = true))
+      producer.commitTransaction()
+
+      // Get producerId and epoch after first commit
+      val log = brokers(partitionLeader).logManager.getLog(new TopicPartition(testTopic, 0)).get
+      val producerStateManager = log.producerStateManager
+      val activeProducersIter = producerStateManager.activeProducers.entrySet().iterator()
+      assertTrue(activeProducersIter.hasNext)
+      var producerStateEntry = activeProducersIter.next().getValue
+      val producerId = producerStateEntry.producerId
+      var previousProducerEpoch = producerStateEntry.producerEpoch
+
+      // Second transaction: abort
+      producer.beginTransaction()
+      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "2", willBeCommitted = false))
+
+      killBroker(partitionLeader) // kill the partition leader to prevent the batch from being submitted
+      val failedFuture = producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "3", "3", willBeCommitted = false))
+      Thread.sleep(6000) // Wait for the record to time out
+      restartDeadBrokers()
+
+      org.apache.kafka.test.TestUtils.assertFutureThrows(failedFuture, classOf[TimeoutException])
+      producer.abortTransaction()
+
+      // Get producer epoch after abortTransaction and verify it has increased.
+      producerStateEntry =
+        brokers(partitionLeader).logManager.getLog(new TopicPartition(testTopic, 0)).get.producerStateManager.activeProducers.get(producerId)
+      // Assert that producerStateEntry is not null
+      assertNotNull(producerStateEntry, "Producer state entry should not be null after abortTransaction")
+
+      val currentProducerEpoch = producerStateEntry.producerEpoch
+      assertTrue(currentProducerEpoch > previousProducerEpoch,
+        s"Producer epoch after abortTransaction ($currentProducerEpoch) should be greater than after first commit ($previousProducerEpoch)"
+      )
+      // Update previousProducerEpoch
+      previousProducerEpoch = currentProducerEpoch
+
+      // Third transaction: commit
+      producer.beginTransaction()
+      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "2", willBeCommitted = true))
+      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "4", "4", willBeCommitted = true))
+      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "1", "1", willBeCommitted = true))
+      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "3", "3", willBeCommitted = true))
+      producer.commitTransaction()
+
+      // Wait until the producer epoch has been updated on the broker
+      TestUtils.waitUntilTrue(() => {
+        val logOption = brokers(partitionLeader).logManager.getLog(new TopicPartition(testTopic, 0))
+        logOption.exists { log =>
+          val producerStateEntry = log.producerStateManager.activeProducers.get(producerId)
+          producerStateEntry != null && producerStateEntry.producerEpoch > previousProducerEpoch
+        }
+      }, "Timed out waiting for producer epoch to be incremented after second commit", 10000)
+
+      // Now that we've verified that the producer epoch has increased,
+      // update the previous producer epoch.
+      previousProducerEpoch = currentProducerEpoch
+
+      consumer.subscribe(List(topic1, topic2, testTopic).asJava)
+
+      val records = consumeRecords(consumer, 5)
+      records.foreach { record =>
+        TestUtils.assertCommittedAndGetValue(record)
+      }
+
+    } finally {
+      producer.close(Duration.ZERO)
+    }
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array(
+    "zk, false",
+    "kraft, false",
+    "kraft, true"
+  ))
+  def testFailureToFenceEpoch(quorum: String, isTV2Enabled: Boolean): Unit = {
     val producer1 = transactionalProducers.head
     val producer2 = createTransactionalProducer("transactional-producer", maxBlockMs = 1000)
+    val initialProducerEpoch = 0
 
     producer1.initTransactions()
 
@@ -771,12 +866,9 @@ class TransactionsTest extends IntegrationTestHarness {
     producer1.commitTransaction()
 
     val partitionLeader = TestUtils.waitUntilLeaderIsKnown(brokers, new TopicPartition(topic1, 0))
-    val activeProducersIter = brokers(partitionLeader).logManager.getLog(new TopicPartition(topic1, 0)).get.producerStateManager
-      .activeProducers.entrySet().iterator()
-    assertTrue(activeProducersIter.hasNext)
-    var producerStateEntry = activeProducersIter.next().getValue
+    var producerStateEntry = brokers(partitionLeader).logManager.getLog(new TopicPartition(topic1, 0)).get.producerStateManager
+      .activeProducers.entrySet().iterator().next().getValue
     val producerId = producerStateEntry.producerId
-    val initialProducerEpoch = producerStateEntry.producerEpoch
 
     // Kill two brokers to bring the transaction log under min-ISR
     killBroker(0)
@@ -814,11 +906,21 @@ class TransactionsTest extends IntegrationTestHarness {
     producer3.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "4", "4", willBeCommitted = true))
     producer3.commitTransaction()
 
-    // Check that the epoch only increased by 1
+    // Check that the epoch only increased by 1 when TV2 is disabled.
+    // With TV2 and the latest EndTxnRequest version, the epoch will be bumped at the end of every transaction aka
+    // three times (once after each commit and once after the timeout exception)
     producerStateEntry =
       brokers(partitionLeader).logManager.getLog(new TopicPartition(topic1, 0)).get.producerStateManager.activeProducers.get(producerId)
     assertNotNull(producerStateEntry)
-    assertEquals((initialProducerEpoch + 1).toShort, producerStateEntry.producerEpoch)
+
+    if (!isTV2Enabled) {
+      assertEquals((initialProducerEpoch + 1).toShort, producerStateEntry.producerEpoch)
+    } else {
+      // Wait until the producer epoch has been updated on the broker.
+      TestUtils.waitUntilTrue(() => {
+          producerStateEntry != null && producerStateEntry.producerEpoch == initialProducerEpoch + 3
+      }, "Timed out waiting for producer epoch to be incremented after second commit", 10000)
+    }
   }
 
   private def sendTransactionalMessagesWithValueRange(producer: KafkaProducer[Array[Byte], Array[Byte]], topic: String,

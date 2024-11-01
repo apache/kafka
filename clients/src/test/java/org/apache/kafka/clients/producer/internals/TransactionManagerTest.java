@@ -2980,6 +2980,64 @@ public class TransactionManagerTest {
         assertEquals(0, transactionManager.sequenceNumber(tp0));
     }
 
+    @Test
+    public void testEpochUpdateAfterBumpFromEndTxnResponseInV2() throws InterruptedException {
+        initializeTransactionManager(Optional.of(transactionalId), true);
+
+        // Initialize transaction with initial producer ID and epoch.
+        doInitTransactions(producerId, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartition(tp0);
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, producerId);
+        runUntil(() -> transactionManager.isPartitionAdded(tp0));
+
+        // Append record with initial producer ID and epoch.
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
+        prepareProduceResponse(Errors.NONE, producerId, epoch);
+        runUntil(responseFuture::isDone);
+
+        final short bumpedEpoch = epoch + 1;
+
+        // Trigger an EndTxn request by completing the transaction.
+        TransactionalRequestResult abortResult = transactionManager.beginAbort();
+
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, epoch, producerId, bumpedEpoch, false);
+        runUntil(abortResult::isCompleted);
+
+        assertEquals(producerId, transactionManager.producerIdAndEpoch().producerId);
+        assertEquals(bumpedEpoch, transactionManager.producerIdAndEpoch().epoch);
+    }
+
+    @Test
+    public void testProducerIdAndEpochUpdateAfterOverflowFromEndTxnResponseInV2() throws InterruptedException {
+        initializeTransactionManager(Optional.of(transactionalId), true);
+
+        // Initialize transaction with initial producer ID and epoch.
+        doInitTransactions(producerId, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartition(tp0);
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, producerId);
+        runUntil(() -> transactionManager.isPartitionAdded(tp0));
+
+        // Append record with initial producer ID and epoch
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
+        prepareProduceResponse(Errors.NONE, producerId, epoch);
+        runUntil(responseFuture::isDone);
+
+        final long newProducerId = producerId + 1;
+
+        // Trigger an EndTxn request by completing the transaction.
+        TransactionalRequestResult commitResult = transactionManager.beginCommit();
+
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, producerId, epoch, newProducerId, (short) 0, false);
+        runUntil(commitResult::isCompleted);
+
+        assertEquals(newProducerId, transactionManager.producerIdAndEpoch().producerId);
+        assertEquals((short) 0, transactionManager.producerIdAndEpoch().epoch);
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testNoFailedBatchHandlingWhenTxnManagerIsInFatalError(boolean transactionV2Enabled) {
@@ -3013,9 +3071,14 @@ public class TransactionManagerTest {
                         .setMinVersion((short) 0)
                         .setMaxVersion((short) 1),
                 new ApiVersion()
+                        .setApiKey(ApiKeys.END_TXN.id)
+                        .setMinVersion((short) 0)
+                        .setMaxVersion((short) 4),
+                new ApiVersion()
                         .setApiKey(ApiKeys.PRODUCE.id)
                         .setMinVersion((short) 0)
-                        .setMaxVersion((short) 7))));
+                        .setMaxVersion((short) 7)
+        )));
 
         doInitTransactions();
 
@@ -3059,6 +3122,7 @@ public class TransactionManagerTest {
         // Set the InitProducerId version such that bumping the epoch number is not supported. This will test the case
         // where the sequence number is reset on an UnknownProducerId error, allowing subsequent transactions to
         // append to the log successfully
+        // Set the EndTxn version such that sequence is not reset on every end txn.
         apiVersions.update("0", NodeApiVersions.create(Arrays.asList(
                 new ApiVersion()
                     .setApiKey(ApiKeys.INIT_PRODUCER_ID.id)
@@ -3067,7 +3131,12 @@ public class TransactionManagerTest {
                 new ApiVersion()
                     .setApiKey(ApiKeys.PRODUCE.id)
                     .setMinVersion((short) 0)
-                    .setMaxVersion((short) 7))));
+                    .setMaxVersion((short) 7),
+                new ApiVersion()
+                     .setApiKey(ApiKeys.END_TXN.id)
+                     .setMinVersion((short) 0)
+                     .setMaxVersion((short) 4)
+        )));
 
         doInitTransactions();
 
@@ -3115,8 +3184,9 @@ public class TransactionManagerTest {
         assertEquals(1, transactionManager.sequenceNumber(tp1));
     }
 
-    @Test
-    public void testBumpTransactionalEpochOnAbortableError() throws InterruptedException {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testBumpTransactionalEpochOnAbortableError(boolean transactionV2Enabled) throws InterruptedException {
         final short initialEpoch = 1;
         final short bumpedEpoch = initialEpoch + 1;
 
@@ -3733,7 +3803,7 @@ public class TransactionManagerTest {
 
         TransactionalRequestResult result = firstTransactionResult == TransactionResult.COMMIT ?
                 transactionManager.beginCommit() : transactionManager.beginAbort();
-        prepareEndTxnResponse(Errors.NONE, firstTransactionResult, producerId, epoch, true);
+        prepareEndTxnResponse(Errors.NONE, firstTransactionResult, producerId, epoch, producerId, epoch, true);
         runUntil(() -> !client.hasPendingResponses());
         assertFalse(result.isCompleted());
         assertThrows(TimeoutException.class, () -> result.await(MAX_BLOCK_TIMEOUT, TimeUnit.MILLISECONDS));
@@ -3744,7 +3814,7 @@ public class TransactionManagerTest {
                 transactionManager.beginCommit() : transactionManager.beginAbort();
         assertEquals(retryResult, result); // check if cached result is reused.
 
-        prepareEndTxnResponse(Errors.NONE, retryTransactionResult, producerId, epoch, false);
+        prepareEndTxnResponse(Errors.NONE, retryTransactionResult, producerId, epoch);
         runUntil(retryResult::isCompleted);
         assertFalse(transactionManager.hasOngoingTransaction());
     }
@@ -3869,19 +3939,87 @@ public class TransactionManagerTest {
         return AddPartitionsToTxnRequest.getPartitions(request.data().v3AndBelowTopics());
     }
 
-    private void prepareEndTxnResponse(Errors error, final TransactionResult result, final long producerId, final short epoch) {
-        this.prepareEndTxnResponse(error, result, producerId, epoch, false);
+    /**
+     * Prepares an `EndTxnResponse` for a transactional producer.
+     * This method can be used when Transaction V2 is NOT enabled, which
+     * means the producer ID and producer epoch will NOT be a part of
+     * the End Txn Response.
+     * An error stating to use the right method and provide the expected producer ID and epoch
+     * will be thrown if the End Txn API version is >= 5.
+     *
+     * @param error                 The error to be set in the response.
+     * @param result                The transaction result.
+     * @param requestProducerId     The producer ID in the request.
+     * @param requestProducerEpoch  The producer epoch in the request.
+     */
+    private void prepareEndTxnResponse(
+        Errors error,
+        final TransactionResult result,
+        final long requestProducerId,
+        final short requestProducerEpoch
+    ) {
+        EndTxnResponseData responseData = new EndTxnResponseData()
+            .setErrorCode(error.code())
+            .setThrottleTimeMs(0);
+
+        client.prepareResponse(body -> {
+            EndTxnRequest endTxnRequest = (EndTxnRequest) body;
+
+            assertEquals(transactionalId, endTxnRequest.data().transactionalId());
+            assertEquals(requestProducerId, endTxnRequest.data().producerId());
+            assertEquals(requestProducerEpoch, endTxnRequest.data().producerEpoch());
+            assertEquals(result, endTxnRequest.result());
+
+            int requestVersion = endTxnRequest.version();
+            if (requestVersion >= 5) {
+                fail("ExpectedProducerId and ExpectedEpochId must be provided when transaction V2 is enabled. Use the appropriate method.");
+            }
+            return true;
+        }, new EndTxnResponse(responseData));
     }
 
-    private void prepareEndTxnResponse(Errors error,
-                                       final TransactionResult result,
-                                       final long producerId,
-                                       final short epoch,
-                                       final boolean shouldDisconnect) {
-        client.prepareResponse(endTxnMatcher(result, producerId, epoch),
-                               new EndTxnResponse(new EndTxnResponseData()
-                                                      .setErrorCode(error.code())
-                                                      .setThrottleTimeMs(0)), shouldDisconnect);
+    /**
+     * Prepares an `EndTxnResponse` for a transactional producer.
+     * This method should be used when Transaction V2 is enabled, which
+     * means the producer ID and producer epoch will be a part of
+     * the End Txn Response.
+     *
+     * @param error                 The error to be set in the response.
+     * @param result                The transaction result.
+     * @param requestProducerId     The producer ID in the request.
+     * @param requestEpochId        The producer epoch in the request.
+     * @param expectedProducerId    The expected producer ID to set in the response if the API version is >= 5.
+     * @param expectedEpochId       The expected producer epoch to set in the response if the API version is >= 5.
+     * @param shouldDisconnect      Whether to simulate a disconnection after sending the response.
+     */
+    private void prepareEndTxnResponse(
+        Errors error,
+        final TransactionResult result,
+        final long requestProducerId,
+        final short requestEpochId,
+        final long expectedProducerId,
+        final short expectedEpochId,
+        boolean shouldDisconnect
+    ) {
+        EndTxnResponseData responseData = new EndTxnResponseData()
+            .setErrorCode(error.code())
+            .setThrottleTimeMs(0);
+
+        client.prepareResponse(body -> {
+            EndTxnRequest endTxnRequest = (EndTxnRequest) body;
+
+            assertEquals(transactionalId, endTxnRequest.data().transactionalId());
+            assertEquals(requestProducerId, endTxnRequest.data().producerId());
+            assertEquals(requestEpochId, endTxnRequest.data().producerEpoch());
+            assertEquals(result, endTxnRequest.result());
+
+            int requestVersion = endTxnRequest.version(); // Extract request version
+            if (requestVersion >= 5) {
+                responseData.setProducerId(expectedProducerId);
+                responseData.setProducerEpoch(expectedEpochId);
+            }
+            return true;
+        }, new EndTxnResponse(responseData), shouldDisconnect);
     }
 
     private void sendEndTxnResponse(Errors error, final TransactionResult result, final long producerId, final short epoch) {

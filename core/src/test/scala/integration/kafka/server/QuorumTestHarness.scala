@@ -43,7 +43,7 @@ import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.queue.KafkaEventQueue
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.ClientMetricsManager
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{MetadataVersion, TransactionVersion}
 import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
 import org.apache.kafka.server.util.timer.SystemTimer
@@ -319,14 +319,14 @@ abstract class QuorumTestHarness extends Logging {
   def addFormatterSettings(formatter: Formatter): Unit = {}
 
   private def newKRaftQuorum(testInfo: TestInfo): KRaftQuorumImplementation = {
-    newKRaftQuorum(new Properties())
+    newKRaftQuorum(testInfo, new Properties())
   }
 
   protected def extraControllerSecurityProtocols(): Seq[SecurityProtocol] = {
     Seq.empty
   }
 
-  protected def newKRaftQuorum(overridingProps: Properties): KRaftQuorumImplementation = {
+  protected def newKRaftQuorum(testInfo: TestInfo, overridingProps: Properties): KRaftQuorumImplementation = {
     val propsList = kraftControllerConfigs(testInfo)
     if (propsList.size != 1) {
       throw new RuntimeException("Only one KRaft controller is supported for now.")
@@ -362,6 +362,13 @@ abstract class QuorumTestHarness extends Logging {
     formatter.setUnstableFeatureVersionsEnabled(true)
     formatter.setControllerListenerName(config.controllerListenerNames.head)
     formatter.setMetadataLogDirectory(config.metadataLogDir)
+
+    val transactionVersion =
+      if (TestInfoUtils.isTransactionV2Enabled(testInfo)) {
+        TransactionVersion.TV_2.featureLevel()
+      } else TransactionVersion.TV_1.featureLevel()
+    formatter.setFeatureLevel(TransactionVersion.FEATURE_NAME, transactionVersion)
+
     addFormatterSettings(formatter)
     formatter.run()
     val bootstrapMetadata = formatter.bootstrapMetadata()
