@@ -18,6 +18,7 @@
 package org.apache.kafka.coordinator.share;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.internals.Topic;
@@ -33,6 +34,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
 import org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics;
+import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.util.FutureUtils;
 
 import org.junit.jupiter.api.Test;
@@ -607,5 +609,32 @@ class ShareCoordinatorServiceTest {
                     ))
             ).get(5, TimeUnit.SECONDS)
         );
+    }
+
+    @Test
+    public void testTopicPartitionFor() {
+        CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        ShareCoordinatorService service = new ShareCoordinatorService(
+            new LogContext(),
+            ShareCoordinatorConfigTest.createConfig(ShareCoordinatorConfigTest.testConfigMap()),
+            runtime,
+            new ShareCoordinatorMetrics(),
+            Time.SYSTEM
+        );
+
+        service.startup(() -> 50);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 0;
+
+        TopicPartition tp = service.topicPartitionFor(new SharePartitionKey(groupId, new TopicIdPartition(topicId, partition, null)));
+        assertEquals(Topic.SHARE_GROUP_STATE_TOPIC_NAME, tp.topic());
+        int expectedPartition = tp.partition();
+
+        // The presence of a topic name should not affect the choice of partition
+        tp = service.topicPartitionFor(new SharePartitionKey(groupId, new TopicIdPartition(topicId, partition, "whatever")));
+        assertEquals(Topic.SHARE_GROUP_STATE_TOPIC_NAME, tp.topic());
+        assertEquals(expectedPartition, tp.partition());
     }
 }
