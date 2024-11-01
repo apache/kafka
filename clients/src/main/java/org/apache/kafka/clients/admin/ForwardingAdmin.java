@@ -310,6 +310,11 @@ public class ForwardingAdmin implements Admin {
     }
 
     @Override
+    public ListGroupsResult listGroups(ListGroupsOptions options) {
+        return delegate.listGroups(options);
+    }
+
+    @Override
     public void registerMetricForSubscription(KafkaMetric metric) {
         throw new UnsupportedOperationException();
     }
