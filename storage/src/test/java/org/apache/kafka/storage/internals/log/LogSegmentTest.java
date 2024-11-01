@@ -93,7 +93,7 @@ public class LogSegmentTest {
     }
 
     /* Create a ByteBufferMessageSet for the given messages starting from the given offset */
-    private MemoryRecords records(long offset, String... records) {
+    private MemoryRecords v1Records(long offset, String... records) {
         List<SimpleRecord> simpleRecords = new ArrayList<>();
         for (String s : records) {
             simpleRecords.add(new SimpleRecord(offset * 10, s.getBytes()));
@@ -101,6 +101,16 @@ public class LogSegmentTest {
         return MemoryRecords.withRecords(
             RecordBatch.MAGIC_VALUE_V1, offset,
             Compression.NONE, TimestampType.CREATE_TIME, simpleRecords.toArray(new SimpleRecord[0]));
+    }
+
+    private MemoryRecords v2Records(long offset, String... records) {
+        List<SimpleRecord> simpleRecords = new ArrayList<>();
+        for (String s : records) {
+            simpleRecords.add(new SimpleRecord(offset * 10, s.getBytes()));
+        }
+        return MemoryRecords.withRecords(
+                RecordBatch.MAGIC_VALUE_V2, offset,
+                Compression.NONE, TimestampType.CREATE_TIME, simpleRecords.toArray(new SimpleRecord[0]));
     }
 
     @BeforeEach
@@ -134,7 +144,7 @@ public class LogSegmentTest {
     public void testAppendForLogSegmentOffsetOverflowException(long baseOffset, long largestOffset) throws IOException {
         try (LogSegment seg = createSegment(baseOffset, 10, Time.SYSTEM)) {
             long currentTime = Time.SYSTEM.milliseconds();
-            MemoryRecords memoryRecords = records(0, "hello");
+            MemoryRecords memoryRecords = v1Records(0, "hello");
             assertThrows(LogSegmentOffsetOverflowException.class, () -> seg.append(largestOffset, currentTime, largestOffset, memoryRecords));
         }
     }
@@ -157,10 +167,25 @@ public class LogSegmentTest {
     @Test
     public void testReadBeforeFirstOffset() throws IOException {
         try (LogSegment seg = createSegment(40)) {
-            MemoryRecords ms = records(50, "hello", "there", "little", "bee");
+            MemoryRecords ms = v1Records(50, "hello", "there", "little", "bee");
             seg.append(53, RecordBatch.NO_TIMESTAMP, -1L, ms);
             Records read = seg.read(41, 300).records;
             checkEquals(ms.records().iterator(), read.records().iterator());
+        }
+    }
+
+    /**
+     * Reading from an offset in the middle of a batch should return a
+     * LogOffsetMetadata offset that points to the batch's base offset
+     */
+    @Test
+    public void testReadFromMiddleOfBatch() throws IOException {
+        long batchBaseOffset = 50;
+        try (LogSegment seg = createSegment(40)) {
+            MemoryRecords ms = v2Records(batchBaseOffset, "hello", "there", "little", "bee");
+            seg.append(53, RecordBatch.NO_TIMESTAMP, -1L, ms);
+            FetchDataInfo readInfo = seg.read(52, 300);
+            assertEquals(batchBaseOffset, readInfo.fetchOffsetMetadata.messageOffset);
         }
     }
 
@@ -170,7 +195,7 @@ public class LogSegmentTest {
     @Test
     public void testReadAfterLast() throws IOException {
         try (LogSegment seg = createSegment(40)) {
-            MemoryRecords ms = records(50, "hello", "there");
+            MemoryRecords ms = v1Records(50, "hello", "there");
             seg.append(51, RecordBatch.NO_TIMESTAMP, -1L, ms);
             FetchDataInfo read = seg.read(52, 200);
             assertNull(read, "Read beyond the last offset in the segment should give null");
@@ -184,9 +209,9 @@ public class LogSegmentTest {
     @Test
     public void testReadFromGap() throws IOException {
         try (LogSegment seg = createSegment(40)) {
-            MemoryRecords ms = records(50, "hello", "there");
+            MemoryRecords ms = v1Records(50, "hello", "there");
             seg.append(51, RecordBatch.NO_TIMESTAMP, -1L, ms);
-            MemoryRecords ms2 = records(60, "alpha", "beta");
+            MemoryRecords ms2 = v1Records(60, "alpha", "beta");
             seg.append(61, RecordBatch.NO_TIMESTAMP, -1L, ms2);
             FetchDataInfo read = seg.read(55, 200);
             checkEquals(ms2.records().iterator(), read.records.records().iterator());
@@ -199,16 +224,11 @@ public class LogSegmentTest {
         Optional<Long> maxPosition = Optional.empty();
         int maxSize = 1;
         try (LogSegment seg = createSegment(40)) {
-            MemoryRecords ms = records(50, "hello", "there");
+            MemoryRecords ms = v1Records(50, "hello", "there");
             seg.append(51, RecordBatch.NO_TIMESTAMP, -1L, ms);
 
-            // read before first offset
-            FetchDataInfo read = seg.read(48, maxSize, maxPosition, minOneMessage);
-            assertEquals(new LogOffsetMetadata(48, 40, 0), read.fetchOffsetMetadata);
-            assertFalse(read.records.records().iterator().hasNext());
-
             // read at first offset
-            read = seg.read(50, maxSize, maxPosition, minOneMessage);
+            FetchDataInfo read = seg.read(50, maxSize, maxPosition, minOneMessage);
             assertEquals(new LogOffsetMetadata(50, 40, 0), read.fetchOffsetMetadata);
             assertFalse(read.records.records().iterator().hasNext());
 
@@ -236,9 +256,9 @@ public class LogSegmentTest {
         try (LogSegment seg = createSegment(40)) {
             long offset = 40;
             for (int i = 0; i < 30; i++) {
-                MemoryRecords ms1 = records(offset, "hello");
+                MemoryRecords ms1 = v1Records(offset, "hello");
                 seg.append(offset, RecordBatch.NO_TIMESTAMP, -1L, ms1);
-                MemoryRecords ms2 = records(offset + 1, "hello");
+                MemoryRecords ms2 = v1Records(offset + 1, "hello");
                 seg.append(offset + 1, RecordBatch.NO_TIMESTAMP, -1L, ms2);
 
                 // check that we can read back both messages
@@ -297,10 +317,10 @@ public class LogSegmentTest {
     @Test
     public void testReloadLargestTimestampAndNextOffsetAfterTruncation() throws IOException {
         int numMessages = 30;
-        try (LogSegment seg = createSegment(40, 2 * records(0, "hello").sizeInBytes() - 1)) {
+        try (LogSegment seg = createSegment(40, 2 * v1Records(0, "hello").sizeInBytes() - 1)) {
             int offset = 40;
             for (int i = 0; i < numMessages; i++) {
-                seg.append(offset, offset, offset, records(offset, "hello"));
+                seg.append(offset, offset, offset, v1Records(offset, "hello"));
                 offset++;
             }
             assertEquals(offset, seg.readNextOffset());
@@ -323,7 +343,7 @@ public class LogSegmentTest {
         MockTime time = new MockTime();
         try (LogSegment seg = createSegment(40, time)) {
 
-            seg.append(41, RecordBatch.NO_TIMESTAMP, -1L, records(40, "hello", "there"));
+            seg.append(41, RecordBatch.NO_TIMESTAMP, -1L, v1Records(40, "hello", "there"));
 
             // If the segment is empty after truncation, the create time should be reset
             time.sleep(500);
@@ -335,7 +355,7 @@ public class LogSegmentTest {
             assertFalse(seg.offsetIndex().isFull());
             assertNull(seg.read(0, 1024), "Segment should be empty.");
 
-            seg.append(41, RecordBatch.NO_TIMESTAMP, -1L, records(40, "hello", "there"));
+            seg.append(41, RecordBatch.NO_TIMESTAMP, -1L, v1Records(40, "hello", "there"));
         }
     }
 
@@ -344,11 +364,11 @@ public class LogSegmentTest {
      */
     @Test
     public void testFindOffsetByTimestamp() throws IOException {
-        int messageSize = records(0, "msg00").sizeInBytes();
+        int messageSize = v1Records(0, "msg00").sizeInBytes();
         try (LogSegment seg = createSegment(40, messageSize * 2 - 1)) {
             // Produce some messages
             for (int i = 40; i < 50; i++) {
-                seg.append(i, i * 10, i, records(i, "msg" + i));
+                seg.append(i, i * 10, i, v1Records(i, "msg" + i));
             }
 
             assertEquals(490, seg.largestTimestamp());
@@ -374,7 +394,7 @@ public class LogSegmentTest {
     public void testNextOffsetCalculation() throws IOException {
         try (LogSegment seg = createSegment(40)) {
             assertEquals(40, seg.readNextOffset());
-            seg.append(52, RecordBatch.NO_TIMESTAMP, -1L, records(50, "hello", "there", "you"));
+            seg.append(52, RecordBatch.NO_TIMESTAMP, -1L, v1Records(50, "hello", "there", "you"));
             assertEquals(53, seg.readNextOffset());
         }
     }
@@ -417,7 +437,7 @@ public class LogSegmentTest {
     public void testRecoveryFixesCorruptIndex() throws Exception {
         try (LogSegment seg = createSegment(0)) {
             for (int i = 0; i < 100; i++) {
-                seg.append(i, RecordBatch.NO_TIMESTAMP, -1L, records(i, Integer.toString(i)));
+                seg.append(i, RecordBatch.NO_TIMESTAMP, -1L, v1Records(i, Integer.toString(i)));
             }
             File indexFile = seg.offsetIndexFile();
             writeNonsenseToFile(indexFile, 5, (int) indexFile.length());
@@ -547,7 +567,7 @@ public class LogSegmentTest {
     public void testRecoveryFixesCorruptTimeIndex() throws IOException {
         try (LogSegment seg = createSegment(0)) {
             for (int i = 0; i < 100; i++) {
-                seg.append(i, i * 10, i, records(i, String.valueOf(i)));
+                seg.append(i, i * 10, i, v1Records(i, String.valueOf(i)));
             }
             File timeIndexFile = seg.timeIndexFile();
             writeNonsenseToFile(timeIndexFile, 5, (int) timeIndexFile.length());
@@ -570,7 +590,7 @@ public class LogSegmentTest {
         for (int ignore = 0; ignore < 10; ignore++) {
             try (LogSegment seg = createSegment(0)) {
                 for (int i = 0; i < messagesAppended; i++) {
-                    seg.append(i, RecordBatch.NO_TIMESTAMP, -1L, records(i, String.valueOf(i)));
+                    seg.append(i, RecordBatch.NO_TIMESTAMP, -1L, v1Records(i, String.valueOf(i)));
                 }
                 int offsetToBeginCorruption = TestUtils.RANDOM.nextInt(messagesAppended);
                 // start corrupting somewhere in the middle of the chosen record all the way to the end
@@ -606,9 +626,9 @@ public class LogSegmentTest {
         try (LogSegment seg = LogSegment.open(tempDir, 40, logConfig, Time.SYSTEM, false,
             512 * 1024 * 1024, true, "")) {
             segments.add(seg);
-            MemoryRecords ms = records(50, "hello", "there");
+            MemoryRecords ms = v1Records(50, "hello", "there");
             seg.append(51, RecordBatch.NO_TIMESTAMP, -1L, ms);
-            MemoryRecords ms2 = records(60, "alpha", "beta");
+            MemoryRecords ms2 = v1Records(60, "alpha", "beta");
             seg.append(61, RecordBatch.NO_TIMESTAMP, -1L, ms2);
             FetchDataInfo read = seg.read(55, 200);
             checkEquals(ms2.records().iterator(), read.records.records().iterator());
@@ -629,9 +649,9 @@ public class LogSegmentTest {
         LogConfig logConfig = new LogConfig(configMap);
 
         try (LogSegment seg = LogSegment.open(tempDir, 40, logConfig, Time.SYSTEM, 512 * 1024 * 1024, true)) {
-            MemoryRecords ms = records(50, "hello", "there");
+            MemoryRecords ms = v1Records(50, "hello", "there");
             seg.append(51, RecordBatch.NO_TIMESTAMP, -1L, ms);
-            MemoryRecords ms2 = records(60, "alpha", "beta");
+            MemoryRecords ms2 = v1Records(60, "alpha", "beta");
             seg.append(61, RecordBatch.NO_TIMESTAMP, -1L, ms2);
             FetchDataInfo read = seg.read(55, 200);
             checkEquals(ms2.records().iterator(), read.records.records().iterator());
@@ -685,7 +705,7 @@ public class LogSegmentTest {
         }
     }
 
-    private MemoryRecords records(long offset, int size) {
+    private MemoryRecords v2RecordWithSize(long offset, int size) {
         return MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, offset, Compression.NONE, TimestampType.CREATE_TIME,
             new SimpleRecord(new byte[size]));
     }
@@ -697,10 +717,10 @@ public class LogSegmentTest {
         FileRecords fileRecords = FileRecords.open(LogFileUtils.logFile(tempDir, 0));
 
         // Simulate a scenario with log offset range exceeding Integer.MAX_VALUE
-        fileRecords.append(records(0, 1024));
-        fileRecords.append(records(500, 1024 * 1024 + 1));
+        fileRecords.append(v2RecordWithSize(0, 1024));
+        fileRecords.append(v2RecordWithSize(500, 1024 * 1024 + 1));
         long sizeBeforeOverflow = fileRecords.sizeInBytes();
-        fileRecords.append(records(Integer.MAX_VALUE + 5L, 1024));
+        fileRecords.append(v2RecordWithSize(Integer.MAX_VALUE + 5L, 1024));
         long sizeAfterOverflow = fileRecords.sizeInBytes();
 
         try (LogSegment segment = createSegment(0)) {
