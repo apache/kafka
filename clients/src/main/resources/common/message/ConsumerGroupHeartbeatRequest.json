@@ -16,7 +16,7 @@
 {
   "apiKey": 68,
   "type": "request",
-  "listeners": ["zkBroker", "broker"],
+  "listeners": ["broker"],
   "name": "ConsumerGroupHeartbeatRequest",
   // Version 1 adds SubscribedTopicRegex (KIP-848), and requires the consumer to generate their own Member ID (KIP-1082)
   "validVersions": "0-1",

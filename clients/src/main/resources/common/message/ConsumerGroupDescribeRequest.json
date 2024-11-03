@@ -16,7 +16,7 @@
 {
   "apiKey": 69,
   "type": "request",
-  "listeners": ["zkBroker", "broker"],
+  "listeners": ["broker"],
   "name": "ConsumerGroupDescribeRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",

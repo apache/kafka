@@ -11107,7 +11107,8 @@ class KafkaApisTest extends Logging {
     val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequestData().setGroupId("group")
 
     val requestChannelRequest = buildRequest(new ConsumerGroupHeartbeatRequest.Builder(consumerGroupHeartbeatRequest, true).build())
-    kafkaApis = createKafkaApis()
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+    kafkaApis = createKafkaApis(raftSupport = true)
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
     val expectedHeartbeatResponse = new ConsumerGroupHeartbeatResponseData()
@@ -11249,7 +11250,8 @@ class KafkaApisTest extends Logging {
     val expectedDescribedGroup = new DescribedGroup().setGroupId(groupId).setErrorCode(errorCode)
     val expectedResponse = new ConsumerGroupDescribeResponseData()
     expectedResponse.groups.add(expectedDescribedGroup)
-    kafkaApis = createKafkaApis()
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+    kafkaApis = createKafkaApis(raftSupport = true)
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
     val response = verifyNoThrottling[ConsumerGroupDescribeResponse](requestChannelRequest)
 
