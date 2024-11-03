@@ -31,7 +31,7 @@ import java.util.Map;
  * The specification for a workload that sends messages to a broker and then
  * reads them back.
  */
-public class RoundTripWorkloadSpec extends TaskSpec {
+public final class RoundTripWorkloadSpec extends TaskSpec {
     private final String clientNode;
     private final String bootstrapServers;
     private final int targetMessagesPerSec;
@@ -43,7 +43,6 @@ public class RoundTripWorkloadSpec extends TaskSpec {
     private final Map<String, String> consumerConf;
     private final Map<String, String> adminClientConf;
 
-    @SuppressWarnings("this-escape")
     @JsonCreator
     public RoundTripWorkloadSpec(@JsonProperty("startMs") long startMs,
              @JsonProperty("durationMs") long durationMs,

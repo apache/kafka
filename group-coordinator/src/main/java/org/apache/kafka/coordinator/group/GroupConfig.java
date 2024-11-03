@@ -36,7 +36,7 @@ import static org.apache.kafka.common.config.ConfigDef.Type.INT;
  * Group configuration related parameters and supporting methods like validation, etc. are
  * defined in this class.
  */
-public class GroupConfig extends AbstractConfig {
+public final class GroupConfig extends AbstractConfig {
 
     public static final String CONSUMER_SESSION_TIMEOUT_MS_CONFIG = "consumer.session.timeout.ms";
 
@@ -90,7 +90,6 @@ public class GroupConfig extends AbstractConfig {
             MEDIUM,
             ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_DOC);
 
-    @SuppressWarnings("this-escape")
     public GroupConfig(Map<?, ?> props) {
         super(CONFIG, props, false);
         this.consumerSessionTimeoutMs = getInt(CONSUMER_SESSION_TIMEOUT_MS_CONFIG);

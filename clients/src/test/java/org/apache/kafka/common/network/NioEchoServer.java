@@ -61,7 +61,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * with the configured security protocol.
  *
  */
-public class NioEchoServer extends Thread {
+public final class NioEchoServer extends Thread {
     private static final Logger LOG = LoggerFactory.getLogger(NioEchoServer.class);
 
     public enum MetricType {
@@ -103,7 +103,6 @@ public class NioEchoServer extends Thread {
                 new DelegationTokenCache(ScramMechanism.mechanismNames()));
     }
 
-    @SuppressWarnings("this-escape")
     public NioEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol, AbstractConfig config,
             String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache,
             int failedAuthenticationDelayMs, Time time, DelegationTokenCache tokenCache) throws Exception {

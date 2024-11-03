@@ -23,12 +23,11 @@ import java.util.PriorityQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
 
-public class MockExpirationService implements ExpirationService, MockTime.Listener {
+public final class MockExpirationService implements ExpirationService, MockTime.Listener {
     private final AtomicLong idGenerator = new AtomicLong(0);
     private final MockTime time;
     private final PriorityQueue<ExpirationFuture<?>> queue = new PriorityQueue<>();
 
-    @SuppressWarnings("this-escape")
     public MockExpirationService(MockTime time) {
         this.time = time;
         time.addListener(this);

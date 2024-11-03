@@ -67,7 +67,7 @@ import static java.util.Collections.emptyList;
  * sensor.record(messageSize);
  * </pre>
  */
-public class Metrics implements Closeable {
+public final class Metrics implements Closeable {
 
     private final MetricConfig config;
     private final ConcurrentMap<MetricName, KafkaMetric> metrics;
@@ -155,7 +155,6 @@ public class Metrics implements Closeable {
      * @param enableExpiration true if the metrics instance can garbage collect inactive sensors, false otherwise
      * @param metricsContext The metricsContext to initialize metrics reporter with
      */
-    @SuppressWarnings("this-escape")
     public Metrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time, boolean enableExpiration,
                    MetricsContext metricsContext) {
         this.config = defaultConfig;

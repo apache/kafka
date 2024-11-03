@@ -77,7 +77,7 @@ import static org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.reg
  * {@link ConsumerMetadata}, so this implements {@link ClusterResourceListener} to get notified
  * when the cluster metadata is updated.
  */
-public class OffsetsRequestManager implements RequestManager, ClusterResourceListener {
+public final class OffsetsRequestManager implements RequestManager, ClusterResourceListener {
 
     private final ConsumerMetadata metadata;
     private final IsolationLevel isolationLevel;
@@ -109,7 +109,6 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      */
     private PendingFetchCommittedRequest pendingOffsetFetchEvent;
 
-    @SuppressWarnings("this-escape")
     public OffsetsRequestManager(final SubscriptionState subscriptionState,
                                  final ConsumerMetadata metadata,
                                  final IsolationLevel isolationLevel,

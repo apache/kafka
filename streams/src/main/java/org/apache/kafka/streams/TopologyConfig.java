@@ -71,7 +71,7 @@ import static org.apache.kafka.streams.internals.StreamsConfigUtils.totalCacheSi
  * topology builders via the {@link org.apache.kafka.streams.StreamsBuilder#StreamsBuilder(TopologyConfig) StreamsBuilder(TopologyConfig)} method.
  */
 @SuppressWarnings("deprecation")
-public class TopologyConfig extends AbstractConfig {
+public final class TopologyConfig extends AbstractConfig {
     private static final ConfigDef CONFIG;
     static {
         CONFIG = new ConfigDef()
@@ -151,7 +151,6 @@ public class TopologyConfig extends AbstractConfig {
         this(null, globalAppConfigs, new Properties());
     }
 
-    @SuppressWarnings("this-escape")
     public TopologyConfig(final String topologyName, final StreamsConfig globalAppConfigs, final Properties topologyOverrides) {
         super(CONFIG, topologyOverrides, false);
 

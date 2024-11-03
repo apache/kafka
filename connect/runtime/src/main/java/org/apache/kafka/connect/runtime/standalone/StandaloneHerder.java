@@ -69,7 +69,7 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * Single process, in-memory "herder". Useful for a standalone Kafka Connect process.
  */
-public class StandaloneHerder extends AbstractHerder {
+public final class StandaloneHerder extends AbstractHerder {
     private static final Logger log = LoggerFactory.getLogger(StandaloneHerder.class);
 
     private final AtomicLong requestSeqNum = new AtomicLong();
@@ -92,7 +92,6 @@ public class StandaloneHerder extends AbstractHerder {
     }
 
     // visible for testing
-    @SuppressWarnings("this-escape")
     StandaloneHerder(Worker worker,
                      String workerId,
                      String kafkaClusterId,

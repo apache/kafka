@@ -94,7 +94,6 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
-@SuppressWarnings("this-escape")
 public class StoreChangelogReaderTest {
 
     @Mock

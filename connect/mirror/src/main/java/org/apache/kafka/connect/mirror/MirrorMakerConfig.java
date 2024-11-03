@@ -59,7 +59,7 @@ import static org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidStrin
  *      --->%---
  * </pre>
  */
-public class MirrorMakerConfig extends AbstractConfig {
+public final class MirrorMakerConfig extends AbstractConfig {
 
     public static final String CLUSTERS_CONFIG = "clusters";
     private static final String CLUSTERS_DOC = "List of cluster aliases.";
@@ -89,7 +89,6 @@ public class MirrorMakerConfig extends AbstractConfig {
 
     private final Map<String, String> rawProperties;
 
-    @SuppressWarnings("this-escape")
     public MirrorMakerConfig(Map<String, String> props) {
         super(config(), props, true);
         plugins = new Plugins(originalsStrings());

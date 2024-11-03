@@ -28,7 +28,7 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
 
-public class MaterializedInternal<K, V, S extends StateStore> extends Materialized<K, V, S> {
+public final class MaterializedInternal<K, V, S extends StateStore> extends Materialized<K, V, S> {
 
     private final boolean queryable;
 
@@ -36,7 +36,6 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
         this(materialized, null, null);
     }
 
-    @SuppressWarnings("this-escape")
     public MaterializedInternal(final Materialized<K, V, S> materialized,
                                 final InternalNameProvider nameProvider,
                                 final String generatedStorePrefix) {
