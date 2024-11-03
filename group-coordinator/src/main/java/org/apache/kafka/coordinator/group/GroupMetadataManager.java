@@ -1502,7 +1502,7 @@ public class GroupMetadataManager {
         if (member.memberEpoch() != LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
             // The new member can't join.
             log.info("[GroupId {}] Static member {} with instance id {} cannot join the group because the instance id is" +
-                    " is owned by member {}.", groupId, receivedMemberId, receivedInstanceId, member.memberId());
+                    " owned by member {}.", groupId, receivedMemberId, receivedInstanceId, member.memberId());
             throw Errors.UNRELEASED_INSTANCE_ID.exception("Static member " + receivedMemberId + " with instance id "
                 + receivedInstanceId + " cannot join the group because the instance id is owned by " + member.memberId() + " member.");
         }
@@ -2706,11 +2706,11 @@ public class GroupMetadataManager {
             throwIfStaticMemberIsUnknown(member, instanceId);
             throwIfInstanceIdIsFenced(member, groupId, memberId, instanceId);
             if (memberEpoch == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
-                log.info("[GroupId {}] Static Member {} with instance id {} temporarily left the consumer group.",
+                log.info("[GroupId {}] Static member {} with instance id {} temporarily left the consumer group.",
                     group.groupId(), memberId, instanceId);
                 return consumerGroupStaticMemberGroupLeave(group, member);
             } else {
-                log.info("[GroupId {}] Static Member {} with instance id {} left the consumer group.",
+                log.info("[GroupId {}] Static member {} with instance id {} left the consumer group.",
                     group.groupId(), memberId, instanceId);
                 return consumerGroupFenceMember(group, member, response);
             }
@@ -3029,7 +3029,7 @@ public class GroupMetadataManager {
             sessionTimeoutMs,
             TimeUnit.MILLISECONDS,
             true,
-            () -> consumerGroupFenceMemberOperation(groupId, memberId, "the member session expired.")
+            () -> consumerGroupFenceMemberOperation(groupId, memberId, "the member session expired")
         );
     }
 
@@ -3049,7 +3049,7 @@ public class GroupMetadataManager {
             sessionTimeoutMs,
             TimeUnit.MILLISECONDS,
             true,
-            () -> shareGroupFenceMemberOperation(groupId, memberId, "the member session expired.")
+            () -> shareGroupFenceMemberOperation(groupId, memberId, "the member session expired")
         );
     }
 
@@ -3139,7 +3139,7 @@ public class GroupMetadataManager {
             rebalanceTimeoutMs,
             TimeUnit.MILLISECONDS,
             true,
-            () -> consumerGroupFenceMemberOperation(groupId, memberId, "the classic member failed to join within the rebalance timeout.")
+            () -> consumerGroupFenceMemberOperation(groupId, memberId, "the classic member failed to join within the rebalance timeout")
         );
     }
 
@@ -3173,7 +3173,7 @@ public class GroupMetadataManager {
             rebalanceTimeoutMs,
             TimeUnit.MILLISECONDS,
             true,
-            () -> consumerGroupFenceMemberOperation(groupId, memberId, "the member failed to sync within timeout.")
+            () -> consumerGroupFenceMemberOperation(groupId, memberId, "the member failed to sync within timeout")
         );
     }
 
@@ -5739,7 +5739,7 @@ public class GroupMetadataManager {
                     member = group.getOrMaybeCreateMember(memberId, false);
                     throwIfMemberDoesNotUseClassicProtocol(member);
 
-                    log.info("[Group {}] Dynamic Member {} has left group " +
+                    log.info("[Group {}] Dynamic member {} has left group " +
                             "through explicit `LeaveGroup` request; client reason: {}",
                         groupId, memberId, reason);
                 } else {
@@ -5753,7 +5753,7 @@ public class GroupMetadataManager {
                     throwIfMemberDoesNotUseClassicProtocol(member);
 
                     memberId = member.memberId();
-                    log.info("[Group {}] Static Member {} with instance id {} has left group " +
+                    log.info("[Group {}] Static member {} with instance id {} has left group " +
                             "through explicit `LeaveGroup` request; client reason: {}",
                         groupId, memberId, instanceId, reason);
                 }
