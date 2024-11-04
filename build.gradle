@@ -1007,19 +1007,6 @@ project(':share') {
     testRuntimeOnly libs.junitPlatformLanucher
   }
 
-  sourceSets {
-    main {
-      java {
-        srcDirs = ["src/main/java"]
-      }
-    }
-    test {
-      java {
-        srcDirs = ["src/test/java"]
-      }
-    }
-  }
-
   checkstyle {
     configProperties = checkstyleConfigProperties("import-control-share.xml")
   }
@@ -1454,19 +1441,6 @@ project(':group-coordinator:group-coordinator-api') {
     }
   }
 
-  sourceSets {
-    main {
-      java {
-        srcDirs = ["src/main/java"]
-      }
-    }
-    test {
-      java {
-        srcDirs = ["src/test/java"]
-      }
-    }
-  }
-
   jar {
     dependsOn createVersionFile
     from("$buildDir") {
@@ -1580,19 +1554,6 @@ project(':test-common') {
     testRuntimeOnly runtimeTestLibs
   }
 
-  sourceSets {
-    main {
-      java {
-        srcDirs = ["src/main/java"]
-      }
-    }
-    test {
-      java {
-        srcDirs = ["src/test/java"]
-      }
-    }
-  }
-
   checkstyle {
     configProperties = checkstyleConfigProperties("import-control-test-common.xml")
   }
@@ -1623,19 +1584,6 @@ project(':test-common:test-common-api') {
     testImplementation libs.mockitoCore
 
     testRuntimeOnly runtimeTestLibs
-  }
-
-  sourceSets {
-    main {
-      java {
-        srcDirs = ["src/main/java"]
-      }
-    }
-    test {
-      java {
-        srcDirs = ["src/test/java"]
-      }
-    }
   }
 
   checkstyle {
@@ -1732,19 +1680,6 @@ project(':coordinator-common') {
     testImplementation libs.mockitoCore
 
     testRuntimeOnly runtimeTestLibs
-  }
-
-  sourceSets {
-    main {
-      java {
-        srcDirs = ["src/main/java"]
-      }
-    }
-    test {
-      java {
-        srcDirs = ["src/test/java"]
-      }
-    }
   }
 
   checkstyle {
@@ -2238,19 +2173,6 @@ project(':storage:storage-api') {
     }
   }
 
-  sourceSets {
-    main {
-      java {
-        srcDirs = ["src/main/java"]
-      }
-    }
-    test {
-      java {
-        srcDirs = ["src/test/java"]
-      }
-    }
-  }
-
   jar {
     dependsOn createVersionFile
     from("$buildDir") {
@@ -2421,19 +2343,6 @@ project(':tools:tools-api') {
       receiptFile.parentFile.mkdirs()
       def content = data.entrySet().collect { "$it.key=$it.value" }.sort().join("\n")
       receiptFile.setText(content, "ISO-8859-1")
-    }
-  }
-
-  sourceSets {
-    main {
-      java {
-        srcDirs = ["src/main/java"]
-      }
-    }
-    test {
-      java {
-        srcDirs = ["src/test/java"]
-      }
     }
   }
 
