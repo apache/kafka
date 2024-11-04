@@ -52,7 +52,7 @@ class ReplicaScaleTest(Test):
         topic_count=[50],
         partition_count=[34],
         replication_factor=[3],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
@@ -119,13 +119,6 @@ class ReplicaScaleTest(Test):
         trogdor.stop()
 
     @cluster(num_nodes=12)
-    @matrix(
-        topic_count=[50],
-        partition_count=[34],
-        replication_factor=[3],
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
-    )
     @matrix(
         topic_count=[50],
         partition_count=[34],

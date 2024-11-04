@@ -77,7 +77,7 @@ class ControllerMutationQuotaTest(Test):
             self.zk.stop()
 
     @cluster(num_nodes=2)
-    @matrix(metadata_quorum=quorum.all)
+    @matrix(metadata_quorum=quorum.all_kraft)
     def test_controller_mutation_quota(self, metadata_quorum=quorum.zk):
         self.partition_count = 10
         mutation_rate = 3 * self.partition_count / (self.window_num * self.window_size_seconds)

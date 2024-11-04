@@ -61,7 +61,7 @@ class SecurityTest(EndToEndTest):
     @matrix(
         security_protocol=['PLAINTEXT'],
         interbroker_security_protocol=['SSL'],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
@@ -74,7 +74,7 @@ class SecurityTest(EndToEndTest):
     @matrix(
         security_protocol=['SSL'],
         interbroker_security_protocol=['PLAINTEXT'],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
@@ -157,7 +157,7 @@ class SecurityTest(EndToEndTest):
 
     @cluster(num_nodes=2)
     @matrix(
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(

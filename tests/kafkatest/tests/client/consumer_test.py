@@ -76,7 +76,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
 
     @cluster(num_nodes=7)
     @matrix(
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
@@ -138,7 +138,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
     @matrix(
         clean_shutdown=[True],
         bounce_mode=["all", "rolling"],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
@@ -195,7 +195,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         static_membership=[True, False],
         bounce_mode=["all", "rolling"],
         num_bounces=[5],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
@@ -272,7 +272,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
     @cluster(num_nodes=7)
     @matrix(
         bounce_mode=["all", "rolling"],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
@@ -314,7 +314,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
     @matrix(
         num_conflict_consumers=[1, 2],
         fencing_stage=["stable", "all"],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
@@ -399,7 +399,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
     @matrix(
         clean_shutdown=[True],
         enable_autocommit=[True, False],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
@@ -457,12 +457,6 @@ class OffsetValidationTest(VerifiableConsumerTest):
     @matrix(
         clean_shutdown=[True, False],
         enable_autocommit=[True, False],
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        clean_shutdown=[True, False],
-        enable_autocommit=[True, False],
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
@@ -511,7 +505,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
 
     @cluster(num_nodes=7)
     @matrix(
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
@@ -574,7 +568,7 @@ class AssignmentValidationTest(VerifiableConsumerTest):
                              "org.apache.kafka.clients.consumer.RoundRobinAssignor",
                              "org.apache.kafka.clients.consumer.StickyAssignor",
                              "org.apache.kafka.clients.consumer.CooperativeStickyAssignor"],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(

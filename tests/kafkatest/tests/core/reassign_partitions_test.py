@@ -147,7 +147,7 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
     @matrix(
         bounce_brokers=[True, False],
         reassign_from_offset_zero=[True, False],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(

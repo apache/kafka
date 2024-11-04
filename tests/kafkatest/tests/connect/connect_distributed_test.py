@@ -175,7 +175,7 @@ class ConnectDistributedTest(Test):
     @matrix(
         exactly_once_source=[True, False],
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
@@ -210,7 +210,7 @@ class ConnectDistributedTest(Test):
     @matrix(
         connector_type=['source', 'exactly-once source', 'sink'],
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
@@ -247,7 +247,7 @@ class ConnectDistributedTest(Test):
     @cluster(num_nodes=5)
     @matrix(
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
@@ -277,7 +277,7 @@ class ConnectDistributedTest(Test):
     @matrix(
         connector_type=['source', 'sink'],
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
@@ -311,12 +311,6 @@ class ConnectDistributedTest(Test):
                    err_msg="Failed to see task transition to the RUNNING state")
 
     @cluster(num_nodes=5)
-    @matrix(
-        exactly_once_source=[True, False],
-        connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
-    )
     @matrix(
         exactly_once_source=[True, False],
         connect_protocol=['sessioned', 'compatible', 'eager'],
@@ -366,7 +360,7 @@ class ConnectDistributedTest(Test):
     @cluster(num_nodes=5)
     @matrix(
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
@@ -422,12 +416,6 @@ class ConnectDistributedTest(Test):
                    err_msg="Failed to consume messages after resuming sink connector")
 
     @cluster(num_nodes=5)
-    @matrix(
-        exactly_once_source=[True, False],
-        connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
-    )
     @matrix(
         exactly_once_source=[True, False],
         connect_protocol=['sessioned', 'compatible', 'eager'],
@@ -643,7 +631,7 @@ class ConnectDistributedTest(Test):
         security_protocol=[SecurityConfig.PLAINTEXT, SecurityConfig.SASL_SSL],
         exactly_once_source=[True, False],
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
@@ -693,7 +681,7 @@ class ConnectDistributedTest(Test):
     @matrix(
         clean=[True, False],
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
@@ -826,12 +814,6 @@ class ConnectDistributedTest(Test):
     @matrix(
         clean=[True, False],
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        clean=[True, False],
-        connect_protocol=['sessioned', 'compatible', 'eager'],
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[True, False]
     )
@@ -933,7 +915,7 @@ class ConnectDistributedTest(Test):
     @cluster(num_nodes=6)
     @matrix(
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(

@@ -71,7 +71,7 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
 
     @cluster(num_nodes=9)
     @matrix(
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(

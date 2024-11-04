@@ -91,8 +91,6 @@ class LogDirFailureTest(ProduceConsumeValidateTest):
         """Override this since we're adding services outside of the constructor"""
         return super(LogDirFailureTest, self).min_cluster_size() + self.num_producers * 2 + self.num_consumers * 2
 
-    @cluster(num_nodes=8)
-    @matrix(bounce_broker=[False, True], broker_type=["leader", "follower"], security_protocol=["PLAINTEXT"], metadata_quorum=[quorum.zk])
     @cluster(num_nodes=10)
     @matrix(bounce_broker=[False, True], broker_type=["leader", "follower"], security_protocol=["PLAINTEXT"], metadata_quorum=[quorum.isolated_kraft])
     def test_replication_with_disk_failure(self, bounce_broker, security_protocol, broker_type, metadata_quorum):
