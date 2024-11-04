@@ -401,6 +401,7 @@ public class PersisterStateManager {
 
                 case COORDINATOR_NOT_AVAILABLE: // retryable error codes
                 case COORDINATOR_LOAD_IN_PROGRESS:
+                case NOT_COORDINATOR:
                     log.warn("Received retryable error in find coordinator: {}", error.message());
                     if (!findCoordBackoff.canAttempt()) {
                         log.error("Exhausted max retries to find coordinator without success.");
@@ -537,6 +538,7 @@ public class PersisterStateManager {
                             // check retryable errors
                             case COORDINATOR_NOT_AVAILABLE:
                             case COORDINATOR_LOAD_IN_PROGRESS:
+                            case NOT_COORDINATOR:
                                 log.warn("Received retryable error in write state RPC: {}", error.message());
                                 if (!writeStateBackoff.canAttempt()) {
                                     log.error("Exhausted max retries for write state RPC without success.");
@@ -679,6 +681,7 @@ public class PersisterStateManager {
                             // check retryable errors
                             case COORDINATOR_NOT_AVAILABLE:
                             case COORDINATOR_LOAD_IN_PROGRESS:
+                            case NOT_COORDINATOR:
                                 log.warn("Received retryable error in read state RPC: {}", error.message());
                                 if (!readStateBackoff.canAttempt()) {
                                     log.error("Exhausted max retries for read state RPC without success.");
