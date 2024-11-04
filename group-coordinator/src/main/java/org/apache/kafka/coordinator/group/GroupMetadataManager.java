@@ -27,6 +27,7 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
+import org.apache.kafka.common.errors.InvalidRegularExpression;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
@@ -117,6 +118,9 @@ import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineHashSet;
+
+import com.google.re2j.Pattern;
+import com.google.re2j.PatternSyntaxException;
 
 import org.slf4j.Logger;
 
@@ -1312,7 +1316,6 @@ public class GroupMetadataManager {
         throwIfEmptyString(request.groupId(), "GroupId can't be empty.");
         throwIfEmptyString(request.instanceId(), "InstanceId can't be empty.");
         throwIfEmptyString(request.rackId(), "RackId can't be empty.");
-        throwIfNotNull(request.subscribedTopicRegex(), "SubscribedTopicRegex is not supported yet.");
 
         if (request.memberEpoch() == 0) {
             if (request.rebalanceTimeoutMs() == -1) {
@@ -1321,8 +1324,10 @@ public class GroupMetadataManager {
             if (request.topicPartitions() == null || !request.topicPartitions().isEmpty()) {
                 throw new InvalidRequestException("TopicPartitions must be empty when (re-)joining.");
             }
-            if (request.subscribedTopicNames() == null || request.subscribedTopicNames().isEmpty()) {
-                throw new InvalidRequestException("SubscribedTopicNames must be set in first request.");
+            boolean hasSubscribedTopicNames = request.subscribedTopicNames() != null && !request.subscribedTopicNames().isEmpty();
+            boolean hasSubscribedTopicRegex = request.subscribedTopicRegex() != null && !request.subscribedTopicRegex().isEmpty();
+            if (!hasSubscribedTopicNames && !hasSubscribedTopicRegex) {
+                throw new InvalidRequestException("SubscribedTopicNames or SubscribedTopicRegex must be set in first request.");
             }
         } else if (request.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
             throwIfNull(request.instanceId(), "InstanceId can't be null.");
@@ -1639,6 +1644,24 @@ public class GroupMetadataManager {
                 String.format("A new rebalance is triggered in group %s and member %s should rejoin to catch up.",
                     group.groupId(), member.memberId())
             );
+        }
+    }
+
+    /**
+     * Validates if the provided regular expression is valid.
+     *
+     * @param regex The regular expression to validate.
+     * @throws InvalidRegularExpression if the regular expression is invalid.
+     */
+    private static void throwIfRegularExpressionIsInvalid(
+        String regex
+    ) throws InvalidRegularExpression {
+        try {
+            Pattern.compile(regex);
+        } catch (PatternSyntaxException ex) {
+            throw new InvalidRegularExpression(
+                String.format("SubscribedTopicRegex `%s` is not a valid regular expression: %s.",
+                    regex, ex.getDescription()));
         }
     }
 
@@ -2390,13 +2413,14 @@ public class GroupMetadataManager {
      * @param records       The list to accumulate any new records.
      * @return A boolean indicating whether the updatedMember has a different
      *         subscribedTopicNames/subscribedTopicRegex from the old member.
+     * @throws InvalidRegularExpression if the regular expression is invalid.
      */
     private boolean hasMemberSubscriptionChanged(
         String groupId,
         ConsumerGroupMember member,
         ConsumerGroupMember updatedMember,
         List<CoordinatorRecord> records
-    ) {
+    ) throws InvalidRegularExpression {
         String memberId = updatedMember.memberId();
         if (!updatedMember.equals(member)) {
             records.add(newConsumerGroupMemberSubscriptionRecord(groupId, updatedMember));
@@ -2410,6 +2434,11 @@ public class GroupMetadataManager {
             if (!updatedMember.subscribedTopicRegex().equals(member.subscribedTopicRegex())) {
                 log.debug("[GroupId {}] Member {} updated its subscribed regex to: {}.",
                     groupId, memberId, updatedMember.subscribedTopicRegex());
+                // If the regular expression has changed, we compile it to ensure that
+                // its syntax is valid.
+                if (updatedMember.subscribedTopicRegex() != null) {
+                    throwIfRegularExpressionIsInvalid(updatedMember.subscribedTopicRegex());
+                }
                 return true;
             }
         }

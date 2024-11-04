@@ -27,6 +27,7 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
+import org.apache.kafka.common.errors.InvalidRegularExpression;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
@@ -206,7 +207,7 @@ public class GroupMetadataManagerTest {
                 .setRebalanceTimeoutMs(5000)));
         assertEquals("TopicPartitions must be empty when (re-)joining.", ex.getMessage());
 
-        // SubscribedTopicNames must be present and empty in the first request (epoch == 0).
+        // SubscribedTopicNames or SubscribedTopicRegex must be present and non-empty in the first request (epoch == 0).
         ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setMemberId(memberId)
@@ -214,7 +215,7 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(0)
                 .setRebalanceTimeoutMs(5000)
                 .setTopicPartitions(Collections.emptyList())));
-        assertEquals("SubscribedTopicNames must be set in first request.", ex.getMessage());
+        assertEquals("SubscribedTopicNames or SubscribedTopicRegex must be set in first request.", ex.getMessage());
 
         // InstanceId must be non-empty if provided in all requests.
         ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
@@ -257,20 +258,57 @@ public class GroupMetadataManagerTest {
 
     @Test
     public void testConsumerHeartbeatRegexValidation() {
+        String memberId = Uuid.randomUuid().toString();
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Collections.emptyMap()));
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConsumerGroupAssignors(Collections.singletonList(assignor))
             .build();
-        Exception ex;
-        // Regex not supported for now. This test will evolve to actually validate the regex when it's supported
-        ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
+
+        // Subscribing with an invalid regular expression fails.
+        Exception ex = assertThrows(InvalidRegularExpression.class, () -> context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setMemberId(Uuid.randomUuid().toString())
                 .setGroupId("foo")
+                .setMemberId(memberId)
                 .setMemberEpoch(0)
                 .setRebalanceTimeoutMs(5000)
-                .setSubscribedTopicRegex("t*")));
-        assertEquals("SubscribedTopicRegex is not supported yet.", ex.getMessage());
+                .setSubscribedTopicRegex("[")
+                .setTopicPartitions(Collections.emptyList())));
+        assertEquals("SubscribedTopicRegex `[` is not a valid regular expression: missing closing ].", ex.getMessage());
+
+        // Subscribing with a valid regular expression succeeds.
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId("foo")
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicRegex(".*")
+                .setTopicPartitions(Collections.emptyList()));
+        assertEquals(1, result.response().memberEpoch());
+
+        // Updating the subscription to an invalid regular expression fails.
+        assertThrows(InvalidRegularExpression.class, () -> context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId("foo")
+                .setMemberId(memberId)
+                .setMemberEpoch(1)
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicRegex("[")
+                .setTopicPartitions(Collections.emptyList())));
+        assertEquals("SubscribedTopicRegex `[` is not a valid regular expression: missing closing ].", ex.getMessage());
+
+        // Updating the subscription to topic names succeeds (checking when the regex becomes null).
+        result = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId("foo")
+                .setMemberId(memberId)
+                .setMemberEpoch(1)
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(Collections.singletonList("foo"))
+                .setTopicPartitions(Collections.emptyList()));
+        assertEquals(2, result.response().memberEpoch());
     }
 
     @Test
