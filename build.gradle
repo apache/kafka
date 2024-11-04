@@ -519,9 +519,9 @@ subprojects {
     doLast {
       if (ext.isGithubActions) {
         def moduleDirPath = projectToJUnitXmlPath(project)
-        def dest = rootProject.layout.buildDirectory.dir("junit-xml/${moduleDirPath}").get().asFile
+        def dest = rootProject.layout.buildDirectory.dir("junit-xml/${moduleDirPath}/test").get().asFile
         println "Copy JUnit XML for ${project.name} to $dest"
-        ant.copy(todir: "$dest/test") {
+        ant.copy(todir: "$dest") {
           ant.fileset(dir: "${test.reports.junitXml.entryPoint}")
         }
 
@@ -580,9 +580,9 @@ subprojects {
     doLast {
       if (ext.isGithubActions) {
         def moduleDirPath = projectToJUnitXmlPath(project)
-        def dest = rootProject.layout.buildDirectory.dir("junit-xml/${moduleDirPath}").get().asFile
+        def dest = rootProject.layout.buildDirectory.dir("junit-xml/${moduleDirPath}/quarantinedTest").get().asFile
         println "Copy JUnit XML for ${project.name} to $dest"
-        ant.copy(todir: "$dest/quarantinedTest", failonerror: "false") {
+        ant.copy(todir: "$dest", failonerror: "false") {
           ant.fileset(dir: "${quarantinedTest.reports.junitXml.entryPoint}") {
             ant.include(name: "**/*.xml")
           }

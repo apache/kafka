@@ -41,6 +41,7 @@ PASSED = "PASSED ✅"
 FAILED = "FAILED ❌"
 FLAKY = "FLAKY ⚠️ "
 SKIPPED = "SKIPPED 🙈"
+QUARANTINED = "QUARANTINED 😷"
 
 
 def get_env(key: str, fn = str) -> Optional:
@@ -197,18 +198,21 @@ def pretty_time_duration(seconds: float) -> str:
     return time_fmt
 
 
-def module_path_from_report_path(base_path: str, report_path: str) -> str:
+def split_report_path(base_path: str, report_path: str) -> Tuple[str, str]:
     """
     Parse a report XML and extract the module path. Test report paths look like:
 
-        build/junit-xml/module[/sub-module]/[suite]/TEST-class.method.xml
+        build/junit-xml/module[/sub-module]/[task]/TEST-class.method.xml
 
     This method strips off a base path and assumes all path segments leading up to the suite name
     are part of the module path.
+
+    Returns a tuple of (module, task)
     """
     rel_report_path = os.path.relpath(report_path, base_path)
     path_segments = pathlib.Path(rel_report_path).parts
-    return os.path.join(*path_segments[0:-2])
+
+    return os.path.join(*path_segments[0:-2]), path_segments[-2]
 
 
 if __name__ == "__main__":
@@ -254,14 +258,15 @@ if __name__ == "__main__":
     failed_table = []
     flaky_table = []
     skipped_table = []
+    quarantined_table = []
 
     exporter = TestCatalogExporter()
 
     logger.debug(f"::group::Parsing {len(reports)} JUnit Report Files")
     for report in reports:
         with open(report, "r") as fp:
-            module_path = module_path_from_report_path(args.path, report)
-            logger.debug(f"Parsing file: {report}, module: {module_path}")
+            module_path, task = split_report_path(args.path, report)
+            logger.debug(f"Parsing file: {report}, module: {module_path}, task: {task}")
             for suite in parse_report(workspace_path, report, fp):
                 total_skipped += suite.skipped
                 total_errors += suite.errors
@@ -271,10 +276,10 @@ if __name__ == "__main__":
                 # Due to how the Develocity Test Retry plugin interacts with our generated ClusterTests, we can see
                 # tests pass and then fail in the same run. Because of this, we need to capture all passed and all
                 # failed for each suite. Then we can find flakes by taking the intersection of those two.
-                all_suite_passed = {test.key() for test in suite.passed_tests}
+                all_suite_passed = {test.key(): test for test in suite.passed_tests}
                 all_suite_failed = {test.key(): test for test in suite.failed_tests}
-                flaky = all_suite_passed & all_suite_failed.keys()
-                all_tests = all_suite_passed | all_suite_failed.keys()
+                flaky = all_suite_passed.keys() & all_suite_failed.keys()
+                all_tests = all_suite_passed.keys() | all_suite_failed.keys()
                 total_tests += len(all_tests)
                 total_flaky += len(flaky)
                 total_failures += len(all_suite_failed) - len(flaky)
@@ -298,6 +303,15 @@ if __name__ == "__main__":
                     logger.debug(f"Found skipped test: {skipped_test}")
                     skipped_table.append((simple_class_name, skipped_test.test_name))
 
+                # Collect all tests that were run as part of quarantinedTest
+                if task == "quarantinedTest":
+                    for test in all_suite_passed.values():
+                        simple_class_name = test.class_name.split(".")[-1]
+                        quarantined_table.append((simple_class_name, test.test_name))
+                    for test in all_suite_failed.values():
+                        simple_class_name = test.class_name.split(".")[-1]
+                        quarantined_table.append((simple_class_name, test.test_name))
+
                 if args.export_test_catalog:
                     exporter.handle_suite(module_path, suite)
 
@@ -311,7 +325,9 @@ if __name__ == "__main__":
     duration = pretty_time_duration(total_time)
     logger.info(f"Finished processing {len(reports)} reports")
 
-    # Print summary
+    # Print summary of the tests.
+    # The stdout (print) goes to the workflow step console output.
+    # The stderr (logger) is redirected to GITHUB_STEP_SUMMARY which becomes part of the HTML job summary.
     report_url = get_env("JUNIT_REPORT_URL")
     report_md = f"Download [HTML report]({report_url})."
     summary = (f"{total_run} tests cases run in {duration}. "
@@ -345,6 +361,18 @@ if __name__ == "__main__":
         print(f"| Module | Test |")
         print(f"| ------ | ---- |")
         for row in skipped_table:
+            row_joined = " | ".join(row)
+            print(f"| {row_joined} |")
+        print("\n</details>")
+
+    if len(quarantined_table) > 0:
+        logger.info(f"Ran {len(quarantined_table)} quarantined test:")
+        print("<details>")
+        print(f"<summary>{len(quarantined_table)} Quarantined Tests</summary>\n")
+        print(f"| Module | Test |")
+        print(f"| ------ | ---- |")
+        for row in quarantined_table:
+            logger.info(f"{QUARANTINED} {row[0]} > {row[1]}")
             row_joined = " | ".join(row)
             print(f"| {row_joined} |")
         print("\n</details>")
