@@ -130,6 +130,11 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      */
     private final TimelineHashMap<Uuid, TimelineHashMap<Integer, Integer>> currentPartitionEpoch;
 
+    /**
+     * The number of members subscribed to each regular expressions.
+     */
+    private final TimelineHashMap<String, Integer> subscribedRegularExpressions;
+
     public ConsumerGroup(
         SnapshotRegistry snapshotRegistry,
         String groupId,
@@ -143,6 +148,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         this.numClassicProtocolMembers = new TimelineInteger(snapshotRegistry);
         this.classicProtocolMembersSupportedProtocols = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentPartitionEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.subscribedRegularExpressions = new TimelineHashMap<>(snapshotRegistry, 0);
     }
 
     /**
@@ -294,6 +300,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         maybeUpdateSubscribedTopicNamesAndGroupSubscriptionType(oldMember, newMember);
         maybeUpdateServerAssignors(oldMember, newMember);
         maybeUpdatePartitionEpoch(oldMember, newMember);
+        maybeUpdateSubscribedRegularExpression(oldMember, newMember);
         updateStaticMember(newMember);
         maybeUpdateGroupState();
         maybeUpdateNumClassicProtocolMembers(oldMember, newMember);
@@ -317,6 +324,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         maybeUpdateSubscribedTopicNamesAndGroupSubscriptionType(oldMember, null);
         maybeUpdateServerAssignors(oldMember, null);
         maybeRemovePartitionEpoch(oldMember);
+        maybeUpdateSubscribedRegularExpression(oldMember, null);
         removeStaticMember(oldMember);
         maybeUpdateGroupState();
         maybeUpdateNumClassicProtocolMembers(oldMember, null);
@@ -332,6 +340,13 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         if (oldMember != null && oldMember.instanceId() != null) {
             staticMembers.remove(oldMember.instanceId());
         }
+    }
+
+    /**
+     * @return The number of members subscribed to the provided regex.
+     */
+    public int numSubscribedMembers(String regex) {
+        return subscribedRegularExpressions.getOrDefault(regex, 0);
     }
 
     /**
@@ -365,7 +380,8 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      * @return The epoch or -1.
      */
     public int currentPartitionEpoch(
-        Uuid topicId, int partitionId
+        Uuid topicId,
+        int partitionId
     ) {
         Map<Integer, Integer> partitions = currentPartitionEpoch.get(topicId);
         if (partitions == null) {
@@ -662,6 +678,26 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             newMember.serverAssignorName().ifPresent(name ->
                 serverAssignorCount.compute(name, Utils::incValue)
             );
+        }
+    }
+
+    /**
+     * Updates the number of the members that use the regular expression.
+     *
+     * @param oldMember The old member.
+     * @param newMember The new member.
+     */
+    private void maybeUpdateSubscribedRegularExpression(
+        ConsumerGroupMember oldMember,
+        ConsumerGroupMember newMember
+    ) {
+        // Decrement the count of the old regex.
+        if (oldMember != null && oldMember.subscribedTopicRegex() != null) {
+            subscribedRegularExpressions.compute(oldMember.subscribedTopicRegex(), Utils::decValue);
+        }
+        // Increment the count of the new regex.
+        if (newMember != null && newMember.subscribedTopicRegex() != null) {
+            subscribedRegularExpressions.compute(newMember.subscribedTopicRegex(), Utils::incValue);
         }
     }
 
