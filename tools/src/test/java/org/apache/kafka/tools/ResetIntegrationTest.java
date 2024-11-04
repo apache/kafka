@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.integration;
+package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.network.SocketServerConfigs;
@@ -24,7 +24,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.test.TestUtils;
-import org.apache.kafka.tools.StreamsResetter;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -48,10 +47,9 @@ import java.util.Properties;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.isEmptyConsumerGroup;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests local state store and global application cleanup.
@@ -210,7 +208,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
         // Reset will success with --force, it will force delete active members on broker side
         cleanGlobal(false, "--force", null, appID);
-        assertThat("Group is not empty after cleanGlobal", isEmptyConsumerGroup(adminClient, appID));
+        assertTrue(isEmptyConsumerGroup(adminClient, appID), "Group is not empty after cleanGlobal");
 
         assertInternalTopicsGotDeleted(null);
 
@@ -219,7 +217,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
         streams.close();
 
-        assertThat(resultRerun, equalTo(result));
+        assertEquals(result, resultRerun);
         cleanGlobal(false, "--force", null, appID);
     }
 
@@ -259,7 +257,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         streams.close();
 
         result.remove(0);
-        assertThat(resultRerun, equalTo(result));
+        assertEquals(result, resultRerun);
 
         waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT);
         cleanGlobal(false, null, null, appID);
@@ -306,7 +304,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
         streams.close();
 
-        assertThat(resultRerun, equalTo(result));
+        assertEquals(result, resultRerun);
 
         waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT);
         cleanGlobal(false, null, null, appID);
@@ -348,7 +346,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
         streams.close();
 
-        assertThat(resultRerun, equalTo(result));
+        assertEquals(result, resultRerun);
 
         waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT);
         cleanGlobal(false, null, null, appID);
