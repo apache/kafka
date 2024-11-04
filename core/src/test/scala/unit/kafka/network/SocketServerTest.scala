@@ -2248,7 +2248,7 @@ class SocketServerTest {
     time: Time = Time.SYSTEM,
     connectionDisconnectListeners: Seq[ConnectionDisconnectListener] = Seq.empty
   ) extends SocketServer(
-    config, new Metrics, time, credentialProvider, apiVersionManager, connectionDisconnectListeners
+    config, new Metrics, time, credentialProvider, apiVersionManager, connectionDisconnectListeners = connectionDisconnectListeners
   ) {
 
     override def createDataPlaneAcceptor(endPoint: EndPoint, isPrivilegedListener: Boolean, requestChannel: RequestChannel) : DataPlaneAcceptor = {

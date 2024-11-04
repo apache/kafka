@@ -46,6 +46,7 @@ import org.apache.kafka.common.utils.{KafkaThread, LogContext, Time, Utils}
 import org.apache.kafka.common.{Endpoint, KafkaException, MetricName, Reconfigurable}
 import org.apache.kafka.network.{ConnectionQuotaEntity, ConnectionThrottledException, SocketServerConfigs, TooManyConnectionsException}
 import org.apache.kafka.security.CredentialProvider
+import org.apache.kafka.server.ServerSocketFactory
 import org.apache.kafka.server.config.QuotaConfig
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.network.ConnectionDisconnectListener
@@ -76,13 +77,15 @@ import scala.util.control.ControlThrowable
  *      Acceptor has 1 Processor thread that has its own selector and read requests from the socket.
  *      1 Handler thread that handles requests and produces responses back to the processor thread for writing.
  */
-class SocketServer(val config: KafkaConfig,
-                   val metrics: Metrics,
-                   val time: Time,
-                   val credentialProvider: CredentialProvider,
-                   val apiVersionManager: ApiVersionManager,
-                   val connectionDisconnectListeners: Seq[ConnectionDisconnectListener] = Seq.empty)
-  extends Logging with BrokerReconfigurable {
+class SocketServer(
+  val config: KafkaConfig,
+  val metrics: Metrics,
+  val time: Time,
+  val credentialProvider: CredentialProvider,
+  val apiVersionManager: ApiVersionManager,
+  val socketFactory: ServerSocketFactory = ServerSocketFactory.INSTANCE,
+  val connectionDisconnectListeners: Seq[ConnectionDisconnectListener] = Seq.empty
+) extends Logging with BrokerReconfigurable {
 
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
@@ -721,23 +724,17 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
    * Create a server socket to listen for connections on.
    */
   private def openServerSocket(host: String, port: Int, listenBacklogSize: Int): ServerSocketChannel = {
-    val socketAddress =
-      if (Utils.isBlank(host))
-        new InetSocketAddress(port)
-      else
-        new InetSocketAddress(host, port)
-    val serverChannel = ServerSocketChannel.open()
-    try {
-      serverChannel.configureBlocking(false)
-      if (recvBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
-        serverChannel.socket().setReceiveBufferSize(recvBufferSize)
-      serverChannel.socket.bind(socketAddress, listenBacklogSize)
-      info(s"Awaiting socket connections on ${socketAddress.getHostString}:${serverChannel.socket.getLocalPort}.")
-    } catch {
-      case e: SocketException =>
-        Utils.closeQuietly(serverChannel, "server socket")
-        throw new KafkaException(s"Socket server failed to bind to ${socketAddress.getHostString}:$port: ${e.getMessage}.", e)
+    val socketAddress = if (Utils.isBlank(host)) {
+      new InetSocketAddress(port)
+    } else {
+      new InetSocketAddress(host, port)
     }
+    val serverChannel = socketServer.socketFactory.openServerSocket(
+      endPoint.listenerName.value(),
+      socketAddress,
+      listenBacklogSize,
+      recvBufferSize)
+    info(s"Awaiting socket connections on ${socketAddress.getHostString}:${serverChannel.socket.getLocalPort}.")
     serverChannel
   }
 
