@@ -479,7 +479,6 @@ class TransactionStateManager(brokerId: Int,
                       case Some(txnMetadata) =>
                         loadedTransactions.put(transactionalId, txnMetadata)
                     }
-                    currOffset = batch.nextOffset
 
                   case unknownKey: UnknownKey =>
                     warn(s"Unknown message key with version ${unknownKey.version}" +
@@ -487,6 +486,7 @@ class TransactionStateManager(brokerId: Int,
                       "It could be a left over from an aborted upgrade.")
                 }
               }
+              currOffset = batch.nextOffset
             }
           }
         } catch {
