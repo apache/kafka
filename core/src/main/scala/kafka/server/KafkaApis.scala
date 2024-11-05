@@ -2431,8 +2431,12 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
 
         val markerResults = new ConcurrentHashMap[TopicPartition, Errors]()
-        def maybeComplete(): Unit = {
-          if (partitionsWithCompatibleMessageFormat.size == markerResults.size) {
+        val numPartitions = new AtomicInteger(partitionsWithCompatibleMessageFormat.size)
+        def addResultAndMaybeComplete(partition: TopicPartition, error: Errors): Unit = {
+          markerResults.put(partition, error)
+          // We should only call maybeSendResponseCallback once per marker. Otherwise, it causes sending the response
+          // prematurely.
+          if (numPartitions.decrementAndGet() == 0) {
             maybeSendResponseCallback(producerId, marker.transactionResult, markerResults)
           }
         }
@@ -2462,8 +2466,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                     error
                 }
               }
-              markerResults.put(partition, error)
-              maybeComplete()
+              addResultAndMaybeComplete(partition, error)
             }
           } else {
             // Otherwise, the regular appendRecords path is used for all the non __consumer_offsets
@@ -2476,20 +2479,21 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
         }
 
-        replicaManager.appendRecords(
-          timeout = config.requestTimeoutMs.toLong,
-          requiredAcks = -1,
-          internalTopicsAllowed = true,
-          origin = AppendOrigin.COORDINATOR,
-          entriesPerPartition = controlRecords,
-          requestLocal = requestLocal,
-          responseCallback = errors => {
-            errors.foreachEntry { (tp, partitionResponse) =>
-              markerResults.put(tp, partitionResponse.error)
+        if (controlRecords.nonEmpty) {
+          replicaManager.appendRecords(
+            timeout = config.requestTimeoutMs.toLong,
+            requiredAcks = -1,
+            internalTopicsAllowed = true,
+            origin = AppendOrigin.COORDINATOR,
+            entriesPerPartition = controlRecords,
+            requestLocal = requestLocal,
+            responseCallback = errors => {
+              errors.foreachEntry { (tp, partitionResponse) =>
+                addResultAndMaybeComplete(tp, partitionResponse.error)
+              }
             }
-            maybeComplete()
-          }
-        )
+          )
+        }
       }
     }
 

@@ -3071,6 +3071,44 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
+  def testWriteTxnMarkersShouldAllBeIncludedInTheResponse(): Unit = {
+    // This test verifies the response will not be sent prematurely because of calling replicaManager append
+    // with no records.
+    val topicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
+    val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
+      asList(
+        new TxnMarkerEntry(1, 1.toShort, 0, TransactionResult.COMMIT, asList(topicPartition)),
+        new TxnMarkerEntry(2, 1.toShort, 0, TransactionResult.COMMIT, asList(topicPartition)),
+      )).build()
+    val request = buildRequest(writeTxnMarkersRequest)
+    val capturedResponse: ArgumentCaptor[WriteTxnMarkersResponse] = ArgumentCaptor.forClass(classOf[WriteTxnMarkersResponse])
+
+    when(replicaManager.getMagic(any()))
+      .thenReturn(Some(RecordBatch.MAGIC_VALUE_V2))
+    when(groupCoordinator.isNewGroupCoordinator)
+      .thenReturn(true)
+    when(groupCoordinator.completeTransaction(
+      ArgumentMatchers.eq(topicPartition),
+      any(),
+      ArgumentMatchers.eq(1.toShort),
+      ArgumentMatchers.eq(0),
+      ArgumentMatchers.eq(TransactionResult.COMMIT),
+      any()
+    )).thenReturn(CompletableFuture.completedFuture[Void](null))
+
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleWriteTxnMarkersRequest(request, RequestLocal.withThreadConfinedCaching)
+
+    verify(requestChannel).sendResponse(
+      ArgumentMatchers.eq(request),
+      capturedResponse.capture(),
+      ArgumentMatchers.eq(None)
+    )
+    val markersResponse = capturedResponse.getValue
+    assertEquals(2, markersResponse.errorsByProducerId.size())
+  }
+
+  @Test
   def shouldRespondWithUnsupportedMessageFormatForBadPartitionAndNoErrorsForGoodPartition(): Unit = {
     val tp1 = new TopicPartition("t", 0)
     val tp2 = new TopicPartition("t1", 0)
