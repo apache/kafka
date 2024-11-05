@@ -73,7 +73,7 @@ class ConnectRestApiTest(KafkaTest):
     CONNECT_PROTOCOL="compatible"
 
     def __init__(self, test_context):
-        super(ConnectRestApiTest, self).__init__(test_context, num_zk=1, num_brokers=1, topics={
+        super(ConnectRestApiTest, self).__init__(test_context, num_zk=0, num_brokers=1, topics={
             'test': {'partitions': 1, 'replication-factor': 1}
         })
 
