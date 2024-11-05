@@ -50,7 +50,7 @@ import scala.jdk.CollectionConverters._
 /**
   * The test cases here verify that a producer authorized to publish to a topic
   * is able to, and that consumers in a group authorized to consume are able to
-  * to do so.
+  * do so.
   *
   * This test relies on a chain of test harness traits to set up. It directly
   * extends IntegrationTestHarness. IntegrationTestHarness creates producers and
