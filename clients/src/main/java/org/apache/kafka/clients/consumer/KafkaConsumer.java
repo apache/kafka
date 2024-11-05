@@ -873,7 +873,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             is too large or if the topic does not exist).
      * @throws org.apache.kafka.common.errors.TimeoutException if the timeout specified by {@code default.api.timeout.ms} expires
      *            before successful completion of the offset commit
-     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
+     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer is using the classic group protocol
+     *            and this instance gets fenced by broker.
      */
     @Override
     public void commitSync() {
@@ -916,7 +917,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             is too large or if the topic does not exist).
      * @throws org.apache.kafka.common.errors.TimeoutException if the timeout expires before successful completion
      *            of the offset commit
-     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
+     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer is using the classic group protocol
+     *            and this instance gets fenced by broker.
      */
     @Override
     public void commitSync(Duration timeout) {
@@ -964,7 +966,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             is too large or if the topic does not exist).
      * @throws org.apache.kafka.common.errors.TimeoutException if the timeout expires before successful completion
      *            of the offset commit
-     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
+     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer is using the classic group protocol
+     *            and this instance gets fenced by broker.
      */
     @Override
     public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
@@ -1012,7 +1015,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             is too large or if the topic does not exist).
      * @throws org.apache.kafka.common.errors.TimeoutException if the timeout expires before successful completion
      *            of the offset commit
-     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
+     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer is using the classic group protocol
+     *            and this instance gets fenced by broker.
      */
     @Override
     public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets, final Duration timeout) {
@@ -1022,7 +1026,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Commit offsets returned on the last {@link #poll(Duration)} for all the subscribed list of topics and partition.
      * Same as {@link #commitAsync(OffsetCommitCallback) commitAsync(null)}
-     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
+     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer is using the classic group protocol
+     *            and this instance gets fenced by broker.
      */
     @Override
     public void commitAsync() {
@@ -1045,7 +1050,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * (and variants) returns.
      *
      * @param callback Callback to invoke when the commit completes
-     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
+     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer is using the classic group protocol
+     *             and this instance gets fenced by broker.
      */
     @Override
     public void commitAsync(OffsetCommitCallback callback) {
@@ -1072,7 +1078,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param offsets A map of offsets by partition with associate metadata. This map will be copied internally, so it
      *                is safe to mutate the map after returning.
      * @param callback Callback to invoke when the commit completes
-     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
+     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer is using the classic group protocol
+     *             and this instance gets fenced by broker.
      */
     @Override
     public void commitAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
