@@ -35,7 +35,6 @@ import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
  * @see KStream#transformValues(ValueTransformerWithKeySupplier, String...)
  * @see Transformer
  * @see TransformerSupplier
- * @see KStream#transform(TransformerSupplier, String...)
  * @deprecated Since 4.0. Use {@link FixedKeyProcessorSupplier} instead.
  */
 @Deprecated

@@ -54,7 +54,6 @@ import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.ThreadMetadata;
@@ -68,6 +67,7 @@ import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
@@ -2289,34 +2289,29 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
-    @SuppressWarnings("deprecation")
+    @MethodSource("data")
     public void shouldPunctuateWithTimestampPreservedInProcessorContext(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
         assumeFalse(processingThreadsEnabled);
 
-        final org.apache.kafka.streams.kstream.TransformerSupplier<Object, Object, KeyValue<Object, Object>> punctuateProcessor =
-            () -> new org.apache.kafka.streams.kstream.Transformer<Object, Object, KeyValue<Object, Object>>() {
-                @Override
-                public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
-                    context.schedule(Duration.ofMillis(100L), PunctuationType.WALL_CLOCK_TIME, timestamp -> context.forward("key", "value"));
-                    context.schedule(Duration.ofMillis(100L), PunctuationType.STREAM_TIME, timestamp -> context.forward("key", "value"));
-                }
+        final ProcessorSupplier<Object, Object, Object, Object> punctuateProcessor = () -> new Processor<>() {
+            @Override
+            public void init(final ProcessorContext<Object, Object> context) {
+                final Duration duration = Duration.ofMillis(100L);
+                final Punctuator punctuator = timestamp -> context.forward(new Record<>("key", "value", timestamp));
+                context.schedule(duration, PunctuationType.WALL_CLOCK_TIME, punctuator);
+                context.schedule(duration, PunctuationType.STREAM_TIME, punctuator);
+            }
 
-                @Override
-                public KeyValue<Object, Object> transform(final Object key, final Object value) {
-                        return null;
-                    }
-
-                @Override
-                public void close() {}
-            };
+            @Override
+            public void process(final Record<Object, Object> record) {}
+        };
 
         final List<Long> peekedContextTime = new ArrayList<>();
         final ProcessorSupplier<Object, Object, Void, Void> peekProcessor =
             () -> (Processor<Object, Object, Void, Void>) record -> peekedContextTime.add(record.timestamp());
 
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed)
-            .transform(punctuateProcessor)
+            .process(punctuateProcessor)
             .process(peekProcessor);
         internalStreamsBuilder.buildAndOptimizeTopology();
 

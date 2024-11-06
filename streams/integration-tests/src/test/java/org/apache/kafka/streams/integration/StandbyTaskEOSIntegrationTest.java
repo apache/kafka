@@ -30,8 +30,10 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
@@ -319,7 +321,6 @@ public class StandbyTaskEOSIntegrationTest {
         );
     }
 
-    @SuppressWarnings("deprecation")
     private KafkaStreams buildWithDeduplicationTopology(final String stateDirPath) {
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -329,26 +330,31 @@ public class StandbyTaskEOSIntegrationTest {
             Serdes.Integer())
         );
         builder.<Integer, Integer>stream(inputTopic)
-            .transform(
-                () -> new org.apache.kafka.streams.kstream.Transformer<Integer, Integer, KeyValue<Integer, Integer>>() {
+            .process(
+                () -> new Processor<Integer, Integer, Integer, Integer>() {
+                    private ProcessorContext<Integer, Integer> context;
                     private KeyValueStore<Integer, Integer> store;
 
-                    @SuppressWarnings("unchecked")
                     @Override
-                    public void init(final ProcessorContext context) {
-                        store = (KeyValueStore<Integer, Integer>) context.getStateStore(storeName);
+                    public void init(final ProcessorContext<Integer, Integer> context) {
+                        this.context = context;
+                        store = context.getStateStore(storeName);
                     }
 
                     @Override
-                    public KeyValue<Integer, Integer> transform(final Integer key, final Integer value) {
+                    public void process(final Record<Integer, Integer> record) {
+                        final int key = record.key();
+                        final int value = record.value();
+
                         if (skipRecord.get()) {
                             // we only forward so we can verify the skipping by reading the output topic
                             // the goal is skipping is to not modify the state store
-                            return KeyValue.pair(key, value);
+                            context.forward(record);
+                            return;
                         }
 
                         if (store.get(key) != null) {
-                            return null;
+                            return;
                         }
 
                         store.put(key, value);
@@ -360,11 +366,8 @@ public class StandbyTaskEOSIntegrationTest {
                             throw new RuntimeException("Injected test error");
                         }
 
-                        return KeyValue.pair(key, value);
+                        context.forward(record);
                     }
-
-                    @Override
-                    public void close() { }
                 },
                 storeName
             )
