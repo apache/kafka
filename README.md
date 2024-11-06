@@ -44,8 +44,8 @@ Follow instructions in https://kafka.apache.org/quickstart
 ### Running a particular unit/integration test ###
     ./gradlew clients:test --tests RequestResponseTest
 
-### Repeatedly running a particular unit/integration test ###
-    I=0; while ./gradlew clients:test --tests RequestResponseTest --rerun --fail-fast; do (( I=$I+1 )); echo "Completed run: $I"; sleep 1; done
+### Repeatedly running a particular unit/integration test with specific times by setting N ###
+    N=500; I=0; while [ $I -lt $N ] && ./gradlew clients:test --tests RequestResponseTest --rerun --fail-fast; do (( I=$I+1 )); echo "Completed run: $I"; sleep 1; done
 
 ### Running a particular test method within a unit/integration test ###
     ./gradlew core:test --tests kafka.api.ProducerFailureHandlingTest.testCannotSendToInternalTopic
