@@ -58,6 +58,8 @@ import org.apache.kafka.clients.admin.DeleteTopicsOptions;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeAclsOptions;
 import org.apache.kafka.clients.admin.DescribeAclsResult;
+import org.apache.kafka.clients.admin.DescribeClassicGroupsOptions;
+import org.apache.kafka.clients.admin.DescribeClassicGroupsResult;
 import org.apache.kafka.clients.admin.DescribeClientQuotasOptions;
 import org.apache.kafka.clients.admin.DescribeClientQuotasResult;
 import org.apache.kafka.clients.admin.DescribeClusterOptions;
@@ -423,6 +425,11 @@ public class TestingMetricsInterceptingAdminClient extends AdminClient {
     @Override
     public ListShareGroupsResult listShareGroups(final ListShareGroupsOptions options) {
         return adminDelegate.listShareGroups(options);
+    }
+
+    @Override
+    public DescribeClassicGroupsResult describeClassicGroups(final Collection<String> groupIds, final DescribeClassicGroupsOptions options) {
+        return adminDelegate.describeClassicGroups(groupIds, options);
     }
 
     @Override

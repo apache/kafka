@@ -49,6 +49,7 @@ import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.clients.admin.internals.DeleteConsumerGroupOffsetsHandler;
 import org.apache.kafka.clients.admin.internals.DeleteConsumerGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DeleteRecordsHandler;
+import org.apache.kafka.clients.admin.internals.DescribeClassicGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeConsumerGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeProducersHandler;
 import org.apache.kafka.clients.admin.internals.DescribeShareGroupsHandler;
@@ -3963,6 +3964,17 @@ public class KafkaAdminClient extends AdminClient {
         }, nowMetadata);
 
         return new ListShareGroupsResult(all);
+    }
+
+    @Override
+    public DescribeClassicGroupsResult describeClassicGroups(final Collection<String> groupIds,
+                                                             final DescribeClassicGroupsOptions options) {
+        SimpleAdminApiFuture<CoordinatorKey, ClassicGroupDescription> future =
+            DescribeClassicGroupsHandler.newFuture(groupIds);
+        DescribeClassicGroupsHandler handler = new DescribeClassicGroupsHandler(options.includeAuthorizedOperations(), logContext);
+        invokeDriver(handler, future, options.timeoutMs);
+        return new DescribeClassicGroupsResult(future.all().entrySet().stream()
+            .collect(Collectors.toMap(entry -> entry.getKey().idValue, Map.Entry::getValue)));
     }
 
     @Override

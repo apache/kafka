@@ -315,6 +315,11 @@ public class ForwardingAdmin implements Admin {
     }
 
     @Override
+    public DescribeClassicGroupsResult describeClassicGroups(Collection<String> groupIds, DescribeClassicGroupsOptions options) {
+        return delegate.describeClassicGroups(groupIds, options);
+    }
+
+    @Override
     public void registerMetricForSubscription(KafkaMetric metric) {
         throw new UnsupportedOperationException();
     }

@@ -16,25 +16,28 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
+import org.apache.kafka.clients.admin.ClassicGroupDescription;
 import org.apache.kafka.clients.admin.MemberAssignment;
 import org.apache.kafka.clients.admin.MemberDescription;
-import org.apache.kafka.clients.admin.ShareGroupDescription;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.ClassicGroupState;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.ShareGroupState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AclOperation;
-import org.apache.kafka.common.message.ShareGroupDescribeRequestData;
-import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
+import org.apache.kafka.common.message.DescribeGroupsRequestData;
+import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.DescribeGroupsRequest;
+import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
-import org.apache.kafka.common.requests.ShareGroupDescribeRequest;
-import org.apache.kafka.common.requests.ShareGroupDescribeResponse;
 import org.apache.kafka.common.utils.LogContext;
 
 import org.slf4j.Logger;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -42,22 +45,24 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.admin.internals.AdminUtils.validAclOperations;
 
-public class DescribeShareGroupsHandler extends AdminApiHandler.Batched<CoordinatorKey, ShareGroupDescription> {
+public class DescribeClassicGroupsHandler extends AdminApiHandler.Batched<CoordinatorKey, ClassicGroupDescription> {
 
     private final boolean includeAuthorizedOperations;
     private final Logger log;
     private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
 
-    public DescribeShareGroupsHandler(
-          boolean includeAuthorizedOperations,
-          LogContext logContext) {
+    public DescribeClassicGroupsHandler(
+        boolean includeAuthorizedOperations,
+        LogContext logContext
+    ) {
         this.includeAuthorizedOperations = includeAuthorizedOperations;
-        this.log = logContext.logger(DescribeShareGroupsHandler.class);
+        this.log = logContext.logger(DescribeConsumerGroupsHandler.class);
         this.lookupStrategy = new CoordinatorStrategy(CoordinatorType.GROUP, logContext);
     }
 
@@ -67,13 +72,13 @@ public class DescribeShareGroupsHandler extends AdminApiHandler.Batched<Coordina
             .collect(Collectors.toSet());
     }
 
-    public static AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, ShareGroupDescription> newFuture(Collection<String> groupIds) {
+    public static AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, ClassicGroupDescription> newFuture(Collection<String> groupIds) {
         return AdminApiFuture.forKeys(buildKeySet(groupIds));
     }
 
     @Override
     public String apiName() {
-        return "describeShareGroups";
+        return "describeClassicGroups";
     }
 
     @Override
@@ -82,116 +87,102 @@ public class DescribeShareGroupsHandler extends AdminApiHandler.Batched<Coordina
     }
 
     @Override
-    public ShareGroupDescribeRequest.Builder buildBatchedRequest(int coordinatorId, Set<CoordinatorKey> keys) {
+    public DescribeGroupsRequest.Builder buildBatchedRequest(int coordinatorId, Set<CoordinatorKey> keys) {
         List<String> groupIds = keys.stream().map(key -> {
             if (key.type != FindCoordinatorRequest.CoordinatorType.GROUP) {
                 throw new IllegalArgumentException("Invalid group coordinator key " + key +
-                    " when building `DescribeShareGroups` request");
+                    " when building `DescribeGroups` request");
             }
             return key.idValue;
         }).collect(Collectors.toList());
-        ShareGroupDescribeRequestData data = new ShareGroupDescribeRequestData()
-            .setGroupIds(groupIds)
+        DescribeGroupsRequestData data = new DescribeGroupsRequestData()
+            .setGroups(groupIds)
             .setIncludeAuthorizedOperations(includeAuthorizedOperations);
-        return new ShareGroupDescribeRequest.Builder(data, true);
+        return new DescribeGroupsRequest.Builder(data);
     }
 
     @Override
-    public ApiResult<CoordinatorKey, ShareGroupDescription> handleResponse(
+    public ApiResult<CoordinatorKey, ClassicGroupDescription> handleResponse(
             Node coordinator,
             Set<CoordinatorKey> groupIds,
             AbstractResponse abstractResponse) {
-        final ShareGroupDescribeResponse response = (ShareGroupDescribeResponse) abstractResponse;
-        final Map<CoordinatorKey, ShareGroupDescription> completed = new HashMap<>();
+        final DescribeGroupsResponse response = (DescribeGroupsResponse) abstractResponse;
+        final Map<CoordinatorKey, ClassicGroupDescription> completed = new HashMap<>();
         final Map<CoordinatorKey, Throwable> failed = new HashMap<>();
         final Set<CoordinatorKey> groupsToUnmap = new HashSet<>();
 
-        for (ShareGroupDescribeResponseData.DescribedGroup describedGroup : response.data().groups()) {
+        for (DescribeGroupsResponseData.DescribedGroup describedGroup : response.data().groups()) {
             CoordinatorKey groupIdKey = CoordinatorKey.byGroupId(describedGroup.groupId());
             Errors error = Errors.forCode(describedGroup.errorCode());
             if (error != Errors.NONE) {
-                handleError(groupIdKey, describedGroup, coordinator, error, describedGroup.errorMessage(), completed, failed, groupsToUnmap);
+                handleError(groupIdKey, error, error.message(), failed, groupsToUnmap);
                 continue;
             }
 
             final List<MemberDescription> memberDescriptions = new ArrayList<>(describedGroup.members().size());
             final Set<AclOperation> authorizedOperations = validAclOperations(describedGroup.authorizedOperations());
 
-            describedGroup.members().forEach(groupMember ->
+            final String protocolType = describedGroup.protocolType();
+            final boolean isConsumerGroup = protocolType.equals(ConsumerProtocol.PROTOCOL_TYPE) || protocolType.isEmpty();
+            describedGroup.members().forEach(groupMember -> {
+                Set<TopicPartition> partitions = Collections.emptySet();
+                if (isConsumerGroup && groupMember.memberAssignment().length > 0) {
+                    // We can only deserialize the assignment for a classic consumer group
+                    final Assignment assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(groupMember.memberAssignment()));
+                    partitions = new HashSet<>(assignment.partitions());
+                }
                 memberDescriptions.add(new MemberDescription(
                     groupMember.memberId(),
+                    Optional.ofNullable(groupMember.groupInstanceId()),
                     groupMember.clientId(),
                     groupMember.clientHost(),
-                    new MemberAssignment(convertAssignment(groupMember.assignment()))
-                ))
-            );
+                    new MemberAssignment(partitions)));
+            });
 
-            final ShareGroupDescription shareGroupDescription =
-                new ShareGroupDescription(groupIdKey.idValue,
+            final ClassicGroupDescription classicGroupDescription =
+                new ClassicGroupDescription(
+                    groupIdKey.idValue,
+                    protocolType,
+                    describedGroup.protocolData(),
                     memberDescriptions,
-                    ShareGroupState.parse(describedGroup.groupState()),
+                    ClassicGroupState.parse(describedGroup.groupState()),
                     coordinator,
                     authorizedOperations);
-            completed.put(groupIdKey, shareGroupDescription);
+            completed.put(groupIdKey, classicGroupDescription);
         }
 
-        return new ApiResult<>(completed, failed, new ArrayList<>(groupsToUnmap));
-    }
-
-    private Set<TopicPartition> convertAssignment(ShareGroupDescribeResponseData.Assignment assignment) {
-        return assignment.topicPartitions().stream().flatMap(topic ->
-            topic.partitions().stream().map(partition ->
-                new TopicPartition(topic.topicName(), partition)
-            )
-        ).collect(Collectors.toSet());
+        return new ApiResult<>(completed, failed, List.copyOf(groupsToUnmap));
     }
 
     private void handleError(
             CoordinatorKey groupId,
-            ShareGroupDescribeResponseData.DescribedGroup describedGroup,
-            Node coordinator,
             Errors error,
             String errorMsg,
-            Map<CoordinatorKey, ShareGroupDescription> completed,
             Map<CoordinatorKey, Throwable> failed,
             Set<CoordinatorKey> groupsToUnmap) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
-                log.debug("`DescribeShareGroups` request for group id {} failed due to error {}", groupId.idValue, error);
+                log.debug("`DescribeGroups` request for group id {} failed due to error {}.", groupId.idValue, error);
                 failed.put(groupId, error.exception(errorMsg));
                 break;
 
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // If the coordinator is in the middle of loading, then we just need to retry
-                log.debug("`DescribeShareGroups` request for group id {} failed because the coordinator " +
-                    "is still in the process of loading state. Will retry", groupId.idValue);
+                log.debug("`DescribeGroups` request for group id {} failed because the coordinator " +
+                    "is still in the process of loading state. Will retry.", groupId.idValue);
                 break;
 
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
                 // If the coordinator is unavailable or there was a coordinator change, then we unmap
                 // the key so that we retry the `FindCoordinator` request
-                log.debug("`DescribeShareGroups` request for group id {} returned error {}. " +
-                    "Will attempt to find the coordinator again and retry", groupId.idValue, error);
+                log.debug("`DescribeGroups` request for group id {} returned error {}. " +
+                    "Will attempt to find the coordinator again and retry.", groupId.idValue, error);
                 groupsToUnmap.add(groupId);
                 break;
 
-            case GROUP_ID_NOT_FOUND:
-                // In order to maintain compatibility with describeConsumerGroups, an unknown group ID is
-                // reported as a DEAD share group, and the admin client operation did not fail
-                log.debug("`DescribeShareGroups` request for group id {} failed because the group does not exist. {}",
-                    groupId.idValue, errorMsg != null ? errorMsg : "");
-                final ShareGroupDescription shareGroupDescription =
-                    new ShareGroupDescription(groupId.idValue,
-                        Collections.emptySet(),
-                        ShareGroupState.DEAD,
-                        coordinator,
-                        validAclOperations(describedGroup.authorizedOperations()));
-                completed.put(groupId, shareGroupDescription);
-                break;
-
             default:
-                log.error("`DescribeShareGroups` request for group id {} failed due to unexpected error {}", groupId.idValue, error);
+                log.error("`DescribeGroups` request for group id {} failed due to unexpected error {}.", groupId.idValue, error);
                 failed.put(groupId, error.exception(errorMsg));
         }
     }

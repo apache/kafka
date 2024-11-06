@@ -28,6 +28,7 @@ import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.ClassicGroupState;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.ElectionType;
@@ -5317,6 +5318,177 @@ public class KafkaAdminClientTest {
             ListShareGroupsOptions options = new ListShareGroupsOptions();
             ListShareGroupsResult result = env.adminClient().listShareGroups(options);
             TestUtils.assertFutureThrows(result.all(), UnsupportedVersionException.class);
+        }
+    }
+
+    @Test
+    public void testDescribeClassicGroups() throws Exception {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            // Retriable FindCoordinatorResponse errors should be retried
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE,  Node.noNode()));
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS,  Node.noNode()));
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            DescribeGroupsResponseData data = new DescribeGroupsResponseData();
+
+            // Retriable errors should be retried
+            data.groups().add(new DescribeGroupsResponseData.DescribedGroup()
+                .setGroupId(GROUP_ID)
+                .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code()));
+            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
+
+            /*
+             * We need to return two responses here, one with NOT_COORDINATOR error when calling describe classic group
+             * api using coordinator that has moved. This will retry whole operation. So we need to again respond with a
+             * FindCoordinatorResponse.
+             *
+             * And the same reason for COORDINATOR_NOT_AVAILABLE error response
+             */
+            data = new DescribeGroupsResponseData();
+            data.groups().add(new DescribeGroupsResponseData.DescribedGroup()
+                .setGroupId(GROUP_ID)
+                .setErrorCode(Errors.NOT_COORDINATOR.code()));
+            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            data = new DescribeGroupsResponseData();
+            data.groups().add(new DescribeGroupsResponseData.DescribedGroup()
+                .setGroupId(GROUP_ID)
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()));
+            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            final List<TopicPartition> topicPartitions = List.of(
+                new TopicPartition("my_topic", 0),
+                new TopicPartition("my_topic", 1),
+                new TopicPartition("my_topic", 2));
+            final ByteBuffer memberAssignment = ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(topicPartitions));
+            final byte[] memberAssignmentBytes = new byte[memberAssignment.remaining()];
+            memberAssignment.get(memberAssignmentBytes);
+
+            data = new DescribeGroupsResponseData();
+            DescribeGroupsResponseData.DescribedGroupMember memberOne = new DescribeGroupsResponseData.DescribedGroupMember()
+                .setMemberId("0")
+                .setClientId("clientId0")
+                .setClientHost("clientHost")
+                .setMemberAssignment(memberAssignmentBytes);
+            DescribeGroupsResponseData.DescribedGroupMember memberTwo = new DescribeGroupsResponseData.DescribedGroupMember()
+                .setMemberId("1")
+                .setClientId("clientId1")
+                .setClientHost("clientHost")
+                .setGroupInstanceId("static")
+                .setMemberAssignment(memberAssignmentBytes);
+
+            final List<TopicPartition> expectedTopicPartitions = new ArrayList<>();
+            expectedTopicPartitions.add(0, new TopicPartition("my_topic", 0));
+            expectedTopicPartitions.add(1, new TopicPartition("my_topic", 1));
+            expectedTopicPartitions.add(2, new TopicPartition("my_topic", 2));
+
+            List<MemberDescription> expectedMemberDescriptions = new ArrayList<>();
+            expectedMemberDescriptions.add(convertToMemberDescriptions(memberOne,
+                new MemberAssignment(new HashSet<>(expectedTopicPartitions))));
+            expectedMemberDescriptions.add(convertToMemberDescriptions(memberTwo,
+                new MemberAssignment(new HashSet<>(expectedTopicPartitions))));
+            data.groups().add(new DescribeGroupsResponseData.DescribedGroup()
+                .setGroupId(GROUP_ID)
+                .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                .setGroupState(ClassicGroupState.STABLE.toString())
+                .setMembers(List.of(memberOne, memberTwo)));
+
+            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
+
+            final DescribeClassicGroupsResult result = env.adminClient().describeClassicGroups(List.of(GROUP_ID));
+            final ClassicGroupDescription groupDescription = result.describedGroups().get(GROUP_ID).get();
+
+            assertEquals(1, result.describedGroups().size());
+            assertEquals(GROUP_ID, groupDescription.groupId());
+            assertEquals(2, groupDescription.members().size());
+            assertEquals(expectedMemberDescriptions, groupDescription.members());
+        }
+    }
+
+    @Test
+    public void testDescribeClassicGroupsWithAuthorizedOperationsOmitted() throws Exception {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(
+                prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            DescribeGroupsResponseData data = new DescribeGroupsResponseData();
+
+            data.groups().add(new DescribeGroupsResponseData.DescribedGroup()
+                .setGroupId(GROUP_ID)
+                .setProtocolType("")
+                .setAuthorizedOperations(MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED));
+
+            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
+
+            final DescribeClassicGroupsResult result = env.adminClient().describeClassicGroups(List.of(GROUP_ID));
+            final ClassicGroupDescription groupDescription = result.describedGroups().get(GROUP_ID).get();
+
+            assertNull(groupDescription.authorizedOperations());
+        }
+    }
+
+    @Test
+    public void testDescribeMultipleClassicGroups() {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            final List<TopicPartition> topicPartitions = List.of(
+                new TopicPartition("my_topic", 0),
+                new TopicPartition("my_topic", 1),
+                new TopicPartition("my_topic", 2));
+            final ByteBuffer memberAssignment = ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(topicPartitions));
+            final byte[] memberAssignmentBytes = new byte[memberAssignment.remaining()];
+            memberAssignment.get(memberAssignmentBytes);
+
+            DescribeGroupsResponseData group0Data = new DescribeGroupsResponseData();
+            group0Data.groups().add(new DescribeGroupsResponseData.DescribedGroup()
+                .setGroupId(GROUP_ID)
+                .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                .setGroupState(ClassicGroupState.STABLE.toString())
+                .setMembers(List.of(
+                    new DescribeGroupsResponseData.DescribedGroupMember()
+                        .setMemberId("0")
+                        .setClientId("clientId0")
+                        .setClientHost("clientHost")
+                        .setMemberAssignment(memberAssignmentBytes),
+                    new DescribeGroupsResponseData.DescribedGroupMember()
+                        .setMemberId("1")
+                        .setClientId("clientId1")
+                        .setClientHost("clientHost")
+                        .setMemberAssignment(memberAssignmentBytes))));
+
+            DescribeGroupsResponseData group1Data = new DescribeGroupsResponseData();
+            group1Data.groups().add(new DescribeGroupsResponseData.DescribedGroup()
+                .setGroupId("group-1")
+                .setProtocolType("other")
+                .setGroupState(ClassicGroupState.STABLE.toString())
+                .setMembers(List.of(
+                    new DescribeGroupsResponseData.DescribedGroupMember()
+                        .setMemberId("0")
+                        .setClientId("clientId0")
+                        .setClientHost("clientHost"),
+                    new DescribeGroupsResponseData.DescribedGroupMember()
+                        .setMemberId("1")
+                        .setClientId("clientId1")
+                        .setClientHost("clientHost"))));
+
+            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(group0Data));
+            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(group1Data));
+
+            Collection<String> groups = new HashSet<>();
+            groups.add(GROUP_ID);
+            groups.add("group-1");
+            final DescribeClassicGroupsResult result = env.adminClient().describeClassicGroups(groups);
+            assertEquals(2, result.describedGroups().size());
+            assertEquals(groups, result.describedGroups().keySet());
         }
     }
 
