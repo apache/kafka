@@ -49,18 +49,15 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import static java.util.Arrays.asList;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -1015,35 +1012,6 @@ public class SelectorTest {
 
         selector.poll(0);
         assertEquals(0, selector.completedReceives().size());
-    }
-
-    /**
-     * Validate that correct subset of io metrics marked deprecated in docs
-     */
-    @Test
-    public void testIoMetricsHaveCorrectDoc() {
-        Predicate<MetricName> docDeprecated =
-                mName -> mName.description().toLowerCase(Locale.ROOT).contains("deprecated");
-
-        List<String> actual = asList("io-ratio", "io-wait-ratio");
-        assertEquals(
-                actual.size(),
-                metrics.metrics().keySet().stream()
-                        .filter(m -> actual.contains(m.name()))
-                        .filter(m -> !docDeprecated.test(m))
-                        .count(),
-                "Metrics " + actual + " should be registered as non-deprecated"
-        );
-
-        List<String> deprecated = asList("iotime-total", "io-waittime-total");
-        assertEquals(
-                deprecated.size(),
-                metrics.metrics().keySet().stream()
-                        .filter(m -> deprecated.contains(m.name()))
-                        .filter(docDeprecated)
-                        .count(),
-                "Metrics " + deprecated + " should be registered as deprecated"
-        );
     }
 
     private String blockingRequest(String node, String s) throws IOException {

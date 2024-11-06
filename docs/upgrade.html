@@ -32,6 +32,9 @@
                         <li>The <code>auto.include.jmx.reporter</code> configuration was removed. The <code>metric.reporters</code> configuration
                             is now set to <code>org.apache.kafka.common.metrics.JmxReporter</code> by default.
                         </li>
+                        <li>The <code>bufferpool-wait-time-total</code>, <code>io-waittime-total</code>, and <code>iotime-total</code> metrics were removed.
+                            Please use <code>bufferpool-wait-time-ns-total</code>, <code>io-wait-time-ns-total</code>, and <code>io-time-ns-total</code> metrics as replacements, respectively.
+                        </li>
                     </ul>
                 </li>
                 <li><b>Broker</b>
@@ -963,7 +966,7 @@
 <h5><a id="upgrade_310_notable" href="#upgrade_310_notable">Notable changes in 3.1.0</a></h5>
 <ul>
     <li>Apache Kafka supports Java 17.</li>
-    <li>The following metrics have been deprecated: <code>bufferpool-wait-time-total</code>, <code>io-waittime-total</code>,
+    <li>The following metrics have been deprecated and will be removed in Apache Kafka 4.0: <code>bufferpool-wait-time-total</code>, <code>io-waittime-total</code>,
         and <code>iotime-total</code>. Please use <code>bufferpool-wait-time-ns-total</code>, <code>io-wait-time-ns-total</code>,
         and <code>io-time-ns-total</code> instead. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-773%3A+Differentiate+consistently+metric+latency+measured+in+millis+and+nanos">KIP-773</a>
         for more details.</li>
