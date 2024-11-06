@@ -77,6 +77,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -1845,8 +1847,9 @@ public class StreamTaskTest {
         verify(stateManager).close();
     }
 
-    @Test
-    public void shouldReturnOffsetsForRepartitionTopicsForPurging() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldMaybeReturnOffsetsForRepartitionTopicsForPurging(final boolean doCommit) {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         final TopicPartition repartition = new TopicPartition("repartition", 1);
@@ -1907,10 +1910,17 @@ public class StreamTaskTest {
         assertTrue(task.process(0L));
 
         task.prepareCommit();
+        if (doCommit) {
+            task.updateCommittedOffsets(repartition, 10L);
+        }
 
         final Map<TopicPartition, Long> map = task.purgeableOffsets();
 
-        assertThat(map, equalTo(singletonMap(repartition, 11L)));
+        if (doCommit) {
+            assertThat(map, equalTo(singletonMap(repartition, 10L)));
+        } else {
+            assertThat(map, equalTo(Collections.emptyMap()));
+        }
     }
 
     @Test
