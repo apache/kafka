@@ -77,7 +77,6 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.fail;
 
-@SuppressWarnings("deprecation") //Need to call the old handler, will remove those calls when the old handler is removed
 @Tag("integration")
 @Timeout(600)
 public class StreamsUncaughtExceptionHandlerIntegrationTest {
@@ -142,29 +141,8 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
     }
 
     @Test
-    public void shouldShutdownThreadUsingOldHandler() throws Exception {
-        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
-            final AtomicInteger counter = new AtomicInteger(0);
-            kafkaStreams.setUncaughtExceptionHandler((t, e) -> counter.incrementAndGet());
-
-            startApplicationAndWaitUntilRunning(kafkaStreams);
-            produceMessages(NOW, inputTopic, "A");
-
-            // should call the UncaughtExceptionHandler in current thread
-            TestUtils.waitForCondition(() -> counter.get() == 1, "Handler was called 1st time");
-            // should call the UncaughtExceptionHandler after rebalancing to another thread
-            TestUtils.waitForCondition(() -> counter.get() == 2, DEFAULT_DURATION.toMillis(), "Handler was called 2nd time");
-            // there is no threads running but the client is still in running
-            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.RUNNING, DEFAULT_DURATION);
-
-            assertThat(processorValueCollector.size(), equalTo(2));
-        }
-    }
-
-    @Test
     public void shouldShutdownClient() throws Exception {
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
-            kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
 
             kafkaStreams.setUncaughtExceptionHandler(exception -> SHUTDOWN_CLIENT);
 
@@ -249,7 +227,6 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
         properties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 0);
 
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
-            kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
             kafkaStreams.setUncaughtExceptionHandler(exception -> REPLACE_THREAD);
 
             startApplicationAndWaitUntilRunning(kafkaStreams);
@@ -360,8 +337,6 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
         try (final KafkaStreams kafkaStreams1 = new KafkaStreams(topology, properties);
              final KafkaStreams kafkaStreams2 = new KafkaStreams(topology, properties)) {
-            kafkaStreams1.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
-            kafkaStreams2.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
             kafkaStreams1.setUncaughtExceptionHandler(exception -> SHUTDOWN_APPLICATION);
             kafkaStreams2.setUncaughtExceptionHandler(exception -> SHUTDOWN_APPLICATION);
 
@@ -377,8 +352,6 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
     private void testReplaceThreads(final int numThreads) throws Exception {
         properties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numThreads);
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
-            kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
-
             final AtomicInteger count = new AtomicInteger();
             kafkaStreams.setUncaughtExceptionHandler(exception -> {
                 if (count.incrementAndGet() == numThreads) {

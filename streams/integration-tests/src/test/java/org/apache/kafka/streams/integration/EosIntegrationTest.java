@@ -40,6 +40,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
@@ -418,7 +419,6 @@ public class EosIntegrationTest {
                 uncommittedRecords,
                 dataBeforeFailure,
                 "The uncommitted records before failure do not match what expected");
-
             errorInjected.set(true);
             writeInputData(dataAfterFailure);
 
@@ -1104,7 +1104,7 @@ public class EosIntegrationTest {
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), config);
 
-        streams.setUncaughtExceptionHandler((t, e) -> {
+        streams.setUncaughtExceptionHandler(e -> {
             if (uncaughtException != null ||
                 !(e instanceof StreamsException) ||
                 !e.getCause().getMessage().equals("Injected test exception.")) {
@@ -1112,8 +1112,8 @@ public class EosIntegrationTest {
                 hasUnexpectedError = true;
             }
             uncaughtException = e;
+            return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.REPLACE_THREAD;
         });
-
         return streams;
     }
 
