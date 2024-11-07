@@ -21,6 +21,8 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.Herder;
+import org.apache.kafka.connect.runtime.MockConnectMetrics;
+import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.distributed.NotLeaderException;
@@ -75,6 +77,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -92,6 +95,8 @@ public class RestForwardingIntegrationTest {
     private ConnectRestServer leaderServer;
     @Mock
     private Herder leaderHerder;
+    @Mock
+    private Worker worker;
 
     private SslContextFactory.Client factory;
     private CloseableHttpClient httpClient;
@@ -167,6 +172,8 @@ public class RestForwardingIntegrationTest {
         followerServer = new ConnectRestServer(null, followerClient, followerConfig.originals());
         followerServer.initializeServer();
         when(followerHerder.plugins()).thenReturn(plugins);
+        doReturn(new MockConnectMetrics()).when(worker).metrics();
+        doReturn(worker).when(followerHerder).worker();
         followerServer.initializeResources(followerHerder);
 
         // Leader worker setup
@@ -174,6 +181,8 @@ public class RestForwardingIntegrationTest {
         leaderServer = new ConnectRestServer(null, leaderClient, leaderConfig.originals());
         leaderServer.initializeServer();
         when(leaderHerder.plugins()).thenReturn(plugins);
+        doReturn(new MockConnectMetrics()).when(worker).metrics();
+        doReturn(worker).when(leaderHerder).worker();
         leaderServer.initializeResources(leaderHerder);
 
         // External client setup

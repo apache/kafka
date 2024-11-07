@@ -62,6 +62,7 @@ public class EmbeddedConnectStandalone extends EmbeddedConnect {
     private final String offsetsFile;
 
     private volatile WorkerHandle connectWorker;
+    private Connect<StandaloneHerder> connect;
 
     private EmbeddedConnectStandalone(
             int numBrokers,
@@ -92,7 +93,7 @@ public class EmbeddedConnectStandalone extends EmbeddedConnect {
         workerProps.putIfAbsent(PLUGIN_DISCOVERY_CONFIG, "hybrid_fail");
 
         ConnectStandalone cli = new ConnectStandalone();
-        Connect<StandaloneHerder> connect = cli.startConnect(workerProps);
+        connect = cli.startConnect(workerProps);
         connectWorker = new WorkerHandle("standalone", connect);
         cli.processExtraArgs(connect, connectorConfigFiles());
     }
@@ -135,6 +136,10 @@ public class EmbeddedConnectStandalone extends EmbeddedConnect {
         }
 
         return result;
+    }
+
+    public StandaloneHerder herder() {
+        return connect.herder();
     }
 
     public static class Builder extends EmbeddedConnectBuilder<EmbeddedConnectStandalone, Builder> {

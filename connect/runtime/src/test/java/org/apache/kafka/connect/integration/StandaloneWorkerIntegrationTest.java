@@ -45,7 +45,7 @@ import jakarta.ws.rs.core.Response;
 import static org.apache.kafka.connect.integration.BlockingConnectorTest.Block.BLOCK_CONFIG;
 import static org.apache.kafka.connect.integration.BlockingConnectorTest.CONNECTOR_START;
 import static org.apache.kafka.connect.integration.BlockingConnectorTest.CONNECTOR_TASK_CONFIGS;
-import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
+import static org.apache.kafka.connect.integration.TestableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.NAME_CONFIG;
@@ -370,7 +370,7 @@ public class StandaloneWorkerIntegrationTest {
         // setup props for the source connector
         Map<String, String> props = new HashMap<>();
         props.put(NAME_CONFIG, CONNECTOR_NAME);
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         props.put(TOPIC_CONFIG, topic);
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());

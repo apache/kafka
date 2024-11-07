@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.connect.errors.ConnectException;
 
 import org.slf4j.Logger;
@@ -61,6 +62,11 @@ public class HerderConnectorContext implements CloseableConnectorContext {
         }
 
         herder.onFailure(connectorName, e);
+    }
+
+    @Override
+    public PluginMetrics pluginMetrics() {
+        return null;
     }
 
     @Override

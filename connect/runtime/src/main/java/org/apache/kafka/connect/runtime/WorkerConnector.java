@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.metrics.PluginMetrics;
+import org.apache.kafka.common.metrics.internals.PluginMetricsImpl;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
@@ -81,12 +83,13 @@ public class WorkerConnector implements Runnable {
     private State state;
     private final CloseableOffsetStorageReader offsetStorageReader;
     private final ConnectorOffsetBackingStore offsetStore;
+    private final PluginMetricsImpl pluginMetrics;
 
     public WorkerConnector(String connName,
                            Connector connector,
                            ConnectorConfig connectorConfig,
                            CloseableConnectorContext ctx,
-                           ConnectMetrics metrics,
+                           ConnectMetrics connectMetrics,
                            ConnectorStatus.Listener statusListener,
                            CloseableOffsetStorageReader offsetStorageReader,
                            ConnectorOffsetBackingStore offsetStore,
@@ -97,7 +100,7 @@ public class WorkerConnector implements Runnable {
         this.ctx = ctx;
         this.connector = connector;
         this.state = State.INIT;
-        this.metrics = new ConnectorMetricsGroup(metrics, AbstractStatus.State.UNASSIGNED, statusListener);
+        this.metrics = new ConnectorMetricsGroup(connectMetrics, AbstractStatus.State.UNASSIGNED, statusListener);
         this.statusListener = this.metrics;
         this.offsetStorageReader = offsetStorageReader;
         this.offsetStore = offsetStore;
@@ -107,6 +110,7 @@ public class WorkerConnector implements Runnable {
         this.externalFailure = null;
         this.stopping = false;
         this.cancelled = false;
+        this.pluginMetrics = connectMetrics.connectorPluginMetrics(connName);
     }
 
     public ClassLoader loader() {
@@ -191,12 +195,12 @@ public class WorkerConnector implements Runnable {
             log.debug("{} Initializing connector {}", this, connName);
             if (isSinkConnector()) {
                 SinkConnectorConfig.validate(config);
-                connector.initialize(new WorkerSinkConnectorContext());
+                connector.initialize(new WorkerSinkConnectorContext(pluginMetrics));
             } else {
                 Objects.requireNonNull(offsetStore, "Offset store cannot be null for source connectors");
                 Objects.requireNonNull(offsetStorageReader, "Offset reader cannot be null for source connectors");
                 offsetStore.start();
-                connector.initialize(new WorkerSourceConnectorContext(offsetStorageReader));
+                connector.initialize(new WorkerSourceConnectorContext(offsetStorageReader, pluginMetrics));
             }
         } catch (Throwable t) {
             log.error("{} Error initializing connector", this, t);
@@ -324,6 +328,7 @@ public class WorkerConnector implements Runnable {
             if (offsetStore != null) {
                 Utils.closeQuietly(offsetStore::stop, "offset backing store for " + connName);
             }
+            Utils.closeQuietly(pluginMetrics, "plugin metrics");
         }
     }
 
@@ -585,19 +590,37 @@ public class WorkerConnector implements Runnable {
     }
 
     private class WorkerSinkConnectorContext extends WorkerConnectorContext implements SinkConnectorContext {
+
+        private final PluginMetrics pluginMetrics;
+
+        WorkerSinkConnectorContext(PluginMetrics pluginMetrics) {
+            this.pluginMetrics = pluginMetrics;
+        }
+
+        @Override
+        public PluginMetrics pluginMetrics() {
+            return pluginMetrics;
+        }
     }
 
     private class WorkerSourceConnectorContext extends WorkerConnectorContext implements SourceConnectorContext {
 
         private final OffsetStorageReader offsetStorageReader;
+        private final PluginMetrics pluginMetrics;
 
-        WorkerSourceConnectorContext(OffsetStorageReader offsetStorageReader) {
+        WorkerSourceConnectorContext(OffsetStorageReader offsetStorageReader, PluginMetrics pluginMetrics) {
             this.offsetStorageReader = offsetStorageReader;
+            this.pluginMetrics = pluginMetrics;
         }
 
         @Override
         public OffsetStorageReader offsetStorageReader() {
             return offsetStorageReader;
+        }
+
+        @Override
+        public PluginMetrics pluginMetrics() {
+            return pluginMetrics;
         }
     }
 }
