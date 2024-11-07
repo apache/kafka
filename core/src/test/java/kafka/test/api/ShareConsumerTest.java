@@ -370,7 +370,7 @@ public class ShareConsumerTest {
         // Now in the second poll, we implicitly acknowledge the record received in the first poll.
         // We get back the acknowledgment error code after the second poll.
         // When we start the 3rd poll, the acknowledgment commit callback is invoked.
-        records = shareConsumer.poll(Duration.ofMillis(200));
+        records = shareConsumer.poll(Duration.ofMillis(5000));
         assertEquals(1, records.count());
 
         records = shareConsumer.poll(Duration.ofMillis(200));
