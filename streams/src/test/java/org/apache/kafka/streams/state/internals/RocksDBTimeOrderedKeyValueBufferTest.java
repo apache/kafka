@@ -65,7 +65,7 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         when(serdeGetter.valueSerde()).thenReturn(new Serdes.StringSerde());
         final Metrics metrics = new Metrics();
         offset = 0;
-        streamsMetrics = new StreamsMetricsImpl(metrics, "test-client", new MockTime());
+        streamsMetrics = new StreamsMetricsImpl(metrics, "test-client", "processId", new MockTime());
         context = new MockInternalNewProcessorContext<>(StreamsTestUtils.getStreamsConfig(), new TaskId(0, 0), TestUtils.tempDirectory());
     }
 

@@ -240,9 +240,10 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         metricConfig.recordLevel(Sensor.RecordingLevel.DEBUG);
         final String threadId = Thread.currentThread().getName();
         this.metrics = new StreamsMetricsImpl(
-            new Metrics(metricConfig),
-            threadId,
-            Time.SYSTEM
+                new Metrics(metricConfig),
+                threadId,
+                "processId",
+                Time.SYSTEM
         );
         TaskMetrics.droppedRecordsSensor(threadId, taskId.toString(), metrics);
     }

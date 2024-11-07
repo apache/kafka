@@ -72,7 +72,7 @@ public class RecordQueueTest {
 
     private final Metrics metrics = new Metrics();
     private final StreamsMetricsImpl streamsMetrics =
-        new StreamsMetricsImpl(metrics, "mock", new MockTime());
+        new StreamsMetricsImpl(metrics, "mock", "processId", new MockTime());
 
     @SuppressWarnings("rawtypes")
     final InternalMockProcessorContext context = new InternalMockProcessorContext<>(

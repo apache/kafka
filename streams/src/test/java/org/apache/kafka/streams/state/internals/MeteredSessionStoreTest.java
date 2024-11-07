@@ -127,7 +127,7 @@ public class MeteredSessionStoreTest {
         metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
         when(context.applicationId()).thenReturn(APPLICATION_ID);
         when(context.metrics())
-                .thenReturn(new StreamsMetricsImpl(metrics, "test", mockTime));
+                .thenReturn(new StreamsMetricsImpl(metrics, "test", "processId", mockTime));
         when(context.taskId()).thenReturn(taskId);
         when(context.changelogFor(STORE_NAME)).thenReturn(CHANGELOG_TOPIC);
         when(innerStore.name()).thenReturn(STORE_NAME);

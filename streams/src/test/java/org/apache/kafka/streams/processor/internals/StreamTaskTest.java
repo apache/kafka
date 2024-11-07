@@ -2487,7 +2487,7 @@ public class StreamTaskTest {
                 streamsMetrics,
                 null
         );
-        final StreamsMetricsImpl metrics = new StreamsMetricsImpl(this.metrics, "test", time);
+        final StreamsMetricsImpl metrics = new StreamsMetricsImpl(this.metrics, "test", "processId", time);
 
         // The processor topology is missing the topics
         final ProcessorTopology topology = withSources(emptyList(), mkMap());
@@ -3043,7 +3043,7 @@ public class StreamTaskTest {
             topology,
             consumer,
             new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
-            new StreamsMetricsImpl(metrics, "test", time),
+            new StreamsMetricsImpl(metrics, "test", "processId", time),
             stateDirectory,
             cache,
             time,
@@ -3080,7 +3080,7 @@ public class StreamTaskTest {
             topology,
             consumer,
             new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
-            new StreamsMetricsImpl(metrics, "test", time),
+            new StreamsMetricsImpl(metrics, "test", "processId", time),
             stateDirectory,
             cache,
             time,
@@ -3116,7 +3116,7 @@ public class StreamTaskTest {
             topology,
             consumer,
             new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
-            new StreamsMetricsImpl(metrics, "test", time),
+            new StreamsMetricsImpl(metrics, "test", "processId", time),
             stateDirectory,
             cache,
             time,
