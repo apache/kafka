@@ -72,6 +72,7 @@ import static org.apache.kafka.common.protocol.Errors.COORDINATOR_LOAD_IN_PROGRE
 public class CommitRequestManager implements RequestManager, MemberStateListener {
     private final Time time;
     private final SubscriptionState subscriptions;
+    private final ConsumerMetadata metadata;
     private final LogContext logContext;
     private final Logger log;
     private final Optional<AutoCommitState> autoCommitState;
@@ -102,15 +103,16 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     private final MemberInfo memberInfo;
 
     public CommitRequestManager(
-            final Time time,
-            final LogContext logContext,
-            final SubscriptionState subscriptions,
-            final ConsumerConfig config,
-            final CoordinatorRequestManager coordinatorRequestManager,
-            final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
-            final String groupId,
-            final Optional<String> groupInstanceId,
-            final Metrics metrics) {
+        final Time time,
+        final LogContext logContext,
+        final SubscriptionState subscriptions,
+        final ConsumerConfig config,
+        final CoordinatorRequestManager coordinatorRequestManager,
+        final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
+        final String groupId,
+        final Optional<String> groupInstanceId,
+        final Metrics metrics,
+        final ConsumerMetadata metadata) {
         this(time,
             logContext,
             subscriptions,
@@ -122,7 +124,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
             config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG),
             OptionalDouble.empty(),
-            metrics);
+            metrics,
+            metadata);
     }
 
     // Visible for testing
@@ -138,7 +141,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         final long retryBackoffMs,
         final long retryBackoffMaxMs,
         final OptionalDouble jitter,
-        final Metrics metrics) {
+        final Metrics metrics,
+        final ConsumerMetadata metadata) {
         Objects.requireNonNull(coordinatorRequestManager, "Coordinator is needed upon committing offsets");
         this.time = time;
         this.logContext = logContext;
@@ -155,6 +159,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         this.groupId = groupId;
         this.groupInstanceId = groupInstanceId;
         this.subscriptions = subscriptions;
+        this.metadata = metadata;
         this.retryBackoffMs = retryBackoffMs;
         this.retryBackoffMaxMs = retryBackoffMaxMs;
         this.jitter = jitter;
@@ -381,20 +386,22 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      * exceptionally depending on the response. If the request fails with a retriable error, the
      * future will be completed with a {@link RetriableCommitFailedException}.
      */
-    public CompletableFuture<Void> commitAsync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-        if (offsets.isEmpty()) {
+    public CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> commitAsync(final Optional<Map<TopicPartition, OffsetAndMetadata>> offsets) {
+        Map<TopicPartition, OffsetAndMetadata> commitOffsets = offsets.orElseGet(subscriptions::allConsumed);
+        if (commitOffsets.isEmpty()) {
             log.debug("Skipping commit of empty offsets");
-            return CompletableFuture.completedFuture(null);
+            return CompletableFuture.completedFuture(Map.of());
         }
-        OffsetCommitRequestState commitRequest = createOffsetCommitRequest(offsets, Long.MAX_VALUE);
+        maybeUpdateLastSeenEpochIfNewer(commitOffsets);
+        OffsetCommitRequestState commitRequest = createOffsetCommitRequest(commitOffsets, Long.MAX_VALUE);
         pendingRequests.addOffsetCommitRequest(commitRequest);
 
-        CompletableFuture<Void> asyncCommitResult = new CompletableFuture<>();
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> asyncCommitResult = new CompletableFuture<>();
         commitRequest.future.whenComplete((committedOffsets, error) -> {
             if (error != null) {
                 asyncCommitResult.completeExceptionally(commitAsyncExceptionForError(error));
             } else {
-                asyncCommitResult.complete(null);
+                asyncCommitResult.complete(commitOffsets);
             }
         });
         return asyncCommitResult;
@@ -403,15 +410,20 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     /**
      * Commit offsets, retrying on expected retriable errors while the retry timeout hasn't expired.
      *
-     * @param offsets               Offsets to commit
-     * @param deadlineMs            Time until which the request will be retried if it fails with
-     *                              an expected retriable error.
+     * @param offsets    Offsets to commit
+     * @param deadlineMs Time until which the request will be retried if it fails with
+     *                   an expected retriable error.
      * @return Future that will complete when a successful response
      */
-    public CompletableFuture<Void> commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                              final long deadlineMs) {
-        CompletableFuture<Void> result = new CompletableFuture<>();
-        OffsetCommitRequestState requestState = createOffsetCommitRequest(offsets, deadlineMs);
+    public CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> commitSync(final Optional<Map<TopicPartition, OffsetAndMetadata>> offsets,
+                                                                                final long deadlineMs) {
+        Map<TopicPartition, OffsetAndMetadata> commitOffsets = offsets.orElseGet(subscriptions::allConsumed);
+        if (commitOffsets.isEmpty()) {
+            return CompletableFuture.completedFuture(Map.of());
+        }
+        maybeUpdateLastSeenEpochIfNewer(commitOffsets);
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result = new CompletableFuture<>();
+        OffsetCommitRequestState requestState = createOffsetCommitRequest(commitOffsets, deadlineMs);
         commitSyncWithRetries(requestState, result);
         return result;
     }
@@ -439,14 +451,14 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     }
 
     private void commitSyncWithRetries(OffsetCommitRequestState requestAttempt,
-                                       CompletableFuture<Void> result) {
+                                       CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result) {
         pendingRequests.addOffsetCommitRequest(requestAttempt);
 
         // Retry the same commit request while it fails with RetriableException and the retry
         // timeout hasn't expired.
         requestAttempt.future.whenComplete((res, error) -> {
             if (error == null) {
-                result.complete(null);
+                result.complete(requestAttempt.offsets);
             } else {
                 if (error instanceof RetriableException) {
                     if (requestAttempt.isExpired()) {
@@ -531,6 +543,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     "outbound buffer:" + fetchRequest);
             }
             if (error == null) {
+                maybeUpdateLastSeenEpochIfNewer(res);
                 result.complete(res);
             } else {
                 if (error instanceof RetriableException || isStaleEpochErrorAndValidEpochAvailable(error)) {
@@ -613,6 +626,13 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             return EMPTY;
         List<NetworkClientDelegate.UnsentRequest> requests = pendingRequests.drainPendingCommits();
         return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, requests);
+    }
+
+    private void maybeUpdateLastSeenEpochIfNewer(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+        offsets.forEach((topicPartition, offsetAndMetadata) -> {
+            if (offsetAndMetadata != null)
+                offsetAndMetadata.leaderEpoch().ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(topicPartition, epoch));
+        });
     }
 
     class OffsetCommitRequestState extends RetriableRequestState {

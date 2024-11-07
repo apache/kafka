@@ -205,7 +205,8 @@ public class RequestManagers implements Closeable {
                             offsetCommitCallbackInvoker,
                             groupRebalanceConfig.groupId,
                             groupRebalanceConfig.groupInstanceId,
-                            metrics);
+                            metrics,
+                            metadata);
                     membershipManager = new ConsumerMembershipManager(
                             groupRebalanceConfig.groupId,
                             groupRebalanceConfig.groupInstanceId,

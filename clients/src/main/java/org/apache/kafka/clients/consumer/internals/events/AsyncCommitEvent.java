@@ -20,13 +20,15 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Event to commit offsets without waiting for a response, so the request won't be retried.
+ * If no offsets are provided, this event will commit all consumed offsets.
  */
 public class AsyncCommitEvent extends CommitEvent {
 
-    public AsyncCommitEvent(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+    public AsyncCommitEvent(final Optional<Map<TopicPartition, OffsetAndMetadata>> offsets) {
         super(Type.COMMIT_ASYNC, offsets, Long.MAX_VALUE);
     }
 }

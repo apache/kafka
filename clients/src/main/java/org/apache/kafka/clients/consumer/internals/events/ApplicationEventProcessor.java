@@ -198,29 +198,41 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private void process(final AsyncCommitEvent event) {
-        if (!requestManagers.commitRequestManager.isPresent()) {
+        if (requestManagers.commitRequestManager.isEmpty()) {
+            event.future().completeExceptionally(new KafkaException("Unable to async commit " +
+                "offset because the CommitRequestManager is not available. Check if group.id was set correctly"));
             return;
         }
 
-        CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        CompletableFuture<Void> future = manager.commitAsync(event.offsets());
-        future.whenComplete(complete(event.future()));
+        try {
+            CommitRequestManager manager = requestManagers.commitRequestManager.get();
+            CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = manager.commitAsync(event.offsets());
+            future.whenComplete(complete(event.future()));
+        } catch (Exception e) {
+            event.future().completeExceptionally(e);
+        }
     }
 
     private void process(final SyncCommitEvent event) {
-        if (!requestManagers.commitRequestManager.isPresent()) {
+        if (requestManagers.commitRequestManager.isEmpty()) {
+            event.future().completeExceptionally(new KafkaException("Unable to sync commit " +
+                "offset because the CommitRequestManager is not available. Check if group.id was set correctly"));
             return;
         }
 
-        CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        CompletableFuture<Void> future = manager.commitSync(event.offsets(), event.deadlineMs());
-        future.whenComplete(complete(event.future()));
+        try {
+            CommitRequestManager manager = requestManagers.commitRequestManager.get();
+            CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = manager.commitSync(event.offsets(), event.deadlineMs());
+            future.whenComplete(complete(event.future()));
+        } catch (Exception e) {
+            event.future().completeExceptionally(e);
+        }
     }
 
     private void process(final FetchCommittedOffsetsEvent event) {
-        if (!requestManagers.commitRequestManager.isPresent()) {
+        if (requestManagers.commitRequestManager.isEmpty()) {
             event.future().completeExceptionally(new KafkaException("Unable to fetch committed " +
-                    "offset because the CommittedRequestManager is not available. Check if group.id was set correctly"));
+                    "offset because the CommitRequestManager is not available. Check if group.id was set correctly"));
             return;
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
@@ -523,6 +535,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
     private void process(final SeekUnvalidatedEvent event) {
         try {
+            event.offsetEpoch().ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(event.partition(), epoch));
             SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
                     event.offset(),
                     event.offsetEpoch(),
