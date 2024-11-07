@@ -31,7 +31,7 @@ import java.util.Map;
  * The specification for a workload that sends messages to a broker and then
  * reads them back.
  */
-public final class RoundTripWorkloadSpec extends TaskSpec {
+public class RoundTripWorkloadSpec extends TaskSpec {
     private final String clientNode;
     private final String bootstrapServers;
     private final int targetMessagesPerSec;
