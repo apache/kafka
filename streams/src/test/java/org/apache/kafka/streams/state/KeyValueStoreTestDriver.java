@@ -27,7 +27,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
-import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -58,6 +57,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -213,10 +213,11 @@ public class KeyValueStoreTestDriver<K, V> {
             logContext,
             new TaskId(0, 0),
             new StreamsProducer(
-                StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
                 new MockProducer<>(null, true, null, null),
-                logContext,
-                Time.SYSTEM),
+                AT_LEAST_ONCE,
+                Time.SYSTEM,
+                logContext
+            ),
             new DefaultProductionExceptionHandler(),
             new MockStreamsMetrics(new Metrics()),
             topology

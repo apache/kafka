@@ -54,7 +54,6 @@ import org.apache.kafka.streams.errors.ProductionExceptionHandler.SerializationE
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
-import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -88,6 +87,8 @@ import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.producerRecordSizeInBytes;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOPIC_LEVEL_GROUP;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -145,10 +146,10 @@ public class RecordCollectorTest {
     @BeforeEach
     public void setup() {
         streamsProducer = new StreamsProducer(
-            StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
             mockProducer,
-            logContext,
-            Time.SYSTEM
+            AT_LEAST_ONCE,
+            Time.SYSTEM,
+            logContext
         );
         final SinkNode<?, ?> sinkNode = new SinkNode<>(
             sinkNodeName,
@@ -1429,15 +1430,15 @@ public class RecordCollectorTest {
             logContext,
             taskId,
             new StreamsProducer(
-                StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2,
-                new MockProducer<byte[], byte[]>(cluster, true, byteArraySerializer, byteArraySerializer) {
+                new MockProducer<>(cluster, true, byteArraySerializer, byteArraySerializer) {
                     @Override
                     public void abortTransaction() {
                         functionCalled.set(true);
                     }
                 },
-                logContext,
-                Time.SYSTEM
+                EXACTLY_ONCE_V2,
+                Time.SYSTEM,
+                logContext
             ),
             productionExceptionHandler,
             streamsMetrics,
@@ -1454,15 +1455,15 @@ public class RecordCollectorTest {
             logContext,
             taskId,
             new StreamsProducer(
-                StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
-                new MockProducer<byte[], byte[]>(cluster, true, byteArraySerializer, byteArraySerializer) {
+                new MockProducer<>(cluster, true, byteArraySerializer, byteArraySerializer) {
                     @Override
                     public List<PartitionInfo> partitionsFor(final String topic) {
                         return Collections.emptyList();
                     }
                 },
-                logContext,
-                Time.SYSTEM
+                AT_LEAST_ONCE,
+                Time.SYSTEM,
+                logContext
             ),
             productionExceptionHandler,
             streamsMetrics,
@@ -1487,10 +1488,10 @@ public class RecordCollectorTest {
             logContext,
             taskId,
             new StreamsProducer(
-                StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2,
                 mockProducer,
-                logContext,
-                Time.SYSTEM
+                EXACTLY_ONCE_V2,
+                Time.SYSTEM,
+                logContext
             ),
             productionExceptionHandler,
             streamsMetrics,
@@ -1883,30 +1884,30 @@ public class RecordCollectorTest {
 
     private StreamsProducer getExceptionalStreamsProducerOnSend(final Exception exception) {
         return new StreamsProducer(
-            StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
-            new MockProducer<byte[], byte[]>(cluster, true, byteArraySerializer, byteArraySerializer) {
+            new MockProducer<>(cluster, true, byteArraySerializer, byteArraySerializer) {
                 @Override
                 public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
                     callback.onCompletion(null, exception);
                     return null;
                 }
             },
-            logContext,
-            Time.SYSTEM
+            AT_LEAST_ONCE,
+            Time.SYSTEM,
+            logContext
         );
     }
 
     private StreamsProducer getExceptionalStreamProducerOnPartitionsFor(final RuntimeException exception) {
         return new StreamsProducer(
-            StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
-            new MockProducer<byte[], byte[]>(cluster, true, byteArraySerializer, byteArraySerializer) {
+            new MockProducer<>(cluster, true, byteArraySerializer, byteArraySerializer) {
                 @Override
                 public synchronized List<PartitionInfo> partitionsFor(final String topic) {
                     throw exception;
                 }
             },
-            logContext,
-            Time.SYSTEM
+            AT_LEAST_ONCE,
+            Time.SYSTEM,
+            logContext
         );
     }
 

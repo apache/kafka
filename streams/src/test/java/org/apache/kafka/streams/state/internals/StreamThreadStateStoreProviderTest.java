@@ -88,6 +88,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
@@ -451,10 +452,10 @@ public class StreamThreadStateStoreProviderTest {
             logContext,
             taskId,
             new StreamsProducer(
-                StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
                 producer,
-                logContext,
-                Time.SYSTEM
+                AT_LEAST_ONCE,
+                Time.SYSTEM,
+                logContext
             ),
             streamsConfig.productionExceptionHandler(),
             new MockStreamsMetrics(metrics),

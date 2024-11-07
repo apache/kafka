@@ -44,6 +44,7 @@ import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
+import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -115,7 +116,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
-import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
@@ -339,17 +339,17 @@ public class TopologyTestDriver implements Closeable {
 
         consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
         final Serializer<byte[]> bytesSerializer = new ByteArraySerializer();
-        producer = new MockProducer<byte[], byte[]>(true, bytesSerializer, bytesSerializer) {
+        producer = new MockProducer<>(true, bytesSerializer, bytesSerializer) {
             @Override
             public List<PartitionInfo> partitionsFor(final String topic) {
                 return Collections.singletonList(new PartitionInfo(topic, PARTITION_ID, null, null, null));
             }
         };
         testDriverProducer = new TestDriverProducer(
-            StreamsConfigUtils.processingMode(streamsConfig),
             producer,
-            logContext,
-            mockWallClockTime
+            StreamsConfigUtils.processingMode(streamsConfig),
+            mockWallClockTime,
+            logContext
         );
 
         setupGlobalTask(mockWallClockTime, streamsConfig, streamsMetrics, cache);
@@ -1138,9 +1138,8 @@ public class TopologyTestDriver implements Closeable {
                          " {} configuration during TopologyTestDriver#close().",
                      StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
         }
-        if (processingMode == AT_LEAST_ONCE) {
-            producer.close();
-        }
+        producer.close();
+        consumer.close();
         stateDirectory.clean();
     }
 
@@ -1354,11 +1353,11 @@ public class TopologyTestDriver implements Closeable {
 
     private static class TestDriverProducer extends StreamsProducer {
 
-        public TestDriverProducer(final StreamsConfigUtils.ProcessingMode processingMode,
-                                  final Producer<byte[], byte[]> producer,
-                                  final LogContext logContext,
-                                  final Time time) {
-            super(processingMode, producer, logContext, time);
+        public TestDriverProducer(final Producer<byte[], byte[]> producer,
+                                  final ProcessingMode processingMode,
+                                  final Time time,
+                                  final LogContext logContext) {
+            super(producer, processingMode, time, logContext);
         }
 
         @Override

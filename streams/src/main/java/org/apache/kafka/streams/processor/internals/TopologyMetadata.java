@@ -274,11 +274,7 @@ public class TopologyMetadata {
      * @return A boolean indicating if the topology is paused.
      */
     public boolean isPaused(final String topologyName) {
-        if (topologyName == null) {
-            return pausedTopologies.contains(UNNAMED_TOPOLOGY);
-        } else {
-            return pausedTopologies.contains(topologyName);
-        }
+        return pausedTopologies.contains(getTopologyNameOrElseUnnamed(topologyName));
     }
 
     /**
@@ -463,7 +459,7 @@ public class TopologyMetadata {
 
         applyToEachBuilder(b -> {
             final String patternString = b.sourceTopicPatternString();
-            if (patternString.length() > 0) {
+            if (!patternString.isEmpty()) {
                 patternBuilder.append(patternString).append("|");
             }
         });
@@ -629,11 +625,7 @@ public class TopologyMetadata {
      *         else returns {@code null} if {@code topologyName} is non-null but no such NamedTopology exists
      */
     public InternalTopologyBuilder lookupBuilderForNamedTopology(final String topologyName) {
-        if (topologyName == null) {
-            return builders.get(UNNAMED_TOPOLOGY);
-        } else {
-            return builders.get(topologyName);
-        }
+        return builders.get(getTopologyNameOrElseUnnamed(topologyName));
     }
 
     private boolean evaluateConditionIsTrueForAnyBuilders(final Function<InternalTopologyBuilder, Boolean> condition) {

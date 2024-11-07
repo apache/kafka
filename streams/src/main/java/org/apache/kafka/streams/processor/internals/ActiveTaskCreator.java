@@ -28,7 +28,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
@@ -63,7 +62,6 @@ class ActiveTaskCreator {
     private final Logger log;
     private final Sensor createTaskSensor;
     private final StreamsProducer streamsProducer;
-    private final ProcessingMode processingMode;
     private final boolean stateUpdaterEnabled;
     private final boolean processingThreadsEnabled;
 
@@ -97,22 +95,21 @@ class ActiveTaskCreator {
         this.processingThreadsEnabled = processingThreadsEnabled;
 
         createTaskSensor = ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
-        processingMode = processingMode(applicationConfig);
 
         final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
         final LogContext logContext = new LogContext(threadIdPrefix);
 
         streamsProducer = new StreamsProducer(
-            processingMode,
             producer(),
-            logContext,
-            time
+            processingMode(applicationConfig),
+            time,
+            logContext
         );
     }
 
     private Producer<byte[], byte[]> producer() {
         final Map<String, Object> producerConfig = applicationConfig.getProducerConfigs(producerClientId(threadId));
-        if (eosEnabled(processingMode)) {
+        if (eosEnabled(applicationConfig)) {
             producerConfig.put(
                 ProducerConfig.TRANSACTIONAL_ID_CONFIG,
                 applicationConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG) + "-" + processId + "-" + threadIdx
