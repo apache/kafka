@@ -16,8 +16,10 @@
  */
 package kafka.server.share;
 
+import org.apache.kafka.server.purgatory.DelayedOperationKey;
+
 /**
  * A key for delayed operations that fetch data for share consumers.
  */
-public interface DelayedShareFetchKey {
+public interface DelayedShareFetchKey extends DelayedOperationKey {
 }

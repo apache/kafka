@@ -93,6 +93,11 @@
             <allow pkg="org.apache.kafka.server.authorizer" />
         </subpackage>
 
+        <subpackage name="purgatory">
+            <allow pkg="org.apache.kafka.server.metrics" />
+            <allow pkg="org.apache.kafka.server.util" />
+        </subpackage>
+
         <subpackage name="util">
             <!-- InterBrokerSendThread uses some clients classes that are not part of the public -->
             <!-- API but are still relatively common -->

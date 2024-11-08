@@ -17,13 +17,14 @@
 package kafka.server
 
 import com.yammer.metrics.core.Meter
-import kafka.utils.Pool
+import kafka.utils.{Logging, Pool}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ApiException
 import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsPartitionResponse, ListOffsetsTopicResponse}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ListOffsetsResponse
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.purgatory.DelayedOperation
 
 import java.util.concurrent.TimeUnit
 import scala.collection.{Map, mutable}
@@ -33,7 +34,8 @@ class DelayedRemoteListOffsets(delayMs: Long,
                                version: Int,
                                statusByPartition: mutable.Map[TopicPartition, ListOffsetsPartitionStatus],
                                replicaManager: ReplicaManager,
-                               responseCallback: List[ListOffsetsTopicResponse] => Unit) extends DelayedOperation(delayMs) {
+                               responseCallback: List[ListOffsetsTopicResponse] => Unit)
+  extends DelayedOperation(delayMs) with Logging {
   // Mark the status as completed, if there is no async task to track.
   // If there is a task to track, then build the response as REQUEST_TIMED_OUT by default.
   statusByPartition.foreachEntry { (topicPartition, status) =>

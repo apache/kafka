@@ -23,6 +23,7 @@ import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicR
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.requests.ListOffsetsResponse
+import org.apache.kafka.server.purgatory.{DelayedOperationPurgatory, TopicPartitionOperationKey}
 import org.apache.kafka.server.util.timer.MockTimer
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -33,6 +34,7 @@ import java.util.Optional
 import java.util.concurrent.CompletableFuture
 import scala.collection.mutable
 import scala.concurrent.TimeoutException
+import scala.jdk.CollectionConverters._
 
 class DelayedRemoteListOffsetsTest {
 
@@ -41,7 +43,7 @@ class DelayedRemoteListOffsetsTest {
   val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
   type T = Either[Exception, Option[TimestampAndOffset]]
   val purgatory =
-    new DelayedOperationPurgatory[DelayedRemoteListOffsets]("test-purgatory", timer, purgeInterval = 10)
+    new DelayedOperationPurgatory[DelayedRemoteListOffsets]("test-purgatory", timer, 0, 10, true, true)
 
   @AfterEach
   def afterEach(): Unit = {
@@ -80,7 +82,7 @@ class DelayedRemoteListOffsetsTest {
     )
 
     val delayedRemoteListOffsets = new DelayedRemoteListOffsets(delayMs, version = 5, statusByPartition, replicaManager, responseCallback)
-    val listOffsetsRequestKeys = statusByPartition.keys.map(TopicPartitionOperationKey(_)).toSeq
+    val listOffsetsRequestKeys = statusByPartition.keys.map(new TopicPartitionOperationKey(_)).toList.asJava
     assertEquals(0, DelayedRemoteListOffsetsMetrics.aggregateExpirationMeter.count())
     assertEquals(0, DelayedRemoteListOffsetsMetrics.partitionExpirationMeters.size)
     purgatory.tryCompleteElseWatch(delayedRemoteListOffsets, listOffsetsRequestKeys)
@@ -90,7 +92,7 @@ class DelayedRemoteListOffsetsTest {
     assertEquals(listOffsetsRequestKeys.size, cancelledCount)
     assertEquals(listOffsetsRequestKeys.size, numResponse)
     assertEquals(listOffsetsRequestKeys.size, DelayedRemoteListOffsetsMetrics.aggregateExpirationMeter.count())
-    listOffsetsRequestKeys.foreach(key => {
+    listOffsetsRequestKeys.forEach(key => {
       val tp = new TopicPartition(key.topic, key.partition)
       assertEquals(1, DelayedRemoteListOffsetsMetrics.partitionExpirationMeters.get(tp).count())
     })
@@ -132,7 +134,7 @@ class DelayedRemoteListOffsetsTest {
     )
 
     val delayedRemoteListOffsets = new DelayedRemoteListOffsets(delayMs, version = 5, statusByPartition, replicaManager, responseCallback)
-    val listOffsetsRequestKeys = statusByPartition.keys.map(TopicPartitionOperationKey(_)).toSeq
+    val listOffsetsRequestKeys = statusByPartition.keys.map(new TopicPartitionOperationKey(_)).toList.asJava
     purgatory.tryCompleteElseWatch(delayedRemoteListOffsets, listOffsetsRequestKeys)
 
     assertEquals(0, cancelledCount)
@@ -188,7 +190,7 @@ class DelayedRemoteListOffsetsTest {
     )
 
     val delayedRemoteListOffsets = new DelayedRemoteListOffsets(delayMs, version = 5, statusByPartition, replicaManager, responseCallback)
-    val listOffsetsRequestKeys = statusByPartition.keys.map(TopicPartitionOperationKey(_)).toSeq
+    val listOffsetsRequestKeys = statusByPartition.keys.map(new TopicPartitionOperationKey(_)).toList.asJava
     purgatory.tryCompleteElseWatch(delayedRemoteListOffsets, listOffsetsRequestKeys)
 
     assertEquals(0, cancelledCount)
@@ -246,7 +248,7 @@ class DelayedRemoteListOffsetsTest {
     )
 
     val delayedRemoteListOffsets = new DelayedRemoteListOffsets(delayMs, version = 5, statusByPartition, replicaManager, responseCallback)
-    val listOffsetsRequestKeys = statusByPartition.keys.map(TopicPartitionOperationKey(_)).toSeq
+    val listOffsetsRequestKeys = statusByPartition.keys.map(new TopicPartitionOperationKey(_)).toList.asJava
     purgatory.tryCompleteElseWatch(delayedRemoteListOffsets, listOffsetsRequestKeys)
 
     assertEquals(1, cancelledCount)

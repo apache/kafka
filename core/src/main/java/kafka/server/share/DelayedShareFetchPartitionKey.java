@@ -16,8 +16,6 @@
  */
 package kafka.server.share;
 
-import kafka.server.DelayedOperationKey;
-
 import org.apache.kafka.common.Uuid;
 
 import java.util.Objects;
@@ -25,7 +23,7 @@ import java.util.Objects;
 /**
  * A key for delayed share fetch purgatory that refers to the topic partition.
  */
-public class DelayedShareFetchPartitionKey implements  DelayedShareFetchKey, DelayedOperationKey {
+public class DelayedShareFetchPartitionKey implements DelayedShareFetchKey {
     private final Uuid topicId;
     private final int partition;
 

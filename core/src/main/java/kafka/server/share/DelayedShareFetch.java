@@ -17,7 +17,6 @@
 package kafka.server.share;
 
 import kafka.cluster.Partition;
-import kafka.server.DelayedOperation;
 import kafka.server.LogReadResult;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
@@ -25,6 +24,7 @@ import kafka.server.ReplicaManager;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FetchRequest;
+import org.apache.kafka.server.purgatory.DelayedOperation;
 import org.apache.kafka.server.share.fetch.ShareFetchData;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
@@ -42,7 +42,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import scala.Option;
 import scala.Tuple2;
 import scala.collection.Seq;
 import scala.jdk.javaapi.CollectionConverters;
@@ -70,7 +69,7 @@ public class DelayedShareFetch extends DelayedOperation {
             ReplicaManager replicaManager,
             SharePartitionManager sharePartitionManager,
             LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions) {
-        super(shareFetchData.fetchParams().maxWaitMs, Option.empty());
+        super(shareFetchData.fetchParams().maxWaitMs, Optional.empty());
         this.shareFetchData = shareFetchData;
         this.replicaManager = replicaManager;
         this.partitionsAcquired = new LinkedHashMap<>();

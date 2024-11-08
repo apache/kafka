@@ -66,6 +66,7 @@ import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerL
 import org.apache.kafka.server.log.remote.storage._
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.network.BrokerEndPoint
+import org.apache.kafka.server.purgatory.DelayedOperationPurgatory
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
 import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{MockScheduler, MockTime}
@@ -1790,7 +1791,7 @@ class ReplicaManagerTest {
       assertTrue(consumerResult.hasFired)
 
       // No delayed fetch was inserted
-      assertEquals(0, replicaManager.delayedFetchPurgatory.watched)
+      assertEquals(0, replicaManager.delayedFetchPurgatory.watched())
 
       // Returns a preferred replica
       assertTrue(consumerResult.assertFired.preferredReadReplica.isPresent)
@@ -2995,19 +2996,19 @@ class ReplicaManagerTest {
           followerBrokerId -> new Node(followerBrokerId, "host2", 9092, "rack-b")).toMap)
     when(metadataCache.metadataVersion()).thenReturn(config.interBrokerProtocolVersion)
     val mockProducePurgatory = new DelayedOperationPurgatory[DelayedProduce](
-      purgatoryName = "Produce", timer, reaperEnabled = false)
+      "Produce", timer, 0, false)
     val mockFetchPurgatory = new DelayedOperationPurgatory[DelayedFetch](
-      purgatoryName = "Fetch", timer, reaperEnabled = false)
+      "Fetch", timer, 0, false)
     val mockDeleteRecordsPurgatory = new DelayedOperationPurgatory[DelayedDeleteRecords](
-      purgatoryName = "DeleteRecords", timer, reaperEnabled = false)
+      "DeleteRecords", timer, 0, false)
     val mockElectLeaderPurgatory = new DelayedOperationPurgatory[DelayedElectLeader](
-      purgatoryName = "ElectLeader", timer, reaperEnabled = false)
+      "ElectLeader", timer, 0, false)
     val mockRemoteFetchPurgatory = new DelayedOperationPurgatory[DelayedRemoteFetch](
-      purgatoryName = "RemoteFetch", timer, reaperEnabled = false)
+      "RemoteFetch", timer, 0, false)
     val mockRemoteListOffsetsPurgatory = new DelayedOperationPurgatory[DelayedRemoteListOffsets](
-      purgatoryName = "RemoteListOffsets", timer, reaperEnabled = false)
+      "RemoteListOffsets", timer, 0, false)
     val mockDelayedShareFetchPurgatory = new DelayedOperationPurgatory[DelayedShareFetch](
-      purgatoryName = "ShareFetch", timer, reaperEnabled = false)
+      "ShareFetch", timer, 0, false)
 
     // Mock network client to show leader offset of 5
     val blockingSend = new MockBlockingSender(
@@ -3422,19 +3423,19 @@ class ReplicaManagerTest {
     when(metadataCache.metadataVersion()).thenReturn(config.interBrokerProtocolVersion)
     mockGetAliveBrokerFunctions(metadataCache, aliveBrokers)
     val mockProducePurgatory = new DelayedOperationPurgatory[DelayedProduce](
-      purgatoryName = "Produce", timer, reaperEnabled = false)
+      "Produce", timer, 0, false)
     val mockFetchPurgatory = new DelayedOperationPurgatory[DelayedFetch](
-      purgatoryName = "Fetch", timer, reaperEnabled = false)
+      "Fetch", timer, 0, false)
     val mockDeleteRecordsPurgatory = new DelayedOperationPurgatory[DelayedDeleteRecords](
-      purgatoryName = "DeleteRecords", timer, reaperEnabled = false)
+      "DeleteRecords", timer, 0, false)
     val mockDelayedElectLeaderPurgatory = new DelayedOperationPurgatory[DelayedElectLeader](
-      purgatoryName = "DelayedElectLeader", timer, reaperEnabled = false)
+      "DelayedElectLeader", timer, 0, false)
     val mockDelayedRemoteFetchPurgatory = new DelayedOperationPurgatory[DelayedRemoteFetch](
-      purgatoryName = "DelayedRemoteFetch", timer, reaperEnabled = false)
+      "DelayedRemoteFetch", timer, 0, false)
     val mockDelayedRemoteListOffsetsPurgatory = new DelayedOperationPurgatory[DelayedRemoteListOffsets](
-      purgatoryName = "RemoteListOffsets", timer, reaperEnabled = false)
+      "RemoteListOffsets", timer, 0, false)
     val mockDelayedShareFetchPurgatory = new DelayedOperationPurgatory[DelayedShareFetch](
-      purgatoryName = "ShareFetch", timer, reaperEnabled = false)
+      "ShareFetch", timer, 0, false)
 
     when(metadataCache.contains(new TopicPartition(topic, 0))).thenReturn(true)
 

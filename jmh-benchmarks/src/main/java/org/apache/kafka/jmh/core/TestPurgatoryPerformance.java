@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.jmh.core;
 
-import kafka.server.DelayedOperation;
-import kafka.server.DelayedOperationPurgatory;
-
+import org.apache.kafka.server.purgatory.DelayedOperation;
+import org.apache.kafka.server.purgatory.DelayedOperationKey;
+import org.apache.kafka.server.purgatory.DelayedOperationPurgatory;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.server.util.ShutdownableThread;
 
@@ -30,6 +30,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
@@ -43,14 +44,12 @@ import java.util.stream.IntStream;
 import joptsimple.ArgumentAcceptingOptionSpec;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
-import scala.Option;
-import scala.jdk.javaapi.CollectionConverters;
 
 import static java.lang.String.format;
 
 public class TestPurgatoryPerformance {
 
-    public static void main(String[] args) throws InterruptedException {
+    public static void main(String[] args) throws Exception {
         TestArgumentDefinition def = new TestArgumentDefinition(args);
         def.checkRequiredArgs();
 
@@ -70,7 +69,7 @@ public class TestPurgatoryPerformance {
         IntervalSamples intervalSamples = new IntervalSamples(1000000, requestRate);
 
         DelayedOperationPurgatory<FakeOperation> purgatory =
-                DelayedOperationPurgatory.apply("fake purgatory", 0, 1000, true, true);
+                new DelayedOperationPurgatory<>("fake purgatory", 0, 1000);
         CompletionQueue queue = new CompletionQueue();
 
         List<String> gcNames = gcMXBeans.stream().map(MemoryManagerMXBean::getName).collect(Collectors.toList());
@@ -78,8 +77,8 @@ public class TestPurgatoryPerformance {
         long initialCpuTimeNano = getProcessCpuTimeNanos(osMXBean).orElseThrow();
         long start = System.currentTimeMillis();
         Random rand = new Random();
-        List<String> keys = IntStream.range(0, numKeys)
-                .mapToObj(i -> format("fakeKey%d", rand.nextInt(numPossibleKeys)))
+        List<FakeOperationKey> keys = IntStream.range(0, numKeys)
+                .mapToObj(i -> new FakeOperationKey(format("fakeKey%d", rand.nextInt(numPossibleKeys))))
                 .collect(Collectors.toList());
 
         AtomicLong requestArrivalTime = new AtomicLong(start);
@@ -196,7 +195,7 @@ public class TestPurgatoryPerformance {
         }
 
         public void checkRequiredArgs() {
-            CommandLineUtils.checkRequiredArgs(parser, options, numRequestsOpt, requestRateOpt, pct75Opt, pct50Opt);
+            CommandLineUtils.checkRequiredArgs(parser, options, numRequestsOpt, requestRateOpt, timeoutOpt, pct75Opt, pct50Opt);
         }
 
         public int numRequests() {
@@ -240,7 +239,7 @@ public class TestPurgatoryPerformance {
                                      LatencySamples latencySamples,
                                      AtomicLong requestArrivalTime,
                                      CountDownLatch latch,
-                                     List<String> keys,
+                                     List<FakeOperationKey> keys,
                                      AtomicLong end) {
         int i = numRequests;
         while (i > 0) {
@@ -263,9 +262,7 @@ public class TestPurgatoryPerformance {
                 queue.add(request);
             }
 
-            purgatory.tryCompleteElseWatch(request, CollectionConverters.asScala(
-                    keys.stream().map(k -> (Object) k).collect(Collectors.toList())
-            ).toSeq());
+            purgatory.tryCompleteElseWatch(request, keys);
         }
         end.set(System.currentTimeMillis());
     }
@@ -433,13 +430,39 @@ public class TestPurgatoryPerformance {
         }
     }
 
+    private static class FakeOperationKey implements DelayedOperationKey {
+        private final String key;
+
+        public FakeOperationKey(String key) {
+            this.key = key;
+        }
+
+        @Override
+        public String keyLabel() {
+            return key;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            FakeOperationKey that = (FakeOperationKey) o;
+            return Objects.equals(key, that.key);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(key);
+        }
+    }
+
     private static class FakeOperation extends DelayedOperation {
         final long completesAt;
         final long latencyMs;
         final CountDownLatch latch;
 
         public FakeOperation(long delayMs, long latencyMs, CountDownLatch latch) {
-            super(delayMs, Option.empty());
+            super(delayMs);
             this.latencyMs = latencyMs;
             this.latch = latch;
             completesAt = System.currentTimeMillis() + delayMs;

@@ -73,6 +73,7 @@ import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.{GroupVersion, MetadataVersion, RequestLocal, TransactionVersion}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_11_0_IV0, IBP_2_3_IV0}
+import org.apache.kafka.server.purgatory.TopicPartitionOperationKey
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.share.context.ShareFetchContext
 import org.apache.kafka.server.share.ErroneousAndValidPartitionData
@@ -417,7 +418,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (replicaManager.hasDelayedElectionOperations) {
         updateMetadataRequest.partitionStates.forEach { partitionState =>
           val tp = new TopicPartition(partitionState.topicName, partitionState.partitionIndex)
-          replicaManager.tryCompleteElection(TopicPartitionOperationKey(tp))
+          replicaManager.tryCompleteElection(new TopicPartitionOperationKey(tp))
         }
       }
       requestHelper.sendResponseExemptThrottle(request, new UpdateMetadataResponse(
