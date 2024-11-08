@@ -1415,6 +1415,92 @@ public class RemoteLogManagerTest {
     }
 
     @Test
+    public void testFetchNextSegmentWithTxnIndex() throws RemoteStorageException {
+        remoteLogManager.startup();
+        remoteLogManager.onLeadershipChange(
+            Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
+        remoteLogManager.fetchNextSegmentWithTxnIndex(leaderTopicIdPartition.topicPartition(), 10, 100L);
+        remoteLogManager.fetchNextSegmentWithTxnIndex(followerTopicIdPartition.topicPartition(), 20, 200L);
+
+        verify(remoteLogMetadataManager)
+            .nextSegmentWithTxnIndex(eq(leaderTopicIdPartition), anyInt(), anyLong());
+        verify(remoteLogMetadataManager)
+                .nextSegmentWithTxnIndex(eq(followerTopicIdPartition), anyInt(), anyLong());
+    }
+
+    @Test
+    public void testFindNextSegmentWithTxnIndex() throws RemoteStorageException {
+        checkpoint.write(totalEpochEntries);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint, scheduler);
+        when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
+
+        when(remoteLogMetadataManager.highestOffsetForEpoch(any(TopicIdPartition.class), anyInt()))
+                .thenReturn(Optional.of(0L));
+        when(remoteLogMetadataManager.nextSegmentWithTxnIndex(any(TopicIdPartition.class), anyInt(), anyLong()))
+                .thenAnswer(ans -> {
+                    TopicIdPartition topicIdPartition = ans.getArgument(0);
+                    int leaderEpoch = ans.getArgument(1);
+                    long offset = ans.getArgument(2);
+                    RemoteLogSegmentId segmentId = new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid());
+                    Map<Integer, Long> leaderEpochs = new TreeMap<>();
+                    leaderEpochs.put(leaderEpoch, offset);
+                    RemoteLogSegmentMetadata metadata = new RemoteLogSegmentMetadata(segmentId,
+                            offset, offset + 100, time.milliseconds(), 0, time.milliseconds(), 1024, leaderEpochs, true);
+                    return Optional.of(metadata);
+                });
+
+        remoteLogManager.startup();
+        remoteLogManager.onLeadershipChange(
+                Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
+
+        // For offset-10, epoch is 0.
+        remoteLogManager.findNextSegmentWithTxnIndex(leaderTopicIdPartition.topicPartition(), 10, cache);
+        verify(remoteLogMetadataManager)
+                .nextSegmentWithTxnIndex(eq(leaderTopicIdPartition), eq(0), eq(10L));
+    }
+
+    @Test
+    public void testFindNextSegmentWithTxnIndexTraversesNextEpoch() throws RemoteStorageException {
+        checkpoint.write(totalEpochEntries);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint, scheduler);
+        when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
+
+        when(remoteLogMetadataManager.highestOffsetForEpoch(any(TopicIdPartition.class), anyInt()))
+                .thenReturn(Optional.of(0L));
+        when(remoteLogMetadataManager.nextSegmentWithTxnIndex(any(TopicIdPartition.class), anyInt(), anyLong()))
+                .thenAnswer(ans -> {
+                    TopicIdPartition topicIdPartition = ans.getArgument(0);
+                    int leaderEpoch = ans.getArgument(1);
+                    long offset = ans.getArgument(2);
+                    Optional<RemoteLogSegmentMetadata> metadataOpt = Optional.empty();
+                    if (leaderEpoch == 2) {
+                        RemoteLogSegmentId segmentId = new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid());
+                        Map<Integer, Long> leaderEpochs = new TreeMap<>();
+                        leaderEpochs.put(leaderEpoch, offset);
+                        RemoteLogSegmentMetadata metadata = new RemoteLogSegmentMetadata(segmentId,
+                                offset, offset + 100, time.milliseconds(), 0, time.milliseconds(), 1024, leaderEpochs, true);
+                        metadataOpt = Optional.of(metadata);
+                    }
+                    return metadataOpt;
+                });
+
+        remoteLogManager.startup();
+        remoteLogManager.onLeadershipChange(
+                Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
+
+        // For offset-10, epoch is 0.
+        //  1. For epoch 0 and 1, it returns empty and
+        //  2. For epoch 2, it returns the segment metadata.
+        remoteLogManager.findNextSegmentWithTxnIndex(leaderTopicIdPartition.topicPartition(), 10, cache);
+        verify(remoteLogMetadataManager)
+            .nextSegmentWithTxnIndex(eq(leaderTopicIdPartition), eq(0), eq(10L));
+        verify(remoteLogMetadataManager)
+                .nextSegmentWithTxnIndex(eq(leaderTopicIdPartition), eq(1), eq(100L));
+        verify(remoteLogMetadataManager)
+                .nextSegmentWithTxnIndex(eq(leaderTopicIdPartition), eq(2), eq(200L));
+    }
+
+    @Test
     void testOnLeadershipChangeWillInvokeHandleLeaderOrFollowerPartitions() {
         remoteLogManager.startup();
         RemoteLogManager spyRemoteLogManager = spy(remoteLogManager);

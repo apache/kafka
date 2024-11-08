@@ -202,4 +202,24 @@ public class TransactionIndexTest {
         index.deleteIfExists();
         assertFalse(file.exists());
     }
+
+    @Test
+    public void testIsEmptyWhenFileDoesNotExist() throws IOException {
+        File nonExistentFile = TestUtils.tempFile();
+        assertTrue(nonExistentFile.delete());
+        try (TransactionIndex testIndex = new TransactionIndex(0, nonExistentFile)) {
+            assertTrue(testIndex.isEmpty());
+        }
+    }
+
+    @Test
+    public void testIsEmptyWhenFileIsEmpty() {
+        assertTrue(index.isEmpty());
+    }
+
+    @Test
+    public void testIsEmptyWhenFileIsNotEmpty() throws IOException {
+        index.append(new AbortedTxn(0L, 0, 10, 2));
+        assertFalse(index.isEmpty());
+    }
 }

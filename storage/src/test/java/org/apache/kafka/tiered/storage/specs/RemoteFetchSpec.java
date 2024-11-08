@@ -24,7 +24,7 @@ public final class RemoteFetchSpec {
 
     private final int sourceBrokerId;
     private final TopicPartition topicPartition;
-    private final int count;
+    private final RemoteFetchCount remoteFetchCount;
 
     /**
      * Specifies a fetch (download) event from a second-tier storage. This is used to ensure the
@@ -32,14 +32,14 @@ public final class RemoteFetchSpec {
      *
      * @param sourceBrokerId The broker which fetched (a) remote log segment(s) from the second-tier storage.
      * @param topicPartition The topic-partition which segment(s) were fetched.
-     * @param count The number of remote log segment(s) fetched.
+     * @param remoteFetchCount The number of remote log segment(s) and indexes fetched.
      */
     public RemoteFetchSpec(int sourceBrokerId,
                            TopicPartition topicPartition,
-                           int count) {
+                           RemoteFetchCount remoteFetchCount) {
         this.sourceBrokerId = sourceBrokerId;
         this.topicPartition = topicPartition;
-        this.count = count;
+        this.remoteFetchCount = remoteFetchCount;
     }
 
     public int getSourceBrokerId() {
@@ -50,14 +50,14 @@ public final class RemoteFetchSpec {
         return topicPartition;
     }
 
-    public int getCount() {
-        return count;
+    public RemoteFetchCount getRemoteFetchCount() {
+        return remoteFetchCount;
     }
 
     @Override
     public String toString() {
-        return String.format("RemoteFetch[source-broker-id=%d topic-partition=%s count=%d]",
-                sourceBrokerId, topicPartition, count);
+        return String.format("RemoteFetch[source-broker-id=%d topic-partition=%s remote-fetch-count=%s]",
+                sourceBrokerId, topicPartition, remoteFetchCount);
     }
 
     @Override
@@ -66,12 +66,12 @@ public final class RemoteFetchSpec {
         if (o == null || getClass() != o.getClass()) return false;
         RemoteFetchSpec that = (RemoteFetchSpec) o;
         return sourceBrokerId == that.sourceBrokerId
-                && count == that.count
+                && Objects.equals(remoteFetchCount, that.remoteFetchCount)
                 && Objects.equals(topicPartition, that.topicPartition);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(sourceBrokerId, topicPartition, count);
+        return Objects.hash(sourceBrokerId, topicPartition, remoteFetchCount);
     }
 }
