@@ -361,35 +361,6 @@ public class GroupCoordinatorRecordHelpers {
     }
 
     /**
-     * Creates a ConsumerGroupCurrentMemberAssignment record.
-     *
-     * @param groupId   The consumer group id.
-     * @param member    The share group member.
-     * @return The record.
-     */
-    public static CoordinatorRecord newConsumerGroupCurrentAssignmentRecord(
-        String groupId,
-        ShareGroupMember member
-    ) {
-        return new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ConsumerGroupCurrentMemberAssignmentKey()
-                    .setGroupId(groupId)
-                    .setMemberId(member.memberId()),
-                (short) 8
-            ),
-            new ApiMessageAndVersion(
-                new ConsumerGroupCurrentMemberAssignmentValue()
-                    .setMemberEpoch(member.memberEpoch())
-                    .setPreviousMemberEpoch(member.previousMemberEpoch())
-                    .setState(member.state().value())
-                    .setAssignedPartitions(toTopicPartitions(member.assignedPartitions())),
-                (short) 0
-            )
-        );
-    }
-
-    /**
      * Creates a ConsumerGroupCurrentMemberAssignment tombstone.
      *
      * @param groupId   The consumer group id.
@@ -731,7 +702,7 @@ public class GroupCoordinatorRecordHelpers {
      * @return The record.
      */
     public static CoordinatorRecord newShareGroupSubscriptionMetadataTombstoneRecord(
-            String groupId
+        String groupId
     ) {
         return new CoordinatorRecord(
             new ApiMessageAndVersion(
@@ -929,8 +900,8 @@ public class GroupCoordinatorRecordHelpers {
      * @return The record.
      */
     public static CoordinatorRecord newShareGroupCurrentAssignmentTombstoneRecord(
-            String groupId,
-            String memberId
+        String groupId,
+        String memberId
     ) {
         return new CoordinatorRecord(
             new ApiMessageAndVersion(
