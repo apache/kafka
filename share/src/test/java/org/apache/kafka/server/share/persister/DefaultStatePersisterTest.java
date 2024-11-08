@@ -107,7 +107,7 @@ class DefaultStatePersisterTest {
             }
 
             @Override
-            public Node getShareCoordinator(String key, String internalTopicName) {
+            public Node getShareCoordinator(SharePartitionKey key, String internalTopicName) {
                 return Node.noNode();
             }
 

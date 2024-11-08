@@ -142,7 +142,7 @@ class PersisterStateManagerTest {
             this.result.complete(new TestHandlerResponse(new TestHandlerResponseData()
                 .setResults(Collections.singletonList(new WriteShareGroupStateResponseData.WriteStateResult()
                     .setPartitions(Collections.singletonList(new WriteShareGroupStateResponseData.PartitionResult()
-                        .setPartition(partition)
+                        .setPartition(partitionKey().partition())
                         .setErrorMessage(Errors.NONE.message())
                         .setErrorCode(Errors.NONE.code()))
                     )
@@ -159,9 +159,9 @@ class PersisterStateManagerTest {
         protected void findCoordinatorErrorResponse(Errors error, Exception exception) {
             this.result.complete(new TestHandlerResponse(new TestHandlerResponseData()
                 .setResults(Collections.singletonList(new WriteShareGroupStateResponseData.WriteStateResult()
-                    .setTopicId(topicId)
+                    .setTopicId(partitionKey().topicId())
                     .setPartitions(Collections.singletonList(new WriteShareGroupStateResponseData.PartitionResult()
-                        .setPartition(partition)
+                        .setPartition(partitionKey().partition())
                         .setErrorMessage(exception == null ? error.message() : exception.getMessage())
                         .setErrorCode(error.code()))
                     )
@@ -198,7 +198,7 @@ class PersisterStateManagerTest {
             }
 
             @Override
-            public Node getShareCoordinator(String key, String internalTopicName) {
+            public Node getShareCoordinator(SharePartitionKey key, String internalTopicName) {
                 return Node.noNode();
             }
 
@@ -217,7 +217,7 @@ class PersisterStateManagerTest {
             }
 
             @Override
-            public Node getShareCoordinator(String key, String internalTopicName) {
+            public Node getShareCoordinator(SharePartitionKey key, String internalTopicName) {
                 return coordinatorNode;
             }
 

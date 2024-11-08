@@ -18,13 +18,14 @@
 package org.apache.kafka.server.share.persister;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.server.share.SharePartitionKey;
 
 import java.util.List;
 
 public interface ShareCoordinatorMetadataCacheHelper {
     boolean containsTopic(String topic);
 
-    Node getShareCoordinator(String key, String internalTopicName);
+    Node getShareCoordinator(SharePartitionKey key, String internalTopicName);
 
     List<Node> getClusterNodes();
 }

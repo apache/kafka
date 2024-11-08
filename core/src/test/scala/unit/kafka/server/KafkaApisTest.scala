@@ -1340,6 +1340,10 @@ class KafkaApisTest extends Logging {
     topicConfigOverride.put(ServerConfigs.REQUEST_TIMEOUT_MS_CONFIG, requestTimeout.toString)
 
     val groupId = "group"
+    val topicId = Uuid.randomUuid
+    val partition = 0
+    var key:String = groupId
+
     val topicName =
       coordinatorType match {
         case CoordinatorType.GROUP =>
@@ -1359,6 +1363,7 @@ class KafkaApisTest extends Logging {
         case CoordinatorType.SHARE =>
           authorizeResource(authorizer, AclOperation.CLUSTER_ACTION, ResourceType.CLUSTER,
             Resource.CLUSTER_NAME, AuthorizationResult.ALLOWED)
+          key = "%s:%s:%d" format(groupId, topicId, partition)
           Topic.SHARE_GROUP_STATE_TOPIC_NAME
         case _ =>
           throw new IllegalStateException(s"Unknown coordinator type $coordinatorType")
@@ -1368,12 +1373,12 @@ class KafkaApisTest extends Logging {
       new FindCoordinatorRequest.Builder(
         new FindCoordinatorRequestData()
           .setKeyType(coordinatorType.id())
-          .setCoordinatorKeys(asList(groupId)))
+          .setCoordinatorKeys(asList(key)))
     } else {
       new FindCoordinatorRequest.Builder(
         new FindCoordinatorRequestData()
           .setKeyType(coordinatorType.id())
-          .setKey(groupId))
+          .setKey(key))
     }
     val request = buildRequest(findCoordinatorRequestBuilder.build(requestHeader.apiVersion))
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
@@ -1389,7 +1394,7 @@ class KafkaApisTest extends Logging {
       assertEquals(Errors.INVALID_REQUEST.code, response.data.coordinators.get(0).errorCode)
     } else if (version >= 4) {
       assertEquals(Errors.COORDINATOR_NOT_AVAILABLE.code, response.data.coordinators.get(0).errorCode)
-      assertEquals(groupId, response.data.coordinators.get(0).key)
+      assertEquals(key, response.data.coordinators.get(0).key)
     } else {
       assertEquals(Errors.COORDINATOR_NOT_AVAILABLE.code, response.data.errorCode)
       assertTrue(capturedRequest.getValue.isEmpty)

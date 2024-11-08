@@ -24,6 +24,7 @@ import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.persister.ShareCoordinatorMetadataCacheHelper;
 
 import java.util.HashSet;
@@ -38,12 +39,12 @@ import scala.jdk.javaapi.OptionConverters;
 
 public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinatorMetadataCacheHelper {
     private final MetadataCache metadataCache;
-    private final Function<String, Integer> keyToPartitionMapper;
+    private final Function<SharePartitionKey, Integer> keyToPartitionMapper;
     private final ListenerName interBrokerListenerName;
 
     public ShareCoordinatorMetadataCacheHelperImpl(
         MetadataCache metadataCache,
-        Function<String, Integer> keyToPartitionMapper,
+        Function<SharePartitionKey, Integer> keyToPartitionMapper,
         ListenerName interBrokerListenerName
     ) {
         Objects.requireNonNull(metadataCache, "metadataCache must not be null");
@@ -61,7 +62,7 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
     }
 
     @Override
-    public Node getShareCoordinator(String key, String internalTopicName) {
+    public Node getShareCoordinator(SharePartitionKey key, String internalTopicName) {
         if (metadataCache.contains(internalTopicName)) {
             Set<String> topicSet = new HashSet<>();
             topicSet.add(internalTopicName);
