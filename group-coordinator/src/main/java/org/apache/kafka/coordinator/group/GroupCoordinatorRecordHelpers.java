@@ -29,6 +29,8 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegularExpressionKey;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegularExpressionValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
@@ -51,6 +53,7 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMe
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
+import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -403,6 +406,61 @@ public class GroupCoordinatorRecordHelpers {
                     .setGroupId(groupId)
                     .setMemberId(memberId),
                 (short) 8
+            ),
+            null // Tombstone
+        );
+    }
+
+    /**
+     * Creates a ConsumerGroupRegularExpression record.
+     *
+     * @param groupId                       The consumer group id.
+     * @param regex                         The regular expression.
+     * @param resolvedRegularExpression     The metadata associated with the regular expression.
+     * @return The record.
+     */
+    public static CoordinatorRecord newConsumerGroupRegularExpressionRecord(
+        String groupId,
+        String regex,
+        ResolvedRegularExpression resolvedRegularExpression
+    ) {
+        List<String> topics = new ArrayList<>(resolvedRegularExpression.topics);
+        Collections.sort(topics);
+
+        return new CoordinatorRecord(
+            new ApiMessageAndVersion(
+                new ConsumerGroupRegularExpressionKey()
+                    .setGroupId(groupId)
+                    .setRegularExpression(regex),
+                (short) 16
+            ),
+            new ApiMessageAndVersion(
+                new ConsumerGroupRegularExpressionValue()
+                    .setTopics(topics)
+                    .setVersion(resolvedRegularExpression.version)
+                    .setTimestamp(resolvedRegularExpression.timestamp),
+                (short) 0
+            )
+        );
+    }
+
+    /**
+     * Creates a ConsumerGroupRegularExpression tombstone.
+     *
+     * @param groupId   The consumer group id.
+     * @param regex     The regular expression.
+     * @return The record.
+     */
+    public static CoordinatorRecord newConsumerGroupRegularExpressionTombstone(
+        String groupId,
+        String regex
+    ) {
+        return new CoordinatorRecord(
+            new ApiMessageAndVersion(
+                new ConsumerGroupRegularExpressionKey()
+                    .setGroupId(groupId)
+                    .setRegularExpression(regex),
+                (short) 16
             ),
             null // Tombstone
         );

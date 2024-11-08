@@ -84,6 +84,7 @@ import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupBuilder;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
+import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupBuilder;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
@@ -15084,6 +15085,63 @@ public class GroupMetadataManagerTest {
 
         List<ShareGroupDescribeResponseData.DescribedGroup> actual = context.sendShareGroupDescribe(Collections.singletonList(groupId));
         assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testReplayConsumerGroupRegularExpression() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        ResolvedRegularExpression resolvedRegularExpression = new ResolvedRegularExpression(
+            Set.of("abc", "abcd"),
+            10L,
+            12345L
+        );
+
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionRecord(
+            "foo",
+            "abc*",
+            resolvedRegularExpression
+        ));
+
+        assertEquals(
+            Optional.of(resolvedRegularExpression),
+            context.groupMetadataManager.consumerGroup("foo").regularExpression("abc*")
+        );
+    }
+
+    @Test
+    public void testReplayConsumerGroupRegularExpressionTombstone() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // The group may not exist at all. Replaying the ConsumerGroupRegularExpression tombstone
+        // should be a no-op.
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionTombstone("foo", "abc*"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.consumerGroup("foo"));
+
+        // Otherwise, it should remove the regular expression.
+        ResolvedRegularExpression resolvedRegularExpression = new ResolvedRegularExpression(
+            Set.of("abc", "abcd"),
+            10L,
+            12345L
+        );
+
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionRecord(
+            "foo",
+            "abc*",
+            resolvedRegularExpression
+        ));
+
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionTombstone(
+            "foo",
+            "abc*"
+        ));
+
+        assertEquals(
+            Optional.empty(),
+            context.groupMetadataManager.consumerGroup("foo").regularExpression("abc*")
+        );
     }
 
     private static void checkJoinGroupResponse(

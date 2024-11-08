@@ -80,7 +80,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     protected final TimelineHashMap<String, T> members;
 
     /**
-     * The number of subscribers per topic.
+     * The number of subscribers or regular expressions per topic.
      */
     protected final TimelineHashMap<String, Integer> subscribedTopicNames;
 

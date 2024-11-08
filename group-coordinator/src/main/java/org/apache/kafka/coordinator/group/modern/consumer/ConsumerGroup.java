@@ -135,6 +135,11 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      */
     private final TimelineHashMap<String, Integer> subscribedRegularExpressions;
 
+    /**
+     * The resolved regular expressions.
+     */
+    private final TimelineHashMap<String, ResolvedRegularExpression> resolvedRegularExpressions;
+
     public ConsumerGroup(
         SnapshotRegistry snapshotRegistry,
         String groupId,
@@ -149,6 +154,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         this.classicProtocolMembersSupportedProtocols = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentPartitionEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedRegularExpressions = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.resolvedRegularExpressions = new TimelineHashMap<>(snapshotRegistry, 0);
     }
 
     /**
@@ -340,6 +346,46 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         if (oldMember != null && oldMember.instanceId() != null) {
             staticMembers.remove(oldMember.instanceId());
         }
+    }
+
+    /**
+     * Update the resolved regular expression.
+     *
+     * @param regex                         The regular expression.
+     * @param newResolvedRegularExpression  The regular expression's metadata.
+     */
+    public void updateResolvedRegularExpression(
+        String regex,
+        ResolvedRegularExpression newResolvedRegularExpression
+    ) {
+        removeResolvedRegularExpression(regex);
+        if (newResolvedRegularExpression != null) {
+            resolvedRegularExpressions.put(regex, newResolvedRegularExpression);
+            newResolvedRegularExpression.topics.forEach(topicName -> subscribedTopicNames.compute(topicName, Utils::incValue));
+        }
+    }
+
+    /**
+     * Remove the resolved regular expression.
+     *
+     * @param regex The regular expression.
+     */
+    public void removeResolvedRegularExpression(String regex) {
+        ResolvedRegularExpression oldResolvedRegularExpression = resolvedRegularExpressions.remove(regex);
+        if (oldResolvedRegularExpression != null) {
+            oldResolvedRegularExpression.topics.forEach(topicName -> subscribedTopicNames.compute(topicName, Utils::decValue));
+        }
+    }
+
+    /**
+     * Return an optional containing the resolved regular expression corresponding to the provided regex
+     * or an empty optional.
+     *
+     * @param regex The regular expression.
+     * @return The optional containing the resolved regular expression or an empty optional.
+     */
+    public Optional<ResolvedRegularExpression> regularExpression(String regex) {
+        return Optional.ofNullable(resolvedRegularExpressions.get(regex));
     }
 
     /**

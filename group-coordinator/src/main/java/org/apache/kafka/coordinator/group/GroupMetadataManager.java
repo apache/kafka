@@ -82,6 +82,8 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegularExpressionKey;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegularExpressionValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
@@ -109,6 +111,7 @@ import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.CurrentAssignmentBuilder;
+import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupAssignmentBuilder;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
@@ -3605,6 +3608,40 @@ public class GroupMetadataManager {
                 .setPartitionsPendingRevocation(Collections.emptyMap())
                 .build();
             group.updateMember(newMember);
+        }
+    }
+
+    /**
+     * Replays ConsumerGroupRegularExpressionKey/Value to update the hard state of
+     * the consumer group.
+     *
+     * @param key   A ConsumerGroupRegularExpressionKey key.
+     * @param value A ConsumerGroupRegularExpressionValue record.
+     */
+    public void replay(
+        ConsumerGroupRegularExpressionKey key,
+        ConsumerGroupRegularExpressionValue value
+    ) {
+        String groupId = key.groupId();
+        String regex = key.regularExpression();
+
+        if (value != null) {
+            ConsumerGroup group = getOrMaybeCreatePersistedConsumerGroup(groupId, true);
+            group.updateResolvedRegularExpression(
+                regex,
+                new ResolvedRegularExpression(
+                    new HashSet<>(value.topics()),
+                    value.version(),
+                    value.timestamp()
+                )
+            );
+        } else {
+            try {
+                ConsumerGroup group = getOrMaybeCreatePersistedConsumerGroup(groupId, false);
+                group.removeResolvedRegularExpression(regex);
+            } catch (GroupIdNotFoundException ex) {
+                // If the group does not exist, we can ignore the tombstone.
+            }
         }
     }
 
