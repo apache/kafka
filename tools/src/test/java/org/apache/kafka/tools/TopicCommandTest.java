@@ -340,6 +340,8 @@ public class TopicCommandTest {
     static List<ClusterConfig> generate() {
         Map<String, String> serverProp = new HashMap<>();
         serverProp.put(REPLICA_FETCH_MAX_BYTES_CONFIG, "1"); // if config name error, no exception throw
+        serverProp.put("log.initial.task.delay.ms", "100");
+        serverProp.put("log.segment.delete.delay.ms", "1000");
 
         Map<Integer, Map<String, String>> rackInfo = new HashMap<>();
         Map<String, String> infoPerBroker1 = new HashMap<>();

@@ -224,7 +224,14 @@ public class ClusterTestExtensionsTest {
     }
 
 
-    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT}, brokers = 4)
+    @ClusterTest(
+        types = {Type.CO_KRAFT, Type.KRAFT},
+        brokers = 4,
+        serverProperties = {
+            @ClusterConfigProperty(key = "log.initial.task.delay.ms", value = "100"),
+            @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000")
+        }
+    )
     public void testVerifyTopicDeletion(ClusterInstance clusterInstance) throws Exception {
         try (Admin admin = clusterInstance.createAdminClient()) {
             String testTopic = "testTopic";
