@@ -56,7 +56,7 @@ import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 import org.apache.kafka.metadata.LeaderAndIsr
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.server.{ActionQueue, DelayedActionQueue, common}
-import org.apache.kafka.server.common.{DirectoryEventHandler, RequestLocal, TopicOptionalIdPartition}
+import org.apache.kafka.server.common.{DirectoryEventHandler, RequestLocal, StopPartition, TopicOptionalIdPartition}
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.network.BrokerEndPoint
@@ -105,11 +105,6 @@ case class LogDeleteRecordsResult(requestedOffset: Long, lowWatermark: Long, exc
     case Some(e) => Errors.forException(e)
   }
 }
-
-case class StopPartition(topicPartition: TopicPartition,
-                         deleteLocalLog: Boolean,
-                         deleteRemoteLog: Boolean = false,
-                         stopRemoteLogMetadataManager: Boolean = false)
 
 /**
  * Result metadata of a log read operation on the log
@@ -443,7 +438,7 @@ class ReplicaManager(val config: KafkaConfig,
     warn(s"Found stray partitions ${strayPartitions.mkString(",")}")
 
     // First, stop the partitions. This will shutdown the fetchers and other managers
-    val partitionsToStop = strayPartitions.map(tp => StopPartition(tp, deleteLocalLog = false)).toSet
+    val partitionsToStop = strayPartitions.map(tp => new StopPartition(tp, false, false, false)).toSet
     stopPartitions(partitionsToStop).foreachEntry { (topicPartition, exception) =>
       error(s"Unable to stop stray partition $topicPartition", exception)
     }
@@ -582,8 +577,8 @@ class ReplicaManager(val config: KafkaConfig,
               if (requestLeaderEpoch == LeaderAndIsr.EPOCH_DURING_DELETE ||
                   requestLeaderEpoch == LeaderAndIsr.NO_EPOCH ||
                   requestLeaderEpoch >= currentLeaderEpoch) {
-                stoppedPartitions += StopPartition(topicPartition, deletePartition,
-                  deletePartition && partition.isLeader && requestLeaderEpoch == LeaderAndIsr.EPOCH_DURING_DELETE)
+                stoppedPartitions += new StopPartition(topicPartition, deletePartition,
+                  deletePartition && partition.isLeader && requestLeaderEpoch == LeaderAndIsr.EPOCH_DURING_DELETE, false)
                 // Assume that everything will go right. It is overwritten in case of an error.
                 responseMap.put(topicPartition, Errors.NONE)
               } else {
@@ -598,7 +593,7 @@ class ReplicaManager(val config: KafkaConfig,
             case HostedPartition.None =>
               // Delete log and corresponding folders in case replica manager doesn't hold them anymore.
               // This could happen when topic is being deleted while broker is down and recovers.
-              stoppedPartitions += StopPartition(topicPartition, deletePartition)
+              stoppedPartitions += new StopPartition(topicPartition, deletePartition, false, false)
               responseMap.put(topicPartition, Errors.NONE)
           }
         }
@@ -2909,7 +2904,7 @@ class ReplicaManager(val config: KafkaConfig,
               .map(image => image.partitions().get(tp.partition()))
               .exists(partition => partition.leader == config.nodeId)
             val deleteRemoteLog = delta.topicWasDeleted(tp.topic()) && isCurrentLeader
-            StopPartition(tp, deleteLocalLog = true, deleteRemoteLog = deleteRemoteLog)
+            new StopPartition(tp, true, deleteRemoteLog, false)
           }
           .toSet
         stateChangeLogger.info(s"Deleting ${deletes.size} partition(s).")
@@ -3081,7 +3076,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
 
     if (partitionsToStopFetching.nonEmpty) {
-      val partitionsToStop = partitionsToStopFetching.map { case (tp, deleteLocalLog) => StopPartition(tp, deleteLocalLog) }.toSet
+      val partitionsToStop = partitionsToStopFetching.map { case (tp, deleteLocalLog) => new StopPartition(tp, deleteLocalLog, false, false) }.toSet
       stopPartitions(partitionsToStop)
       stateChangeLogger.info(s"Stopped fetchers as part of controlled shutdown for ${partitionsToStop.size} partitions")
     }

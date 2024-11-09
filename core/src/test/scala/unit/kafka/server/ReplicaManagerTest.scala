@@ -61,7 +61,7 @@ import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsem
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
-import org.apache.kafka.server.common.{DirectoryEventHandler, MetadataVersion, OffsetAndEpoch, RequestLocal}
+import org.apache.kafka.server.common.{DirectoryEventHandler, MetadataVersion, OffsetAndEpoch, RequestLocal, StopPartition}
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.storage._
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
@@ -3925,7 +3925,7 @@ class ReplicaManagerTest {
           verify(mockRemoteLogManager, times(0)).stopPartitions(any(), any())
         } else {
           verify(mockRemoteLogManager, times(1))
-            .stopPartitions(ArgumentMatchers.eq(Collections.singleton(StopPartition(tp0, deleteLocalLog = deletePartitions))), any())
+            .stopPartitions(ArgumentMatchers.eq(Collections.singleton(new StopPartition(tp0, deletePartitions, false, false))), any())
         }
       }
     } finally {
@@ -4608,9 +4608,10 @@ class ReplicaManagerTest {
         assertFalse(readRecoveryPointCheckpoint().containsKey(tp0))
         assertFalse(readLogStartOffsetCheckpoint().containsKey(tp0))
         if (enableRemoteStorage) {
-          val stopPartition = StopPartition(tp0,
-            deleteLocalLog = deletePartition,
-            deleteRemoteLog = leaderEpoch == LeaderAndIsr.EPOCH_DURING_DELETE)
+          val stopPartition = new StopPartition(tp0,
+            deletePartition,
+            leaderEpoch == LeaderAndIsr.EPOCH_DURING_DELETE,
+            false)
           verify(mockRemoteLogManager)
             .stopPartitions(ArgumentMatchers.eq(Collections.singleton(stopPartition)), any())
         }
@@ -4618,7 +4619,7 @@ class ReplicaManagerTest {
 
       if (expectedOutput == Errors.NONE && !deletePartition && enableRemoteStorage) {
         verify(mockRemoteLogManager)
-          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(StopPartition(tp0, deleteLocalLog = false))), any())
+          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(new StopPartition(tp0, false, false, false))), any())
       }
     } finally {
       replicaManager.shutdown(checkpointHW = false)
@@ -5451,7 +5452,7 @@ class ReplicaManagerTest {
       if (enableRemoteStorage) {
         verify(mockRemoteLogManager, never()).onLeadershipChange(anySet(), anySet(), anyMap())
         verify(mockRemoteLogManager, times(1))
-          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(StopPartition(topicPartition, deleteLocalLog = true))), any())
+          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(new StopPartition(topicPartition, true, false, false))), any())
       }
 
       // Check that the partition was removed
@@ -5499,7 +5500,7 @@ class ReplicaManagerTest {
       if (enableRemoteStorage) {
         verify(mockRemoteLogManager, never()).onLeadershipChange(anySet(), anySet(), anyMap())
         verify(mockRemoteLogManager, times(1))
-          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(StopPartition(topicPartition, deleteLocalLog = true))), any())
+          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(new StopPartition(topicPartition, true, false, false))), any())
       }
 
       // Check that the partition was removed
@@ -5546,7 +5547,7 @@ class ReplicaManagerTest {
       if (enableRemoteStorage) {
         verify(mockRemoteLogManager, never()).onLeadershipChange(anySet(), anySet(), anyMap())
         verify(mockRemoteLogManager, times(1))
-          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(StopPartition(topicPartition, deleteLocalLog = true))), any())
+          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(new StopPartition(topicPartition, true, false, false))), any())
       }
 
       // Check that the partition was removed
@@ -5593,7 +5594,7 @@ class ReplicaManagerTest {
       if (enableRemoteStorage) {
         verify(mockRemoteLogManager, never()).onLeadershipChange(anySet(), anySet(), anyMap())
         verify(mockRemoteLogManager, times(1))
-          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(StopPartition(topicPartition, deleteLocalLog = true, deleteRemoteLog = true))), any())
+          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(new StopPartition(topicPartition, true, true, false))), any())
       }
 
       // Check that the partition was removed

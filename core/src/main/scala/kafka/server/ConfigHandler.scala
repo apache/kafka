@@ -32,6 +32,7 @@ import org.apache.kafka.common.utils.Sanitizer
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.ClientMetricsManager
+import org.apache.kafka.server.common.StopPartition
 import org.apache.kafka.storage.internals.log.{LogStartOffsetIncrementReason, ThrottledReplicaListValidator}
 import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 
@@ -98,7 +99,7 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     // When copy disabled, we should stop leaderCopyRLMTask, but keep expirationTask
     if (isRemoteLogEnabled && !wasCopyDisabled && isCopyDisabled) {
       replicaManager.remoteLogManager.foreach(rlm => {
-        rlm.stopLeaderCopyRLMTasks(leaderPartitions.toSet.asJava);
+        rlm.stopLeaderCopyRLMTasks(leaderPartitions.toSet.asJava)
       })
     }
 
@@ -107,14 +108,12 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
       val stopPartitions: java.util.HashSet[StopPartition] = new java.util.HashSet[StopPartition]()
       leaderPartitions.foreach(partition => {
         // delete remote logs and stop RemoteLogMetadataManager
-        stopPartitions.add(StopPartition(partition.topicPartition, deleteLocalLog = false,
-          deleteRemoteLog = true, stopRemoteLogMetadataManager = true))
+        stopPartitions.add(new StopPartition(partition.topicPartition, false, true, true))
       })
 
       followerPartitions.foreach(partition => {
         // we need to cancel follower tasks and stop RemoteLogMetadataManager
-        stopPartitions.add(StopPartition(partition.topicPartition, deleteLocalLog = false,
-          deleteRemoteLog = false, stopRemoteLogMetadataManager = true))
+        stopPartitions.add(new StopPartition(partition.topicPartition, false, false, true))
       })
 
       // update the log start offset to local log start offset for the leader replicas
