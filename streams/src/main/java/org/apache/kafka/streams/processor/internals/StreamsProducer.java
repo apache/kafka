@@ -239,7 +239,7 @@ public class StreamsProducer {
      * @throws IllegalStateException if EOS is disabled
      * @throws TaskMigratedException
      */
-    protected void commitTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
+    public void commitTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                      final ConsumerGroupMetadata consumerGroupMetadata) {
         if (!eosEnabled()) {
             throw new IllegalStateException(formatException("Exactly-once is not enabled"));

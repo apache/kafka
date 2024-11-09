@@ -29,7 +29,6 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -44,7 +43,6 @@ import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
-import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -233,7 +231,7 @@ public class TopologyTestDriver implements Closeable {
 
     private final MockConsumer<byte[], byte[]> consumer;
     private final MockProducer<byte[], byte[]> producer;
-    private final TestDriverProducer testDriverProducer;
+    private final StreamsProducer testDriverProducer;
 
     private final Map<String, TopicPartition> partitionsByInputTopic = new HashMap<>();
     private final Map<String, TopicPartition> globalPartitionsByInputTopic = new HashMap<>();
@@ -345,7 +343,8 @@ public class TopologyTestDriver implements Closeable {
                 return Collections.singletonList(new PartitionInfo(topic, PARTITION_ID, null, null, null));
             }
         };
-        testDriverProducer = new TestDriverProducer(
+
+        testDriverProducer = new StreamsProducer(
             producer,
             StreamsConfigUtils.processingMode(streamsConfig),
             mockWallClockTime,
@@ -739,7 +738,14 @@ public class TopologyTestDriver implements Closeable {
     public final <K, V> TestInputTopic<K, V> createInputTopic(final String topicName,
                                                               final Serializer<K> keySerializer,
                                                               final Serializer<V> valueSerializer) {
-        return new TestInputTopic<>(this, topicName, keySerializer, valueSerializer, Instant.now(), Duration.ZERO);
+        return new TestInputTopic<>(
+            this,
+            topicName,
+            keySerializer,
+            valueSerializer,
+            Instant.ofEpochMilli(mockWallClockTime.milliseconds()),
+            Duration.ZERO
+        );
     }
 
     /**
@@ -986,7 +992,7 @@ public class TopologyTestDriver implements Closeable {
     public <K, V> KeyValueStore<K, V> getKeyValueStore(final String name) {
         final StateStore store = getStateStore(name, false);
         if (store instanceof TimestampedKeyValueStore) {
-            log.info("Method #getTimestampedKeyValueStore() should be used to access a TimestampedKeyValueStore.");
+            log.warn("Method #getTimestampedKeyValueStore() should be used to access a TimestampedKeyValueStore.");
             return new KeyValueStoreFacade<>((TimestampedKeyValueStore<K, V>) store);
         }
         return store instanceof KeyValueStore ? (KeyValueStore<K, V>) store : null;
@@ -1064,7 +1070,7 @@ public class TopologyTestDriver implements Closeable {
     public <K, V> WindowStore<K, V> getWindowStore(final String name) {
         final StateStore store = getStateStore(name, false);
         if (store instanceof TimestampedWindowStore) {
-            log.info("Method #getTimestampedWindowStore() should be used to access a TimestampedWindowStore.");
+            log.warn("Method #getTimestampedWindowStore() should be used to access a TimestampedWindowStore.");
             return new WindowStoreFacade<>((TimestampedWindowStore<K, V>) store);
         }
         return store instanceof WindowStore ? (WindowStore<K, V>) store : null;
@@ -1352,19 +1358,4 @@ public class TopologyTestDriver implements Closeable {
         }
     }
 
-    private static class TestDriverProducer extends StreamsProducer {
-
-        public TestDriverProducer(final Producer<byte[], byte[]> producer,
-                                  final ProcessingMode processingMode,
-                                  final Time time,
-                                  final LogContext logContext) {
-            super(producer, processingMode, time, logContext);
-        }
-
-        @Override
-        public void commitTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                      final ConsumerGroupMetadata consumerGroupMetadata) throws ProducerFencedException {
-            super.commitTransaction(offsets, consumerGroupMetadata);
-        }
-    }
 }
