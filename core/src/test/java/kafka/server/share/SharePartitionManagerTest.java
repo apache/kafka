@@ -60,6 +60,8 @@ import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
 import org.apache.kafka.server.share.context.FinalContext;
 import org.apache.kafka.server.share.context.ShareFetchContext;
 import org.apache.kafka.server.share.context.ShareSessionContext;
+import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
+import org.apache.kafka.server.share.fetch.DelayedShareFetchKey;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
 import org.apache.kafka.server.share.fetch.ShareFetchData;
 import org.apache.kafka.server.share.persister.NoOpShareStatePersister;

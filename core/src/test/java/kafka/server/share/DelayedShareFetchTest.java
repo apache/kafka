@@ -29,6 +29,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.server.purgatory.DelayedOperationKey;
 import org.apache.kafka.server.purgatory.DelayedOperationPurgatory;
+import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
 import org.apache.kafka.server.share.fetch.ShareFetchData;
 import org.apache.kafka.server.storage.log.FetchIsolation;
@@ -71,7 +72,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
-
 
 public class DelayedShareFetchTest {
     private static final int MAX_WAIT_MS = 5000;

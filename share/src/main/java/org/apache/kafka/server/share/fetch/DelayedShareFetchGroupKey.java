@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.server.share;
+package org.apache.kafka.server.share.fetch;
 
 import org.apache.kafka.common.Uuid;
 
@@ -28,7 +28,7 @@ public class DelayedShareFetchGroupKey implements DelayedShareFetchKey {
     private final Uuid topicId;
     private final int partition;
 
-    DelayedShareFetchGroupKey(String groupId, Uuid topicId, int partition) {
+    public DelayedShareFetchGroupKey(String groupId, Uuid topicId, int partition) {
         this.groupId = groupId;
         this.topicId = topicId;
         this.partition = partition;

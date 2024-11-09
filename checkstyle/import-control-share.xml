@@ -46,6 +46,7 @@
       <allow pkg="org.apache.kafka.server.share" />
 
       <subpackage name="fetch">
+        <allow pkg="org.apache.kafka.server.purgatory" />
         <allow class="org.apache.kafka.server.storage.log.FetchParams"/>
       </subpackage>
 

@@ -46,7 +46,7 @@ import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.{ConcurrentHashMap, CountDownLatch, Semaphore}
 import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
-import kafka.server.share.{DelayedShareFetch, DelayedShareFetchPartitionKey}
+import kafka.server.share.DelayedShareFetch
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
@@ -59,6 +59,7 @@ import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, Metad
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.purgatory.{DelayedOperationPurgatory, TopicPartitionOperationKey}
+import org.apache.kafka.server.share.fetch.DelayedShareFetchPartitionKey
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams}
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints
