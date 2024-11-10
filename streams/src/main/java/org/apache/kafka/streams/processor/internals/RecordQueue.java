@@ -240,6 +240,7 @@ public class RecordQueue {
                         deserialized.topic(), deserialized.partition(), deserialized.offset(), timestamp, timestampExtractor.getClass().getCanonicalName()
                 );
                 droppedRecordsSensor.record();
+                lastCorruptedRecord = raw;
                 continue;
             }
             headRecord = new StampedRecord(deserialized, timestamp);
