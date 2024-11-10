@@ -55,10 +55,6 @@ class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
         self.kafka = kafka
         self.security_config = kafka.security_config.client_config()
 
-        security_protocol = self.security_config.security_protocol
-        assert version.consumer_supports_bootstrap_server() or security_protocol == SecurityConfig.PLAINTEXT, \
-            "Security protocol %s is only supported if version >= 0.9.0.0, version %s" % (self.security_config, str(version))
-
         self.args = {
             'topic': topic,
             'kafka_opts': self.security_config.kafka_opts,

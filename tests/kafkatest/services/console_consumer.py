@@ -21,7 +21,7 @@ from ducktape.utils.util import wait_until
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.monitor.jmx import JmxMixin, JmxTool
-from kafkatest.version import DEV_BRANCH, LATEST_0_8_2, LATEST_0_9, LATEST_0_10_0, V_0_10_0_0, V_0_11_0_0, V_2_0_0, LATEST_3_7
+from kafkatest.version import DEV_BRANCH, LATEST_3_7
 from kafkatest.services.kafka.util import fix_opts_for_new_jvm
 
 """
@@ -118,9 +118,6 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
 
         self.isolation_level = isolation_level
         self.enable_systest_events = enable_systest_events
-        if self.enable_systest_events:
-            # Only available in 0.10.0 and up
-            assert version >= V_0_10_0_0
 
         self.print_timestamp = print_timestamp
         self.jaas_override_variables = jaas_override_variables or {}
@@ -134,10 +131,6 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         """Return a string which can be used to create a configuration file appropriate for the given node."""
         # Process client configuration
         prop_file = self.render('console_consumer.properties')
-        if hasattr(node, "version") and node.version <= LATEST_0_8_2:
-            # in 0.8.2.X and earlier, console consumer does not have --timeout-ms option
-            # instead, we have to pass it through the config file
-            prop_file += "\nconsumer.timeout.ms=%s\n" % str(self.consumer_timeout_ms)
 
         # Add security properties to the config. If security protocol is not specified,
         # use the default in the template properties.
@@ -176,19 +169,8 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
               "%(console_consumer)s " \
               "--topic %(topic)s " \
               "--consumer.config %(config_file)s " % args
-
-        if self.new_consumer:
-            assert node.version.consumer_supports_bootstrap_server(), \
-                "new_consumer is only supported if version >= 0.9.0.0, version %s" % str(node.version)
-            if node.version <= LATEST_0_10_0:
-                cmd += " --new-consumer"
-            cmd += " --bootstrap-server %(broker_list)s" % args
-            if node.version >= V_0_11_0_0:
-                cmd += " --isolation-level %s" % self.isolation_level
-        else:
-            assert node.version < V_2_0_0, \
-                "new_consumer==false is only supported if version < 2.0.0, version %s" % str(node.version)
-            cmd += " --zookeeper %(zk_connect)s" % args
+        cmd += " --bootstrap-server %(broker_list)s" % args
+        cmd += " --isolation-level %s" % self.isolation_level
 
         if self.from_beginning:
             cmd += " --from-beginning"
@@ -196,8 +178,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         if self.consumer_timeout_ms is not None:
             # version 0.8.X and below do not support --timeout-ms option
             # This will be added in the properties file instead
-            if node.version > LATEST_0_8_2:
-                cmd += " --timeout-ms %s" % self.consumer_timeout_ms
+            cmd += " --timeout-ms %s" % self.consumer_timeout_ms
 
         if self.print_timestamp:
             cmd += " --property print.timestamp=true"
@@ -209,16 +190,12 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             cmd += " --property print.partition=true"
 
         # LoggingMessageFormatter was introduced after 0.9
-        if node.version > LATEST_0_9:
-            if node.version > LATEST_3_7:
-                cmd += " --formatter org.apache.kafka.tools.consumer.LoggingMessageFormatter"
-            else:
-                cmd += " --formatter kafka.tools.LoggingMessageFormatter"
+        if node.version > LATEST_3_7:
+            cmd += " --formatter org.apache.kafka.tools.consumer.LoggingMessageFormatter"
+        else:
+            cmd += " --formatter kafka.tools.LoggingMessageFormatter"
 
         if self.enable_systest_events:
-            # enable systest events is only available in 0.10.0 and later
-            # check the assertion here as well, in case node.version has been modified
-            assert node.version >= V_0_10_0_0
             cmd += " --enable-systest-events"
 
         if self.consumer_properties is not None:

@@ -18,8 +18,7 @@ import os
 
 from kafkatest.services.kafka.util import fix_opts_for_new_jvm
 from kafkatest.services.performance import PerformanceService
-from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.version import DEV_BRANCH, V_2_0_0, LATEST_0_10_0
+from kafkatest.version import V_2_5_0, DEV_BRANCH
 
 
 class ConsumerPerformanceService(PerformanceService):
@@ -65,24 +64,13 @@ class ConsumerPerformanceService(PerformanceService):
             "collect_default": True}
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, messages, version=DEV_BRANCH, new_consumer=True, settings={}):
+    def __init__(self, context, num_nodes, kafka, topic, messages, version=DEV_BRANCH, settings={}):
         super(ConsumerPerformanceService, self).__init__(context, num_nodes)
         self.kafka = kafka
         self.security_config = kafka.security_config.client_config()
         self.topic = topic
         self.messages = messages
-        self.new_consumer = new_consumer
         self.settings = settings
-
-        assert version.consumer_supports_bootstrap_server() or (not new_consumer), \
-            "new_consumer is only supported if version >= 0.9.0.0, version %s" % str(version)
-
-        assert version < V_2_0_0 or new_consumer, \
-            "new_consumer==false is only supported if version < 2.0.0, version %s" % str(version)
-
-        security_protocol = self.security_config.security_protocol
-        assert version.consumer_supports_bootstrap_server() or security_protocol == SecurityConfig.PLAINTEXT, \
-            "Security protocol %s is only supported if version >= 0.9.0.0, version %s" % (self.security_config, str(version))
 
         # These less-frequently used settings can be updated manually after instantiation
         self.fetch_size = None
@@ -97,17 +85,13 @@ class ConsumerPerformanceService(PerformanceService):
         """Dictionary of arguments used to start the Consumer Performance script."""
         args = {
             'topic': self.topic,
-            'messages': self.messages,
+            'messages': self.messages
         }
 
-        if self.new_consumer:
-            if version <= LATEST_0_10_0:
-                args['new-consumer'] = ""
-                args['broker-list'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
-            else:
-                args['bootstrap-server'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
+        if version < V_2_5_0:
+            args['broker-list'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
         else:
-            args['zookeeper'] = self.kafka.zk_connect_setting()
+            args['bootstrap-server'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
 
         if self.fetch_size is not None:
             args['fetch-size'] = self.fetch_size
@@ -132,9 +116,7 @@ class ConsumerPerformanceService(PerformanceService):
         for key, value in self.args(node.version).items():
             cmd += " --%s %s" % (key, value)
 
-        if node.version.consumer_supports_bootstrap_server():
-            # This is only used for security settings
-            cmd += " --consumer.config %s" % ConsumerPerformanceService.CONFIG_FILE
+        cmd += " --consumer.config %s" % ConsumerPerformanceService.CONFIG_FILE
 
         for key, value in self.settings.items():
             cmd += " %s=%s" % (str(key), str(value))
@@ -142,22 +124,6 @@ class ConsumerPerformanceService(PerformanceService):
         cmd += " 2>> %(stderr)s | tee -a %(stdout)s" % {'stdout': ConsumerPerformanceService.STDOUT_CAPTURE,
                                                         'stderr': ConsumerPerformanceService.STDERR_CAPTURE}
         return cmd
-
-    def parse_results(self, line, version):
-        parts = line.split(',')
-        if version.consumer_supports_bootstrap_server():
-            result = {
-                'total_mb': float(parts[2]),
-                'mbps': float(parts[3]),
-                'records_per_sec': float(parts[5]),
-            }
-        else:
-            result = {
-                'total_mb': float(parts[3]),
-                'mbps': float(parts[4]),
-                'records_per_sec': float(parts[6]),
-            }
-        return result
 
     def _worker(self, idx, node):
         node.account.ssh("mkdir -p %s" % ConsumerPerformanceService.PERSISTENT_ROOT, allow_fail=False)
@@ -174,4 +140,10 @@ class ConsumerPerformanceService(PerformanceService):
             last = line
 
         # Parse and save the last line's information
-        self.results[idx-1] = self.parse_results(last, node.version)
+        if last is not None:
+            parts = last.split(',')
+            self.results[idx-1] = {
+                'total_mb': float(parts[2]),
+                'mbps': float(parts[3]),
+                'records_per_sec': float(parts[5]),
+            }
