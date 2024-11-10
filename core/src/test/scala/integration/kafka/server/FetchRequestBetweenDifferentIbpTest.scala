@@ -19,15 +19,15 @@ package kafka.server
 
 import java.time.Duration
 import java.util.Arrays.asList
-
-import kafka.utils.TestUtils
+import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_2_7_IV0, IBP_2_8_IV1, IBP_3_1_IV0}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.MethodSource
 
 import scala.collection.{Map, Seq}
 
@@ -43,15 +43,17 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
     )
   }
 
-  @Test
-  def testControllerOldIBP(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_ZK_implicit"))
+  def testControllerOldIBP(quorum: String, groupProtocol: String): Unit = {
     // Ensure controller version < IBP_2_8_IV1, and then create a topic where leader of partition 0 is not the controller,
     // leader of partition 1 is.
     testControllerWithGivenIBP(IBP_2_7_IV0, 0)
   }
 
-  @Test
-  def testControllerNewIBP(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_ZK_implicit"))
+  def testControllerNewIBP(quorum: String, groupProtocol: String): Unit = {
     // Ensure controller version = IBP_3_1_IV0, and then create a topic where leader of partition 1 is the old version.
     testControllerWithGivenIBP(IBP_3_1_IV0, 2)
   }
@@ -79,13 +81,15 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
     assertEquals(2, count)
   }
 
-  @Test
-  def testControllerNewToOldIBP(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_ZK_implicit"))
+  def testControllerNewToOldIBP(quorum: String, groupProtocol: String): Unit = {
     testControllerSwitchingIBP(IBP_3_1_IV0, 2, IBP_2_7_IV0, 0)
   }
 
-  @Test
-  def testControllerOldToNewIBP(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_ZK_implicit"))
+  def testControllerOldToNewIBP(quorum: String, groupProtocol: String): Unit = {
     testControllerSwitchingIBP(IBP_2_7_IV0, 0, IBP_3_1_IV0, 2)
   }
 

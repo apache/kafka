@@ -30,7 +30,7 @@ import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.CsvSource
 
 import java.util.{Locale, Properties}
 import scala.annotation.nowarn
@@ -81,9 +81,9 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
    * Verifies some of the metrics of producer, consumer as well as server.
    */
   @nowarn("cat=deprecation")
-  @ParameterizedTest(name = "testMetrics with systemRemoteStorageEnabled: {0}")
-  @ValueSource(booleans = Array(true, false))
-  def testMetrics(systemRemoteStorageEnabled: Boolean): Unit = {
+  @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}.systemRemoteStorageEnabled={2}")
+  @CsvSource(Array("zk,classic,true", "zk,classic,false"))
+  def testMetrics(quorum: String, groupProtocol: String, systemRemoteStorageEnabled: Boolean): Unit = {
     val topic = "topicWithOldMessageFormat"
     val props = new Properties
     props.setProperty(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.9.0")

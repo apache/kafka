@@ -22,7 +22,7 @@ import java.util.concurrent.{ExecutionException, TimeUnit}
 import kafka.api.IntegrationTestHarness
 import kafka.controller.{OfflineReplica, PartitionAndReplica}
 import kafka.utils.TestUtils.{Checkpoint, LogDirFailureType, Roll, waitUntilTrue}
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.{CoreUtils, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
@@ -32,7 +32,7 @@ import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.MethodSource
 import org.junit.jupiter.params.ParameterizedTest
 
 import java.nio.file.Files
@@ -63,15 +63,15 @@ class LogDirFailureTest extends IntegrationTestHarness {
     ensureConsistentKRaftMetadata()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testProduceErrorFromFailureOnLogRoll(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testProduceErrorFromFailureOnLogRoll(quorum: String, groupProtocol: String): Unit = {
     testProduceErrorsFromLogDirFailureOnLeader(Roll)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testLogDirNotificationTimeout(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testLogDirNotificationTimeout(quorum: String, groupProtocol: String): Unit = {
     // Disable retries to allow exception to bubble up for validation
     this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
     this.producerConfig.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false")
@@ -94,9 +94,9 @@ class LogDirFailureTest extends IntegrationTestHarness {
     leaderServer.awaitShutdown()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testIOExceptionDuringLogRoll(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testIOExceptionDuringLogRoll(quorum: String, groupProtocol: String): Unit = {
     testProduceAfterLogDirFailureOnLeader(Roll, quorum)
   }
 
@@ -131,21 +131,21 @@ class LogDirFailureTest extends IntegrationTestHarness {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testProduceErrorFromFailureOnCheckpoint(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testProduceErrorFromFailureOnCheckpoint(quorum: String, groupProtocol: String): Unit = {
     testProduceErrorsFromLogDirFailureOnLeader(Checkpoint)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testIOExceptionDuringCheckpoint(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testIOExceptionDuringCheckpoint(quorum: String, groupProtocol: String): Unit = {
     testProduceAfterLogDirFailureOnLeader(Checkpoint, quorum)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testReplicaFetcherThreadAfterLogDirFailureOnFollower(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testReplicaFetcherThreadAfterLogDirFailureOnFollower(quorum: String, groupProtocol: String): Unit = {
     this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
     this.producerConfig.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false")
     val producer = createProducer()

@@ -662,6 +662,7 @@ object TestUtils extends Logging {
    * Create a consumer with a few pre-configured properties.
    */
   def createConsumer[K, V](brokerList: String,
+                           groupProtocol: GroupProtocol,
                            groupId: String = "group",
                            autoOffsetReset: String = "earliest",
                            enableAutoCommit: Boolean = true,
@@ -671,8 +672,7 @@ object TestUtils extends Logging {
                            trustStoreFile: Option[File] = None,
                            saslProperties: Option[Properties] = None,
                            keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,
-                           valueDeserializer: Deserializer[V] = new ByteArrayDeserializer,
-                           groupProtocol: GroupProtocol = GroupProtocol.CLASSIC): Consumer[K, V] = {
+                           valueDeserializer: Deserializer[V] = new ByteArrayDeserializer): Consumer[K, V] = {
     val consumerProps = new Properties
     consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     consumerProps.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.toString)
@@ -1303,11 +1303,13 @@ object TestUtils extends Logging {
       brokers: Seq[B],
       topic: String,
       numMessages: Int,
+      groupProtocol: GroupProtocol,
       groupId: String = "group",
       securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
       trustStoreFile: Option[File] = None,
       waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[Array[Byte], Array[Byte]]] = {
     val consumer = createConsumer(bootstrapServers(brokers, ListenerName.forSecurityProtocol(securityProtocol)),
+      groupProtocol,
       groupId = groupId,
       securityProtocol = securityProtocol,
       trustStoreFile = trustStoreFile)

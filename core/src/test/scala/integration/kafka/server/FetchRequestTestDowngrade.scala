@@ -19,8 +19,7 @@ package kafka.server
 
 import java.time.Duration
 import java.util.Arrays.asList
-
-import kafka.utils.TestUtils
+import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.zk.ZkVersion
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
@@ -28,7 +27,8 @@ import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_2_7_IV0, IBP_3_1_IV0}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.MethodSource
 
 import scala.collection.{Map, Seq}
 
@@ -43,8 +43,9 @@ class FetchRequestTestDowngrade extends BaseRequestTest {
         )
     }
 
-    @Test
-    def testTopicIdIsRemovedFromFetcherWhenControllerDowngrades(): Unit = {
+    @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+    @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_ZK_implicit"))
+    def testTopicIdIsRemovedFromFetcherWhenControllerDowngrades(quorum: String, groupProtocol: String): Unit = {
         val tp = new TopicPartition("topic", 0)
         val producer = createProducer()
         val consumer = createConsumer()

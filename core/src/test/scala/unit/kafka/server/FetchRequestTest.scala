@@ -43,7 +43,7 @@ import scala.util.Random
 class FetchRequestTest extends BaseFetchRequestTest {
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk","kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testBrokerRespectsPartitionsOrderAndSizeLimits(quorum: String): Unit = {
     initProducer()
 
@@ -146,7 +146,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk","kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testFetchRequestV4WithReadCommitted(quorum: String): Unit = {
     initProducer()
     val maxPartitionBytes = 200
@@ -165,7 +165,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk","kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testFetchRequestToNonReplica(quorum: String): Unit = {
     val topic = "topic"
     val partition = 0
@@ -196,13 +196,13 @@ class FetchRequestTest extends BaseFetchRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testLastFetchedEpochValidation(quorum: String): Unit = {
     checkLastFetchedEpochValidation(ApiKeys.FETCH.latestVersion())
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testLastFetchedEpochValidationV12(quorum: String): Unit = {
     checkLastFetchedEpochValidation(12)
   }
@@ -251,13 +251,13 @@ class FetchRequestTest extends BaseFetchRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk","kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testCurrentEpochValidation(quorum: String): Unit = {
     checkCurrentEpochValidation(ApiKeys.FETCH.latestVersion())
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk","kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testCurrentEpochValidationV12(quorum: String): Unit = {
     checkCurrentEpochValidation(12)
   }
@@ -301,13 +301,13 @@ class FetchRequestTest extends BaseFetchRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk","kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testEpochValidationWithinFetchSession(quorum: String): Unit = {
     checkEpochValidationWithinFetchSession(ApiKeys.FETCH.latestVersion())
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk","kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testEpochValidationWithinFetchSessionV12(quorum: String): Unit = {
     checkEpochValidationWithinFetchSession(12)
   }
@@ -369,7 +369,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
    * channel is muted in the server. If buffers are not released this will result in OOM.
    */
   @ParameterizedTest
-  @ValueSource(strings = Array("zk","kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDownConversionWithConnectionFailure(quorum: String): Unit = {
     val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1).head
     val topicIds = getTopicIds().asJava
@@ -437,7 +437,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     * some records have to be dropped during the conversion.
     */
   @ParameterizedTest
-  @ValueSource(strings = Array("zk","kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDownConversionFromBatchedToUnbatchedRespectsOffset(quorum: String): Unit = {
     // Increase linger so that we have control over the batches created
     producer = TestUtils.createProducer(bootstrapServers(),
@@ -519,7 +519,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
    * This tests using FetchRequests that don't use topic IDs
    */
   @ParameterizedTest
-  @ValueSource(strings = Array("zk","kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testCreateIncrementalFetchWithPartitionsInErrorV12(quorum: String): Unit = {
     def createConsumerFetchRequest(topicPartitions: Seq[TopicPartition],
                            metadata: JFetchMetadata,
@@ -582,7 +582,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
    * Test that when a Fetch Request receives an unknown topic ID, it returns a top level error.
    */
   @ParameterizedTest
-  @ValueSource(strings = Array("zk","kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testFetchWithPartitionsWithIdError(quorum: String): Unit = {
     def createConsumerFetchRequest(fetchData: util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData],
                            metadata: JFetchMetadata,
@@ -627,7 +627,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk","kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testZStdCompressedTopic(quorum: String): Unit = {
     // ZSTD compressed topic
     val topicConfig = Map(TopicConfig.COMPRESSION_TYPE_CONFIG -> BrokerCompressionType.ZSTD.name)
@@ -675,7 +675,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk","kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testZStdCompressedRecords(quorum: String): Unit = {
     // Producer compressed topic
     val topicConfig = Map(TopicConfig.COMPRESSION_TYPE_CONFIG -> BrokerCompressionType.PRODUCER.name)

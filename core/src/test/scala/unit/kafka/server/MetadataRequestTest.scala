@@ -42,7 +42,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testClusterIdWithRequestVersion1(quorum: String): Unit = {
     val v1MetadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
     val v1ClusterId = v1MetadataResponse.clusterId
@@ -50,7 +50,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testClusterIdIsValid(quorum: String): Unit = {
     val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(2.toShort))
     isValidClusterId(metadataResponse.clusterId)
@@ -84,7 +84,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testRack(quorum: String): Unit = {
     val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
     // Validate rack matches what's set in generateConfigs() above
@@ -94,7 +94,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testIsInternal(quorum: String): Unit = {
     val internalTopic = Topic.GROUP_METADATA_TOPIC_NAME
     val notInternalTopic = "notInternal"
@@ -116,7 +116,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testNoTopicsRequest(quorum: String): Unit = {
     // create some topics
     createTopic("t1", 3, 2)
@@ -130,7 +130,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testAutoTopicCreation(quorum: String): Unit = {
     val topic1 = "t1"
     val topic2 = "t2"
@@ -161,7 +161,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testAutoCreateTopicWithInvalidReplicationFactor(quorum: String): Unit = {
     // Shutdown all but one broker so that the number of brokers is less than the default replication factor
     brokers.tail.foreach(_.shutdown())
@@ -212,7 +212,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testAllTopicsRequest(quorum: String): Unit = {
     // create some topics
     createTopic("t1", 3, 2)
@@ -230,7 +230,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testTopicIdsInResponse(quorum: String): Unit = {
     val replicaAssignment = Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1))
     val topic1 = "topic1"
@@ -260,7 +260,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     * Preferred replica should be the first item in the replicas list
     */
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testPreferredReplica(quorum: String): Unit = {
     val replicaAssignment = Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1))
     createTopicWithAssignment("t1", replicaAssignment)
@@ -284,7 +284,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testReplicaDownResponse(quorum: String): Unit = {
     val replicaDownTopic = "replicaDown"
     val replicaCount = 3
@@ -330,7 +330,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testIsrAfterBrokerShutDownAndJoinsBack(quorum: String): Unit = {
     def checkIsr[B <: KafkaBroker](
       brokers: Seq[B],
@@ -368,7 +368,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testAliveBrokersWithNoTopics(quorum: String): Unit = {
     def checkMetadata[B <: KafkaBroker](
       brokers: Seq[B],

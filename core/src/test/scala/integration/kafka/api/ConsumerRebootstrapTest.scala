@@ -16,15 +16,17 @@
  */
 package kafka.api
 
-import kafka.utils.TestUtils
+import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.MethodSource
 
 import java.util.Collections
 
 class ConsumerRebootstrapTest extends RebootstrapTest {
-  @Test
-  def testRebootstrap(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_ZK_implicit"))
+  def testRebootstrap(quorum: String, groupProtocol: String): Unit = {
     sendRecords(10, 0)
 
     TestUtils.waitUntilTrue(

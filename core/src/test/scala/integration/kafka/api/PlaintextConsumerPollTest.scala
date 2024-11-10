@@ -19,11 +19,10 @@ import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, MethodSource}
+import org.junit.jupiter.params.provider.MethodSource
 
 import java.time.Duration
 import java.util
-import java.util.stream.Stream
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
@@ -289,12 +288,4 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
     for (poller <- consumerPollers)
       poller.shutdown()
   }
-}
-
-object PlaintextConsumerPollTest {
-  def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly: Stream[Arguments] =
-    BaseConsumerTest.getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly()
-
-  def getTestQuorumAndGroupProtocolParametersAll: Stream[Arguments] =
-    BaseConsumerTest.getTestQuorumAndGroupProtocolParametersAll()
 }

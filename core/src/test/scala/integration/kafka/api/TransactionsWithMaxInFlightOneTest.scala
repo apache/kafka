@@ -20,17 +20,17 @@ package kafka.api
 import java.util.Properties
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
-import kafka.utils.TestUtils
+import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils.consumeRecords
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
-import org.apache.kafka.server.config.{ServerConfigs, ReplicationConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.MethodSource
 
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
@@ -72,9 +72,9 @@ class TransactionsWithMaxInFlightOneTest extends KafkaServerTestHarness {
     super.tearDown()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testTransactionalProducerSingleBrokerMaxInFlightOne(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testTransactionalProducerSingleBrokerMaxInFlightOne(quorum: String, groupProtocol: String): Unit = {
     // We want to test with one broker to verify multiple requests queued on a connection
     assertEquals(1, brokers.size)
 
@@ -120,6 +120,7 @@ class TransactionsWithMaxInFlightOneTest extends KafkaServerTestHarness {
 
   private def createReadCommittedConsumer(group: String) = {
     val consumer = TestUtils.createConsumer(bootstrapServers(),
+      groupProtocolFromTestParameters(),
       groupId = group,
       enableAutoCommit = false,
       readCommitted = true)

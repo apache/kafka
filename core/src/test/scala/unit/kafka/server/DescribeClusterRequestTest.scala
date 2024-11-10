@@ -49,13 +49,13 @@ class DescribeClusterRequestTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDescribeClusterRequestIncludingClusterAuthorizedOperations(quorum: String): Unit = {
     testDescribeClusterRequest(true)
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDescribeClusterRequestExcludingClusterAuthorizedOperations(quorum: String): Unit = {
     testDescribeClusterRequest(false)
   }

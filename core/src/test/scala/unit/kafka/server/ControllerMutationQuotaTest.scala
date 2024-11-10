@@ -127,7 +127,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testSetUnsetQuota(quorum: String): Unit = {
     val rate = 1.5
     val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "User")
@@ -144,7 +144,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testQuotaMetric(quorum: String): Unit = {
     asPrincipal(ThrottledPrincipal) {
       // Metric is lazily created
@@ -167,7 +167,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testStrictCreateTopicsRequest(quorum: String): Unit = {
     asPrincipal(ThrottledPrincipal) {
       // Create two topics worth of 30 partitions each. As we use a strict quota, we
@@ -191,7 +191,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testPermissiveCreateTopicsRequest(quorum: String): Unit = {
     asPrincipal(ThrottledPrincipal) {
       // Create two topics worth of 30 partitions each. As we use a permissive quota, we
@@ -205,7 +205,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testUnboundedCreateTopicsRequest(quorum: String): Unit = {
     asPrincipal(UnboundedPrincipal) {
       // Create two topics worth of 30 partitions each. As we use an user without quota, we
@@ -217,7 +217,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testStrictDeleteTopicsRequest(quorum: String): Unit = {
     asPrincipal(UnboundedPrincipal) {
       createTopics(TopicsWith30Partitions, StrictCreateTopicsRequestVersion)
@@ -245,7 +245,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testPermissiveDeleteTopicsRequest(quorum: String): Unit = {
     asPrincipal(UnboundedPrincipal) {
       createTopics(TopicsWith30Partitions, StrictCreateTopicsRequestVersion)
@@ -263,7 +263,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testUnboundedDeleteTopicsRequest(quorum: String): Unit = {
     asPrincipal(UnboundedPrincipal) {
       createTopics(TopicsWith30Partitions, StrictCreateTopicsRequestVersion)
@@ -277,7 +277,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testStrictCreatePartitionsRequest(quorum: String): Unit = {
     asPrincipal(UnboundedPrincipal) {
       createTopics(TopicsWithOnePartition, StrictCreatePartitionsRequestVersion)
@@ -305,7 +305,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testPermissiveCreatePartitionsRequest(quorum: String): Unit = {
     asPrincipal(UnboundedPrincipal) {
       createTopics(TopicsWithOnePartition, StrictCreatePartitionsRequestVersion)
@@ -323,7 +323,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testUnboundedCreatePartitionsRequest(quorum: String): Unit = {
     asPrincipal(UnboundedPrincipal) {
       createTopics(TopicsWithOnePartition, StrictCreatePartitionsRequestVersion)

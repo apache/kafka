@@ -35,7 +35,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -106,9 +106,9 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
     }
 
     // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedQuorumName() in the ParameterizedTest name.
-    @ParameterizedTest(name = "{displayName}.quorum={0}")
-    @ValueSource(strings = {"zk", "kraft"})
-    public void executeTieredStorageTest(String quorum) {
+    @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}")
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    public void executeTieredStorageTest(String quorum, String groupProtocol) {
         TieredStorageTestBuilder builder = new TieredStorageTestBuilder();
         writeTestSpecifications(builder);
         try {

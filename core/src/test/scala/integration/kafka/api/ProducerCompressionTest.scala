@@ -19,6 +19,7 @@ package kafka.api.test
 
 import kafka.server.{KafkaBroker, KafkaConfig, QuorumTestHarness}
 import kafka.utils.TestUtils
+import org.apache.kafka.clients.consumer.GroupProtocol
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.header.Header
@@ -62,17 +63,20 @@ class ProducerCompressionTest extends QuorumTestHarness {
    *
    * Compressed messages should be able to sent and consumed correctly
    */
-  @ParameterizedTest
+  @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}.compression={2}")
   @CsvSource(value = Array(
-    "kraft,none",
-    "kraft,gzip",
-    "kraft,snappy",
-    "kraft,lz4",
-    "kraft,zstd",
-    "zk,gzip",
-    "zk,snappy"
+    "kraft,classic,none",
+    "kraft,consumer,none",
+    "kraft,classic,gzip",
+    "kraft,consumer,gzip",
+    "kraft,classic,snappy",
+    "kraft,consumer,snappy",
+    "kraft,classic,lz4",
+    "kraft,consumer,lz4",
+    "kraft,classic,zstd",
+    "kraft,consumer,zstd"
   ))
-  def testCompression(quorum: String, compression: String): Unit = {
+  def testCompression(quorum: String, groupProtocol: String, compression: String): Unit = {
     val producerProps = new Properties()
     val bootstrapServers = TestUtils.plaintextBootstrapServers(Seq(broker))
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
@@ -80,7 +84,7 @@ class ProducerCompressionTest extends QuorumTestHarness {
     producerProps.put(ProducerConfig.BATCH_SIZE_CONFIG, "66000")
     producerProps.put(ProducerConfig.LINGER_MS_CONFIG, "200")
     val producer = new KafkaProducer(producerProps, new ByteArraySerializer, new ByteArraySerializer)
-    val consumer = TestUtils.createConsumer(bootstrapServers)
+    val consumer = TestUtils.createConsumer(bootstrapServers, GroupProtocol.of(groupProtocol))
 
     try {
       // create topic

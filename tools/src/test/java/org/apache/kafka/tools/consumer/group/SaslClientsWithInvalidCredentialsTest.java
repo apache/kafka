@@ -30,9 +30,10 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.function.Executable;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -121,8 +122,10 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
         closeSasl();
     }
 
-    @Test
-    public void testConsumerGroupServiceWithAuthenticationFailure() throws Exception {
+    // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedQuorumName() in the ParameterizedTest name.
+    @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}")
+    @MethodSource("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_ZK_implicit")
+    public void testConsumerGroupServiceWithAuthenticationFailure(String quorum, String groupProtocol) throws Exception {
         ConsumerGroupCommand.ConsumerGroupService consumerGroupService = prepareConsumerGroupService();
         try (Consumer<byte[], byte[]> consumer = createConsumer()) {
             consumer.subscribe(Collections.singletonList(TOPIC));
@@ -133,8 +136,9 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
         }
     }
 
-    @Test
-    public void testConsumerGroupServiceWithAuthenticationSuccess() throws Exception {
+    @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}")
+    @MethodSource("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_ZK_implicit")
+    public void testConsumerGroupServiceWithAuthenticationSuccess(String quorum, String groupProtocol) throws Exception {
         createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KAFKA_SCRAM_USER_2, JaasTestUtils.KAFKA_SCRAM_PASSWORD_2);
         ConsumerGroupCommand.ConsumerGroupService consumerGroupService = prepareConsumerGroupService();
         try (Consumer<byte[], byte[]> consumer = createConsumer()) {

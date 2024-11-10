@@ -33,7 +33,7 @@ import scala.jdk.CollectionConverters._
 class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testValidCreateTopicsRequests(quorum: String): Unit = {
     // Generated assignments
     validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic1"))))
@@ -63,7 +63,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testErrorCreateTopicsRequests(quorum: String): Unit = {
     val existingTopic = "existing-topic"
     createTopic(existingTopic)
@@ -134,7 +134,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
 
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testInvalidCreateTopicsRequests(quorum: String): Unit = {
     // Partitions/ReplicationFactor and ReplicaAssignment
     validateErrorCreateTopicsRequests(topicsReq(Seq(
@@ -201,7 +201,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testCreateClusterMetadataTopic(quorum: String): Unit = {
     validateErrorCreateTopicsRequests(
       topicsReq(Seq(topicReq(Topic.CLUSTER_METADATA_TOPIC_NAME))),

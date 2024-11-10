@@ -39,7 +39,7 @@ import scala.jdk.CollectionConverters._
 class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testTopicDeletionClusterHasOfflinePartitions(quorum: String): Unit = {
     // Create a two topics with one partition/replica. Make one of them offline.
     val offlineTopic = "topic-1"
@@ -73,7 +73,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testValidDeleteTopicRequests(quorum: String): Unit = {
     val timeout = 10000
     // Single topic

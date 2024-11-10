@@ -70,7 +70,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
    * checking all metrics we care in a single test is faster though it would be more elegant to have 3 @Test methods
    */
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testMetricsDuringTopicCreateDelete(quorum: String): Unit = {
 
     // For UnderReplicatedPartitions, because of https://issues.apache.org/jira/browse/KAFKA-4605

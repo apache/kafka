@@ -71,7 +71,7 @@ class AddPartitionsTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testWrongReplicaCount(quorum: String): Unit = {
     assertEquals(classOf[InvalidReplicaAssignmentException], assertThrows(classOf[ExecutionException], () => {
         admin.createPartitions(Collections.singletonMap(topic1,
@@ -84,7 +84,7 @@ class AddPartitionsTest extends BaseRequestTest {
    * and consecutive.
    */
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testMissingPartitionsInCreateTopics(quorum: String): Unit = {
     val topic6Placements = new util.HashMap[Integer, util.List[Integer]]
     topic6Placements.put(1, asList(0, 1))
@@ -110,7 +110,7 @@ class AddPartitionsTest extends BaseRequestTest {
    * enough partitions.
    */
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testMissingPartitionsInCreatePartitions(quorum: String): Unit = {
     val cause = assertThrows(classOf[ExecutionException], () =>
       admin.createPartitions(Collections.singletonMap(topic1,
@@ -134,7 +134,7 @@ class AddPartitionsTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testIncrementPartitions(quorum: String): Unit = {
     admin.createPartitions(Collections.singletonMap(topic1, NewPartitions.increaseTo(3))).all().get()
 
@@ -163,7 +163,7 @@ class AddPartitionsTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testManualAssignmentOfReplicas(quorum: String): Unit = {
     // Add 2 partitions
     admin.createPartitions(Collections.singletonMap(topic2, NewPartitions.increaseTo(3,

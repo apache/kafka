@@ -23,7 +23,7 @@ import java.util.concurrent.TimeUnit
 import kafka.api.SaslSetup
 import kafka.security.JaasTestUtils
 import kafka.security.JaasTestUtils.JaasSection
-import kafka.utils.TestUtils
+import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
@@ -35,7 +35,9 @@ import org.apache.kafka.server.config.{ReplicationConfigs, ZkConfigs}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.network.SocketServerConfigs
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.MethodSource
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -134,7 +136,8 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
         producers(clientMetadata) = TestUtils.createProducer(bootstrapServers, acks = -1,
           securityProtocol = endPoint.securityProtocol, trustStoreFile = trustStoreFile, saslProperties = saslProps)
 
-        consumers(clientMetadata) = TestUtils.createConsumer(bootstrapServers, groupId = clientMetadata.toString,
+        consumers(clientMetadata) = TestUtils.createConsumer(bootstrapServers,
+          groupProtocolFromTestParameters(), groupId = clientMetadata.toString,
           securityProtocol = endPoint.securityProtocol, trustStoreFile = trustStoreFile, saslProperties = saslProps)
       }
 
@@ -161,8 +164,9 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
     * Tests that we can produce and consume to/from all broker-defined listeners and security protocols. We produce
     * with acks=-1 to ensure that replication is also working.
     */
-  @Test
-  def testProduceConsume(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_ZK_implicit"))
+  def testProduceConsume(quorum: String, groupProtocol: String): Unit = {
     producers.foreach { case (clientMetadata, producer) =>
       val producerRecords = (1 to 10).map(i => new ProducerRecord(clientMetadata.topic, s"key$i".getBytes,
         s"value$i".getBytes))

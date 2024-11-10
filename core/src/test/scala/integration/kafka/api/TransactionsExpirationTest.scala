@@ -20,7 +20,7 @@ package kafka.api
 import java.util.{Collections, Properties}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
-import kafka.utils.TestUtils
+import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils.{consumeRecords, createAdminClient}
 import org.apache.kafka.clients.admin.{Admin, ProducerState}
 import org.apache.kafka.clients.consumer.Consumer
@@ -33,7 +33,7 @@ import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, Server
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
+import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -60,6 +60,7 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
 
     producer = TestUtils.createTransactionalProducer("transactionalProducer", brokers)
     consumer = TestUtils.createConsumer(bootstrapServers(),
+      groupProtocolFromTestParameters(),
       enableAutoCommit = false,
       readCommitted = true)
     admin = createAdminClient(brokers, listenerName)
@@ -80,9 +81,9 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
     super.tearDown()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testBumpTransactionalEpochAfterInvalidProducerIdMapping(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testBumpTransactionalEpochAfterInvalidProducerIdMapping(quorum: String, groupProtocol: String): Unit = {
     producer.initTransactions()
 
     // Start and then abort a transaction to allow the transactional ID to expire.
@@ -120,13 +121,14 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
     }
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}.isTV2Enabled={2}")
   @CsvSource(Array(
-    "zk, false",
-    "kraft, false",
-    "kraft, true"
+    "kraft,classic,false",
+    "kraft,consumer,false",
+    "kraft,classic,true",
+    "kraft,consumer,true",
   ))
-  def testTransactionAfterProducerIdExpires(quorum: String, isTV2Enabled: Boolean): Unit = {
+  def testTransactionAfterProducerIdExpires(quorum: String, groupProtocol: String, isTV2Enabled: Boolean): Unit = {
     producer.initTransactions()
 
     // Start and then abort a transaction to allow the producer ID to expire.

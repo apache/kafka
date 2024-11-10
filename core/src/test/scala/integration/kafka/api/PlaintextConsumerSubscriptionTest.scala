@@ -20,11 +20,10 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, MethodSource}
+import org.junit.jupiter.params.provider.MethodSource
 
 import java.time.Duration
 import java.util.regex.Pattern
-import java.util.stream.Stream
 import scala.jdk.CollectionConverters._
 
 /**
@@ -269,9 +268,4 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
 
     assertEquals(s"Invalid topics: [${invalidTopicName}]", exception.getMessage)
   }
-}
-
-object PlaintextConsumerSubscriptionTest {
-  def getTestQuorumAndGroupProtocolParametersAll: Stream[Arguments] =
-    BaseConsumerTest.getTestQuorumAndGroupProtocolParametersAll()
 }

@@ -74,7 +74,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testCreateRemoteTopicWithValidRetentionTime(quorum: String): Unit = {
     val topicConfig = new Properties()
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
@@ -86,7 +86,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testCreateRemoteTopicWithValidRetentionSize(quorum: String): Unit = {
     val topicConfig = new Properties()
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
@@ -98,7 +98,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testCreateRemoteTopicWithInheritedLocalRetentionTime(quorum: String): Unit = {
     // inherited local retention ms is 1000
     val topicConfig = new Properties()
@@ -110,7 +110,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testCreateRemoteTopicWithInheritedLocalRetentionSize(quorum: String): Unit = {
     // inherited local retention bytes is 1024
     val topicConfig = new Properties()
@@ -122,7 +122,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testCreateRemoteTopicWithInvalidRetentionTime(quorum: String): Unit = {
     // inherited local retention ms is 1000
     val topicConfig = new Properties()
@@ -134,7 +134,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testCreateRemoteTopicWithInvalidRetentionSize(quorum: String): Unit = {
     // inherited local retention bytes is 1024
     val topicConfig = new Properties()
@@ -146,7 +146,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testCreateCompactedRemoteStorage(quorum: String): Unit = {
     val topicConfig = new Properties()
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
@@ -301,7 +301,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testEnableRemoteLogOnExistingTopicTest(quorum: String): Unit = {
     val admin = createAdminClient()
     val topicConfig = new Properties()
@@ -319,7 +319,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testEnableRemoteLogWhenSystemRemoteStorageIsDisabled(quorum: String): Unit = {
     val admin = createAdminClient()
 
@@ -343,7 +343,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testUpdateTopicConfigWithValidRetentionTimeTest(quorum: String): Unit = {
     val admin = createAdminClient()
     val topicConfig = new Properties()
@@ -364,7 +364,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testUpdateTopicConfigWithValidRetentionSizeTest(quorum: String): Unit = {
     val admin = createAdminClient()
     val topicConfig = new Properties()
@@ -385,7 +385,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testUpdateTopicConfigWithInheritedLocalRetentionTime(quorum: String): Unit = {
     val admin = createAdminClient()
     val topicConfig = new Properties()
@@ -405,7 +405,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testUpdateTopicConfigWithInheritedLocalRetentionSize(quorum: String): Unit = {
     val admin = createAdminClient()
     val topicConfig = new Properties()
@@ -474,7 +474,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testTopicDeletion(quorum: String): Unit = {
     MyRemoteStorageManager.deleteSegmentEventCounter.set(0)
     val numPartitions = 2
@@ -493,7 +493,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testClusterWideDisablementOfTieredStorageWithEnabledTieredTopic(quorum: String): Unit = {
     val topicConfig = new Properties()
     topicConfig.setProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
@@ -515,7 +515,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testClusterWithoutTieredStorageStartsSuccessfullyIfTopicWithTieringDisabled(quorum: String): Unit = {
     val topicConfig = new Properties()
     topicConfig.setProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, false.toString)

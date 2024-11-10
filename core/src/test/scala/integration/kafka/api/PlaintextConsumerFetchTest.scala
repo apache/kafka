@@ -18,11 +18,10 @@ import org.apache.kafka.clients.producer.ProducerRecord
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, MethodSource}
+import org.junit.jupiter.params.provider.MethodSource
 import org.apache.kafka.common.TopicPartition
 
 import java.time.Duration
-import java.util.stream.Stream
 import scala.jdk.CollectionConverters._
 
 /**
@@ -235,9 +234,4 @@ class PlaintextConsumerFetchTest extends AbstractConsumerTest {
     assertEquals(expected, actual)
   }
 
-}
-
-object PlaintextConsumerFetchTest {
-  def getTestQuorumAndGroupProtocolParametersAll: Stream[Arguments] =
-    BaseConsumerTest.getTestQuorumAndGroupProtocolParametersAll()
 }

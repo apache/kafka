@@ -25,9 +25,9 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, MethodSource}
+import org.junit.jupiter.params.provider.MethodSource
 
-import java.util.{Properties, stream}
+import java.util.Properties
 import java.util.concurrent.atomic.AtomicInteger
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -112,31 +112,6 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
 }
 
 object BaseConsumerTest {
-  // We want to test the following combinations:
-  // * KRaft and the classic group protocol
-  // * KRaft and the consumer group protocol
-  def getTestQuorumAndGroupProtocolParametersAll() : java.util.stream.Stream[Arguments] = {
-    stream.Stream.of(
-      Arguments.of("kraft", "classic"),
-      Arguments.of("kraft", "consumer")
-    )
-  }
-
-  // For tests that only work with the classic group protocol, we want to test the following combinations:
-  // * KRaft and the classic group protocol
-  def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly() : java.util.stream.Stream[Arguments] = {
-    stream.Stream.of(
-      Arguments.of("kraft", "classic")
-    )
-  }
-
-  // For tests that only work with the consumer group protocol, we want to test the following combination:
-  // * KRaft and the consumer group protocol
-  def getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly(): stream.Stream[Arguments] = {
-    stream.Stream.of(
-      Arguments.of("kraft", "consumer")
-    )
-  }
 
   val updateProducerCount = new AtomicInteger()
   val updateConsumerCount = new AtomicInteger()

@@ -304,8 +304,8 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
   )(f: Consumer[Array[Byte], Array[Byte]] => Unit): Unit = {
     val consumer = TestUtils.createConsumer(
       brokerList = cluster.bootstrapServers(),
-      groupId = groupId,
       groupProtocol = groupProtocol,
+      groupId = groupId,
       enableAutoCommit = enableAutoCommit
     )
     try {
