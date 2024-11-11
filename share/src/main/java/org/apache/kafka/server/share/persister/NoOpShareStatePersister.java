@@ -53,7 +53,7 @@ public class NoOpShareStatePersister implements Persister {
         for (TopicData<PartitionIdLeaderEpochData> topicData : reqData.topicsData()) {
             resultArgs.add(new TopicData<>(topicData.topicId(), topicData.partitions().stream().
                 map(partitionIdData -> PartitionFactory.newPartitionAllData(
-                    partitionIdData.partition(), PartitionFactory.DEFAULT_STATE_EPOCH, PartitionFactory.DEFAULT_START_OFFSET, PartitionFactory.DEFAULT_ERROR_CODE, PartitionFactory.DEFAULT_ERR_MESSAGE, Collections.emptyList()))
+                    partitionIdData.partition(), PartitionFactory.DEFAULT_STATE_EPOCH, PartitionFactory.UNINITIALIZED_START_OFFSET, PartitionFactory.DEFAULT_ERROR_CODE, PartitionFactory.DEFAULT_ERR_MESSAGE, Collections.emptyList()))
                 .collect(Collectors.toList())));
         }
         return CompletableFuture.completedFuture(new ReadShareGroupStateResult.Builder().setTopicsData(resultArgs).build());
@@ -93,7 +93,7 @@ public class NoOpShareStatePersister implements Persister {
         for (TopicData<PartitionIdLeaderEpochData> topicData : reqData.topicsData()) {
             resultArgs.add(new TopicData<>(topicData.topicId(), topicData.partitions().stream().
                 map(partitionIdData -> PartitionFactory.newPartitionStateErrorData(
-                    partitionIdData.partition(), PartitionFactory.DEFAULT_STATE_EPOCH, PartitionFactory.DEFAULT_START_OFFSET, PartitionFactory.DEFAULT_ERROR_CODE, PartitionFactory.DEFAULT_ERR_MESSAGE))
+                    partitionIdData.partition(), PartitionFactory.DEFAULT_STATE_EPOCH, PartitionFactory.UNINITIALIZED_START_OFFSET, PartitionFactory.DEFAULT_ERROR_CODE, PartitionFactory.DEFAULT_ERR_MESSAGE))
                 .collect(Collectors.toList())));
         }
         return CompletableFuture.completedFuture(new ReadShareGroupStateSummaryResult.Builder().setTopicsData(resultArgs).build());

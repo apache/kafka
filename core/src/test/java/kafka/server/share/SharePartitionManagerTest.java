@@ -17,6 +17,7 @@
 package kafka.server.share;
 
 import kafka.cluster.Partition;
+import kafka.log.OffsetResultHolder;
 import kafka.server.LogReadResult;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicaQuota;
@@ -42,6 +43,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.ShareFetchRequest;
@@ -1040,6 +1042,8 @@ public class SharePartitionManagerTest {
         partitionMaxBytes.put(tp5, PARTITION_MAX_BYTES);
         partitionMaxBytes.put(tp6, PARTITION_MAX_BYTES);
 
+        mockFetchOffsetForTimestamp(mockReplicaManager);
+
         Time time = mock(Time.class);
         when(time.hiResClockMs()).thenReturn(0L).thenReturn(100L);
         Metrics metrics = new Metrics();
@@ -1109,6 +1113,9 @@ public class SharePartitionManagerTest {
         partitionMaxBytes.put(tp3, PARTITION_MAX_BYTES);
 
         final Time time = new MockTime(0, System.currentTimeMillis(), 0);
+
+        mockFetchOffsetForTimestamp(mockReplicaManager);
+
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
             "TestShareFetch", mockTimer, mockReplicaManager.localBrokerId(),
             DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
@@ -1232,6 +1239,8 @@ public class SharePartitionManagerTest {
         Uuid fooId = Uuid.randomUuid();
         TopicIdPartition tp0 = new TopicIdPartition(fooId, new TopicPartition("foo", 0));
         Map<TopicIdPartition, Integer> partitionMaxBytes = Collections.singletonMap(tp0, PARTITION_MAX_BYTES);
+
+        mockFetchOffsetForTimestamp(mockReplicaManager);
 
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
             "TestShareFetch", mockTimer, mockReplicaManager.localBrokerId(),
@@ -2480,6 +2489,12 @@ public class SharePartitionManagerTest {
             assertEquals(error.code(), result.get(topicIdPartition).errorCode());
             assertEquals(message, result.get(topicIdPartition).errorMessage());
         });
+    }
+
+    private void mockFetchOffsetForTimestamp(ReplicaManager replicaManager) {
+        FileRecords.TimestampAndOffset timestampAndOffset = new FileRecords.TimestampAndOffset(-1L, 0L, Optional.empty());
+        Mockito.doReturn(new OffsetResultHolder(Option.apply(timestampAndOffset), Option.empty())).
+            when(replicaManager).fetchOffsetForTimestamp(Mockito.any(TopicPartition.class), Mockito.anyLong(), Mockito.any(), Mockito.any(), Mockito.anyBoolean());
     }
 
     static Seq<Tuple2<TopicIdPartition, LogReadResult>> buildLogReadResult(Set<TopicIdPartition> topicIdPartitions) {

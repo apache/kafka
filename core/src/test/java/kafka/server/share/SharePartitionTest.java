@@ -16,12 +16,14 @@
  */
 package kafka.server.share;
 
+import kafka.log.OffsetResultHolder;
 import kafka.server.ReplicaManager;
 import kafka.server.share.SharePartition.InFlightState;
 import kafka.server.share.SharePartition.RecordState;
 import kafka.server.share.SharePartition.SharePartitionState;
 
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
@@ -34,9 +36,11 @@ import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupConfig;
@@ -76,6 +80,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+
+import scala.Option;
 
 import static kafka.server.share.SharePartition.EMPTY_MEMBER_ID;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
@@ -189,6 +195,244 @@ public class SharePartitionTest {
         assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(11L).batchState());
         assertEquals(3, sharePartition.cachedState().get(11L).batchDeliveryCount());
         assertNull(sharePartition.cachedState().get(11L).offsetState());
+    }
+
+    @Test
+    public void testMaybeInitializeDefaultStartEpochGroupConfigReturnsEarliest() {
+        Persister persister = Mockito.mock(Persister.class);
+        ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
+                PartitionFactory.newPartitionAllData(
+                    0, PartitionFactory.DEFAULT_STATE_EPOCH,
+                    PartitionFactory.UNINITIALIZED_START_OFFSET,
+                    PartitionFactory.DEFAULT_ERROR_CODE,
+                    PartitionFactory.DEFAULT_ERR_MESSAGE,
+                    Collections.emptyList())))));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+
+        GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
+        Mockito.when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
+        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(GroupConfig.ShareGroupAutoOffsetReset.EARLIEST);
+
+        ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
+
+        FileRecords.TimestampAndOffset timestampAndOffset = new FileRecords.TimestampAndOffset(-1L, 0L, Optional.empty());
+        Mockito.doReturn(new OffsetResultHolder(Option.apply(timestampAndOffset), Option.empty())).
+            when(replicaManager).fetchOffsetForTimestamp(Mockito.any(TopicPartition.class), Mockito.anyLong(), Mockito.any(), Mockito.any(), Mockito.anyBoolean());
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withGroupConfigManager(groupConfigManager)
+            .withReplicaManager(replicaManager)
+            .build();
+
+        CompletableFuture<Void> result = sharePartition.maybeInitialize();
+        assertTrue(result.isDone());
+        assertFalse(result.isCompletedExceptionally());
+
+        // replicaManager.fetchOffsetForTimestamp should be called with "ListOffsetsRequest.EARLIEST_TIMESTAMP"
+        Mockito.verify(replicaManager).fetchOffsetForTimestamp(
+            Mockito.any(TopicPartition.class),
+            Mockito.eq(ListOffsetsRequest.EARLIEST_TIMESTAMP),
+            Mockito.any(),
+            Mockito.any(),
+            Mockito.anyBoolean()
+        );
+
+        assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
+        assertEquals(0, sharePartition.startOffset());
+        assertEquals(0, sharePartition.endOffset());
+        assertEquals(PartitionFactory.DEFAULT_STATE_EPOCH, sharePartition.stateEpoch());
+    }
+
+    @Test
+    public void testMaybeInitializeDefaultStartEpochGroupConfigReturnsLatest() {
+        Persister persister = Mockito.mock(Persister.class);
+        ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
+                PartitionFactory.newPartitionAllData(
+                    0, PartitionFactory.DEFAULT_STATE_EPOCH,
+                    PartitionFactory.UNINITIALIZED_START_OFFSET,
+                    PartitionFactory.DEFAULT_ERROR_CODE,
+                    PartitionFactory.DEFAULT_ERR_MESSAGE,
+                    Collections.emptyList())))));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+
+        GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
+        Mockito.when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
+        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(GroupConfig.ShareGroupAutoOffsetReset.LATEST);
+
+        ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
+
+        FileRecords.TimestampAndOffset timestampAndOffset = new FileRecords.TimestampAndOffset(-1L, 15L, Optional.empty());
+        Mockito.doReturn(new OffsetResultHolder(Option.apply(timestampAndOffset), Option.empty())).
+            when(replicaManager).fetchOffsetForTimestamp(Mockito.any(TopicPartition.class), Mockito.anyLong(), Mockito.any(), Mockito.any(), Mockito.anyBoolean());
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withGroupConfigManager(groupConfigManager)
+            .withReplicaManager(replicaManager)
+            .build();
+
+        CompletableFuture<Void> result = sharePartition.maybeInitialize();
+        assertTrue(result.isDone());
+        assertFalse(result.isCompletedExceptionally());
+
+        // replicaManager.fetchOffsetForTimestamp should be called with "ListOffsetsRequest.LATEST_TIMESTAMP"
+        Mockito.verify(replicaManager).fetchOffsetForTimestamp(
+            Mockito.any(TopicPartition.class),
+            Mockito.eq(ListOffsetsRequest.LATEST_TIMESTAMP),
+            Mockito.any(),
+            Mockito.any(),
+            Mockito.anyBoolean()
+        );
+
+        assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
+        assertEquals(15, sharePartition.startOffset());
+        assertEquals(15, sharePartition.endOffset());
+        assertEquals(PartitionFactory.DEFAULT_STATE_EPOCH, sharePartition.stateEpoch());
+    }
+
+    @Test
+    public void testMaybeInitializeDefaultStartEpochGroupConfigNotPresent() {
+        Persister persister = Mockito.mock(Persister.class);
+        ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
+                PartitionFactory.newPartitionAllData(
+                    0, PartitionFactory.DEFAULT_STATE_EPOCH,
+                    PartitionFactory.UNINITIALIZED_START_OFFSET,
+                    PartitionFactory.DEFAULT_ERROR_CODE,
+                    PartitionFactory.DEFAULT_ERR_MESSAGE,
+                    Collections.emptyList())))));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+
+        GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        Mockito.when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.empty());
+
+        ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
+
+        FileRecords.TimestampAndOffset timestampAndOffset = new FileRecords.TimestampAndOffset(-1L, 15L, Optional.empty());
+        Mockito.doReturn(new OffsetResultHolder(Option.apply(timestampAndOffset), Option.empty())).
+            when(replicaManager).fetchOffsetForTimestamp(Mockito.any(TopicPartition.class), Mockito.anyLong(), Mockito.any(), Mockito.any(), Mockito.anyBoolean());
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withGroupConfigManager(groupConfigManager)
+            .withReplicaManager(replicaManager)
+            .build();
+
+        CompletableFuture<Void> result = sharePartition.maybeInitialize();
+        assertTrue(result.isDone());
+        assertFalse(result.isCompletedExceptionally());
+
+        // replicaManager.fetchOffsetForTimestamp should be called with "ListOffsetsRequest.LATEST_TIMESTAMP"
+        Mockito.verify(replicaManager).fetchOffsetForTimestamp(
+            Mockito.any(TopicPartition.class),
+            Mockito.eq(ListOffsetsRequest.LATEST_TIMESTAMP),
+            Mockito.any(),
+            Mockito.any(),
+            Mockito.anyBoolean()
+        );
+
+        assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
+        assertEquals(15, sharePartition.startOffset());
+        assertEquals(15, sharePartition.endOffset());
+        assertEquals(PartitionFactory.DEFAULT_STATE_EPOCH, sharePartition.stateEpoch());
+    }
+
+    @Test
+    public void testMaybeInitializeFetchOffsetForLatestTimestampThrowsError() {
+        Persister persister = Mockito.mock(Persister.class);
+        ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
+                PartitionFactory.newPartitionAllData(
+                    0, PartitionFactory.DEFAULT_STATE_EPOCH,
+                    PartitionFactory.UNINITIALIZED_START_OFFSET,
+                    PartitionFactory.DEFAULT_ERROR_CODE,
+                    PartitionFactory.DEFAULT_ERR_MESSAGE,
+                    Collections.emptyList())))));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+
+        GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        Mockito.when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.empty());
+
+        ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
+
+        Mockito.when(replicaManager.fetchOffsetForTimestamp(Mockito.any(TopicPartition.class), Mockito.anyLong(), Mockito.any(), Mockito.any(), Mockito.anyBoolean()))
+            .thenThrow(new RuntimeException("fetch offsets exception"));
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withGroupConfigManager(groupConfigManager)
+            .withReplicaManager(replicaManager)
+            .build();
+
+        CompletableFuture<Void> result = sharePartition.maybeInitialize();
+        assertTrue(result.isDone());
+        assertTrue(result.isCompletedExceptionally());
+
+        // replicaManager.fetchOffsetForTimestamp should be called with "ListOffsetsRequest.LATEST_TIMESTAMP"
+        Mockito.verify(replicaManager).fetchOffsetForTimestamp(
+            Mockito.any(TopicPartition.class),
+            Mockito.eq(ListOffsetsRequest.LATEST_TIMESTAMP),
+            Mockito.any(),
+            Mockito.any(),
+            Mockito.anyBoolean()
+        );
+
+        assertEquals(SharePartitionState.FAILED, sharePartition.partitionState());
+    }
+
+    @Test
+    public void testMaybeInitializeFetchOffsetForEarliestTimestampThrowsError() {
+        Persister persister = Mockito.mock(Persister.class);
+        ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
+                PartitionFactory.newPartitionAllData(
+                    0, PartitionFactory.DEFAULT_STATE_EPOCH,
+                    PartitionFactory.UNINITIALIZED_START_OFFSET,
+                    PartitionFactory.DEFAULT_ERROR_CODE,
+                    PartitionFactory.DEFAULT_ERR_MESSAGE,
+                    Collections.emptyList())))));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+
+        GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
+        Mockito.when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
+        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(GroupConfig.ShareGroupAutoOffsetReset.EARLIEST);
+
+        ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
+
+        Mockito.when(replicaManager.fetchOffsetForTimestamp(Mockito.any(TopicPartition.class), Mockito.anyLong(), Mockito.any(), Mockito.any(), Mockito.anyBoolean()))
+            .thenThrow(new RuntimeException("fetch offsets exception"));
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withGroupConfigManager(groupConfigManager)
+            .withReplicaManager(replicaManager)
+            .build();
+
+        CompletableFuture<Void> result = sharePartition.maybeInitialize();
+        assertTrue(result.isDone());
+        assertTrue(result.isCompletedExceptionally());
+
+        // replicaManager.fetchOffsetForTimestamp should be called with "ListOffsetsRequest.EARLIEST_TIMESTAMP"
+        Mockito.verify(replicaManager).fetchOffsetForTimestamp(
+            Mockito.any(TopicPartition.class),
+            Mockito.eq(ListOffsetsRequest.EARLIEST_TIMESTAMP),
+            Mockito.any(),
+            Mockito.any(),
+            Mockito.anyBoolean()
+        );
+
+        assertEquals(SharePartitionState.FAILED, sharePartition.partitionState());
     }
 
     @Test
@@ -460,7 +704,13 @@ public class SharePartitionTest {
 
     @Test
     public void testMaybeInitializeWithNoOpShareStatePersister() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
+
+        FileRecords.TimestampAndOffset timestampAndOffset = new FileRecords.TimestampAndOffset(-1L, 0L, Optional.empty());
+        Mockito.doReturn(new OffsetResultHolder(Option.apply(timestampAndOffset), Option.empty())).
+            when(replicaManager).fetchOffsetForTimestamp(Mockito.any(TopicPartition.class), Mockito.anyLong(), Mockito.any(), Mockito.any(), Mockito.anyBoolean());
+
+        SharePartition sharePartition = SharePartitionBuilder.builder().withReplicaManager(replicaManager).build();
         CompletableFuture<Void> result = sharePartition.maybeInitialize();
         assertTrue(result.isDone());
         assertFalse(result.isCompletedExceptionally());
@@ -825,7 +1075,13 @@ public class SharePartitionTest {
 
     @Test
     public void testMaybeAcquireAndReleaseFetchLock() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
+
+        FileRecords.TimestampAndOffset timestampAndOffset = new FileRecords.TimestampAndOffset(-1L, 0L, Optional.empty());
+        Mockito.doReturn(new OffsetResultHolder(Option.apply(timestampAndOffset), Option.empty())).
+            when(replicaManager).fetchOffsetForTimestamp(Mockito.any(TopicPartition.class), Mockito.anyLong(), Mockito.any(), Mockito.any(), Mockito.anyBoolean());
+
+        SharePartition sharePartition = SharePartitionBuilder.builder().withReplicaManager(replicaManager).build();
         sharePartition.maybeInitialize();
         assertTrue(sharePartition.maybeAcquireFetchLock());
         // Lock cannot be acquired again, as already acquired.
@@ -5233,7 +5489,7 @@ public class SharePartitionTest {
         private int maxInflightMessages = MAX_IN_FLIGHT_MESSAGES;
 
         private Persister persister = new NoOpShareStatePersister();
-        private final ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
+        private ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
         private GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
         private SharePartitionState state = SharePartitionState.EMPTY;
 
@@ -5254,6 +5510,11 @@ public class SharePartitionTest {
 
         private SharePartitionBuilder withMaxDeliveryCount(int maxDeliveryCount) {
             this.maxDeliveryCount = maxDeliveryCount;
+            return this;
+        }
+
+        private SharePartitionBuilder withReplicaManager(ReplicaManager replicaManager) {
+            this.replicaManager = replicaManager;
             return this;
         }
 
