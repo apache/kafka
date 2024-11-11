@@ -64,7 +64,7 @@ versions += [
   commonsValidator: "1.9.0",
   classgraph: "4.8.173",
   dropwizardMetrics: "4.1.12.1",
-  gradle: "8.10",
+  gradle: "8.10.2",
   grgit: "4.1.1",
   httpclient: "4.5.14",
   jackson: "2.16.2",
