@@ -288,7 +288,7 @@ public class TransactionIndexTest {
                 ByteBuffer buffer = ByteBuffer.allocate(100);
 
                 while (index.txnFile.isChannelOpen()) {
-                    index.txnFile.read(buffer, 0);
+                    index.txnFile.readFully(buffer, 0);
                     buffer.clear();
                     // wait until first reading happens to mark it as ready
                     if (ready.getCount() > 0) ready.countDown();
@@ -301,9 +301,9 @@ public class TransactionIndexTest {
             }
         });
         t.start();
-        
+
         assertTrue(ready.await(5, TimeUnit.SECONDS), "Timeout waiting for thread to finish");
-        
+
         // When thread is interrupted
         t.interrupt();
 

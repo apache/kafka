@@ -217,7 +217,7 @@ public class TransactionIndex implements Closeable {
             public AbortedTxnWithPosition next() {
                 try {
                     ByteBuffer buffer = allocate.get();
-                    txnFile.read(buffer, position.value);
+                    txnFile.readFully(buffer, position.value);
                     buffer.flip();
 
                     AbortedTxn abortedTxn = new AbortedTxn(buffer);
@@ -284,7 +284,7 @@ public class TransactionIndex implements Closeable {
             if (channel != null)
                 channel.close();
         }
-        
+
         synchronized boolean isChannelOpen() {
             return channel != null && channel.isOpen();
         }
@@ -311,7 +311,7 @@ public class TransactionIndex implements Closeable {
             Utils.writeFully(channel(), buffer);
         }
 
-        void read(ByteBuffer buffer, int position) throws IOException {
+        void readFully(ByteBuffer buffer, int position) throws IOException {
             Utils.readFully(channel(), buffer, position);
         }
 
