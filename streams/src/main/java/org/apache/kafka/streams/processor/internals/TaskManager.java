@@ -337,7 +337,7 @@ public class TaskManager {
                     // replace our dummy values with the real ones, now we know our thread and assignment
                     final Set<TopicPartition> inputPartitions = entry.getValue();
                     task.stateManager().assignToStreamThread(new LogContext(threadLogPrefix), changelogReader, inputPartitions);
-                    task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(taskId));
+                    updateInputPartitionsOfStandbyTaskIfTheyChanged(task, inputPartitions);
 
                     assignedTasks.put(task, inputPartitions);
                 }
