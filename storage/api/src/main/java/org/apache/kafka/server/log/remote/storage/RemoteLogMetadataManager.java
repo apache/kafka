@@ -230,4 +230,14 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
                                                                        long offset) throws RemoteStorageException {
         return remoteLogSegmentMetadata(topicIdPartition, epoch, offset);
     }
+
+    /**
+     * Denotes whether the partition metadata is ready to serve.
+     *
+     * @param topicIdPartition topic partition
+     * @return True if the partition is ready to serve for remote storage operations.
+     */
+    default boolean isReady(TopicIdPartition topicIdPartition) {
+        return true;
+    }
 }
