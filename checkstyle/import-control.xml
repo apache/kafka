@@ -368,6 +368,7 @@
     <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.test"/>
     <allow pkg="org.apache.kafka.trogdor" />
+    <allow pkg="org.apache.kafka.coordinator" />
     <allow pkg="org.eclipse.jetty" />
     <allow pkg="org.glassfish.jersey" />
   </subpackage>

@@ -2469,10 +2469,15 @@ project(':trogdor') {
     implementation libs.jettyServlet
     implementation libs.jettyServlets
 
+    implementation project(':group-coordinator')
+    implementation project(':group-coordinator:group-coordinator-api')
+
     testImplementation project(':clients')
     testImplementation libs.junitJupiter
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.mockitoCore
+
+    testImplementation project(':group-coordinator')
 
     testRuntimeOnly runtimeTestLibs
   }
