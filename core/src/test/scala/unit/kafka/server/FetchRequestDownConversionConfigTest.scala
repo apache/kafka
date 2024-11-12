@@ -30,7 +30,7 @@ import org.apache.kafka.network.metrics.RequestMetrics
 import org.apache.kafka.server.config.ServerLogConfigs.LOG_MESSAGE_DOWNCONVERSION_ENABLE_CONFIG
 import org.apache.kafka.storage.log.metrics.BrokerTopicMetrics
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -98,15 +98,16 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
   /**
    * Tests that fetch request that require down-conversion returns with an error response when down-conversion is disabled on broker.
    */
-  @Test
-  def testV1FetchWithDownConversionDisabled(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testV1FetchWithDownConversionDisabled(quorum: String): Unit = {
     val topicMap = createTopics(numTopics = 5, numPartitions = 1)
     val topicPartitions = topicMap.keySet.toSeq
-    val topicIds = servers.head.kafkaController.controllerContext.topicIds
+    val topicIds = getTopicIds()
     val topicNames = topicIds.map(_.swap)
     topicPartitions.foreach(tp => producer.send(new ProducerRecord(tp.topic(), "key", "value")).get())
     val fetchRequest = FetchRequest.Builder.forConsumer(1, Int.MaxValue, 0, createPartitionMap(1024,
-      topicPartitions, topicIds.toMap)).build(1)
+      topicPartitions, topicIds)).build(1)
     val fetchResponse = sendFetchRequest(topicMap.head._2, fetchRequest)
     val fetchResponseData = fetchResponse.responseData(topicNames.asJava, 1)
     topicPartitions.foreach(tp => assertEquals(Errors.UNSUPPORTED_VERSION, Errors.forCode(fetchResponseData.get(tp).errorCode)))
@@ -115,15 +116,16 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
   /**
    * Tests that "message.downconversion.enable" has no effect when down-conversion is not required.
    */
-  @Test
-  def testLatestFetchWithDownConversionDisabled(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testLatestFetchWithDownConversionDisabled(quorum: String): Unit = {
     val topicMap = createTopics(numTopics = 5, numPartitions = 1)
     val topicPartitions = topicMap.keySet.toSeq
-    val topicIds = servers.head.kafkaController.controllerContext.topicIds
+    val topicIds = getTopicIds()
     val topicNames = topicIds.map(_.swap)
     topicPartitions.foreach(tp => producer.send(new ProducerRecord(tp.topic(), "key", "value")).get())
     val fetchRequest = FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, Int.MaxValue, 0, createPartitionMap(1024,
-      topicPartitions, topicIds.toMap)).build()
+      topicPartitions, topicIds)).build()
     val fetchResponse = sendFetchRequest(topicMap.head._2, fetchRequest)
     val fetchResponseData = fetchResponse.responseData(topicNames.asJava, ApiKeys.FETCH.latestVersion)
     topicPartitions.foreach(tp => assertEquals(Errors.NONE, Errors.forCode(fetchResponseData.get(tp).errorCode)))
@@ -132,15 +134,16 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
   /**
    * Tests that "message.downconversion.enable" has no effect when down-conversion is not required on last version before topic IDs.
    */
-  @Test
-  def testV12WithDownConversionDisabled(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testV12WithDownConversionDisabled(quorum: String): Unit = {
     val topicMap = createTopics(numTopics = 5, numPartitions = 1)
     val topicPartitions = topicMap.keySet.toSeq
-    val topicIds = servers.head.kafkaController.controllerContext.topicIds
+    val topicIds = getTopicIds()
     val topicNames = topicIds.map(_.swap)
     topicPartitions.foreach(tp => producer.send(new ProducerRecord(tp.topic(), "key", "value")).get())
     val fetchRequest = FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, Int.MaxValue, 0, createPartitionMap(1024,
-      topicPartitions, topicIds.toMap)).build(12)
+      topicPartitions, topicIds)).build(12)
     val fetchResponse = sendFetchRequest(topicMap.head._2, fetchRequest)
     val fetchResponseData = fetchResponse.responseData(topicNames.asJava, 12)
     topicPartitions.foreach(tp => assertEquals(Errors.NONE, Errors.forCode(fetchResponseData.get(tp).errorCode)))
