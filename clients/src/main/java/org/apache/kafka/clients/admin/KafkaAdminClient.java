@@ -3371,7 +3371,7 @@ public class KafkaAdminClient extends AdminClient {
             CreateDelegationTokenRequest.Builder createRequest(int timeoutMs) {
                 CreateDelegationTokenRequestData data = new CreateDelegationTokenRequestData()
                     .setRenewers(renewers)
-                    .setMaxLifetimeMs(options.maxlifeTimeMs());
+                    .setMaxLifetimeMs(options.maxLifetimeMs());
                 if (options.owner().isPresent()) {
                     data.setOwnerPrincipalName(options.owner().get().getName());
                     data.setOwnerPrincipalType(options.owner().get().getPrincipalType());

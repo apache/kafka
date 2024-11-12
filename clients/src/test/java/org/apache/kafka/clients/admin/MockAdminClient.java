@@ -646,7 +646,7 @@ public class MockAdminClient extends AdminClient {
         }
 
         String tokenId = Uuid.randomUuid().toString();
-        TokenInformation tokenInfo = new TokenInformation(tokenId, options.renewers().get(0), options.renewers(), System.currentTimeMillis(), options.maxlifeTimeMs(), -1);
+        TokenInformation tokenInfo = new TokenInformation(tokenId, options.renewers().get(0), options.renewers(), System.currentTimeMillis(), options.maxLifetimeMs(), -1);
         DelegationToken token = new DelegationToken(tokenInfo, tokenId.getBytes());
         allTokens.add(token);
         future.complete(token);
