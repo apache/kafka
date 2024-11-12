@@ -109,7 +109,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
-import static org.apache.kafka.coordinator.group.Assertions.assertSyncGroupResponseEquals;
+import static org.apache.kafka.coordinator.group.Assertions.assertResponseEquals;
 import static org.apache.kafka.coordinator.group.GroupConfigManagerTest.createConfigManager;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESULT;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupHeartbeatKey;
@@ -1416,7 +1416,7 @@ public class GroupMetadataManagerTestContext {
 
         // Simulate a successful write to log.
         syncResult.appendFuture.complete(null);
-        assertSyncGroupResponseEquals(
+        assertResponseEquals(
             new SyncGroupResponseData()
                 .setProtocolType(protocolType)
                 .setProtocolName(protocolName)
