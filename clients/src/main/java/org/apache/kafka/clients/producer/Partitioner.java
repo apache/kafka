@@ -49,6 +49,9 @@ public interface Partitioner extends Configurable, Closeable {
      * <p>
      * Notifies the partitioner a new batch is about to be created. When using the sticky partitioner,
      * this method can change the chosen sticky partition for the new batch.
+     * <p>
+     * After onNewBatch, the {@link #partition(String, Object, byte[], Object, byte[], Cluster)} method is called again
+     * which allows the implementation to "redirect" the message on new batch creation.
      * @param topic The topic name
      * @param cluster The current cluster metadata
      * @param prevPartition The partition previously selected for the record that triggered a new batch
