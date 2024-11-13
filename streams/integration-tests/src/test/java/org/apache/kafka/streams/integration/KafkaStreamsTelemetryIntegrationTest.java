@@ -55,7 +55,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
@@ -148,8 +147,8 @@ public class KafkaStreamsTelemetryIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"INFO", "DEBUG", "TRACE"})
-    @DisplayName("End-to-end test validating metrics pushed to broker")
     public void shouldPushMetricsToBroker(final String recordingLevel) throws Exception {
+        // End-to-end test validating metrics pushed to broker
         streamsApplicationProperties  = props(true);
         streamsApplicationProperties.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, recordingLevel);
         final Topology topology = simpleTopology();
@@ -202,8 +201,8 @@ public class KafkaStreamsTelemetryIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("singleAndMultiTaskParameters")
-    @DisplayName("Streams metrics should get passed to Admin and Consumer")
     public void shouldPassMetrics(final String topologyType, final boolean stateUpdaterEnabled) throws Exception {
+        // Streams metrics should get passed to Admin and Consumer
         streamsApplicationProperties = props(stateUpdaterEnabled);
         final Topology topology = topologyType.equals("simple") ? simpleTopology() : complexTopology();
        
@@ -232,8 +231,8 @@ public class KafkaStreamsTelemetryIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("multiTaskParameters")
-    @DisplayName("Correct streams metrics should get passed with dynamic membership")
     public void shouldPassCorrectMetricsDynamicInstances(final boolean stateUpdaterEnabled) throws Exception {
+        // Correct streams metrics should get passed with dynamic membership
         streamsApplicationProperties = props(stateUpdaterEnabled);
         streamsApplicationProperties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks1");
         streamsApplicationProperties.put(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks1");
@@ -324,8 +323,8 @@ public class KafkaStreamsTelemetryIntegrationTest {
     }
 
     @Test
-    @DisplayName("Streams metrics should not be visible in client metrics")
     public void passedMetricsShouldNotLeakIntoClientMetrics() throws Exception {
+        // Streams metrics should not be visible in client metrics
         streamsApplicationProperties = props(true);
         final Topology topology =  complexTopology();
 
