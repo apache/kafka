@@ -17,10 +17,13 @@
 
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.common.TopicPartition;
+
 import java.util.Optional;
+import java.util.Set;
 
 /**
- * Listener for getting notified of member epoch changes.
+ * Listener for getting notified of membership state changes.
  */
 public interface MemberStateListener {
 
@@ -34,4 +37,14 @@ public interface MemberStateListener {
      * @param memberId    Current member ID. It won't change until the process is terminated.
      */
     void onMemberEpochUpdated(Optional<Integer> memberEpoch, String memberId);
+
+    /**
+     * This callback is invoked when a group member's assigned set of partitions changes. Assignments can change via
+     * group coordinator partition assignment changes, unsubscribing, and when leaving the group.
+     *
+     * @param partitions New assignment, can be empty, but not {@code null}
+     */
+    default void onGroupAssignmentUpdated(Set<TopicPartition> partitions) {
+
+    }
 }

@@ -136,6 +136,10 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 process((CommitOnCloseEvent) event);
                 return;
 
+            case LEAVE_GROUP_ON_CLOSE:
+                process((LeaveGroupOnCloseEvent) event);
+                return;
+
             case CREATE_FETCH_REQUESTS:
                 process((CreateFetchRequestsEvent) event);
                 return;
@@ -392,6 +396,15 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             return;
         log.debug("Signal CommitRequestManager closing");
         requestManagers.commitRequestManager.get().signalClose();
+    }
+
+    private void process(final LeaveGroupOnCloseEvent event) {
+        if (!requestManagers.consumerMembershipManager.isPresent())
+            return;
+
+        log.debug("Signal the ConsumerMembershipManager to leave the consumer group since the consumer is closing");
+        CompletableFuture<Void> future = requestManagers.consumerMembershipManager.get().leaveGroupOnClose();
+        future.whenComplete(complete(event.future()));
     }
 
     /**

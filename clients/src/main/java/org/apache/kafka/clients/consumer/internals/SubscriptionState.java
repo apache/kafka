@@ -100,7 +100,7 @@ public class SubscriptionState {
     private final OffsetResetStrategy defaultResetStrategy;
 
     /* User-provided listener to be invoked when assignment changes */
-    private Optional<ConsumerRebalanceListener> rebalanceListener;
+    private Optional<ConsumerRebalanceListener> rebalanceListener = Optional.empty();
 
     private int assignmentId = 0;
 
