@@ -27,16 +27,15 @@ import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderOrFollowerException}
-import org.apache.kafka.common.utils.{Exit, Utils}
+import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import org.junit.jupiter.params.provider.MethodSource
 import org.junit.jupiter.params.ParameterizedTest
 
 import java.nio.file.Files
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 /**
@@ -98,37 +97,6 @@ class LogDirFailureTest extends IntegrationTestHarness {
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testIOExceptionDuringLogRoll(quorum: String, groupProtocol: String): Unit = {
     testProduceAfterLogDirFailureOnLeader(Roll, quorum)
-  }
-
-  // Broker should halt on any log directory failure if inter-broker protocol < 1.0
-  @nowarn("cat=deprecation")
-  @Test
-  def testZkBrokerWithOldInterBrokerProtocolShouldHaltOnLogDirFailure(): Unit = {
-    @volatile var statusCodeOption: Option[Int] = None
-    Exit.setHaltProcedure { (statusCode, _) =>
-      statusCodeOption = Some(statusCode)
-      throw new IllegalArgumentException
-    }
-
-    var server: KafkaServer = null
-    try {
-      val props = TestUtils.createBrokerConfig(brokerCount, zkConnect, logDirCount = 3)
-      props.put(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "0.11.0")
-      props.put(ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_CONFIG, "0.11.0")
-      val kafkaConfig = KafkaConfig.fromProps(props)
-      val logDir = new File(kafkaConfig.logDirs.head)
-      // Make log directory of the partition on the leader broker inaccessible by replacing it with a file
-      CoreUtils.swallow(Utils.delete(logDir), this)
-      Files.createFile(logDir.toPath)
-      assertTrue(logDir.isFile)
-
-      server = TestUtils.createServer(kafkaConfig)
-      TestUtils.waitUntilTrue(() => statusCodeOption.contains(1), "timed out waiting for broker to halt")
-    } finally {
-      Exit.resetHaltProcedure()
-      if (server != null)
-        TestUtils.shutdownServers(List(server))
-    }
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
