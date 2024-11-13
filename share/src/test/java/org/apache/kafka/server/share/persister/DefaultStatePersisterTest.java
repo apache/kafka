@@ -20,6 +20,7 @@ package org.apache.kafka.server.share.persister;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
 import org.apache.kafka.common.message.ReadShareGroupStateRequestData;
@@ -42,12 +43,16 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -391,7 +396,8 @@ class DefaultStatePersisterTest {
 
         WriteShareGroupStateResult result = null;
         try {
-            result = resultFuture.get();
+            // adding long delay to allow for environment/GC issues
+            result = resultFuture.get(10L, TimeUnit.SECONDS);
         } catch (Exception e) {
             fail("Unexpected exception", e);
         }
@@ -535,7 +541,8 @@ class DefaultStatePersisterTest {
 
         ReadShareGroupStateResult result = null;
         try {
-            result = resultFuture.get();
+            // adding long delay to allow for environment/GC issues
+            result = resultFuture.get(10L, TimeUnit.SECONDS);
         } catch (Exception e) {
             fail("Unexpected exception", e);
         }
@@ -562,6 +569,220 @@ class DefaultStatePersisterTest {
 
         assertEquals(2, result.topicsData().size());
         assertEquals(expectedResultMap, resultMap);
+    }
+
+    @Test
+    public void testWriteStateResponseToResultPartialResults() {
+        Map<Uuid, Map<Integer, CompletableFuture<WriteShareGroupStateResponse>>> futureMap = new HashMap<>();
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), 1, null);
+        TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), 1, null);
+
+        // one entry has valid results
+        futureMap.computeIfAbsent(tp1.topicId(), k -> new HashMap<>())
+            .put(tp1.partition(), CompletableFuture.completedFuture(
+                    new WriteShareGroupStateResponse(
+                        WriteShareGroupStateResponse.toResponseData(
+                            tp1.topicId(),
+                            tp1.partition()
+                        )
+                    )
+                )
+            );
+
+        // one entry has error
+        futureMap.computeIfAbsent(tp2.topicId(), k -> new HashMap<>())
+            .put(tp2.partition(), CompletableFuture.completedFuture(
+                    new WriteShareGroupStateResponse(
+                        WriteShareGroupStateResponse.toErrorResponseData(
+                            tp2.topicId(),
+                            tp2.partition(),
+                            Errors.UNKNOWN_TOPIC_OR_PARTITION,
+                            "unknown tp"
+                        )
+                    )
+                )
+            );
+
+        PersisterStateManager psm = mock(PersisterStateManager.class);
+        DefaultStatePersister dsp = new DefaultStatePersister(psm);
+
+        WriteShareGroupStateResult results = dsp.writeResponsesToResult(futureMap);
+
+        // results should contain partial results
+        assertEquals(2, results.topicsData().size());
+        assertTrue(
+            results.topicsData().contains(
+                new TopicData<>(
+                    tp1.topicId(),
+                    Collections.singletonList(PartitionFactory.newPartitionErrorData(tp1.partition(), Errors.NONE.code(), null))
+                )
+            )
+        );
+        assertTrue(
+            results.topicsData().contains(
+                new TopicData<>(
+                    tp2.topicId(),
+                    Collections.singletonList(PartitionFactory.newPartitionErrorData(tp2.partition(), Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), "unknown tp"))
+                )
+            )
+        );
+    }
+
+    @Test
+    public void testWriteStateResponseToResultFailedFuture() {
+        Map<Uuid, Map<Integer, CompletableFuture<WriteShareGroupStateResponse>>> futureMap = new HashMap<>();
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), 1, null);
+        TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), 1, null);
+
+        // one entry has valid results
+        futureMap.computeIfAbsent(tp1.topicId(), k -> new HashMap<>())
+            .put(tp1.partition(), CompletableFuture.completedFuture(
+                    new WriteShareGroupStateResponse(
+                        WriteShareGroupStateResponse.toResponseData(
+                            tp1.topicId(),
+                            tp1.partition()
+                        )
+                    )
+                )
+            );
+
+        // one entry has failed future
+        futureMap.computeIfAbsent(tp2.topicId(), k -> new HashMap<>())
+            .put(tp2.partition(), CompletableFuture.failedFuture(new Exception("scary stuff")));
+
+        PersisterStateManager psm = mock(PersisterStateManager.class);
+        DefaultStatePersister dsp = new DefaultStatePersister(psm);
+
+        WriteShareGroupStateResult results = dsp.writeResponsesToResult(futureMap);
+
+        // results should contain partial results
+        assertEquals(2, results.topicsData().size());
+        assertTrue(
+            results.topicsData().contains(
+                new TopicData<>(
+                    tp1.topicId(),
+                    Collections.singletonList(PartitionFactory.newPartitionErrorData(tp1.partition(), Errors.NONE.code(), null))
+                )
+            )
+        );
+        assertTrue(
+            results.topicsData().contains(
+                new TopicData<>(
+                    tp2.topicId(),
+                    Collections.singletonList(PartitionFactory.newPartitionErrorData(tp2.partition(), Errors.UNKNOWN_SERVER_ERROR.code(), "Error writing state to share coordinator: java.lang.Exception: scary stuff"))
+                )
+            )
+        );
+    }
+
+    @Test
+    public void testReadStateResponseToResultPartialResults() {
+        Map<Uuid, Map<Integer, CompletableFuture<ReadShareGroupStateResponse>>> futureMap = new HashMap<>();
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), 1, null);
+        TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), 1, null);
+
+        // one entry has valid results
+        futureMap.computeIfAbsent(tp1.topicId(), k -> new HashMap<>())
+            .put(tp1.partition(), CompletableFuture.completedFuture(
+                    new ReadShareGroupStateResponse(
+                        ReadShareGroupStateResponse.toResponseData(
+                            tp1.topicId(),
+                            tp1.partition(),
+                            1L,
+                            2,
+                            Collections.emptyList()
+                        )
+                    )
+                )
+            );
+
+        // one entry has error
+        futureMap.computeIfAbsent(tp2.topicId(), k -> new HashMap<>())
+            .put(tp2.partition(), CompletableFuture.completedFuture(
+                    new ReadShareGroupStateResponse(
+                        ReadShareGroupStateResponse.toErrorResponseData(
+                            tp2.topicId(),
+                            tp2.partition(),
+                            Errors.UNKNOWN_TOPIC_OR_PARTITION,
+                            "unknown tp"
+                        )
+                    )
+                )
+            );
+
+        PersisterStateManager psm = mock(PersisterStateManager.class);
+        DefaultStatePersister dsp = new DefaultStatePersister(psm);
+
+        ReadShareGroupStateResult results = dsp.readResponsesToResult(futureMap);
+
+        // results should contain partial results
+        assertEquals(2, results.topicsData().size());
+        assertTrue(
+            results.topicsData().contains(
+                new TopicData<>(
+                    tp1.topicId(),
+                    Collections.singletonList(PartitionFactory.newPartitionAllData(tp1.partition(), 2, 1L, Errors.NONE.code(), null, Collections.emptyList()))
+                )
+            )
+        );
+        assertTrue(
+            results.topicsData().contains(
+                new TopicData<>(
+                    tp2.topicId(),
+                    Collections.singletonList(PartitionFactory.newPartitionAllData(tp2.partition(), 0, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), "unknown tp", Collections.emptyList()))
+                )
+            )
+        );
+    }
+
+    @Test
+    public void testReadStateResponseToResultFailedFuture() {
+        Map<Uuid, Map<Integer, CompletableFuture<ReadShareGroupStateResponse>>> futureMap = new HashMap<>();
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), 1, null);
+        TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), 1, null);
+
+        // one entry has valid results
+        futureMap.computeIfAbsent(tp1.topicId(), k -> new HashMap<>())
+            .put(tp1.partition(), CompletableFuture.completedFuture(
+                    new ReadShareGroupStateResponse(
+                        ReadShareGroupStateResponse.toResponseData(
+                            tp1.topicId(),
+                            tp1.partition(),
+                            1L,
+                            2,
+                            Collections.emptyList()
+                        )
+                    )
+                )
+            );
+
+        // one entry has failed future
+        futureMap.computeIfAbsent(tp2.topicId(), k -> new HashMap<>())
+            .put(tp2.partition(), CompletableFuture.failedFuture(new Exception("scary stuff")));
+
+        PersisterStateManager psm = mock(PersisterStateManager.class);
+        DefaultStatePersister dsp = new DefaultStatePersister(psm);
+
+        ReadShareGroupStateResult results = dsp.readResponsesToResult(futureMap);
+
+        // results should contain partial results
+        assertEquals(2, results.topicsData().size());
+        assertTrue(
+            results.topicsData().contains(
+                new TopicData<>(
+                    tp1.topicId(),
+                    Collections.singletonList(PartitionFactory.newPartitionAllData(tp1.partition(), 2, 1L, Errors.NONE.code(), null, Collections.emptyList()))
+                )
+            )
+        );
+        assertTrue(
+            results.topicsData().contains(
+                new TopicData<>(
+                    tp2.topicId(),
+                    Collections.singletonList(PartitionFactory.newPartitionAllData(tp2.partition(), -1, -1L, Errors.UNKNOWN_SERVER_ERROR.code(), "Error reading state from share coordinator: java.lang.Exception: scary stuff", Collections.emptyList()))
+                )
+            )
+        );
     }
 
     @Test
