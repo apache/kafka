@@ -741,7 +741,8 @@ public interface KStream<K, V> {
 
     /**
      * Split this stream into different branches. The returned {@link BranchedKStream} instance can be used for routing
-     * the records to different branches depending on evaluation against the supplied predicates.
+     * the records to different branches depending on evaluation against the supplied predicates. Records are evaluated against the
+     * predicates in the order they are provided with the first matching predicate accepting the record.
      * <p>
      *     Note: Stream branching is a stateless record-by-record operation.
      *     Please check {@link BranchedKStream} for detailed description and usage example
@@ -752,7 +753,8 @@ public interface KStream<K, V> {
 
     /**
      * Split this stream into different branches. The returned {@link BranchedKStream} instance can be used for routing
-     * the records to different branches depending on evaluation against the supplied predicates.
+     * the records to different branches depending on evaluation against the supplied predicates. Records are evaluated against the
+     * predicates in the order they are provided with the first matching predicate accepting the record.
      * <p>
      *     Note: Stream branching is a stateless record-by-record operation.
      *     Please check {@link BranchedKStream} for detailed description and usage example
