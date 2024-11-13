@@ -27,6 +27,8 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegularExpressionKey;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegularExpressionValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
@@ -85,6 +87,8 @@ public class GroupCoordinatorRecordSerde extends CoordinatorRecordSerde {
                 return new ShareGroupCurrentMemberAssignmentKey();
             case 15:
                 return new ShareGroupStatePartitionMetadataKey();
+            case 16:
+                return new ConsumerGroupRegularExpressionKey();
             default:
                 throw new CoordinatorLoader.UnknownRecordTypeException(recordVersion);
         }
@@ -124,6 +128,8 @@ public class GroupCoordinatorRecordSerde extends CoordinatorRecordSerde {
                 return new ShareGroupCurrentMemberAssignmentValue();
             case 15:
                 return new ShareGroupStatePartitionMetadataValue();
+            case 16:
+                return new ConsumerGroupRegularExpressionValue();
             default:
                 throw new CoordinatorLoader.UnknownRecordTypeException(recordVersion);
         }
