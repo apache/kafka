@@ -51,6 +51,7 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.test.api.Flaky
 import org.apache.kafka.common.utils.{Exit, LogContext, Time, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.image._
@@ -4342,6 +4343,7 @@ class ReplicaManagerTest {
     }
   }
 
+  @Flaky("KAFKA-18000")
   @Test
   def testSuccessfulBuildRemoteLogAuxStateMetrics(): Unit = {
     val tp0 = new TopicPartition(topic, 0)

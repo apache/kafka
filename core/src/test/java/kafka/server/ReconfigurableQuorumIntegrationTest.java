@@ -24,6 +24,7 @@ import org.apache.kafka.clients.admin.RaftVoterEndpoint;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.test.KafkaClusterTestKit;
 import org.apache.kafka.common.test.TestKitNodes;
+import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.test.TestUtils;
 
@@ -129,6 +130,7 @@ public class ReconfigurableQuorumIntegrationTest {
         }
     }
 
+    @Flaky("KAFKA-17988")
     @Test
     public void testRemoveAndAddSameController() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(

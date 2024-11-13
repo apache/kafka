@@ -18,6 +18,7 @@ package org.apache.kafka.tiered.storage.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
 import org.apache.kafka.tiered.storage.TieredStorageTestHarness;
@@ -36,6 +37,7 @@ import static org.apache.kafka.tiered.storage.specs.RemoteFetchCount.OperationTy
  * Test Cases:
  *    Elementary offloads and fetches from tiered storage using consumer with read_committed isolation level.
  */
+@Flaky("KAFKA-17998")
 public final class OffloadAndTxnConsumeFromLeaderTest extends TieredStorageTestHarness {
 
     /**
