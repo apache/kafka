@@ -70,7 +70,7 @@ public class LogManagerIntegrationTest {
         RaftClusterInvocationContext.RaftClusterInstance raftInstance =
                 (RaftClusterInvocationContext.RaftClusterInstance) cluster;
 
-        try (Admin admin = cluster.createAdminClient()) {
+        try (Admin admin = cluster.admin()) {
             admin.createTopics(Collections.singletonList(new NewTopic("foo", 1, (short) 3))).all().get();
         }
         cluster.waitForTopic("foo", 1);
@@ -82,7 +82,7 @@ public class LogManagerIntegrationTest {
         assertTrue(partitionMetadataFile.isPresent());
 
         raftInstance.getUnderlying().brokers().get(0).shutdown();
-        try (Admin admin = cluster.createAdminClient()) {
+        try (Admin admin = cluster.admin()) {
             TestUtils.waitForCondition(() -> {
                 List<TopicPartitionInfo> partitionInfos = admin.describeTopics(Collections.singletonList("foo"))
                         .topicNameValues().get("foo").get().partitions();
@@ -96,7 +96,7 @@ public class LogManagerIntegrationTest {
         raftInstance.getUnderlying().brokers().get(0).startup();
         // make sure there is no error during load logs
         assertDoesNotThrow(() -> raftInstance.getUnderlying().fatalFaultHandler().maybeRethrowFirstException());
-        try (Admin admin = cluster.createAdminClient()) {
+        try (Admin admin = cluster.admin()) {
             TestUtils.waitForCondition(() -> {
                 List<TopicPartitionInfo> partitionInfos = admin.describeTopics(Collections.singletonList("foo"))
                         .topicNameValues().get("foo").get().partitions();

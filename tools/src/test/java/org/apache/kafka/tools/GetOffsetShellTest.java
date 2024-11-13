@@ -107,7 +107,7 @@ public class GetOffsetShellTest {
     }
 
     private void setupTopics(Function<Integer, String> topicName, Map<String, String> configs) {
-        try (Admin admin = cluster.createAdminClient()) {
+        try (Admin admin = cluster.admin()) {
             List<NewTopic> topics = new ArrayList<>();
 
             IntStream.range(0, topicCount + 1).forEach(i ->

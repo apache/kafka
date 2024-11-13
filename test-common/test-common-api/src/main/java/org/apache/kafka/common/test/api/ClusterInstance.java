@@ -23,13 +23,23 @@ import kafka.server.BrokerServer;
 import kafka.server.ControllerServer;
 import kafka.server.KafkaBroker;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.serialization.BytesDeserializer;
+import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile;
@@ -40,12 +50,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -157,10 +167,52 @@ public interface ClusterInstance {
         return asClass.cast(getUnderlying());
     }
 
-    Admin createAdminClient(Properties configOverrides);
+    //---------------------------[producer/consumer/admin]---------------------------//
 
-    default Admin createAdminClient() {
-        return createAdminClient(new Properties());
+    default <K, V> Producer<K, V> producer(Map<String, Object> configs) {
+        Map<String, Object> props = new HashMap<>(configs);
+        props.putIfAbsent(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, BytesSerializer.class.getName());
+        props.putIfAbsent(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, BytesSerializer.class.getName());
+        props.putIfAbsent(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
+        return new KafkaProducer<>(props);
+    }
+
+    default <K, V> Producer<K, V> producer() {
+        return new KafkaProducer<>(Map.of());
+    }
+
+    default <K, V> Consumer<K, V> consumer(Map<String, Object> configs) {
+        Map<String, Object> props = new HashMap<>(configs);
+        props.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, BytesDeserializer.class.getName());
+        props.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, BytesDeserializer.class.getName());
+        props.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group_" + TestUtils.randomString(5));
+        props.putIfAbsent(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
+        return new KafkaConsumer<>(props);
+    }
+
+    default <K, V> Consumer<K, V> consumer() {
+        return new KafkaConsumer<>(Map.of());
+    }
+
+    default Admin admin(Map<String, Object> configs, boolean usingBootstrapControllers) {
+        Map<String, Object> props = new HashMap<>(configs);
+        if (usingBootstrapControllers) {
+            props.putIfAbsent(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, bootstrapControllers());
+            props.remove(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
+        } else {
+            props.putIfAbsent(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
+            props.remove(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG);
+        }
+        return Admin.create(props);
+    }
+
+    default Admin admin(Map<String, Object> configs) {
+        return admin(configs, false);
+    }
+
+    default Admin admin() {
+        return admin(Map.of(), false);
     }
 
     default Set<GroupProtocol> supportedGroupProtocols() {
@@ -188,7 +240,7 @@ public interface ClusterInstance {
     }
     
     default void createTopic(String topicName, int partitions, short replicas) throws InterruptedException {
-        try (Admin admin = createAdminClient()) {
+        try (Admin admin = admin()) {
             admin.createTopics(Collections.singletonList(new NewTopic(topicName, partitions, replicas)));
             waitForTopic(topicName, partitions);
         }

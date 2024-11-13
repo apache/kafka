@@ -288,13 +288,17 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
 
   private def createTopic(topic: String, partitionReplicaAssignment: collection.Map[Int, Seq[Int]]): Unit = {
     Using(createAdminClient(brokers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))) { admin =>
-      TestUtils.createTopicWithAdmin(
-        admin = admin,
-        topic = topic,
-        replicaAssignment = partitionReplicaAssignment,
-        brokers = brokers,
-        controllers = controllerServers
-      )
+      try {
+        TestUtils.createTopicWithAdmin(
+          admin = admin,
+          topic = topic,
+          replicaAssignment = partitionReplicaAssignment,
+          brokers = brokers,
+          controllers = controllerServers
+        )
+      } finally {
+        admin.close()
+      }
     }
   }
 

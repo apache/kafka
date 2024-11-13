@@ -47,24 +47,34 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   protected var producer: KafkaProducer[String, String] = _
 
   protected def createOffsetsTopic(): Unit = {
-    TestUtils.createOffsetsTopicWithAdmin(
-      admin = cluster.createAdminClient(),
-      brokers = brokers(),
-      controllers = controllerServers()
-    )
+    val admin = cluster.admin()
+    try {
+      TestUtils.createOffsetsTopicWithAdmin(
+        admin = admin,
+        brokers = brokers(),
+        controllers = controllerServers()
+      )
+    } finally {
+      admin.close()
+    }
   }
 
   protected def createTopic(
     topic: String,
     numPartitions: Int
   ): Unit = {
-    TestUtils.createTopicWithAdmin(
-      admin = cluster.createAdminClient(),
-      brokers = brokers(),
-      controllers = controllerServers(),
-      topic = topic,
-      numPartitions = numPartitions
-    )
+    val admin = cluster.admin()
+    try {
+      TestUtils.createTopicWithAdmin(
+        admin = admin,
+        brokers = brokers(),
+        controllers = controllerServers(),
+        topic = topic,
+        numPartitions = numPartitions
+      )
+    } finally {
+      admin.close()
+    }
   }
 
   protected def createTopicAndReturnLeaders(
@@ -73,16 +83,21 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     replicationFactor: Int = 1,
     topicConfig: Properties = new Properties
   ): Map[TopicIdPartition, Int] = {
-    val partitionToLeader = TestUtils.createTopicWithAdmin(
-      admin = cluster.createAdminClient(),
-      topic = topic,
-      brokers = brokers(),
-      controllers = controllerServers(),
-      numPartitions = numPartitions,
-      replicationFactor = replicationFactor,
-      topicConfig = topicConfig
-    )
-    partitionToLeader.map { case (partition, leader) => new TopicIdPartition(getTopicIds(topic), new TopicPartition(topic, partition)) -> leader }
+    val admin = cluster.admin()
+    try {
+      val partitionToLeader = TestUtils.createTopicWithAdmin(
+        admin = admin,
+        topic = topic,
+        brokers = brokers(),
+        controllers = controllerServers(),
+        numPartitions = numPartitions,
+        replicationFactor = replicationFactor,
+        topicConfig = topicConfig
+      )
+      partitionToLeader.map { case (partition, leader) => new TopicIdPartition(getTopicIds(topic), new TopicPartition(topic, partition)) -> leader }
+    } finally {
+      admin.close()
+    }
   }
 
   protected def isUnstableApiEnabled: Boolean = {

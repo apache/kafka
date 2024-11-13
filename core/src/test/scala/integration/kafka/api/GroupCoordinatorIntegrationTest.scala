@@ -289,7 +289,7 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
   }
 
   private def withAdmin(f: Admin => Unit): Unit = {
-    val admin: Admin = cluster.createAdminClient()
+    val admin: Admin = cluster.admin()
     try {
       f(admin)
     } finally {

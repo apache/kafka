@@ -40,6 +40,8 @@ import org.apache.kafka.server.config.ServerLogConfigs;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
@@ -82,7 +84,7 @@ public class AdminFenceProducersTest {
         clusterInstance.createTopic(TOPIC_NAME, 1, (short) 1);
 
         try (KafkaProducer<byte[], byte[]> producer = createProducer();
-             Admin adminClient = clusterInstance.createAdminClient()) {
+             Admin adminClient = clusterInstance.admin()) {
             producer.initTransactions();
             producer.beginTransaction();
             producer.send(RECORD).get();
@@ -103,10 +105,10 @@ public class AdminFenceProducersTest {
 
     @ClusterTest
     void testFenceProducerTimeoutMs() {
-        Properties config = new Properties();
+        Map<String, Object> config = new HashMap<>();
         config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:" + INCORRECT_BROKER_PORT);
 
-        try (Admin adminClient = clusterInstance.createAdminClient(config)) {
+        try (Admin adminClient = clusterInstance.admin(config)) {
             ExecutionException exception = assertThrows(
                     ExecutionException.class, () ->
                             adminClient.fenceProducers(Collections.singletonList(TXN_ID), new FenceProducersOptions().timeoutMs(0)).all().get());
@@ -119,7 +121,7 @@ public class AdminFenceProducersTest {
         clusterInstance.createTopic(TOPIC_NAME, 1, (short) 1);
 
         try (KafkaProducer<byte[], byte[]> producer = createProducer();
-             Admin adminClient = clusterInstance.createAdminClient()) {
+             Admin adminClient = clusterInstance.admin()) {
 
             producer.initTransactions();
             producer.beginTransaction();

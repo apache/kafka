@@ -21,7 +21,6 @@ import kafka.server.BrokerServer;
 import kafka.server.ControllerServer;
 import kafka.server.KafkaBroker;
 
-import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.test.KafkaClusterTestKit;
 import org.apache.kafka.common.test.TestKitNodes;
@@ -45,10 +44,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
@@ -106,7 +103,6 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         final AtomicBoolean started = new AtomicBoolean(false);
         final AtomicBoolean stopped = new AtomicBoolean(false);
         final AtomicBoolean formated = new AtomicBoolean(false);
-        private final ConcurrentLinkedQueue<Admin> admins = new ConcurrentLinkedQueue<>();
         private KafkaClusterTestKit clusterTestKit;
         private final boolean isCombined;
         private final ListenerName listenerName;
@@ -175,13 +171,6 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         @Override
-        public Admin createAdminClient(Properties configOverrides) {
-            Admin admin = Admin.create(clusterTestKit.newClientPropertiesBuilder(configOverrides).build());
-            admins.add(admin);
-            return admin;
-        }
-
-        @Override
         public void start() {
             try {
                 format();
@@ -200,8 +189,6 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         @Override
         public void stop() {
             if (stopped.compareAndSet(false, true)) {
-                admins.forEach(admin -> Utils.closeQuietly(admin, "admin"));
-                admins.clear();
                 Utils.closeQuietly(clusterTestKit, "cluster");
             }
         }

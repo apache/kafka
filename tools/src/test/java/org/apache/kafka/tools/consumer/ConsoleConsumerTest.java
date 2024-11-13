@@ -295,7 +295,7 @@ public class ConsoleConsumerTest {
 
     @ClusterTest(brokers = 3)
     public void testTransactionLogMessageFormatter(ClusterInstance cluster) throws Exception {
-        try (Admin admin = cluster.createAdminClient()) {
+        try (Admin admin = cluster.admin()) {
 
             NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
             admin.createTopics(singleton(newTopic));
@@ -334,7 +334,7 @@ public class ConsoleConsumerTest {
 
     @ClusterTest(brokers = 3)
     public void testOffsetsMessageFormatter(ClusterInstance cluster) throws Exception {
-        try (Admin admin = cluster.createAdminClient()) {
+        try (Admin admin = cluster.admin()) {
 
             NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
             admin.createTopics(singleton(newTopic));
@@ -376,7 +376,7 @@ public class ConsoleConsumerTest {
 
     @ClusterTest(brokers = 3)
     public void testGroupMetadataMessageFormatter(ClusterInstance cluster) throws Exception {
-        try (Admin admin = cluster.createAdminClient()) {
+        try (Admin admin = cluster.admin()) {
 
             NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
             admin.createTopics(singleton(newTopic));
