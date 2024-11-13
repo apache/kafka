@@ -1076,7 +1076,8 @@ public class TaskManager {
         } catch (final LockException lockException) {
             // The state directory may still be locked by another thread, when the rebalance just happened.
             // Retry in the next iteration.
-            log.info("Encountered lock exception. Reattempting locking the state in the next iteration.", lockException);
+            log.info("Encountered lock exception. Reattempting locking the state in the next iteration. Error message was: {}",
+                     lockException.getMessage());
             tasks.addPendingTasksToInit(Collections.singleton(task));
             updateOrCreateBackoffRecord(task.id(), nowMs);
         }
