@@ -417,6 +417,13 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     }
 
     /**
+     * @return An immutable Map containing all the resolved regular expressions.
+     */
+    public Map<String, ResolvedRegularExpression> resolvedRegularExpressions() {
+        return Collections.unmodifiableMap(resolvedRegularExpressions);
+    }
+
+    /**
      * Returns the current epoch of a partition or -1 if the partition
      * does not have one.
      *

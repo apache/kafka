@@ -2606,8 +2606,8 @@ public class GroupMetadataManager {
             updatedMember
         ).orElse(defaultConsumerGroupAssignor.name());
         try {
-            TargetAssignmentBuilder<ConsumerGroupMember> assignmentResultBuilder =
-                new TargetAssignmentBuilder<ConsumerGroupMember>(group.groupId(), groupEpoch, consumerGroupAssignors.get(preferredServerAssignor))
+            TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder assignmentResultBuilder =
+                new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(group.groupId(), groupEpoch, consumerGroupAssignors.get(preferredServerAssignor))
                     .withMembers(group.members())
                     .withStaticMembers(group.staticMembers())
                     .withSubscriptionMetadata(subscriptionMetadata)
@@ -2615,6 +2615,7 @@ public class GroupMetadataManager {
                     .withTargetAssignment(group.targetAssignment())
                     .withInvertedTargetAssignment(group.invertedTargetAssignment())
                     .withTopicsImage(metadataImage.topics())
+                    .withResolvedRegularExpressions(group.resolvedRegularExpressions())
                     .addOrUpdateMember(updatedMember.memberId(), updatedMember);
 
             // If the instance id was associated to a different member, it means that the
@@ -2673,16 +2674,14 @@ public class GroupMetadataManager {
         List<CoordinatorRecord> records
     ) {
         try {
-            TargetAssignmentBuilder<ShareGroupMember> assignmentResultBuilder =
-                new TargetAssignmentBuilder<ShareGroupMember>(group.groupId(), groupEpoch, shareGroupAssignor)
+            TargetAssignmentBuilder.ShareTargetAssignmentBuilder assignmentResultBuilder =
+                new TargetAssignmentBuilder.ShareTargetAssignmentBuilder(group.groupId(), groupEpoch, shareGroupAssignor)
                     .withMembers(group.members())
                     .withSubscriptionMetadata(subscriptionMetadata)
                     .withSubscriptionType(subscriptionType)
                     .withTargetAssignment(group.targetAssignment())
                     .withInvertedTargetAssignment(group.invertedTargetAssignment())
                     .withTopicsImage(metadataImage.topics())
-                    .withTargetAssignmentRecordBuilder(GroupCoordinatorRecordHelpers::newShareGroupTargetAssignmentRecord)
-                    .withTargetAssignmentEpochRecordBuilder(GroupCoordinatorRecordHelpers::newShareGroupTargetAssignmentEpochRecord)
                     .addOrUpdateMember(updatedMember.memberId(), updatedMember);
 
             long startTimeMs = time.milliseconds();

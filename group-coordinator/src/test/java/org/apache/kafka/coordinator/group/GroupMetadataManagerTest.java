@@ -70,6 +70,7 @@ import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer.ExpiredT
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer.ScheduledTimeout;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
@@ -14976,6 +14977,83 @@ public class GroupMetadataManagerTest {
         assertEquals(
             Optional.empty(),
             context.groupMetadataManager.consumerGroup("foo").regularExpression("abc*")
+        );
+    }
+
+    @Test
+    public void testConsumerGroupMemberPicksUpExistingResolvedRegularExpression() {
+        String groupId = "fooup";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        ConsumerGroupPartitionAssignor assignor = mock(ConsumerGroupPartitionAssignor.class);
+        when(assignor.name()).thenReturn("range");
+        when(assignor.assign(any(), any())).thenAnswer(answer -> {
+            GroupSpec spec = answer.getArgument(0);
+
+            List.of(memberId1, memberId2).forEach(memberId ->
+                assertEquals(
+                    Collections.singleton(fooTopicId),
+                    spec.memberSubscription(memberId).subscribedTopicIds(),
+                    String.format("Member %s has unexpected subscribed topic ids", memberId)
+                )
+            );
+
+            return new GroupAssignment(Map.of(
+                memberId1, new MemberAssignmentImpl(mkAssignment(
+                    mkTopicAssignment(fooTopicId, 0)
+                )),
+                memberId2, new MemberAssignmentImpl(mkAssignment(
+                    mkTopicAssignment(fooTopicId, 1)
+                ))
+            ));
+        });
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 2)
+                .build())
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId1)
+                    .setState(MemberState.STABLE)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(10)
+                    .setClientId(DEFAULT_CLIENT_ID)
+                    .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+                    .setSubscribedTopicRegex("foo*")
+                    .setServerAssignorName("range")
+                    .setAssignedPartitions(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0, 1)))
+                    .build())
+                .withResolvedRegularExpression("foo*", new ResolvedRegularExpression(
+                    Collections.singleton(fooTopicName),
+                    100L,
+                    12345L))
+                .withAssignment(memberId1, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 0, 1)))
+                .withAssignmentEpoch(10))
+            .build();
+
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId2)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(10000)
+                .setSubscribedTopicRegex("foo*")
+                .setTopicPartitions(Collections.emptyList()));
+
+        assertEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(memberId2)
+                .setMemberEpoch(11)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()),
+            result.response()
         );
     }
 
