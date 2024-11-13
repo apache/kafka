@@ -40,12 +40,17 @@ abstract class RebootstrapTest extends AbstractConsumerTest {
       .map(KafkaConfig.fromProps(_, overridingProps))
   }
 
-  def clientOverrides: Properties = {
+  def clientOverrides(useRebootstrapTriggerMs: Boolean): Properties = {
     val overrides = new Properties()
-    overrides.put(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, "5000")
-    overrides.put(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG, "5000")
-    overrides.put(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG, "1000")
-    overrides.put(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG, "1000")
+    if (useRebootstrapTriggerMs) {
+      overrides.put(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG, "5000")
+    } else {
+      overrides.put(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG, "3600000")
+      overrides.put(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, "5000")
+      overrides.put(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG, "5000")
+      overrides.put(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG, "1000")
+      overrides.put(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG, "1000")
+    }
     overrides.put(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG, "rebootstrap")
     overrides
   }

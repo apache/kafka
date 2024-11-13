@@ -16,15 +16,18 @@
  */
 package kafka.api
 
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 class AdminClientRebootstrapTest extends RebootstrapTest {
-  @Test
-  def testRebootstrap(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(false, true))
+  def testRebootstrap(useRebootstrapTriggerMs: Boolean): Unit = {
+
     server1.shutdown()
     server1.awaitShutdown()
 
-    val adminClient = createAdminClient(configOverrides = clientOverrides)
+    val adminClient = createAdminClient(configOverrides = clientOverrides(useRebootstrapTriggerMs))
 
     // Only the server 0 is available for the admin client during the bootstrap.
     adminClient.listTopics().names().get()

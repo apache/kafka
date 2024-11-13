@@ -122,6 +122,7 @@ public class WorkerGroupMember {
                     true,
                     new ApiVersions(),
                     logContext,
+                    config.getLong(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG),
                     MetadataRecoveryStrategy.forName(config.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG))
             );
             this.client = new ConsumerNetworkClient(

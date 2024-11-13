@@ -42,7 +42,8 @@
   // Version 11 deprecates ClusterAuthorizedOperations. This is now exposed
   // by the DescribeCluster API (KIP-700).
   // Version 12 supports topicId.
-  "validVersions": "0-12",
+  // Version 13 supports top-level error code in the response.
+  "validVersions": "0-13",
   "flexibleVersions": "9+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "3+", "ignorable": true,
@@ -93,6 +94,9 @@
         "about": "32-bit bitfield to represent authorized operations for this topic." }
     ]},
     { "name": "ClusterAuthorizedOperations", "type": "int32", "versions": "8-10", "default": "-2147483648",
-      "about": "32-bit bitfield to represent authorized operations for this cluster." }
+      "about": "32-bit bitfield to represent authorized operations for this cluster." },
+    { "name": "ErrorCode", "type": "int16", "versions": "13+", "ignorable": true,
+      "about": "The top-level error code, or 0 if there was no error." }
+
   ]
 }

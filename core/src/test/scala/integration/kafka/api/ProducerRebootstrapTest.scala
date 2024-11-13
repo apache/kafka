@@ -18,18 +18,21 @@ package kafka.api
 
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 class ProducerRebootstrapTest extends RebootstrapTest {
-  @Test
-  def testRebootstrap(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(false, true))
+  def testRebootstrap(useRebootstrapTriggerMs: Boolean): Unit = {
     server1.shutdown()
     server1.awaitShutdown()
 
-    val producer = createProducer(configOverrides = clientOverrides)
+    val producer = createProducer(configOverrides = clientOverrides(useRebootstrapTriggerMs))
 
     // Only the server 0 is available for the producer during the bootstrap.
-    producer.send(new ProducerRecord(topic, part, "key 0".getBytes, "value 0".getBytes)).get()
+    val recordMetadata0 = producer.send(new ProducerRecord(topic, part, "key 0".getBytes, "value 0".getBytes)).get()
+    assertEquals(0, recordMetadata0.offset())
 
     server0.shutdown()
     server0.awaitShutdown()

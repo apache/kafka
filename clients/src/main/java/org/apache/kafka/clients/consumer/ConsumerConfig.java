@@ -654,7 +654,14 @@ public class ConsumerConfig extends AbstractConfig {
                                         ConfigDef.CaseInsensitiveValidString
                                                 .in(Utils.enumOptions(MetadataRecoveryStrategy.class)),
                                         Importance.LOW,
-                                        CommonClientConfigs.METADATA_RECOVERY_STRATEGY_DOC);
+                                        CommonClientConfigs.METADATA_RECOVERY_STRATEGY_DOC)
+                                .define(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG,
+                                        Type.LONG,
+                                        CommonClientConfigs.DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS,
+                                        atLeast(0),
+                                        Importance.LOW,
+                                        CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC);
+
     }
 
     @Override

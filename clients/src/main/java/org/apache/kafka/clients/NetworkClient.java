@@ -115,6 +115,9 @@ public class NetworkClient implements KafkaClient {
     /* time in ms to wait before retrying to create connection to a server */
     private final long reconnectBackoffMs;
 
+    /* Timeout starting from an attempt to fetch metadata after which client rebootstraps */
+    private final long rebootstrapTriggerMs;
+
     private final MetadataRecoveryStrategy metadataRecoveryStrategy;
 
     private final Time time;
@@ -166,9 +169,49 @@ public class NetworkClient implements KafkaClient {
              time,
              discoverBrokerVersions,
              apiVersions,
-             null,
              logContext,
+             Long.MAX_VALUE,
              metadataRecoveryStrategy);
+    }
+
+    public NetworkClient(Selectable selector,
+                         Metadata metadata,
+                         String clientId,
+                         int maxInFlightRequestsPerConnection,
+                         long reconnectBackoffMs,
+                         long reconnectBackoffMax,
+                         int socketSendBuffer,
+                         int socketReceiveBuffer,
+                         int defaultRequestTimeoutMs,
+                         long connectionSetupTimeoutMs,
+                         long connectionSetupTimeoutMaxMs,
+                         Time time,
+                         boolean discoverBrokerVersions,
+                         ApiVersions apiVersions,
+                         LogContext logContext,
+                         long rebootstrapTriggerMs,
+                         MetadataRecoveryStrategy metadataRecoveryStrategy) {
+        this(null,
+                metadata,
+                selector,
+                clientId,
+                maxInFlightRequestsPerConnection,
+                reconnectBackoffMs,
+                reconnectBackoffMax,
+                socketSendBuffer,
+                socketReceiveBuffer,
+                defaultRequestTimeoutMs,
+                connectionSetupTimeoutMs,
+                connectionSetupTimeoutMaxMs,
+                time,
+                discoverBrokerVersions,
+                apiVersions,
+                null,
+                logContext,
+                new DefaultHostResolver(),
+                null,
+                rebootstrapTriggerMs,
+                metadataRecoveryStrategy);
     }
 
     public NetworkClient(Selectable selector,
@@ -207,6 +250,7 @@ public class NetworkClient implements KafkaClient {
              logContext,
              new DefaultHostResolver(),
              null,
+             Long.MAX_VALUE,
              metadataRecoveryStrategy);
     }
 
@@ -245,6 +289,7 @@ public class NetworkClient implements KafkaClient {
              logContext,
              new DefaultHostResolver(),
              null,
+             Long.MAX_VALUE,
              metadataRecoveryStrategy);
     }
 
@@ -267,6 +312,7 @@ public class NetworkClient implements KafkaClient {
                          LogContext logContext,
                          HostResolver hostResolver,
                          ClientTelemetrySender clientTelemetrySender,
+                         long rebootstrapTriggerMs,
                          MetadataRecoveryStrategy metadataRecoveryStrategy) {
         /* It would be better if we could pass `DefaultMetadataUpdater` from the public constructor, but it's not
          * possible because `DefaultMetadataUpdater` is an inner class and it can only be instantiated after the
@@ -298,6 +344,7 @@ public class NetworkClient implements KafkaClient {
         this.log = logContext.logger(NetworkClient.class);
         this.state = new AtomicReference<>(State.ACTIVE);
         this.telemetrySender = (clientTelemetrySender != null) ? new TelemetrySender(clientTelemetrySender) : null;
+        this.rebootstrapTriggerMs = rebootstrapTriggerMs;
         this.metadataRecoveryStrategy = metadataRecoveryStrategy;
     }
 
@@ -401,6 +448,17 @@ public class NetworkClient implements KafkaClient {
         long now = time.milliseconds();
         cancelInFlightRequests(nodeId, now, null, false);
         connectionStates.remove(nodeId);
+        apiVersions.remove(nodeId);
+        nodesNeedingApiVersionsFetch.remove(nodeId);
+    }
+
+    @Override
+    public void closeAll() {
+        log.info("Client requested connection close from all nodes.");
+        List<Node> nodes = this.metadataUpdater.fetchNodes();
+        for (Node node : nodes) {
+            close(node.idString());
+        }
     }
 
     /**
@@ -1116,6 +1174,15 @@ public class NetworkClient implements KafkaClient {
         // Defined if there is a request in progress, null otherwise
         private InProgressData inProgress;
 
+        /*
+         * The time in wall-clock milliseconds when we started attempts to fetch metadata. If empty,
+         * metadata has not been requested. This is the start time based on which rebootstrap is
+         * triggered if metadata is not obtained for the configured rebootstrap trigger interval.
+         * Set to Optional.of(0L) to force rebootstrap immediately.
+         */
+        private Optional<Long> metadataAttemptStartMs = Optional.empty();
+
+
         DefaultMetadataUpdater(Metadata metadata) {
             this.metadata = metadata;
             this.inProgress = null;
@@ -1146,6 +1213,14 @@ public class NetworkClient implements KafkaClient {
                 return metadataTimeout;
             }
 
+            if (metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP) {
+                if (!metadataAttemptStartMs.isPresent())
+                    metadataAttemptStartMs = Optional.of(now);
+                else if (metadataAttemptStartMs.filter(startMs -> now - startMs > rebootstrapTriggerMs).isPresent()) {
+                    rebootstrap(now);
+                }
+            }
+
             // Beware that the behavior of this method and the computation of timeouts for poll() are
             // highly dependent on the behavior of leastLoadedNode.
             LeastLoadedNode leastLoadedNode = leastLoadedNode(now);
@@ -1153,7 +1228,7 @@ public class NetworkClient implements KafkaClient {
             // Rebootstrap if needed and configured.
             if (metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP
                     && !leastLoadedNode.hasNodeAvailableOrConnectionReady()) {
-                metadata.rebootstrap();
+                rebootstrap(now);
 
                 leastLoadedNode = leastLoadedNode(now);
             }
@@ -1219,13 +1294,18 @@ public class NetworkClient implements KafkaClient {
             if (!errors.isEmpty())
                 log.warn("The metadata response from the cluster reported a recoverable issue with correlation id {} : {}", requestHeader.correlationId(), errors);
 
-            // When talking to the startup phase of a broker, it is possible to receive an empty metadata set, which
-            // we should retry later.
-            if (response.brokers().isEmpty()) {
+            if (metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP && response.topLevelError() == Errors.REBOOTSTRAP_REQUIRED) {
+                log.info("Rebootstrap requested by server.");
+                metadataAttemptStartMs = Optional.of(0L); // to force rebootstrap
+                this.metadata.requestUpdate(true);
+            } else if (response.brokers().isEmpty()) {
+                // When talking to the startup phase of a broker, it is possible to receive an empty metadata set, which
+                // we should retry later.
                 log.trace("Ignoring empty metadata response with correlation id {}.", requestHeader.correlationId());
                 this.metadata.failedUpdate(now);
             } else {
                 this.metadata.update(inProgress.requestVersion, response, inProgress.isPartialUpdate, now);
+                metadataAttemptStartMs = Optional.empty();
             }
 
             inProgress = null;
@@ -1234,6 +1314,12 @@ public class NetworkClient implements KafkaClient {
         @Override
         public void close() {
             this.metadata.close();
+        }
+
+        private void rebootstrap(long now) {
+            closeAll();
+            metadata.rebootstrap();
+            metadataAttemptStartMs = Optional.of(now);
         }
 
         /**
