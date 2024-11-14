@@ -20,7 +20,7 @@ from ducktape.mark.resource import cluster
 from kafkatest.tests.verifiable_consumer_test import VerifiableConsumerTest
 from kafkatest.services.kafka import TopicPartition, quorum, consumer_group
 from kafkatest.version import LATEST_2_1, LATEST_2_3, LATEST_2_4, LATEST_2_5, \
-    LATEST_3_2, LATEST_3_4, LATEST_3_5, LATEST_3_6, LATEST_3_7, LATEST_3_8, DEV_BRANCH, KafkaVersion
+    LATEST_3_2, LATEST_3_4, LATEST_3_5, LATEST_3_6, LATEST_3_7, LATEST_3_8, LATEST_3_9, DEV_BRANCH, KafkaVersion
 
 class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
     """
@@ -42,7 +42,7 @@ class ConsumerProtocolMigrationTest(VerifiableConsumerTest):
     COOPERATIVE_STICKEY = "org.apache.kafka.clients.consumer.CooperativeStickyAssignor"
 
     all_consumer_versions = [LATEST_2_1, LATEST_2_3, LATEST_2_4, LATEST_2_5, \
-                             LATEST_3_2, LATEST_3_4, LATEST_3_5, LATEST_3_6, LATEST_3_7, LATEST_3_8, DEV_BRANCH]
+                             LATEST_3_2, LATEST_3_4, LATEST_3_5, LATEST_3_6, LATEST_3_7, LATEST_3_8, LATEST_3_9, DEV_BRANCH]
     consumer_versions_supporting_range_assignnor = [str(v) for v in all_consumer_versions]
     consumer_versions_supporting_static_membership = [str(v) for v in all_consumer_versions if v >= LATEST_2_3]
     consumer_versions_supporting_cooperative_sticky_assignor = [str(v) for v in all_consumer_versions if v >= LATEST_2_4]
