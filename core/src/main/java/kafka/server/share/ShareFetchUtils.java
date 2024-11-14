@@ -29,7 +29,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
-import org.apache.kafka.server.share.fetch.ShareFetchData;
+import org.apache.kafka.server.share.fetch.ShareFetch;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
 
 import org.slf4j.Logger;
@@ -55,7 +55,7 @@ public class ShareFetchUtils {
      * by acquiring records from the share partition.
      */
     static Map<TopicIdPartition, ShareFetchResponseData.PartitionData> processFetchResponse(
-            ShareFetchData shareFetchData,
+            ShareFetch shareFetch,
             Map<TopicIdPartition, FetchPartitionData> responseData,
             LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions,
             ReplicaManager replicaManager
@@ -91,7 +91,7 @@ public class ShareFetchUtils {
                     partitionData.setErrorMessage(Errors.NONE.message());
                 }
             } else {
-                ShareAcquiredRecords shareAcquiredRecords = sharePartition.acquire(shareFetchData.memberId(), shareFetchData.maxFetchRecords() - acquiredRecordsCount, fetchPartitionData);
+                ShareAcquiredRecords shareAcquiredRecords = sharePartition.acquire(shareFetch.memberId(), shareFetch.maxFetchRecords() - acquiredRecordsCount, fetchPartitionData);
                 log.trace("Acquired records: {} for topicIdPartition: {}", shareAcquiredRecords, topicIdPartition);
                 // Maybe, in the future, check if no records are acquired, and we want to retry
                 // replica manager fetch. Depends on the share partition manager implementation,
@@ -151,11 +151,15 @@ public class ShareFetchUtils {
     }
 
     static int leaderEpoch(ReplicaManager replicaManager, TopicPartition tp) {
+        return partition(replicaManager, tp).getLeaderEpoch();
+    }
+
+    static Partition partition(ReplicaManager replicaManager, TopicPartition tp) {
         Partition partition = replicaManager.getPartitionOrException(tp);
         if (!partition.isLeader()) {
             log.debug("The broker is not the leader for topic partition: {}-{}", tp.topic(), tp.partition());
             throw new NotLeaderOrFollowerException();
         }
-        return partition.getLeaderEpoch();
+        return partition;
     }
 }

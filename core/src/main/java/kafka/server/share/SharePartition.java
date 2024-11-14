@@ -1082,8 +1082,8 @@ public class SharePartition {
 
     /**
      * Prior to fetching records from the leader, the fetch lock is acquired to ensure that the same
-     * share partition does not enter a fetch queue while another one is being fetched within the queue.
-     * The fetch lock is released once the records are fetched from the leader.
+     * share partition is not fetched concurrently by multiple clients. The fetch lock is released once
+     * the records are fetched and acquired.
      *
      * @return A boolean which indicates whether the fetch lock is acquired.
      */
