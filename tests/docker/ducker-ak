@@ -38,7 +38,7 @@ tmp_native_dir=${ducker_dir}/native
 # This does not include swap.
 docker_build_memory_limit="3200m"
 
-# The maximum mmemory consumption to allow in containers.
+# The maximum memory consumption to allow in containers.
 docker_run_memory_limit="2000m"
 
 # The default number of cluster nodes to bring up if a number is not specified.
