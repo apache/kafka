@@ -20,6 +20,7 @@ package kafka.server
 import java.nio.ByteBuffer
 import java.util.{Collections, Properties}
 import kafka.utils.TestUtils
+import org.apache.kafka.clients.admin.{Admin, TopicDescription}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
@@ -35,6 +36,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 import org.junit.jupiter.params.provider.ValueSource
 
+import java.util.concurrent.TimeUnit
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
@@ -84,14 +86,41 @@ class ProduceRequestTest extends BaseRequestTest {
       new SimpleRecord(System.currentTimeMillis(), "key2".getBytes, "value2".getBytes)), 1)
   }
 
-  @ParameterizedTest
+  private def getPartitionToLeader(
+    admin: Admin,
+    topic: String
+  ): Map[Int, Int] = {
+    var topicDescription: TopicDescription = null
+    TestUtils.waitUntilTrue(() => {
+      val topicMap = admin.
+        describeTopics(java.util.Arrays.asList(topic)).
+          allTopicNames().get(10, TimeUnit.MINUTES)
+      topicDescription = topicMap.get(topic)
+      topicDescription != null
+    }, "Timed out waiting to describe topic " + topic)
+    topicDescription.partitions().asScala.map(p => {
+      p.partition() -> p.leader().id()
+    }).toMap
+  }
+
+  @ParameterizedTest(name = "quorum=kraft")
   @MethodSource(Array("timestampConfigProvider"))
   def testProduceWithInvalidTimestamp(messageTimeStampConfig: String, recordTimestamp: Long): Unit = {
     val topic = "topic"
     val partition = 0
     val topicConfig = new Properties
     topicConfig.setProperty(messageTimeStampConfig, "1000")
-    val partitionToLeader = TestUtils.createTopic(zkClient, topic, 1, 1, servers, topicConfig)
+    val admin = createAdminClient()
+    TestUtils.createTopicWithAdmin(
+      admin = admin,
+      topic = topic,
+      brokers = brokers,
+      controllers = controllerServers,
+      numPartitions = 1,
+      replicationFactor = 1,
+      topicConfig = topicConfig
+    )
+    val partitionToLeader = getPartitionToLeader(admin, topic)
     val leader = partitionToLeader(partition)
 
     def createRecords(magicValue: Byte, timestamp: Long, codec: Compression): MemoryRecords = {
@@ -138,7 +167,14 @@ class ProduceRequestTest extends BaseRequestTest {
     val partition = 0
 
     // Create a single-partition topic and find a broker which is not the leader
-    val partitionToLeader = createTopic(topic)
+    val admin = createAdminClient()
+    TestUtils.createTopicWithAdmin(
+      admin = admin,
+      topic = topic,
+      brokers = brokers,
+      controllers = controllerServers
+    )
+    val partitionToLeader = getPartitionToLeader(admin, topic)
     val leader = partitionToLeader(partition)
     val nonReplicaOpt = brokers.find(_.config.brokerId != leader)
     assertTrue(nonReplicaOpt.isDefined)
