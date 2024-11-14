@@ -56,8 +56,7 @@ public class BrokerApiVersionsCommandTest {
         assertTrue(lineIter.hasNext());
         assertEquals(clusterInstance.bootstrapServers() + " (id: 0 rack: null) -> (", lineIter.next());
 
-        ApiMessageType.ListenerType listenerType = clusterInstance.isKRaftTest() ?
-                ApiMessageType.ListenerType.BROKER : ApiMessageType.ListenerType.ZK_BROKER;
+        ApiMessageType.ListenerType listenerType = ApiMessageType.ListenerType.BROKER;
 
         NodeApiVersions nodeApiVersions = new NodeApiVersions(
                 ApiVersionsResponse.collectApis(ApiKeys.clientApis(), true),

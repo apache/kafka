@@ -908,11 +908,8 @@ public class TopicCommandTest {
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
 
             // create the offset topic
-            // In ZK mode, Topic.GROUP_METADATA_TOPIC_NAME exist when cluster is created.
-            if (clusterInstance.isKRaftTest()) {
-                adminClient.createTopics(Collections.singletonList(new NewTopic(Topic.GROUP_METADATA_TOPIC_NAME, defaultNumPartitions, defaultReplicationFactor)));
-                clusterInstance.waitForTopic(Topic.GROUP_METADATA_TOPIC_NAME, defaultNumPartitions);
-            }
+            adminClient.createTopics(Collections.singletonList(new NewTopic(Topic.GROUP_METADATA_TOPIC_NAME, defaultNumPartitions, defaultReplicationFactor)));
+            clusterInstance.waitForTopic(Topic.GROUP_METADATA_TOPIC_NAME, defaultNumPartitions);
 
             // Try to delete the Topic.GROUP_METADATA_TOPIC_NAME which is allowed by default.
             // This is a difference between the new and the old command as the old one didn't allow internal topic deletion.

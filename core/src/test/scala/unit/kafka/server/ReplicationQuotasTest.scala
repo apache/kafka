@@ -22,7 +22,6 @@ import java.util.{Collections, Properties}
 import java.util.Map.Entry
 import kafka.server.KafkaConfig.fromProps
 import kafka.utils.TestUtils._
-import kafka.utils.CoreUtils._
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry, NewTopic}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
@@ -113,30 +112,20 @@ class ReplicationQuotasTest extends QuorumTestHarness {
     if (!leaderThrottle) throttle = throttle * 3
 
     Using(createAdminClient(brokers, listenerName)) { admin =>
-      if (isKRaftTest()) {
-        (106 to 107).foreach(registerBroker)
-      }
+      (106 to 107).foreach(registerBroker)
       admin.createTopics(List(new NewTopic(topic, assignment.map(a => a._1.asInstanceOf[Integer] ->
         a._2.map(_.asInstanceOf[Integer]).toList.asJava).asJava)).asJava).all().get()
       //Set the throttle limit on all 8 brokers, but only assign throttled replicas to the six leaders, or two followers
       (100 to 107).foreach { brokerId =>
-        if (isKRaftTest()) {
-          val entry = new SimpleImmutableEntry[AlterConfigOp.OpType, String](SET, throttle.toString)
-            .asInstanceOf[Entry[AlterConfigOp.OpType, String]]
-          controllerServer.controller.incrementalAlterConfigs(
-            ControllerRequestContextUtil.ANONYMOUS_CONTEXT,
-            Map(new ConfigResource(BROKER, String.valueOf(brokerId)) -> Map(
-              QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG -> entry,
-              QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG -> entry).asJava).asJava,
-            false
-          ).get()
-        } else {
-          adminZkClient.changeBrokerConfig(Seq(brokerId),
-            propsWith(
-              (QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, throttle.toString),
-              (QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, throttle.toString)
-            ))
-        }
+        val entry = new SimpleImmutableEntry[AlterConfigOp.OpType, String](SET, throttle.toString)
+          .asInstanceOf[Entry[AlterConfigOp.OpType, String]]
+        controllerServer.controller.incrementalAlterConfigs(
+          ControllerRequestContextUtil.ANONYMOUS_CONTEXT,
+          Map(new ConfigResource(BROKER, String.valueOf(brokerId)) -> Map(
+            QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG -> entry,
+            QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG -> entry).asJava).asJava,
+          false
+        ).get()
       }
       //Either throttle the six leaders or the two followers
       val configEntry = if (leaderThrottle)
@@ -224,9 +213,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
     val throttle: Long = msg.length * msgCount / expectedDuration
 
     Using(createAdminClient(brokers, listenerName)) { admin =>
-      if (isKRaftTest()) {
-        registerBroker(101)
-      }
+      registerBroker(101)
       admin.createTopics(
         List(new NewTopic(topic, Collections.singletonMap(0, List(100, 101).map(_.asInstanceOf[Integer]).asJava))).asJava
       ).all().get()

@@ -70,10 +70,6 @@ public interface ClusterInstance {
 
     Type type();
 
-    default boolean isKRaftTest() {
-        return type() == Type.KRAFT || type() == Type.CO_KRAFT;
-    }
-
     Map<Integer, KafkaBroker> brokers();
 
     default Map<Integer, KafkaBroker> aliveBrokers() {
@@ -158,15 +154,6 @@ public interface ClusterInstance {
 
     String clusterId();
 
-    /**
-     * The underlying object which is responsible for setting up and tearing down the cluster.
-     */
-    Object getUnderlying();
-
-    default <T> T getUnderlying(Class<T> asClass) {
-        return asClass.cast(getUnderlying());
-    }
-
     //---------------------------[producer/consumer/admin]---------------------------//
 
     default <K, V> Producer<K, V> producer(Map<String, Object> configs) {
@@ -216,7 +203,7 @@ public interface ClusterInstance {
     }
 
     default Set<GroupProtocol> supportedGroupProtocols() {
-        if (isKRaftTest() && brokers().values().stream().allMatch(b -> b.dataPlaneRequestProcessor().isConsumerGroupProtocolEnabled())) {
+        if (brokers().values().stream().allMatch(b -> b.dataPlaneRequestProcessor().isConsumerGroupProtocolEnabled())) {
             return Set.of(CLASSIC, CONSUMER);
         } else {
             return Collections.singleton(CLASSIC);

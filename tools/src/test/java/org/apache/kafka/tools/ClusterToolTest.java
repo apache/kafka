@@ -51,22 +51,14 @@ public class ClusterToolTest {
     @ClusterTest(brokers = 3)
     public void testUnregister(ClusterInstance clusterInstance) {
         int brokerId;
-        if (!clusterInstance.isKRaftTest()) {
-            brokerId = assertDoesNotThrow(() -> clusterInstance.brokerIds().stream().findFirst().get());
-        } else {
-            Set<Integer> brokerIds = clusterInstance.brokerIds();
-            brokerIds.removeAll(clusterInstance.controllerIds());
-            brokerId = assertDoesNotThrow(() -> brokerIds.stream().findFirst().get());
-        }
+        Set<Integer> brokerIds = clusterInstance.brokerIds();
+        brokerIds.removeAll(clusterInstance.controllerIds());
+        brokerId = assertDoesNotThrow(() -> brokerIds.stream().findFirst().get());
         clusterInstance.shutdownBroker(brokerId);
         String output = ToolsTestUtils.captureStandardOut(() ->
                 assertDoesNotThrow(() -> ClusterTool.execute("unregister", "--bootstrap-server", clusterInstance.bootstrapServers(), "--id", String.valueOf(brokerId))));
 
-        if (clusterInstance.isKRaftTest()) {
-            assertTrue(output.contains("Broker " + brokerId + " is no longer registered."));
-        } else {
-            assertTrue(output.contains("The target cluster does not support the broker unregistration API."));
-        }
+        assertTrue(output.contains("Broker " + brokerId + " is no longer registered."));
     }
 
     @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT})

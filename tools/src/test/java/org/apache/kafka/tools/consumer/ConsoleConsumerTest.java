@@ -396,42 +396,22 @@ public class ConsoleConsumerTest {
 
                 JsonNode jsonNode = objectMapper.reader().readTree(out.toByteArray());
 
-                // The new group coordinator writes an empty group metadata record when the group is created for
-                // the first time whereas the old group coordinator only writes a group metadata record when
-                // the first rebalance completes.
-                if (cluster.isKRaftTest()) {
-                    JsonNode keyNode = jsonNode.get("key");
-                    GroupMetadataKey groupMetadataKey =
-                        GroupMetadataKeyJsonConverter.read(keyNode.get("data"), GroupMetadataKey.HIGHEST_SUPPORTED_VERSION);
-                    assertNotNull(groupMetadataKey);
-                    assertEquals(groupId, groupMetadataKey.group());
+                // The group coordinator writes an empty group metadata record when the group is created for the first time
+                JsonNode keyNode = jsonNode.get("key");
+                GroupMetadataKey groupMetadataKey =
+                    GroupMetadataKeyJsonConverter.read(keyNode.get("data"), GroupMetadataKey.HIGHEST_SUPPORTED_VERSION);
+                assertNotNull(groupMetadataKey);
+                assertEquals(groupId, groupMetadataKey.group());
 
-                    JsonNode valueNode = jsonNode.get("value");
-                    GroupMetadataValue groupMetadataValue =
-                        GroupMetadataValueJsonConverter.read(valueNode.get("data"), GroupMetadataValue.HIGHEST_SUPPORTED_VERSION);
-                    assertNotNull(groupMetadataValue);
-                    assertEquals("", groupMetadataValue.protocolType());
-                    assertEquals(0, groupMetadataValue.generation());
-                    assertNull(groupMetadataValue.protocol());
-                    assertNull(groupMetadataValue.leader());
-                    assertEquals(0, groupMetadataValue.members().size());
-                } else {
-                    JsonNode keyNode = jsonNode.get("key");
-                    GroupMetadataKey groupMetadataKey =
-                        GroupMetadataKeyJsonConverter.read(keyNode.get("data"), GroupMetadataKey.HIGHEST_SUPPORTED_VERSION);
-                    assertNotNull(groupMetadataKey);
-                    assertEquals(groupId, groupMetadataKey.group());
-
-                    JsonNode valueNode = jsonNode.get("value");
-                    GroupMetadataValue groupMetadataValue =
-                        GroupMetadataValueJsonConverter.read(valueNode.get("data"), GroupMetadataValue.HIGHEST_SUPPORTED_VERSION);
-                    assertNotNull(groupMetadataValue);
-                    assertEquals("consumer", groupMetadataValue.protocolType());
-                    assertEquals(1, groupMetadataValue.generation());
-                    assertEquals("range", groupMetadataValue.protocol());
-                    assertNotNull(groupMetadataValue.leader());
-                    assertEquals(1, groupMetadataValue.members().size());
-                }
+                JsonNode valueNode = jsonNode.get("value");
+                GroupMetadataValue groupMetadataValue =
+                    GroupMetadataValueJsonConverter.read(valueNode.get("data"), GroupMetadataValue.HIGHEST_SUPPORTED_VERSION);
+                assertNotNull(groupMetadataValue);
+                assertEquals("", groupMetadataValue.protocolType());
+                assertEquals(0, groupMetadataValue.generation());
+                assertNull(groupMetadataValue.protocol());
+                assertNull(groupMetadataValue.leader());
+                assertEquals(0, groupMetadataValue.members().size());
             } finally {
                 consumerWrapper.cleanup();
             }

@@ -205,11 +205,7 @@ public class GetOffsetShellTest {
         setUp();
 
         List<Row> output = executeAndParse();
-        if (!cluster.isKRaftTest()) {
-            assertEquals(expectedOffsetsWithInternal(), output);
-        } else {
-            assertEquals(expectedTestTopicOffsets(), output);
-        }
+        assertEquals(expectedTestTopicOffsets(), output);
     }
 
     @ClusterTest
@@ -247,11 +243,7 @@ public class GetOffsetShellTest {
         setUp();
 
         List<Row> offsets = executeAndParse("--partitions", "0,1");
-        if (!cluster.isKRaftTest()) {
-            assertEquals(expectedOffsetsWithInternal().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()), offsets);
-        } else {
-            assertEquals(expectedTestTopicOffsets().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()), offsets);
-        }
+        assertEquals(expectedTestTopicOffsets().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()), offsets);
     }
 
     @ClusterTest

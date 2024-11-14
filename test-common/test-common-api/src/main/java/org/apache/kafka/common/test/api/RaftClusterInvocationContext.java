@@ -165,7 +165,6 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
             return controllers().keySet();
         }
 
-        @Override
         public KafkaClusterTestKit getUnderlying() {
             return clusterTestKit;
         }

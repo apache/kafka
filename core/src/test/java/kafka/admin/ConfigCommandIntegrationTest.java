@@ -87,7 +87,7 @@ public class ConfigCommandIntegrationTest {
     @ClusterTest
     public void testExitWithNonZeroStatusOnUpdatingUnallowedConfig() {
         assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
-            "--entity-name", cluster.isKRaftTest() ? "0" : "1",
+            "--entity-name", "0",
             "--entity-type", "brokers",
             "--alter",
             "--add-config", "security.inter.broker.protocol=PLAINTEXT")),

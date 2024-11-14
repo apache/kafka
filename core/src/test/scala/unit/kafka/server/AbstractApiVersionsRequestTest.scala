@@ -64,7 +64,7 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
     clientTelemetryEnabled: Boolean = false,
     apiVersion: Short = ApiKeys.API_VERSIONS.latestVersion
   ): Unit = {
-    if (cluster.isKRaftTest && apiVersion >= 3) {
+    if (apiVersion >= 3) {
       assertEquals(3, apiVersionsResponse.data().finalizedFeatures().size())
       assertEquals(MetadataVersion.latestTesting().featureLevel(), apiVersionsResponse.data().finalizedFeatures().find(MetadataVersion.FEATURE_NAME).minVersionLevel())
       assertEquals(MetadataVersion.latestTesting().featureLevel(), apiVersionsResponse.data().finalizedFeatures().find(MetadataVersion.FEATURE_NAME).maxVersionLevel())
@@ -84,12 +84,7 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
       assertEquals(0, apiVersionsResponse.data().supportedFeatures().find(GroupVersion.FEATURE_NAME).minVersion())
       assertEquals(GroupVersion.GV_1.featureLevel(), apiVersionsResponse.data().supportedFeatures().find(GroupVersion.FEATURE_NAME).maxVersion())
     }
-    val expectedApis = if (!cluster.isKRaftTest) {
-      ApiVersionsResponse.collectApis(
-        ApiKeys.apisForListener(ApiMessageType.ListenerType.ZK_BROKER),
-        enableUnstableLastVersion
-      )
-    } else if (cluster.controllerListenerName().toScala.contains(listenerName)) {
+    val expectedApis = if (cluster.controllerListenerName().toScala.contains(listenerName)) {
       ApiVersionsResponse.collectApis(
         ApiKeys.apisForListener(ApiMessageType.ListenerType.CONTROLLER),
         enableUnstableLastVersion
@@ -107,9 +102,7 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
     assertEquals(expectedApis.size, apiVersionsResponse.data.apiKeys.size,
       "API keys in ApiVersionsResponse must match API keys supported by broker.")
 
-    val defaultApiVersionsResponse = if (!cluster.isKRaftTest) {
-      TestUtils.defaultApiVersionsResponse(0, ListenerType.ZK_BROKER, enableUnstableLastVersion)
-    } else if (cluster.controllerListenerName().toScala.contains(listenerName)) {
+    val defaultApiVersionsResponse = if (cluster.controllerListenerName().toScala.contains(listenerName)) {
       TestUtils.defaultApiVersionsResponse(0, ListenerType.CONTROLLER, enableUnstableLastVersion)
     } else {
       TestUtils.createApiVersionsResponse(0, expectedApis)

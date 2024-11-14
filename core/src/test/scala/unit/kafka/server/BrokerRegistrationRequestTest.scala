@@ -57,7 +57,7 @@ class BrokerRegistrationRequestTest {
 
         val saslMechanism: String = ""
 
-        def isZkController: Boolean = !clusterInstance.isKRaftTest
+        def isZkController: Boolean = false
 
         override def getControllerInfo(): ControllerInformation =
           ControllerInformation(node, listenerName, securityProtocol, saslMechanism, isZkController)
