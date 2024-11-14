@@ -1399,8 +1399,9 @@ public class RemoteLogManager implements Closeable {
         }
 
         private Optional<RetentionTimeData> buildRetentionTimeData(long retentionMs) {
-            return retentionMs > -1
-                    ? Optional.of(new RetentionTimeData(retentionMs, time.milliseconds() - retentionMs))
+            long cleanupUntilMs = time.milliseconds() - retentionMs;
+            return retentionMs > -1 && cleanupUntilMs >= 0
+                    ? Optional.of(new RetentionTimeData(retentionMs, cleanupUntilMs))
                     : Optional.empty();
         }
 
