@@ -1100,6 +1100,7 @@ public class ShareMembershipManagerTest {
 
         verifyReconciliationNotTriggered(membershipManager);
         membershipManager.poll(time.milliseconds());
+        verify(subscriptionState).markPendingRevocation(Set.of());
 
         // Member should complete reconciliation
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
@@ -1123,6 +1124,7 @@ public class ShareMembershipManagerTest {
         receiveAssignment(topicId, Collections.singletonList(1), membershipManager);
 
         membershipManager.poll(time.milliseconds());
+        verify(subscriptionState, times(2)).markPendingRevocation(Set.of(new TopicPartition(topicName, 0)));
 
         // Revocation should complete without requesting any metadata update given that the topic
         // received in target assignment should exist in local topic name cache.
@@ -1423,7 +1425,6 @@ public class ShareMembershipManagerTest {
         assertEquals(assignmentByTopicId, membershipManager.currentAssignment().partitions);
         assertFalse(membershipManager.reconciliationInProgress());
 
-        verify(subscriptionState).markPendingRevocation(anySet());
         List<TopicPartition> expectedTopicPartitionAssignment =
                 buildTopicPartitions(expectedCurrentAssignment);
         HashSet<TopicPartition> expectedSet = new HashSet<>(expectedTopicPartitionAssignment);

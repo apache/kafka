@@ -851,6 +851,10 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
                 revokedPartitions
         );
 
+        // Mark partitions as pending revocation to stop fetching from the partitions (no new
+        // fetches sent out, and no in-flight fetches responses processed).
+        markPendingRevocationToPauseFetching(revokedPartitions);
+
         // Commit offsets if auto-commit enabled before reconciling a new assignment. Request will
         // be retried until it succeeds, fails with non-retriable error, or timer expires.
         CompletableFuture<Void> commitResult;

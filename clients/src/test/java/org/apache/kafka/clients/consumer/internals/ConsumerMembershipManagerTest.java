@@ -45,6 +45,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.InOrder;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -86,6 +87,7 @@ import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -1433,6 +1435,7 @@ public class ConsumerMembershipManagerTest {
         membershipManager.poll(time.milliseconds());
 
         testRevocationOfAllPartitionsCompleted(membershipManager);
+        verify(subscriptionState, times(2)).markPendingRevocation(Set.of(new TopicPartition("topic1", 0)));
     }
 
     @Test
@@ -1456,6 +1459,10 @@ public class ConsumerMembershipManagerTest {
 
         // Complete commit request
         commitResult.complete(null);
+        InOrder inOrder = inOrder(subscriptionState, commitRequestManager);
+        inOrder.verify(subscriptionState).markPendingRevocation(Set.of(new TopicPartition("topic1", 0)));
+        inOrder.verify(commitRequestManager).maybeAutoCommitSyncBeforeRevocation(anyLong());
+        inOrder.verify(subscriptionState).markPendingRevocation(Set.of(new TopicPartition("topic1", 0)));
 
         testRevocationOfAllPartitionsCompleted(membershipManager);
     }
@@ -1480,6 +1487,7 @@ public class ConsumerMembershipManagerTest {
         // Complete commit request
         commitResult.completeExceptionally(new KafkaException("Commit request failed with " +
                 "non-retriable error"));
+        verify(subscriptionState, times(2)).markPendingRevocation(Set.of(new TopicPartition("topic1", 0)));
 
         testRevocationOfAllPartitionsCompleted(membershipManager);
     }
@@ -1579,11 +1587,11 @@ public class ConsumerMembershipManagerTest {
         mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId, topicName, Collections.emptyList());
 
         // Member received assignment to reconcile;
-
         receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
 
         verifyReconciliationNotTriggered(membershipManager);
         membershipManager.poll(time.milliseconds());
+        verify(subscriptionState).markPendingRevocation(Set.of());
 
         // Member should complete reconciliation
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
@@ -1607,6 +1615,7 @@ public class ConsumerMembershipManagerTest {
         receiveAssignment(topicId, Collections.singletonList(1), membershipManager);
 
         membershipManager.poll(time.milliseconds());
+        verify(subscriptionState, times(2)).markPendingRevocation(Set.of(new TopicPartition(topicName, 0)));
 
         // Revocation should complete without requesting any metadata update given that the topic
         // received in target assignment should exist in local topic name cache.
@@ -2551,7 +2560,6 @@ public class ConsumerMembershipManagerTest {
         assertEquals(assignmentByTopicId, membershipManager.currentAssignment().partitions);
         assertFalse(membershipManager.reconciliationInProgress());
 
-        verify(subscriptionState).markPendingRevocation(anySet());
         List<TopicPartition> expectedTopicPartitionAssignment =
                 buildTopicPartitions(expectedCurrentAssignment);
         HashSet<TopicPartition> expectedSet = new HashSet<>(expectedTopicPartitionAssignment);
