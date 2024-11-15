@@ -76,10 +76,12 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
@@ -1571,10 +1573,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     subscriptions.assignedPartitions());
 
             try {
-                // If users subscribe to an invalid topic name, they will get InvalidTopicException in error events,
-                // because network thread keeps trying to send MetadataRequest in the background.
-                // Ignore it to avoid unsubscribe failed.
-                processBackgroundEvents(unsubscribeEvent.future(), timer, e -> e instanceof InvalidTopicException);
+                // If users subscribe to a topic with invalid name or without permission, they will get some exceptions.
+                // Because network thread keeps trying to send MetadataRequest or ConsumerGroupHeartbeatRequest in the background,
+                // there will be some error events in the background queue.
+                // When running unsubscribe, these exceptions should be ignored, or users can't unsubscribe successfully.
+                processBackgroundEvents(unsubscribeEvent.future(), timer,
+                    e -> e instanceof InvalidTopicException || e instanceof TopicAuthorizationException || e instanceof GroupAuthorizationException);
                 log.info("Unsubscribed all topics or patterns and assigned partitions");
             } catch (TimeoutException e) {
                 log.error("Failed while waiting for the unsubscribe event to complete");

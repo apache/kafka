@@ -63,6 +63,7 @@ import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
@@ -278,6 +279,23 @@ public class AsyncKafkaConsumerTest {
     public void testCloseWithInvalidTopicException() {
         consumer = newConsumer();
         backgroundEventQueue.add(new ErrorEvent(new InvalidTopicException("Invalid topic name")));
+        completeUnsubscribeApplicationEventSuccessfully();
+        assertDoesNotThrow(() -> consumer.close());
+    }
+
+    @Test
+    public void testUnsubscribeWithTopicAuthorizationException() {
+        consumer = newConsumer();
+        backgroundEventQueue.add(new ErrorEvent(new TopicAuthorizationException(Set.of("test-topic"))));
+        completeUnsubscribeApplicationEventSuccessfully();
+        assertDoesNotThrow(() -> consumer.unsubscribe());
+        assertDoesNotThrow(() -> consumer.close());
+    }
+
+    @Test
+    public void testCloseWithTopicAuthorizationException() {
+        consumer = newConsumer();
+        backgroundEventQueue.add(new ErrorEvent(new TopicAuthorizationException(Set.of("test-topic"))));
         completeUnsubscribeApplicationEventSuccessfully();
         assertDoesNotThrow(() -> consumer.close());
     }

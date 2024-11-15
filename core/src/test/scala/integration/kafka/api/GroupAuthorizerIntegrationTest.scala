@@ -33,6 +33,7 @@ import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.security.authorizer.AclEntry.WILDCARD_HOST
 import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
@@ -130,6 +131,84 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
     val consumeException = assertThrows(classOf[TopicAuthorizationException],
       () => TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords = 1))
     assertEquals(Set(topic), consumeException.unauthorizedTopics.asScala)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testConsumeUnsubscribeWithoutGroupPermission(quorum: String, groupProtocol: String): Unit = {
+    val topic = "topic"
+
+    createTopic(topic, listenerName = interBrokerListenerName)
+
+    // allow topic read/write permission to poll/send record
+    addAndVerifyAcls(
+      Set(createAcl(AclOperation.WRITE, AclPermissionType.ALLOW), createAcl(AclOperation.READ, AclPermissionType.ALLOW)),
+      new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL)
+    )
+    val producer = createProducer()
+    producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "message".getBytes)).get()
+    producer.close()
+
+    // allow group read permission to join group
+    val group = "group"
+    addAndVerifyAcls(
+      Set(createAcl(AclOperation.READ, AclPermissionType.ALLOW)),
+      new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL)
+    )
+
+    val props = new Properties()
+    props.put(ConsumerConfig.GROUP_ID_CONFIG, group)
+    props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+    val consumer = createConsumer(configOverrides = props)
+    consumer.subscribe(List(topic).asJava)
+    TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords = 1)
+
+    removeAndVerifyAcls(
+      Set(createAcl(AclOperation.READ, AclPermissionType.ALLOW)),
+      new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL)
+    )
+
+    assertDoesNotThrow(new Executable {
+      override def execute(): Unit = consumer.unsubscribe()
+    })
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testConsumeCloseWithoutGroupPermission(quorum: String, groupProtocol: String): Unit = {
+    val topic = "topic"
+    createTopic(topic, listenerName = interBrokerListenerName)
+
+    // allow topic read/write permission to poll/send record
+    addAndVerifyAcls(
+      Set(createAcl(AclOperation.WRITE, AclPermissionType.ALLOW), createAcl(AclOperation.READ, AclPermissionType.ALLOW)),
+      new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL)
+    )
+    val producer = createProducer()
+    producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "message".getBytes)).get()
+
+    // allow group read permission to join group
+    val group = "group"
+    addAndVerifyAcls(
+      Set(createAcl(AclOperation.READ, AclPermissionType.ALLOW)),
+      new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL)
+    )
+
+    val props = new Properties()
+    props.put(ConsumerConfig.GROUP_ID_CONFIG, group)
+    props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+    val consumer = createConsumer(configOverrides = props)
+    consumer.subscribe(List(topic).asJava)
+    TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords = 1)
+
+    removeAndVerifyAcls(
+      Set(createAcl(AclOperation.READ, AclPermissionType.ALLOW)),
+      new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL)
+    )
+
+    assertDoesNotThrow(new Executable {
+      override def execute(): Unit = consumer.close()
+    })
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
