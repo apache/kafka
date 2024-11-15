@@ -28,7 +28,7 @@ import java.util.Map;
  * Deserialization handler that logs a deserialization exception and then
  * signals the processing pipeline to continue processing more records.
  */
-public class LogAndContinueExceptionHandler implements DeserializationExceptionHandler {
+public class LogAndContinueExceptionHandler extends CommonExceptionHandler  implements DeserializationExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(LogAndContinueExceptionHandler.class);
 
     /**
@@ -67,11 +67,11 @@ public class LogAndContinueExceptionHandler implements DeserializationExceptionH
             exception
         );
 
-        return DeserializationHandlerResponse.CONTINUE;
+        return DeserializationHandlerResponse.CONTINUE.andAddToDeadLetterQueue(maybeBuildDeadLetterQueueRecords(null, null, context, exception));
     }
 
     @Override
     public void configure(final Map<String, ?> configs) {
-        // ignore
+        super.configure(configs);
     }
 }

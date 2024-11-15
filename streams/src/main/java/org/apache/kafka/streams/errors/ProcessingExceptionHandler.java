@@ -16,8 +16,12 @@
  */
 package org.apache.kafka.streams.errors;
 
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.streams.processor.api.Record;
+
+import java.util.LinkedList;
+import java.util.List;
 
 /**
  * An interface that allows user code to inspect a record that has failed processing
@@ -53,9 +57,23 @@ public interface ProcessingExceptionHandler extends Configurable {
          */
         public final int id;
 
+        public final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords;
+
         ProcessingHandlerResponse(final int id, final String name) {
             this.id = id;
             this.name = name;
+            deadLetterQueueRecords = new LinkedList<>();
+        }
+
+
+        public ProcessingExceptionHandler.ProcessingHandlerResponse andAddToDeadLetterQueue(final Iterable<org.apache.kafka.clients.producer.ProducerRecord<byte[], byte[]>> deadLetterQueueRecords) {
+            if (deadLetterQueueRecords == null) {
+                return this;
+            }
+            for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : deadLetterQueueRecords) {
+                this.deadLetterQueueRecords.add(deadLetterQueueRecord);
+            }
+            return this;
         }
     }
 }

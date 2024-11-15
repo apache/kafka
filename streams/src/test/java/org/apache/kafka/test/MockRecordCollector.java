@@ -49,7 +49,7 @@ public class MockRecordCollector implements RecordCollector {
                             final Serializer<K> keySerializer,
                             final Serializer<V> valueSerializer,
                             final String processorNodeId,
-                            final InternalProcessorContext<Void, Void> context) {
+                            final InternalProcessorContext<?, ?> context) {
         collected.add(new ProducerRecord<>(
             topic,
             partition,
@@ -69,7 +69,7 @@ public class MockRecordCollector implements RecordCollector {
                             final Serializer<K> keySerializer,
                             final Serializer<V> valueSerializer,
                             final String processorNodeId,
-                            final InternalProcessorContext<Void, Void> context,
+                            final InternalProcessorContext<?, ?> context,
                             final StreamPartitioner<? super K, ? super V> partitioner) {
         collected.add(new ProducerRecord<>(
             topic,

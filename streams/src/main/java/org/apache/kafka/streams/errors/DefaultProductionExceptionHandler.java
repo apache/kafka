@@ -44,12 +44,12 @@ public class DefaultProductionExceptionHandler implements ProductionExceptionHan
                                                      final ProducerRecord<byte[], byte[]> record,
                                                      final Exception exception) {
         return exception instanceof RetriableException ?
-            ProductionExceptionHandlerResponse.RETRY :
-            ProductionExceptionHandlerResponse.FAIL;
+                ProductionExceptionHandlerResponse.RETRY :
+                ProductionExceptionHandlerResponse.FAIL.andAddToDeadLetterQueue(maybeBuildDeadLetterQueueRecords(null, null, context, exception));
     }
 
     @Override
     public void configure(final Map<String, ?> configs) {
-        // ignore
+        super.configure(configs);
     }
 }

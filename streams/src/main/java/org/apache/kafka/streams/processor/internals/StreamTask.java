@@ -20,11 +20,13 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.TopologyConfig.TaskConfig;
@@ -961,6 +963,23 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     processingException
                 );
                 throw new FailedProcessingException("Fatal user code error in processing error callback", node.name(), fatalUserException);
+            }
+
+            if (!response.deadLetterQueueRecords.isEmpty()) {
+                final RecordCollector collector = ((RecordCollector.Supplier) processorContext).recordCollector();
+                for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : response.deadLetterQueueRecords) {
+                    collector.send(
+                            deadLetterQueueRecord.topic(),
+                            deadLetterQueueRecord.key(),
+                            deadLetterQueueRecord.value(),
+                            deadLetterQueueRecord.headers(),
+                            null,
+                            deadLetterQueueRecord.timestamp(),
+                            new ByteArraySerializer(),
+                            new ByteArraySerializer(),
+                            node.name(),
+                            processorContext);
+                }
             }
 
             if (response == ProcessingExceptionHandler.ProcessingHandlerResponse.FAIL) {

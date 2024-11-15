@@ -35,7 +35,7 @@ public interface RecordCollector {
                      final Serializer<K> keySerializer,
                      final Serializer<V> valueSerializer,
                      final String processorNodeId,
-                     final InternalProcessorContext<Void, Void> context);
+                     final InternalProcessorContext<?, ?> context);
 
     <K, V> void send(final String topic,
                      final K key,
@@ -45,7 +45,7 @@ public interface RecordCollector {
                      final Serializer<K> keySerializer,
                      final Serializer<V> valueSerializer,
                      final String processorNodeId,
-                     final InternalProcessorContext<Void, Void> context,
+                     final InternalProcessorContext<?, ?> context,
                      final StreamPartitioner<? super K, ? super V> partitioner);
 
     /**

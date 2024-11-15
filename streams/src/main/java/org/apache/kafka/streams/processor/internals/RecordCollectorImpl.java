@@ -139,7 +139,7 @@ public class RecordCollectorImpl implements RecordCollector {
                             final Serializer<K> keySerializer,
                             final Serializer<V> valueSerializer,
                             final String processorNodeId,
-                            final InternalProcessorContext<Void, Void> context,
+                            final InternalProcessorContext<?, ?> context,
                             final StreamPartitioner<? super K, ? super V> partitioner) {
 
         if (partitioner != null) {
@@ -197,7 +197,7 @@ public class RecordCollectorImpl implements RecordCollector {
                             final Serializer<K> keySerializer,
                             final Serializer<V> valueSerializer,
                             final String processorNodeId,
-                            final InternalProcessorContext<Void, Void> context) {
+                            final InternalProcessorContext<?, ?> context) {
         checkForException();
 
         final byte[] keyBytes;
@@ -329,7 +329,7 @@ public class RecordCollectorImpl implements RecordCollector {
                                         final Integer partition,
                                         final Long timestamp,
                                         final String processorNodeId,
-                                        final InternalProcessorContext<Void, Void> context,
+                                        final InternalProcessorContext<?, ?> context,
                                         final Exception serializationException) {
         log.debug(String.format("Error serializing record for topic %s", topic), serializationException);
 
@@ -385,7 +385,7 @@ public class RecordCollectorImpl implements RecordCollector {
         droppedRecordsSensor.record();
     }
 
-    private DefaultErrorHandlerContext errorHandlerContext(final InternalProcessorContext<Void, Void> context,
+    private DefaultErrorHandlerContext errorHandlerContext(final InternalProcessorContext<?, ?> context,
                                                            final String processorNodeId) {
         final RecordContext recordContext = context != null ? context.recordContext() : null;
 
@@ -442,7 +442,7 @@ public class RecordCollectorImpl implements RecordCollector {
     private void recordSendError(final String topic,
                                  final Exception productionException,
                                  final ProducerRecord<byte[], byte[]> serializedRecord,
-                                 final InternalProcessorContext<Void, Void> context,
+                                 final InternalProcessorContext<?, ?> context,
                                  final String processorNodeId) {
         String errorMessage = String.format(SEND_EXCEPTION_MESSAGE, topic, taskId, productionException.toString());
 

@@ -27,7 +27,7 @@ import java.util.Map;
  * Processing exception handler that logs a processing exception and then
  * signals the processing pipeline to continue processing more records.
  */
-public class LogAndContinueProcessingExceptionHandler implements ProcessingExceptionHandler {
+public class LogAndContinueProcessingExceptionHandler extends CommonExceptionHandler implements ProcessingExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(LogAndContinueProcessingExceptionHandler.class);
 
     @Override
@@ -42,11 +42,11 @@ public class LogAndContinueProcessingExceptionHandler implements ProcessingExcep
             exception
         );
 
-        return ProcessingHandlerResponse.CONTINUE;
+        return ProcessingHandlerResponse.CONTINUE.andAddToDeadLetterQueue(maybeBuildDeadLetterQueueRecords(null, null, context, exception));
     }
 
     @Override
     public void configure(final Map<String, ?> configs) {
-        // ignore
+        super.configure(configs);
     }
 }

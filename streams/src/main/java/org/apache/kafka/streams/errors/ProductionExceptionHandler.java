@@ -19,6 +19,9 @@ package org.apache.kafka.streams.errors;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Configurable;
 
+import java.util.LinkedList;
+import java.util.List;
+
 /**
  * Interface that specifies how an exception when attempting to produce a result to
  * Kafka should be handled.
@@ -140,11 +143,25 @@ public interface ProductionExceptionHandler extends Configurable {
          */
         public final int id;
 
+        public final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords;
+
         ProductionExceptionHandlerResponse(final int id,
                                            final String name) {
             this.id = id;
             this.name = name;
+            deadLetterQueueRecords = new LinkedList<>();
         }
+
+        public ProductionExceptionHandler.ProductionExceptionHandlerResponse andAddToDeadLetterQueue(final Iterable<org.apache.kafka.clients.producer.ProducerRecord<byte[], byte[]>> deadLetterQueueRecords) {
+            if (deadLetterQueueRecords == null) {
+                return this;
+            }
+            for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : deadLetterQueueRecords) {
+                this.deadLetterQueueRecords.add(deadLetterQueueRecord);
+            }
+            return this;
+        }
+
     }
 
     enum SerializationExceptionOrigin {

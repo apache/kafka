@@ -234,7 +234,7 @@ public class KeyValueStoreTestDriver<K, V> {
                                       final Serializer<K1> keySerializer,
                                       final Serializer<V1> valueSerializer,
                                       final String processorNodeId,
-                                      final InternalProcessorContext<Void, Void> context) {
+                                      final InternalProcessorContext<?, ?> context) {
                 // for byte arrays we need to wrap it for comparison
 
                 final byte[] keyBytes = keySerializer.serialize(topic, headers, key);
@@ -255,7 +255,7 @@ public class KeyValueStoreTestDriver<K, V> {
                                       final Serializer<K1> keySerializer,
                                       final Serializer<V1> valueSerializer,
                                       final String processorNodeId,
-                                      final InternalProcessorContext<Void, Void> context,
+                                      final InternalProcessorContext<?, ?> context,
                                       final StreamPartitioner<? super K1, ? super V1> partitioner) {
                 throw new UnsupportedOperationException();
             }

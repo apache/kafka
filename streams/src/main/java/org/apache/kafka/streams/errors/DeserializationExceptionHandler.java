@@ -17,9 +17,13 @@
 package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.streams.errors.internals.DefaultErrorHandlerContext;
 import org.apache.kafka.streams.processor.ProcessorContext;
+
+import java.util.LinkedList;
+import java.util.List;
 
 /**
  * Interface that specifies how an exception from source node deserialization
@@ -88,11 +92,22 @@ public interface DeserializationExceptionHandler extends Configurable {
          * The permanent and immutable id for the used option. This can't change ever.
          */
         public final int id;
+        public final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords;
 
         DeserializationHandlerResponse(final int id, final String name) {
             this.id = id;
             this.name = name;
+            this.deadLetterQueueRecords = new LinkedList<>();
+        }
+
+        public DeserializationHandlerResponse andAddToDeadLetterQueue(final Iterable<org.apache.kafka.clients.producer.ProducerRecord<byte[], byte[]>> deadLetterQueueRecords) {
+            if (deadLetterQueueRecords == null) {
+                return this;
+            }
+            for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : deadLetterQueueRecords) {
+                this.deadLetterQueueRecords.add(deadLetterQueueRecord);
+            }
+            return this;
         }
     }
-
 }
