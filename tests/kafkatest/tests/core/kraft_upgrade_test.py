@@ -100,7 +100,7 @@ class TestKRaftUpgrade(ProduceConsumeValidateTest):
                                            compression_types=["none"],
                                            version=KafkaVersion(from_kafka_version))
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka,
-                                        self.topic, new_consumer=True, consumer_timeout_ms=30000,
+                                        self.topic, consumer_timeout_ms=30000,
                                         message_validator=is_int, version=KafkaVersion(from_kafka_version))
         self.run_produce_consume_validate(core_test_action=lambda: self.perform_version_change(from_kafka_version))
         cluster_id = self.kafka.cluster_id()

@@ -59,7 +59,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             "collect_default": False}
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, group_id="test-consumer-group", new_consumer=True,
+    def __init__(self, context, num_nodes, kafka, topic, group_id="test-consumer-group",
                  message_validator=None, from_beginning=True, consumer_timeout_ms=None, version=DEV_BRANCH,
                  client_id="console-consumer", print_key=False, jmx_object_names=None, jmx_attributes=None,
                  enable_systest_events=False, stop_timeout_sec=35, print_timestamp=False, print_partition=False,
@@ -72,7 +72,6 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             num_nodes:                  number of nodes to use (this should be 1)
             kafka:                      kafka service
             topic:                      consume from this topic
-            new_consumer:               use new Kafka consumer if True
             message_validator:          function which returns message or None
             from_beginning:             consume from beginning if True, else from the end
             consumer_timeout_ms:        corresponds to consumer.timeout.ms. consumer process ends if time between
@@ -96,7 +95,6 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
                           root=ConsoleConsumer.PERSISTENT_ROOT)
         BackgroundThreadService.__init__(self, context, num_nodes)
         self.kafka = kafka
-        self.new_consumer = new_consumer
         self.group_id = group_id
         self.args = {
             'topic': topic,
@@ -145,8 +143,6 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         """Return the start command appropriate for the given node."""
         args = self.args.copy()
         args['broker_list'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
-        if not self.new_consumer:
-            args['zk_connect'] = self.kafka.zk_connect_setting()
         args['stdout'] = ConsoleConsumer.STDOUT_CAPTURE
         args['stderr'] = ConsoleConsumer.STDERR_CAPTURE
         args['log_dir'] = ConsoleConsumer.LOG_DIR

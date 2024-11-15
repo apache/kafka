@@ -881,11 +881,11 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             kafka_storage_script = self.path.script("kafka-storage.sh", node)
             cmd = "%s format --ignore-formatted --config %s --cluster-id %s" % (kafka_storage_script, KafkaService.CONFIG_FILE, config_property.CLUSTER_ID)
             if self.dynamicRaftQuorum:
-                cmd += " --feature kraft.version=1"
                 if self.node_quorum_info.has_controller_role:
                     if self.standalone_controller_bootstrapped:
                         cmd += " --no-initial-controllers"
                     else:
+                        cmd += " --feature kraft.version=1"
                         cmd += " --standalone"
                         self.standalone_controller_bootstrapped = True
             self.logger.info("Running log directory format command...\n%s" % cmd)
