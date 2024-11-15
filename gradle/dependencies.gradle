@@ -108,6 +108,7 @@ versions += [
   kafka_36: "3.6.2",
   kafka_37: "3.7.1",
   kafka_38: "3.8.1",
+  kafka_39: "3.9.0",
   // When updating lz4 make sure the compression levels in org.apache.kafka.common.record.CompressionType are still valid
   lz4: "1.8.0",
   mavenArtifact: "3.9.6",
@@ -208,6 +209,7 @@ libs += [
   kafkaStreams_36: "org.apache.kafka:kafka-streams:$versions.kafka_36",
   kafkaStreams_37: "org.apache.kafka:kafka-streams:$versions.kafka_37",
   kafkaStreams_38: "org.apache.kafka:kafka-streams:$versions.kafka_38",
+  kafkaStreams_39: "org.apache.kafka:kafka-streams:$versions.kafka_39",
   lz4: "org.lz4:lz4-java:$versions.lz4",
   metrics: "com.yammer.metrics:metrics-core:$versions.metrics",
   dropwizardMetrics: "io.dropwizard.metrics:metrics-core:$versions.dropwizardMetrics",
