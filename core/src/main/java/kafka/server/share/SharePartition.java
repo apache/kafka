@@ -280,9 +280,9 @@ public class SharePartition {
     private long endOffset;
 
     /**
-     * We maintain the latest fetch offset metadata to estimate the minBytes requirement more efficiently.
+     * We maintain the latest fetch offset and its metadata to estimate the minBytes requirement more efficiently.
      */
-    private Optional<LogOffsetMetadata> fetchOffsetMetadata;
+    private final OffsetMetadata fetchOffsetMetadata;
 
     /**
      * The state epoch is used to track the version of the state of the share partition.
@@ -347,6 +347,7 @@ public class SharePartition {
         this.partitionState = sharePartitionState;
         this.replicaManager = replicaManager;
         this.groupConfigManager = groupConfigManager;
+        this.fetchOffsetMetadata = new OffsetMetadata();
     }
 
     /**
@@ -451,12 +452,12 @@ public class SharePartition {
                     // If the cachedState is not empty, findNextFetchOffset flag is set to true so that any AVAILABLE records
                     // in the cached state are not missed
                     findNextFetchOffset.set(true);
-                    updateEndOffsetAndResetFetchOffsetMetadata(cachedState.lastEntry().getValue().lastOffset());
+                    endOffset = cachedState.lastEntry().getValue().lastOffset();
                     // In case the persister read state RPC result contains no AVAILABLE records, we can update cached state
                     // and start/end offsets.
                     maybeUpdateCachedStateAndOffsets();
                 } else {
-                    updateEndOffsetAndResetFetchOffsetMetadata(startOffset);
+                    endOffset = startOffset;
                 }
                 // Set the partition state to Active and complete the future.
                 partitionState = SharePartitionState.ACTIVE;
@@ -943,7 +944,7 @@ public class SharePartition {
                 // If the cached state is empty, then the start and end offset will be the new log start offset.
                 // This can occur during the initialization of share partition if LSO has moved.
                 startOffset = logStartOffset;
-                updateEndOffsetAndResetFetchOffsetMetadata(logStartOffset);
+                endOffset = logStartOffset;
                 return;
             }
 
@@ -961,7 +962,7 @@ public class SharePartition {
                 // This case means that the cached state is completely fresh now.
                 // Example scenario - batch of 0-10 in acquired state in cached state, then LSO moves to 15,
                 // then endOffset should be 15 as well.
-                updateEndOffsetAndResetFetchOffsetMetadata(startOffset);
+                endOffset = startOffset;
             }
 
             // Note -
@@ -1192,7 +1193,7 @@ public class SharePartition {
             if (cachedState.firstKey() == firstAcquiredOffset)  {
                 startOffset = firstAcquiredOffset;
             }
-            updateEndOffsetAndResetFetchOffsetMetadata(lastAcquiredOffset);
+            endOffset = lastAcquiredOffset;
             return new AcquiredRecords()
                 .setFirstOffset(firstAcquiredOffset)
                 .setLastOffset(lastAcquiredOffset)
@@ -1592,27 +1593,21 @@ public class SharePartition {
         return Optional.empty();
     }
 
-    // The caller of this function is expected to hold lock.writeLock() when calling this method.
-    protected void updateEndOffsetAndResetFetchOffsetMetadata(long updatedEndOffset) {
-        endOffset = updatedEndOffset;
-        fetchOffsetMetadata = Optional.empty();
-    }
-
-    protected void updateFetchOffsetMetadata(Optional<LogOffsetMetadata> fetchOffsetMetadata) {
+    protected void updateFetchOffsetMetadata(long nextFetchOffset, LogOffsetMetadata logOffsetMetadata) {
         lock.writeLock().lock();
         try {
-            this.fetchOffsetMetadata = fetchOffsetMetadata;
+            fetchOffsetMetadata.updateOffsetMetadata(nextFetchOffset, logOffsetMetadata);
         } finally {
             lock.writeLock().unlock();
         }
     }
 
-    protected Optional<LogOffsetMetadata> fetchOffsetMetadata() {
+    protected Optional<LogOffsetMetadata> fetchOffsetMetadata(long nextFetchOffset) {
         lock.readLock().lock();
         try {
-            if (findNextFetchOffset.get())
+            if (fetchOffsetMetadata.offsetMetadata() == null || fetchOffsetMetadata.offset() != nextFetchOffset)
                 return Optional.empty();
-            return fetchOffsetMetadata;
+            return Optional.of(fetchOffsetMetadata.offsetMetadata());
         } finally {
             lock.readLock().unlock();
         }
@@ -1696,7 +1691,7 @@ public class SharePartition {
             long lastCachedOffset = cachedState.lastEntry().getValue().lastOffset();
             if (lastOffsetAcknowledged == lastCachedOffset) {
                 startOffset = lastCachedOffset + 1; // The next offset that will be fetched and acquired in the share partition
-                updateEndOffsetAndResetFetchOffsetMetadata(lastCachedOffset + 1);
+                endOffset = lastCachedOffset + 1;
                 cachedState.clear();
                 // Nothing further to do.
                 return;
@@ -2422,6 +2417,32 @@ public class SharePartition {
                 ", deliveryCount=" + deliveryCount +
                 ", memberId=" + memberId +
                 ")";
+        }
+    }
+
+    /**
+     * FetchOffsetMetadata class is used to cache offset and its log metadata.
+     */
+    static final class OffsetMetadata {
+        // This offset could be different from offsetMetadata.messageOffset if it's in the middle of a batch.
+        private long offset;
+        private LogOffsetMetadata offsetMetadata;
+
+        OffsetMetadata() {
+            offset = -1;
+        }
+
+        long offset() {
+            return offset;
+        }
+
+        LogOffsetMetadata offsetMetadata() {
+            return offsetMetadata;
+        }
+
+        void updateOffsetMetadata(long offset, LogOffsetMetadata offsetMetadata) {
+            this.offset = offset;
+            this.offsetMetadata = offsetMetadata;
         }
     }
 }

@@ -90,7 +90,7 @@ public class DelayedShareFetch extends DelayedOperation {
      */
     @Override
     public void onComplete() {
-        // We are utilizing lock so that onComplete doesn't do a dirty read for global variables -
+        // We are utilizing lock so that onComplete doesn't do a dirty read for instance variables -
         // partitionsAcquired and partitionsAlreadyFetched, since these variables can get updated in a different tryComplete thread.
         lock.lock();
         log.trace("Completing the delayed share fetch request for group {}, member {}, "
@@ -165,7 +165,7 @@ public class DelayedShareFetch extends DelayedOperation {
                 // replicaManager.readFromLog to populate the offset metadata and update the fetch offset metadata for
                 // those topic partitions.
                 LinkedHashMap<TopicIdPartition, LogReadResult> replicaManagerReadResponse = maybeReadFromLog(topicPartitionData);
-                maybeUpdateFetchOffsetMetadata(replicaManagerReadResponse);
+                maybeUpdateFetchOffsetMetadata(topicPartitionData, replicaManagerReadResponse);
                 if (anyPartitionHasLogReadError(replicaManagerReadResponse) || isMinBytesSatisfied(topicPartitionData)) {
                     partitionsAcquired = topicPartitionData;
                     partitionsAlreadyFetched = replicaManagerReadResponse;
@@ -239,21 +239,22 @@ public class DelayedShareFetch extends DelayedOperation {
     }
 
     private LinkedHashMap<TopicIdPartition, LogReadResult> maybeReadFromLog(LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData) {
-        LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> partitionsMissingFetchOffsetMetadata = new LinkedHashMap<>();
+        LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> partitionsNotMatchingFetchOffsetMetadata = new LinkedHashMap<>();
         topicPartitionData.forEach((topicIdPartition, partitionData) -> {
             SharePartition sharePartition = sharePartitions.get(topicIdPartition);
-            if (sharePartition.fetchOffsetMetadata().isEmpty()) {
-                partitionsMissingFetchOffsetMetadata.put(topicIdPartition, partitionData);
+            if (sharePartition.fetchOffsetMetadata(partitionData.fetchOffset).isEmpty()) {
+                partitionsNotMatchingFetchOffsetMetadata.put(topicIdPartition, partitionData);
             }
         });
-        if (partitionsMissingFetchOffsetMetadata.isEmpty()) {
+        if (partitionsNotMatchingFetchOffsetMetadata.isEmpty()) {
             return new LinkedHashMap<>();
         }
         // We fetch data from replica manager corresponding to the topic partitions that have missing fetch offset metadata.
-        return readFromLog(partitionsMissingFetchOffsetMetadata);
+        return readFromLog(partitionsNotMatchingFetchOffsetMetadata);
     }
 
     private void maybeUpdateFetchOffsetMetadata(
+        LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData,
         LinkedHashMap<TopicIdPartition, LogReadResult> replicaManagerReadResponseData) {
         for (Map.Entry<TopicIdPartition, LogReadResult> entry : replicaManagerReadResponseData.entrySet()) {
             TopicIdPartition topicIdPartition = entry.getKey();
@@ -264,7 +265,9 @@ public class DelayedShareFetch extends DelayedOperation {
                     replicaManagerLogReadResult, topicIdPartition);
                 continue;
             }
-            sharePartition.updateFetchOffsetMetadata(Optional.of(replicaManagerLogReadResult.info().fetchOffsetMetadata));
+            sharePartition.updateFetchOffsetMetadata(
+                topicPartitionData.get(topicIdPartition).fetchOffset,
+                replicaManagerLogReadResult.info().fetchOffsetMetadata);
         }
     }
 
@@ -290,7 +293,7 @@ public class DelayedShareFetch extends DelayedOperation {
 
             SharePartition sharePartition = sharePartitions.get(topicIdPartition);
 
-            Optional<LogOffsetMetadata> optionalFetchOffsetMetadata = sharePartition.fetchOffsetMetadata();
+            Optional<LogOffsetMetadata> optionalFetchOffsetMetadata = sharePartition.fetchOffsetMetadata(partitionData.fetchOffset);
             if (optionalFetchOffsetMetadata.isEmpty() || optionalFetchOffsetMetadata.get() == LogOffsetMetadata.UNKNOWN_OFFSET_METADATA)
                 continue;
             LogOffsetMetadata fetchOffsetMetadata = optionalFetchOffsetMetadata.get();
