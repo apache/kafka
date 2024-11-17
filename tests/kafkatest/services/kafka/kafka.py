@@ -268,7 +268,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :param quorum_info_provider: A function that takes this KafkaService as an argument and returns a ServiceQuorumInfo. If this is None, then the ServiceQuorumInfo is generated from the test context
         :param use_new_coordinator: When true, use the new implementation of the group coordinator as per KIP-848. If this is None, the default existing group coordinator is used.
         :param consumer_group_migration_policy: The config that enables converting the non-empty classic group using the consumer embedded protocol to the non-empty consumer group using the consumer group protocol and vice versa.
-        :param dynamicRaftQuorum: When true, the quorum uses kraft.version=1, controller_quorum_bootstrap_servers, and bootstraps the first controller using the standalone flag
+        :param dynamicRaftQuorum: When true, controller_quorum_bootstrap_servers, and bootstraps the first controller using the standalone flag
         """
 
         self.zk = zk
@@ -885,7 +885,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                     if self.standalone_controller_bootstrapped:
                         cmd += " --no-initial-controllers"
                     else:
-                        cmd += " --feature kraft.version=1"
                         cmd += " --standalone"
                         self.standalone_controller_bootstrapped = True
             self.logger.info("Running log directory format command...\n%s" % cmd)
