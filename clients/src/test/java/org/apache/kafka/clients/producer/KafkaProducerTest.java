@@ -416,15 +416,10 @@ public class KafkaProducerTest {
                 putAll(baseProps);
                 setProperty(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "6");
             }};
-        config = new ProducerConfig(validProps2);
-        assertFalse(
-            config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG),
-            "idempotence should be disabled when `max.in.flight.requests.per.connection` is greater than 5 and " +
-                "`enable.idempotence` config is unset.");
-        assertEquals(
-            6,
-            config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION),
-            "`max.in.flight.requests.per.connection` should be set with overridden value");
+
+        ConfigException configException = assertThrows(ConfigException.class, () -> new ProducerConfig(validProps2));
+        assertEquals("To use the idempotent producer, " + ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION +
+                     " must be set to at most 5. Current value is 6.", configException.getMessage());
 
         Properties invalidProps = new Properties() {{
                 putAll(baseProps);
