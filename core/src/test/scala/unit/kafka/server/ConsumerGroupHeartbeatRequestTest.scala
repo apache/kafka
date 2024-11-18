@@ -17,7 +17,6 @@
 package kafka.server
 
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterFeature, ClusterInstance, ClusterTest, ClusterTestDefaults, ClusterTestExtensions, Type}
-import org.apache.kafka.common.test.api.RaftClusterInvocationContext.RaftClusterInstance
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
@@ -78,7 +77,6 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
   @ClusterTest
   def testConsumerGroupHeartbeatIsAccessibleWhenNewGroupCoordinatorIsEnabled(): Unit = {
-    val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
     val admin = cluster.admin()
     
     // Creates the __consumer_offsets topics because it won't be created automatically
@@ -86,8 +84,8 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     try {
       TestUtils.createOffsetsTopicWithAdmin(
         admin = admin,
-        brokers = raftCluster.brokers.values().asScala.toSeq,
-        controllers = raftCluster.controllers().values().asScala.toSeq
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
       )
 
       // Heartbeat request to join the group. Note that the member subscribes
@@ -170,7 +168,6 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
   @ClusterTest
   def testConsumerGroupHeartbeatWithRegularExpression(): Unit = {
-    val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
     val admin = cluster.admin()
 
     // Creates the __consumer_offsets topics because it won't be created automatically
@@ -178,8 +175,8 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     try {
       TestUtils.createOffsetsTopicWithAdmin(
         admin = admin,
-        brokers = raftCluster.brokers.values().asScala.toSeq,
-        controllers = raftCluster.controllers().values().asScala.toSeq
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
       )
 
       // Heartbeat request to join the group. Note that the member subscribes
@@ -214,7 +211,6 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
   @ClusterTest
   def testConsumerGroupHeartbeatWithInvalidRegularExpression(): Unit = {
-    val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
     val admin = cluster.admin()
 
     // Creates the __consumer_offsets topics because it won't be created automatically
@@ -222,8 +218,8 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     try {
       TestUtils.createOffsetsTopicWithAdmin(
         admin = admin,
-        brokers = raftCluster.brokers.values().asScala.toSeq,
-        controllers = raftCluster.controllers().values().asScala.toSeq
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
       )
 
       // Heartbeat request to join the group. Note that the member subscribes
@@ -256,7 +252,6 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
   @ClusterTest
   def testRejoiningStaticMemberGetsAssignmentsBackWhenNewGroupCoordinatorIsEnabled(): Unit = {
-    val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
     val admin = cluster.admin()
     try {
       val instanceId = "instanceId"
@@ -265,8 +260,8 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       // in this test because it does not use FindCoordinator API.
       TestUtils.createOffsetsTopicWithAdmin(
         admin = admin,
-        brokers = raftCluster.brokers.values().asScala.toSeq,
-        controllers = raftCluster.controllers().values().asScala.toSeq
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
       )
 
       // Heartbeat request so that a static member joins the group
@@ -381,7 +376,6 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     )
   )
   def testStaticMemberRemovedAfterSessionTimeoutExpiryWhenNewGroupCoordinatorIsEnabled(): Unit = {
-    val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
     val admin = cluster.admin()
     try {
       val instanceId = "instanceId"
@@ -390,8 +384,8 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       // in this test because it does not use FindCoordinator API.
       TestUtils.createOffsetsTopicWithAdmin(
         admin = admin,
-        brokers = raftCluster.brokers.values().asScala.toSeq,
-        controllers = raftCluster.controllers().values().asScala.toSeq
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
       )
 
       // Heartbeat request to join the group. Note that the member subscribes
@@ -496,7 +490,6 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     )
   )
   def testUpdateConsumerGroupHeartbeatConfigSuccessful(): Unit = {
-    val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
     val admin = cluster.admin()
     try {
       val newHeartbeatIntervalMs = 10000
@@ -507,8 +500,8 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       // in this test because it does not use FindCoordinator API.
       TestUtils.createOffsetsTopicWithAdmin(
         admin = admin,
-        brokers = raftCluster.brokers.values().asScala.toSeq,
-        controllers = raftCluster.controllers().values().asScala.toSeq
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
       )
 
       // Heartbeat request to join the group. Note that the member subscribes
@@ -569,7 +562,6 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
   @ClusterTest
   def testConsumerGroupHeartbeatFailureIfMemberIdMissingForVersionsAbove0(): Unit = {
-    val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
     val admin = cluster.admin()
 
     // Creates the __consumer_offsets topics because it won't be created automatically
@@ -577,8 +569,8 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     try {
       TestUtils.createOffsetsTopicWithAdmin(
         admin = admin,
-        brokers = raftCluster.brokers.values().asScala.toSeq,
-        controllers = raftCluster.controllers().values().asScala.toSeq
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
       )
 
       val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
@@ -603,15 +595,14 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
   @ClusterTest
   def testMemberIdGeneratedOnServerWhenApiVersionIs0(): Unit = {
-    val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
     val admin = cluster.admin()
 
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
     TestUtils.createOffsetsTopicWithAdmin(
       admin = admin,
-      brokers = raftCluster.brokers.values().asScala.toSeq,
-      controllers = raftCluster.controllers().values().asScala.toSeq
+      brokers = cluster.brokers.values().asScala.toSeq,
+      controllers = cluster.controllers().values().asScala.toSeq
     )
 
     val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(

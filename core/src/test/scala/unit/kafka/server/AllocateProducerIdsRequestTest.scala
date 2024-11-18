@@ -21,7 +21,6 @@ import kafka.server.{BrokerServer, ControllerServer, IntegrationTestUtils}
 import org.apache.kafka.common.test.api.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.common.test.api.ClusterTestExtensions
-import org.apache.kafka.common.test.api.RaftClusterInvocationContext.RaftClusterInstance
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
@@ -35,11 +34,10 @@ class AllocateProducerIdsRequestTest(cluster: ClusterInstance) {
 
   @ClusterTest
   def testAllocateProducersIdSentToController(): Unit = {
-    val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
-    val sourceBroker = raftCluster.brokers.values().stream().findFirst().get().asInstanceOf[BrokerServer]
+    val sourceBroker = cluster.brokers.values().stream().findFirst().get().asInstanceOf[BrokerServer]
 
     val controllerId = sourceBroker.raftManager.leaderAndEpoch.leaderId().getAsInt
-    val controllerServer = raftCluster.controllers.values().stream()
+    val controllerServer = cluster.controllers.values().stream()
       .filter(_.config.nodeId == controllerId)
       .findFirst()
       .get()
@@ -52,11 +50,10 @@ class AllocateProducerIdsRequestTest(cluster: ClusterInstance) {
 
   @ClusterTest(controllers = 3)
   def testAllocateProducersIdSentToNonController(): Unit = {
-    val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
-    val sourceBroker = raftCluster.brokers.values().stream().findFirst().get().asInstanceOf[BrokerServer]
+    val sourceBroker = cluster.brokers.values().stream().findFirst().get().asInstanceOf[BrokerServer]
 
     val controllerId = sourceBroker.raftManager.leaderAndEpoch.leaderId().getAsInt
-    val controllerServer = raftCluster.controllers().values().stream()
+    val controllerServer = cluster.controllers().values().stream()
       .filter(_.config.nodeId != controllerId)
       .findFirst()
       .get()

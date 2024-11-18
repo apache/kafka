@@ -17,7 +17,6 @@
 package kafka.server
 
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterInstance, ClusterTest, ClusterTestDefaults, ClusterTestExtensions, Type}
-import org.apache.kafka.common.test.api.RaftClusterInvocationContext.RaftClusterInstance
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.waitForAllPartitionsMetadata
 import org.apache.kafka.clients.admin.{Admin, NewPartitions}
@@ -61,7 +60,6 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
     ))
   def testShareGroupHeartbeatIsAccessibleWhenShareGroupIsEnabled(): Unit = {
-    val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
     val admin = cluster.admin()
 
     // Creates the __consumer_offsets topics because it won't be created automatically
@@ -69,8 +67,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     try {
       TestUtils.createOffsetsTopicWithAdmin(
         admin = admin,
-        brokers = raftCluster.brokers.values().asScala.toSeq,
-        controllers = raftCluster.controllers().values().asScala.toSeq
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
       )
 
       // Heartbeat request to join the group. Note that the member subscribes
@@ -158,7 +156,6 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
     ))
   def testShareGroupHeartbeatWithMultipleMembers(): Unit = {
-    val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
     val admin = cluster.admin()
 
     // Creates the __consumer_offsets topics because it won't be created automatically
@@ -166,8 +163,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     try {
       TestUtils.createOffsetsTopicWithAdmin(
         admin = admin,
-        brokers = raftCluster.brokers.values().asScala.toSeq,
-        controllers = raftCluster.controllers().values().asScala.toSeq
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
       )
 
       // Heartbeat request to join the group. Note that the member subscribes
@@ -306,7 +303,6 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
     ))
   def testMemberLeavingAndRejoining(): Unit = {
-    val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
     val admin = cluster.admin()
 
     // Creates the __consumer_offsets topics because it won't be created automatically
@@ -314,8 +310,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     try {
       TestUtils.createOffsetsTopicWithAdmin(
         admin = admin,
-        brokers = raftCluster.brokers.values().asScala.toSeq,
-        controllers = raftCluster.controllers().values().asScala.toSeq
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
       )
 
       // Heartbeat request to join the group. Note that the member subscribes
@@ -423,15 +419,14 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
     ))
   def testPartitionAssignmentWithChangingTopics(): Unit = {
-    val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
     val admin = cluster.admin()
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
     try {
       TestUtils.createOffsetsTopicWithAdmin(
         admin = admin,
-        brokers = raftCluster.brokers.values().asScala.toSeq,
-        controllers = raftCluster.controllers().values().asScala.toSeq
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
       )
       // Heartbeat request to join the group. Note that the member subscribes
       // to a nonexistent topic.
@@ -569,8 +564,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       TestUtils.deleteTopicWithAdmin(
         admin = admin,
         topic = "foo",
-        brokers = raftCluster.brokers.values().asScala.toSeq,
-        controllers = raftCluster.controllers().values().asScala.toSeq
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
       )
 
       expectedAssignment = new ShareGroupHeartbeatResponseData.Assignment()
@@ -617,7 +612,6 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ClusterConfigProperty(key = "group.share.min.session.timeout.ms", value = "501")
     ))
   def testMemberJoiningAndExpiring(): Unit = {
-    val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
     val admin = cluster.admin()
 
     // Creates the __consumer_offsets topics because it won't be created automatically
@@ -625,8 +619,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     try {
       TestUtils.createOffsetsTopicWithAdmin(
         admin = admin,
-        brokers = raftCluster.brokers.values().asScala.toSeq,
-        controllers = raftCluster.controllers().values().asScala.toSeq
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
       )
 
       // Heartbeat request to join the group. Note that the member subscribes
@@ -791,15 +785,14 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
     ))
   def testGroupCoordinatorChange(): Unit = {
-    val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
     val admin = cluster.admin()
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
     try {
       TestUtils.createOffsetsTopicWithAdmin(
         admin = admin,
-        brokers = raftCluster.brokers.values().asScala.toSeq,
-        controllers = raftCluster.controllers().values().asScala.toSeq
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
       )
       // Heartbeat request to join the group. Note that the member subscribes
       // to an nonexistent topic.
@@ -852,9 +845,9 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       assertEquals(2, shareGroupHeartbeatResponse.data.memberEpoch)
 
       // Restart the only running broker.
-      val broker = raftCluster.brokers().values().iterator().next()
-      raftCluster.shutdownBroker(broker.config.brokerId)
-      raftCluster.startBroker(broker.config.brokerId)
+      val broker = cluster.brokers().values().iterator().next()
+      cluster.shutdownBroker(broker.config.brokerId)
+      cluster.startBroker(broker.config.brokerId)
 
       // Prepare the next heartbeat for member with no updates.
       shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(

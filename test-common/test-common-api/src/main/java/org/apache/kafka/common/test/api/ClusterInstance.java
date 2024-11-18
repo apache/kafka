@@ -42,6 +42,7 @@ import org.apache.kafka.common.serialization.BytesDeserializer;
 import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.server.authorizer.Authorizer;
+import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile;
 
 import java.io.File;
@@ -209,6 +210,17 @@ public interface ClusterInstance {
             return Collections.singleton(CLASSIC);
         }
     }
+
+    /**
+     * Returns the first recorded fatal exception, if any.
+     *
+     */
+    Optional<FaultHandlerException> firstFatalException();
+
+    /**
+     * Return the first recorded non-fatal exception, if any.
+     */
+    Optional<FaultHandlerException> firstNonFatalException();
 
     //---------------------------[modify]---------------------------//
 

@@ -32,6 +32,7 @@ import org.apache.kafka.metadata.storage.FormatterException;
 import org.apache.kafka.server.common.FeatureVersion;
 import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.fault.FaultHandlerException;
 
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
 import org.junit.jupiter.api.extension.BeforeTestExecutionCallback;
@@ -97,7 +98,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         );
     }
 
-    public static class RaftClusterInstance implements ClusterInstance {
+    private static class RaftClusterInstance implements ClusterInstance {
 
         private final ClusterConfig clusterConfig;
         final AtomicBoolean started = new AtomicBoolean(false);
@@ -200,6 +201,16 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         @Override
         public void startBroker(int brokerId) {
             findBrokerOrThrow(brokerId).startup();
+        }
+
+        @Override
+        public Optional<FaultHandlerException> firstFatalException() {
+            return Optional.ofNullable(clusterTestKit.fatalFaultHandler().firstException());
+        }
+
+        @Override
+        public Optional<FaultHandlerException> firstNonFatalException() {
+            return Optional.ofNullable(clusterTestKit.nonFatalFaultHandler().firstException());
         }
 
         @Override
