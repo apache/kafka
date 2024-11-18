@@ -70,7 +70,6 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
@@ -325,14 +324,6 @@ public class ClusterControlManager {
 
     Map<Integer, BrokerRegistration> brokerRegistrations() {
         return brokerRegistrations;
-    }
-
-    Set<Integer> fencedBrokerIds() {
-        return brokerRegistrations.values()
-            .stream()
-            .filter(BrokerRegistration::fenced)
-            .map(BrokerRegistration::id)
-            .collect(Collectors.toSet());
     }
 
     /**
