@@ -3346,7 +3346,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         transactionManager.maybeAddPartition(tp0);
-        prepareAddPartitionsToTxnResponse(Errors.INVALID_PRODUCER_ID_MAPPING, tp0, initialEpoch, producerId);
+        prepareAddPartitionsToTxnResponse(Errors.UNKNOWN_PRODUCER_ID, tp0, initialEpoch, producerId);
         runUntil(transactionManager::hasAbortableError);
         TransactionalRequestResult abortResult = transactionManager.beginAbort();
 
@@ -3378,7 +3378,7 @@ public class TransactionManagerTest {
         offsets.put(tp0, new OffsetAndMetadata(1));
         transactionManager.sendOffsetsToTransaction(offsets, new ConsumerGroupMetadata(consumerGroupId));
         assertFalse(transactionManager.hasPendingOffsetCommits());
-        prepareAddOffsetsToTxnResponse(Errors.INVALID_PRODUCER_ID_MAPPING, consumerGroupId, producerId, initialEpoch);
+        prepareAddOffsetsToTxnResponse(Errors.UNKNOWN_PRODUCER_ID, consumerGroupId, producerId, initialEpoch);
         runUntil(transactionManager::hasAbortableError);  // Send AddOffsetsRequest
         TransactionalRequestResult abortResult = transactionManager.beginAbort();
 

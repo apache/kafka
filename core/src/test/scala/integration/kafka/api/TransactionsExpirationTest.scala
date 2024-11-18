@@ -20,20 +20,20 @@ package kafka.api
 import java.util.{Collections, Properties}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import kafka.utils.TestUtils.{consumeRecords, createAdminClient}
 import org.apache.kafka.clients.admin.{Admin, ProducerState}
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.KafkaProducer
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.{InvalidPidMappingException, TransactionalIdNotFoundException}
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
+import org.junit.jupiter.params.provider.CsvSource
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -81,9 +81,14 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
     super.tearDown()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testBumpTransactionalEpochAfterInvalidProducerIdMapping(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest
+  @CsvSource(Array(
+    "kraft,classic,false",
+    "kraft,consumer,false",
+    "kraft,classic,true",
+    "kraft,consumer,true",
+  ))
+  def testFatalErrorAfterInvalidProducerIdMapping(quorum: String, groupProtocol: String, isTV2Enabled: Boolean): Unit = {
     producer.initTransactions()
 
     // Start and then abort a transaction to allow the transactional ID to expire.
@@ -96,14 +101,22 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
     waitUntilTransactionalStateExists()
     waitUntilTransactionalStateExpires()
 
-    // Start a new transaction and attempt to send, which will trigger an AddPartitionsToTxnRequest, which will fail due to the expired transactional ID.
+    // Start a new transaction and attempt to send, triggering an AddPartitionsToTxnRequest that will fail
+    // due to the expired transactional ID, resulting in a fatal error.
     producer.beginTransaction()
     val failedFuture = producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 3, "1", "1", willBeCommitted = false))
     TestUtils.waitUntilTrue(() => failedFuture.isDone, "Producer future never completed.")
-
     org.apache.kafka.test.TestUtils.assertFutureThrows(failedFuture, classOf[InvalidPidMappingException])
-    producer.abortTransaction()
 
+    // Assert that aborting the transaction throws a KafkaException due to the fatal error.
+    assertThrows(classOf[KafkaException], () => producer.abortTransaction())
+
+    // Close the producer and reinitialize to recover from the fatal error.
+    producer.close()
+    producer = TestUtils.createTransactionalProducer("transactionalProducer", brokers)
+    producer.initTransactions()
+
+    // Proceed with a new transaction after reinitializing.
     producer.beginTransaction()
     producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "2", willBeCommitted = true))
     producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 2, "4", "4", willBeCommitted = true))
@@ -170,7 +183,9 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
     // soon after the first will re-use the same producerId, while bumping the epoch to indicate that they are distinct.
     assertEquals(oldProducerId, newProducerId)
     if (isTV2Enabled) {
-      assertEquals(oldProducerEpoch + 3, newProducerEpoch)
+      // TV2 bumps epoch on EndTxn, and the final commit may or may not have bumped the epoch in the producer state.
+      // The epoch should be at least oldProducerEpoch + 2 for the first commit and the restarted producer.
+      assertTrue(oldProducerEpoch + 2 <= newProducerEpoch)
     } else {
       assertEquals(oldProducerEpoch + 1, newProducerEpoch)
     }

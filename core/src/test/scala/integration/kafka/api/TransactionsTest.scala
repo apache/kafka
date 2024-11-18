@@ -697,7 +697,7 @@ class TransactionsTest extends IntegrationTestHarness {
     assertThrows(classOf[IllegalStateException], () => producer.initTransactions())
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @ParameterizedTest
   @CsvSource(Array(
     "kraft,classic,false",
     "kraft,consumer,false",
@@ -762,8 +762,11 @@ class TransactionsTest extends IntegrationTestHarness {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @CsvSource(Array("kraft, classic, true", "kraft, consumer, true"))
+  @ParameterizedTest
+  @CsvSource(Array(
+    "kraft, classic, true",
+    "kraft, consumer, true"
+  ))
   def testBumpTransactionalEpochWithTV2Enabled(quorum: String, groupProtocol: String, isTV2Enabled: Boolean): Unit = {
     val producer = createTransactionalProducer("transactionalProducer",
       deliveryTimeoutMs = 5000, requestTimeoutMs = 5000)
