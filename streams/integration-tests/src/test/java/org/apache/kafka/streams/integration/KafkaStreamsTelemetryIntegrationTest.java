@@ -180,7 +180,8 @@ public class KafkaStreamsTelemetryIntegrationTest {
                         final String name = mn.name().replace('-', '.');
                         final String group = mn.group().replace("-metrics", "").replace('-', '.');
                         return "org.apache.kafka." + group + "." + name;
-                    }).sorted().collect(Collectors.toList());
+                    }).filter(name -> !name.equals("org.apache.kafka.stream.thread.state"))// telemetry reporter filters out string metrics
+                    .sorted().collect(Collectors.toList());
             final List<String> actualMetrics = new ArrayList<>(TelemetryPlugin.SUBSCRIBED_METRICS.get(mainConsumerInstanceId));
             assertEquals(expectedMetrics, actualMetrics);
 
@@ -188,7 +189,12 @@ public class KafkaStreamsTelemetryIntegrationTest {
                     30_000,
                     "Never received subscribed metrics");
             final List<String> actualInstanceMetrics = TelemetryPlugin.SUBSCRIBED_METRICS.get(adminInstanceId);
-            final List<String> expectedInstanceMetrics = Arrays.asList("org.apache.kafka.stream.alive.stream.threads", "org.apache.kafka.stream.failed.stream.threads");
+            final List<String> expectedInstanceMetrics = Arrays.asList(
+                "org.apache.kafka.stream.alive.stream.threads",
+                "org.apache.kafka.stream.client.state",
+                "org.apache.kafka.stream.failed.stream.threads",
+                "org.apache.kafka.stream.recording.level");
+            
             assertEquals(expectedInstanceMetrics, actualInstanceMetrics);
 
             TestUtils.waitForCondition(() -> TelemetryPlugin.processId != null,

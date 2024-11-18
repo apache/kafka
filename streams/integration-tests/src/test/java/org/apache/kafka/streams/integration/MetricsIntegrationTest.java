@@ -105,6 +105,7 @@ public class MetricsIntegrationTest {
     private static final String APPLICATION_ID = "application-id";
     private static final String TOPOLOGY_DESCRIPTION = "topology-description";
     private static final String STATE = "state";
+    private static final String CLIENT_STATE = "client-state";
     private static final String ALIVE_STREAM_THREADS = "alive-stream-threads";
     private static final String FAILED_STREAM_THREADS = "failed-stream-threads";
     private static final String PUT_LATENCY_AVG = "put-latency-avg";
@@ -125,6 +126,7 @@ public class MetricsIntegrationTest {
     private static final String RANGE_LATENCY_MAX = "range-latency-max";
     private static final String FLUSH_LATENCY_AVG = "flush-latency-avg";
     private static final String FLUSH_LATENCY_MAX = "flush-latency-max";
+    private static final String RECORDING_LEVEL = "recording-level";
     private static final String RESTORE_LATENCY_AVG = "restore-latency-avg";
     private static final String RESTORE_LATENCY_MAX = "restore-latency-max";
     private static final String PUT_RATE = "put-rate";
@@ -167,6 +169,8 @@ public class MetricsIntegrationTest {
     private static final String PUNCTUATE_RATE = "punctuate-rate";
     private static final String PUNCTUATE_TOTAL = "punctuate-total";
     private static final String PUNCTUATE_RATIO = "punctuate-ratio";
+    private static final String THREAD_STATE = "thread-state";
+    private static final String THREAD_STATE_JMX = "state";
     private static final String CREATE_RATE = "create-rate";
     private static final String CREATE_TOTAL = "create-total";
     private static final String DESTROY_RATE = "destroy-rate";
@@ -474,6 +478,8 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricThread, STATE, 1);
         checkMetricByName(listMetricThread, ALIVE_STREAM_THREADS, 1);
         checkMetricByName(listMetricThread, FAILED_STREAM_THREADS, 1);
+        checkMetricByName(listMetricThread, CLIENT_STATE, 1);
+        checkMetricByName(listMetricThread, RECORDING_LEVEL, 1);
     }
 
     private void checkThreadLevelMetrics() {
@@ -510,6 +516,8 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricThread, TASK_CLOSED_TOTAL, NUM_THREADS);
         checkMetricByName(listMetricThread, BLOCKED_TIME_TOTAL, NUM_THREADS);
         checkMetricByName(listMetricThread, THREAD_START_TIME, NUM_THREADS);
+        checkMetricByName(listMetricThread, THREAD_STATE, NUM_THREADS);
+        checkMetricByName(listMetricThread, THREAD_STATE_JMX, NUM_THREADS);
     }
 
     private void checkTaskLevelMetrics() {
