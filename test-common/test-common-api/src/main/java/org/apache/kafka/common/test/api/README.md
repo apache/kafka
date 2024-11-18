@@ -28,8 +28,8 @@ Multiple `@ClusterTest` annotations can be given to generate more than one test 
 
 ```scala
 @ClusterTests(Array(
-  @ClusterTest(brokerSecurityProtocol = SecurityProtocol.PLAINTEXT),
-  @ClusterTest(securityProtocol = SecurityProtocol.SASL_PLAINTEXT)
+  new ClusterTest(brokerSecurityProtocol = SecurityProtocol.PLAINTEXT),
+  new ClusterTest(brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT)
 ))
 def testSomething(): Unit = { ... }
 ```
