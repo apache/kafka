@@ -418,10 +418,7 @@ object SocketServer {
 
   val ListenerReconfigurableConfigs: Set[String] = Set(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG)
 
-  def closeSocket(
-    channel: SocketChannel,
-    logging: Logging
-  ): Unit = {
+  def closeSocket(channel: SocketChannel): Unit = {
     Utils.closeQuietly(channel.socket, "channel socket")
     Utils.closeQuietly(channel, "channel")
   }
@@ -716,7 +713,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
     // The serverChannel will be null if Acceptor's thread is not started
     Utils.closeQuietly(serverChannel, "Acceptor serverChannel")
     Utils.closeQuietly(nioSelector, "Acceptor nioSelector")
-    throttledSockets.foreach(throttledSocket => closeSocket(throttledSocket.socket, this))
+    throttledSockets.foreach(throttledSocket => closeSocket(throttledSocket.socket))
     throttledSockets.clear()
   }
 
@@ -822,7 +819,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
     while (throttledSockets.headOption.exists(_.endThrottleTimeMs < timeMs)) {
       val closingSocket = throttledSockets.dequeue()
       debug(s"Closing socket from ip ${closingSocket.socket.getRemoteAddress}")
-      closeSocket(closingSocket.socket, this)
+      closeSocket(closingSocket.socket)
     }
   }
 
@@ -1807,7 +1804,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     if (channel != null) {
       log.debug(s"Closing connection from ${channel.socket.getRemoteSocketAddress}")
       dec(listenerName, channel.socket.getInetAddress)
-      closeSocket(channel, log)
+      closeSocket(channel)
     }
   }
 
