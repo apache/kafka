@@ -87,14 +87,15 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     private final IdempotentCloser idempotentCloser = new IdempotentCloser();
     private Uuid memberId;
     private boolean fetchMoreRecords = false;
-    private final Map<TopicIdPartition, Acknowledgements> fetchAcknowledgementsMap;
+    private final Map<TopicIdPartition, Acknowledgements> fetchAcknowledgementsToSend;
+    private final Map<TopicIdPartition, Acknowledgements> fetchAcknowledgementsInFlight;
     private final Map<Integer, Tuple<AcknowledgeRequestState>> acknowledgeRequestStates;
     private final long retryBackoffMs;
     private final long retryBackoffMaxMs;
     private boolean closing = false;
     private final CompletableFuture<Void> closeFuture;
     private boolean isAcknowledgementCommitCallbackRegistered = false;
-    private final Map<IdAndPartition, String> forgottenTopicNames = new HashMap<>();
+    private final Map<IdAndPartition, String> topicNamesMap = new HashMap<>();
 
     ShareConsumeRequestManager(final Time time,
                                final LogContext logContext,
@@ -122,7 +123,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         this.sessionHandlers = new HashMap<>();
         this.nodesWithPendingRequests = new HashSet<>();
         this.acknowledgeRequestStates = new HashMap<>();
-        this.fetchAcknowledgementsMap = new HashMap<>();
+        this.fetchAcknowledgementsToSend = new HashMap<>();
+        this.fetchAcknowledgementsInFlight = new HashMap<>();
         this.closeFuture = new CompletableFuture<>();
     }
 
@@ -170,12 +172,14 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                         k -> sessionHandlers.computeIfAbsent(node.id(), n -> new ShareSessionHandler(logContext, n, memberId)));
 
                 TopicIdPartition tip = new TopicIdPartition(topicId, partition);
-                Acknowledgements acknowledgementsToSend = fetchAcknowledgementsMap.get(tip);
+                Acknowledgements acknowledgementsToSend = fetchAcknowledgementsToSend.remove(tip);
                 if (acknowledgementsToSend != null) {
                     metricsManager.recordAcknowledgementSent(acknowledgementsToSend.size());
+                    fetchAcknowledgementsInFlight.put(tip, acknowledgementsToSend);
                 }
                 handler.addPartitionToFetch(tip, acknowledgementsToSend);
                 fetchedPartitions.add(tip);
+                topicNamesMap.putIfAbsent(new IdAndPartition(tip.topicId(), tip.partition()), tip.topic());
 
                 log.debug("Added fetch request for partition {} to node {}", tip, node.id());
             }
@@ -194,15 +198,18 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 } else {
                     for (TopicIdPartition tip : sessionHandler.sessionPartitions()) {
                         if (!fetchedPartitions.contains(tip)) {
-                            Acknowledgements acknowledgementsToSend = fetchAcknowledgementsMap.get(tip);
+                            Acknowledgements acknowledgementsToSend = fetchAcknowledgementsToSend.remove(tip);
+
                             if (acknowledgementsToSend != null) {
                                 metricsManager.recordAcknowledgementSent(acknowledgementsToSend.size());
+                                fetchAcknowledgementsInFlight.put(tip, acknowledgementsToSend);
                             }
+
                             sessionHandler.addPartitionToFetch(tip, acknowledgementsToSend);
                             partitionsToForgetMap.putIfAbsent(node, new ArrayList<>());
                             partitionsToForgetMap.get(node).add(tip);
 
-                            forgottenTopicNames.putIfAbsent(new IdAndPartition(tip.topicId(), tip.partition()), tip.topic());
+                            topicNamesMap.putIfAbsent(new IdAndPartition(tip.topicId(), tip.partition()), tip.topic());
                             fetchedPartitions.add(tip);
                             log.debug("Added fetch request for previously subscribed partition {} to node {}", tip, node.id());
                         }
@@ -253,7 +260,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         }
 
         // The acknowledgements sent via ShareFetch are stored in this map.
-        acknowledgementsMap.forEach((tip, acks) -> fetchAcknowledgementsMap.merge(tip, acks, Acknowledgements::merge));
+        acknowledgementsMap.forEach((tip, acks) -> fetchAcknowledgementsToSend.merge(tip, acks, Acknowledgements::merge));
     }
 
     /**
@@ -566,8 +573,10 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 for (TopicIdPartition tip : sessionHandler.sessionPartitions()) {
                     Acknowledgements acknowledgements = acknowledgementsMap.getOrDefault(tip, Acknowledgements.empty());
 
-                    if (fetchAcknowledgementsMap.get(tip) != null) {
-                        acknowledgements.merge(fetchAcknowledgementsMap.remove(tip));
+                    Acknowledgements acksFromShareFetch = fetchAcknowledgementsToSend.remove(tip);
+
+                    if (acksFromShareFetch != null) {
+                        acknowledgements.merge(acksFromShareFetch);
                     }
 
                     if (acknowledgements != null && !acknowledgements.isEmpty()) {
@@ -639,7 +648,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                             responseData.put(new TopicIdPartition(topicResponse.topicId(),
                                     partition.partitionIndex(),
                                     metadata.topicNames().getOrDefault(topicResponse.topicId(),
-                                            forgottenTopicNames.remove(new IdAndPartition(topicResponse.topicId(), partition.partitionIndex())))), partition))
+                                            topicNamesMap.remove(new IdAndPartition(topicResponse.topicId(), partition.partitionIndex())))), partition))
             );
 
             final Set<TopicPartition> partitions = responseData.keySet().stream().map(TopicIdPartition::topicPartition).collect(Collectors.toSet());
@@ -653,7 +662,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
                 log.debug("ShareFetch for partition {} returned fetch data {}", tip, partitionData);
 
-                Acknowledgements acks = fetchAcknowledgementsMap.remove(tip);
+                Acknowledgements acks = fetchAcknowledgementsInFlight.remove(tip);
                 if (acks != null) {
                     if (partitionData.acknowledgeErrorCode() != Errors.NONE.code()) {
                         metricsManager.recordFailedAcknowledgements(acks.size());
@@ -716,7 +725,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                         partition.partitionIndex(),
                         metadata.topicNames().get(topic.topicId()));
 
-                Acknowledgements acks = fetchAcknowledgementsMap.remove(tip);
+                Acknowledgements acks = fetchAcknowledgementsInFlight.remove(tip);
                 if (acks != null) {
                     metricsManager.recordFailedAcknowledgements(acks.size());
                     acks.setAcknowledgeErrorCode(Errors.forException(error));

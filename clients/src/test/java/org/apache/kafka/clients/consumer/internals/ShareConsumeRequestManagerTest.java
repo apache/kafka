@@ -638,6 +638,52 @@ public class ShareConsumeRequestManagerTest {
     }
 
     @Test
+    public void testPiggybackAcknowledgementsInFlight() {
+        buildRequestManager();
+
+        assignFromSubscribed(Collections.singleton(tp0));
+
+        // normal fetch
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tip0, records, acquiredRecords, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        Acknowledgements acknowledgements = Acknowledgements.empty();
+        acknowledgements.add(1L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(2L, AcknowledgeType.ACCEPT);
+
+        // Reading records from the share fetch buffer.
+        fetchRecords();
+
+        // Piggyback acknowledgements
+        shareConsumeRequestManager.fetch(Collections.singletonMap(tip0, acknowledgements));
+
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        assertEquals(2.0,
+                metrics.metrics().get(metrics.metricInstance(shareFetchMetricsRegistry.acknowledgementSendTotal)).metricValue());
+
+        Acknowledgements acknowledgements2 = Acknowledgements.empty();
+        acknowledgements2.add(3L, AcknowledgeType.ACCEPT);
+        shareConsumeRequestManager.fetch(Collections.singletonMap(tip0, acknowledgements2));
+
+        client.prepareResponse(fullFetchResponse(tip0, records, acquiredRecords, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        fetchRecords();
+
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+        assertEquals(3.0,
+                metrics.metrics().get(metrics.metricInstance(shareFetchMetricsRegistry.acknowledgementSendTotal)).metricValue());
+    }
+
+    @Test
     public void testCommitAsyncWithSubscriptionChange() {
         buildRequestManager();
 
