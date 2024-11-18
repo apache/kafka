@@ -2089,6 +2089,135 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
   @ParameterizedTest
   @ValueSource(strings = Array("kraft+kip932"))
+  def testListGroups(quorum: String): Unit = {
+    val classicGroupId = "classic_group_id"
+    val consumerGroupId = "consumer_group_id"
+    val shareGroupId = "share_group_id"
+    val simpleGroupId = "simple_group_id"
+    val testTopicName = "test_topic"
+
+    consumerConfig.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name)
+    val classicGroupConfig = new Properties(consumerConfig)
+    classicGroupConfig.put(ConsumerConfig.GROUP_ID_CONFIG, classicGroupId)
+    val classicGroup = createConsumer(configOverrides = classicGroupConfig)
+
+    consumerConfig.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name)
+    val consumerGroupConfig = new Properties(consumerConfig)
+    consumerGroupConfig.put(ConsumerConfig.GROUP_ID_CONFIG, consumerGroupId)
+    val consumerGroup = createConsumer(configOverrides = consumerGroupConfig)
+
+    val shareGroupConfig = new Properties(consumerConfig)
+    shareGroupConfig.put(ConsumerConfig.GROUP_ID_CONFIG, shareGroupId)
+    val shareGroup = createShareConsumer(configOverrides = shareGroupConfig)
+
+    val config = createConfig
+    client = Admin.create(config)
+    try {
+      client.createTopics(Collections.singleton(
+        new NewTopic(testTopicName, 1, 1.toShort)
+      )).all().get()
+      waitForTopics(client, List(testTopicName), List())
+      val topicPartition = new TopicPartition(testTopicName, 0)
+
+      classicGroup.subscribe(Collections.singleton(testTopicName))
+      classicGroup.poll(JDuration.ofMillis(1000))
+      consumerGroup.subscribe(Collections.singleton(testTopicName))
+      consumerGroup.poll(JDuration.ofMillis(1000))
+      shareGroup.subscribe(Collections.singleton(testTopicName))
+      shareGroup.poll(JDuration.ofMillis(1000))
+
+      val alterConsumerGroupOffsetsResult = client.alterConsumerGroupOffsets(simpleGroupId,
+        Collections.singletonMap(topicPartition, new OffsetAndMetadata(0L)))
+      assertNull(alterConsumerGroupOffsetsResult.all().get())
+      assertNull(alterConsumerGroupOffsetsResult.partitionResult(topicPartition).get())
+
+      TestUtils.waitUntilTrue(() => {
+        val groups = client.listGroups().all().get()
+        groups.size() == 4
+      }, "Expected to find all groups")
+
+      val classicGroupListing = new GroupListing(classicGroupId, Optional.of(GroupType.CLASSIC), "consumer")
+      val consumerGroupListing = new GroupListing(consumerGroupId, Optional.of(GroupType.CONSUMER), "consumer")
+      val shareGroupListing = new GroupListing(shareGroupId, Optional.of(GroupType.SHARE), "share")
+      val simpleGroupListing = new GroupListing(simpleGroupId, Optional.of(GroupType.CLASSIC), "")
+
+      var listGroupsResult = client.listGroups()
+      assertTrue(listGroupsResult.errors().get().isEmpty)
+      assertEquals(Set(classicGroupListing, simpleGroupListing, consumerGroupListing, shareGroupListing), listGroupsResult.all().get().asScala.toSet)
+      assertEquals(Set(classicGroupListing, simpleGroupListing, consumerGroupListing, shareGroupListing), listGroupsResult.valid().get().asScala.toSet)
+
+      listGroupsResult = client.listGroups(new ListGroupsOptions().withTypes(java.util.Set.of(GroupType.CLASSIC)))
+      assertTrue(listGroupsResult.errors().get().isEmpty)
+      assertEquals(Set(classicGroupListing, simpleGroupListing), listGroupsResult.all().get().asScala.toSet)
+      assertEquals(Set(classicGroupListing, simpleGroupListing), listGroupsResult.valid().get().asScala.toSet)
+
+      listGroupsResult = client.listGroups(new ListGroupsOptions().withTypes(java.util.Set.of(GroupType.CONSUMER)))
+      assertTrue(listGroupsResult.errors().get().isEmpty)
+      assertEquals(Set(consumerGroupListing), listGroupsResult.all().get().asScala.toSet)
+      assertEquals(Set(consumerGroupListing), listGroupsResult.valid().get().asScala.toSet)
+
+      listGroupsResult = client.listGroups(new ListGroupsOptions().withTypes(java.util.Set.of(GroupType.SHARE)))
+      assertTrue(listGroupsResult.errors().get().isEmpty)
+      assertEquals(Set(shareGroupListing), listGroupsResult.all().get().asScala.toSet)
+      assertEquals(Set(shareGroupListing), listGroupsResult.valid().get().asScala.toSet)
+    } finally {
+      Utils.closeQuietly(classicGroup, "classicGroup")
+      Utils.closeQuietly(consumerGroup, "consumerGroup")
+      Utils.closeQuietly(shareGroup, "shareGroup")
+      Utils.closeQuietly(client, "adminClient")
+    }
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  def testDescribeClassicGroups(quorum: String, groupProtocol: String): Unit = {
+    val classicGroupId = "classic_group_id"
+    val simpleGroupId = "simple_group_id"
+    val testTopicName = "test_topic"
+
+    val classicGroupConfig = new Properties(consumerConfig)
+    classicGroupConfig.put(ConsumerConfig.GROUP_ID_CONFIG, classicGroupId)
+    val classicGroup = createConsumer(configOverrides = classicGroupConfig)
+
+    val config = createConfig
+    client = Admin.create(config)
+    try {
+      client.createTopics(Collections.singleton(
+        new NewTopic(testTopicName, 1, 1.toShort)
+      )).all().get()
+      waitForTopics(client, List(testTopicName), List())
+      val topicPartition = new TopicPartition(testTopicName, 0)
+
+      classicGroup.subscribe(Collections.singleton(testTopicName))
+      classicGroup.poll(JDuration.ofMillis(1000))
+
+      val alterConsumerGroupOffsetsResult = client.alterConsumerGroupOffsets(simpleGroupId,
+        Collections.singletonMap(topicPartition, new OffsetAndMetadata(0L)))
+      assertNull(alterConsumerGroupOffsetsResult.all().get())
+      assertNull(alterConsumerGroupOffsetsResult.partitionResult(topicPartition).get())
+
+      val groupIds = Seq(simpleGroupId, classicGroupId)
+      TestUtils.waitUntilTrue(() => {
+        val groups = client.describeClassicGroups(groupIds.asJavaCollection).all().get()
+        groups.size() == 2
+      }, "Expected to find all groups")
+
+      val classicConsumers = client.describeClassicGroups(groupIds.asJavaCollection).all().get()
+      assertNotNull(classicConsumers.get(classicGroupId))
+      assertEquals(classicGroupId, classicConsumers.get(classicGroupId).groupId())
+      assertEquals("consumer", classicConsumers.get(classicGroupId).protocol())
+
+      assertNotNull(classicConsumers.get(simpleGroupId))
+      assertEquals(simpleGroupId, classicConsumers.get(simpleGroupId).groupId())
+      assertTrue(classicConsumers.get(simpleGroupId).protocol().isEmpty)
+    } finally {
+      Utils.closeQuietly(classicGroup, "classicGroup")
+      Utils.closeQuietly(client, "adminClient")
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft+kip932"))
   def testShareGroups(quorum: String): Unit = {
     val testGroupId = "test_group_id"
     val testClientId = "test_client_id"
