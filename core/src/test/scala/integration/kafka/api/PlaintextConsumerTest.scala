@@ -27,6 +27,7 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.{InterruptException, InvalidGroupIdException, InvalidTopicException, TimeoutException, WakeupException}
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization._
+import org.apache.kafka.common.test.api.Flaky
 import org.apache.kafka.common.{MetricName, TopicPartition}
 import org.apache.kafka.server.quota.QuotaType
 import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
@@ -825,6 +826,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertThrows(classOf[WakeupException], () => consumer.position(topicPartition, Duration.ofSeconds(100)))
   }
 
+  @Flaky("KAFKA-18031")
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testCloseLeavesGroupOnInterrupt(quorum: String, groupProtocol: String): Unit = {

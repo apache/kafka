@@ -51,6 +51,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.test.KafkaClusterTestKit;
 import org.apache.kafka.common.test.TestKitNodes;
+import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.test.TestUtils;
 
@@ -276,6 +277,7 @@ public class ShareConsumerTest {
         }
     }
 
+    @Flaky("KAFKA-18033")
     @ParameterizedTest(name = "{displayName}.persister={0}")
     @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
     public void testAcknowledgementSentOnSubscriptionChange(String persister) throws ExecutionException, InterruptedException {
@@ -372,6 +374,7 @@ public class ShareConsumerTest {
         }
     }
 
+    @Flaky("KAFKA-18033")
     @ParameterizedTest(name = "{displayName}.persister={0}")
     @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
     public void testAcknowledgementCommitCallbackInvalidRecordStateException(String persister) throws Exception {
@@ -598,6 +601,7 @@ public class ShareConsumerTest {
         }
     }
 
+    @Flaky("KAFKA-18033")
     @ParameterizedTest(name = "{displayName}.persister={0}")
     @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
     public void testExplicitAcknowledgementCommitAsync(String persister) throws InterruptedException {
@@ -654,6 +658,7 @@ public class ShareConsumerTest {
         }
     }
 
+    @Flaky("KAFKA-18033")
     @ParameterizedTest(name = "{displayName}.persister={0}")
     @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
     public void testExplicitAcknowledgementCommitAsyncPartialBatch(String persister) {
@@ -760,6 +765,7 @@ public class ShareConsumerTest {
         }
     }
 
+    @Flaky("KAFKA-18033")
     @ParameterizedTest(name = "{displayName}.persister={0}")
     @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
     public void testExplicitAcknowledgeReleaseClose(String persister) {
@@ -993,6 +999,7 @@ public class ShareConsumerTest {
         }
     }
 
+    @Flaky("KAFKA-18033")
     @ParameterizedTest(name = "{displayName}.persister={0}")
     @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
     public void testMultipleConsumersInGroupConcurrentConsumption(String persister) {
@@ -1366,6 +1373,7 @@ public class ShareConsumerTest {
      * Test to verify that the acknowledgement commit callback can invoke KafkaShareConsumer.wakeup() and it
      * wakes up the enclosing poll.
      */
+    @Flaky("KAFKA-18033")
     @ParameterizedTest(name = "{displayName}.persister={0}")
     @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
     public void testAcknowledgeCommitCallbackCallsShareConsumerWakeup(String persister) throws InterruptedException {
@@ -1418,6 +1426,7 @@ public class ShareConsumerTest {
      * Test to verify that the acknowledgement commit callback can throw an exception, and it is propagated
      * to the caller of poll().
      */
+    @Flaky("KAFKA-18033")
     @ParameterizedTest(name = "{displayName}.persister={0}")
     @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
     public void testAcknowledgeCommitCallbackThrowsException(String persister) throws InterruptedException {
@@ -1664,6 +1673,7 @@ public class ShareConsumerTest {
         }
     }
 
+    @Flaky("KAFKA-18033")
     @ParameterizedTest(name = "{displayName}.persister={0}")
     @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
     public void testShareAutoOffsetResetDefaultValue(String persister) {
