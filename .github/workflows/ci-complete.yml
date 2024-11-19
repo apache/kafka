@@ -67,7 +67,7 @@ jobs:
         with:
           github-token: ${{ github.token }}
           run-id: ${{ github.event.workflow_run.id }}
-          name: ${{ matrix.artifact-prefix }}-${{ matrix.java }}
+          name: ${{ matrix.artifact-prefix }}${{ matrix.java }}
           path: ~/.gradle/build-scan-data  # This is where Gradle buffers unpublished build scan data when --no-scan is given
       - name: Handle missing scan
         if: ${{ steps.download-build-scan.outcome == 'failure' }}
