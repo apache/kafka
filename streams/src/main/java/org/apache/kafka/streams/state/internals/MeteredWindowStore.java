@@ -49,6 +49,7 @@ import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.NavigableSet;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.LongAdder;
@@ -142,7 +143,13 @@ public class MeteredWindowStore<K, V>
         StateStoreMetrics.addNumOpenIteratorsGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
                 (config, now) -> numOpenIterators.sum());
         StateStoreMetrics.addOldestOpenIteratorGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
-                (config, now) -> openIterators.isEmpty() ? null : openIterators.first().startTimestamp()
+                (config, now) -> {
+                    try {
+                        return openIterators.isEmpty() ? null : openIterators.first().startTimestamp();
+                    } catch (final NoSuchElementException ignored) {
+                        return null;
+                    }
+                }
         );
     }
 
