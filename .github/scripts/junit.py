@@ -142,6 +142,7 @@ def parse_report(workspace_path, report_path, fp) -> Iterable[TestSuite]:
     cur_suite: Optional[TestSuite] = None
     partial_test_case = None
     test_case_failed = False
+    test_case_skipped = False
     for (event, elem) in xml.etree.ElementTree.iterparse(fp, events=["start", "end"]):
         if event == "start":
             if elem.tag == "testsuite":
@@ -171,11 +172,12 @@ def parse_report(workspace_path, report_path, fp) -> Iterable[TestSuite]:
             elif elem.tag == "skipped":
                 skipped = partial_test_case(None, None, None)
                 cur_suite.skipped_tests.append(skipped)
+                test_case_skipped = True
             else:
                 pass
         elif event == "end":
             if elem.tag == "testcase":
-                if not test_case_failed:
+                if not test_case_failed and not test_case_skipped:
                     passed = partial_test_case(None, None, None)
                     cur_suite.passed_tests.append(passed)
                 partial_test_case = None
@@ -303,7 +305,7 @@ if __name__ == "__main__":
                     logger.debug(f"Found skipped test: {skipped_test}")
                     skipped_table.append((simple_class_name, skipped_test.test_name))
 
-                # Collect all tests that were run as part of quarantinedTest
+                # Only collect quarantined tests from the "quarantinedTest" task
                 if task == "quarantinedTest":
                     for test in all_suite_passed.values():
                         simple_class_name = test.class_name.split(".")[-1]
@@ -329,53 +331,75 @@ if __name__ == "__main__":
     # The stdout (print) goes to the workflow step console output.
     # The stderr (logger) is redirected to GITHUB_STEP_SUMMARY which becomes part of the HTML job summary.
     report_url = get_env("JUNIT_REPORT_URL")
-    report_md = f"Download [HTML report]({report_url})."
-    summary = (f"{total_run} tests cases run in {duration}. "
+    if report_url:
+        report_md = f"Download [HTML report]({report_url})."
+    else:
+        report_md = "No report available. JUNIT_REPORT_URL was missing."
+    summary = (f"{total_run} tests cases run in {duration}.\n\n"
                f"{total_success} {PASSED}, {total_failures} {FAILED}, "
-               f"{total_flaky} {FLAKY}, {total_skipped} {SKIPPED}, and {total_errors} errors.")
+               f"{total_flaky} {FLAKY}, {total_skipped} {SKIPPED}, {len(quarantined_table)} {QUARANTINED}, and {total_errors} errors.<br/>")
     print("## Test Summary\n")
-    print(f"{summary} {report_md}\n")
+    print(f"{summary}\n\n{report_md}\n")
+
+    # Failed
     if len(failed_table) > 0:
-        logger.info(f"Found {len(failed_table)} test failures:")
-        print("### Failed Tests\n")
+        print("<details open=\"true\">")
+        print(f"<summary>Failed Tests {FAILED} ({len(failed_table)})</summary>\n")
         print(f"| Module | Test | Message | Time |")
         print(f"| ------ | ---- | ------- | ---- |")
+        logger.info(f"Found {len(failed_table)} test failures:")
         for row in failed_table:
             logger.info(f"{FAILED} {row[0]} > {row[1]}")
             row_joined = " | ".join(row)
             print(f"| {row_joined} |")
+        print("\n</details>")
     print("\n")
+
+    # Flaky
     if len(flaky_table) > 0:
-        logger.info(f"Found {len(flaky_table)} flaky test failures:")
-        print("### Flaky Tests\n")
+        print("<details open=\"true\">")
+        print(f"<summary>Flaky Tests {FLAKY} ({len(flaky_table)})</summary>\n")
         print(f"| Module | Test | Message | Time |")
         print(f"| ------ | ---- | ------- | ---- |")
+        logger.info(f"Found {len(flaky_table)} flaky test failures:")
         for row in flaky_table:
             logger.info(f"{FLAKY} {row[0]} > {row[1]}")
             row_joined = " | ".join(row)
             print(f"| {row_joined} |")
+        print("\n</details>")
     print("\n")
+
+    # Skipped
     if len(skipped_table) > 0:
         print("<details>")
-        print(f"<summary>{len(skipped_table)} Skipped Tests</summary>\n")
+        print(f"<summary>Skipped Tests {SKIPPED} ({len(skipped_table)})</summary>\n")
         print(f"| Module | Test |")
         print(f"| ------ | ---- |")
+        logger.debug(f"::group::Found {len(skipped_table)} skipped tests")
         for row in skipped_table:
             row_joined = " | ".join(row)
             print(f"| {row_joined} |")
+            logger.debug(f"{row[0]} > {row[1]}")
         print("\n</details>")
+        logger.debug("::endgroup::")
+    print("\n")
 
+    # Quarantined
     if len(quarantined_table) > 0:
-        logger.info(f"Ran {len(quarantined_table)} quarantined test:")
         print("<details>")
-        print(f"<summary>{len(quarantined_table)} Quarantined Tests</summary>\n")
+        print(f"<summary>Quarantined Tests {QUARANTINED} ({len(quarantined_table)})</summary>\n")
         print(f"| Module | Test |")
         print(f"| ------ | ---- |")
+        logger.debug(f"::group::Found {len(quarantined_table)} quarantined tests")
         for row in quarantined_table:
-            logger.info(f"{QUARANTINED} {row[0]} > {row[1]}")
             row_joined = " | ".join(row)
             print(f"| {row_joined} |")
+            logger.debug(f"{row[0]} > {row[1]}")
         print("\n</details>")
+        logger.debug("::endgroup::")
+
+    # Create a horizontal rule
+    print("-"*80)
 
     # Print special message if there was a timeout
     exit_code = get_env("GRADLE_EXIT_CODE", int)

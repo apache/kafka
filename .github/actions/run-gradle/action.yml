@@ -1,0 +1,75 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+---
+name: "Gradle Setup"
+description: "Setup Java and Gradle"
+inputs:
+  # Composite actions do not support typed parameters. Everything is treated as a string
+  # See: https://github.com/actions/runner/issues/2238
+  test-task:
+    description: "The test suite to run. Either 'test' or 'quarantinedTest'."
+    required: true
+  timeout-minutes:
+    description: "The timeout for the tests, in minutes."
+    required: true
+  test-catalog-path:
+    description: "The file path of the test catalog file."
+    required: true
+  build-scan-artifact-name:
+    description: "The name to use for archiving the build scan."
+    required: true
+outputs:
+  gradle-exitcode:
+    description: "The result of the Gradle test task."
+    value: ${{ steps.run-tests.outputs.exitcode }}
+runs:
+  using: "composite"
+  steps:
+    - name: Run JUnit Tests (${{ inputs.test-task }})
+      # Gradle flags
+      # --build-cache:  Let Gradle restore the build cache
+      # --no-scan:      Don't attempt to publish the scan yet. We want to archive it first.
+      # --continue:     Keep running even if a test fails
+      # -PcommitId      Prevent the Git SHA being written into the jar files (which breaks caching)
+      shell: bash
+      id: run-tests
+      env:
+        TIMEOUT_MINUTES: ${{ inputs.timeout-minutes}}
+        TEST_CATALOG: ${{ inputs.test-catalog-path }}
+        TEST_TASK: ${{ inputs.test-task }}
+      run: |
+        set +e
+        ./.github/scripts/thread-dump.sh &
+        timeout ${TIMEOUT_MINUTES}m ./gradlew --build-cache --continue --no-scan \
+        -PtestLoggingEvents=started,passed,skipped,failed \
+        -PmaxParallelForks=2 \
+        -PmaxTestRetries=1 -PmaxTestRetryFailures=3 \
+        -PmaxQuarantineTestRetries=3 -PmaxQuarantineTestRetryFailures=0 \
+        -Pkafka.test.catalog.file=$TEST_CATALOG \
+        -PcommitId=xxxxxxxxxxxxxxxx \
+        $TEST_TASK
+        exitcode="$?"
+        echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
+    - name: Archive build scan (${{ inputs.test-task }})
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.build-scan-artifact-name }}
+        path: ~/.gradle/build-scan-data
+        compression-level: 9
+        if-no-files-found: ignore

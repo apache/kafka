@@ -77,7 +77,7 @@ public class UuidTest {
         assertEquals(Uuid.fromString(zeroIdString), Uuid.ZERO_UUID);
     }
 
-    @RepeatedTest(100)
+    @RepeatedTest(value = 100, name = RepeatedTest.LONG_DISPLAY_NAME)
     public void testRandomUuid() {
         Uuid randomID = Uuid.randomUuid();
 

@@ -118,7 +118,8 @@ include 'clients',
     'transaction-coordinator',
     'trogdor',
     'test-common',
-    'test-common:test-common-api'
+    'test-common:test-common-api',
+    'test-common:test-common-runtime'
 
 project(":storage:api").name = "storage-api"
 rootProject.name = 'kafka'
