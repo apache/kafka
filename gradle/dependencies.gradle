@@ -114,7 +114,7 @@ versions += [
   mavenArtifact: "3.9.6",
   metrics: "2.2.0",
   mockito: "5.14.2",
-  netty: "4.1.111.Final",
+  netty: "4.1.115.Final",
   opentelemetryProto: "1.0.0-alpha",
   protobuf: "3.25.5", // a dependency of opentelemetryProto
   pcollections: "4.0.1",
