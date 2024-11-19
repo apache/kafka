@@ -47,8 +47,8 @@ public class ReplicationConfigs {
 
     public static final String REPLICA_LAG_TIME_MAX_MS_CONFIG = "replica.lag.time.max.ms";
     public static final long REPLICA_LAG_TIME_MAX_MS_DEFAULT = 30000L;
-    public static final String REPLICA_LAG_TIME_MAX_MS_DOC = "If a follower hasn't sent any fetch requests or hasn't consumed up to the leaders log end offset for at least this time," +
-            " the leader will remove the follower from isr";
+    public static final String REPLICA_LAG_TIME_MAX_MS_DOC = "If a follower hasn't sent any fetch requests or hasn't consumed up to the leader's log end offset for at least this time," +
+            " the leader will remove the follower from ISR";
 
     public static final String REPLICA_SOCKET_TIMEOUT_MS_CONFIG = "replica.socket.timeout.ms";
     public static final int REPLICA_SOCKET_TIMEOUT_MS_DEFAULT = 30 * 1000;
