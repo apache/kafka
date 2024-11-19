@@ -45,6 +45,7 @@ import org.apache.kafka.timeline.TimelineInteger;
 import org.apache.kafka.timeline.TimelineObject;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -56,6 +57,7 @@ import java.util.Set;
 
 import static org.apache.kafka.coordinator.group.Utils.toOptional;
 import static org.apache.kafka.coordinator.group.Utils.toTopicPartitionMap;
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupMember.EMPTY_ASSIGNMENT;
 import static org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState.ASSIGNING;
 import static org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState.EMPTY;
 import static org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState.RECONCILING;
@@ -939,12 +941,22 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         consumerGroup.setTargetAssignmentEpoch(classicGroup.generationId());
 
         classicGroup.allMembers().forEach(classicGroupMember -> {
-            Map<Uuid, Set<Integer>> assignedPartitions = toTopicPartitionMap(
-                ConsumerProtocol.deserializeConsumerProtocolAssignment(
-                    ByteBuffer.wrap(classicGroupMember.assignment())
-                ),
-                topicsImage
-            );
+            // The assigned partition can be empty if the member just joined and has never synced.
+            // We should accept the empty assignment.
+            Map<Uuid, Set<Integer>> assignedPartitions;
+            if (Arrays.equals(classicGroupMember.assignment(), EMPTY_ASSIGNMENT)) {
+                assignedPartitions = Collections.emptyMap();
+            } else {
+                assignedPartitions = toTopicPartitionMap(
+                    ConsumerProtocol.deserializeConsumerProtocolAssignment(
+                        ByteBuffer.wrap(classicGroupMember.assignment())
+                    ),
+                    topicsImage
+                );
+            }
+
+            // Every member is guaranteed to have metadata set when it joins,
+            // so we don't check for empty subscription here.
             ConsumerProtocolSubscription subscription = ConsumerProtocol.deserializeConsumerProtocolSubscription(
                 ByteBuffer.wrap(classicGroupMember.metadata(classicGroup.protocolName().get()))
             );
