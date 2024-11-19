@@ -45,8 +45,7 @@ public class UnionSetTest {
             Set.of(2, 3, 4, 5)
         );
 
-        List<Integer> result = new ArrayList<>();
-        result.addAll(union);
+        List<Integer> result = new ArrayList<>(union);
         result.sort(Integer::compareTo);
 
         assertEquals(List.of(1, 2, 3, 4, 5), result);

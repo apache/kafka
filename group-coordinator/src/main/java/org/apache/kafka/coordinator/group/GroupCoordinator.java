@@ -420,7 +420,6 @@ public interface GroupCoordinator {
      *
      * @param groupId           The group id.
      * @param newGroupConfig    The new group config
-     * @return void
      */
     void updateGroupConfig(String groupId, Properties newGroupConfig);
 

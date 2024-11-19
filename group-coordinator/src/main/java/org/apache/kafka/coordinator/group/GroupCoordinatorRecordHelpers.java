@@ -141,13 +141,13 @@ public class GroupCoordinatorRecordHelpers {
         Map<String, TopicMetadata> newSubscriptionMetadata
     ) {
         ConsumerGroupPartitionMetadataValue value = new ConsumerGroupPartitionMetadataValue();
-        newSubscriptionMetadata.forEach((topicName, topicMetadata) -> {
+        newSubscriptionMetadata.forEach((topicName, topicMetadata) ->
             value.topics().add(new ConsumerGroupPartitionMetadataValue.TopicMetadata()
                 .setTopicId(topicMetadata.id())
                 .setTopicName(topicMetadata.name())
                 .setNumPartitions(topicMetadata.numPartitions())
-            );
-        });
+            )
+        );
 
         return new CoordinatorRecord(
             new ApiMessageAndVersion(
@@ -674,13 +674,13 @@ public class GroupCoordinatorRecordHelpers {
         Map<String, TopicMetadata> newSubscriptionMetadata
     ) {
         ShareGroupPartitionMetadataValue value = new ShareGroupPartitionMetadataValue();
-        newSubscriptionMetadata.forEach((topicName, topicMetadata) -> {
+        newSubscriptionMetadata.forEach((topicName, topicMetadata) ->
             value.topics().add(new ShareGroupPartitionMetadataValue.TopicMetadata()
                 .setTopicId(topicMetadata.id())
                 .setTopicName(topicMetadata.name())
                 .setNumPartitions(topicMetadata.numPartitions())
-            );
-        });
+            )
+        );
 
         return new CoordinatorRecord(
             new ApiMessageAndVersion(

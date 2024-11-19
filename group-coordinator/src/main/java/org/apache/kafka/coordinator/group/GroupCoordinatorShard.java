@@ -116,11 +116,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
     public static class Builder implements CoordinatorShardBuilder<GroupCoordinatorShard, CoordinatorRecord> {
         private final GroupCoordinatorConfig config;
+        private final GroupConfigManager groupConfigManager;
         private LogContext logContext;
         private SnapshotRegistry snapshotRegistry;
         private Time time;
         private CoordinatorTimer<Void, CoordinatorRecord> timer;
-        private GroupConfigManager groupConfigManager;
         private CoordinatorMetrics coordinatorMetrics;
         private TopicPartition topicPartition;
 

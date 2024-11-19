@@ -253,7 +253,7 @@ public class ConsumerGroupMember extends ModernGroupMember {
     /**
      * The rebalance timeout provided by the member.
      */
-    private int rebalanceTimeoutMs;
+    private final int rebalanceTimeoutMs;
 
     /**
      * The subscription pattern configured by the member.
@@ -360,7 +360,7 @@ public class ConsumerGroupMember extends ModernGroupMember {
      */
     public Optional<Integer> classicProtocolSessionTimeout() {
         if (useClassicProtocol()) {
-            return Optional.ofNullable(classicMemberMetadata.sessionTimeoutMs());
+            return Optional.of(classicMemberMetadata.sessionTimeoutMs());
         } else {
             return Optional.empty();
         }

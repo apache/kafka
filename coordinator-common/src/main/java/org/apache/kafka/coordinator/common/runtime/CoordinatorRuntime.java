@@ -2333,7 +2333,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             if (context != null) {
                 context.lock.lock();
                 try {
-                    if (!partitionEpoch.isPresent() || context.epoch < partitionEpoch.getAsInt()) {
+                    if (partitionEpoch.isEmpty() || context.epoch < partitionEpoch.getAsInt()) {
                         log.info("Started unloading metadata for {} with epoch {}.", tp, partitionEpoch);
                         context.transitionTo(CoordinatorState.CLOSED);
                         coordinators.remove(tp, context);

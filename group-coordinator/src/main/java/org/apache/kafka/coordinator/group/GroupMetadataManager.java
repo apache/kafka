@@ -731,7 +731,7 @@ public class GroupMetadataManager {
                 ClassicGroup group = classicGroup(groupId, committedOffset);
 
                 if (group.isInState(STABLE)) {
-                    if (!group.protocolName().isPresent()) {
+                    if (group.protocolName().isEmpty()) {
                         throw new IllegalStateException("Invalid null group protocol for stable group");
                     }
 
@@ -751,7 +751,7 @@ public class GroupMetadataManager {
                         .setGroupState(group.stateAsString())
                         .setProtocolType(group.protocolType().orElse(""))
                         .setMembers(group.allMembers().stream()
-                            .map(member -> member.describeNoMetadata())
+                            .map(ClassicGroupMember::describeNoMetadata)
                             .collect(Collectors.toList())
                         )
                     );
@@ -3737,9 +3737,9 @@ public class GroupMetadataManager {
 
         if (value != null) {
             Map<String, TopicMetadata> subscriptionMetadata = new HashMap<>();
-            value.topics().forEach(topicMetadata -> {
-                subscriptionMetadata.put(topicMetadata.topicName(), TopicMetadata.fromRecord(topicMetadata));
-            });
+            value.topics().forEach(topicMetadata ->
+                subscriptionMetadata.put(topicMetadata.topicName(), TopicMetadata.fromRecord(topicMetadata))
+            );
             group.setSubscriptionMetadata(subscriptionMetadata);
         } else {
             group.setSubscriptionMetadata(Collections.emptyMap());
@@ -3947,19 +3947,19 @@ public class GroupMetadataManager {
                         case DEAD:
                             break;
                         case PREPARING_REBALANCE:
-                            classicGroup.allMembers().forEach(member -> {
+                            classicGroup.allMembers().forEach(member ->
                                 classicGroup.completeJoinFuture(member, new JoinGroupResponseData()
                                     .setMemberId(member.memberId())
-                                    .setErrorCode(NOT_COORDINATOR.code()));
-                            });
+                                    .setErrorCode(NOT_COORDINATOR.code()))
+                            );
 
                             break;
                         case COMPLETING_REBALANCE:
                         case STABLE:
-                            classicGroup.allMembers().forEach(member -> {
+                            classicGroup.allMembers().forEach(member ->
                                 classicGroup.completeSyncFuture(member, new SyncGroupResponseData()
-                                    .setErrorCode(NOT_COORDINATOR.code()));
-                            });
+                                    .setErrorCode(NOT_COORDINATOR.code()))
+                            );
                     }
                     break;
                 case SHARE:
@@ -6086,7 +6086,7 @@ public class GroupMetadataManager {
         if (isEmptyClassicGroup(group)) {
             // Delete the classic group by adding tombstones.
             // There's no need to remove the group as the replay of tombstones removes it.
-            if (group != null) createGroupTombstoneRecords(group, records);
+            createGroupTombstoneRecords(group, records);
             return true;
         }
         return false;

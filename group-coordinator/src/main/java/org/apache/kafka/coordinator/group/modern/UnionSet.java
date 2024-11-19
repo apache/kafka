@@ -73,7 +73,7 @@ public class UnionSet<T> implements Set<T> {
 
     @Override
     public Iterator<T> iterator() {
-        return new Iterator<T>() {
+        return new Iterator<>() {
             private final Iterator<T> largeSetIterator = largeSet.iterator();
             private final Iterator<T> smallSetIterator = smallSet.iterator();
             private T next = null;
