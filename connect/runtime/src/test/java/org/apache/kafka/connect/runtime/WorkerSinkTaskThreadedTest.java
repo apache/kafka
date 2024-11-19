@@ -641,7 +641,7 @@ public class WorkerSinkTaskThreadedTest {
     }
 
     private void expectPreCommit(ExpectOffsetCommitCommand... commands) {
-        doAnswer(new Answer<Object>() {
+        doAnswer(new Answer<>() {
             int index = 0;
 
             @Override
@@ -662,7 +662,7 @@ public class WorkerSinkTaskThreadedTest {
     }
     
     private void expectOffsetCommit(ExpectOffsetCommitCommand... commands) {
-        doAnswer(new Answer<Object>() {
+        doAnswer(new Answer<>() {
             int index = 0;
 
             @Override
@@ -718,7 +718,6 @@ public class WorkerSinkTaskThreadedTest {
     private abstract static class TestSinkTask extends SinkTask {
     }
 
-    @SuppressWarnings("NewClassNamingConvention")
     private static class ExpectOffsetCommitCommand {
         final long expectedMessages;
         final RuntimeException error;

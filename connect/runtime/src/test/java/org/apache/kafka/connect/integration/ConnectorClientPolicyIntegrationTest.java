@@ -25,7 +25,6 @@ import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -49,19 +48,15 @@ public class ConnectorClientPolicyIntegrationTest {
     private static final int NUM_WORKERS = 1;
     private static final String CONNECTOR_NAME = "simple-conn";
 
-    @AfterEach
-    public void close() {
-    }
-
     @Test
-    public void testCreateWithOverridesForNonePolicy() throws Exception {
+    public void testCreateWithOverridesForNonePolicy() {
         Map<String, String> props = basicConnectorConfig();
         props.put(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + SaslConfigs.SASL_JAAS_CONFIG, "sasl");
         assertFailCreateConnector("None", props);
     }
 
     @Test
-    public void testCreateWithNotAllowedOverridesForPrincipalPolicy() throws Exception {
+    public void testCreateWithNotAllowedOverridesForPrincipalPolicy() {
         Map<String, String> props = basicConnectorConfig();
         props.put(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + SaslConfigs.SASL_JAAS_CONFIG, "sasl");
         props.put(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
@@ -98,7 +93,7 @@ public class ConnectorClientPolicyIntegrationTest {
         assertPassCreateConnector(null, props);
     }
 
-    private EmbeddedConnectCluster connectClusterWithPolicy(String policy) throws InterruptedException {
+    private EmbeddedConnectCluster connectClusterWithPolicy(String policy) {
         // setup Connect worker properties
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, String.valueOf(5_000));
@@ -125,7 +120,7 @@ public class ConnectorClientPolicyIntegrationTest {
         return connect;
     }
 
-    private void assertFailCreateConnector(String policy, Map<String, String> props) throws InterruptedException {
+    private void assertFailCreateConnector(String policy, Map<String, String> props) {
         EmbeddedConnectCluster connect = connectClusterWithPolicy(policy);
         try {
             connect.configureConnector(CONNECTOR_NAME, props);

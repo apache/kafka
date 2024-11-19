@@ -1760,7 +1760,7 @@ public class WorkerSinkTaskTest {
                 transformationChain, mockConsumer, pluginLoader, time,
                 RetryWithToleranceOperatorTest.noopOperator(), null, statusBackingStore, Collections::emptyList);
         mockConsumer.updateBeginningOffsets(
-                new HashMap<TopicPartition, Long>() {{
+                new HashMap<>() {{
                     put(TOPIC_PARTITION, 0L);
                     put(TOPIC_PARTITION2, 0L);
                 }}

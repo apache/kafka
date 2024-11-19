@@ -1232,7 +1232,7 @@ public class AbstractHerderTest {
 
     private void testConfigProviderRegex(String rawConnConfig, boolean expected) {
         Set<String> keys = keysWithVariableValues(Collections.singletonMap("key", rawConnConfig), ConfigTransformer.DEFAULT_PATTERN);
-        boolean actual = keys != null && !keys.isEmpty() && keys.contains("key");
+        boolean actual = !keys.isEmpty() && keys.contains("key");
         assertEquals(expected, actual, String.format("%s should have matched regex", rawConnConfig));
     }
 

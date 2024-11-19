@@ -629,7 +629,7 @@ public class ConnectorsResourceTest {
     }
 
     @Test
-    public void testPatchConnectorConfigNotFound() throws Throwable {
+    public void testPatchConnectorConfigNotFound() {
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackException(cb, new NotFoundException("Connector " + CONNECTOR_NAME + " not found"))
                 .when(herder).patchConnectorConfig(eq(CONNECTOR_NAME), eq(CONNECTOR_CONFIG_PATCH), cb.capture());

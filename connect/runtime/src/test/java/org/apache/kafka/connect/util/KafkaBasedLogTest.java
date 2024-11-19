@@ -141,7 +141,7 @@ public class KafkaBasedLogTest {
 
     @BeforeEach
     public void setUp() {
-        store = new KafkaBasedLog<String, String>(TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, topicAdminSupplier, consumedCallback, time, initializer) {
+        store = new KafkaBasedLog<>(TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, topicAdminSupplier, consumedCallback, time, initializer) {
             @Override
             protected KafkaProducer<String, String> createProducer() {
                 return producer;

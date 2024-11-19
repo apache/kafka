@@ -74,7 +74,6 @@ import static org.junit.jupiter.api.Assertions.fail;
 public class ErrorHandlingIntegrationTest {
     
     private static final Logger log = LoggerFactory.getLogger(ErrorHandlingIntegrationTest.class);
-    private static final int NUM_WORKERS = 1;
     private static final String DLQ_TOPIC = "my-connector-errors";
     private static final String CONNECTOR_NAME = "error-conn";
     private static final String TASK_ID = "error-conn-0";

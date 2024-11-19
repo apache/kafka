@@ -159,22 +159,18 @@ public class ConnectorPluginsResourceTest {
             PREDICATE_PLUGINS.add(new PluginDesc<>(HasHeaderKey.class, appVersion, PluginType.PREDICATE, classLoader));
             PREDICATE_PLUGINS.add(new PluginDesc<>(RecordIsTombstone.class, appVersion, PluginType.PREDICATE, classLoader));
         } catch (Exception e) {
-            e.printStackTrace();
             fail("Failed setting up plugins");
         }
     }
 
     static {
-        List<ConfigInfo> configs = new LinkedList<>();
-        List<ConfigInfo> partialConfigs = new LinkedList<>();
-
         ConfigDef connectorConfigDef = ConnectorConfig.configDef();
         List<ConfigValue> connectorConfigValues = connectorConfigDef.validate(PROPS);
         List<ConfigValue> partialConnectorConfigValues = connectorConfigDef.validate(PARTIAL_PROPS);
         ConfigInfos result = AbstractHerder.generateResult(ConnectorPluginsResourceTestConnector.class.getName(), connectorConfigDef.configKeys(), connectorConfigValues, Collections.emptyList());
         ConfigInfos partialResult = AbstractHerder.generateResult(ConnectorPluginsResourceTestConnector.class.getName(), connectorConfigDef.configKeys(), partialConnectorConfigValues, Collections.emptyList());
-        configs.addAll(result.values());
-        partialConfigs.addAll(partialResult.values());
+        List<ConfigInfo> configs = new LinkedList<>(result.values());
+        List<ConfigInfo> partialConfigs = new LinkedList<>(partialResult.values());
 
         ConfigKeyInfo configKeyInfo = new ConfigKeyInfo("test.string.config", "STRING", true, null, "HIGH", "Test configuration for string type.", null, -1, "NONE", "test.string.config", Collections.emptyList());
         ConfigValueInfo configValueInfo = new ConfigValueInfo("test.string.config", "testString", Collections.emptyList(), Collections.emptyList(), true);

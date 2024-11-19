@@ -618,7 +618,7 @@ abstract class EmbeddedConnect {
             if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
                 // We use String instead of ConnectorTaskId as the key here since the latter can't be automatically
                 // deserialized by Jackson when used as a JSON object key (i.e., when it's serialized as a JSON string)
-                return mapper.readValue(responseToString(response), new TypeReference<List<TaskInfo>>() { });
+                return mapper.readValue(responseToString(response), new TypeReference<>() { });
             }
         } catch (IOException e) {
             log.error("Could not read task configs from response: {}",

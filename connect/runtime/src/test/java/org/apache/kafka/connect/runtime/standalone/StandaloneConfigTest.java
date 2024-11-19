@@ -34,7 +34,7 @@ public class StandaloneConfigTest {
     private static final String HTTPS_LISTENER_PREFIX = "listeners.https.";
 
     private Map<String, Object> sslProps() {
-        return new HashMap<String, Object>() {
+        return new HashMap<>() {
             {
                 put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, new Password("ssl_key_password"));
                 put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, "ssl_keystore");
@@ -46,7 +46,7 @@ public class StandaloneConfigTest {
     }
 
     private Map<String, String> baseWorkerProps() {
-        return new HashMap<String, String>() {
+        return new HashMap<>() {
             {
                 put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
                 put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");

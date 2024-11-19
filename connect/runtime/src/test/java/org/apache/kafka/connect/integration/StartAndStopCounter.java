@@ -116,19 +116,6 @@ public class StartAndStopCounter {
     }
 
     /**
-     * Obtain a {@link StartAndStopLatch} that can be used to wait until the expected number of restarts
-     * has been completed.
-     *
-     * @param expectedRestarts the expected number of restarts
-     * @param dependents       any dependent latches that must also complete in order for the
-     *                         resulting latch to complete
-     * @return the latch; never null
-     */
-    public StartAndStopLatch expectedRestarts(int expectedRestarts, List<StartAndStopLatch> dependents) {
-        return expectedRestarts(expectedRestarts, expectedRestarts, dependents);
-    }
-
-    /**
      * Obtain a {@link StartAndStopLatch} that can be used to wait until the expected number of starts
      * has been completed.
      *

@@ -184,7 +184,7 @@ public class ConnectRestServerTest {
         response.getEntity().writeTo(baos);
         assertArrayEquals(
             request.getAllowedMethods(response).toArray(),
-            new String(baos.toByteArray(), StandardCharsets.UTF_8).split(", ")
+            baos.toString(StandardCharsets.UTF_8).split(", ")
         );
     }
 
@@ -281,7 +281,7 @@ public class ConnectRestServerTest {
         expectedLogger.put("level", loggingLevel);
         expectedLogger.put("last_modified", lastModified);
         Map<String, Map<String, Object>> expectedLoggers = Collections.singletonMap(logger, expectedLogger);
-        Map<String, Map<String, Object>> actualLoggers = mapper.readValue(responseStr, new TypeReference<Map<String, Map<String, Object>>>() { });
+        Map<String, Map<String, Object>> actualLoggers = mapper.readValue(responseStr, new TypeReference<>() { });
         assertEquals(expectedLoggers, actualLoggers);
     }
 

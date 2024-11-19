@@ -86,7 +86,7 @@ public class ConnectorRestartApiIntegrationTest {
         connectorHandle = RuntimeHandles.get().connectorHandle(connectorName);
     }
 
-    private void startOrReuseConnectWithNumWorkers(int numWorkers) throws Exception {
+    private void startOrReuseConnectWithNumWorkers(int numWorkers) {
         connect = CONNECT_CLUSTERS.computeIfAbsent(numWorkers, n -> {
             // setup Connect worker properties
             Map<String, String> workerProps = new HashMap<>();
@@ -123,7 +123,7 @@ public class ConnectorRestartApiIntegrationTest {
     }
 
     @Test
-    public void testRestartUnknownConnectorNoParams() throws Exception {
+    public void testRestartUnknownConnectorNoParams() {
         String connectorName = "Unknown";
 
         // build a Connect cluster backed by a Kafka KRaft cluster
@@ -137,14 +137,14 @@ public class ConnectorRestartApiIntegrationTest {
     }
 
     @Test
-    public void testRestartUnknownConnector() throws Exception {
+    public void testRestartUnknownConnector() {
         restartUnknownConnector(false, false);
         restartUnknownConnector(false, true);
         restartUnknownConnector(true, false);
         restartUnknownConnector(true, true);
     }
 
-    private void restartUnknownConnector(boolean onlyFailed, boolean includeTasks) throws Exception {
+    private void restartUnknownConnector(boolean onlyFailed, boolean includeTasks) {
         String connectorName = "Unknown";
 
         // build a Connect cluster backed by a Kafka KRaft cluster

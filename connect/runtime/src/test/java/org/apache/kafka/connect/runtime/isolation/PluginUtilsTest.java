@@ -518,7 +518,6 @@ public class PluginUtilsTest {
                 Collections.emptySortedSet(),
                 Collections.emptySortedSet()
         );
-        Map<String, String> aliases = PluginUtils.computeAliases(result);
         Map<String, String> actualAliases = PluginUtils.computeAliases(result);
         Map<String, String> expectedAliases = new HashMap<>();
         expectedAliases.put("MockSinkConnector", MockSinkConnector.class.getName());
