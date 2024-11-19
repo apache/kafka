@@ -26,6 +26,8 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.ErrorHandlerContext;
+import org.apache.kafka.streams.errors.LogAndContinueProcessingExceptionHandler;
+import org.apache.kafka.streams.errors.LogAndFailProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -109,6 +111,52 @@ public class ProcessingExceptionHandlerIntegrationTest {
     }
 
     @Test
+    public void shouldFailWhenProcessingExceptionOccursFromFlushingCacheIfExceptionHandlerReturnsFail() {
+        final List<KeyValue<String, String>> events = Arrays.asList(
+            new KeyValue<>("ID123-1", "ID123-A1"),
+            new KeyValue<>("ID123-1", "ID123-A2"),
+            new KeyValue<>("ID123-1", "ID123-A3"),
+            new KeyValue<>("ID123-1", "ID123-A4")
+        );
+
+        final List<KeyValueTimestamp<String, String>> expectedProcessedRecords = Arrays.asList(
+            new KeyValueTimestamp<>("ID123-1", "1", TIMESTAMP.toEpochMilli()),
+            new KeyValueTimestamp<>("ID123-1", "2", TIMESTAMP.toEpochMilli())
+        );
+
+        final MockProcessorSupplier<String, String, Void, Void> processor = new MockProcessorSupplier<>();
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder
+            .stream("TOPIC_NAME", Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey()
+            .count()
+            .toStream()
+            .mapValues(value -> value.toString())
+            .process(runtimeErrorProcessorSupplierMock())
+            .process(processor);
+
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndFailProcessingExceptionHandler.class);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.ofEpochMilli(0L))) {
+            final TestInputTopic<String, String> inputTopic = driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
+
+            final StreamsException exception = assertThrows(StreamsException.class,
+                () -> inputTopic.pipeKeyValueList(events, TIMESTAMP, Duration.ZERO));
+
+            assertTrue(exception.getMessage().contains("Failed to flush cache of store KSTREAM-AGGREGATE-STATE-STORE-0000000001"));
+            assertEquals(expectedProcessedRecords.size(), processor.theCapturedProcessor().processed().size());
+            assertIterableEquals(expectedProcessedRecords, processor.theCapturedProcessor().processed());
+
+            final MetricName dropTotal = droppedRecordsTotalMetric();
+            final MetricName dropRate = droppedRecordsRateMetric();
+
+            assertEquals(0.0, driver.metrics().get(dropTotal).metricValue());
+            assertEquals(0.0, driver.metrics().get(dropRate).metricValue());
+        }
+    }
+
+    @Test
     public void shouldContinueWhenProcessingExceptionOccursIfExceptionHandlerReturnsContinue() {
         final List<KeyValue<String, String>> events = Arrays.asList(
             new KeyValue<>("ID123-1", "ID123-A1"),
@@ -149,6 +197,50 @@ public class ProcessingExceptionHandlerIntegrationTest {
             final MetricName dropRate = droppedRecordsRateMetric();
 
             assertEquals(2.0, driver.metrics().get(dropTotal).metricValue());
+            assertTrue((Double) driver.metrics().get(dropRate).metricValue() > 0.0);
+        }
+    }
+
+    @Test
+    public void shouldContinueWhenProcessingExceptionOccursFromFlushingCacheIfExceptionHandlerReturnsContinue() {
+        final List<KeyValue<String, String>> events = Arrays.asList(
+            new KeyValue<>("ID123-1", "ID123-A1"),
+            new KeyValue<>("ID123-1", "ID123-A2"),
+            new KeyValue<>("ID123-1", "ID123-A3"),
+            new KeyValue<>("ID123-1", "ID123-A4")
+        );
+
+        final List<KeyValueTimestamp<String, String>> expectedProcessedRecords = Arrays.asList(
+            new KeyValueTimestamp<>("ID123-1", "1", TIMESTAMP.toEpochMilli()),
+            new KeyValueTimestamp<>("ID123-1", "2", TIMESTAMP.toEpochMilli()),
+            new KeyValueTimestamp<>("ID123-1", "4", TIMESTAMP.toEpochMilli())
+        );
+
+        final MockProcessorSupplier<String, String, Void, Void> processor = new MockProcessorSupplier<>();
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder
+            .stream("TOPIC_NAME", Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey()
+            .count()
+            .toStream()
+            .mapValues(value -> value.toString())
+            .process(runtimeErrorProcessorSupplierMock())
+            .process(processor);
+
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueProcessingExceptionHandler.class);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.ofEpochMilli(0L))) {
+            final TestInputTopic<String, String> inputTopic = driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
+            inputTopic.pipeKeyValueList(events, TIMESTAMP, Duration.ZERO);
+
+            assertEquals(expectedProcessedRecords.size(), processor.theCapturedProcessor().processed().size());
+            assertIterableEquals(expectedProcessedRecords, processor.theCapturedProcessor().processed());
+
+            final MetricName dropTotal = droppedRecordsTotalMetric();
+            final MetricName dropRate = droppedRecordsRateMetric();
+
+            assertEquals(1.0, driver.metrics().get(dropTotal).metricValue());
             assertTrue((Double) driver.metrics().get(dropRate).metricValue() > 0.0);
         }
     }
@@ -377,7 +469,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
         return () -> new ContextualProcessor<String, String, String, String>() {
             @Override
             public void process(final Record<String, String> record) {
-                if (record.key().contains("ERR")) {
+                if (record.key().contains("ERR") || record.value().equals("3")) {
                     throw new RuntimeException("Exception should be handled by processing exception handler");
                 }
 
