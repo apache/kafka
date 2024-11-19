@@ -16,21 +16,21 @@
  */
 package org.apache.kafka.tools.consumer.group;
 
-import org.apache.kafka.common.ConsumerGroupState;
+import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.Node;
 
-class GroupState {
+class GroupInformation {
     final String group;
     final Node coordinator;
     final String assignmentStrategy;
-    final ConsumerGroupState state;
+    final GroupState groupState;
     final int numMembers;
 
-    GroupState(String group, Node coordinator, String assignmentStrategy, ConsumerGroupState state, int numMembers) {
+    GroupInformation(String group, Node coordinator, String assignmentStrategy, GroupState groupState, int numMembers) {
         this.group = group;
         this.coordinator = coordinator;
         this.assignmentStrategy = assignmentStrategy;
-        this.state = state;
+        this.groupState = groupState;
         this.numMembers = numMembers;
     }
 }

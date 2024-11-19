@@ -25,7 +25,7 @@ import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.ConsumerGroupState;
+import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -834,10 +834,10 @@ public class ResetConsumerGroupOffsetTest {
     private void awaitConsumerGroupInactive(ConsumerGroupCommand.ConsumerGroupService service,
                                             String group) throws Exception {
         TestUtils.waitForCondition(() -> {
-            ConsumerGroupState state = service.collectGroupState(group).state;
-            return Objects.equals(state, ConsumerGroupState.EMPTY) || Objects.equals(state, ConsumerGroupState.DEAD);
+            GroupState state = service.collectGroupState(group).groupState;
+            return Objects.equals(state, GroupState.EMPTY) || Objects.equals(state, GroupState.DEAD);
         }, "Expected that consumer group is inactive. Actual state: " +
-                service.collectGroupState(group).state);
+                service.collectGroupState(group).groupState);
     }
 
     private void resetAndAssertOffsetsCommitted(ClusterInstance cluster,

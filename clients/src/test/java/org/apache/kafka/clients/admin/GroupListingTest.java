@@ -18,6 +18,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 
 import org.junit.jupiter.api.Test;
@@ -33,16 +34,16 @@ public class GroupListingTest {
 
     @Test
     public void testSimpleConsumerGroup() {
-        GroupListing gl = new GroupListing(GROUP_ID, Optional.of(GroupType.CLASSIC), "");
+        GroupListing gl = new GroupListing(GROUP_ID, Optional.of(GroupType.CLASSIC), "", Optional.of(GroupState.EMPTY));
         assertTrue(gl.isSimpleConsumerGroup());
 
-        gl = new GroupListing(GROUP_ID, Optional.of(GroupType.CLASSIC), ConsumerProtocol.PROTOCOL_TYPE);
+        gl = new GroupListing(GROUP_ID, Optional.of(GroupType.CLASSIC), ConsumerProtocol.PROTOCOL_TYPE, Optional.of(GroupState.STABLE));
         assertFalse(gl.isSimpleConsumerGroup());
 
-        gl = new GroupListing(GROUP_ID, Optional.of(GroupType.CONSUMER), "");
+        gl = new GroupListing(GROUP_ID, Optional.of(GroupType.CONSUMER), "", Optional.of(GroupState.EMPTY));
         assertFalse(gl.isSimpleConsumerGroup());
 
-        gl = new GroupListing(GROUP_ID, Optional.empty(), "");
+        gl = new GroupListing(GROUP_ID, Optional.empty(), "", Optional.empty());
         assertFalse(gl.isSimpleConsumerGroup());
     }
 }

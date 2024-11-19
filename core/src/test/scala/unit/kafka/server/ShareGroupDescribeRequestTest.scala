@@ -20,7 +20,7 @@ import org.apache.kafka.common.test.api.ClusterInstance
 import org.apache.kafka.common.test.api._
 import org.apache.kafka.common.test.api.ClusterTestExtensions
 import kafka.utils.TestUtils
-import org.apache.kafka.common.ShareGroupState
+import org.apache.kafka.common.GroupState
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData.DescribedGroup
 import org.apache.kafka.common.message.{ShareGroupDescribeRequestData, ShareGroupDescribeResponseData, ShareGroupHeartbeatResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -114,7 +114,7 @@ class ShareGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoord
         val expected = List(
           new DescribedGroup()
             .setGroupId("grp-1")
-            .setGroupState(ShareGroupState.STABLE.toString)
+            .setGroupState(GroupState.STABLE.toString)
             .setGroupEpoch(1)
             .setAssignmentEpoch(1)
             .setAssignorName("simple")

@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.coordinator.group.metrics;
 
+import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.ShareGroupState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.metrics.Metrics;
@@ -116,19 +116,19 @@ public class GroupCoordinatorMetricsTest {
                 GroupCoordinatorMetrics.METRICS_GROUP,
                 "The number of share groups in empty state.",
                 "protocol", Group.GroupType.SHARE.toString(),
-                "state", ShareGroupState.EMPTY.toString()),
+                "state", GroupState.EMPTY.toString()),
             metrics.metricName(
                 "group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
                 "The number of share groups in stable state.",
                 "protocol", Group.GroupType.SHARE.toString(),
-                "state", ShareGroupState.STABLE.toString()),
+                "state", GroupState.STABLE.toString()),
             metrics.metricName(
                 "group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
                 "The number of share groups in dead state.",
                 "protocol", Group.GroupType.SHARE.toString(),
-                "state", ShareGroupState.DEAD.toString())
+                "state", GroupState.DEAD.toString())
         ));
 
         try {

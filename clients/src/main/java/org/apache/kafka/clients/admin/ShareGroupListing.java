@@ -17,7 +17,7 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.ShareGroupState;
+import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Objects;
@@ -31,7 +31,7 @@ import java.util.Optional;
 @InterfaceStability.Evolving
 public class ShareGroupListing {
     private final String groupId;
-    private final Optional<ShareGroupState> state;
+    private final Optional<GroupState> groupState;
 
     /**
      * Create an instance with the specified parameters.
@@ -46,11 +46,11 @@ public class ShareGroupListing {
      * Create an instance with the specified parameters.
      *
      * @param groupId Group Id
-     * @param state The state of the share group
+     * @param groupState The state of the share group
      */
-    public ShareGroupListing(String groupId, Optional<ShareGroupState> state) {
+    public ShareGroupListing(String groupId, Optional<GroupState> groupState) {
         this.groupId = groupId;
-        this.state = Objects.requireNonNull(state);
+        this.groupState = Objects.requireNonNull(groupState);
     }
 
     /**
@@ -63,21 +63,21 @@ public class ShareGroupListing {
     /**
      * The share group state.
      */
-    public Optional<ShareGroupState> state() {
-        return state;
+    public Optional<GroupState> groupState() {
+        return groupState;
     }
 
     @Override
     public String toString() {
         return "(" +
             "groupId='" + groupId + '\'' +
-            ", state=" + state +
+            ", groupState=" + groupState +
             ')';
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(groupId, state);
+        return Objects.hash(groupId, groupState);
     }
 
     @Override
@@ -86,6 +86,6 @@ public class ShareGroupListing {
         if (!(o instanceof ShareGroupListing)) return false;
         ShareGroupListing that = (ShareGroupListing) o;
         return Objects.equals(groupId, that.groupId) &&
-            Objects.equals(state, that.state);
+            Objects.equals(groupState, that.groupState);
     }
 }

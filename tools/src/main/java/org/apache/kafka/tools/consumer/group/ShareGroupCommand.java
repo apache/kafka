@@ -20,14 +20,15 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AbstractOptions;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DescribeShareGroupsResult;
+import org.apache.kafka.clients.admin.GroupListing;
+import org.apache.kafka.clients.admin.ListGroupsOptions;
+import org.apache.kafka.clients.admin.ListGroupsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
-import org.apache.kafka.clients.admin.ListShareGroupsOptions;
-import org.apache.kafka.clients.admin.ListShareGroupsResult;
 import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.ShareGroupDescription;
-import org.apache.kafka.clients.admin.ShareGroupListing;
-import org.apache.kafka.common.ShareGroupState;
+import org.apache.kafka.common.GroupState;
+import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
@@ -89,14 +90,13 @@ public class ShareGroupCommand {
         }
     }
 
-    static Set<ShareGroupState> shareGroupStatesFromString(String input) {
-        Set<ShareGroupState> parsedStates =
-            Arrays.stream(input.split(",")).map(s -> ShareGroupState.parse(s.trim())).collect(Collectors.toSet());
-        if (parsedStates.contains(ShareGroupState.UNKNOWN)) {
-            Collection<ShareGroupState> validStates =
-                Arrays.stream(ShareGroupState.values()).filter(s -> s != ShareGroupState.UNKNOWN).collect(Collectors.toList());
+    static Set<GroupState> groupStatesFromString(String input) {
+        Set<GroupState> parsedStates =
+            Arrays.stream(input.split(",")).map(s -> GroupState.parse(s.trim())).collect(Collectors.toSet());
+        Set<GroupState> validStates = GroupState.groupStatesForType(GroupType.SHARE);
+        if (!validStates.containsAll(parsedStates)) {
             throw new IllegalArgumentException("Invalid state list '" + input + "'. Valid states are: " +
-                validStates.stream().map(Object::toString).collect(Collectors.joining(", ")));
+                    validStates.stream().map(GroupState::toString).collect(Collectors.joining(", ")));
         }
         return parsedStates;
     }
@@ -128,10 +128,10 @@ public class ShareGroupCommand {
         public void listGroups() throws ExecutionException, InterruptedException {
             if (opts.options.has(opts.stateOpt)) {
                 String stateValue = opts.options.valueOf(opts.stateOpt);
-                Set<ShareGroupState> states = (stateValue == null || stateValue.isEmpty())
+                Set<GroupState> states = (stateValue == null || stateValue.isEmpty())
                     ? Collections.emptySet()
-                    : shareGroupStatesFromString(stateValue);
-                List<ShareGroupListing> listings = listShareGroupsWithState(states);
+                    : groupStatesFromString(stateValue);
+                List<GroupListing> listings = listShareGroupsInStates(states);
 
                 printGroupInfo(listings);
             } else
@@ -140,31 +140,32 @@ public class ShareGroupCommand {
 
         List<String> listShareGroups() {
             try {
-                ListShareGroupsResult result = adminClient.listShareGroups(withTimeoutMs(new ListShareGroupsOptions()));
-                Collection<ShareGroupListing> listings = result.all().get();
-                return listings.stream().map(ShareGroupListing::groupId).collect(Collectors.toList());
+                ListGroupsResult result = adminClient.listGroups(withTimeoutMs(new ListGroupsOptions()).withTypes(Set.of(GroupType.SHARE)));
+                Collection<GroupListing> listings = result.all().get();
+                return listings.stream().map(GroupListing::groupId).collect(Collectors.toList());
             } catch (InterruptedException | ExecutionException e) {
                 throw new RuntimeException(e);
             }
         }
 
-        List<ShareGroupListing> listShareGroupsWithState(Set<ShareGroupState> states) throws ExecutionException, InterruptedException {
-            ListShareGroupsOptions listShareGroupsOptions = withTimeoutMs(new ListShareGroupsOptions());
-            listShareGroupsOptions.inStates(states);
-            ListShareGroupsResult result = adminClient.listShareGroups(listShareGroupsOptions);
+        List<GroupListing> listShareGroupsInStates(Set<GroupState> states) throws ExecutionException, InterruptedException {
+            ListGroupsOptions listGroupsOptions = withTimeoutMs(new ListGroupsOptions());
+            listGroupsOptions.withTypes(Set.of(GroupType.SHARE));
+            listGroupsOptions.inGroupStates(states);
+            ListGroupsResult result = adminClient.listGroups(listGroupsOptions);
             return new ArrayList<>(result.all().get());
         }
 
-        private void printGroupInfo(List<ShareGroupListing> groups) {
+        private void printGroupInfo(List<GroupListing> groups) {
             // find proper columns width
             int maxGroupLen = 15;
-            for (ShareGroupListing group : groups) {
+            for (GroupListing group : groups) {
                 maxGroupLen = Math.max(maxGroupLen, group.groupId().length());
             }
             System.out.printf("%" + (-maxGroupLen) + "s %s\n", "GROUP", "STATE");
-            for (ShareGroupListing group : groups) {
+            for (GroupListing group : groups) {
                 String groupId = group.groupId();
-                String state = group.state().orElse(ShareGroupState.UNKNOWN).toString();
+                String state = group.groupState().orElse(GroupState.UNKNOWN).toString();
                 System.out.printf("%" + (-maxGroupLen) + "s %s\n", groupId, state);
             }
         }
@@ -174,14 +175,14 @@ public class ShareGroupCommand {
          *
          * @return Whether the group detail should be printed
          */
-        public static boolean maybePrintEmptyGroupState(String group, ShareGroupState state, int numRows) {
-            if (state == ShareGroupState.DEAD) {
+        public static boolean maybePrintEmptyGroupState(String group, GroupState state, int numRows) {
+            if (state == GroupState.DEAD) {
                 printError("Share group '" + group + "' does not exist.", Optional.empty());
-            } else if (state == ShareGroupState.EMPTY) {
+            } else if (state == GroupState.EMPTY) {
                 System.err.println("\nShare group '" + group + "' has no active members.");
             }
 
-            return !state.equals(ShareGroupState.DEAD) && numRows > 0;
+            return !state.equals(GroupState.DEAD) && numRows > 0;
         }
 
         public void describeGroups() throws ExecutionException, InterruptedException {
@@ -233,9 +234,9 @@ public class ShareGroupCommand {
 
         private void printOffsets(ShareGroupDescription description) throws ExecutionException, InterruptedException {
             Map<TopicPartition, Long> offsets = getOffsets(description.members());
-            if (maybePrintEmptyGroupState(description.groupId(), description.state(), offsets.size())) {
+            if (maybePrintEmptyGroupState(description.groupId(), description.groupState(), offsets.size())) {
                 String fmt = printOffsetFormat(description, offsets);
-                System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "OFFSET");
+                System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "START-OFFSET");
 
                 for (Map.Entry<TopicPartition, Long> offset : offsets.entrySet()) {
                     System.out.printf(fmt, description.groupId(), offset.getKey().topic(), offset.getKey().partition(), offset.getValue());
@@ -253,7 +254,7 @@ public class ShareGroupCommand {
         }
 
         private void printStates(ShareGroupDescription description) {
-            maybePrintEmptyGroupState(description.groupId(), description.state(), 1);
+            maybePrintEmptyGroupState(description.groupId(), description.groupState(), 1);
 
             int groupLen = Math.max(15, description.groupId().length());
             String coordinator = description.coordinator().host() + ":" + description.coordinator().port() + "  (" + description.coordinator().idString() + ")";
@@ -261,14 +262,14 @@ public class ShareGroupCommand {
 
             String fmt = "%" + -groupLen + "s %" + -coordinatorLen + "s %-15s %s\n";
             System.out.printf(fmt, "GROUP", "COORDINATOR (ID)", "STATE", "#MEMBERS");
-            System.out.printf(fmt, description.groupId(), coordinator, description.state().toString(), description.members().size());
+            System.out.printf(fmt, description.groupId(), coordinator, description.groupState().toString(), description.members().size());
         }
 
         private void printMembers(ShareGroupDescription description) {
             int groupLen = Math.max(15, description.groupId().length());
             int maxConsumerIdLen = 15, maxHostLen = 15, maxClientIdLen = 15;
             Collection<MemberDescription> members = description.members();
-            if (maybePrintEmptyGroupState(description.groupId(), description.state(), description.members().size())) {
+            if (maybePrintEmptyGroupState(description.groupId(), description.groupState(), description.members().size())) {
                 for (MemberDescription member : members) {
                     maxConsumerIdLen = Math.max(maxConsumerIdLen, member.consumerId().length());
                     maxHostLen = Math.max(maxHostLen, member.host().length());
