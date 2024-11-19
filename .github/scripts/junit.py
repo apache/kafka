@@ -159,6 +159,7 @@ def parse_report(workspace_path, report_path, fp) -> Iterable[TestSuite]:
                 test_time = float(elem.get("time", 0.0))
                 partial_test_case = partial(TestCase, test_name, class_name, test_time)
                 test_case_failed = False
+                test_case_skipped = False
             elif elem.tag == "failure":
                 failure_message = elem.get("message")
                 if failure_message:
