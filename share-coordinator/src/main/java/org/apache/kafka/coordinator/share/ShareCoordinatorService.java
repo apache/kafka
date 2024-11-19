@@ -60,6 +60,7 @@ import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
 import java.util.stream.Collectors;
@@ -175,6 +176,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
                     .withSerializer(new ShareCoordinatorRecordSerde())
                     .withCompression(Compression.of(config.shareCoordinatorStateTopicCompressionType()).build())
                     .withAppendLingerMs(config.shareCoordinatorAppendLingerMs())
+                    .withExecutorService(Executors.newSingleThreadExecutor())
                     .build();
 
             return new ShareCoordinatorService(

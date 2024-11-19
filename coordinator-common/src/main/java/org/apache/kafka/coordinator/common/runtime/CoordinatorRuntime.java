@@ -60,6 +60,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -118,6 +119,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private Serializer<U> serializer;
         private Compression compression;
         private int appendLingerMs;
+        private ExecutorService executorService;
 
         public Builder<S, U> withLogPrefix(String logPrefix) {
             this.logPrefix = logPrefix;
@@ -189,6 +191,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             return this;
         }
 
+        public Builder<S, U> withExecutorService(ExecutorService executorService) {
+            this.executorService = executorService;
+            return this;
+        }
+
         public CoordinatorRuntime<S, U> build() {
             if (logPrefix == null)
                 logPrefix = "";
@@ -216,6 +223,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 compression = Compression.NONE;
             if (appendLingerMs < 0)
                 throw new IllegalArgumentException("AppendLinger must be >= 0");
+            if (executorService == null)
+                throw new IllegalArgumentException("ExecutorService must be set.");
 
             return new CoordinatorRuntime<>(
                 logPrefix,
@@ -231,7 +240,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 coordinatorMetrics,
                 serializer,
                 compression,
-                appendLingerMs
+                appendLingerMs,
+                executorService
             );
         }
     }
@@ -552,6 +562,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         final EventBasedCoordinatorTimer timer;
 
         /**
+         * The coordinator executor.
+         */
+        final CoordinatorExecutorImpl<S, U> executor;
+
+        /**
          * The current state.
          */
         CoordinatorState state;
@@ -603,6 +618,13 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             this.epoch = -1;
             this.deferredEventQueue = new DeferredEventQueue(logContext);
             this.timer = new EventBasedCoordinatorTimer(tp, logContext);
+            this.executor = new CoordinatorExecutorImpl<>(
+                logContext,
+                tp,
+                CoordinatorRuntime.this,
+                executorService,
+                defaultWriteTimeout
+            );
             this.bufferSupplier = new BufferSupplier.GrowableBufferSupplier();
         }
 
@@ -633,6 +655,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                             .withSnapshotRegistry(snapshotRegistry)
                             .withTime(time)
                             .withTimer(timer)
+                            .withExecutor(executor)
                             .withCoordinatorMetrics(coordinatorMetrics)
                             .withTopicPartition(tp)
                             .build(),
@@ -714,6 +737,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 highWatermarklistener = null;
             }
             timer.cancelAll();
+            executor.cancelAll();
             deferredEventQueue.failAll(Errors.NOT_COORDINATOR.exception());
             failCurrentBatch(Errors.NOT_COORDINATOR.exception());
             if (coordinator != null) {
@@ -1900,6 +1924,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     private final int appendLingerMs;
 
     /**
+     * The executor service used by the coordinator runtime to schedule
+     * asynchronous tasks.
+     */
+    private final ExecutorService executorService;
+
+    /**
      * Atomic boolean indicating whether the runtime is running.
      */
     private final AtomicBoolean isRunning = new AtomicBoolean(true);
@@ -1926,6 +1956,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * @param serializer                        The serializer.
      * @param compression                       The compression codec.
      * @param appendLingerMs                    The append linger time in ms.
+     * @param executorService                   The executor service.
      */
     @SuppressWarnings("checkstyle:ParameterNumber")
     private CoordinatorRuntime(
@@ -1942,7 +1973,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         CoordinatorMetrics coordinatorMetrics,
         Serializer<U> serializer,
         Compression compression,
-        int appendLingerMs
+        int appendLingerMs,
+        ExecutorService executorService
     ) {
         this.logPrefix = logPrefix;
         this.logContext = logContext;
@@ -1960,6 +1992,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         this.serializer = serializer;
         this.compression = compression;
         this.appendLingerMs = appendLingerMs;
+        this.executorService = executorService;
     }
 
     /**
@@ -2423,6 +2456,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             }
         });
         coordinators.clear();
+        executorService.shutdown();
         Utils.closeQuietly(runtimeMetrics, "runtime metrics");
         log.info("Coordinator runtime closed.");
     }
