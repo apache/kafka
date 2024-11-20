@@ -151,8 +151,10 @@ public class MirrorCheckpointConnector extends SourceConnector {
             return Collections.emptyList();
         }
 
-        int numTasks = Math.min(maxTasks, knownConsumerGroups.size());
-        List<List<String>> groupsPartitioned = ConnectorUtils.groupPartitions(new ArrayList<>(knownConsumerGroups), numTasks);
+        final int limitCheckpointConnectorsTasks = Math.min(maxTasks, config.getCheckpointConnectorTaskMax());
+        final int numTasks = Math.min(limitCheckpointConnectorsTasks, knownConsumerGroups.size());
+        log.info("Limiting the CheckpointConnector tasks to {}", numTasks);
+        final List<List<String>> groupsPartitioned = ConnectorUtils.groupPartitions(new ArrayList<>(knownConsumerGroups), numTasks);
         return IntStream.range(0, numTasks)
                 .mapToObj(i -> config.taskConfigForConsumerGroups(groupsPartitioned.get(i), i))
                 .collect(Collectors.toList());

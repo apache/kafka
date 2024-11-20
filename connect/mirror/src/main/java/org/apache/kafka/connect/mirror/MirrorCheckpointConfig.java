@@ -41,6 +41,10 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
     public static final String CHECKPOINTS_TOPIC_REPLICATION_FACTOR_DOC = "Replication factor for checkpoints topic.";
     public static final short CHECKPOINTS_TOPIC_REPLICATION_FACTOR_DEFAULT = 3;
 
+    protected static final String CHECKPOINTS_TASKS_MAXIMUM = "checkpoints.tasks.max";
+    protected static final String CHECKPOINTS_TASKS_MAXIMUM_DOC = "Maximum number of checkpoint connector tasks.";
+    private static final int CHECKPOINTS_TASKS_MAX_DEFAULT = 1;
+
     protected static final String TASK_CONSUMER_GROUPS = "task.assigned.groups";
 
     public static final String CONSUMER_POLL_TIMEOUT_MILLIS = "consumer.poll.timeout.ms";
@@ -122,6 +126,10 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
             // negative interval to disable
             return Duration.ofMillis(-1);
         }
+    }
+
+    Integer getCheckpointConnectorTaskMax() {
+        return getInt(CHECKPOINTS_TASKS_MAXIMUM);
     }
 
     Map<String, String> taskConfigForConsumerGroups(List<String> groups, int taskIndex) {
@@ -250,6 +258,12 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
                         CHECKPOINTS_TOPIC_REPLICATION_FACTOR_DEFAULT,
                         ConfigDef.Importance.LOW,
                         CHECKPOINTS_TOPIC_REPLICATION_FACTOR_DOC)
+                .define(
+                        CHECKPOINTS_TASKS_MAXIMUM,
+                        ConfigDef.Type.INT,
+                        CHECKPOINTS_TASKS_MAX_DEFAULT,
+                        ConfigDef.Importance.LOW,
+                        CHECKPOINTS_TASKS_MAXIMUM_DOC)
                 .define(
                         OFFSET_SYNCS_TOPIC_LOCATION,
                         ConfigDef.Type.STRING,
