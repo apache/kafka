@@ -160,7 +160,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
             
             final Uuid mainConsumerInstanceId = clientInstanceIds.consumerInstanceIds().entrySet().stream()
                     .filter(entry -> !entry.getKey().endsWith("-restore-consumer")
-                            && !entry.getKey().endsWith("GlobalStreamThread"))
+                            && !entry.getKey().endsWith("GlobalStreamThread-global-consumer"))
                     .map(Map.Entry::getValue)
                     .findFirst().orElseThrow();
             assertNotNull(adminInstanceId);
