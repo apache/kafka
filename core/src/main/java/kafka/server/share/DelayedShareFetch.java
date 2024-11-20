@@ -41,6 +41,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
@@ -125,7 +126,7 @@ public class DelayedShareFetch extends DelayedOperation {
         try {
             LinkedHashMap<TopicIdPartition, LogReadResult> responseData;
             if (partitionsAlreadyFetched.isEmpty())
-                responseData = readFromLog(topicPartitionData);
+                responseData = readFromLog(topicPartitionData, shareFetch.fetchParams().maxBytes / topicPartitionData.size());
             else
                 // There shouldn't be a case when we have a partitionsAlreadyFetched value here and this variable is getting
                 // updated in a different tryComplete thread.
@@ -207,7 +208,6 @@ public class DelayedShareFetch extends DelayedOperation {
         LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData = new LinkedHashMap<>();
 
         sharePartitions.forEach((topicIdPartition, sharePartition) -> {
-            int partitionMaxBytes = shareFetch.partitionMaxBytes().getOrDefault(topicIdPartition, 0);
             // Add the share partition to the list of partitions to be fetched only if we can
             // acquire the fetch lock on it.
             if (sharePartition.maybeAcquireFetchLock()) {
@@ -220,7 +220,6 @@ public class DelayedShareFetch extends DelayedOperation {
                                 topicIdPartition.topicId(),
                                 sharePartition.nextFetchOffset(),
                                 0,
-                                partitionMaxBytes,
                                 Optional.empty()
                             )
                         );
@@ -251,7 +250,7 @@ public class DelayedShareFetch extends DelayedOperation {
             return new LinkedHashMap<>();
         }
         // We fetch data from replica manager corresponding to the topic partitions that have missing fetch offset metadata.
-        return readFromLog(partitionsNotMatchingFetchOffsetMetadata);
+        return readFromLog(partitionsNotMatchingFetchOffsetMetadata, shareFetch.fetchParams().maxBytes / topicPartitionData.size());
     }
 
     private void maybeUpdateFetchOffsetMetadata(
@@ -312,7 +311,7 @@ public class DelayedShareFetch extends DelayedOperation {
                     return true;
                 } else if (fetchOffsetMetadata.onSameSegment(endOffsetMetadata)) {
                     // we take the partition fetch size as upper bound when accumulating the bytes.
-                    long bytesAvailable = Math.min(endOffsetMetadata.positionDiff(fetchOffsetMetadata), partitionData.maxBytes);
+                    long bytesAvailable = Math.min(endOffsetMetadata.positionDiff(fetchOffsetMetadata), shareFetch.fetchParams().maxBytes / topicPartitionData.size());
                     accumulatedSize += bytesAvailable;
                 }
             }
@@ -335,12 +334,13 @@ public class DelayedShareFetch extends DelayedOperation {
 
     }
 
-    private LinkedHashMap<TopicIdPartition, LogReadResult> readFromLog(LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData) {
+    private LinkedHashMap<TopicIdPartition, LogReadResult> readFromLog(LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData, int partitionMaxBytes) {
         // Filter if there already exists any erroneous topic partition.
         Set<TopicIdPartition> partitionsToFetch = shareFetch.filterErroneousTopicPartitions(topicPartitionData.keySet());
         if (partitionsToFetch.isEmpty()) {
             return new LinkedHashMap<>();
         }
+        topicPartitionData.values().forEach(partitionData -> partitionData.updateMaxBytes(partitionMaxBytes));
 
         Seq<Tuple2<TopicIdPartition, LogReadResult>> responseLogResult = replicaManager.readFromLog(
             shareFetch.fetchParams(),
@@ -393,15 +393,21 @@ public class DelayedShareFetch extends DelayedOperation {
     LinkedHashMap<TopicIdPartition, LogReadResult> combineLogReadResponse(LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData,
                                                                 LinkedHashMap<TopicIdPartition, LogReadResult> existingFetchedData) {
         LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> missingLogReadTopicPartitions = new LinkedHashMap<>();
+        AtomicInteger totalPartitionMaxBytesUsed = new AtomicInteger();
         topicPartitionData.forEach((topicIdPartition, partitionData) -> {
             if (!existingFetchedData.containsKey(topicIdPartition)) {
                 missingLogReadTopicPartitions.put(topicIdPartition, partitionData);
+            } else {
+                totalPartitionMaxBytesUsed.addAndGet(partitionData.maxBytes);
             }
         });
         if (missingLogReadTopicPartitions.isEmpty()) {
             return existingFetchedData;
         }
-        LinkedHashMap<TopicIdPartition, LogReadResult> missingTopicPartitionsLogReadResponse = readFromLog(missingLogReadTopicPartitions);
+        LinkedHashMap<TopicIdPartition, LogReadResult> missingTopicPartitionsLogReadResponse = readFromLog(
+            missingLogReadTopicPartitions,
+            (shareFetch.fetchParams().maxBytes - totalPartitionMaxBytesUsed.get()) / missingLogReadTopicPartitions.size()
+            );
         missingTopicPartitionsLogReadResponse.putAll(existingFetchedData);
         return missingTopicPartitionsLogReadResponse;
     }

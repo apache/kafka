@@ -59,9 +59,18 @@ public class FetchRequest extends AbstractRequest {
         public final Uuid topicId;
         public final long fetchOffset;
         public final long logStartOffset;
-        public final int maxBytes;
         public final Optional<Integer> currentLeaderEpoch;
         public final Optional<Integer> lastFetchedEpoch;
+        public int maxBytes;
+
+        public PartitionData(
+            Uuid topicId,
+            long fetchOffset,
+            long logStartOffset,
+            Optional<Integer> currentLeaderEpoch
+        ) {
+            this(topicId, fetchOffset, logStartOffset, 0, currentLeaderEpoch, Optional.empty());
+        }
 
         public PartitionData(
             Uuid topicId,
@@ -87,6 +96,10 @@ public class FetchRequest extends AbstractRequest {
             this.maxBytes = maxBytes;
             this.currentLeaderEpoch = currentLeaderEpoch;
             this.lastFetchedEpoch = lastFetchedEpoch;
+        }
+
+        public void updateMaxBytes(int maxBytes) {
+            this.maxBytes = maxBytes;
         }
 
         @Override
