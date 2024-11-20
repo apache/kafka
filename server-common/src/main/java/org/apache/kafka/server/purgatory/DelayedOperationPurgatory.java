@@ -147,7 +147,10 @@ public class DelayedOperationPurgatory<T extends DelayedOperation> {
         // any exclusive lock. Since DelayedOperationPurgatory.checkAndComplete() completes delayed operations asynchronously,
         // holding an exclusive lock to make the call is often unnecessary.
         if (operation.safeTryCompleteOrElse(() -> {
-            watchKeys.forEach(key -> watchForOperation(key, operation));
+            watchKeys.forEach(key -> {
+                if (!operation.isCompleted())
+                    watchForOperation(key, operation);
+            });
             if (!watchKeys.isEmpty())
                 estimatedTotalOperations.incrementAndGet();
         })) {
