@@ -430,17 +430,19 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public void registerMetricForSubscription(KafkaMetric metric) {
-        if (clientTelemetryReporter.isPresent()) {
-            ClientTelemetryReporter reporter = clientTelemetryReporter.get();
-            reporter.metricChange(metric);
+        if (!metrics().containsKey(metric.metricName())) {
+            clientTelemetryReporter.ifPresent(reporter -> reporter.metricChange(metric));
+        } else {
+            log.debug("Skipping registration for metric {}. Existing consumer metrics cannot be overwritten.", metric.metricName());
         }
     }
 
     @Override
     public void unregisterMetricFromSubscription(KafkaMetric metric) {
-        if (clientTelemetryReporter.isPresent()) {
-            ClientTelemetryReporter reporter = clientTelemetryReporter.get();
-            reporter.metricRemoval(metric);
+        if (!metrics().containsKey(metric.metricName())) {
+            clientTelemetryReporter.ifPresent(reporter -> reporter.metricRemoval(metric));
+        }  else {
+            log.debug("Skipping unregistration for metric {}. Existing consumer metrics cannot be removed.", metric.metricName());
         }
     }
 
