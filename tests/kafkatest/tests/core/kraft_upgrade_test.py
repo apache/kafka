@@ -53,7 +53,7 @@ class TestKRaftUpgrade(ProduceConsumeValidateTest):
             wait_until(lambda: len(self.kafka.isr_idx_list(self.topic, partition)) == self.replication_factor, timeout_sec=60,
                     backoff_sec=1, err_msg="Replicas did not rejoin the ISR in a reasonable amount of time")
 
-    def perform_version_change(self, from_kafka_version):
+    def upgrade_to_dev_version(self, from_kafka_version, update_metadata_version):
         self.logger.info("Performing rolling upgrade.")
         for node in self.kafka.controller_quorum.nodes:
             self.logger.info("Stopping controller node %s" % node.account.hostname)
@@ -71,8 +71,28 @@ class TestKRaftUpgrade(ProduceConsumeValidateTest):
             self.kafka.start_node(node)
             self.wait_until_rejoin()
             self.logger.info("Successfully restarted broker node %s" % node.account.hostname)
-        self.logger.info("Changing metadata.version to %s" % LATEST_STABLE_METADATA_VERSION)
-        self.kafka.upgrade_metadata_version(LATEST_STABLE_METADATA_VERSION)
+        if update_metadata_version:
+            self.logger.info("Changing metadata.version to %s" % LATEST_STABLE_METADATA_VERSION)
+            self.kafka.upgrade_metadata_version(LATEST_STABLE_METADATA_VERSION)
+
+    def downgrade_to_version(self, to_kafka_version):
+        self.logger.info("Performing rolling downgrade.")
+        for node in self.kafka.controller_quorum.nodes:
+            self.logger.info("Stopping controller node %s" % node.account.hostname)
+            self.kafka.controller_quorum.stop_node(node)
+            node.version = KafkaVersion(to_kafka_version)
+            self.logger.info("Restarting controller node %s" % node.account.hostname)
+            self.kafka.controller_quorum.start_node(node)
+            self.wait_until_rejoin()
+            self.logger.info("Successfully restarted controller node %s" % node.account.hostname)
+        for node in self.kafka.nodes:
+            self.logger.info("Stopping broker node %s" % node.account.hostname)
+            self.kafka.stop_node(node)
+            node.version = KafkaVersion(to_kafka_version)
+            self.logger.info("Restarting broker node %s" % node.account.hostname)
+            self.kafka.start_node(node)
+            self.wait_until_rejoin()
+            self.logger.info("Successfully restarted broker node %s" % node.account.hostname)
 
     def run_upgrade(self, from_kafka_version):
         """Test upgrade of Kafka broker cluster from various versions to the current version
@@ -102,7 +122,42 @@ class TestKRaftUpgrade(ProduceConsumeValidateTest):
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka,
                                         self.topic, consumer_timeout_ms=30000,
                                         message_validator=is_int, version=KafkaVersion(from_kafka_version))
-        self.run_produce_consume_validate(core_test_action=lambda: self.perform_version_change(from_kafka_version))
+
+        self.run_produce_consume_validate(core_test_action=lambda: self.upgrade_to_dev_version(from_kafka_version, True))
+        cluster_id = self.kafka.cluster_id()
+        assert cluster_id is not None
+        assert len(cluster_id) == 22
+        assert self.kafka.check_protocol_errors(self)
+
+    def run_upgrade_downgrade(self, starting_kafka_version):
+        """Test upgrade and downgrade of Kafka broker cluster from various versions to current version and back
+
+        - Start 3 node broker cluster on version 'starting_kafka_version'.
+        - Perform rolling upgrade but do not update metadata.version.
+        - Start producer and consumer in the background.
+        - Perform rolling downgrade.
+        - Finally, validate that every message acked by the producer was consumed by the consumer.
+        """
+        fromKafkaVersion = KafkaVersion(starting_kafka_version)
+        self.kafka = KafkaService(self.test_context,
+                                  num_nodes=3,
+                                  zk=None,
+                                  version=fromKafkaVersion,
+                                  topics={self.topic: {"partitions": self.partitions,
+                                                       "replication-factor": self.replication_factor,
+                                                       'configs': {"min.insync.replicas": 2}}})
+        self.kafka.start()
+        self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka,
+                                           self.topic, throughput=self.producer_throughput,
+                                           message_validator=is_int,
+                                           compression_types=["none"],
+                                           version=KafkaVersion(starting_kafka_version))
+        self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka,
+                                        self.topic, consumer_timeout_ms=30000,
+                                        message_validator=is_int, version=KafkaVersion(starting_kafka_version))
+        self.upgrade_to_dev_version(starting_kafka_version, False)
+
+        self.run_produce_consume_validate(core_test_action=lambda: self.downgrade_to_version(starting_kafka_version))
         cluster_id = self.kafka.cluster_id()
         assert cluster_id is not None
         assert len(cluster_id) == 22
@@ -120,3 +175,14 @@ class TestKRaftUpgrade(ProduceConsumeValidateTest):
     def test_isolated_mode_upgrade(self, from_kafka_version, metadata_quorum, use_new_coordinator=False):
         self.run_upgrade(from_kafka_version)
 
+    @cluster(num_nodes=5)
+    @matrix(from_kafka_version=[str(LATEST_3_3), str(LATEST_3_4), str(LATEST_3_5), str(LATEST_3_6), str(LATEST_3_7), str(LATEST_3_8), str(LATEST_3_9), str(DEV_BRANCH)],
+            metadata_quorum=[combined_kraft])
+    def test_combined_mode_upgrade_downgrade(self, from_kafka_version, metadata_quorum, use_new_coordinator=False):
+        self.run_upgrade_downgrade(from_kafka_version)
+
+    @cluster(num_nodes=8)
+    @matrix(from_kafka_version=[str(LATEST_3_3), str(LATEST_3_4), str(LATEST_3_5), str(LATEST_3_6), str(LATEST_3_7), str(LATEST_3_8), str(LATEST_3_9), str(DEV_BRANCH)],
+            metadata_quorum=[isolated_kraft])
+    def test_isolated_mode_upgrade_downgrade(self, from_kafka_version, metadata_quorum, use_new_coordinator=False):
+        self.run_upgrade_downgrade(from_kafka_version)
