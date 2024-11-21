@@ -32,6 +32,7 @@ public class StreamsStoppedException extends InvalidStateStoreException {
         super(message);
     }
 
+    @SuppressWarnings("unused")
     public StreamsStoppedException(final String message, final Throwable throwable) {
         super(message, throwable);
     }

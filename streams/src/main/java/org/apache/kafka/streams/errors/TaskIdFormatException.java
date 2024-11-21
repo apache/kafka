@@ -35,6 +35,7 @@ public class TaskIdFormatException extends StreamsException {
         super("Task id cannot be parsed correctly" + (message == null ? "" : " from " + message), throwable);
     }
 
+    @SuppressWarnings("unused")
     public TaskIdFormatException(final Throwable throwable) {
         super(throwable);
     }
