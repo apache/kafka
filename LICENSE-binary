@@ -223,7 +223,7 @@ jackson-dataformat-csv-2.16.2
 jackson-datatype-jdk8-2.16.2
 jackson-jaxrs-base-2.16.2
 jackson-jaxrs-json-provider-2.16.2
-jackson-module-afterburner-2.16.2
+jackson-module-blackbird-2.16.2
 jackson-module-jaxb-annotations-2.16.2
 jackson-module-scala_2.13-2.16.2
 jakarta.validation-api-2.0.2

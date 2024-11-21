@@ -241,15 +241,15 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
     /**
      * Creates a JsonConvert initializing serializer and deserializer.
      *
-     * @param enableAfterburner permits to enable/disable the registration of Jackson Afterburner module.
+     * @param enableBlackbird permits to enable/disable the registration of Jackson Blackbird module.
      * <p>
      * NOTE: This is visible only for testing
      */
-    public JsonConverter(boolean enableAfterburner) {
+    public JsonConverter(boolean enableBlackbird) {
         serializer = new JsonSerializer(
             Set.of(),
             JSON_NODE_FACTORY,
-            enableAfterburner
+            enableBlackbird
         );
 
         deserializer = new JsonDeserializer(
@@ -259,7 +259,7 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
                 DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS
             ),
             JSON_NODE_FACTORY,
-            enableAfterburner
+            enableBlackbird
         );
     }
 
