@@ -907,26 +907,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     @Override
-    public void tasksConfig(String connName, final Callback<Map<ConnectorTaskId, Map<String, String>>> callback) {
-        log.trace("Submitting tasks config request {}", connName);
-
-        addRequest(
-            () -> {
-                if (checkRebalanceNeeded(callback))
-                    return null;
-
-                if (!configState.contains(connName)) {
-                    callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
-                } else {
-                    callback.onCompletion(null, buildTasksConfig(connName));
-                }
-                return null;
-            },
-            forwardErrorAndTickThreadStages(callback)
-        );
-    }
-
-    @Override
     protected Map<String, String> rawConfig(String connName) {
         return configState.rawConnectorConfig(connName);
     }

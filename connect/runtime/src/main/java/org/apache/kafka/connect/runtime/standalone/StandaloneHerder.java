@@ -149,7 +149,7 @@ public final class StandaloneHerder extends AbstractHerder {
     public synchronized void connectors(Callback<Collection<String>> callback) {
         callback.onCompletion(null, connectors());
     }
-    
+
     @Override
     public synchronized void connectorInfo(String connName, Callback<ConnectorInfo> callback) {
         ConnectorInfo connectorInfo = connectorInfo(connName);
@@ -635,15 +635,4 @@ public final class StandaloneHerder extends AbstractHerder {
             return Objects.hash(seq);
         }
     }
-
-    @Override
-    public void tasksConfig(String connName, Callback<Map<ConnectorTaskId, Map<String, String>>> callback) {
-        Map<ConnectorTaskId, Map<String, String>> tasksConfig = buildTasksConfig(connName);
-        if (tasksConfig.isEmpty()) {
-            callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
-            return;
-        }
-        callback.onCompletion(null, tasksConfig);
-    }
-
 }

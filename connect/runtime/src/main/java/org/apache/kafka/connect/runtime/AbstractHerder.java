@@ -327,20 +327,6 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         );
     }
 
-    protected Map<ConnectorTaskId, Map<String, String>> buildTasksConfig(String connector) {
-        final ClusterConfigState configState = configBackingStore.snapshot();
-
-        if (!configState.contains(connector))
-            return Collections.emptyMap();
-
-        Map<ConnectorTaskId, Map<String, String>> configs = new HashMap<>();
-        for (ConnectorTaskId cti : configState.tasks(connector)) {
-            configs.put(cti, configState.rawTaskConfig(cti));
-        }
-
-        return configs;
-    }
-
     @Override
     public ConnectorStateInfo connectorStatus(String connName) {
         ConnectorStatus connector = statusBackingStore.get(connName);
