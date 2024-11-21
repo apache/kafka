@@ -167,7 +167,7 @@ public class MockLog implements ReplicatedLog {
     }
 
     private void assertValidHighWatermarkMetadata(LogOffsetMetadata offsetMetadata) {
-        if (!offsetMetadata.metadata().isPresent()) {
+        if (offsetMetadata.metadata().isEmpty()) {
             return;
         }
 

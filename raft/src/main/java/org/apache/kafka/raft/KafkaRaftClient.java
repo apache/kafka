@@ -1210,7 +1210,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         int position = 0;
         for (ReplicaKey candidate : preferredCandidates) {
             if (candidate.id() == quorum.localIdOrThrow()) {
-                if (!candidate.directoryId().isPresent() ||
+                if (candidate.directoryId().isEmpty() ||
                     candidate.directoryId().get().equals(quorum.localDirectoryId())
                 ) {
                     // Found ourselves in the preferred candidate list
@@ -1788,7 +1788,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
         Optional<FetchSnapshotRequestData.PartitionSnapshot> partitionSnapshotOpt = FetchSnapshotRequest
             .forTopicPartition(data, log.topicPartition());
-        if (!partitionSnapshotOpt.isPresent()) {
+        if (partitionSnapshotOpt.isEmpty()) {
             // The Raft client assumes that there is only one topic partition.
             TopicPartition unknownTopicPartition = new TopicPartition(
                 data.topics().get(0).name(),
@@ -1828,7 +1828,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
 
         Optional<RawSnapshotReader> snapshotOpt = log.readSnapshot(snapshotId);
-        if (!snapshotOpt.isPresent() || snapshotId.equals(BOOTSTRAP_SNAPSHOT_ID)) {
+        if (snapshotOpt.isEmpty() || snapshotId.equals(BOOTSTRAP_SNAPSHOT_ID)) {
             // The bootstrap checkpoint should not be replicated. The first leader will
             // make sure that the content of the bootstrap checkpoint is included in the
             // partition log
@@ -1944,7 +1944,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
         Optional<FetchSnapshotResponseData.PartitionSnapshot> partitionSnapshotOpt = FetchSnapshotResponse
             .forTopicPartition(data, log.topicPartition());
-        if (!partitionSnapshotOpt.isPresent()) {
+        if (partitionSnapshotOpt.isEmpty()) {
             return false;
         }
 
@@ -2098,7 +2098,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         Optional<ReplicaKey> newVoter = RaftUtil.addVoterRequestVoterKey(data);
-        if (!newVoter.isPresent() || !newVoter.get().directoryId().isPresent()) {
+        if (newVoter.isEmpty() || newVoter.get().directoryId().isEmpty()) {
             return completedFuture(
                 new AddRaftVoterResponseData()
                     .setErrorCode(Errors.INVALID_REQUEST.code())
@@ -2107,7 +2107,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         Endpoints newVoterEndpoints = Endpoints.fromAddVoterRequest(data.listeners());
-        if (!newVoterEndpoints.address(channel.listenerName()).isPresent()) {
+        if (newVoterEndpoints.address(channel.listenerName()).isEmpty()) {
             return completedFuture(
                 new AddRaftVoterResponseData()
                     .setErrorCode(Errors.INVALID_REQUEST.code())
@@ -2181,7 +2181,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         Optional<ReplicaKey> oldVoter = RaftUtil.removeVoterRequestVoterKey(data);
-        if (!oldVoter.isPresent() || !oldVoter.get().directoryId().isPresent()) {
+        if (oldVoter.isEmpty() || oldVoter.get().directoryId().isEmpty()) {
             return completedFuture(
                 new RemoveRaftVoterResponseData()
                     .setErrorCode(Errors.INVALID_REQUEST.code())
@@ -2226,7 +2226,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         Optional<ReplicaKey> voter = RaftUtil.updateVoterRequestVoterKey(data);
-        if (!voter.isPresent() || !voter.get().directoryId().isPresent()) {
+        if (voter.isEmpty() || voter.get().directoryId().isEmpty()) {
             return completedFuture(
                 RaftUtil.updateVoterResponse(
                     Errors.INVALID_REQUEST,
@@ -2238,7 +2238,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         Endpoints voterEndpoints = Endpoints.fromUpdateVoterRequest(data.listeners());
-        if (!voterEndpoints.address(channel.listenerName()).isPresent()) {
+        if (voterEndpoints.address(channel.listenerName()).isEmpty()) {
             return completedFuture(
                 RaftUtil.updateVoterResponse(
                     Errors.INVALID_REQUEST,
@@ -2319,8 +2319,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             return quorum.isLeader();
         } else {
             return epoch != quorum.epoch()
-                || !leaderId.isPresent()
-                || !quorum.leaderId().isPresent()
+                || leaderId.isEmpty()
+                || quorum.leaderId().isEmpty()
                 || leaderId.equals(quorum.leaderId());
         }
     }
@@ -2516,7 +2516,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         return voterKey
             .map(key -> {
                 if (!OptionalInt.of(key.id()).equals(nodeId)) return false;
-                if (!key.directoryId().isPresent()) return true;
+                if (key.directoryId().isEmpty()) return true;
 
                 return key.directoryId().get().equals(nodeDirectoryId);
             })
@@ -3399,7 +3399,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             // Note that if we transition to another state before we have a chance to
             // request resignation, then we consider the call fulfilled.
             Optional<LeaderState<Object>> leaderStateOpt = quorum.maybeLeaderState();
-            if (!leaderStateOpt.isPresent()) {
+            if (leaderStateOpt.isEmpty()) {
                 logger.debug("Ignoring call to resign from epoch {} since this node is " +
                     "no longer the leader", epoch);
                 return;
@@ -3702,7 +3702,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 return true;
             } else {
                 return leaderAndEpoch.leaderId().isPresent() &&
-                    !lastFiredLeaderChange.leaderId().isPresent();
+                    lastFiredLeaderChange.leaderId().isEmpty();
             }
         }
 

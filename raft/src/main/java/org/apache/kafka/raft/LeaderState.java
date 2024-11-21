@@ -35,7 +35,6 @@ import org.apache.kafka.server.common.KRaftVersion;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -112,7 +111,7 @@ public class LeaderState<T> implements EpochState {
                 new ReplicaState(voterNode.voterKey(), hasAcknowledgedLeader, voterNode.listeners())
             );
         }
-        this.grantingVoters = Collections.unmodifiableSet(new HashSet<>(grantingVoters));
+        this.grantingVoters = Set.copyOf(grantingVoters);
         this.log = logContext.logger(LeaderState.class);
         this.accumulator = Objects.requireNonNull(accumulator, "accumulator must be non-null");
         // use the 1.5x of fetch timeout to tolerate some network transition time or other IO time.
@@ -809,9 +808,9 @@ public class LeaderState<T> implements EpochState {
         public int compareTo(ReplicaState that) {
             if (this.endOffset.equals(that.endOffset))
                 return this.replicaKey.compareTo(that.replicaKey);
-            else if (!this.endOffset.isPresent())
+            else if (this.endOffset.isEmpty())
                 return 1;
-            else if (!that.endOffset.isPresent())
+            else if (that.endOffset.isEmpty())
                 return -1;
             else
                 return Long.compare(that.endOffset.get().offset(), this.endOffset.get().offset());

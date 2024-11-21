@@ -990,7 +990,7 @@ public class RaftEventSimulationTest {
                 Integer oldEpoch = nodeEpochs.get(nodeId);
 
                 Optional<ElectionState> electionState = state.store.readElectionState();
-                if (!electionState.isPresent()) {
+                if (electionState.isEmpty()) {
                     continue;
                 }
 
@@ -1171,7 +1171,7 @@ public class RaftEventSimulationTest {
             final MockLog log = node.log;
 
             OptionalLong highWatermark = manager.highWatermark();
-            if (!highWatermark.isPresent()) {
+            if (highWatermark.isEmpty()) {
                 // We cannot do validation if the current high watermark is unknown
                 return;
             }

@@ -49,7 +49,7 @@ public final class AddVoterHandlerState {
     }
 
     public boolean expectingApiResponse(int replicaId) {
-        return !lastOffset.isPresent() && replicaId == voterKey.id();
+        return lastOffset.isEmpty() && replicaId == voterKey.id();
     }
 
     public void setLastOffset(long lastOffset) {

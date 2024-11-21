@@ -140,7 +140,7 @@ public class QuorumState {
         ElectionState election = readElectionState();
 
         final EpochState initialState;
-        if (election.hasVoted() && !localId.isPresent()) {
+        if (election.hasVoted() && localId.isEmpty()) {
             throw new IllegalStateException(
                 String.format(
                     "Initialized quorum state (%s) with a voted candidate but without a local id",
@@ -332,7 +332,7 @@ public class QuorumState {
     }
 
     public boolean isVoter() {
-        if (!localId.isPresent()) {
+        if (localId.isEmpty()) {
             return false;
         }
 
@@ -425,7 +425,7 @@ public class QuorumState {
                     epoch
                 )
             );
-        } else if (!localId.isPresent()) {
+        } else if (localId.isEmpty()) {
             throw new IllegalStateException("Cannot transition to voted without a replica id");
         } else if (epoch < currentEpoch) {
             throw new IllegalStateException(
@@ -707,7 +707,7 @@ public class QuorumState {
     }
 
     public boolean isUnattachedNotVoted() {
-        return maybeUnattachedState().filter(unattached -> !unattached.votedKey().isPresent()).isPresent();
+        return maybeUnattachedState().filter(unattached -> unattached.votedKey().isEmpty()).isPresent();
     }
 
     public boolean isUnattachedAndVoted() {

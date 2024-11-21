@@ -380,7 +380,7 @@ public class KafkaRaftClientReconfigTest {
             apiVersionsResponse(Errors.NONE)
         );
 
-        // Handle the the API_VERSIONS response
+        // Handle the API_VERSIONS response
         context.client.poll();
         // Append new VotersRecord to log
         context.client.poll();
@@ -735,7 +735,7 @@ public class KafkaRaftClientReconfigTest {
             apiVersionsResponse(Errors.NONE)
         );
 
-        // Handle the the API_VERSIONS response
+        // Handle the API_VERSIONS response
         context.client.poll();
 
         // Wait for request timeout without sending a FETCH request to timeout the add voter RPC
@@ -1101,7 +1101,7 @@ public class KafkaRaftClientReconfigTest {
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
 
-        // Send a FETCH request for follower2 and increaes the HWM
+        // Send a FETCH request for follower2 and increase the HWM
         context.deliverRequest(
             context.fetchRequest(epoch, follower2, context.log.endOffset().offset(), epoch, 0)
         );
@@ -1123,8 +1123,8 @@ public class KafkaRaftClientReconfigTest {
         // Calls to resign should be allowed and not throw an exception
         context.client.resign(epoch);
 
-        // Election timeout is random numer in [electionTimeoutMs, 2 * electionTimeoutMs)
-        context.time.sleep(2 * context.electionTimeoutMs());
+        // Election timeout is random number in [electionTimeoutMs, 2 * electionTimeoutMs)
+        context.time.sleep(2L * context.electionTimeoutMs());
         context.client.poll();
 
         assertTrue(context.client.quorum().isObserver());
@@ -1578,7 +1578,7 @@ public class KafkaRaftClientReconfigTest {
             )
         );
 
-        // Expect reply for UpdateVoter request without commiting the record
+        // Expect reply for UpdateVoter request without committing the record
         context.pollUntilResponse();
         context.assertSentUpdateVoterResponse(
             Errors.NONE,
@@ -1767,7 +1767,7 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(3)
             .build();
 
-        // Attempt to uodate voter in the quorum
+        // Attempt to update voter in the quorum
         context.deliverRequest(
             context.updateVoterRequest(
                 follower,
@@ -2248,14 +2248,14 @@ public class KafkaRaftClientReconfigTest {
     @Test
     void testObserverDiscoversLeaderWithUnknownVoters() throws Exception {
         ReplicaKey local = replicaKey(randomReplicaId(), true);
-        InetSocketAddress bootstrapAdddress = InetSocketAddress.createUnresolved("localhost", 1234);
+        InetSocketAddress bootstrapAddress = InetSocketAddress.createUnresolved("localhost", 1234);
         int epoch = 3;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.empty())
             .withUnknownLeader(epoch)
-            .withBootstrapServers(Optional.of(Collections.singletonList(bootstrapAdddress)))
+            .withBootstrapServers(Optional.of(Collections.singletonList(bootstrapAddress)))
             .build();
 
         context.pollUntilRequest();
