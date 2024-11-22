@@ -17,8 +17,6 @@
 
 package org.apache.kafka.common.config;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
@@ -30,8 +28,7 @@ public enum SslClientAuth {
     REQUESTED,
     NONE;
 
-    public static final List<SslClientAuth> VALUES =
-            Collections.unmodifiableList(Arrays.asList(SslClientAuth.values()));
+    public static final List<SslClientAuth> VALUES = List.of(SslClientAuth.values());
 
     public static SslClientAuth forConfig(String key) {
         if (key == null) {

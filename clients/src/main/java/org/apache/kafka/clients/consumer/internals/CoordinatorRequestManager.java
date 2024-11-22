@@ -210,7 +210,7 @@ public class CoordinatorRequestManager implements RequestManager {
     ) {
         // handles Runtime exception
         Optional<FindCoordinatorResponseData.Coordinator> coordinator = response.coordinatorByKey(this.groupId);
-        if (!coordinator.isPresent()) {
+        if (coordinator.isEmpty()) {
             String msg = String.format("Response did not contain expected coordinator section for groupId: %s", this.groupId);
             onFailedResponse(currentTimeMs, new IllegalStateException(msg));
             return;

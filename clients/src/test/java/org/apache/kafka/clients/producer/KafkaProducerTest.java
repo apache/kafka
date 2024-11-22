@@ -748,7 +748,7 @@ public class KafkaProducerTest {
             }
         };
 
-        return new KafkaProducer<String, String>(
+        return new KafkaProducer<>(
                 new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, new StringSerializer(), new StringSerializer())),
                 new StringSerializer(), new StringSerializer(), metadata, mockClient, null, time) {
             @Override

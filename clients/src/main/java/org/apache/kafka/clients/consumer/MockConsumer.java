@@ -553,7 +553,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     public synchronized Set<TopicPartition> paused() {
-        return Collections.unmodifiableSet(new HashSet<>(paused));
+        return Set.copyOf(paused);
     }
 
     private void ensureNotClosed() {

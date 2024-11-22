@@ -40,7 +40,7 @@ public abstract class CommitEvent extends CompletableApplicationEvent<Map<TopicP
      * {@link Collections#unmodifiableMap(Map) as unmodifiable}.
      */
     private static Optional<Map<TopicPartition, OffsetAndMetadata>> validate(final Optional<Map<TopicPartition, OffsetAndMetadata>> offsets) {
-        if (!offsets.isPresent()) {
+        if (offsets.isEmpty()) {
             return Optional.empty();
         }
 

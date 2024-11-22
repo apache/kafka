@@ -3206,7 +3206,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testListGroupsWithTypesOlderBrokerVersion() throws Exception {
+    public void testListGroupsWithTypesOlderBrokerVersion() {
         ApiVersion listGroupV4 = new ApiVersion()
             .setApiKey(ApiKeys.LIST_GROUPS.id)
             .setMinVersion((short) 0)
@@ -5296,7 +5296,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testListShareGroupsWithStatesOlderBrokerVersion() throws Exception {
+    public void testListShareGroupsWithStatesOlderBrokerVersion() {
         ApiVersion listGroupV4 = new ApiVersion()
             .setApiKey(ApiKeys.LIST_GROUPS.id)
             .setMinVersion((short) 0)
@@ -6548,7 +6548,7 @@ public class KafkaAdminClientTest {
                     .noneMatch(p -> p.timestamp() == ListOffsetsRequest.MAX_TIMESTAMP),
                 new ListOffsetsResponse(responseData), node);
 
-            ListOffsetsResult result = env.adminClient().listOffsets(new HashMap<TopicPartition, OffsetSpec>() {{
+            ListOffsetsResult result = env.adminClient().listOffsets(new HashMap<>() {{
                     put(tp0, OffsetSpec.maxTimestamp());
                     put(tp1, OffsetSpec.latest());
                 }});
@@ -6609,7 +6609,7 @@ public class KafkaAdminClientTest {
                     new ListOffsetsResponse(responseDataWithError), node);
             }
             ListOffsetsResult result = env.adminClient().listOffsets(
-                new HashMap<TopicPartition, OffsetSpec>() {
+                new HashMap<>() {
                     {
                         put(tp0, OffsetSpec.latest());
                         put(tp1, OffsetSpec.latest());
@@ -6632,7 +6632,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponseFrom(
                 request -> request instanceof ListOffsetsRequest, new ListOffsetsResponse(responseData), node);
             result = env.adminClient().listOffsets(
-                new HashMap<TopicPartition, OffsetSpec>() {
+                new HashMap<>() {
                     {
                         put(tp0, OffsetSpec.latest());
                         put(tp1, OffsetSpec.latest());

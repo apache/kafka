@@ -23,9 +23,9 @@ import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.acl.AclOperation;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -84,8 +84,7 @@ public class ConsumerGroupDescription {
                                     Set<AclOperation> authorizedOperations) {
         this.groupId = groupId == null ? "" : groupId;
         this.isSimpleConsumerGroup = isSimpleConsumerGroup;
-        this.members = members == null ? Collections.emptyList() :
-            Collections.unmodifiableList(new ArrayList<>(members));
+        this.members = members == null ? Collections.emptyList() : List.copyOf(members);
         this.partitionAssignor = partitionAssignor == null ? "" : partitionAssignor;
         this.type = type;
         this.groupState = GroupState.parse(state.name());
@@ -122,8 +121,7 @@ public class ConsumerGroupDescription {
                                     Set<AclOperation> authorizedOperations) {
         this.groupId = groupId == null ? "" : groupId;
         this.isSimpleConsumerGroup = isSimpleConsumerGroup;
-        this.members = members == null ? Collections.emptyList() :
-                Collections.unmodifiableList(new ArrayList<>(members));
+        this.members = members == null ? Collections.emptyList() : List.copyOf(members);
         this.partitionAssignor = partitionAssignor == null ? "" : partitionAssignor;
         this.type = type;
         this.groupState = groupState;

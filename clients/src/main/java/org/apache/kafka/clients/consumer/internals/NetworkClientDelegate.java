@@ -413,7 +413,7 @@ public class NetworkClientDelegate implements AutoCloseable {
                                                            final Sensor throttleTimeSensor,
                                                            final ClientTelemetrySender clientTelemetrySender,
                                                            final BackgroundEventHandler backgroundEventHandler) {
-        return new CachedSupplier<NetworkClientDelegate>() {
+        return new CachedSupplier<>() {
             @Override
             protected NetworkClientDelegate create() {
                 KafkaClient client = ClientUtils.createNetworkClient(config,

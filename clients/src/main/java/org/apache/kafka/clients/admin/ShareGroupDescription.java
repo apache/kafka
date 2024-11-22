@@ -22,9 +22,9 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -53,8 +53,7 @@ public class ShareGroupDescription {
                                  Node coordinator,
                                  Set<AclOperation> authorizedOperations) {
         this.groupId = groupId == null ? "" : groupId;
-        this.members = members == null ? Collections.emptyList() :
-            Collections.unmodifiableList(new ArrayList<>(members));
+        this.members = members == null ? Collections.emptyList() : List.copyOf(members);
         this.groupState = groupState;
         this.coordinator = coordinator;
         this.authorizedOperations = authorizedOperations;

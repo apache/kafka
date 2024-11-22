@@ -150,7 +150,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         for (TopicPartition partition : partitionsToFetch()) {
             Optional<Node> leaderOpt = metadata.currentLeader(partition).leader;
 
-            if (!leaderOpt.isPresent()) {
+            if (leaderOpt.isEmpty()) {
                 log.debug("Requesting metadata update for partition {} since current leader node is missing", partition);
                 metadata.requestUpdate(false);
                 continue;

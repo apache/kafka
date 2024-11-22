@@ -61,12 +61,7 @@ public class ConsumerConfig extends AbstractConfig {
     // a list contains all the assignor names that only assign subscribed topics to consumer. Should be updated when new assignor added.
     // This is to help optimize ConsumerCoordinator#performAssignment method
     public static final List<String> ASSIGN_FROM_SUBSCRIBED_ASSIGNORS =
-        Collections.unmodifiableList(Arrays.asList(
-            RANGE_ASSIGNOR_NAME,
-            ROUNDROBIN_ASSIGNOR_NAME,
-            STICKY_ASSIGNOR_NAME,
-            COOPERATIVE_STICKY_ASSIGNOR_NAME
-        ));
+        List.of(RANGE_ASSIGNOR_NAME, ROUNDROBIN_ASSIGNOR_NAME, STICKY_ASSIGNOR_NAME, COOPERATIVE_STICKY_ASSIGNOR_NAME);
 
     /*
      * NOTE: DO NOT CHANGE EITHER CONFIG STRINGS OR THEIR JAVA VARIABLE NAMES AS
@@ -709,7 +704,7 @@ public class ConsumerConfig extends AbstractConfig {
         Optional<String> groupId = Optional.ofNullable(getString(CommonClientConfigs.GROUP_ID_CONFIG));
         Map<String, Object> originals = originals();
         boolean enableAutoCommit = originals.containsKey(ENABLE_AUTO_COMMIT_CONFIG) ? getBoolean(ENABLE_AUTO_COMMIT_CONFIG) : false;
-        if (!groupId.isPresent()) { // overwrite in case of default group id where the config is not explicitly provided
+        if (groupId.isEmpty()) { // overwrite in case of default group id where the config is not explicitly provided
             if (!originals.containsKey(ENABLE_AUTO_COMMIT_CONFIG)) {
                 configs.put(ENABLE_AUTO_COMMIT_CONFIG, false);
             } else if (enableAutoCommit) {

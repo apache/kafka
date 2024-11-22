@@ -156,7 +156,7 @@ public class AbstractCoordinatorTest {
                                                                         groupInstanceId,
                                                                         retryBackoffMs,
                                                                         retryBackoffMaxMs,
-                                                                        !groupInstanceId.isPresent());
+                                                                        groupInstanceId.isEmpty());
         this.coordinator = new DummyCoordinator(rebalanceConfig,
                                                 consumerClient,
                                                 metrics,

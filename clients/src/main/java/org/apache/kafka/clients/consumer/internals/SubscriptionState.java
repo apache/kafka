@@ -985,7 +985,7 @@ public class SubscriptionState {
                 return false;
             }
 
-            if (!currentLeaderAndEpoch.leader.isPresent()) {
+            if (currentLeaderAndEpoch.leader.isEmpty()) {
                 return false;
             }
 

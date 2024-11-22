@@ -894,7 +894,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
             Long offset = entry.getValue();
             Metadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(tp);
 
-            if (!leaderAndEpoch.leader.isPresent()) {
+            if (leaderAndEpoch.leader.isEmpty()) {
                 log.debug("Leader for partition {} is unknown for fetching offset {}", tp, offset);
                 metadata.requestUpdate(true);
                 listOffsetsRequestState.ifPresent(offsetsRequestState -> offsetsRequestState.remainingToSearch.put(tp, offset));

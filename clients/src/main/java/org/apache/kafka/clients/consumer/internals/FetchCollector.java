@@ -347,7 +347,7 @@ public class FetchCollector<K, V> {
         } else if (error == Errors.OFFSET_OUT_OF_RANGE) {
             Optional<Integer> clearedReplicaId = subscriptions.clearPreferredReadReplica(tp);
 
-            if (!clearedReplicaId.isPresent()) {
+            if (clearedReplicaId.isEmpty()) {
                 // If there's no preferred replica to clear, we're fetching from the leader so handle this error normally
                 SubscriptionState.FetchPosition position = subscriptions.positionOrNull(tp);
 

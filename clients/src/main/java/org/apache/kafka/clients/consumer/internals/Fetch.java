@@ -32,9 +32,9 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 
 public class Fetch<K, V> {
     private final Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
+    private final Map<TopicPartition, OffsetAndMetadata> nextOffsetAndMetadata;
     private boolean positionAdvanced;
     private int numRecords;
-    private Map<TopicPartition, OffsetAndMetadata> nextOffsetAndMetadata;
 
     public static <K, V> Fetch<K, V> empty() {
         return new Fetch<>(new HashMap<>(), false, 0, new HashMap<>());

@@ -201,12 +201,12 @@ public interface Authorizer extends Configurable, Closeable {
             resourceTypeFilter, AccessControlEntryFilter.ANY);
 
         EnumMap<PatternType, Set<String>> denyPatterns =
-            new EnumMap<PatternType, Set<String>>(PatternType.class) {{
+            new EnumMap<>(PatternType.class) {{
                 put(PatternType.LITERAL, new HashSet<>());
                 put(PatternType.PREFIXED, new HashSet<>());
             }};
         EnumMap<PatternType, Set<String>> allowPatterns =
-            new EnumMap<PatternType, Set<String>>(PatternType.class) {{
+            new EnumMap<>(PatternType.class) {{
                 put(PatternType.LITERAL, new HashSet<>());
                 put(PatternType.PREFIXED, new HashSet<>());
             }};

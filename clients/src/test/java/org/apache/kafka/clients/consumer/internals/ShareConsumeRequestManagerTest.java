@@ -124,13 +124,13 @@ public class ShareConsumeRequestManagerTest {
     private final String groupId = "test-group";
     private final Uuid topicId = Uuid.randomUuid();
     private final Uuid topicId2 = Uuid.randomUuid();
-    private final Map<String, Uuid> topicIds = new HashMap<String, Uuid>() {
+    private final Map<String, Uuid> topicIds = new HashMap<>() {
         {
             put(topicName, topicId);
             put(topicName2, topicId2);
         }
     };
-    private final Map<String, Integer> topicPartitionCounts = new HashMap<String, Integer>() {
+    private final Map<String, Integer> topicPartitionCounts = new HashMap<>() {
         {
             put(topicName, 2);
             put(topicName2, 1);
@@ -739,7 +739,7 @@ public class ShareConsumeRequestManagerTest {
     }
 
     @Test
-    public void testRetryAcknowledgementsWithLeaderChange() throws InterruptedException {
+    public void testRetryAcknowledgementsWithLeaderChange() {
         buildRequestManager();
 
         subscriptions.subscribeToShareGroup(Collections.singleton(topicName));
@@ -1473,7 +1473,7 @@ public class ShareConsumeRequestManagerTest {
     }
 
     /**
-     * Assert that the {@link ShareFetchCollector#collect(ShareFetchBuffer)} latest fetch} does not contain any
+     * Assert that the {@link ShareFetchCollector#collect(ShareFetchBuffer) latest fetch} does not contain any
      * {@link ShareFetch#records() user-visible records}, and is {@link ShareFetch#isEmpty() empty}.
      *
      * @param reason the reason to include for assertion methods such as {@link org.junit.jupiter.api.Assertions#assertTrue(boolean, String)}

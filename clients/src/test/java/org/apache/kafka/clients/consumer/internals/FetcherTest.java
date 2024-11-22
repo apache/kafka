@@ -157,7 +157,7 @@ public class FetcherTest {
     private final String topicName = "test";
     private final String groupId = "test-group";
     private final Uuid topicId = Uuid.randomUuid();
-    private final Map<String, Uuid> topicIds = new HashMap<String, Uuid>() {
+    private final Map<String, Uuid> topicIds = new HashMap<>() {
         {
             put(topicName, topicId);
         }
@@ -1709,8 +1709,7 @@ public class FetcherTest {
 
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         for (int i = 0; i < 2; i++) {
-            OffsetOutOfRangeException e = assertThrows(OffsetOutOfRangeException.class, () ->
-                    collectFetch());
+            OffsetOutOfRangeException e = assertThrows(OffsetOutOfRangeException.class, this::collectFetch);
             assertEquals(singleton(tp0), e.offsetOutOfRangePartitions().keySet());
             assertEquals(0L, e.offsetOutOfRangePartitions().get(tp0).longValue());
         }
@@ -2849,7 +2848,7 @@ public class FetcherTest {
                 true, // check crcs
                 CommonClientConfigs.DEFAULT_CLIENT_RACK,
                 isolationLevel);
-        fetcher = new Fetcher<byte[], byte[]>(
+        fetcher = new Fetcher<>(
                 logContext,
                 consumerClient,
                 metadata,

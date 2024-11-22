@@ -259,7 +259,7 @@ public class AdminMetadataManager {
     public void transitionToUpdatePending(long now) {
         this.state = State.UPDATE_PENDING;
         this.lastMetadataFetchAttemptMs = now;
-        if (!metadataAttemptStartMs.isPresent())
+        if (metadataAttemptStartMs.isEmpty())
             metadataAttemptStartMs = Optional.of(now);
     }
 

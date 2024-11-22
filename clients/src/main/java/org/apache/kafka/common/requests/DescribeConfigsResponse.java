@@ -17,7 +17,6 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.DescribeConfigsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;

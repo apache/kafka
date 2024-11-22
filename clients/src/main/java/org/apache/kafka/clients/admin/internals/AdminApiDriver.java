@@ -339,7 +339,7 @@ public class AdminApiDriver<K, V> {
             }
 
             // Copy the keys to avoid exposing the underlying mutable set
-            Set<K> copyKeys = Collections.unmodifiableSet(new HashSet<>(keys));
+            Set<K> copyKeys = Set.copyOf(keys);
 
             Collection<AdminApiHandler.RequestAndKeys<K>> newRequests = buildRequest.apply(copyKeys, scope);
             if (newRequests.isEmpty()) {

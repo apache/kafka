@@ -90,7 +90,7 @@ class TxnPartitionMap {
         // It might happen that the TransactionManager has been reset while a request was reenqueued and got a valid
         // response for this. This can happen only if the producer is only idempotent (not transactional) and in
         // this case there will be no tracked bookkeeper entry about it, so we have to insert one.
-        if (!lastAckedOffset.isPresent() && !isTransactional)
+        if (lastAckedOffset.isEmpty() && !isTransactional)
             getOrCreate(topicPartition);
         if (lastOffset > lastAckedOffset.orElse(ProduceResponse.INVALID_OFFSET))
             get(topicPartition).setLastAckedOffset(lastOffset);

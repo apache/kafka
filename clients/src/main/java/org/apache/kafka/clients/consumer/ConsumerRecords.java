@@ -115,7 +115,7 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
 
         @Override
         public Iterator<ConsumerRecord<K, V>> iterator() {
-            return new AbstractIterator<ConsumerRecord<K, V>>() {
+            return new AbstractIterator<>() {
                 final Iterator<? extends Iterable<ConsumerRecord<K, V>>> iters = iterables.iterator();
                 Iterator<ConsumerRecord<K, V>> current;
 
