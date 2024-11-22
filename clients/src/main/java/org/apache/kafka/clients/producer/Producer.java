@@ -50,13 +50,6 @@ public interface Producer<K, V> extends Closeable {
     void beginTransaction() throws ProducerFencedException;
 
     /**
-     * See {@link KafkaProducer#sendOffsetsToTransaction(Map, String)}
-     */
-    @Deprecated
-    void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
-                                  String consumerGroupId) throws ProducerFencedException;
-
-    /**
      * See {@link KafkaProducer#sendOffsetsToTransaction(Map, ConsumerGroupMetadata)}
      */
     void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,

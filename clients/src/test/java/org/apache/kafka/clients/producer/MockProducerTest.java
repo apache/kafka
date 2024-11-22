@@ -419,31 +419,12 @@ public class MockProducerTest {
         assertEquals(Collections.singletonList(expectedResult), producer.consumerGroupOffsetsHistory());
     }
 
-    @Deprecated
-    @Test
-    public void shouldThrowOnNullConsumerGroupIdWhenSendOffsetsToTransaction() {
-        buildMockProducer(true);
-        producer.initTransactions();
-        producer.beginTransaction();
-        assertThrows(NullPointerException.class, () -> producer.sendOffsetsToTransaction(Collections.emptyMap(), (String) null));
-    }
-
     @Test
     public void shouldThrowOnNullConsumerGroupMetadataWhenSendOffsetsToTransaction() {
         buildMockProducer(true);
         producer.initTransactions();
         producer.beginTransaction();
         assertThrows(NullPointerException.class, () -> producer.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata(null)));
-    }
-
-    @Deprecated
-    @Test
-    public void shouldIgnoreEmptyOffsetsWhenSendOffsetsToTransactionByGroupId() {
-        buildMockProducer(true);
-        producer.initTransactions();
-        producer.beginTransaction();
-        producer.sendOffsetsToTransaction(Collections.emptyMap(), "groupId");
-        assertFalse(producer.sentOffsets());
     }
 
     @Test
@@ -453,24 +434,6 @@ public class MockProducerTest {
         producer.beginTransaction();
         producer.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata("groupId"));
         assertFalse(producer.sentOffsets());
-    }
-
-    @Deprecated
-    @Test
-    public void shouldAddOffsetsWhenSendOffsetsToTransactionByGroupId() {
-        buildMockProducer(true);
-        producer.initTransactions();
-        producer.beginTransaction();
-
-        assertFalse(producer.sentOffsets());
-
-        Map<TopicPartition, OffsetAndMetadata> groupCommit = new HashMap<TopicPartition, OffsetAndMetadata>() {
-            {
-                put(new TopicPartition(topic, 0), new OffsetAndMetadata(42L, null));
-            }
-        };
-        producer.sendOffsetsToTransaction(groupCommit, "groupId");
-        assertTrue(producer.sentOffsets());
     }
 
     @Test

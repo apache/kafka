@@ -202,14 +202,6 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this.sentOffsets = false;
     }
 
-    @Deprecated
-    @Override
-    public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
-                                         String consumerGroupId) throws ProducerFencedException {
-        Objects.requireNonNull(consumerGroupId);
-        sendOffsetsToTransaction(offsets, new ConsumerGroupMetadata(consumerGroupId));
-    }
-
     @Override
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                          ConsumerGroupMetadata groupMetadata) throws ProducerFencedException {
