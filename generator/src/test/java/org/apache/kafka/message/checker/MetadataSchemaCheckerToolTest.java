@@ -27,6 +27,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class MetadataSchemaCheckerToolTest {
     @Test
+    public void testVerifyEvolutionGit() throws Exception {
+        try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
+            MetadataSchemaCheckerTool.run(new String[]{"verify-evolution-git", "--file", "AbortTransactionRecord.json"}, new PrintStream(stream));
+            assertEquals("Successfully verified evolution of file: AbortTransactionRecord.json",
+                stream.toString().trim());
+        }
+    }
+
+    @Test
     public void testSuccessfulParse() throws Exception {
         try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
             String path = messageSpecStringToTempFile(

@@ -380,6 +380,7 @@
     <allow pkg="net.sourceforge.argparse4j" />
     <allow pkg="org.apache.kafka.message" />
     <allow pkg="org.apache.message" />
+    <allow pkg="org.eclipse.jgit" />
   </subpackage>
 
   <subpackage name="streams">
