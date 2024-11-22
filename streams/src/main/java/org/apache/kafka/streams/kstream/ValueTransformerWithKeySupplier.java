@@ -32,8 +32,6 @@ import java.util.function.Supplier;
  * @param <VR> transformed value type
  * @see ValueTransformer
  * @see ValueTransformerWithKey
- * @see KStream#transformValues(ValueTransformerSupplier, String...)
- * @see KStream#transformValues(ValueTransformerWithKeySupplier, String...)
  * @see Transformer
  * @see TransformerSupplier
  */

@@ -44,8 +44,7 @@ import java.time.Duration;
  * @param <VR> transformed value type
  * @see ValueTransformerSupplier
  * @see ValueTransformerWithKeySupplier
- * @see KStream#transformValues(ValueTransformerSupplier, String...)
- * @see KStream#transformValues(ValueTransformerWithKeySupplier, String...)
+ * @see KTable#transformValues(ValueTransformerWithKeySupplier, Materialized, String...)
  * @see Transformer
  * @deprecated Since 4.0. Use {@link FixedKeyProcessor} instead.
  */
@@ -77,7 +76,7 @@ public interface ValueTransformer<V, VR> {
 
     /**
      * Transform the given value to a new value.
-     * Additionally, any {@link StateStore} that is {@link KStream#transformValues(ValueTransformerSupplier, String...)
+     * Additionally, any {@link StateStore} that is {@link KTable#transformValues(ValueTransformerWithKeySupplier, String...)
      * attached} to this operator can be accessed and modified arbitrarily (cf.
      * {@link ProcessorContext#getStateStore(String)}).
      * <p>
