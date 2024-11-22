@@ -29,6 +29,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.InvalidRegularExpression;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -752,6 +753,55 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void subscribe(Pattern pattern) {
+        delegate.subscribe(pattern);
+    }
+
+    /**
+     * Subscribe to all topics matching the specified pattern, to get dynamically assigned partitions.
+     * The pattern matching will be done periodically against all topics. This is only supported under the
+     * CONSUMER group protocol (see {@link ConsumerConfig#GROUP_PROTOCOL_CONFIG}).
+     * <p>
+     * If the provided pattern is not compatible with Google RE2/J, an {@link InvalidRegularExpression} will be
+     * eventually thrown on a call to {@link #poll(Duration)} following this call to subscribe.
+     * <p>
+     * See {@link #subscribe(Collection, ConsumerRebalanceListener)} for details on the
+     * use of the {@link ConsumerRebalanceListener}. Generally, rebalances are triggered when there
+     * is a change to the topics matching the provided pattern and when consumer group membership changes.
+     * Group rebalances only take place during an active call to {@link #poll(Duration)}.
+     *
+     * @param pattern  Pattern to subscribe to, that must be compatible with Google RE2/J.
+     * @param listener Non-null listener instance to get notifications on partition assignment/revocation for the
+     *                 subscribed topics.
+     * @throws IllegalArgumentException If pattern is null or empty, or if the listener is null.
+     * @throws IllegalStateException    If {@code subscribe()} is called previously with topics, or assign is called
+     *                                  previously (without a subsequent call to {@link #unsubscribe()}).
+     */
+    @Override
+    public void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener listener) {
+        delegate.subscribe(pattern, listener);
+    }
+
+    /**
+     * Subscribe to all topics matching the specified pattern, to get dynamically assigned partitions.
+     * The pattern matching will be done periodically against topics. This is only supported under the
+     * CONSUMER group protocol (see {@link ConsumerConfig#GROUP_PROTOCOL_CONFIG})
+     * <p>
+     * If the provided pattern is not compatible with Google RE2/J, an {@link InvalidRegularExpression} will be
+     * eventually thrown on a call to {@link #poll(Duration)} following this call to subscribe.
+     * <p>
+     * This is a short-hand for {@link #subscribe(Pattern, ConsumerRebalanceListener)}, which
+     * uses a no-op listener. If you need the ability to seek to particular offsets, you should prefer
+     * {@link #subscribe(Pattern, ConsumerRebalanceListener)}, since group rebalances will cause partition offsets
+     * to be reset. You should also provide your own listener if you are doing your own offset
+     * management since the listener gives you an opportunity to commit offsets before a rebalance finishes.
+     *
+     * @param pattern Pattern to subscribe to, that must be compatible with Google RE2/J.
+     * @throws IllegalArgumentException If pattern is null or empty.
+     * @throws IllegalStateException    If {@code subscribe()} is called previously with topics, or assign is called
+     *                                  previously (without a subsequent call to {@link #unsubscribe()}).
+     */
+    @Override
+    public void subscribe(SubscriptionPattern pattern) {
         delegate.subscribe(pattern);
     }
 

@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
+import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeEvent;
@@ -1827,6 +1828,19 @@ public class AsyncKafkaConsumerTest {
         ResetOffsetEvent resetOffsetEvent = assertInstanceOf(ResetOffsetEvent.class, event);
         assertEquals(topics, new HashSet<>(resetOffsetEvent.topicPartitions()));
         assertEquals(OffsetResetStrategy.LATEST, resetOffsetEvent.offsetResetStrategy());
+    }
+
+    @Test
+    public void testSubscribeToRe2JPatternValidation() {
+        consumer = newConsumer();
+
+        Throwable t = assertThrows(IllegalArgumentException.class, () -> consumer.subscribe((SubscriptionPattern) null));
+        assertEquals("Topic pattern to subscribe to cannot be null", t.getMessage());
+
+        t = assertThrows(IllegalArgumentException.class, () -> consumer.subscribe(new SubscriptionPattern("")));
+        assertEquals("Topic pattern to subscribe to cannot be empty", t.getMessage());
+
+        assertDoesNotThrow(() -> consumer.subscribe(new SubscriptionPattern("t*")));
     }
 
     private Map<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {

@@ -34,6 +34,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.events.AllTopicsMetadataEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
@@ -1796,6 +1797,16 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     @Override
+    public void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener callback) {
+        subscribeToRegex(pattern, Optional.ofNullable(callback));
+    }
+
+    @Override
+    public void subscribe(SubscriptionPattern pattern) {
+        subscribeToRegex(pattern, Optional.empty());
+    }
+
+    @Override
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
@@ -1854,6 +1865,29 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 pattern, listener, calculateDeadlineMs(time.timer(defaultApiTimeoutMs))));
         } finally {
             release();
+        }
+    }
+
+    /**
+     * Subscribe to the RE2/J pattern. This will generate an event to update the pattern in the
+     * subscription, so it's included in a next heartbeat request sent to the broker. No validation of the pattern is
+     * performed by the client (other than null/empty checks).
+     */
+    private void subscribeToRegex(SubscriptionPattern pattern,
+                                  Optional<ConsumerRebalanceListener> listener) {
+        maybeThrowInvalidGroupIdException();
+        throwIfSubscriptionPatternIsInvalid(pattern);
+        log.info("Subscribing to regular expression {}", pattern);
+
+        // TODO: generate event to update subscribed regex so it's included in the next HB.
+    }
+
+    private void throwIfSubscriptionPatternIsInvalid(SubscriptionPattern subscriptionPattern) {
+        if (subscriptionPattern == null) {
+            throw new IllegalArgumentException("Topic pattern to subscribe to cannot be null");
+        }
+        if (subscriptionPattern.pattern().isEmpty()) {
+            throw new IllegalArgumentException("Topic pattern to subscribe to cannot be empty");
         }
     }
 
