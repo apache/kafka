@@ -920,19 +920,6 @@ abstract class EmbeddedConnect {
      * @param url the HTTP endpoint
      * @return the response to the GET request
      * @throws ConnectException if execution of the GET request fails
-     * @deprecated Use {@link #requestGet(String)} instead.
-     */
-    @Deprecated
-    public String executeGet(String url) {
-        return responseToString(requestGet(url));
-    }
-
-    /**
-     * Execute a GET request on the given URL.
-     *
-     * @param url the HTTP endpoint
-     * @return the response to the GET request
-     * @throws ConnectException if execution of the GET request fails
      */
     public Response requestGet(String url) {
         return requestHttpMethod(url, null, Collections.emptyMap(), "GET");
@@ -945,38 +932,9 @@ abstract class EmbeddedConnect {
      * @param body the payload of the PUT request
      * @return the response to the PUT request
      * @throws ConnectException if execution of the PUT request fails
-     * @deprecated Use {@link #requestPut(String, String)} instead.
-     */
-    @Deprecated
-    public int executePut(String url, String body) {
-        return requestPut(url, body).getStatus();
-    }
-
-    /**
-     * Execute a PUT request on the given URL.
-     *
-     * @param url the HTTP endpoint
-     * @param body the payload of the PUT request
-     * @return the response to the PUT request
-     * @throws ConnectException if execution of the PUT request fails
      */
     public Response requestPut(String url, String body) {
         return requestHttpMethod(url, body, Collections.emptyMap(), "PUT");
-    }
-
-    /**
-     * Execute a POST request on the given URL.
-     *
-     * @param url the HTTP endpoint
-     * @param body the payload of the POST request
-     * @param headers a map that stores the POST request headers
-     * @return the response to the POST request
-     * @throws ConnectException if execution of the POST request fails
-     * @deprecated Use {@link #requestPost(String, String, java.util.Map)} instead.
-     */
-    @Deprecated
-    public int executePost(String url, String body, Map<String, String> headers) {
-        return requestPost(url, body, headers).getStatus();
     }
 
     /**
@@ -1002,19 +960,6 @@ abstract class EmbeddedConnect {
      */
     public Response requestPatch(String url, String body) {
         return requestHttpMethod(url, body, Collections.emptyMap(), "PATCH");
-    }
-
-    /**
-     * Execute a DELETE request on the given URL.
-     *
-     * @param url the HTTP endpoint
-     * @return the response to the DELETE request
-     * @throws ConnectException if execution of the DELETE request fails
-     * @deprecated Use {@link #requestDelete(String)} instead.
-     */
-    @Deprecated
-    public int executeDelete(String url) {
-        return requestDelete(url).getStatus();
     }
 
     /**
