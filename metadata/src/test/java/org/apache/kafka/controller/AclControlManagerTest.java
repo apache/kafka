@@ -115,6 +115,34 @@ public class AclControlManagerTest {
     }
 
     /**
+     * Verify that validateNewAcl catches invalid ACLs with principals that do not contain a colon.
+     */
+    @Test
+    public void testValidateAclWithBadPrincipal() {
+        assertEquals("Could not parse principal from `invalid` (no colon is present " +
+                "separating the principal type from the principal name)",
+            assertThrows(InvalidRequestException.class, () ->
+                AclControlManager.validateNewAcl(new AclBinding(
+                    new ResourcePattern(TOPIC, "*", LITERAL),
+                    new AccessControlEntry("invalid", "*", ALTER, ALLOW)))).
+                getMessage());
+    }
+
+    /**
+     * Verify that validateNewAcl catches invalid ACLs with principals that do not contain a colon.
+     */
+    @Test
+    public void testValidateAclWithEmptyPrincipal() {
+        assertEquals("Could not parse principal from `` (no colon is present " +
+                "separating the principal type from the principal name)",
+            assertThrows(InvalidRequestException.class, () ->
+                AclControlManager.validateNewAcl(new AclBinding(
+                    new ResourcePattern(TOPIC, "*", LITERAL),
+                    new AccessControlEntry("", "*", ALTER, ALLOW)))).
+                        getMessage());
+    }
+
+    /**
      * Verify that validateFilter catches invalid filters.
      */
     @Test
