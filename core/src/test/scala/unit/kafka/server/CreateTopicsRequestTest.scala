@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import kafka.utils._
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.CreateTopicsRequestData
@@ -104,36 +103,6 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def testCreateTopicsWithVeryShortTimeouts(quorum: String): Unit = {
-    // When using ZooKeeper, we don't expect a request to ever complete within 1ms.
-    // A timeout of 1 ms allows us to test the purgatory timeout logic.
-    //
-    // Note: we do not test KRaft here because its behavior is different. Server-side
-    // timeouts are much less likely to happen with KRaft since the operation is much
-    // faster. Additionally, if a server side timeout does happen, the operation is
-    // usually not performed.
-    validateErrorCreateTopicsRequests(topicsReq(Seq(
-      topicReq("error-timeout", numPartitions = 10, replicationFactor = 3)), timeout = 1),
-      Map("error-timeout" -> error(Errors.REQUEST_TIMED_OUT)), checkErrorMessage = false)
-    validateErrorCreateTopicsRequests(topicsReq(Seq(
-      topicReq("error-timeout-zero", numPartitions = 10, replicationFactor = 3)), timeout = 0),
-      Map("error-timeout-zero" -> error(Errors.REQUEST_TIMED_OUT)), checkErrorMessage = false)
-    // Negative timeouts are treated the same as 0
-    validateErrorCreateTopicsRequests(topicsReq(Seq(
-      topicReq("error-timeout-negative", numPartitions = 10, replicationFactor = 3)), timeout = -1),
-      Map("error-timeout-negative" -> error(Errors.REQUEST_TIMED_OUT)), checkErrorMessage = false)
-    // The topics should still get created eventually
-    TestUtils.waitForPartitionMetadata(servers, "error-timeout", 0)
-    TestUtils.waitForPartitionMetadata(servers, "error-timeout-zero", 0)
-    TestUtils.waitForPartitionMetadata(servers, "error-timeout-negative", 0)
-    validateTopicExists("error-timeout")
-    validateTopicExists("error-timeout-zero")
-    validateTopicExists("error-timeout-negative")
-  }
-
-
-  @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
   def testInvalidCreateTopicsRequests(quorum: String): Unit = {
     // Partitions/ReplicationFactor and ReplicaAssignment
@@ -149,21 +118,8 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "zkMigration"))
-  def testNotController(quorum: String): Unit = {
-    // Note: we don't run this test when in KRaft mode, because KRaft doesn't have this
-    // behavior of returning NOT_CONTROLLER. Instead, the request is forwarded.
-    val req = topicsReq(Seq(topicReq("topic1")))
-    val response = sendCreateTopicRequest(req, notControllerSocketServer)
-    val error = if (isZkMigrationTest()) Errors.NONE else Errors.NOT_CONTROLLER
-    assertEquals(1, response.errorCounts().get(error))
-  }
-
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
+  @ValueSource(strings = Array("kraft"))
   def testCreateTopicsRequestVersions(quorum: String): Unit = {
-    // Note: we don't run this test when in KRaft mode, because kraft does not yet support returning topic
-    // configs from CreateTopics.
     for (version <- ApiKeys.CREATE_TOPICS.oldestVersion to ApiKeys.CREATE_TOPICS.latestVersion) {
       val topic = s"topic_$version"
       val data = new CreateTopicsRequestData()
@@ -175,7 +131,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
       ).asJava.iterator()))
 
       val request = new CreateTopicsRequest.Builder(data).build(version.asInstanceOf[Short])
-      val response = sendCreateTopicRequest(request)
+      val response = sendCreateTopicRequest(request, adminSocketServer)
 
       val topicResponse = response.data.topics.find(topic)
       assertNotNull(topicResponse)
