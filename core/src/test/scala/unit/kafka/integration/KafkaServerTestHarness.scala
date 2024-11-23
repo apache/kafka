@@ -413,7 +413,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
         time = brokerTime(config.brokerId),
         threadNamePrefix = None,
         startup = false,
-        enableZkApiForwarding = isZkMigrationTest() || (config.migrationEnabled && config.interBrokerProtocolVersion.isApiForwardingEnabled)
+        enableZkApiForwarding = config.migrationEnabled && config.interBrokerProtocolVersion.isApiForwardingEnabled
       )
     }
   }

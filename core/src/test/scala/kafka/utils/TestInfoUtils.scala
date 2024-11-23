@@ -45,14 +45,6 @@ object TestInfoUtils {
     }
   }
 
-  def isZkMigrationTest(testInfo: TestInfo): Boolean = {
-    if (!isKRaft(testInfo)) {
-      false
-    } else {
-      testInfo.getDisplayName.contains("quorum=zkMigration")
-    }
-  }
-
   final val TestWithParameterizedQuorumAndGroupProtocolNames = "{displayName}.quorum={0}.groupProtocol={1}"
 
   def isShareGroupTest(testInfo: TestInfo): Boolean = {

@@ -18,7 +18,6 @@
 package kafka.server
 
 import java.util
-import java.util.Collections
 import kafka.network.SocketServer
 import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.common.Uuid
@@ -214,24 +213,6 @@ class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
         validateTopicIsDeleted(names(topic))
       }
     }
-  }
-
-  /*
-   * Only run this test against ZK clusters. KRaft doesn't have this behavior of returning NOT_CONTROLLER.
-   * Instead, the request is forwarded.
-   */
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "zkMigration"))
-  def testNotController(quorum: String): Unit = {
-    val request = new DeleteTopicsRequest.Builder(
-        new DeleteTopicsRequestData()
-          .setTopicNames(Collections.singletonList("not-controller"))
-          .setTimeoutMs(1000)).build()
-    val response = sendDeleteTopicsRequest(request, notControllerSocketServer)
-
-    val expectedError = if (isZkMigrationTest()) Errors.NONE else Errors.NOT_CONTROLLER
-    val error = response.data.responses.find("not-controller").errorCode()
-    assertEquals(expectedError.code(),  error)
   }
 
   private def validateTopicIsDeleted(topic: String): Unit = {
