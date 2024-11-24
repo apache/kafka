@@ -714,8 +714,10 @@ public class Topology {
     public synchronized <KIn, VIn, KOut, VOut> Topology addProcessor(final String name,
                                                                      final ProcessorSupplier<KIn, VIn, KOut, VOut> supplier,
                                                                      final String... parentNames) {
-        internalTopologyBuilder.addProcessor(name, supplier, parentNames);
-        final Set<StoreBuilder<?>> stores = supplier.stores();
+        final ProcessorSupplier<KIn, VIn, KOut, VOut> wrapped = internalTopologyBuilder.wrapProcessorSupplier(name, supplier);
+        internalTopologyBuilder.addProcessor(name, wrapped, parentNames);
+        final Set<StoreBuilder<?>> stores = wrapped.stores();
+
         if (stores != null) {
             for (final StoreBuilder<?> storeBuilder : stores) {
                 internalTopologyBuilder.addStateStore(storeBuilder, name);

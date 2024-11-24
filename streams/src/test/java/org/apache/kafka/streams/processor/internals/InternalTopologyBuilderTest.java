@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -30,8 +31,15 @@ import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.ProcessorWrapper;
+import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.WrappedFixedKeyProcessorSupplier;
+import org.apache.kafka.streams.processor.api.WrappedProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.SubtopologyDescription;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -63,9 +71,11 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.apache.kafka.streams.StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_2;
+import static org.apache.kafka.streams.utils.TestUtils.dummyStreamsConfigMap;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
@@ -1362,4 +1372,86 @@ public class InternalTopologyBuilderTest {
 
         assertThat(builder.buildGlobalStateTopology().storeToChangelogTopic().get(globalStoreName), is(globalTopic));
     }
+
+    @Test
+    public void shouldWrapProcessorSupplier() {
+        final Map<Object, Object> props = dummyStreamsConfigMap();
+        props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, ProcessorSkippingWrapper.class);
+
+        final InternalTopologyBuilder builder =
+            new InternalTopologyBuilder(new TopologyConfig(new StreamsConfig(props)));
+
+        final ProcessorSupplier<String, String, String, String> throwingProcessorSupplier =
+            () -> (Processor<String, String, String, String>) record -> {
+                throw new RuntimeException("oops, don't call process on me!");
+            };
+
+        final ProcessorSupplier<String, String, String, String> wrappedProcessorSupplier =
+            builder.wrapProcessorSupplier("name", throwingProcessorSupplier);
+
+        final Processor<String, String, String, String> throwingProcessor = throwingProcessorSupplier.get();
+        final Processor<String, String, String, String> wrappedProcessor = wrappedProcessorSupplier.get();
+
+        final Record<String, String> input = new Record<>("key", "value", 0L);
+        assertThrows(RuntimeException.class, () -> throwingProcessor.process(input));
+        // wrapped processor should not throw
+        wrappedProcessor.process(input);
+    }
+
+    @Test
+    public void shouldWrapFixedKeyProcessorSupplier() {
+        final Map<Object, Object> props = dummyStreamsConfigMap();
+        props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, ProcessorSkippingWrapper.class.getName());
+
+        final InternalTopologyBuilder builder =
+            new InternalTopologyBuilder(new TopologyConfig(new StreamsConfig(props)));
+
+        final FixedKeyProcessorSupplier<String, String, String> throwingProcessorSupplier =
+            () -> (FixedKeyProcessor<String, String, String>) record -> {
+                throw new RuntimeException("oops, don't call process on me!");
+            };
+
+        final FixedKeyProcessorSupplier<String, String, String> wrappedProcessorSupplier =
+            builder.wrapFixedKeyProcessorSupplier("name", throwingProcessorSupplier);
+
+        final FixedKeyProcessor<String, String, String> throwingProcessor = throwingProcessorSupplier.get();
+        final FixedKeyProcessor<String, String, String> wrappedProcessor = wrappedProcessorSupplier.get();
+
+        // TODO: when we expose a public constructor for FixedKeyRecord we should pass in a real one here
+        final FixedKeyRecord<String, String> input = null;
+        assertThrows(RuntimeException.class, () -> throwingProcessor.process(input));
+        // wrapped processor should not throw
+        wrappedProcessor.process(input);
+    }
+
+    @Test
+    public void shouldThrowOnInvalidProcessorWrapperClassName() {
+        final Map<Object, Object> props = dummyStreamsConfigMap();
+        props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, "invalid.class");
+
+        assertThrows(
+            ConfigException.class,
+            () -> new InternalTopologyBuilder(new TopologyConfig(new StreamsConfig(props)))
+        );
+    }
+
+    public static class ProcessorSkippingWrapper implements ProcessorWrapper {
+
+        @Override
+        public <KIn, VIn, KOut, VOut> WrappedProcessorSupplier<KIn, VIn, KOut, VOut> wrapProcessorSupplier(final String processorName,
+                                                                                                           final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier) {
+            return () -> (Processor<KIn, VIn, KOut, VOut>) record -> {
+                // do nothing
+            };
+        }
+
+        @Override
+        public <KIn, VIn, VOut> WrappedFixedKeyProcessorSupplier<KIn, VIn, VOut> wrapFixedKeyProcessorSupplier(final String processorName,
+                                                                                                               final FixedKeyProcessorSupplier<KIn, VIn, VOut> processorSupplier) {
+            return () -> (FixedKeyProcessor<KIn, VIn, VOut>) record -> {
+                // do nothing
+            };
+        }
+    }
+
 }

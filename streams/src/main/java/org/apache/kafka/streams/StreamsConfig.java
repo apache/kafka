@@ -49,6 +49,7 @@ import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.assignment.TaskAssignor;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
+import org.apache.kafka.streams.processor.internals.NoOpProcessorWrapper;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor;
 import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
@@ -675,6 +676,11 @@ public class StreamsConfig extends AbstractConfig {
         "recommended setting for production; for development you can change this, by adjusting broker setting " +
         "<code>transaction.state.log.replication.factor</code> and <code>transaction.state.log.min.isr</code>.";
 
+    /** {@code processor.wrapper.class} */
+    public static final String PROCESSOR_WRAPPER_CLASS_CONFIG = "processor.wrapper.class";
+    public static final String PROCESSOR_WRAPPER_CLASS_DOC = "A processor wrapper class or class name that implements the <code>org.apache.kafka.streams.state.ProcessorWrapper</code> interface. "
+        + "Must be passed in to the StreamsBuilder or Topology constructor in order to take effect";
+
     /** {@code repartition.purge.interval.ms} */
     @SuppressWarnings("WeakerAccess")
     public static final String REPARTITION_PURGE_INTERVAL_MS_CONFIG = "repartition.purge.interval.ms";
@@ -1124,6 +1130,11 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(60 * 1000L),
                     Importance.LOW,
                     PROBING_REBALANCE_INTERVAL_MS_DOC)
+            .define(PROCESSOR_WRAPPER_CLASS_CONFIG,
+                    Type.CLASS,
+                    NoOpProcessorWrapper.class,
+                    Importance.LOW,
+                    PROCESSOR_WRAPPER_CLASS_DOC)
             .define(RECEIVE_BUFFER_CONFIG,
                     Type.INT,
                     32 * 1024,

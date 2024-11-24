@@ -38,9 +38,11 @@ import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
+import org.apache.kafka.streams.processor.internals.NoOpProcessorWrapper;
 import org.apache.kafka.streams.processor.internals.RecordCollectorTest;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
+import org.apache.kafka.streams.utils.TestUtils.CountingProcessorWrapper;
 
 import org.apache.log4j.Level;
 import org.junit.jupiter.api.BeforeEach;
@@ -69,6 +71,7 @@ import static org.apache.kafka.streams.StreamsConfig.ENABLE_METRICS_PUSH_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH;
 import static org.apache.kafka.streams.StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH;
+import static org.apache.kafka.streams.StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.STATE_DIR_CONFIG;
@@ -1217,6 +1220,24 @@ public class StreamsConfigTest {
     public void shouldThrowOnInvalidClientSupplier() {
         props.put(StreamsConfig.DEFAULT_CLIENT_SUPPLIER_CONFIG, "invalid.class");
         assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
+    @Test
+    public void shouldReturnDefaultProcessorWrapperClass() {
+        final String defaultWrapperClassName = streamsConfig.getClass(PROCESSOR_WRAPPER_CLASS_CONFIG).getName();
+        assertThat(defaultWrapperClassName, equalTo(NoOpProcessorWrapper.class.getName()));
+    }
+
+    @Test
+    public void shouldAllowConfiguringProcessorWrapperWithClass() {
+        props.put(StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG, CountingProcessorWrapper.class);
+        new StreamsConfig(props);
+    }
+
+    @Test
+    public void shouldAllowConfiguringProcessorWrapperWithClassName() {
+        props.put(StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG, CountingProcessorWrapper.class.getName());
+        new StreamsConfig(props);
     }
 
     @Test

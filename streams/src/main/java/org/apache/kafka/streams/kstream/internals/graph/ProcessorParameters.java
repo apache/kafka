@@ -17,11 +17,14 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
+import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorAdapter;
 import org.apache.kafka.streams.state.StoreBuilder;
+
+import java.util.Set;
 
 /**
  * Class used to represent a {@link ProcessorSupplier} or {@link FixedKeyProcessorSupplier} and the name
@@ -78,18 +81,30 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
 
     public void addProcessorTo(final InternalTopologyBuilder topologyBuilder, final String[] parentNodeNames) {
         if (processorSupplier != null) {
-            topologyBuilder.addProcessor(processorName, processorSupplier, parentNodeNames);
-            if (processorSupplier.stores() != null) {
-                for (final StoreBuilder<?> storeBuilder : processorSupplier.stores()) {
+            ApiUtils.checkSupplier(processorSupplier);
+
+            final ProcessorSupplier<KIn, VIn, KOut, VOut> wrapped =
+                topologyBuilder.wrapProcessorSupplier(processorName, processorSupplier);
+
+            topologyBuilder.addProcessor(processorName, wrapped, parentNodeNames);
+            final Set<StoreBuilder<?>> stores = wrapped.stores();
+            if (stores != null) {
+                for (final StoreBuilder<?> storeBuilder : stores) {
                     topologyBuilder.addStateStore(storeBuilder, processorName);
                 }
             }
         }
 
         if (fixedKeyProcessorSupplier != null) {
-            topologyBuilder.addProcessor(processorName, fixedKeyProcessorSupplier, parentNodeNames);
-            if (fixedKeyProcessorSupplier.stores() != null) {
-                for (final StoreBuilder<?> storeBuilder : fixedKeyProcessorSupplier.stores()) {
+            ApiUtils.checkSupplier(fixedKeyProcessorSupplier);
+
+            final FixedKeyProcessorSupplier<KIn, VIn, VOut> wrapped =
+                topologyBuilder.wrapFixedKeyProcessorSupplier(processorName, fixedKeyProcessorSupplier);
+
+            topologyBuilder.addProcessor(processorName, wrapped, parentNodeNames);
+            final Set<StoreBuilder<?>> stores = wrapped.stores();
+            if (stores != null) {
+                for (final StoreBuilder<?> storeBuilder : stores) {
                     topologyBuilder.addStateStore(storeBuilder, processorName);
                 }
             }

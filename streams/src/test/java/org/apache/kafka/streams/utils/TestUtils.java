@@ -18,19 +18,31 @@ package org.apache.kafka.streams.utils;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.ProcessorWrapper;
+import org.apache.kafka.streams.processor.api.WrappedFixedKeyProcessorSupplier;
+import org.apache.kafka.streams.processor.api.WrappedProcessorSupplier;
 
 import org.junit.jupiter.api.TestInfo;
 
 import java.lang.reflect.Method;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.streams.StreamsConfig.APPLICATION_ID_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 public class TestUtils {
+
+    public static final String PROCESSOR_WRAPPER_COUNTER_CONFIG = "wrapped.processor.count";
+
     /**
      * Waits for the given {@link KafkaStreams} instances to all be in a specific {@link KafkaStreams.State}.
      * This method uses polling, which can be more error prone and slightly slower.
@@ -84,5 +96,50 @@ public class TestUtils {
             .replace(']', '_')
             .replace(' ', '_')
             .replace('=', '_');
+    }
+
+    /**
+     * Quick method of generating a config map prepopulated with the required
+     * StreamsConfig properties
+     */
+    public static Map<Object, Object> dummyStreamsConfigMap() {
+        final Map<Object, Object> baseConfigs = new HashMap<>();
+        baseConfigs.put(APPLICATION_ID_CONFIG, "dummy-app-id");
+        baseConfigs.put(BOOTSTRAP_SERVERS_CONFIG, "local");
+        return baseConfigs;
+    }
+
+    /**
+     * Simple pass-through processor wrapper that counts the number of processors
+     * it wraps.
+     * To retrieve the current count, pass an instance of AtomicInteger into the configs
+     * alongside the wrapper itself. Use the config key defined with {@link #PROCESSOR_WRAPPER_COUNTER_CONFIG}
+     */
+    public static class CountingProcessorWrapper implements ProcessorWrapper {
+
+        private AtomicInteger wrappedProcessorCount;
+
+        @Override
+        public void configure(final Map<String, ?> configs) {
+            if (configs.containsKey(PROCESSOR_WRAPPER_COUNTER_CONFIG)) {
+                wrappedProcessorCount = (AtomicInteger) configs.get(PROCESSOR_WRAPPER_COUNTER_CONFIG);
+            } else {
+                wrappedProcessorCount = new AtomicInteger();
+            }
+        }
+
+        @Override
+        public <KIn, VIn, KOut, VOut> WrappedProcessorSupplier<KIn, VIn, KOut, VOut> wrapProcessorSupplier(final String processorName,
+                                                                                                           final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier) {
+            wrappedProcessorCount.incrementAndGet();
+            return ProcessorWrapper.asWrapped(processorSupplier);
+        }
+
+        @Override
+        public <KIn, VIn, VOut> WrappedFixedKeyProcessorSupplier<KIn, VIn, VOut> wrapFixedKeyProcessorSupplier(final String processorName,
+                                                                                                               final FixedKeyProcessorSupplier<KIn, VIn, VOut> processorSupplier) {
+            wrappedProcessorCount.incrementAndGet();
+            return ProcessorWrapper.asWrappedFixedKey(processorSupplier);
+        }
     }
 }
