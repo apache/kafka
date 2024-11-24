@@ -166,7 +166,7 @@ public interface ClusterInstance {
     }
 
     default <K, V> Producer<K, V> producer() {
-        return new KafkaProducer<>(Map.of());
+        return producer(Map.of());
     }
 
     default <K, V> Consumer<K, V> consumer(Map<String, Object> configs) {
@@ -180,7 +180,7 @@ public interface ClusterInstance {
     }
 
     default <K, V> Consumer<K, V> consumer() {
-        return new KafkaConsumer<>(Map.of());
+        return consumer(Map.of());
     }
 
     default Admin admin(Map<String, Object> configs, boolean usingBootstrapControllers) {
