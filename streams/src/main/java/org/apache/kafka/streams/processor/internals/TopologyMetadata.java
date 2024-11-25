@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
@@ -427,7 +427,7 @@ public class TopologyMetadata {
         return hasNamedTopologies() || evaluateConditionIsTrueForAnyBuilders(InternalTopologyBuilder::hasOffsetResetOverrides);
     }
 
-    public OffsetResetStrategy offsetResetStrategy(final String topic) {
+    public AutoOffsetResetStrategy offsetResetStrategy(final String topic) {
         for (final InternalTopologyBuilder builder : builders.values()) {
             if (builder.containsTopic(topic)) {
                 return builder.offsetResetStrategy(topic);

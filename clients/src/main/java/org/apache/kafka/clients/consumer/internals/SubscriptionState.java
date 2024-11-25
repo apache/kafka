@@ -22,7 +22,6 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.PartitionStates;
@@ -97,7 +96,7 @@ public class SubscriptionState {
     private final PartitionStates<TopicPartitionState> assignment;
 
     /* Default offset reset strategy */
-    private final OffsetResetStrategy defaultResetStrategy;
+    private final AutoOffsetResetStrategy defaultResetStrategy;
 
     /* User-provided listener to be invoked when assignment changes */
     private Optional<ConsumerRebalanceListener> rebalanceListener = Optional.empty();
@@ -132,7 +131,7 @@ public class SubscriptionState {
         }
     }
 
-    public SubscriptionState(LogContext logContext, OffsetResetStrategy defaultResetStrategy) {
+    public SubscriptionState(LogContext logContext, AutoOffsetResetStrategy defaultResetStrategy) {
         this.log = logContext.logger(this.getClass());
         this.defaultResetStrategy = defaultResetStrategy;
         this.subscription = new TreeSet<>(); // use a sorted set for better logging
@@ -393,7 +392,7 @@ public class SubscriptionState {
         assignedState(tp).seekUnvalidated(position);
     }
 
-    synchronized void maybeSeekUnvalidated(TopicPartition tp, FetchPosition position, OffsetResetStrategy requestedResetStrategy) {
+    synchronized void maybeSeekUnvalidated(TopicPartition tp, FetchPosition position, AutoOffsetResetStrategy requestedResetStrategy) {
         TopicPartitionState state = assignedStateOrNull(tp);
         if (state == null) {
             log.debug("Skipping reset of partition {} since it is no longer assigned", tp);
@@ -704,11 +703,11 @@ public class SubscriptionState {
         return allConsumed;
     }
 
-    public synchronized void requestOffsetReset(TopicPartition partition, OffsetResetStrategy offsetResetStrategy) {
+    public synchronized void requestOffsetReset(TopicPartition partition, AutoOffsetResetStrategy offsetResetStrategy) {
         assignedState(partition).reset(offsetResetStrategy);
     }
 
-    public synchronized void requestOffsetReset(Collection<TopicPartition> partitions, OffsetResetStrategy offsetResetStrategy) {
+    public synchronized void requestOffsetReset(Collection<TopicPartition> partitions, AutoOffsetResetStrategy offsetResetStrategy) {
         partitions.forEach(tp -> {
             log.info("Seeking to {} offset of partition {}", offsetResetStrategy, tp);
             assignedState(tp).reset(offsetResetStrategy);
@@ -734,14 +733,14 @@ public class SubscriptionState {
     }
 
     boolean hasDefaultOffsetResetPolicy() {
-        return defaultResetStrategy != OffsetResetStrategy.NONE;
+        return defaultResetStrategy != AutoOffsetResetStrategy.NONE;
     }
 
     public synchronized boolean isOffsetResetNeeded(TopicPartition partition) {
         return assignedState(partition).awaitingReset();
     }
 
-    public synchronized OffsetResetStrategy resetStrategy(TopicPartition partition) {
+    public synchronized AutoOffsetResetStrategy resetStrategy(TopicPartition partition) {
         return assignedState(partition).resetStrategy();
     }
 
@@ -782,7 +781,7 @@ public class SubscriptionState {
         final Set<TopicPartition> partitionsWithNoOffsets = new HashSet<>();
         assignment.forEach((tp, partitionState) -> {
             if (partitionState.shouldInitialize() && initPartitionsToInclude.test(tp)) {
-                if (defaultResetStrategy == OffsetResetStrategy.NONE)
+                if (defaultResetStrategy == AutoOffsetResetStrategy.NONE)
                     partitionsWithNoOffsets.add(tp);
                 else
                     requestOffsetReset(tp);
@@ -897,7 +896,7 @@ public class SubscriptionState {
         private boolean paused;  // whether this partition has been paused by the user
         private boolean pendingRevocation;
         private boolean pendingOnAssignedCallback;
-        private OffsetResetStrategy resetStrategy;  // the strategy to use if the offset needs resetting
+        private AutoOffsetResetStrategy resetStrategy;  // the strategy to use if the offset needs resetting
         private Long nextRetryTimeMs;
         private Integer preferredReadReplica;
         private Long preferredReadReplicaExpireTimeMs;
@@ -966,7 +965,7 @@ public class SubscriptionState {
             }
         }
 
-        private void reset(OffsetResetStrategy strategy) {
+        private void reset(AutoOffsetResetStrategy strategy) {
             transitionState(FetchStates.AWAIT_RESET, () -> {
                 this.resetStrategy = strategy;
                 this.nextRetryTimeMs = null;
@@ -1137,7 +1136,7 @@ public class SubscriptionState {
             this.endOffsetRequested = false;
         }
 
-        private OffsetResetStrategy resetStrategy() {
+        private AutoOffsetResetStrategy resetStrategy() {
             return resetStrategy;
         }
     }

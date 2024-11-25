@@ -25,7 +25,6 @@ import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerInterceptor;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -130,8 +129,8 @@ public final class ConsumerUtils {
     }
 
     public static SubscriptionState createSubscriptionState(ConsumerConfig config, LogContext logContext) {
-        String s = config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase(Locale.ROOT);
-        OffsetResetStrategy strategy = OffsetResetStrategy.valueOf(s);
+        String s = config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
+        AutoOffsetResetStrategy strategy = AutoOffsetResetStrategy.fromString(s);
         return new SubscriptionState(logContext, strategy);
     }
 

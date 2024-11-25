@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -63,9 +63,6 @@ import java.util.TreeSet;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.clients.consumer.OffsetResetStrategy.EARLIEST;
-import static org.apache.kafka.clients.consumer.OffsetResetStrategy.LATEST;
-import static org.apache.kafka.clients.consumer.OffsetResetStrategy.NONE;
 import static org.apache.kafka.streams.StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG;
 
 public class InternalTopologyBuilder {
@@ -1345,15 +1342,15 @@ public class InternalTopologyBuilder {
             && latestResetTopics.isEmpty() && latestResetPatterns.isEmpty());
     }
 
-    public OffsetResetStrategy offsetResetStrategy(final String topic) {
+    public AutoOffsetResetStrategy offsetResetStrategy(final String topic) {
         if (maybeDecorateInternalSourceTopics(earliestResetTopics).contains(topic) ||
             earliestResetPatterns.stream().anyMatch(p -> p.matcher(topic).matches())) {
-            return EARLIEST;
+            return AutoOffsetResetStrategy.EARLIEST;
         } else if (maybeDecorateInternalSourceTopics(latestResetTopics).contains(topic) ||
             latestResetPatterns.stream().anyMatch(p -> p.matcher(topic).matches())) {
-            return LATEST;
+            return AutoOffsetResetStrategy.LATEST;
         } else if (containsTopic(topic)) {
-            return NONE;
+            return AutoOffsetResetStrategy.NONE;
         } else {
             throw new IllegalStateException(String.format(
                 "Unable to lookup offset reset strategy for the following topic as it does not exist in the topology%s: %s",

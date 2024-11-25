@@ -23,7 +23,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
@@ -1294,29 +1294,26 @@ public class StreamThread extends Thread implements ProcessingThread {
         final Set<TopicPartition> notReset = new HashSet<>();
 
         for (final TopicPartition partition : partitions) {
-            final OffsetResetStrategy offsetResetStrategy = topologyMetadata.offsetResetStrategy(partition.topic());
+            final AutoOffsetResetStrategy offsetResetStrategy = topologyMetadata.offsetResetStrategy(partition.topic());
 
             // This may be null if the task we are currently processing was apart of a named topology that was just removed.
             // TODO KAFKA-13713: keep the StreamThreads and TopologyMetadata view of named topologies in sync until final thread has acked
             if (offsetResetStrategy != null) {
-                switch (offsetResetStrategy) {
-                    case EARLIEST:
-                        addToResetList(partition, seekToBeginning, "Setting topic '{}' to consume from {} offset", "earliest", loggedTopics);
-                        break;
-                    case LATEST:
-                        addToResetList(partition, seekToEnd, "Setting topic '{}' to consume from {} offset", "latest", loggedTopics);
-                        break;
-                    case NONE:
-                        if ("earliest".equals(originalReset)) {
-                            addToResetList(partition, seekToBeginning, "No custom setting defined for topic '{}' using original config '{}' for offset reset", "earliest", loggedTopics);
-                        } else if ("latest".equals(originalReset)) {
-                            addToResetList(partition, seekToEnd, "No custom setting defined for topic '{}' using original config '{}' for offset reset", "latest", loggedTopics);
-                        } else {
-                            notReset.add(partition);
-                        }
-                        break;
-                    default:
-                        throw new IllegalStateException("Unable to locate topic " + partition.topic() + " in the topology");
+                if (offsetResetStrategy == AutoOffsetResetStrategy.EARLIEST) {
+                    addToResetList(partition, seekToBeginning, "Setting topic '{}' to consume from {} offset", "earliest", loggedTopics);
+                } else if (offsetResetStrategy == AutoOffsetResetStrategy.LATEST) {
+                    addToResetList(partition, seekToEnd, "Setting topic '{}' to consume from {} offset", "latest", loggedTopics);
+                } else if (offsetResetStrategy == AutoOffsetResetStrategy.NONE) {
+                    final AutoOffsetResetStrategy autoOffsetResetStrategy = AutoOffsetResetStrategy.fromString(originalReset);
+                    if (AutoOffsetResetStrategy.EARLIEST == autoOffsetResetStrategy) {
+                        addToResetList(partition, seekToBeginning, "No custom setting defined for topic '{}' using original config '{}' for offset reset", "earliest", loggedTopics);
+                    } else if (AutoOffsetResetStrategy.LATEST == autoOffsetResetStrategy) {
+                        addToResetList(partition, seekToEnd, "No custom setting defined for topic '{}' using original config '{}' for offset reset", "latest", loggedTopics);
+                    } else {
+                        notReset.add(partition);
+                    }
+                } else {
+                    throw new IllegalStateException("Unable to locate topic " + partition.topic() + " in the topology");
                 }
             }
         }

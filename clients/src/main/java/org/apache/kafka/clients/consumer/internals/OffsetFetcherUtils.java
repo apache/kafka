@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.LogTruncationException;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -285,10 +284,10 @@ class OffsetFetcherUtils {
     }
 
     private long offsetResetStrategyTimestamp(final TopicPartition partition) {
-        OffsetResetStrategy strategy = subscriptionState.resetStrategy(partition);
-        if (strategy == OffsetResetStrategy.EARLIEST)
+        AutoOffsetResetStrategy strategy = subscriptionState.resetStrategy(partition);
+        if (strategy == AutoOffsetResetStrategy.EARLIEST)
             return ListOffsetsRequest.EARLIEST_TIMESTAMP;
-        else if (strategy == OffsetResetStrategy.LATEST)
+        else if (strategy == AutoOffsetResetStrategy.LATEST)
             return ListOffsetsRequest.LATEST_TIMESTAMP;
         else
             throw new NoOffsetForPartitionException(partition);
@@ -320,11 +319,11 @@ class OffsetFetcherUtils {
         }
     }
 
-    static OffsetResetStrategy timestampToOffsetResetStrategy(long timestamp) {
+    static AutoOffsetResetStrategy timestampToOffsetResetStrategy(long timestamp) {
         if (timestamp == ListOffsetsRequest.EARLIEST_TIMESTAMP)
-            return OffsetResetStrategy.EARLIEST;
+            return AutoOffsetResetStrategy.EARLIEST;
         else if (timestamp == ListOffsetsRequest.LATEST_TIMESTAMP)
-            return OffsetResetStrategy.LATEST;
+            return AutoOffsetResetStrategy.LATEST;
         else
             return null;
     }
@@ -411,7 +410,7 @@ class OffsetFetcherUtils {
     }
 
     // Visible for testing
-    void resetPositionIfNeeded(TopicPartition partition, OffsetResetStrategy requestedResetStrategy,
+    void resetPositionIfNeeded(TopicPartition partition, AutoOffsetResetStrategy requestedResetStrategy,
                                ListOffsetData offsetData) {
         SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
                 offsetData.offset,

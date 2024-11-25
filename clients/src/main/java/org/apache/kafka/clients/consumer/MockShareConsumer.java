@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -54,7 +55,7 @@ public class MockShareConsumer<K, V> implements ShareConsumer<K, V> {
     private Uuid clientInstanceId;
 
     public MockShareConsumer() {
-        this.subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
+        this.subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         this.records = new HashMap<>();
         this.closed = false;
         this.wakeup = new AtomicBoolean(false);

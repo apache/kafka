@@ -18,7 +18,7 @@
 package org.apache.kafka.streams.internals.metrics;
 
 import org.apache.kafka.clients.consumer.MockConsumer;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Measurable;
@@ -62,7 +62,7 @@ class StreamsThreadMetricsDelegatingReporterTest {
         final Map<String, String> noThreadIdTagMap = new HashMap<>();
         noThreadIdTagMap.put("client-id", "foo");
 
-        mockConsumer = new MockConsumer<>(OffsetResetStrategy.NONE);
+        mockConsumer = new MockConsumer<>(AutoOffsetResetStrategy.NONE.name());
         streamsThreadMetricsDelegatingReporter = new StreamsThreadMetricsDelegatingReporter(mockConsumer, threadId, stateUpdaterId);
 
         final MetricName metricNameOne = new MetricName("metric-one", "test-group-one", "foo bar baz", threadIdTagMap);

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serde;
@@ -106,8 +106,8 @@ public class InternalTopologyBuilderTest {
         builder.addSource(Topology.AutoOffsetReset.LATEST, "source2", null, null, null, latestTopic);
         builder.initializeSubscription();
 
-        assertThat(builder.offsetResetStrategy(earliestTopic), equalTo(OffsetResetStrategy.EARLIEST));
-        assertThat(builder.offsetResetStrategy(latestTopic), equalTo(OffsetResetStrategy.LATEST));
+        assertThat(builder.offsetResetStrategy(earliestTopic), equalTo(AutoOffsetResetStrategy.EARLIEST));
+        assertThat(builder.offsetResetStrategy(latestTopic), equalTo(AutoOffsetResetStrategy.LATEST));
     }
 
     @Test
@@ -119,8 +119,8 @@ public class InternalTopologyBuilderTest {
         builder.addSource(Topology.AutoOffsetReset.LATEST, "source2", null, null, null,  Pattern.compile(latestTopicPattern));
         builder.initializeSubscription();
 
-        assertThat(builder.offsetResetStrategy("earliestTestTopic"), equalTo(OffsetResetStrategy.EARLIEST));
-        assertThat(builder.offsetResetStrategy("latestTestTopic"), equalTo(OffsetResetStrategy.LATEST));
+        assertThat(builder.offsetResetStrategy("earliestTestTopic"), equalTo(AutoOffsetResetStrategy.EARLIEST));
+        assertThat(builder.offsetResetStrategy("latestTestTopic"), equalTo(AutoOffsetResetStrategy.LATEST));
     }
 
     @Test
@@ -130,7 +130,7 @@ public class InternalTopologyBuilderTest {
 
         assertEquals(Collections.singletonList("test-topic"), builder.fullSourceTopicNames());
 
-        assertThat(builder.offsetResetStrategy("test-topic"), equalTo(OffsetResetStrategy.NONE));
+        assertThat(builder.offsetResetStrategy("test-topic"), equalTo(AutoOffsetResetStrategy.NONE));
     }
 
     @Test
@@ -142,7 +142,7 @@ public class InternalTopologyBuilderTest {
 
         assertThat(expectedPattern.pattern(), builder.sourceTopicPatternString(), equalTo("test-.*"));
 
-        assertThat(builder.offsetResetStrategy("test-topic"), equalTo(OffsetResetStrategy.NONE));
+        assertThat(builder.offsetResetStrategy("test-topic"), equalTo(AutoOffsetResetStrategy.NONE));
     }
 
     @Test
