@@ -678,7 +678,7 @@ public class TransactionManagerTest {
         assertEquals(2, transactionManager.sequenceNumber(tp0));
 
         // The producerId might be reset due to a failure on another partition
-        transactionManager.requestEpochBumpForPartition(tp1);
+        transactionManager.requestIdempotentEpochBumpForPartition(tp1);
         transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
         initializeIdempotentProducerId(producerId + 1, (short) 0);
 
@@ -780,6 +780,21 @@ public class TransactionManagerTest {
         return batch;
     }
 
+    private ProducerBatch writeTransactionalBatchWithValue(
+        TransactionManager manager,
+        TopicPartition tp,
+        String value
+    ) {
+        manager.maybeUpdateProducerIdAndEpoch(tp);
+        int seq = manager.sequenceNumber(tp);
+        manager.incrementSequenceNumber(tp, 1);
+        ProducerBatch batch = batchWithValue(tp, value);
+        batch.setProducerState(manager.producerIdAndEpoch(), seq, true);
+        manager.addInFlightBatch(batch);
+        batch.close();
+        return batch;
+    }
+
     private ProducerBatch batchWithValue(TopicPartition tp, String value) {
         MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(64),
                 Compression.NONE, TimestampType.CREATE_TIME, 0L);
@@ -814,7 +829,7 @@ public class TransactionManagerTest {
         transactionManager.incrementSequenceNumber(tp1, 3);
         assertEquals(transactionManager.sequenceNumber(tp1), 3);
 
-        transactionManager.requestEpochBumpForPartition(tp0);
+        transactionManager.requestIdempotentEpochBumpForPartition(tp0);
         transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
         assertEquals(transactionManager.sequenceNumber(tp0), 0);
         assertEquals(transactionManager.sequenceNumber(tp1), 3);
@@ -2948,7 +2963,7 @@ public class TransactionManagerTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void testEpochBumpAfterLastInflightBatchFails(boolean transactionV2Enabled) {
+    public void testEpochBumpAfterLastInFlightBatchFailsIdempotentProducer(boolean transactionV2Enabled) {
         initializeTransactionManager(Optional.empty(), transactionV2Enabled);
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
         initializeIdempotentProducerId(producerId, epoch);
@@ -2978,6 +2993,39 @@ public class TransactionManagerTest {
         runUntil(() -> transactionManager.producerIdAndEpoch().epoch == 2);
         assertFalse(transactionManager.hasUnresolvedSequences());
         assertEquals(0, transactionManager.sequenceNumber(tp0));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testMaybeResolveSequencesTransactionalProducer(boolean transactionV2Enabled) throws Exception {
+        initializeTransactionManager(Optional.of(transactionalId), transactionV2Enabled);
+
+        // Initialize transaction with initial producer ID and epoch.
+        doInitTransactions(producerId, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartition(tp0);
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, producerId);
+        runUntil(() -> transactionManager.isPartitionAdded(tp0));
+
+        ProducerBatch b1 = writeTransactionalBatchWithValue(transactionManager, tp0, "1");
+        assertEquals(Integer.valueOf(1), transactionManager.sequenceNumber(tp0));
+
+        transactionManager.markSequenceUnresolved(b1);
+        assertTrue(transactionManager.hasUnresolvedSequences());
+
+        transactionManager.handleFailedBatch(b1, new TimeoutException(), false);
+        // Call maybeResolveSequences to trigger resolution logic
+        transactionManager.maybeResolveSequences();
+
+        // Verify the type of error state the transaction is in.
+        if (transactionManager.isTransactionV2Enabled() || transactionManager.needToTriggerEpochBumpFromClient()) {
+            // Expected to throw an abortable error when epoch bumping is allowed
+            assertTrue(transactionManager.hasAbortableError());
+        } else {
+            // Expected to throw a fatal error when epoch bumping is not allowed
+            assertTrue(transactionManager.hasFatalError());
+        }
     }
 
     @Test
@@ -3506,13 +3554,13 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testCanBumpEpochDuringCoordinatorDisconnect() {
+    public void testNeedToTriggerEpochBumpFromClientDuringCoordinatorDisconnect() {
         doInitTransactions(0, (short) 0);
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
-        assertTrue(transactionManager.canBumpEpoch());
+        assertTrue(transactionManager.needToTriggerEpochBumpFromClient());
 
         apiVersions.remove(transactionManager.coordinator(CoordinatorType.TRANSACTION).idString());
-        assertTrue(transactionManager.canBumpEpoch());
+        assertTrue(transactionManager.needToTriggerEpochBumpFromClient());
     }
 
     @ParameterizedTest
