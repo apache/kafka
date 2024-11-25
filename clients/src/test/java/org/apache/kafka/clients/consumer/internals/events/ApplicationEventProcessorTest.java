@@ -355,11 +355,10 @@ public class ApplicationEventProcessorTest {
         UpdatePatternSubscriptionEvent event1 = new UpdatePatternSubscriptionEvent(12345);
 
         setupProcessor(true);
-
+        when(subscriptionState.hasPatternSubscription()).thenReturn(true);
         when(metadata.updateVersion()).thenReturn(0);
 
         processor.process(event1);
-        verify(subscriptionState, never()).hasPatternSubscription();
         assertDoesNotThrow(() -> event1.future().get());
 
         Cluster cluster = mock(Cluster.class);
@@ -377,7 +376,6 @@ public class ApplicationEventProcessorTest {
         UpdatePatternSubscriptionEvent event2 = new UpdatePatternSubscriptionEvent(12345);
         processor.process(event2);
         verify(metadata).requestUpdateForNewTopics();
-        verify(subscriptionState).hasPatternSubscription();
         verify(subscriptionState).subscribeFromPattern(topics);
         assertEquals(1, processor.metadataVersionSnapshot());
         verify(membershipManager).onSubscriptionUpdated();

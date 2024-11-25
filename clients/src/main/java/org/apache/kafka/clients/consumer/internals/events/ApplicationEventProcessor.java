@@ -320,11 +320,12 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      * This will make the consumer send the updated subscription on the next poll.
      */
     private void process(final UpdatePatternSubscriptionEvent event) {
+        if (!subscriptions.hasPatternSubscription()) {
+            return;
+        }
         if (this.metadataVersionSnapshot < metadata.updateVersion()) {
             this.metadataVersionSnapshot = metadata.updateVersion();
-            if (subscriptions.hasPatternSubscription()) {
-                updatePatternSubscription(metadata.fetch());
-            }
+            updatePatternSubscription(metadata.fetch());
         }
         event.future().complete(null);
     }
