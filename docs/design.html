@@ -334,11 +334,6 @@
     sending periodic heartbeats to the controller. If the controller fails to receive a heartbeat before the timeout configured by 
     <code>broker.session.timeout.ms</code> expires, then the node is considered offline.
     <p>
-    For clusters using Zookeeper, liveness is determined indirectly through the existence of an ephemeral node which is created by the broker on
-    initialization of its Zookeeper session. If the broker loses its session after failing to send heartbeats to Zookeeper before expiration of
-    <code>zookeeper.session.timeout.ms</code>, then the node gets deleted. The controller would then notice the node deletion through a Zookeeper watch
-    and mark the broker offline.
-    <p>
     We refer to nodes satisfying these two conditions as being "in sync" to avoid the vagueness of "alive" or "failed". The leader keeps track of the set of "in sync" replicas,
     which is known as the ISR. If either of these conditions fail to be satisfied, then the broker will be removed from the ISR. For example,
     if a follower dies, then the controller will notice the failure through the loss of its session, and will remove the broker from the ISR.
@@ -624,7 +619,7 @@
     <p>
         Quota configuration may be defined for (user, client-id), user and client-id groups. It is possible to override the default quota at any of the quota levels that needs a higher (or even lower) quota.
         The mechanism is similar to the per-topic log config overrides.
-        User and (user, client-id) quota overrides are written to ZooKeeper under <i><b>/config/users</b></i> and client-id quota overrides are written under <i><b>/config/clients</b></i>.
+        User and (user, client-id) quota overrides are written to the metadata log.
         These overrides are read by all brokers and are effective immediately. This lets us change quotas without having to do a rolling restart of the entire cluster. See <a href="#quotas">here</a> for details.
         Default quotas for each group may also be updated dynamically using the same mechanism.
     </p>
@@ -632,14 +627,14 @@
         The order of precedence for quota configuration is:
     </p>
         <ol>
-            <li>/config/users/&lt;user&gt;/clients/&lt;client-id&gt;</li>
-            <li>/config/users/&lt;user&gt;/clients/&lt;default&gt;</li>
-            <li>/config/users/&lt;user&gt;</li>
-            <li>/config/users/&lt;default&gt;/clients/&lt;client-id&gt;</li>
-            <li>/config/users/&lt;default&gt;/clients/&lt;default&gt;</li>
-            <li>/config/users/&lt;default&gt;</li>
-            <li>/config/clients/&lt;client-id&gt;</li>
-            <li>/config/clients/&lt;default&gt;</li>
+            <li>matching user and client-id quotas</li>
+            <li>matching user and default client-id quotas</li>
+            <li>matching user quota</li>
+            <li>default user and matching client-id quotas</li>
+            <li>default user and default client-id quotas</li>
+            <li>default user quota</li>
+            <li>matching client-id quota</li>
+            <li>default client-id quota</li>
         </ol>
     <h4 class="anchor-heading"><a id="design_quotasbandwidth" class="anchor-link"></a><a href="#design_quotasbandwidth">Network Bandwidth Quotas</a></h4>
     <p>

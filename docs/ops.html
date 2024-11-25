@@ -508,7 +508,7 @@ Configs for user-principal 'user1', client-id 'clientA' are producer_byte_rate=1
   <p>
   Kafka naturally batches data in both the producer and consumer so it can achieve high-throughput even over a high-latency connection. To allow this though it may be necessary to increase the TCP socket buffer sizes for the producer, consumer, and broker using the <code>socket.send.buffer.bytes</code> and <code>socket.receive.buffer.bytes</code> configurations. The appropriate way to set this is documented <a href="https://en.wikipedia.org/wiki/Bandwidth-delay_product">here</a>.
   <p>
-  It is generally <i>not</i> advisable to run a <i>single</i> Kafka cluster that spans multiple datacenters over a high-latency link. This will incur very high replication latency both for Kafka writes and ZooKeeper writes, and neither Kafka nor ZooKeeper will remain available in all locations if the network between locations is unavailable.
+  It is generally <i>not</i> advisable to run a <i>single</i> Kafka cluster that spans multiple datacenters over a high-latency link. This will incur very high replication latency for Kafka writes, and Kafka will remain available in all locations if the network between locations is unavailable.
 
   <h3 class="anchor-heading"><a id="georeplication" class="anchor-link"></a><a href="#georeplication">6.3 Geo-Replication (Cross-Cluster Data Mirroring)</a></h3>
 
@@ -1149,8 +1149,8 @@ Security settings for Kafka fall into three main categories, which are similar t
   </p>
 
   <ol>
-    <li><strong>Encryption</strong> of data transferred between Kafka brokers and Kafka clients, between brokers, between brokers and ZooKeeper nodes, and between brokers and other, optional tools.</li>
-    <li><strong>Authentication</strong> of connections from Kafka clients and applications to Kafka brokers, as well as connections from Kafka brokers to ZooKeeper nodes.</li>
+    <li><strong>Encryption</strong> of data transferred between Kafka brokers and Kafka clients, between brokers, and between brokers and other optional tools.</li>
+    <li><strong>Authentication</strong> of connections from Kafka clients and applications to Kafka brokers, as well as connections between Kafka brokers.</li>
     <li><strong>Authorization</strong> of client operations such as creating, deleting, and altering the configuration of topics; writing events to or reading events from a topic; creating and deleting ACLs. Administrators can also define custom policies to put in place additional restrictions, such as a <code>CreateTopicPolicy</code> and <code>AlterConfigPolicy</code> (see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-108%3A+Create+Topic+Policy">KIP-108</a> and the settings <a href="#brokerconfigs_create.topic.policy.class.name">create.topic.policy.class.name</a>, <a href="#brokerconfigs_alter.config.policy.class.name">alter.config.policy.class.name</a>).</li>
   </ol>
 
@@ -1213,41 +1213,7 @@ $ bin/kafka-acls.sh \
     <strong>Data contracts:</strong> You may need to define data contracts between the producers and the consumers of data in a cluster, using event schemas. This ensures that events written to Kafka can always be read properly again, and prevents malformed or corrupt events being written. The best way to achieve this is to deploy a so-called schema registry alongside the cluster. (Kafka does not include a schema registry, but there are third-party implementations available.) A schema registry manages the event schemas and maps the schemas to topics, so that producers know which topics are accepting which types (schemas) of events, and consumers know how to read and parse events in a topic. Some registry implementations provide further functionality, such as schema evolution, storing a history of all schemas, and schema compatibility settings.
   </p>
 
-
-  <h3 class="anchor-heading"><a id="config" class="anchor-link"></a><a href="#config">6.5 Kafka Configuration</a></h3>
-
-  <h4 class="anchor-heading"><a id="clientconfig" class="anchor-link"></a><a href="#clientconfig">Important Client Configurations</a></h4>
-
-  The most important producer configurations are:
-  <ul>
-      <li>acks</li>
-      <li>compression</li>
-      <li>batch size</li>
-  </ul>
-  The most important consumer configuration is the fetch size.
-  <p>
-  All configurations are documented in the <a href="#configuration">configuration</a> section.
-  <p>
-  <h4 class="anchor-heading"><a id="prodconfig" class="anchor-link"></a><a href="#prodconfig">A Production Server Config</a></h4>
-  Here is an example production server configuration:
-  <pre><code class="language-text"># ZooKeeper
-zookeeper.connect=[list of ZooKeeper servers]
-
-# Log configuration
-num.partitions=8
-default.replication.factor=3
-log.dir=[List of directories. Kafka should have its own dedicated disk(s) or SSD(s).]
-
-# Other configurations
-broker.id=[An integer. Start with 0 and increment by 1 for each new broker.]
-listeners=[list of listeners]
-auto.create.topics.enable=false
-min.insync.replicas=2
-queued.max.requests=[number of concurrent requests]</code></pre>
-
-  Our client configuration varies a fair amount between different use cases.
-
-  <h3 class="anchor-heading"><a id="java" class="anchor-link"></a><a href="#java">6.6 Java Version</a></h3>
+  <h3 class="anchor-heading"><a id="java" class="anchor-link"></a><a href="#java">6.5 Java Version</a></h3>
 
   Java 11, Java 17, Java 21 and Java 23 are supported.
   <p>
@@ -1274,7 +1240,7 @@ queued.max.requests=[number of concurrent requests]</code></pre>
 
   All of the brokers in that cluster have a 90% GC pause time of about 21ms with less than 1 young GC per second.
 
-  <h3 class="anchor-heading"><a id="hwandos" class="anchor-link"></a><a href="#hwandos">6.7 Hardware and OS</a></h3>
+  <h3 class="anchor-heading"><a id="hwandos" class="anchor-link"></a><a href="#hwandos">6.6 Hardware and OS</a></h3>
   We are using dual quad-core Intel Xeon machines with 24GB of memory.
   <p>
   You need sufficient memory to buffer active readers and writers. You can do a back-of-the-envelope estimate of memory needs by assuming you want to be able to buffer for 30 seconds and compute your memory need as write_throughput*30.
@@ -1380,7 +1346,7 @@ NodeId  LogEndOffset    Lag     LastFetchTimestamp      LastCaughtUpTimestamp   
 
   <pre><code class="language-bash">$ bin/kafka-server-start.sh server_properties</code></pre>
 
-  <h3 class="anchor-heading"><a id="monitoring" class="anchor-link"></a><a href="#monitoring">6.8 Monitoring</a></h3>
+  <h3 class="anchor-heading"><a id="monitoring" class="anchor-link"></a><a href="#monitoring">6.7 Monitoring</a></h3>
 
   Kafka uses Yammer Metrics for metrics reporting in the server. The Java clients use Kafka Metrics, a built-in metrics registry that minimizes transitive dependencies pulled into client applications. Both expose metrics via JMX and can be configured to report stats using pluggable stats reporters to hook up to your monitoring system.
   <p>
@@ -1722,17 +1688,6 @@ NodeId  LogEndOffset    Lag     LastFetchTimestamp      LastCaughtUpTimestamp   
         <td>kafka.server:type=Request</td>
         <td>exempt-throttle-time indicates the percentage of time spent in broker network and I/O threads to process requests
             that are exempt from throttling.</td>
-      </tr>
-      <tr>
-        <td>ZooKeeper client request latency</td>
-        <td>kafka.server:type=ZooKeeperClientMetrics,name=ZooKeeperRequestLatencyMs</td>
-        <td>Latency in milliseconds for ZooKeeper requests from broker.</td>
-      </tr>
-      <tr>
-        <td>ZooKeeper connection status</td>
-        <td>kafka.server:type=SessionExpireListener,name=SessionState</td>
-        <td>Connection status of broker's ZooKeeper session which may be one of
-            Disconnected|SyncConnected|AuthFailed|ConnectedReadOnly|SaslAuthenticated|Expired.</td>
       </tr>
       <tr>
         <td>Max time to load group metadata</td>
@@ -2094,24 +2049,6 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
     <td>kafka.controller:type=KafkaController,name=ActiveBrokerCount</td>
   </tr>
   <tr>
-    <td>Migrating ZK Broker Count</td>
-    <td>The number of brokers registered with the Controller that haven't yet migrated to KRaft mode.</td>
-    <td>kafka.controller:type=KafkaController,name=MigratingZkBrokerCount</td>
-  </tr>
-  <tr>
-    <td>ZK Migrating State</td>
-    <td>
-      <ul style="list-style: none; padding-left: 0; margin: 0;">
-        <li>0 - NONE, cluster created in KRaft mode;</li>
-        <li>4 - ZK, Migration has not started, controller is a ZK controller;</li>
-        <li>2 - PRE_MIGRATION, the KRaft Controller is waiting for all ZK brokers to register in migration mode;</li>
-        <li>1 - MIGRATION, ZK metadata has been migrated, but some broker is still running in ZK mode;</li>
-        <li>3 - POST_MIGRATION, the cluster migration is complete;</li>
-      </ul>
-    </td>
-    <td>kafka.controller:type=KafkaController,name=ZkMigrationState</td>
-  </tr>
-  <tr>
     <td>Global Topic Count</td>
     <td>The number of global topics as observed by this Controller.</td>
     <td>kafka.controller:type=KafkaController,name=GlobalTopicCount</td>
@@ -2156,22 +2093,6 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
     <td>The difference between now and the timestamp of the last record from the cluster metadata partition that was applied by the controller.
     For active Controllers the value of this lag is always zero.</td>
     <td>kafka.controller:type=KafkaController,name=LastAppliedRecordLagMs</td>
-  </tr>
-  <tr>
-    <td>ZooKeeper Write Behind Lag</td>
-    <td>The amount of lag in records that ZooKeeper is behind relative to the highest committed record in the metadata log.
-    This metric will only be reported by the active KRaft controller.</td>
-    <td>kafka.controller:type=KafkaController,name=ZkWriteBehindLag</td>
-  </tr>
-  <tr>
-    <td>ZooKeeper Metadata Snapshot Write Time</td>
-    <td>The number of milliseconds the KRaft controller took reconciling a snapshot into ZooKeeper.</td>
-    <td>kafka.controller:type=KafkaController,name=ZkWriteSnapshotTimeMs</td>
-  </tr>
-  <tr>
-    <td>ZooKeeper Metadata Delta Write Time</td>
-    <td>The number of milliseconds the KRaft controller took writing a delta into ZK.</td>
-    <td>kafka.controller:type=KafkaController,name=ZkWriteDeltaTimeMs</td>
   </tr>
   <tr>
     <td>Timed-out Broker Heartbeat Count</td>
@@ -3708,37 +3629,7 @@ customized state stores; for built-in state stores, currently we have:
 
   On the client side, we recommend monitoring the message/byte rate (global and per topic), request rate/size/time, and on the consumer side, max lag in messages among all partitions and min fetch request rate. For a consumer to keep up, max lag needs to be less than a threshold and min fetch rate needs to be larger than 0.
 
-  <h3 class="anchor-heading"><a id="zk" class="anchor-link"></a><a href="#zk">6.9 ZooKeeper</a></h3>
-
-  <h4 class="anchor-heading"><a id="zkversion" class="anchor-link"></a><a href="#zkversion">Stable version</a></h4>
-  The current stable branch is 3.8. Kafka is regularly updated to include the latest release in the 3.8 series.
-
-  <h4 class="anchor-heading"><a id="zk_depr" class="anchor-link"></a><a href="#zk_depr">ZooKeeper Deprecation</a></h4>
-  <p>With the release of Apache Kafka 3.5, Zookeeper is now marked deprecated. Removal of ZooKeeper is planned in the next major release of Apache Kafka (version 4.0),
-     which is scheduled to happen no sooner than April 2024. During the deprecation phase, ZooKeeper is still supported for metadata management of Kafka clusters,
-     but it is not recommended for new deployments. There is a small subset of features that remain to be implemented in KRaft
-     see <a href="#kraft_missing">current missing features</a> for more information.</p>
-
-    <h5 class="anchor-heading"><a id="zk_depr_migration" class="anchor-link"></a><a href="#zk_drep_migration">Migration</a></h5>
-    <p>Users are recommended to begin planning for migration to KRaft and also begin testing to provide any feedback. Refer to <a href="#kraft_zk_migration">ZooKeeper to KRaft Migration</a> for details on how to perform a live migration from ZooKeeper to KRaft and current limitations.</p>
-
-    <h5 class="anchor-heading"><a id="zk_depr_3xsupport" class="anchor-link"></a><a href="#zk_depr_3xsupport">3.x and ZooKeeper Support</a></h5>
-    <p>The final 3.x minor release, that supports ZooKeeper mode, will receive critical bug fixes and security fixes for 12 months after its release.</p>
-
-<h4 class="anchor-heading"><a id="zkops" class="anchor-link"></a><a href="#zkops">Operationalizing ZooKeeper</a></h4>
-  Operationally, we do the following for a healthy ZooKeeper installation:
-  <ul>
-    <li>Redundancy in the physical/hardware/network layout: try not to put them all in the same rack, decent (but don't go nuts) hardware, try to keep redundant power and network paths, etc. A typical ZooKeeper ensemble has 5 or 7 servers, which tolerates 2 and 3 servers down, respectively. If you have a small deployment, then using 3 servers is acceptable, but keep in mind that you'll only be able to tolerate 1 server down in this case. </li>
-    <li>I/O segregation: if you do a lot of write type traffic you'll almost definitely want the transaction logs on a dedicated disk group. Writes to the transaction log are synchronous (but batched for performance), and consequently, concurrent writes can significantly affect performance. ZooKeeper snapshots can be one such a source of concurrent writes, and ideally should be written on a disk group separate from the transaction log. Snapshots are written to disk asynchronously, so it is typically ok to share with the operating system and message log files. You can configure a server to use a separate disk group with the dataLogDir parameter.</li>
-    <li>Application segregation: Unless you really understand the application patterns of other apps that you want to install on the same box, it can be a good idea to run ZooKeeper in isolation (though this can be a balancing act with the capabilities of the hardware).</li>
-    <li>Use care with virtualization: It can work, depending on your cluster layout and read/write patterns and SLAs, but the tiny overheads introduced by the virtualization layer can add up and throw off ZooKeeper, as it can be very time sensitive</li>
-    <li>ZooKeeper configuration: It's java, make sure you give it 'enough' heap space (We usually run them with 3-5G, but that's mostly due to the data set size we have here). Unfortunately we don't have a good formula for it, but keep in mind that allowing for more ZooKeeper state means that snapshots can become large, and large snapshots affect recovery time. In fact, if the snapshot becomes too large (a few gigabytes), then you may need to increase the initLimit parameter to give enough time for servers to recover and join the ensemble.</li>
-    <li>Monitoring: Both JMX and the 4 letter words (4lw) commands are very useful, they do overlap in some cases (and in those cases we prefer the 4 letter commands, they seem more predictable, or at the very least, they work better with the LI monitoring infrastructure)</li>
-    <li>Don't overbuild the cluster: large clusters, especially in a write heavy usage pattern, means a lot of intracluster communication (quorums on the writes and subsequent cluster member updates), but don't underbuild it (and risk swamping the cluster). Having more servers adds to your read capacity.</li>
-  </ul>
-  Overall, we try to keep the ZooKeeper system as small as will handle the load (plus standard growth capacity planning) and as simple as possible. We try not to do anything fancy with the configuration or application layout as compared to the official release as well as keep it as self contained as possible. For these reasons, we tend to skip the OS packaged versions, since it has a tendency to try to put things in the OS standard hierarchy, which can be 'messy', for want of a better way to word it.
-
-  <h3 class="anchor-heading"><a id="kraft" class="anchor-link"></a><a href="#kraft">6.10 KRaft</a></h3>
+  <h3 class="anchor-heading"><a id="kraft" class="anchor-link"></a><a href="#kraft">6.8 KRaft</a></h3>
 
   <h4 class="anchor-heading"><a id="kraft_config" class="anchor-link"></a><a href="#kraft_config">Configuration</a></h4>
 
@@ -3750,7 +3641,6 @@ customized state stores; for built-in state stores, currently we have:
     <li>If <code>process.roles</code> is set to <code>broker</code>, the server acts as a broker.</li>
     <li>If <code>process.roles</code> is set to <code>controller</code>, the server acts as a controller.</li>
     <li>If <code>process.roles</code> is set to <code>broker,controller</code>, the server acts as both a broker and a controller.</li>
-    <li>If <code>process.roles</code> is not set at all, it is assumed to be in ZooKeeper mode.</li>
   </ul>
 
   <p>Kafka servers that act as both brokers and controllers are referred to as "combined" servers. Combined servers are simpler to operate for small use cases like a development environment. The key disadvantage is that the controller will be less isolated from the rest of the system. For example, it is not possible to roll or scale the controllers separately from the brokers in combined mode. Combined mode is not recommended in critical deployment environments.</p>
@@ -3758,7 +3648,7 @@ customized state stores; for built-in state stores, currently we have:
 
   <h5 class="anchor-heading"><a id="kraft_voter" class="anchor-link"></a><a href="#kraft_voter">Controllers</a></h5>
 
-  <p>In KRaft mode, specific Kafka servers are selected to be controllers (unlike the ZooKeeper-based mode, where any server can become the Controller). The servers selected to be controllers will participate in the metadata quorum. Each controller is either an active or a hot standby for the current active controller.</p>
+  <p>In KRaft mode, specific Kafka servers are selected to be controllers. The servers selected to be controllers will participate in the metadata quorum. Each controller is either an active or a hot standby for the current active controller.</p>
 
   <p>A Kafka admin will typically select 3 or 5 servers for this role, depending on factors like cost and the number of concurrent failures your system should withstand without availability impact. A majority of the controllers must be alive in order to maintain availability. With 3 controllers, the cluster can tolerate 1 controller failure; with 5 controllers, the cluster can tolerate 2 controller failures.</p>
 
@@ -3960,358 +3850,10 @@ foo
 
   <h4 class="anchor-heading"><a id="kraft_zk_migration" class="anchor-link"></a><a href="#kraft_zk_migration">ZooKeeper to KRaft Migration</a></h4>
 
-  <h3>Terminology</h3>
-  <ul>
-    <li>Brokers that are in <b>ZK mode</b> store their metadata in Apache ZooKepeer. This is the old mode of handling metadata.</li>
-    <li>Brokers that are in <b>KRaft mode</b> store their metadata in a KRaft quorum. This is the new and improved mode of handling metadata.</li>
-    <li><b>Migration</b> is the process of moving cluster metadata from ZooKeeper into a KRaft quorum.</li>
-  </ul>
+  <p>In order to migrate from ZooKeeper to KRaft you need to use a bridge release. The last bridge release is Kafka 3.9.
+    See the <a href="/39/documentation/#kraft_zk_migration">ZooKeeper to KRaft Migration steps</a> in the 3.9 documentation.</p>
 
-  <h3>Migration Phases</h3>
-  In general, the migration process passes through several phases.
-
-  <ul>
-    <li>In the <b>initial phase</b>, all the brokers are in ZK mode, and there is a ZK-based controller.</li>
-    <li>During the <b>initial metadata load</b>, a KRaft quorum loads the metadata from ZooKeeper,</li>
-    <li>In <b>hybrid phase</b>, some brokers are in ZK mode, but there is a KRaft controller.</li>
-    <li>In <b>dual-write phase</b>, all brokers are KRaft, but the KRaft controller is continuing to write to ZK.</li>
-    <li>When the migration has been <b>finalized</b>, we no longer write metadata to ZooKeeper.</li>
-  </ul>
-
-  <h3>Limitations</h3>
-  <ul>
-    <li>While a cluster is being migrated from ZK mode to KRaft mode, we do not support changing the <i>metadata
-      version</i> (also known as the <i>inter.broker.protocol.version</i>.) Please do not attempt to do this during
-      a migration, or you may break the cluster.</li>
-    <li>After the migration has been finalized, it is not possible to revert back to ZooKeeper mode.</li>
-    <li>
-      During the migration, if a ZK broker is running with multiple log directories,
-      any directory failure will cause the broker to shutdown.
-      Brokers with broken log directories will only be able to migrate to KRaft once the directories are repaired.
-      For further details refer to <a href="https://issues.apache.org/jira/browse/KAFKA-16431">KAFKA-16431</a>.
-    </li>
-    <li><a href="#kraft_missing">As noted above</a>, some features are not fully implemented in KRaft mode. If you are
-      using one of those features, you will not be able to migrate to KRaft yet.</li>
-  </ul>
-
-  <h3>Preparing for migration</h3>
-  <p>
-    Before beginning the migration, the Kafka brokers must be upgraded to software version {{fullDotVersion}} and have the
-    "inter.broker.protocol.version" configuration set to "{{dotVersion}}".
-  </p>
-
-  <p>
-    It is recommended to enable TRACE level logging for the migration components while the migration is active. This can
-    be done by adding the following log4j configuration to each KRaft controller's "log4j.properties" file.
-  </p>
-
-  <pre><code class="language-text">log4j.logger.org.apache.kafka.metadata.migration=TRACE</code></pre>
-
-  <p>
-    It is generally useful to enable DEBUG logging on the KRaft controllers and the ZK brokers during the migration.
-  </p>
-
-  <h3>Provisioning the KRaft controller quorum</h3>
-  <p>
-    Two things are needed before the migration can begin. First, the brokers must be configured to support the migration and second,
-    a KRaft controller quorum must be deployed. The KRaft controllers should be provisioned with the same cluster ID as
-    the existing Kafka cluster. This can be found by examining one of the "meta.properties" files in the data directories
-    of the brokers, or by running the following command.
-  </p>
-
-  <pre><code class="language-bash">$ bin/zookeeper-shell.sh localhost:2181 get /cluster/id</code></pre>
-
-  <p>
-    The KRaft controller quorum should also be provisioned with the latest <code>metadata.version</code>.
-    This is done automatically when you format the node with the kafka-storage.sh tool.
-    For further instructions on KRaft deployment, please refer to <a href="#kraft_config">the above documentation</a>.
-  </p>
-
-  <p>
-    In addition to the standard KRaft configuration, the KRaft controllers will need to enable support for the migration
-    as well as provide ZooKeeper connection configuration.
-  </p>
-
-  <p>
-    Here is a sample config for a KRaft controller that is ready for migration:
-  </p>
-  <pre><code class="language-text"># Sample KRaft cluster controller.properties listening on 9093
-process.roles=controller
-node.id=3000
-controller.quorum.bootstrap.servers=localhost:9093
-controller.listener.names=CONTROLLER
-listeners=CONTROLLER://:9093
-
-# Enable the migration
-zookeeper.metadata.migration.enable=true
-
-# ZooKeeper client configuration
-zookeeper.connect=localhost:2181
-
-# The inter broker listener in brokers to allow KRaft controller send RPCs to brokers
-inter.broker.listener.name=PLAINTEXT
-
-# Other configs ...</code></pre>
-
-  <p>The new standalone controller in the example configuration above should be formatted using the <code>bin/kafka-storage.sh format --standalone</code>command.</p>
-
-  <p><em>Note: The KRaft cluster <code>node.id</code> values must be different from any existing ZK broker <code>broker.id</code>.
-  In KRaft-mode, the brokers and controllers share the same Node ID namespace.</em></p>
-
-  <h3>Enter Migration Mode on the Brokers</h3>
-  <p>
-    Once the KRaft controller quorum has been started, the brokers will need to be reconfigured and restarted. Brokers
-    may be restarted in a rolling fashion to avoid impacting cluster availability. Each broker requires the
-    following configuration to communicate with the KRaft controllers and to enable the migration.
-  </p>
-
-  <ul>
-    <li><a href="#brokerconfigs_broker.id">broker.id</a>: Ensure <code>broker.id</code> is set to a non-negative integer even if <code>broker.id.generation.enable</code> is enabled (default is enabled). Additionally, ensure <code>broker.id</code> does not exceed <code>reserved.broker.max.id</code> to avoid failure.</li>
-    <li><a href="#brokerconfigs_controller.quorum.bootstrap.servers">controller.quorum.bootstrap.servers</a></li>
-    <li><a href="#brokerconfigs_controller.listener.names">controller.listener.names</a></li>
-    <li>The controller.listener.name should also be added to <a href="#brokerconfigs_listener.security.protocol.map">listener.security.property.map</a></li>
-    <li><a href="#brokerconfigs_zookeeper.metadata.migration.enable">zookeeper.metadata.migration.enable</a></li>
-  </ul>
-
-  <p>Here is a sample config for a broker that is ready for migration:</p>
-
-  <pre><code class="language-text"># Sample ZK broker server.properties listening on 9092
-broker.id=0
-listeners=PLAINTEXT://:9092
-advertised.listeners=PLAINTEXT://localhost:9092
-listener.security.protocol.map=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
-
-# Set the IBP
-inter.broker.protocol.version={{dotVersion}}
-
-# Enable the migration
-zookeeper.metadata.migration.enable=true
-
-# ZooKeeper client configuration
-zookeeper.connect=localhost:2181
-
-# KRaft controller quorum configuration
-controller.quorum.bootstrap.servers=localhost:9093
-controller.listener.names=CONTROLLER</code></pre>
-
-  <p>
-    <em>Note: Once the final ZK broker has been restarted with the necessary configuration, the migration will automatically begin.</em>
-    When the migration is complete, an INFO level log can be observed on the active controller:
-  </p>
-
-  <pre>Completed migration of metadata from Zookeeper to KRaft</pre>
-
-  <h3>Migrating brokers to KRaft</h3>
-  <p>
-    Once the KRaft controller completes the metadata migration, the brokers will still be running
-    in ZooKeeper mode. While the KRaft controller is in migration mode, it will continue sending
-    controller RPCs to the ZooKeeper mode brokers. This includes RPCs like UpdateMetadata and
-    LeaderAndIsr.
-  </p>
-
-  <p>
-    To migrate the brokers to KRaft, they simply need to be reconfigured as KRaft brokers and restarted. Using the above
-    broker configuration as an example, we would replace the <code>broker.id</code> with <code>node.id</code> and add
-    <code>process.roles=broker</code>. It is important that the broker maintain the same Broker/Node ID when it is restarted.
-    The zookeeper configurations should be removed at this point.
-  </p>
-
-  <p>
-    If your broker has authorization configured via the <code>authorizer.class.name</code> property
-    using <code>kafka.security.authorizer.AclAuthorizer</code>, this is also the time to change it
-    to use <code>org.apache.kafka.metadata.authorizer.StandardAuthorizer</code> instead.
-  </p>
-
-  <pre><code class="language-text"># Sample KRaft broker server.properties listening on 9092
-process.roles=broker
-node.id=0
-listeners=PLAINTEXT://:9092
-advertised.listeners=PLAINTEXT://localhost:9092
-listener.security.protocol.map=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
-
-# Don't set the IBP, KRaft uses "metadata.version" feature flag
-# inter.broker.protocol.version={{dotVersion}}
-
-# Remove the migration enabled flag
-# zookeeper.metadata.migration.enable=true
-
-# Remove ZooKeeper client configuration
-# zookeeper.connect=localhost:2181
-
-# Keep the KRaft controller quorum configuration
-controller.quorum.bootstrap.servers=localhost:9093
-controller.listener.names=CONTROLLER</code></pre>
-
-  <p>
-    Each broker is restarted with a KRaft configuration until the entire cluster is running in KRaft mode.
-  </p>
-
-  <h3>Finalizing the migration</h3>
-  <p>
-    Once all brokers have been restarted in KRaft mode, the last step to finalize the migration is to take the
-    KRaft controllers out of migration mode. This is done by removing the "zookeeper.metadata.migration.enable"
-    property from each of their configs and restarting them one at a time.
-  </p>
-  <p>
-    Once the migration has been finalized, you can safely deprovision your ZooKeeper cluster, assuming you are
-    not using it for anything else. After this point, it is no longer possible to revert to ZooKeeper mode.
-  </p>
-
-  <pre><code class="language-text"># Sample KRaft cluster controller.properties listening on 9093
-process.roles=controller
-node.id=3000
-controller.quorum.bootstrap.servers=localhost:9093
-controller.listener.names=CONTROLLER
-listeners=CONTROLLER://:9093
-
-# Disable the migration
-# zookeeper.metadata.migration.enable=true
-
-# Remove ZooKeeper client configuration
-# zookeeper.connect=localhost:2181
-
-# Other configs ...</code></pre>
-
-  <h3>Reverting to ZooKeeper mode During the Migration</h3>
-  <p>
-    While the cluster is still in migration mode, it is possible to revert to ZooKeeper mode.  The process
-    to follow depends on how far the migration has progressed. In order to find out how to revert,
-    select the <b>final</b> migration step that you have <b>completed</b> in this table.
-  </p>
-  <p>
-    Note that the directions given here assume that each step was fully completed, and they were
-    done in order. So, for example, we assume that if "Enter Migration Mode on the Brokers" was
-    completed, "Provisioning the KRaft controller quorum" was also fully completed previously.
-  </p>
-  <p>
-    If you did not fully complete any step, back out whatever you have done and then follow revert
-    directions for the last fully completed step.
-  </p>
-
-  <table class="data-table">
-      <tbody>
-      <tr>
-        <th>Final Migration Section Completed</th>
-        <th>Directions for Reverting</th>
-        <th>Notes</th>
-      </tr>
-      <tr>
-        <td>Preparing for migration</td>
-        <td>
-          The preparation section does not involve leaving ZooKeeper mode. So there is nothing to do in the
-          case of a revert.
-        </td>
-        <td>
-        </td>
-      </tr>
-      <tr>
-        <td>Provisioning the KRaft controller quorum</td>
-        <td>
-          <ul>
-            <li>
-              Deprovision the KRaft controller quorum.
-            </li>
-            <li>
-              Then you are done.
-            </li>
-          </ul>
-        </td>
-        <td>
-        </td>
-      </tr>
-      <tr>
-        <td>Enter Migration Mode on the brokers</td>
-        <td>
-          <ul>
-            <li>
-              Deprovision the KRaft controller quorum.
-            </li>
-            <li>
-              Using <code>zookeeper-shell.sh</code>, run <code>rmr /controller</code> so that one
-              of the brokers can become the new old-style controller. Additionally, run
-              <code>get /migration</code> followed by <code>rmr /migration</code> to clear the
-              migration state from ZooKeeper. This will allow you to re-attempt the migration
-              in the future. The data read from "/migration" can be useful for debugging.
-            </li>
-            <li>
-              On each broker, remove the <code>zookeeper.metadata.migration.enable</code>,
-              <code>controller.listener.names</code>, and <code>controller.quorum.bootstrap.servers</code>
-              configurations, and replace <code>node.id</code> with <code>broker.id</code>.
-              Then perform a rolling restart of all brokers.
-            </li>
-            <li>
-              Then you are done.
-            </li>
-          </ul>
-        </td>
-        <td>
-          It is important to perform the <code>zookeeper-shell.sh</code> step <b>quickly</b>, to minimize the amount of
-          time that the cluster lacks a controller. Until the <code> /controller</code> znode is deleted,
-          you can also ignore any errors in the broker log about failing to connect to the Kraft controller.
-          Those error logs should disappear after second roll to pure zookeeper mode.
-        </td>
-      </tr>
-      <tr>
-        <td>Migrating brokers to KRaft</td>
-        <td>
-          <ul>
-            <li>
-              On each broker, remove the <code>process.roles</code> configuration,
-              replace the <code>node.id</code> with <code>broker.id</code> and
-              restore the <code>zookeeper.connect</code> configuration to its previous value.
-              If your cluster requires other ZooKeeper configurations for brokers, such as
-              <code>zookeeper.ssl.protocol</code>, re-add those configurations as well.
-              Then perform a rolling restart of all brokers.
-            </li>
-            <li>
-              Deprovision the KRaft controller quorum.
-            </li>
-            <li>
-              Using <code>zookeeper-shell.sh</code>, run <code>rmr /controller</code> so that one
-              of the brokers can become the new old-style controller.
-            </li>
-            <li>
-              On each broker, remove the <code>zookeeper.metadata.migration.enable</code>,
-              <code>controller.listener.names</code>, and <code>controller.quorum.bootstrap.servers</code>
-              configurations.
-              Then perform a second rolling restart of all brokers.
-            </li>
-            <li>
-              Then you are done.
-            </li>
-          </ul>
-        </td>
-        <td>
-          <ul>
-            <li>
-              It is important to perform the <code>zookeeper-shell.sh</code> step <b>quickly</b>, to minimize the amount of
-              time that the cluster lacks a controller. Until the <code> /controller</code> znode is deleted,
-              you can also ignore any errors in the broker log about failing to connect to the Kraft controller.
-              Those error logs should disappear after second roll to pure zookeeper mode.
-            </li>
-            <li>
-              Make sure that on the first cluster roll, <code>zookeeper.metadata.migration.enable</code> remains set to
-              <code>true</code>. <b>Do not set it to false until the second cluster roll.</b>
-            </li>
-          </ul>
-        </td>
-      </tr>
-      <tr>
-        <td>Finalizing the migration</td>
-        <td>
-          If you have finalized the ZK migration, then you cannot revert.
-        </td>
-        <td>
-          Some users prefer to wait for a week or two before finalizing the migration. While this
-          requires you to keep the ZooKeeper cluster running for a while longer, it may be helpful
-          in validating KRaft mode in your cluster.
-        </td>
-      </tr>
-    </tbody>
- </table>
-
-
-<h3 class="anchor-heading"><a id="tiered_storage" class="anchor-link"></a><a href="#kraft">6.11 Tiered Storage</a></h3>
+<h3 class="anchor-heading"><a id="tiered_storage" class="anchor-link"></a><a href="#kraft">6.9 Tiered Storage</a></h3>
 
 <h4 class="anchor-heading"><a id="tiered_storage_overview" class="anchor-link"></a><a href="#tiered_storage_overview">Tiered Storage Overview</a></h4>
 
@@ -4376,7 +3918,7 @@ $ ./gradlew clean :storage:testJar</code></pre>
 <p>After build successfully, there should be a `kafka-storage-x.x.x-test.jar` file under `storage/build/libs`.
 Next, setting configurations in the broker side to enable tiered storage feature.</p>
 
-<pre><code class="language-text"># Sample Zookeeper/Kraft broker server.properties listening on PLAINTEXT://:9092
+<pre><code class="language-text"># Sample KRaft broker server.properties listening on PLAINTEXT://:9092
 remote.log.storage.system.enable=true
 
 # Setting the listener for the clients in RemoteLogMetadataManager to talk to the brokers.
