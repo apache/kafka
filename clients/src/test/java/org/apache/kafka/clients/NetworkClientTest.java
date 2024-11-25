@@ -296,6 +296,56 @@ public class NetworkClientTest {
         assertEquals(3, rebootstrapCount.get());
     }
 
+    @Test
+    public void testInflightRequestsDuringRebootstrap() {
+        long refreshBackoffMs = 50;
+        long rebootstrapTriggerMs = 1000;
+        int defaultRequestTimeoutMs = 5000;
+        AtomicInteger rebootstrapCount = new AtomicInteger();
+        Metadata metadata = new Metadata(refreshBackoffMs, refreshBackoffMs, 5000, new LogContext(), new ClusterResourceListeners())  {
+            @Override
+            public synchronized void rebootstrap() {
+                super.rebootstrap();
+                rebootstrapCount.incrementAndGet();
+            }
+        };
+        metadata.bootstrap(Collections.singletonList(new InetSocketAddress("localhost", 9999)));
+        NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
+                reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
+                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, false, new ApiVersions(), new LogContext(),
+                rebootstrapTriggerMs, MetadataRecoveryStrategy.REBOOTSTRAP);
+
+        MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(2, Collections.emptyMap());
+        metadata.updateWithCurrentRequestVersion(metadataResponse, false, time.milliseconds());
+        List<Node> nodes = metadata.fetch().nodes();
+        nodes.forEach(node -> {
+            client.ready(node, time.milliseconds());
+            awaitReady(client, node);
+        });
+
+        // Queue a request
+        sendEmptyProduceRequest(client, nodes.get(0).idString());
+        List<ClientResponse> responses = client.poll(0, time.milliseconds());
+        assertEquals(0, responses.size());
+        assertEquals(1, client.inFlightRequestCount());
+
+        // Trigger rebootstrap
+        metadata.requestUpdate(true);
+        time.sleep(refreshBackoffMs);
+        responses = client.poll(0, time.milliseconds());
+        assertEquals(0, responses.size());
+        assertEquals(2, client.inFlightRequestCount());
+        time.sleep(rebootstrapTriggerMs + 1);
+        responses = client.poll(0, time.milliseconds());
+
+        // Verify that inflight produce request was aborted with disconnection
+        assertEquals(1, responses.size());
+        assertEquals(PRODUCE, responses.get(0).requestHeader().apiKey());
+        assertTrue(responses.get(0).wasDisconnected());
+        assertEquals(0, client.inFlightRequestCount());
+        assertEquals(Collections.emptySet(), nodes.stream().filter(node -> !client.connectionFailed(node)).collect(Collectors.toSet()));
+    }
+
     private void checkSimpleRequestResponse(NetworkClient networkClient) {
         awaitReady(networkClient, node); // has to be before creating any request, as it may send ApiVersionsRequest and its response is mocked with correlation id 0
         short requestVersion = PRODUCE.latestVersion();
@@ -738,10 +788,10 @@ public class NetworkClientTest {
     }
 
     private int sendEmptyProduceRequest() {
-        return sendEmptyProduceRequest(node.idString());
+        return sendEmptyProduceRequest(client, node.idString());
     }
 
-    private int sendEmptyProduceRequest(String nodeId) {
+    private int sendEmptyProduceRequest(NetworkClient client, String nodeId) {
         ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
                 .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
                 .setAcks((short) 1)
