@@ -29,6 +29,8 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.ErrorHandlerContext;
+import org.apache.kafka.streams.errors.LogAndContinueProcessingExceptionHandler;
+import org.apache.kafka.streams.errors.LogAndFailProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
@@ -39,7 +41,9 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -164,6 +168,54 @@ public class ProcessorNodeTest {
         assertInstanceOf(RuntimeException.class, failedProcessingException.getCause());
         assertEquals("KABOOM!", failedProcessingException.getCause().getMessage());
         assertEquals(NAME, failedProcessingException.failedProcessorNodeName());
+    }
+
+
+    @Test
+    public void shouldBuildDeadLetterQueueRecordsInDefaultProcessingExceptionHandler() {
+        final ProcessorNode<Object, Object, Object, Object> node = new ProcessorNode<>("processor",
+                (Processor<Object, Object, Object, Object>) record -> {
+                    throw new NullPointerException("Oopsie!");
+                }, Collections.emptySet());
+
+        final MockRecordCollector collector = new MockRecordCollector();
+        final InternalProcessorContext<Object, Object> internalProcessorContext =
+                new InternalMockProcessorContext<>(
+                        new StateSerdes<>("sink", Serdes.ByteArray(), Serdes.ByteArray()),
+                        collector
+                );
+        final ProcessingExceptionHandler processingExceptionHandler = new LogAndFailProcessingExceptionHandler();
+        processingExceptionHandler.configure(Collections.singletonMap(StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG, "dlq"));
+        node.init(internalProcessorContext, processingExceptionHandler);
+
+        assertThrows(RuntimeException.class,
+                () -> node.process(new Record<>("hello", "world", 1L)));
+
+        assertEquals(1, collector.collected().size());
+        assertEquals("dlq", collector.collected().get(0).topic());
+    }
+
+    @Test
+    public void shouldBuildDeadLetterQueueRecordsInLogAndContinueProcessingExceptionHandler() {
+        final ProcessorNode<Object, Object, Object, Object> node = new ProcessorNode<>("processor",
+                (Processor<Object, Object, Object, Object>) record -> {
+                    throw new NullPointerException("Oopsie!");
+                }, Collections.emptySet());
+
+        final MockRecordCollector collector = new MockRecordCollector();
+        final InternalProcessorContext<Object, Object> internalProcessorContext =
+                new InternalMockProcessorContext<>(
+                        new StateSerdes<>("sink", Serdes.ByteArray(), Serdes.ByteArray()),
+                        collector
+                );
+        final ProcessingExceptionHandler processingExceptionHandler = new LogAndContinueProcessingExceptionHandler();
+        processingExceptionHandler.configure(Collections.singletonMap(StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG, "dlq"));
+        node.init(internalProcessorContext, processingExceptionHandler);
+
+        node.process(new Record<>("hello", "world", 0L));
+
+        assertEquals(1, collector.collected().size());
+        assertEquals("dlq", collector.collected().get(0).topic());
     }
 
     private static class ExceptionalProcessor implements Processor<Object, Object, Object, Object> {

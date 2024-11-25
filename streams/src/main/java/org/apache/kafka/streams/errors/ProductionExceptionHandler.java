@@ -143,6 +143,9 @@ public interface ProductionExceptionHandler extends Configurable {
          */
         public final int id;
 
+        /**
+         * a list of Kafka records to publish, e.g. in a Dead Letter Queue topic
+         */
         public final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords;
 
         ProductionExceptionHandlerResponse(final int id,

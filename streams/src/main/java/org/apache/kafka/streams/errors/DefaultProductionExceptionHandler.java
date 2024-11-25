@@ -49,6 +49,14 @@ public class DefaultProductionExceptionHandler implements ProductionExceptionHan
     }
 
     @Override
+    public ProductionExceptionHandlerResponse handleSerializationException(final ErrorHandlerContext context,
+                                                                           final ProducerRecord record,
+                                                                           final Exception exception,
+                                                                           final SerializationExceptionOrigin origin) {
+        return ProductionExceptionHandlerResponse.FAIL.andAddToDeadLetterQueue(maybeBuildDeadLetterQueueRecords(null, null, context, exception));
+    }
+
+    @Override
     public void configure(final Map<String, ?> configs) {
         super.configure(configs);
     }

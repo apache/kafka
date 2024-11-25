@@ -139,7 +139,7 @@ public class RecordCollectorImpl implements RecordCollector {
                             final Serializer<K> keySerializer,
                             final Serializer<V> valueSerializer,
                             final String processorNodeId,
-                            final InternalProcessorContext<?, ?> context,
+                            final InternalProcessorContext<Void, Void> context,
                             final StreamPartitioner<? super K, ? super V> partitioner) {
 
         if (partitioner != null) {
@@ -197,7 +197,7 @@ public class RecordCollectorImpl implements RecordCollector {
                             final Serializer<K> keySerializer,
                             final Serializer<V> valueSerializer,
                             final String processorNodeId,
-                            final InternalProcessorContext<?, ?> context) {
+                            final InternalProcessorContext<Void, Void> context) {
         checkForException();
 
         final byte[] keyBytes;
@@ -263,6 +263,15 @@ public class RecordCollectorImpl implements RecordCollector {
         // freeing raw records in the context to reduce memory pressure
         freeRawInputRecordFromContext(context);
 
+        send(key, value, processorNodeId, context, serializedRecord);
+    }
+
+    public <K, V> void send(final K key,
+                            final V value,
+                            final String processorNodeId,
+                            final InternalProcessorContext<?, ?> context,
+                            final ProducerRecord<byte[], byte[]> serializedRecord) {
+
         streamsProducer.send(serializedRecord, (metadata, exception) -> {
             try {
                 // if there's already an exception record, skip logging offsets or new exceptions
@@ -278,16 +287,16 @@ public class RecordCollectorImpl implements RecordCollector {
                         log.warn("Received offset={} in produce response for {}", metadata.offset(), tp);
                     }
 
-                    if (!topic.endsWith("-changelog")) {
+                    if (!serializedRecord.topic().endsWith("-changelog")) {
                         // we may not have created a sensor during initialization if the node uses dynamic topic routing,
                         // as all topics are not known up front, so create the sensor for this topic if absent
                         final Sensor topicProducedSensor = producedSensorByTopic.computeIfAbsent(
-                            topic,
+                            serializedRecord.topic(),
                             t -> TopicMetrics.producedSensor(
                                 Thread.currentThread().getName(),
                                 taskId.toString(),
                                 processorNodeId,
-                                topic,
+                                serializedRecord.topic(),
                                 context.metrics()
                             )
                         );
@@ -299,7 +308,7 @@ public class RecordCollectorImpl implements RecordCollector {
                     }
                 } else {
                     recordSendError(
-                        topic,
+                        serializedRecord.topic(),
                         exception,
                         serializedRecord,
                         context,
@@ -307,7 +316,7 @@ public class RecordCollectorImpl implements RecordCollector {
                     );
 
                     // KAFKA-7510 only put message key and value in TRACE level log so we don't leak data by default
-                    log.trace("Failed record: (key {} value {} timestamp {}) topic=[{}] partition=[{}]", key, value, timestamp, topic, partition);
+                    log.trace("Failed record: (key {} value {} timestamp {}) topic=[{}] partition=[{}]", key, value, serializedRecord.timestamp(), serializedRecord.topic(), serializedRecord.partition());
                 }
             } catch (final RuntimeException fatal) {
                 sendException.set(new StreamsException("Producer.send `Callback` failed", fatal));
@@ -363,6 +372,18 @@ public class RecordCollectorImpl implements RecordCollector {
                 processorNodeId,
                 fatalUserException
             );
+        }
+
+        if (!response.deadLetterQueueRecords.isEmpty()) {
+            for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : response.deadLetterQueueRecords) {
+                this.send(
+                        deadLetterQueueRecord.key(),
+                        deadLetterQueueRecord.value(),
+                        processorNodeId,
+                        context,
+                        deadLetterQueueRecord
+                );
+            }
         }
 
         if (maybeFailResponse(response) == ProductionExceptionHandlerResponse.FAIL) {
@@ -488,6 +509,18 @@ public class RecordCollectorImpl implements RecordCollector {
                     )
                 );
                 return;
+            }
+
+            if (!response.deadLetterQueueRecords.isEmpty()) {
+                for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : response.deadLetterQueueRecords) {
+                    this.send(
+                            deadLetterQueueRecord.key(),
+                            deadLetterQueueRecord.value(),
+                            processorNodeId,
+                            context,
+                            deadLetterQueueRecord
+                    );
+                }
             }
 
             if (productionException instanceof RetriableException && response == ProductionExceptionHandlerResponse.RETRY) {

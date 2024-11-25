@@ -47,6 +47,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.ErrorHandlerContext;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
@@ -1835,6 +1836,58 @@ public class RecordCollectorTest {
     }
 
     @Test
+    public void shouldBuildDeadLetterQueueRecordsInDefaultExceptionHandlerDuringDeserialization() {
+        try (final ErrorStringSerializer errorSerializer = new ErrorStringSerializer()) {
+            final DefaultProductionExceptionHandler productionExceptionHandler = new DefaultProductionExceptionHandler();
+            productionExceptionHandler.configure(Collections.singletonMap(
+                StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG,
+                "dlq"
+            ));
+            final RecordCollector collector = newRecordCollector(productionExceptionHandler);
+            collector.initialize();
+
+            assertThat(mockProducer.history().isEmpty(), equalTo(true));
+            final StreamsException error = assertThrows(
+                StreamsException.class,
+                () ->
+                    collector.send(topic, "hello", "world", null, 0, null, errorSerializer, stringSerializer, sinkNodeName, context)
+            );
+
+            assertEquals(1, mockProducer.history().size());
+            assertEquals("dlq", mockProducer.history().get(0).topic());
+        }
+    }
+
+
+    @Test
+    public void shouldBuildDeadLetterQueueRecordsInDefaultExceptionHandler() {
+        final KafkaException exception = new KafkaException("KABOOM!");
+        final StreamsProducer streamProducer = getExceptionalStreamsProducerOnSend(exception);
+        final MockProducer<byte[], byte[]> mockProducer = (MockProducer<byte[], byte[]>) streamProducer.kafkaProducer();
+        final DefaultProductionExceptionHandler productionExceptionHandler = new DefaultProductionExceptionHandler();
+        productionExceptionHandler.configure(Collections.singletonMap(
+            StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG,
+            "dlq"
+        ));
+        final RecordCollector collector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            streamProducer,
+            productionExceptionHandler,
+            streamsMetrics,
+            topology
+        );
+
+        collector.initialize();
+
+        collector.send(topic, "hello", "world", null, 0, null, stringSerializer, stringSerializer, sinkNodeName, context);
+        assertThrows(StreamsException.class, collector::flush);
+
+        assertEquals(1, mockProducer.history().size());
+        assertEquals("dlq", mockProducer.history().get(0).topic());
+    }
+
+    @Test
     public void shouldNotSendIfSendOfOtherTaskFailedInCallback() {
         final TaskId taskId1 = new TaskId(0, 0);
         final TaskId taskId2 = new TaskId(0, 1);
@@ -1978,8 +2031,12 @@ public class RecordCollectorTest {
             new MockProducer<>(cluster, true, null, byteArraySerializer, byteArraySerializer) {
                 @Override
                 public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
-                    callback.onCompletion(null, exception);
-                    return null;
+                    if (record.topic().equals("dlq")) {
+                        return super.send(record, callback);
+                    } else {
+                        callback.onCompletion(null, exception);
+                        return null;
+                    }
                 }
             },
             AT_LEAST_ONCE,

@@ -28,6 +28,9 @@ import java.io.StringWriter;
 import java.util.Collections;
 import java.util.Map;
 
+/**
+ * {@code CommonExceptionHandler} Contains utilities method that could be used by all exception handlers
+ */
 public class CommonExceptionHandler implements Configurable {
     protected String deadLetterQueueTopicName = null;
     public static final String HEADER_ERRORS_EXCEPTION_NAME = "__streams.errors.exception";
@@ -37,17 +40,19 @@ public class CommonExceptionHandler implements Configurable {
     public static final String HEADER_ERRORS_PARTITION_NAME = "__streams.errors.partition";
     public static final String HEADER_ERRORS_OFFSET_NAME = "__streams.errors.offset";
 
-    @Override
-    public void configure(final Map<String, ?> configs) {
-        if (configs.containsKey(StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG)) {
-            setDeadLetterQueueTopicName(String.valueOf(configs.get(StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG)));
-        }
-    }
 
     public boolean shouldBuildDeadLetterQueueRecord() {
         return this.deadLetterQueueTopicName != null;
     }
 
+    /**
+     * If required, return Dead Letter Queue records for the provided exception
+     * @param key Serialized key for the records
+     * @param value Serialized value for the records
+     * @param context ErrorHandlerContext of the exception
+     * @param exception Thrown exception
+     * @return A list of Dead Letter Queue records to produce
+     */
     public Iterable<ProducerRecord<byte[], byte[]>> maybeBuildDeadLetterQueueRecords(final byte[] key,
                                                                                      final byte[] value,
                                                                                      final ErrorHandlerContext context,
@@ -59,6 +64,14 @@ public class CommonExceptionHandler implements Configurable {
         return Collections.singleton(buildDeadLetterQueueRecord(key, value, context, exception));
     }
 
+
+    /**
+     * Build Dead Letter Queue records for the provided exception
+     * @param key Serialized key for the records
+     * @param value Serialized value for the records
+     * @param context ErrorHandlerContext of the exception
+     * @return A list of Dead Letter Queue records to produce
+     */
     public ProducerRecord<byte[], byte[]> buildDeadLetterQueueRecord(final byte[] key,
                                                                      final byte[] value,
                                                                      final ErrorHandlerContext context,
@@ -89,5 +102,12 @@ public class CommonExceptionHandler implements Configurable {
 
     public void setDeadLetterQueueTopicName(final String deadLetterQueueTopicName) {
         this.deadLetterQueueTopicName = deadLetterQueueTopicName;
+    }
+
+    @Override
+    public void configure(final Map<String, ?> configs) {
+        if (configs.containsKey(StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG)) {
+            setDeadLetterQueueTopicName(String.valueOf(configs.get(StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG)));
+        }
     }
 }

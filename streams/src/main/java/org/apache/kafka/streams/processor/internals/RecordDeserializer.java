@@ -20,7 +20,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler.DeserializationHandlerResponse;
@@ -124,16 +123,12 @@ public class RecordDeserializer {
             final RecordCollector collector = ((RecordCollector.Supplier) processorContext).recordCollector();
             for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : response.deadLetterQueueRecords) {
                 collector.send(
-                        deadLetterQueueRecord.topic(),
                         deadLetterQueueRecord.key(),
                         deadLetterQueueRecord.value(),
-                        deadLetterQueueRecord.headers(),
-                        null,
-                        deadLetterQueueRecord.timestamp(),
-                        new ByteArraySerializer(),
-                        new ByteArraySerializer(),
                         sourceNodeName,
-                        (InternalProcessorContext) processorContext);
+                        (InternalProcessorContext) processorContext,
+                        deadLetterQueueRecord
+                );
             }
         }
 

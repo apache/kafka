@@ -18,7 +18,6 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.streams.errors.ErrorHandlerContext;
 import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -248,18 +247,13 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
                 final RecordCollector collector = ((RecordCollector.Supplier) internalProcessorContext).recordCollector();
                 for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : response.deadLetterQueueRecords) {
                     collector.send(
-                            deadLetterQueueRecord.topic(),
                             deadLetterQueueRecord.key(),
                             deadLetterQueueRecord.value(),
-                            deadLetterQueueRecord.headers(),
-                            null,
-                            deadLetterQueueRecord.timestamp(),
-                            new ByteArraySerializer(),
-                            new ByteArraySerializer(),
                             name(),
-                            internalProcessorContext);
+                            internalProcessorContext,
+                            deadLetterQueueRecord
+                    );
                 }
-
             }
 
             if (response == ProcessingExceptionHandler.ProcessingHandlerResponse.FAIL) {

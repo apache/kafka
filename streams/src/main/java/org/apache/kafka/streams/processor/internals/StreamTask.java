@@ -26,7 +26,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.TopologyConfig.TaskConfig;
@@ -969,16 +968,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 final RecordCollector collector = ((RecordCollector.Supplier) processorContext).recordCollector();
                 for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : response.deadLetterQueueRecords) {
                     collector.send(
-                            deadLetterQueueRecord.topic(),
                             deadLetterQueueRecord.key(),
                             deadLetterQueueRecord.value(),
-                            deadLetterQueueRecord.headers(),
-                            null,
-                            deadLetterQueueRecord.timestamp(),
-                            new ByteArraySerializer(),
-                            new ByteArraySerializer(),
                             node.name(),
-                            processorContext);
+                            processorContext,
+                            deadLetterQueueRecord);
                 }
             }
 

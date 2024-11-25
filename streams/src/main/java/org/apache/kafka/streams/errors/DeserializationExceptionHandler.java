@@ -92,6 +92,8 @@ public interface DeserializationExceptionHandler extends Configurable {
          * The permanent and immutable id for the used option. This can't change ever.
          */
         public final int id;
+
+        /** a list of Kafka records to publish, e.g. in a Dead Letter Queue topic */
         public final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords;
 
         DeserializationHandlerResponse(final int id, final String name) {

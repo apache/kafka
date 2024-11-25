@@ -57,6 +57,9 @@ public interface ProcessingExceptionHandler extends Configurable {
          */
         public final int id;
 
+        /**
+         * a list of Kafka records to publish, e.g. in a Dead Letter Queue topic
+         */
         public final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords;
 
         ProcessingHandlerResponse(final int id, final String name) {
