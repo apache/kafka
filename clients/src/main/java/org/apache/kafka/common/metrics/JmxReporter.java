@@ -70,18 +70,7 @@ public class JmxReporter implements MetricsReporter {
     private Predicate<String> mbeanPredicate = s -> true;
 
     public JmxReporter() {
-        this("");
-    }
-
-    /**
-     * Create a JMX reporter that prefixes all metrics with the given string.
-     *  @deprecated Since 2.6.0. Use {@link JmxReporter#JmxReporter()}
-     *  Initialize JmxReporter with {@link JmxReporter#contextChange(MetricsContext)}
-     *  Populate prefix by adding _namespace/prefix key value pair to {@link MetricsContext}
-     */
-    @Deprecated
-    public JmxReporter(String prefix) {
-        this.prefix = prefix != null ? prefix : "";
+        this.prefix = "";
     }
 
     @Override
