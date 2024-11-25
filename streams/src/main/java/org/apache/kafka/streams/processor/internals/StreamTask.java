@@ -964,9 +964,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 throw new FailedProcessingException("Fatal user code error in processing error callback", node.name(), fatalUserException);
             }
 
-            if (!response.deadLetterQueueRecords.isEmpty()) {
+            final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords = response.drainDeadLetterQueueRecords();
+            if (!deadLetterQueueRecords.isEmpty()) {
                 final RecordCollector collector = ((RecordCollector.Supplier) processorContext).recordCollector();
-                for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : response.deadLetterQueueRecords) {
+                for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : deadLetterQueueRecords) {
                     collector.send(
                             deadLetterQueueRecord.key(),
                             deadLetterQueueRecord.value(),

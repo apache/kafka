@@ -243,9 +243,10 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
                 );
             }
 
-            if (!response.deadLetterQueueRecords.isEmpty()) {
+            final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords = response.drainDeadLetterQueueRecords();
+            if (!deadLetterQueueRecords.isEmpty()) {
                 final RecordCollector collector = ((RecordCollector.Supplier) internalProcessorContext).recordCollector();
-                for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : response.deadLetterQueueRecords) {
+                for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : deadLetterQueueRecords) {
                     collector.send(
                             deadLetterQueueRecord.key(),
                             deadLetterQueueRecord.value(),

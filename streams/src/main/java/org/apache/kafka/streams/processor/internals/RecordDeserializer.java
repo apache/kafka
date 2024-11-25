@@ -29,6 +29,7 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 
 import org.slf4j.Logger;
 
+import java.util.List;
 import java.util.Objects;
 
 import static org.apache.kafka.streams.StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
@@ -119,9 +120,10 @@ public class RecordDeserializer {
             throw new StreamsException("Fatal user code error in deserialization error callback", fatalUserException);
         }
 
-        if (!response.deadLetterQueueRecords.isEmpty()) {
+        final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords = response.drainDeadLetterQueueRecords();
+        if (!deadLetterQueueRecords.isEmpty()) {
             final RecordCollector collector = ((RecordCollector.Supplier) processorContext).recordCollector();
-            for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : response.deadLetterQueueRecords) {
+            for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : deadLetterQueueRecords) {
                 collector.send(
                         deadLetterQueueRecord.key(),
                         deadLetterQueueRecord.value(),
