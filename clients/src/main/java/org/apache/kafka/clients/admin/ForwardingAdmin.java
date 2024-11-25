@@ -305,11 +305,6 @@ public class ForwardingAdmin implements Admin {
     }
 
     @Override
-    public ListShareGroupsResult listShareGroups(ListShareGroupsOptions options) {
-        return delegate.listShareGroups(options);
-    }
-
-    @Override
     public ListGroupsResult listGroups(ListGroupsOptions options) {
         return delegate.listGroups(options);
     }

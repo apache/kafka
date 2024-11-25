@@ -108,8 +108,6 @@ import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListPartitionReassignmentsOptions;
 import org.apache.kafka.clients.admin.ListPartitionReassignmentsResult;
-import org.apache.kafka.clients.admin.ListShareGroupsOptions;
-import org.apache.kafka.clients.admin.ListShareGroupsResult;
 import org.apache.kafka.clients.admin.ListTopicsOptions;
 import org.apache.kafka.clients.admin.ListTopicsResult;
 import org.apache.kafka.clients.admin.ListTransactionsOptions;
@@ -420,11 +418,6 @@ public class TestingMetricsInterceptingAdminClient extends AdminClient {
     @Override
     public DescribeShareGroupsResult describeShareGroups(final Collection<String> groupIds, final DescribeShareGroupsOptions options) {
         return adminDelegate.describeShareGroups(groupIds, options);
-    }
-
-    @Override
-    public ListShareGroupsResult listShareGroups(final ListShareGroupsOptions options) {
-        return adminDelegate.listShareGroups(options);
     }
 
     @Override

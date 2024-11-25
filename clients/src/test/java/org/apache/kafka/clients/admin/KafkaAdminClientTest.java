@@ -5221,14 +5221,14 @@ public class KafkaAdminClientTest {
                         .setGroups(Collections.emptyList())),
                 env.cluster().nodeById(3));
 
-            final ListShareGroupsResult result = env.adminClient().listShareGroups();
+            final ListGroupsResult result = env.adminClient().listGroups(new ListGroupsOptions().withTypes(Set.of(GroupType.SHARE)));
             TestUtils.assertFutureError(result.all(), UnknownServerException.class);
 
-            Collection<ShareGroupListing> listings = result.valid().get();
+            Collection<GroupListing> listings = result.valid().get();
             assertEquals(4, listings.size());
 
             Set<String> groupIds = new HashSet<>();
-            for (ShareGroupListing listing : listings) {
+            for (GroupListing listing : listings) {
                 groupIds.add(listing.groupId());
                 assertTrue(listing.groupState().isPresent());
             }
@@ -5256,7 +5256,7 @@ public class KafkaAdminClientTest {
                     -1,
                     Collections.emptyList()));
 
-            final ListShareGroupsResult result = env.adminClient().listShareGroups();
+            final ListGroupsResult result = env.adminClient().listGroups(new ListGroupsOptions().withTypes(Set.of(GroupType.SHARE)));
             TestUtils.assertFutureError(result.all(), KafkaException.class);
         }
     }
@@ -5275,21 +5275,22 @@ public class KafkaAdminClientTest {
                             new ListGroupsResponseData.ListedGroup()
                                 .setGroupId("share-group-1")
                                 .setGroupType(GroupType.SHARE.toString())
+                                .setProtocolType("share")
                                 .setGroupState("Stable"),
                             new ListGroupsResponseData.ListedGroup()
                                 .setGroupId("share-group-2")
                                 .setGroupType(GroupType.SHARE.toString())
+                                .setProtocolType("share")
                                 .setGroupState("Empty")))),
                     env.cluster().nodeById(0));
 
-            final ListShareGroupsOptions options = new ListShareGroupsOptions();
-            final ListShareGroupsResult result = env.adminClient().listShareGroups(options);
-            Collection<ShareGroupListing> listings = result.valid().get();
+            final ListGroupsResult result = env.adminClient().listGroups(new ListGroupsOptions().withTypes(Set.of(GroupType.SHARE)));
+            Collection<GroupListing> listings = result.valid().get();
 
             assertEquals(2, listings.size());
-            List<ShareGroupListing> expected = new ArrayList<>();
-            expected.add(new ShareGroupListing("share-group-1", Optional.of(GroupState.STABLE)));
-            expected.add(new ShareGroupListing("share-group-2", Optional.of(GroupState.EMPTY)));
+            List<GroupListing> expected = new ArrayList<>();
+            expected.add(new GroupListing("share-group-1", Optional.of(GroupType.SHARE), "share", Optional.of(GroupState.STABLE)));
+            expected.add(new GroupListing("share-group-2", Optional.of(GroupType.SHARE), "share", Optional.of(GroupState.EMPTY)));
             assertEquals(expected, listings);
             assertEquals(0, result.errors().get().size());
         }
@@ -5314,8 +5315,7 @@ public class KafkaAdminClientTest {
                         new ListGroupsResponseData.ListedGroup()
                             .setGroupId("share-group-1")))),
                 env.cluster().nodeById(0));
-            ListShareGroupsOptions options = new ListShareGroupsOptions();
-            ListShareGroupsResult result = env.adminClient().listShareGroups(options);
+            ListGroupsResult result = env.adminClient().listGroups(new ListGroupsOptions().withTypes(Set.of(GroupType.SHARE)));
             TestUtils.assertFutureThrows(result.all(), UnsupportedVersionException.class);
         }
     }

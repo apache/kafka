@@ -2605,11 +2605,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       assertEquals(0, list.errors().get().size())
       assertEquals(0, list.valid().get().size())
 
-      val list1 = client.listShareGroups()
-      assertEquals(0, list1.all().get().size())
-      assertEquals(0, list1.errors().get().size())
-      assertEquals(0, list1.valid().get().size())
-
       client.createTopics(Collections.singleton(
         new NewTopic(testTopicName, testNumPartitions, 1.toShort)
       )).all().get()
@@ -2624,26 +2619,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         consumerThreads.foreach(_.start())
         assertTrue(latch.await(30000, TimeUnit.MILLISECONDS))
 
+        // listGroups is used to list share groups
         // Test that we can list the new group.
-        TestUtils.waitUntilTrue(() => {
-          client.listShareGroups.all.get.stream().filter(group =>
-            group.groupId == testGroupId &&
-              group.groupState.get == GroupState.STABLE).count() == 1
-        }, s"Expected to be able to list $testGroupId")
-
-        TestUtils.waitUntilTrue(() => {
-          val options = new ListShareGroupsOptions().inStates(Collections.singleton(GroupState.STABLE))
-          client.listShareGroups(options).all.get.stream().filter(group =>
-            group.groupId == testGroupId &&
-              group.groupState.get == GroupState.STABLE).count() == 1
-        }, s"Expected to be able to list $testGroupId in state Stable")
-
-        TestUtils.waitUntilTrue(() => {
-          val options = new ListShareGroupsOptions().inStates(Collections.singleton(GroupState.EMPTY))
-          client.listShareGroups(options).all.get.stream().filter(_.groupId == testGroupId).count() == 0
-        }, s"Expected to find zero groups")
-
-        // listGroups is equivalent to listShareGroups so ensure that works too
         TestUtils.waitUntilTrue(() => {
           client.listGroups.all.get.stream().filter(group =>
             group.groupId == testGroupId &&

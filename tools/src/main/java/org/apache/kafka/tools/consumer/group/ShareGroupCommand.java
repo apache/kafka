@@ -17,7 +17,6 @@
 package org.apache.kafka.tools.consumer.group;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.admin.AbstractOptions;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DescribeShareGroupsResult;
 import org.apache.kafka.clients.admin.GroupListing;
@@ -140,7 +139,9 @@ public class ShareGroupCommand {
 
         List<String> listShareGroups() {
             try {
-                ListGroupsResult result = adminClient.listGroups(withTimeoutMs(new ListGroupsOptions()).withTypes(Set.of(GroupType.SHARE)));
+                ListGroupsResult result = adminClient.listGroups(new ListGroupsOptions()
+                    .timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue())
+                    .withTypes(Set.of(GroupType.SHARE)));
                 Collection<GroupListing> listings = result.all().get();
                 return listings.stream().map(GroupListing::groupId).collect(Collectors.toList());
             } catch (InterruptedException | ExecutionException e) {
@@ -149,10 +150,10 @@ public class ShareGroupCommand {
         }
 
         List<GroupListing> listShareGroupsInStates(Set<GroupState> states) throws ExecutionException, InterruptedException {
-            ListGroupsOptions listGroupsOptions = withTimeoutMs(new ListGroupsOptions());
-            listGroupsOptions.withTypes(Set.of(GroupType.SHARE));
-            listGroupsOptions.inGroupStates(states);
-            ListGroupsResult result = adminClient.listGroups(listGroupsOptions);
+            ListGroupsResult result = adminClient.listGroups(new ListGroupsOptions()
+                .timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue())
+                .withTypes(Set.of(GroupType.SHARE))
+                .inGroupStates(states));
             return new ArrayList<>(result.all().get());
         }
 
@@ -294,11 +295,6 @@ public class ShareGroupCommand {
             props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt));
             props.putAll(configOverrides);
             return Admin.create(props);
-        }
-
-        private <T extends AbstractOptions<T>> T withTimeoutMs(T options) {
-            int t = opts.options.valueOf(opts.timeoutMsOpt).intValue();
-            return options.timeoutMs(t);
         }
     }
 }

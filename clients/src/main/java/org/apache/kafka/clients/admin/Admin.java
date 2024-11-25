@@ -1825,26 +1825,6 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * List the share groups available in the cluster.
-     *
-     * @param options The options to use when listing the share groups.
-     * @return The ListShareGroupsResult.
-     */
-    ListShareGroupsResult listShareGroups(ListShareGroupsOptions options);
-
-    /**
-     * List the share groups available in the cluster with the default options.
-     * <p>
-     * This is a convenience method for {@link #listShareGroups(ListShareGroupsOptions)} with default options.
-     * See the overload for more details.
-     *
-     * @return The ListShareGroupsResult.
-     */
-    default ListShareGroupsResult listShareGroups() {
-        return listShareGroups(new ListShareGroupsOptions());
-    }
-
-    /**
      * Describe some classic groups in the cluster.
      *
      * @param groupIds The IDs of the groups to describe.
