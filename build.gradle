@@ -47,7 +47,11 @@ plugins {
 
 ext {
   gradleVersion = versions.gradle
-  minJavaVersion = 11
+  minClientJavaVersion = 11
+  minNonClientJavaVersion = 17
+  // The connect:api module also belongs to the clients module, but it has already been bumped to JDK 17 as part of KIP-1032.
+  modulesNeedingJava11 = [":clients", ":streams", ":streams:test-utils", ":streams-scala", ":test-common:test-common-runtime"]
+
   buildVersionFileName = "kafka-version.properties"
 
   defaultMaxHeapSize = "2g"
@@ -113,22 +117,24 @@ ext {
 
   commitId = determineCommitId()
 
-  configureJavaCompiler = { name, options ->
+  configureJavaCompiler = { name, options, projectPath ->
     // -parameters generates arguments with parameter names in TestInfo#getDisplayName.
     // ref: https://github.com/junit-team/junit5/blob/4c0dddad1b96d4a20e92a2cd583954643ac56ac0/junit-jupiter-params/src/main/java/org/junit/jupiter/params/ParameterizedTest.java#L161-L164
-    if (name == "compileTestJava" || name == "compileTestScala") {
+
+    def releaseVersion = modulesNeedingJava11.any { projectPath == it } ? minClientJavaVersion : minNonClientJavaVersion
+
+    options.compilerArgs << "-encoding" << "UTF-8"
+    options.compilerArgs += ["--release", String.valueOf(releaseVersion)]
+
+    if (name in ["compileTestJava", "compileTestScala"]) {
       options.compilerArgs << "-parameters"
-      options.compilerArgs += ["--release", String.valueOf(minJavaVersion)]
-    } else if (name == "compileJava" || name == "compileScala") {
-      options.compilerArgs << "-Xlint:all"
+    } else if (name in ["compileJava", "compileScala"]) {
       if (!project.path.startsWith(":connect") && !project.path.startsWith(":storage"))
         options.compilerArgs << "-Xlint:-rawtypes"
-      options.compilerArgs << "-encoding" << "UTF-8"
-      options.compilerArgs << "-Xlint:-rawtypes"
+      options.compilerArgs << "-Xlint:all"
       options.compilerArgs << "-Xlint:-serial"
       options.compilerArgs << "-Xlint:-try"
       options.compilerArgs << "-Werror"
-      options.compilerArgs += ["--release", String.valueOf(minJavaVersion)]
     }
   }
 
@@ -321,7 +327,7 @@ subprojects {
   }
 
   tasks.withType(JavaCompile) {
-    configureJavaCompiler(name, options)
+    configureJavaCompiler(name, options, project.path)
   }
 
   if (shouldPublish) {
@@ -730,7 +736,7 @@ subprojects {
   }
 
   tasks.withType(ScalaCompile) {
-
+    def releaseVersion = modulesNeedingJava11.any { project.path == it } ? minClientJavaVersion : minNonClientJavaVersion
     scalaCompileOptions.keepAliveMode = userKeepAliveMode
 
     scalaCompileOptions.additionalParameters = [
@@ -774,10 +780,9 @@ subprojects {
     scalaCompileOptions.additionalParameters += ["-opt-warnings", "-Xlint:strict-unsealed-patmat"]
     // Scala 2.13.2 introduces compiler warnings suppression, which is a pre-requisite for -Xfatal-warnings
     scalaCompileOptions.additionalParameters += ["-Xfatal-warnings"]
+    scalaCompileOptions.additionalParameters += ["--release", String.valueOf(releaseVersion)]
 
-    scalaCompileOptions.additionalParameters += ["-release", String.valueOf(minJavaVersion)]
-
-    configureJavaCompiler(name, options)
+    configureJavaCompiler(name, options, project.path)
 
     configure(scalaCompileOptions.forkOptions) {
       memoryMaximumSize = defaultMaxHeapSize
@@ -2601,7 +2606,6 @@ project(':streams') {
     // testCompileOnly prevents streams from exporting a dependency on test-utils, which would cause a dependency cycle
     testCompileOnly project(':streams:test-utils')
 
-    testImplementation project(':metadata')
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.reload4j
     testImplementation libs.junitJupiter
@@ -2610,7 +2614,6 @@ project(':streams') {
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testImplementation libs.junitPlatformSuiteEngine // supports suite test
-    testImplementation project(':group-coordinator')
 
     testRuntimeOnly project(':streams:test-utils')
     testRuntimeOnly runtimeTestLibs
