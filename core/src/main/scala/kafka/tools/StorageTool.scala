@@ -143,14 +143,14 @@ object StorageTool extends Logging {
     if (namespace.getBoolean("standalone")) {
       formatter.setInitialControllers(createStandaloneDynamicVoters(config))
     }
-    if (!namespace.getBoolean("no_initial_controllers")) {
+    if (namespace.getBoolean("no_initial_controllers")) {
+      formatter.setNoInitialControllersFlag(true)
+    } else {
       if (config.processRoles.contains(ProcessRole.ControllerRole)) {
-        if (config.quorumConfig.voters().isEmpty) {
-          if (formatter.initialVoters().isEmpty()) {
-            throw new TerseFailure("Because " + QuorumConfig.QUORUM_VOTERS_CONFIG +
-              " is not set on this controller, you must specify one of the following: " +
-              "--standalone, --initial-controllers, or --no-initial-controllers.");
-          }
+        if (config.quorumConfig.voters().isEmpty && formatter.initialVoters().isEmpty) {
+          throw new TerseFailure("Because " + QuorumConfig.QUORUM_VOTERS_CONFIG +
+            " is not set on this controller, you must specify one of the following: " +
+            "--standalone, --initial-controllers, or --no-initial-controllers.");
         }
       }
     }

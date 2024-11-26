@@ -93,8 +93,10 @@ public class Formatter {
 
     /**
      * Maps feature names to the level they will start off with.
+     *
+     * Visible for testing.
      */
-    private Map<String, Short> featureLevels = new TreeMap<>();
+    protected Map<String, Short> featureLevels = new TreeMap<>();
 
     /**
      * The bootstrap metadata used to format the cluster.
@@ -130,6 +132,7 @@ public class Formatter {
      * The initial KIP-853 voters.
      */
     private Optional<DynamicVoters> initialControllers = Optional.empty();
+    private boolean noInitialControllersFlag = false;
 
     public Formatter setPrintStream(PrintStream printStream) {
         this.printStream = printStream;
@@ -215,12 +218,17 @@ public class Formatter {
         return this;
     }
 
+    public Formatter setNoInitialControllersFlag(boolean noInitialControllersFlag) {
+        this.noInitialControllersFlag = noInitialControllersFlag;
+        return this;
+    }
+
     public Optional<DynamicVoters> initialVoters() {
         return initialControllers;
     }
 
     boolean hasDynamicQuorum() {
-        return initialControllers.isPresent();
+        return initialControllers.isPresent() || noInitialControllersFlag;
     }
 
     public BootstrapMetadata bootstrapMetadata() {
