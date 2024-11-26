@@ -120,6 +120,10 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 process((TopicPatternSubscriptionChangeEvent) event);
                 return;
 
+            case TOPIC_RE2J_PATTERN_SUBSCRIPTION_CHANGE:
+                process((TopicRe2JPatternSubscriptionChangeEvent) event);
+                return;
+
             case UPDATE_SUBSCRIPTION_METADATA:
                 process((UpdatePatternSubscriptionEvent) event);
                 return;
@@ -300,15 +304,39 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     /**
-     * Process event that indicates that the subscription topic pattern changed. This will make the
-     * consumer join the group if it is not part of it yet, or send the updated subscription if
-     * it is already a member on the next poll.
+     * Process event that indicates that the subscription java pattern changed.
+     * This will update the subscription state in the client to persist the new pattern.
+     * It will also evaluate the pattern against the latest metadata to find the matching topics,
+     * and send an updated subscription to the broker on the next poll
+     * (joining the group if it's not already part of it).
      */
     private void process(final TopicPatternSubscriptionChangeEvent event) {
         try {
             subscriptions.subscribe(event.pattern(), event.listener());
             metadata.requestUpdateForNewTopics();
             updatePatternSubscription(metadata.fetch());
+            event.future().complete(null);
+        } catch (Exception e) {
+            event.future().completeExceptionally(e);
+        }
+    }
+
+    /**
+     * Process event that indicates that the subscription RE2J pattern changed.
+     * This will update the subscription state in the client to persist the new pattern.
+     * It will also make the consumer send the updated pattern on the next poll,
+     * joining the group if it's not already part of it.
+     * Note that this does not evaluate the pattern, it just passes it to the broker.
+     */
+    private void process(final TopicRe2JPatternSubscriptionChangeEvent event) {
+        if (requestManagers.consumerMembershipManager.isEmpty()) {
+            event.future().completeExceptionally(
+                new KafkaException("MembershipManager is not available when processing a subscribe event"));
+            return;
+        }
+        try {
+            subscriptions.subscribe(event.pattern(), event.listener());
+            requestManagers.consumerMembershipManager.get().onSubscriptionUpdated();
             event.future().complete(null);
         } catch (Exception e) {
             event.future().completeExceptionally(e);

@@ -22,6 +22,7 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.PartitionStates;
@@ -75,7 +76,7 @@ public class SubscriptionState {
     private final Logger log;
 
     private enum SubscriptionType {
-        NONE, AUTO_TOPICS, AUTO_PATTERN, USER_ASSIGNED, AUTO_TOPICS_SHARE
+        NONE, AUTO_TOPICS, AUTO_PATTERN, AUTO_PATTERN_RE2J, USER_ASSIGNED, AUTO_TOPICS_SHARE
     }
 
     /* the type of subscription */
@@ -83,6 +84,9 @@ public class SubscriptionState {
 
     /* the pattern user has requested */
     private Pattern subscribedPattern;
+
+    /* the Re2J pattern user has requested */
+    private SubscriptionPattern subscribedRe2JPattern;
 
     /* the list of topics the user has requested */
     private Set<String> subscription;
@@ -107,11 +111,19 @@ public class SubscriptionState {
     public synchronized String toString() {
         return "SubscriptionState{" +
             "type=" + subscriptionType +
-            ", subscribedPattern=" + subscribedPattern +
+            ", subscribedPattern=" + subscribedPatternInUse() +
             ", subscription=" + String.join(",", subscription) +
             ", groupSubscription=" + String.join(",", groupSubscription) +
             ", defaultResetStrategy=" + defaultResetStrategy +
             ", assignment=" + assignment.partitionStateValues() + " (id=" + assignmentId + ")}";
+    }
+
+    private Object subscribedPatternInUse() {
+        if (subscriptionType == SubscriptionType.AUTO_PATTERN_RE2J)
+            return subscribedRe2JPattern;
+        if (subscriptionType == SubscriptionType.AUTO_PATTERN)
+            return subscribedPattern;
+        return null;
     }
 
     public synchronized String prettyString() {
@@ -122,6 +134,8 @@ public class SubscriptionState {
                 return "Subscribe(" + String.join(",", subscription) + ")";
             case AUTO_PATTERN:
                 return "Subscribe(" + subscribedPattern + ")";
+            case AUTO_PATTERN_RE2J:
+                return "Subscribe(" + subscribedRe2JPattern + ")";
             case USER_ASSIGNED:
                 return "Assign(" + assignedPartitions() + " , id=" + assignmentId + ")";
             case AUTO_TOPICS_SHARE:
@@ -138,6 +152,7 @@ public class SubscriptionState {
         this.assignment = new PartitionStates<>();
         this.groupSubscription = new HashSet<>();
         this.subscribedPattern = null;
+        this.subscribedRe2JPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
     }
 
@@ -174,6 +189,12 @@ public class SubscriptionState {
         registerRebalanceListener(listener);
         setSubscriptionType(SubscriptionType.AUTO_PATTERN);
         this.subscribedPattern = pattern;
+    }
+
+    public synchronized void subscribe(SubscriptionPattern pattern, Optional<ConsumerRebalanceListener> listener) {
+        registerRebalanceListener(listener);
+        setSubscriptionType(SubscriptionType.AUTO_PATTERN_RE2J);
+        this.subscribedRe2JPattern = pattern;
     }
 
     public synchronized boolean subscribeFromPattern(Set<String> topics) {
@@ -249,7 +270,11 @@ public class SubscriptionState {
     }
 
     /**
-     * @return true if assignments matches subscription, otherwise false
+     * Check if an assignment received while using the classic group protocol matches the subscription.
+     * Note that this only considers the subscribedPattern because this functionality is only used under the
+     * classic protocol, where subscribedRe2JPattern is not supported.
+     *
+     * @return true if assignments matches subscription, otherwise false.
      */
     public synchronized boolean checkAssignmentMatchedSubscription(Collection<TopicPartition> assignments) {
         for (TopicPartition topicPartition : assignments) {

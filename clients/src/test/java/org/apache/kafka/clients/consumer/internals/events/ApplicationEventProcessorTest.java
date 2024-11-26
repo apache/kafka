@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals.events;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerHeartbeatRequestManager;
@@ -380,6 +381,40 @@ public class ApplicationEventProcessorTest {
         assertEquals(1, processor.metadataVersionSnapshot());
         verify(membershipManager).onSubscriptionUpdated();
         assertDoesNotThrow(() -> event2.future().get());
+    }
+
+    @Test
+    public void testR2JPatternSubscriptionEventSuccess() {
+        SubscriptionPattern pattern = new SubscriptionPattern("t*");
+        Optional<ConsumerRebalanceListener> listener = Optional.of(mock(ConsumerRebalanceListener.class));
+        TopicRe2JPatternSubscriptionChangeEvent event =
+            new TopicRe2JPatternSubscriptionChangeEvent(pattern, listener, 12345);
+
+        setupProcessor(true);
+        processor.process(event);
+
+        verify(subscriptionState).subscribe(pattern, listener);
+        verify(subscriptionState, never()).subscribeFromPattern(any());
+        verify(membershipManager).onSubscriptionUpdated();
+        assertDoesNotThrow(() -> event.future().get());
+    }
+
+    @Test
+    public void testR2JPatternSubscriptionEventFailureWithMixedSubscriptionType() {
+        SubscriptionPattern pattern = new SubscriptionPattern("t*");
+        Optional<ConsumerRebalanceListener> listener = Optional.of(mock(ConsumerRebalanceListener.class));
+        TopicRe2JPatternSubscriptionChangeEvent event =
+            new TopicRe2JPatternSubscriptionChangeEvent(pattern, listener, 12345);
+        Exception mixedSubscriptionError = new IllegalStateException("Subscription to topics, partitions and " +
+            "pattern are mutually exclusive");
+        doThrow(mixedSubscriptionError).when(subscriptionState).subscribe(pattern, listener);
+
+        setupProcessor(true);
+        processor.process(event);
+
+        verify(subscriptionState).subscribe(pattern, listener);
+        Exception thrown = assertFutureThrows(event.future(), mixedSubscriptionError.getClass());
+        assertEquals(mixedSubscriptionError, thrown);
     }
 
     @ParameterizedTest

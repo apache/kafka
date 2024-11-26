@@ -62,6 +62,7 @@ import org.apache.kafka.clients.consumer.internals.events.SeekUnvalidatedEvent;
 import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
 import org.apache.kafka.clients.consumer.internals.events.TopicMetadataEvent;
 import org.apache.kafka.clients.consumer.internals.events.TopicPatternSubscriptionChangeEvent;
+import org.apache.kafka.clients.consumer.internals.events.TopicRe2JPatternSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.TopicSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeEvent;
 import org.apache.kafka.clients.consumer.internals.events.UpdatePatternSubscriptionEvent;
@@ -1871,16 +1872,23 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     /**
      * Subscribe to the RE2/J pattern. This will generate an event to update the pattern in the
-     * subscription, so it's included in a next heartbeat request sent to the broker. No validation of the pattern is
-     * performed by the client (other than null/empty checks).
+     * subscription state, so it's included in the next heartbeat request sent to the broker.
+     * No validation of the pattern is performed by the client (other than null/empty checks).
      */
     private void subscribeToRegex(SubscriptionPattern pattern,
                                   Optional<ConsumerRebalanceListener> listener) {
-        maybeThrowInvalidGroupIdException();
-        throwIfSubscriptionPatternIsInvalid(pattern);
-        log.info("Subscribing to regular expression {}", pattern);
-
-        // TODO: generate event to update subscribed regex so it's included in the next HB.
+        acquireAndEnsureOpen();
+        try {
+            maybeThrowInvalidGroupIdException();
+            throwIfSubscriptionPatternIsInvalid(pattern);
+            log.info("Subscribing to regular expression {}", pattern);
+            applicationEventHandler.addAndGet(new TopicRe2JPatternSubscriptionChangeEvent(
+                pattern,
+                listener,
+                calculateDeadlineMs(time.timer(defaultApiTimeoutMs))));
+        } finally {
+            release();
+        }
     }
 
     private void throwIfSubscriptionPatternIsInvalid(SubscriptionPattern subscriptionPattern) {
