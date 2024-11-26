@@ -60,7 +60,7 @@ import java.util.Random;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.test.StreamsTestUtils.toList;
+import static org.apache.kafka.test.StreamsTestUtils.toListAndCloseIterator;
 import static org.apache.kafka.test.StreamsTestUtils.verifyKeyValueList;
 import static org.apache.kafka.test.StreamsTestUtils.verifyWindowedKeyValue;
 import static org.hamcrest.CoreMatchers.hasItem;
@@ -409,7 +409,7 @@ public class CachingPersistentSessionStoreTest {
         // add one that shouldn't appear in the results
         cachingStore.put(new Windowed<>(keyAA, new SessionWindow(0, 0)), "5".getBytes());
 
-        final List<KeyValue<Windowed<Bytes>, byte[]>> results = toList(cachingStore.fetch(keyA));
+        final List<KeyValue<Windowed<Bytes>, byte[]>> results = toListAndCloseIterator(cachingStore.fetch(keyA));
         verifyKeyValueList(expected, results);
     }
 
@@ -428,7 +428,7 @@ public class CachingPersistentSessionStoreTest {
         // add one that shouldn't appear in the results
         cachingStore.put(new Windowed<>(keyAA, new SessionWindow(0, 0)), "5".getBytes());
 
-        final List<KeyValue<Windowed<Bytes>, byte[]>> results = toList(cachingStore.backwardFetch(keyA));
+        final List<KeyValue<Windowed<Bytes>, byte[]>> results = toListAndCloseIterator(cachingStore.backwardFetch(keyA));
         Collections.reverse(results);
         verifyKeyValueList(expected, results);
     }
@@ -448,7 +448,7 @@ public class CachingPersistentSessionStoreTest {
     @Test
     public void shouldQueryItemsInCacheAndStore() {
         final List<KeyValue<Windowed<Bytes>, byte[]>> added = addSessionsUntilOverflow("a");
-        final List<KeyValue<Windowed<Bytes>, byte[]>> actual = toList(cachingStore.findSessions(
+        final List<KeyValue<Windowed<Bytes>, byte[]>> actual = toListAndCloseIterator(cachingStore.findSessions(
                 Bytes.wrap("a".getBytes(StandardCharsets.UTF_8)),
                 0,
                 added.size() * 10L

@@ -126,7 +126,7 @@ public class WindowKeySchemaTest {
     private final Window window = new TimeWindow(startTime, endTime);
     private final Windowed<String> windowedKey = new Windowed<>(key, window);
     private KeySchema keySchema;
-    private final Serde<Windowed<String>> keySerde = new WindowedSerdes.TimeWindowedSerde<>(serde, Long.MAX_VALUE);
+    private final Serde<Windowed<String>> keySerde = new WindowedSerdes.TimeWindowedSerde<>(serde, endTime - startTime);
     private final StateSerdes<String, byte[]> stateSerdes = new StateSerdes<>("dummy", serde, Serdes.ByteArray());
     public SchemaType schemaType;
 
@@ -401,7 +401,7 @@ public class WindowKeySchemaTest {
         final byte[] bytes = keySerde.serializer().serialize(topic, windowedKey);
         final Windowed<String> result = keySerde.deserializer().deserialize(topic, bytes);
         // TODO: fix this part as last bits of KAFKA-4468
-        assertEquals(new Windowed<>(key, new TimeWindow(startTime, Long.MAX_VALUE)), result);
+        assertEquals(new Windowed<>(key, new TimeWindow(startTime, endTime)), result);
     }
 
     @EnumSource(SchemaType.class)

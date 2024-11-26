@@ -71,7 +71,7 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.internals.ThreadCacheTest.memoryCacheEntrySize;
-import static org.apache.kafka.test.StreamsTestUtils.toList;
+import static org.apache.kafka.test.StreamsTestUtils.toListAndCloseIterator;
 import static org.apache.kafka.test.StreamsTestUtils.verifyAllWindowedKeyValues;
 import static org.apache.kafka.test.StreamsTestUtils.verifyKeyValueList;
 import static org.apache.kafka.test.StreamsTestUtils.verifyWindowedKeyValue;
@@ -951,7 +951,7 @@ public class TimeOrderedWindowStoreTest {
                     windowedPair("a", "0001", 1),
                     windowedPair("aa", "0002", 0)
                 ),
-                toList(cachingStore.fetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0),
+                toListAndCloseIterator(cachingStore.fetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0),
                     ofEpochMilli(Long.MAX_VALUE)))
             );
         } else {
@@ -960,7 +960,7 @@ public class TimeOrderedWindowStoreTest {
                     windowedPair("aa", "0002", 0),
                     windowedPair("a", "0001", 1)
                 ),
-                toList(cachingStore.fetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0),
+                toListAndCloseIterator(cachingStore.fetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0),
                     ofEpochMilli(Long.MAX_VALUE)))
             );
         }
@@ -982,7 +982,7 @@ public class TimeOrderedWindowStoreTest {
             KeyValue.pair(SEGMENT_INTERVAL, bytesValue("0005"))
         );
         final List<KeyValue<Long, byte[]>> actual =
-            toList(cachingStore.fetch(bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)));
+            toListAndCloseIterator(cachingStore.fetch(bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)));
         verifyKeyValueList(expected, actual);
     }
 
@@ -1002,7 +1002,7 @@ public class TimeOrderedWindowStoreTest {
             KeyValue.pair(0L, bytesValue("0001"))
         );
         final List<KeyValue<Long, byte[]>> actual =
-            toList(cachingStore.backwardFetch(bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)));
+            toListAndCloseIterator(cachingStore.backwardFetch(bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)));
         verifyKeyValueList(expected, actual);
     }
 
@@ -1022,14 +1022,14 @@ public class TimeOrderedWindowStoreTest {
                 windowedPair("a", "0003", 1),
                 windowedPair("a", "0005", SEGMENT_INTERVAL)
             ),
-            toList(cachingStore.fetch(bytesKey("a"), bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
+            toListAndCloseIterator(cachingStore.fetch(bytesKey("a"), bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
         );
 
         verifyKeyValueList(
             asList(
                 windowedPair("aa", "0002", 0),
                 windowedPair("aa", "0004", 1)),
-            toList(cachingStore.fetch(bytesKey("aa"), bytesKey("aa"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
+            toListAndCloseIterator(cachingStore.fetch(bytesKey("aa"), bytesKey("aa"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
         );
 
         if (hasIndex) {
@@ -1041,7 +1041,7 @@ public class TimeOrderedWindowStoreTest {
                     windowedPair("aa", "0004", 1),
                     windowedPair("a", "0005", SEGMENT_INTERVAL)
                 ),
-                toList(cachingStore.fetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0),
+                toListAndCloseIterator(cachingStore.fetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0),
                     ofEpochMilli(Long.MAX_VALUE)))
             );
         } else {
@@ -1053,7 +1053,7 @@ public class TimeOrderedWindowStoreTest {
                     windowedPair("aa", "0004", 1),
                     windowedPair("a", "0005", SEGMENT_INTERVAL)
                 ),
-                toList(cachingStore.fetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0),
+                toListAndCloseIterator(cachingStore.fetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0),
                     ofEpochMilli(Long.MAX_VALUE)))
             );
         }
@@ -1075,14 +1075,14 @@ public class TimeOrderedWindowStoreTest {
                 windowedPair("a", "0003", 1),
                 windowedPair("a", "0001", 0)
             ),
-            toList(cachingStore.backwardFetch(bytesKey("a"), bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
+            toListAndCloseIterator(cachingStore.backwardFetch(bytesKey("a"), bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
         );
 
         verifyKeyValueList(
             asList(
                 windowedPair("aa", "0004", 1),
                 windowedPair("aa", "0002", 0)),
-            toList(cachingStore.backwardFetch(bytesKey("aa"), bytesKey("aa"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
+            toListAndCloseIterator(cachingStore.backwardFetch(bytesKey("aa"), bytesKey("aa"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
         );
 
         if (!hasIndex) {
@@ -1095,7 +1095,7 @@ public class TimeOrderedWindowStoreTest {
                     windowedPair("aa", "0002", 0),
                     windowedPair("a", "0001", 0)
                 ),
-                toList(cachingStore.backwardFetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0),
+                toListAndCloseIterator(cachingStore.backwardFetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0),
                     ofEpochMilli(Long.MAX_VALUE)))
             );
         } else {
@@ -1108,7 +1108,7 @@ public class TimeOrderedWindowStoreTest {
                     windowedPair("a", "0003", 1),
                     windowedPair("a", "0001", 0)
                 ),
-                toList(cachingStore.backwardFetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0),
+                toListAndCloseIterator(cachingStore.backwardFetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0),
                     ofEpochMilli(Long.MAX_VALUE)))
             );
         }
