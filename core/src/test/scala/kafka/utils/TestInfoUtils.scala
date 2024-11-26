@@ -67,4 +67,12 @@ object TestInfoUtils {
   def isTransactionV2Enabled(testInfo: TestInfo): Boolean = {
     !testInfo.getDisplayName.contains("isTV2Enabled=false")
   }
+
+  /**
+   * Returns whether eligible leader replicas version 1 is enabled.
+   * When no parameter is provided, the default returned is false.
+   */
+  def isEligibleLeaderReplicasV1Enabled(testInfo: TestInfo): Boolean = {
+    testInfo.getDisplayName.contains("isELRV1Enabled=true")
+  }
 }

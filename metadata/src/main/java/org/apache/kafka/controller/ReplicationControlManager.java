@@ -95,6 +95,7 @@ import org.apache.kafka.metadata.placement.PlacementSpec;
 import org.apache.kafka.metadata.placement.TopicAssignment;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.TopicIdPartition;
 import org.apache.kafka.server.mutable.BoundedList;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
@@ -165,7 +166,6 @@ public class ReplicationControlManager {
         private ClusterControlManager clusterControl = null;
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
         private FeatureControlManager featureControl = null;
-        private boolean eligibleLeaderReplicasEnabled = false;
 
         Builder setSnapshotRegistry(SnapshotRegistry snapshotRegistry) {
             this.snapshotRegistry = snapshotRegistry;
@@ -184,11 +184,6 @@ public class ReplicationControlManager {
 
         Builder setDefaultNumPartitions(int defaultNumPartitions) {
             this.defaultNumPartitions = defaultNumPartitions;
-            return this;
-        }
-
-        Builder setEligibleLeaderReplicasEnabled(boolean eligibleLeaderReplicasEnabled) {
-            this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
             return this;
         }
 
@@ -233,7 +228,6 @@ public class ReplicationControlManager {
                 defaultReplicationFactor,
                 defaultNumPartitions,
                 maxElectionsPerImbalance,
-                eligibleLeaderReplicasEnabled,
                 configurationControl,
                 clusterControl,
                 createTopicPolicy,
@@ -304,11 +298,6 @@ public class ReplicationControlManager {
      * not specify a number of partitions.
      */
     private final int defaultNumPartitions;
-
-    /**
-     * True if eligible leader replicas is enabled.
-     */
-    private final boolean eligibleLeaderReplicasEnabled;
 
     /**
      * Maximum number of leader elections to perform during one partition leader balancing operation.
@@ -399,7 +388,6 @@ public class ReplicationControlManager {
         short defaultReplicationFactor,
         int defaultNumPartitions,
         int maxElectionsPerImbalance,
-        boolean eligibleLeaderReplicasEnabled,
         ConfigurationControlManager configurationControl,
         ClusterControlManager clusterControl,
         Optional<CreateTopicPolicy> createTopicPolicy,
@@ -410,7 +398,6 @@ public class ReplicationControlManager {
         this.defaultReplicationFactor = defaultReplicationFactor;
         this.defaultNumPartitions = defaultNumPartitions;
         this.maxElectionsPerImbalance = maxElectionsPerImbalance;
-        this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
         this.configurationControl = configurationControl;
         this.createTopicPolicy = createTopicPolicy;
         this.featureControl = featureControl;
@@ -1029,7 +1016,8 @@ public class ReplicationControlManager {
     }
 
     boolean isElrEnabled() {
-        return eligibleLeaderReplicasEnabled && featureControl.metadataVersion().isElrSupported();
+        return featureControl.metadataVersion().isElrSupported() && featureControl.latestFinalizedFeatures().
+            versionOrDefault(EligibleLeaderReplicasVersion.FEATURE_NAME, (short) 0) >= EligibleLeaderReplicasVersion.ELRV_1.featureLevel();
     }
 
     ControllerResult<AlterPartitionResponseData> alterPartition(

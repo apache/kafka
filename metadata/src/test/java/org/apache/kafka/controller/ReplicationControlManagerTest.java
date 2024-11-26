@@ -63,6 +63,7 @@ import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.On
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingTopicReassignment;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
+import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
@@ -92,6 +93,7 @@ import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.TopicIdPartition;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
@@ -218,6 +220,7 @@ public class ReplicationControlManagerTest {
         final ClusterControlManager clusterControl;
         final ConfigurationControlManager configurationControl;
         final ReplicationControlManager replicationControl;
+        final OffsetControlManager offsetControlManager;
 
         void replay(List<ApiMessageAndVersion> records) {
             RecordTestUtils.replayAll(clusterControl, records);
@@ -245,6 +248,12 @@ public class ReplicationControlManagerTest {
                     Collections.singletonList(0))).
                 setMetadataVersion(metadataVersion).
                 build();
+            featureControl.replay(new FeatureLevelRecord()
+                .setName(EligibleLeaderReplicasVersion.FEATURE_NAME)
+                    .setFeatureLevel(isElrEnabled ?
+                        EligibleLeaderReplicasVersion.ELRV_1.featureLevel() :
+                        EligibleLeaderReplicasVersion.ELRV_0.featureLevel())
+            );
             this.clusterControl = new ClusterControlManager.Builder().
                 setLogContext(logContext).
                 setTime(time).
@@ -254,7 +263,9 @@ public class ReplicationControlManagerTest {
                 setFeatureControlManager(featureControl).
                 setBrokerUncleanShutdownHandler(this::handleUncleanBrokerShutdown).
                 build();
-
+            this.offsetControlManager = new OffsetControlManager.Builder().
+                setSnapshotRegistry(snapshotRegistry).
+                build();
             this.replicationControl = new ReplicationControlManager.Builder().
                 setSnapshotRegistry(snapshotRegistry).
                 setLogContext(logContext).
@@ -263,7 +274,6 @@ public class ReplicationControlManagerTest {
                 setClusterControl(clusterControl).
                 setCreateTopicPolicy(createTopicPolicy).
                 setFeatureControl(featureControl).
-                setEligibleLeaderReplicasEnabled(isElrEnabled).
                 build();
             clusterControl.activate();
         }

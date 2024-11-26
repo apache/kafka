@@ -27,6 +27,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.kafka.server.common.Features.ELIGIBLE_LEADER_REPLICAS_VERSION;
 import static org.apache.kafka.server.common.Features.GROUP_VERSION;
 import static org.apache.kafka.server.common.Features.TRANSACTION_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -111,6 +112,7 @@ public class BrokerFeaturesTest {
         expectedFeatures.put(MetadataVersion.FEATURE_NAME, MetadataVersion.latestTesting().featureLevel());
         expectedFeatures.put(TRANSACTION_VERSION.featureName(), TRANSACTION_VERSION.latestTesting());
         expectedFeatures.put(GROUP_VERSION.featureName(), GROUP_VERSION.latestTesting());
+        expectedFeatures.put(ELIGIBLE_LEADER_REPLICAS_VERSION.featureName(), ELIGIBLE_LEADER_REPLICAS_VERSION.latestTesting());
         expectedFeatures.put("kraft.version", (short) 0);
         expectedFeatures.put("test_feature_1", (short) 4);
         expectedFeatures.put("test_feature_2", (short) 3);

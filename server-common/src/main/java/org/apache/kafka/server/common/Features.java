@@ -44,7 +44,8 @@ public enum Features {
     TEST_VERSION("test.feature.version", TestFeatureVersion.values()),
     KRAFT_VERSION("kraft.version", KRaftVersion.values()),
     TRANSACTION_VERSION("transaction.version", TransactionVersion.values()),
-    GROUP_VERSION("group.version", GroupVersion.values());
+    GROUP_VERSION("group.version", GroupVersion.values()),
+    ELIGIBLE_LEADER_REPLICAS_VERSION("eligible.leader.replicas.version", EligibleLeaderReplicasVersion.values());
 
     public static final Features[] FEATURES;
     public static final List<Features> PRODUCTION_FEATURES;

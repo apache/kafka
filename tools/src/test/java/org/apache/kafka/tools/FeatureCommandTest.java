@@ -60,14 +60,16 @@ public class FeatureCommandTest {
         List<String> features = Arrays.stream(commandOutput.split("\n")).sorted().collect(Collectors.toList());
 
         // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
-        assertEquals("Feature: group.version\tSupportedMinVersion: 0\t" +
+        assertEquals("Feature: eligible.leader.replicas.version\tSupportedMinVersion: 0\t" +
                 "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(0)));
-        assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
+        assertEquals("Feature: group.version\tSupportedMinVersion: 0\t" +
                 "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(1)));
+        assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
+                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(2)));
         assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.0-IV1\t" +
-                "SupportedMaxVersion: 4.0-IV3\tFinalizedVersionLevel: 3.3-IV1\t", outputWithoutEpoch(features.get(2)));
+                "SupportedMaxVersion: 4.0-IV3\tFinalizedVersionLevel: 3.3-IV1\t", outputWithoutEpoch(features.get(3)));
         assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(3)));
+                "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(4)));
     }
 
     // Use the first MetadataVersion that supports KIP-919
@@ -80,14 +82,16 @@ public class FeatureCommandTest {
         List<String> features = Arrays.stream(commandOutput.split("\n")).sorted().collect(Collectors.toList());
 
         // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
-        assertEquals("Feature: group.version\tSupportedMinVersion: 0\t" +
+        assertEquals("Feature: eligible.leader.replicas.version\tSupportedMinVersion: 0\t" +
                 "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(0)));
-        assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
+        assertEquals("Feature: group.version\tSupportedMinVersion: 0\t" +
                 "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(1)));
+        assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
+                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(2)));
         assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.0-IV1\t" +
-                "SupportedMaxVersion: 4.0-IV3\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(features.get(2)));
+                "SupportedMaxVersion: 4.0-IV3\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(features.get(3)));
         assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(3)));
+                "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(4)));
     }
 
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_3_IV1)
@@ -172,7 +176,8 @@ public class FeatureCommandTest {
                         "downgrade", "--release-version", "3.7-IV3"))
 
         );
-        assertEquals("group.version was downgraded to 0.\n" +
+        assertEquals("eligible.leader.replicas.version was downgraded to 0.\n" +
+                "group.version was downgraded to 0.\n" +
                 "kraft.version was downgraded to 0.\n" +
                 "metadata.version was downgraded to 18.\n" +
                 "transaction.version was downgraded to 0.", commandOutput);

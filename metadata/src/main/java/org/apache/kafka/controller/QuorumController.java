@@ -214,7 +214,6 @@ public final class QuorumController implements Controller {
         private Map<String, Object> staticConfig = Collections.emptyMap();
         private BootstrapMetadata bootstrapMetadata = null;
         private int maxRecordsPerBatch = MAX_RECORDS_PER_BATCH;
-        private boolean eligibleLeaderReplicasEnabled = false;
         private DelegationTokenCache tokenCache;
         private String tokenSecretKeyString;
         private long delegationTokenMaxLifeMs;
@@ -337,11 +336,6 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public Builder setEligibleLeaderReplicasEnabled(boolean eligibleLeaderReplicasEnabled) {
-            this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
-            return this;
-        }
-
         public Builder setDelegationTokenCache(DelegationTokenCache tokenCache) {
             this.tokenCache = tokenCache;
             return this;
@@ -432,7 +426,6 @@ public final class QuorumController implements Controller {
                     delegationTokenMaxLifeMs,
                     delegationTokenExpiryTimeMs,
                     delegationTokenExpiryCheckIntervalMs,
-                    eligibleLeaderReplicasEnabled,
                     uncleanLeaderElectionCheckIntervalMs,
                     interBrokerListenerName
                 );
@@ -1437,11 +1430,6 @@ public final class QuorumController implements Controller {
     private final BootstrapMetadata bootstrapMetadata;
 
     /**
-     * True if the KIP-966 eligible leader replicas feature is enabled.
-     */
-    private final boolean eligibleLeaderReplicasEnabled;
-
-    /**
      * The maximum number of records per batch to allow.
      */
     private final int maxRecordsPerBatch;
@@ -1480,7 +1468,6 @@ public final class QuorumController implements Controller {
         long delegationTokenMaxLifeMs,
         long delegationTokenExpiryTimeMs,
         long delegationTokenExpiryCheckIntervalMs,
-        boolean eligibleLeaderReplicasEnabled,
         long uncleanLeaderElectionCheckIntervalMs,
         String interBrokerListenerName
     ) {
@@ -1549,7 +1536,6 @@ public final class QuorumController implements Controller {
             setLogContext(logContext).
             setDefaultReplicationFactor(defaultReplicationFactor).
             setDefaultNumPartitions(defaultNumPartitions).
-            setEligibleLeaderReplicasEnabled(eligibleLeaderReplicasEnabled).
             setMaxElectionsPerImbalance(ReplicationControlManager.MAX_ELECTIONS_PER_IMBALANCE).
             setConfigurationControl(configurationControl).
             setClusterControl(clusterControl).
@@ -1580,7 +1566,6 @@ public final class QuorumController implements Controller {
         this.metaLogListener = new QuorumMetaLogListener();
         this.curClaimEpoch = -1;
         this.recordRedactor = new RecordRedactor(configSchema);
-        this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
         if (maxIdleIntervalNs.isPresent()) {
             registerWriteNoOpRecord(maxIdleIntervalNs.getAsLong());
         }
@@ -1599,10 +1584,7 @@ public final class QuorumController implements Controller {
             setMetrics(controllerMetrics).
             setTime(time).
             build();
-
-        log.info("Creating new QuorumController with clusterId {}.{}",
-            clusterId,
-            eligibleLeaderReplicasEnabled ? " Eligible leader replicas enabled." : "");
+        log.info("Creating new QuorumController with clusterId {}", clusterId);
 
         this.raftClient.register(metaLogListener);
     }
