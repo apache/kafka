@@ -97,6 +97,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.Collections.singleton;
@@ -170,10 +171,8 @@ public class ShareConsumeRequestManagerTest {
     }
 
     private void assignFromSubscribed(Set<TopicPartition> partitions) {
-        partitions.forEach(partition -> {
-            subscriptions.subscribeToShareGroup(Collections.singleton(partition.topic()));
-            subscriptions.assignFromSubscribed(Collections.singleton(partition));
-        });
+        subscriptions.subscribeToShareGroup(partitions.stream().map(TopicPartition::topic).collect(Collectors.toSet()));
+        subscriptions.assignFromSubscribed(partitions);
 
         client.updateMetadata(initialUpdateResponse);
 
@@ -840,6 +839,60 @@ public class ShareConsumeRequestManagerTest {
     }
 
     @Test
+    public void testAcknowledgementCommitCallbackMultiplePartitionCommitAsync() {
+        buildRequestManager();
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        Set<TopicPartition> partitions = new HashSet<>();
+        partitions.add(tp0);
+        partitions.add(t2p0);
+
+        assignFromSubscribed(partitions);
+
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> partitionDataMap = new LinkedHashMap<>();
+        partitionDataMap.put(tip0, partitionDataForFetch(tip0, records, acquiredRecords, Errors.NONE, Errors.NONE));
+        partitionDataMap.put(t2ip0, partitionDataForFetch(t2ip0, records, acquiredRecords, Errors.NONE, Errors.NONE));
+        client.prepareResponse(ShareFetchResponse.of(Errors.NONE, 0, partitionDataMap, Collections.emptyList()));
+
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        Acknowledgements acknowledgements = Acknowledgements.empty();
+        acknowledgements.add(0L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(1L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(2L, AcknowledgeType.ACCEPT);
+
+        Acknowledgements acknowledgements2 = Acknowledgements.empty();
+        acknowledgements2.add(0L, AcknowledgeType.ACCEPT);
+        acknowledgements2.add(1L, AcknowledgeType.ACCEPT);
+        acknowledgements2.add(2L, AcknowledgeType.ACCEPT);
+
+        Map<TopicIdPartition, Acknowledgements> acks = new HashMap<>();
+        acks.put(tip0, acknowledgements);
+        acks.put(t2ip0, acknowledgements2);
+
+        shareConsumeRequestManager.commitAsync(acks);
+
+        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
+
+        Map<TopicIdPartition, Errors> errorsMap = new HashMap<>();
+        errorsMap.put(tip0, Errors.NONE);
+        errorsMap.put(t2ip0, Errors.NONE);
+        client.prepareResponse(fullAcknowledgeResponse(errorsMap));
+
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        // Verifying that the acknowledgement commit callback is invoked for both the partitions.
+        assertEquals(2, completedAcknowledgements.size());
+        assertEquals(1, completedAcknowledgements.get(0).size());
+        assertEquals(1, completedAcknowledgements.get(1).size());
+    }
+
+    @Test
     public void testMultipleTopicsFetch() {
         buildRequestManager();
         Set<TopicPartition> partitions = new HashSet<>();
@@ -1431,6 +1484,12 @@ public class ShareConsumeRequestManagerTest {
     private ShareAcknowledgeResponse fullAcknowledgeResponse(TopicIdPartition tp, Errors error) {
         Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> partitions = Collections.singletonMap(tp,
                 partitionDataForAcknowledge(tp, error));
+        return ShareAcknowledgeResponse.of(Errors.NONE, 0, new LinkedHashMap<>(partitions), Collections.emptyList());
+    }
+
+    private ShareAcknowledgeResponse fullAcknowledgeResponse(Map<TopicIdPartition, Errors> partitionErrorsMap) {
+        Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> partitions = new HashMap<>();
+        partitionErrorsMap.forEach((tip, error) -> partitions.put(tip, partitionDataForAcknowledge(tip, error)));
         return ShareAcknowledgeResponse.of(Errors.NONE, 0, new LinkedHashMap<>(partitions), Collections.emptyList());
     }
 
