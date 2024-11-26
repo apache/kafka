@@ -756,6 +756,7 @@ class TransactionsTest extends IntegrationTestHarness {
     }
   }
 
+  @Flaky("KAFKA-18092")
   @ParameterizedTest
   @CsvSource(Array(
     "kraft, classic, true",
