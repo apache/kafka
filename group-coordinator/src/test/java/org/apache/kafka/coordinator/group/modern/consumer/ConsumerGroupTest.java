@@ -1615,26 +1615,39 @@ public class ConsumerGroupTest {
         ConsumerGroupMember member3 = new ConsumerGroupMember.Builder("member3")
             .setSubscribedTopicRegex("regex1")
             .build();
+        ConsumerGroupMember member4 = new ConsumerGroupMember.Builder("member4")
+            .build();
 
         // Assert the initial state.
+        assertEquals(0, consumerGroup.numSubscribedMembers(""));
         assertEquals(0, consumerGroup.numSubscribedMembers("regex1"));
         assertEquals(0, consumerGroup.numSubscribedMembers("regex2"));
         assertEquals(0, consumerGroup.numSubscribedMembers("regex3"));
 
         // Add member 1.
         consumerGroup.updateMember(member1);
+        assertEquals(0, consumerGroup.numSubscribedMembers(""));
         assertEquals(1, consumerGroup.numSubscribedMembers("regex1"));
         assertEquals(0, consumerGroup.numSubscribedMembers("regex2"));
         assertEquals(0, consumerGroup.numSubscribedMembers("regex3"));
 
         // Add member 2.
         consumerGroup.updateMember(member2);
+        assertEquals(0, consumerGroup.numSubscribedMembers(""));
         assertEquals(1, consumerGroup.numSubscribedMembers("regex1"));
         assertEquals(1, consumerGroup.numSubscribedMembers("regex2"));
         assertEquals(0, consumerGroup.numSubscribedMembers("regex3"));
 
         // Add member 3.
         consumerGroup.updateMember(member3);
+        assertEquals(0, consumerGroup.numSubscribedMembers(""));
+        assertEquals(2, consumerGroup.numSubscribedMembers("regex1"));
+        assertEquals(1, consumerGroup.numSubscribedMembers("regex2"));
+        assertEquals(0, consumerGroup.numSubscribedMembers("regex3"));
+
+        // Add member 4.
+        consumerGroup.updateMember(member4);
+        assertEquals(0, consumerGroup.numSubscribedMembers(""));
         assertEquals(2, consumerGroup.numSubscribedMembers("regex1"));
         assertEquals(1, consumerGroup.numSubscribedMembers("regex2"));
         assertEquals(0, consumerGroup.numSubscribedMembers("regex3"));
@@ -1644,24 +1657,28 @@ public class ConsumerGroupTest {
             .setSubscribedTopicRegex("regex2")
             .build();
         consumerGroup.updateMember(member3);
+        assertEquals(0, consumerGroup.numSubscribedMembers(""));
         assertEquals(1, consumerGroup.numSubscribedMembers("regex1"));
         assertEquals(2, consumerGroup.numSubscribedMembers("regex2"));
         assertEquals(0, consumerGroup.numSubscribedMembers("regex3"));
 
         // Remove member 1.
         consumerGroup.removeMember(member1.memberId());
+        assertEquals(0, consumerGroup.numSubscribedMembers(""));
         assertEquals(0, consumerGroup.numSubscribedMembers("regex1"));
         assertEquals(2, consumerGroup.numSubscribedMembers("regex2"));
         assertEquals(0, consumerGroup.numSubscribedMembers("regex3"));
 
         // Remove member 2.
         consumerGroup.removeMember(member2.memberId());
+        assertEquals(0, consumerGroup.numSubscribedMembers(""));
         assertEquals(0, consumerGroup.numSubscribedMembers("regex1"));
         assertEquals(1, consumerGroup.numSubscribedMembers("regex2"));
         assertEquals(0, consumerGroup.numSubscribedMembers("regex3"));
 
         // Remove member 3.
         consumerGroup.removeMember(member3.memberId());
+        assertEquals(0, consumerGroup.numSubscribedMembers(""));
         assertEquals(0, consumerGroup.numSubscribedMembers("regex1"));
         assertEquals(0, consumerGroup.numSubscribedMembers("regex2"));
         assertEquals(0, consumerGroup.numSubscribedMembers("regex3"));
