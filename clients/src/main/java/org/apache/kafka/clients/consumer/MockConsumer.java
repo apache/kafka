@@ -161,13 +161,23 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener callback) {
-        throw new UnsupportedOperationException("Subscribe to RE2/J regular expression not supported in MockConsumer yet");
+    public void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener listener) {
+        if (listener == null)
+            throw new IllegalArgumentException("RebalanceListener cannot be null");
+        subscribe(pattern, Optional.of(listener));
     }
 
     @Override
     public void subscribe(SubscriptionPattern pattern) {
-        throw new UnsupportedOperationException("Subscribe to RE2/J regular expression not supported in MockConsumer yet");
+        subscribe(pattern, Optional.empty());
+    }
+
+    private void subscribe(SubscriptionPattern pattern, Optional<ConsumerRebalanceListener> listener) {
+        if (pattern == null || pattern.toString().isEmpty())
+            throw new IllegalArgumentException("Topic pattern cannot be " + (pattern == null ? "null" : "empty"));
+        ensureNotClosed();
+        committed.clear();
+        this.subscriptions.subscribe(pattern, listener);
     }
 
     @Override

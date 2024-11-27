@@ -1864,6 +1864,9 @@ public class AsyncKafkaConsumerTest {
         assertEquals("Topic pattern to subscribe to cannot be empty", t.getMessage());
 
         assertDoesNotThrow(() -> consumer.subscribe(new SubscriptionPattern("t*")));
+
+        assertThrows(IllegalArgumentException.class, () -> consumer.subscribe(new SubscriptionPattern("t*"), null));
+        assertDoesNotThrow(() -> consumer.subscribe(new SubscriptionPattern("t*"), mock(ConsumerRebalanceListener.class)));
     }
 
     @Test

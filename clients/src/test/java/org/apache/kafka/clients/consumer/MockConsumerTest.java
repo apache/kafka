@@ -35,6 +35,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MockConsumerTest {
@@ -162,6 +163,21 @@ public class MockConsumerTest {
         assertTrue(assigned.contains(topicPartitionList.get(1)));
         assertEquals(1, revoked.size());
         assertTrue(revoked.contains(topicPartitionList.get(0)));
+    }
+    
+    @Test
+    public void testRe2JPatternSubscription() {
+        assertThrows(IllegalArgumentException.class, () -> consumer.subscribe((SubscriptionPattern) null));
+        assertThrows(IllegalArgumentException.class, () -> consumer.subscribe(new SubscriptionPattern("")));
+
+        SubscriptionPattern pattern = new SubscriptionPattern("t.*");
+        assertThrows(IllegalArgumentException.class, () -> consumer.subscribe(pattern, null));
+
+        consumer.subscribe(pattern);
+        assertTrue(consumer.subscription().isEmpty());
+        // Check that the subscription to pattern was successfully applied in the mock consumer (using a different
+        // subscription type should fail)
+        assertThrows(IllegalStateException.class, () -> consumer.subscribe(List.of("topic1")));
     }
 
 }
