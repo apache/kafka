@@ -445,35 +445,6 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
-  def testUpdateInvalidRemoteStorageConfigUnderZK(quorum: String): Unit = {
-    val admin = createAdminClient()
-    val errorMsg = "It is invalid to set `remote.log.delete.on.disable` or `remote.log.copy.disable` under Zookeeper's mode."
-    val topicConfig = new Properties
-    topicConfig.setProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
-    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
-      topicConfig = topicConfig)
-
-    val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
-    configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
-      util.Arrays.asList(
-        new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, "true"),
-          AlterConfigOp.OpType.SET),
-      ))
-    assertThrowsException(classOf[InvalidConfigurationException],
-      () => admin.incrementalAlterConfigs(configs).all().get(), errorMsg)
-
-    configs.clear()
-    configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
-      util.Arrays.asList(
-        new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, "true"),
-          AlterConfigOp.OpType.SET),
-      ))
-    assertThrowsException(classOf[InvalidConfigurationException],
-      () => admin.incrementalAlterConfigs(configs).all().get(), errorMsg)
-  }
-
-  @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
   def testTopicDeletion(quorum: String): Unit = {
     MyRemoteStorageManager.deleteSegmentEventCounter.set(0)
@@ -501,7 +472,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, brokerCount,
       topicConfig = topicConfig)
 
-    val tsDisabledProps = TestUtils.createBrokerConfigs(1, zkConnectOrNull).head
+    val tsDisabledProps = TestUtils.createBrokerConfigs(1, null).head
     instanceConfigs = List(KafkaConfig.fromProps(tsDisabledProps))
 
     recreateBrokers(startup = true)
@@ -519,7 +490,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, brokerCount,
       topicConfig = topicConfig)
 
-    val tsDisabledProps = TestUtils.createBrokerConfigs(1, zkConnectOrNull).head
+    val tsDisabledProps = TestUtils.createBrokerConfigs(1, null).head
     instanceConfigs = List(KafkaConfig.fromProps(tsDisabledProps))
 
     recreateBrokers(startup = true)
