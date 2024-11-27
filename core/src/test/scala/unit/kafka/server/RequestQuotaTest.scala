@@ -683,10 +683,10 @@ class RequestQuotaTest extends BaseRequestTest {
           new AllocateProducerIdsRequest.Builder(new AllocateProducerIdsRequestData())
 
         case ApiKeys.CONSUMER_GROUP_HEARTBEAT =>
-          new ConsumerGroupHeartbeatRequest.Builder(new ConsumerGroupHeartbeatRequestData(), true)
+          new ConsumerGroupHeartbeatRequest.Builder(new ConsumerGroupHeartbeatRequestData())
 
         case ApiKeys.CONSUMER_GROUP_DESCRIBE =>
-          new ConsumerGroupDescribeRequest.Builder(new ConsumerGroupDescribeRequestData(), true)
+          new ConsumerGroupDescribeRequest.Builder(new ConsumerGroupDescribeRequestData())
 
         case ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS =>
           new GetTelemetrySubscriptionsRequest.Builder(new GetTelemetrySubscriptionsRequestData())

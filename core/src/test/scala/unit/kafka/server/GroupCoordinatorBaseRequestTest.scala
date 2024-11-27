@@ -606,8 +606,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
         .setRebalanceTimeoutMs(rebalanceTimeoutMs)
         .setSubscribedTopicNames(subscribedTopicNames.asJava)
         .setServerAssignor(serverAssignor)
-        .setTopicPartitions(topicPartitions.asJava),
-      true
+        .setTopicPartitions(topicPartitions.asJava)
     ).build(version)
 
     // Send the request until receiving a successful response. There is a delay
