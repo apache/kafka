@@ -248,7 +248,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   @ValueSource(strings = Array("kraft"))
   def testSessionExpireListenerMetrics(quorum: String): Unit = {
     val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
-    val expectedNumMetrics = if (isKRaftTest()) 0 else 1
+    val expectedNumMetrics = 0
     assertEquals(expectedNumMetrics, metrics.keySet.asScala.
       count(_.getMBeanName == "kafka.server:type=SessionExpireListener,name=SessionState"))
     assertEquals(expectedNumMetrics, metrics.keySet.asScala.

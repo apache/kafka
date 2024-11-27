@@ -151,11 +151,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
   def shouldIncreaseLeaderEpochBetweenLeaderRestarts(quorum: String): Unit = {
     //Setup: we are only interested in the single partition on broker 101
     brokers += createBroker(fromProps(createBrokerConfig(100, zkConnectOrNull)))
-    if (isKRaftTest()) {
-      assertEquals(controllerServer.config.nodeId, waitUntilQuorumLeaderElected(controllerServer))
-    } else {
-      assertEquals(100, TestUtils.waitUntilControllerElected(zkClient))
-    }
+    assertEquals(controllerServer.config.nodeId, waitUntilQuorumLeaderElected(controllerServer))
 
     brokers += createBroker(fromProps(createBrokerConfig(101, zkConnectOrNull)))
 

@@ -34,7 +34,7 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group.GroupConfig
-import org.apache.kafka.server.config.{ConfigType, QuotaConfig, ServerLogConfigs}
+import org.apache.kafka.server.config.{QuotaConfig, ServerLogConfigs}
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Test, Timeout}
@@ -63,10 +63,6 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
   def testConfigChange(quorum: String): Unit = {
-    if (!isKRaftTest()) {
-      assertTrue(this.servers.head.dynamicConfigHandlers.contains(ConfigType.TOPIC),
-        "Should contain a ConfigHandler for topics")
-    }
     val oldVal: java.lang.Long = 100000L
     val newVal: java.lang.Long = 200000L
     val tp = new TopicPartition("test", 0)
@@ -78,22 +74,20 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       assertTrue(logOpt.isDefined)
       assertEquals(oldVal, logOpt.get.config.flushInterval)
     }
-    if (isKRaftTest()) {
-      val admin = createAdminClient()
-      try {
-        val resource = new ConfigResource(ConfigResource.Type.TOPIC, tp.topic())
-        val op = new AlterConfigOp(new ConfigEntry(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, newVal.toString),
-          OpType.SET)
-        val resource2 = new ConfigResource(ConfigResource.Type.BROKER, "")
-        val op2 = new AlterConfigOp(new ConfigEntry(ServerLogConfigs.LOG_FLUSH_INTERVAL_MS_CONFIG, newVal.toString),
-          OpType.SET)
-        admin.incrementalAlterConfigs(Map(
-          resource -> List(op).asJavaCollection,
-          resource2 -> List(op2).asJavaCollection,
-        ).asJava).all.get
-      } finally {
-        admin.close()
-      }
+    val admin = createAdminClient()
+    try {
+      val resource = new ConfigResource(ConfigResource.Type.TOPIC, tp.topic())
+      val op = new AlterConfigOp(new ConfigEntry(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, newVal.toString),
+        OpType.SET)
+      val resource2 = new ConfigResource(ConfigResource.Type.BROKER, "")
+      val op2 = new AlterConfigOp(new ConfigEntry(ServerLogConfigs.LOG_FLUSH_INTERVAL_MS_CONFIG, newVal.toString),
+        OpType.SET)
+      admin.incrementalAlterConfigs(Map(
+        resource -> List(op).asJavaCollection,
+        resource2 -> List(op2).asJavaCollection,
+      ).asJava).all.get
+    } finally {
+      admin.close()
     }
     TestUtils.retry(10000) {
       assertEquals(newVal, this.brokers.head.logManager.getLog(tp).get.config.flushInterval)
@@ -115,16 +109,14 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
 
     val newSegmentSize = 2000
-    if (isKRaftTest()) {
-      val admin = createAdminClient()
-      try {
-        val resource = new ConfigResource(ConfigResource.Type.TOPIC, tp.topic())
-        val op = new AlterConfigOp(new ConfigEntry(TopicConfig.SEGMENT_BYTES_CONFIG, newSegmentSize.toString),
-          OpType.SET)
-        admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all.get
-      } finally {
-        admin.close()
-      }
+    val admin = createAdminClient()
+    try {
+      val resource = new ConfigResource(ConfigResource.Type.TOPIC, tp.topic())
+      val op = new AlterConfigOp(new ConfigEntry(TopicConfig.SEGMENT_BYTES_CONFIG, newSegmentSize.toString),
+        OpType.SET)
+      admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all.get
+    } finally {
+      admin.close()
     }
     val log = brokers.head.logManager.getLog(tp).get
     TestUtils.retry(10000) {
@@ -241,18 +233,16 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   @ValueSource(strings = Array("kraft"))
   def testIpQuotaInitialization(quorum: String): Unit = {
     val broker = brokers.head
-    if (isKRaftTest()) {
-      val admin = createAdminClient()
-      try {
-        val alterations = util.Arrays.asList(
-          new ClientQuotaAlteration(new ClientQuotaEntity(singletonMap(IP, null)),
-            singletonList(new Op(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG, 20))),
-          new ClientQuotaAlteration(new ClientQuotaEntity(singletonMap(IP, "1.2.3.4")),
-            singletonList(new Op(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG, 10))))
-        admin.alterClientQuotas(alterations).all().get()
-      } finally {
-        admin.close()
-      }
+    val admin = createAdminClient()
+    try {
+      val alterations = util.Arrays.asList(
+        new ClientQuotaAlteration(new ClientQuotaEntity(singletonMap(IP, null)),
+          singletonList(new Op(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG, 20))),
+        new ClientQuotaAlteration(new ClientQuotaEntity(singletonMap(IP, "1.2.3.4")),
+          singletonList(new Op(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG, 10))))
+      admin.alterClientQuotas(alterations).all().get()
+    } finally {
+      admin.close()
     }
     TestUtils.retry(10000) {
       val connectionQuotas = broker.socketServer.connectionQuotas
@@ -355,20 +345,18 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   private def setBrokerConfigs(brokerId: String, newValue: Long): Unit = alterBrokerConfigs(brokerId, newValue, OpType.SET)
   private def deleteBrokerConfigs(brokerId: String): Unit = alterBrokerConfigs(brokerId, 0, OpType.DELETE)
   private def alterBrokerConfigs(brokerId: String, newValue: Long, op: OpType): Unit = {
-    if (isKRaftTest()) {
-      val admin = createAdminClient()
-      try {
-        val resource = new ConfigResource(ConfigResource.Type.BROKER, brokerId)
-        val configOp = new AlterConfigOp(new ConfigEntry(QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, newValue.toString), op)
-        val configOp2 = new AlterConfigOp(new ConfigEntry(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, newValue.toString), op)
-        val configOp3 = new AlterConfigOp(new ConfigEntry(QuotaConfig.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, newValue.toString), op)
-        val configOps = List(configOp, configOp2, configOp3).asJavaCollection
-        admin.incrementalAlterConfigs(Map(
-          resource -> configOps,
-        ).asJava).all.get
-      } finally {
-        admin.close()
-      }
+    val admin = createAdminClient()
+    try {
+      val resource = new ConfigResource(ConfigResource.Type.BROKER, brokerId)
+      val configOp = new AlterConfigOp(new ConfigEntry(QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, newValue.toString), op)
+      val configOp2 = new AlterConfigOp(new ConfigEntry(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, newValue.toString), op)
+      val configOp3 = new AlterConfigOp(new ConfigEntry(QuotaConfig.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, newValue.toString), op)
+      val configOps = List(configOp, configOp2, configOp3).asJavaCollection
+      admin.incrementalAlterConfigs(Map(
+        resource -> configOps,
+      ).asJava).all.get
+    } finally {
+      admin.close()
     }
   }
 

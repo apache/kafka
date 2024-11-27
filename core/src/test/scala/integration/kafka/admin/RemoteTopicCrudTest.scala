@@ -504,14 +504,10 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     val tsDisabledProps = TestUtils.createBrokerConfigs(1, zkConnectOrNull).head
     instanceConfigs = List(KafkaConfig.fromProps(tsDisabledProps))
 
-    if (isKRaftTest()) {
-      recreateBrokers(startup = true)
-      assertTrue(faultHandler.firstException().getCause.isInstanceOf[ConfigException])
-      // Normally the exception is thrown as part of the TearDown method of the parent class(es). We would like to not do this.
-      faultHandler.setIgnore(true)
-    } else {
-      assertThrows(classOf[ConfigException], () => recreateBrokers(startup = true))
-    }
+    recreateBrokers(startup = true)
+    assertTrue(faultHandler.firstException().getCause.isInstanceOf[ConfigException])
+    // Normally the exception is thrown as part of the TearDown method of the parent class(es). We would like to not do this.
+    faultHandler.setIgnore(true)
   }
 
   @ParameterizedTest

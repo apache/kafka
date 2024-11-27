@@ -71,7 +71,7 @@ class DeleteTopicsRequestWithDeletionDisabledTest extends BaseRequestTest {
     connectAndReceive[DeleteTopicsResponse](
       request,
       controllerSocketServer,
-      if (isKRaftTest()) ListenerName.normalised("CONTROLLER") else listenerName
+      ListenerName.normalised("CONTROLLER")
     )
   }
 

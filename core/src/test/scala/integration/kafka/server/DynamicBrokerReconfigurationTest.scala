@@ -30,13 +30,11 @@ import javax.management.ObjectName
 import com.yammer.metrics.core.MetricName
 import kafka.admin.ConfigCommand
 import kafka.api.{KafkaSasl, SaslSetup}
-import kafka.controller.{ControllerBrokerStateInfo, ControllerChannelManager}
 import kafka.log.UnifiedLog
 import kafka.network.{DataPlaneAcceptor, Processor, RequestChannel}
 import kafka.security.JaasTestUtils
 import kafka.utils._
 import kafka.utils.Implicits._
-import kafka.utils.TestUtils.TestControllerRequestCompletionHandler
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -52,12 +50,10 @@ import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.provider.FileConfigProvider
 import org.apache.kafka.common.errors.{AuthenticationException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.message.MetadataRequestData
 import org.apache.kafka.common.metrics.{JmxReporter, KafkaMetric, MetricsContext, MetricsReporter, Quota}
 import org.apache.kafka.common.network.{ConnectionMode, ListenerName}
 import org.apache.kafka.common.network.CertStores.{KEYSTORE_PROPS, TRUSTSTORE_PROPS}
 import org.apache.kafka.common.record.TimestampType
-import org.apache.kafka.common.requests.MetadataRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
@@ -69,7 +65,7 @@ import org.apache.kafka.server.metrics.{KafkaYammerMetrics, MetricConfigs}
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.ShutdownableThread
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
-import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
+import org.apache.kafka.test.TestSslUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -333,14 +329,6 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       assertFalse(reporter.kafkaMetrics.isEmpty, "No metrics found")
     }
 
-    if (!isKRaftTest()) {
-      // fetch from ZK, values should be unresolved
-      val props = fetchBrokerConfigsFromZooKeeper(servers.head)
-      assertTrue(props.getProperty(TestMetricsReporter.PollingIntervalProp) == PollingIntervalVal, "polling interval is not updated in ZK")
-      assertTrue(props.getProperty(configPrefix + SSL_TRUSTSTORE_TYPE_CONFIG) == SslTruststoreTypeVal, "store type is not updated in ZK")
-      assertTrue(props.getProperty(configPrefix + SSL_KEYSTORE_PASSWORD_CONFIG) == SslKeystorePasswordVal, "keystore password is not updated in ZK")
-    }
-
     // verify the update
     // 1. verify update not occurring if the value of property is same.
     alterConfigsUsingConfigCommand(updatedProps)
@@ -459,23 +447,6 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       verifyProduceConsume(producer, consumer, 10, topic)
     }
 
-    def verifyBrokerToControllerCall(controller: KafkaServer): Unit = {
-      val nonControllerBroker = servers.find(_.config.brokerId != controller.config.brokerId).get
-      val brokerToControllerManager = nonControllerBroker.clientToControllerChannelManager
-      val completionHandler = new TestControllerRequestCompletionHandler()
-      brokerToControllerManager.sendRequest(new MetadataRequest.Builder(new MetadataRequestData()), completionHandler)
-      TestUtils.waitUntilTrue(() => {
-        completionHandler.completed.get() || completionHandler.timedOut.get()
-      }, "Timed out while waiting for broker to controller API call")
-      // we do not expect a timeout from broker to controller request
-      assertFalse(completionHandler.timedOut.get(), "broker to controller request is timeout")
-      assertTrue(completionHandler.actualResponse.isDefined, "No response recorded even though request is completed")
-      val response = completionHandler.actualResponse.get
-      assertNull(response.authenticationException(), s"Request failed due to authentication error ${response.authenticationException}")
-      assertNull(response.versionMismatch(), s"Request failed due to unsupported version error ${response.versionMismatch}")
-      assertFalse(response.wasDisconnected(), "Request failed because broker is not available")
-    }
-
     val group_id = new AtomicInteger(1)
     def next_group_name(): String = s"alter-truststore-${group_id.getAndIncrement()}"
 
@@ -518,18 +489,6 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     TestUtils.incrementalAlterConfigs(servers, adminClients.head, props2, perBrokerConfig = true).all.get(15, TimeUnit.SECONDS)
     verifySslProduceConsume(sslProperties2, next_group_name())
     waitForAuthenticationFailure(producerBuilder.keyStoreProps(sslProperties1))
-
-    if (!isKRaftTest()) {
-      val controller = servers.find(_.config.brokerId == TestUtils.waitUntilControllerElected(zkClient)).get.asInstanceOf[KafkaServer]
-      val controllerChannelManager = controller.kafkaController.controllerChannelManager
-      val brokerStateInfo: mutable.HashMap[Int, ControllerBrokerStateInfo] =
-        JTestUtils.fieldValue(controllerChannelManager, classOf[ControllerChannelManager], "brokerStateInfo")
-      brokerStateInfo(0).networkClient.disconnect("0")
-      TestUtils.createTopic(zkClient, "testtopic2", numPartitions, replicationFactor = numServers, servers)
-
-      // validate that the brokerToController request works fine
-      verifyBrokerToControllerCall(controller)
-    }
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
