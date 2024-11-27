@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals.errors;
+package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Headers;
@@ -23,16 +23,12 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.CommonExceptionHandler;
-import org.apache.kafka.streams.errors.ErrorHandlerContext;
 import org.apache.kafka.streams.errors.internals.DefaultErrorHandlerContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
-import org.apache.kafka.test.StreamsTestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -47,7 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @ExtendWith(MockitoExtension.class)
-public class CommonExceptionHandlerTest {
+public class ExceptionHandlerUtilsTest {
     @Test
     public void checkDealLetterQueueRecords() {
         final StringSerializer stringSerializer = new StringSerializer();
@@ -67,10 +63,8 @@ public class CommonExceptionHandlerTest {
         ));
         final ErrorHandlerContext errorHandlerContext = getErrorHandlerContext(internalProcessorContext);
 
-        final CommonExceptionHandler commonExceptionHandler = new CommonExceptionHandler();
-        commonExceptionHandler.setDeadLetterQueueTopicName("dlq");
         final NullPointerException exception = new NullPointerException("Oopsie!");
-        final Iterable<ProducerRecord<byte[], byte[]>> dlqRecords = commonExceptionHandler.maybeBuildDeadLetterQueueRecords(null, null, errorHandlerContext, exception);
+        final Iterable<ProducerRecord<byte[], byte[]>> dlqRecords = ExceptionHandlerUtils.maybeBuildDeadLetterQueueRecords("dlq", null, null, errorHandlerContext, exception);
         final Iterator<ProducerRecord<byte[], byte[]>> iterator = dlqRecords.iterator();
 
         assertTrue(iterator.hasNext());
@@ -81,20 +75,17 @@ public class CommonExceptionHandlerTest {
         assertEquals("dlq", dlqRecord.topic());
         assertEquals(errorHandlerContext.timestamp(), dlqRecord.timestamp());
         assertEquals(1, dlqRecord.timestamp());
-        assertEquals(exception.toString(), stringDeserializer.deserialize(null, headers.lastHeader(CommonExceptionHandler.HEADER_ERRORS_EXCEPTION_NAME).value()));
-        assertEquals(exception.getMessage(), stringDeserializer.deserialize(null, headers.lastHeader(CommonExceptionHandler.HEADER_ERRORS_EXCEPTION_MESSAGE_NAME).value()));
-        assertEquals("source", stringDeserializer.deserialize(null, headers.lastHeader(CommonExceptionHandler.HEADER_ERRORS_TOPIC_NAME).value()));
-        assertEquals("3", stringDeserializer.deserialize(null, headers.lastHeader(CommonExceptionHandler.HEADER_ERRORS_PARTITION_NAME).value()));
-        assertEquals("2", stringDeserializer.deserialize(null, headers.lastHeader(CommonExceptionHandler.HEADER_ERRORS_OFFSET_NAME).value()));
+        assertEquals(exception.toString(), stringDeserializer.deserialize(null, headers.lastHeader(ExceptionHandlerUtils.HEADER_ERRORS_EXCEPTION_NAME).value()));
+        assertEquals(exception.getMessage(), stringDeserializer.deserialize(null, headers.lastHeader(ExceptionHandlerUtils.HEADER_ERRORS_EXCEPTION_MESSAGE_NAME).value()));
+        assertEquals("source", stringDeserializer.deserialize(null, headers.lastHeader(ExceptionHandlerUtils.HEADER_ERRORS_TOPIC_NAME).value()));
+        assertEquals("3", stringDeserializer.deserialize(null, headers.lastHeader(ExceptionHandlerUtils.HEADER_ERRORS_PARTITION_NAME).value()));
+        assertEquals("2", stringDeserializer.deserialize(null, headers.lastHeader(ExceptionHandlerUtils.HEADER_ERRORS_OFFSET_NAME).value()));
     }
 
     @Test
     public void doNotBuildDeadLetterQueueRecordsIfNotConfigured() {
-        final CommonExceptionHandler commonExceptionHandler = new CommonExceptionHandler();
-        final StreamsConfig streamsConfig = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
-        commonExceptionHandler.configure(streamsConfig.originals());
         final NullPointerException exception = new NullPointerException("Oopsie!");
-        final Iterable<ProducerRecord<byte[], byte[]>> dlqRecords = commonExceptionHandler.maybeBuildDeadLetterQueueRecords(null, null, null, exception);
+        final Iterable<ProducerRecord<byte[], byte[]>> dlqRecords = ExceptionHandlerUtils.maybeBuildDeadLetterQueueRecords(null, null, null, null, exception);
         final Iterator<ProducerRecord<byte[], byte[]>> iterator = dlqRecords.iterator();
 
         assertFalse(iterator.hasNext());

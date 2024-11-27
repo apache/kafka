@@ -243,7 +243,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
                 );
             }
 
-            final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords = response.drainDeadLetterQueueRecords();
+            final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords = response.deadLetterQueueRecords();
             if (!deadLetterQueueRecords.isEmpty()) {
                 final RecordCollector collector = ((RecordCollector.Supplier) internalProcessorContext).recordCollector();
                 for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : deadLetterQueueRecords) {

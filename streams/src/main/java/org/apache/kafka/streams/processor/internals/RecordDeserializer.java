@@ -120,7 +120,7 @@ public class RecordDeserializer {
             throw new StreamsException("Fatal user code error in deserialization error callback", fatalUserException);
         }
 
-        final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords = response.drainDeadLetterQueueRecords();
+        final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords = response.deadLetterQueueRecords();
         if (!deadLetterQueueRecords.isEmpty()) {
             final RecordCollector collector = ((RecordCollector.Supplier) processorContext).recordCollector();
             for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : deadLetterQueueRecords) {

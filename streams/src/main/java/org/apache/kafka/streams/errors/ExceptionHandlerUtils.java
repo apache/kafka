@@ -18,7 +18,6 @@
 package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.StreamsConfig;
@@ -26,23 +25,21 @@ import org.apache.kafka.streams.StreamsConfig;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.Collections;
-import java.util.Map;
 
 /**
  * {@code CommonExceptionHandler} Contains utilities method that could be used by all exception handlers
  */
-public class CommonExceptionHandler implements Configurable {
-    protected String deadLetterQueueTopicName = null;
-    public static final String HEADER_ERRORS_EXCEPTION_NAME = "__streams.errors.exception";
-    public static final String HEADER_ERRORS_STACKTRACE_NAME = "__streams.errors.stacktrace";
-    public static final String HEADER_ERRORS_EXCEPTION_MESSAGE_NAME = "__streams.errors.message";
-    public static final String HEADER_ERRORS_TOPIC_NAME = "__streams.errors.topic";
-    public static final String HEADER_ERRORS_PARTITION_NAME = "__streams.errors.partition";
-    public static final String HEADER_ERRORS_OFFSET_NAME = "__streams.errors.offset";
+class ExceptionHandlerUtils {
+    static final String HEADER_ERRORS_EXCEPTION_NAME = "__streams.errors.exception";
+    static final String HEADER_ERRORS_STACKTRACE_NAME = "__streams.errors.stacktrace";
+    static final String HEADER_ERRORS_EXCEPTION_MESSAGE_NAME = "__streams.errors.message";
+    static final String HEADER_ERRORS_TOPIC_NAME = "__streams.errors.topic";
+    static final String HEADER_ERRORS_PARTITION_NAME = "__streams.errors.partition";
+    static final String HEADER_ERRORS_OFFSET_NAME = "__streams.errors.offset";
 
 
-    public boolean shouldBuildDeadLetterQueueRecord() {
-        return this.deadLetterQueueTopicName != null;
+    static boolean shouldBuildDeadLetterQueueRecord(final String deadLetterQueueTopicName) {
+        return deadLetterQueueTopicName != null;
     }
 
     /**
@@ -53,15 +50,16 @@ public class CommonExceptionHandler implements Configurable {
      * @param exception Thrown exception
      * @return A list of Dead Letter Queue records to produce
      */
-    public Iterable<ProducerRecord<byte[], byte[]>> maybeBuildDeadLetterQueueRecords(final byte[] key,
+    static Iterable<ProducerRecord<byte[], byte[]>> maybeBuildDeadLetterQueueRecords(final String deadLetterQueueTopicName,
+                                                                                     final byte[] key,
                                                                                      final byte[] value,
                                                                                      final ErrorHandlerContext context,
                                                                                      final Exception exception) {
-        if (!shouldBuildDeadLetterQueueRecord()) {
+        if (!shouldBuildDeadLetterQueueRecord(deadLetterQueueTopicName)) {
             return Collections.emptyList();
         }
 
-        return Collections.singleton(buildDeadLetterQueueRecord(key, value, context, exception));
+        return Collections.singleton(buildDeadLetterQueueRecord(deadLetterQueueTopicName, key, value, context, exception));
     }
 
 
@@ -72,10 +70,11 @@ public class CommonExceptionHandler implements Configurable {
      * @param context ErrorHandlerContext of the exception
      * @return A list of Dead Letter Queue records to produce
      */
-    public ProducerRecord<byte[], byte[]> buildDeadLetterQueueRecord(final byte[] key,
-                                                                     final byte[] value,
-                                                                     final ErrorHandlerContext context,
-                                                                     final Exception e) {
+    static ProducerRecord<byte[], byte[]> buildDeadLetterQueueRecord(final String deadLetterQueueTopicName,
+                                                                            final byte[] key,
+                                                                            final byte[] value,
+                                                                            final ErrorHandlerContext context,
+                                                                            final Exception e) {
         if (deadLetterQueueTopicName == null) {
             throw new InvalidConfigurationException(String.format("%s can not be null while building DeadLetterQueue record", StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG));
         }
@@ -94,20 +93,5 @@ public class CommonExceptionHandler implements Configurable {
         }
 
         return producerRecord;
-    }
-
-    public String getDeadLetterQueueTopicName() {
-        return deadLetterQueueTopicName;
-    }
-
-    public void setDeadLetterQueueTopicName(final String deadLetterQueueTopicName) {
-        this.deadLetterQueueTopicName = deadLetterQueueTopicName;
-    }
-
-    @Override
-    public void configure(final Map<String, ?> configs) {
-        if (configs.containsKey(StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG)) {
-            setDeadLetterQueueTopicName(String.valueOf(configs.get(StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG)));
-        }
     }
 }

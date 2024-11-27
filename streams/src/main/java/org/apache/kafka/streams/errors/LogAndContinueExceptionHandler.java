@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
 import org.slf4j.Logger;
@@ -24,12 +25,15 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
+import static org.apache.kafka.streams.errors.ExceptionHandlerUtils.maybeBuildDeadLetterQueueRecords;
+
 /**
  * Deserialization handler that logs a deserialization exception and then
  * signals the processing pipeline to continue processing more records.
  */
-public class LogAndContinueExceptionHandler extends CommonExceptionHandler  implements DeserializationExceptionHandler {
+public class LogAndContinueExceptionHandler implements DeserializationExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(LogAndContinueExceptionHandler.class);
+    private String deadLetterQueueTopic;
 
     /**
      * @deprecated Since 3.9. Use {@link #handle(ErrorHandlerContext, ConsumerRecord, Exception)} instead.
@@ -67,11 +71,11 @@ public class LogAndContinueExceptionHandler extends CommonExceptionHandler  impl
             exception
         );
 
-        return DeserializationHandlerResponse.CONTINUE.andAddToDeadLetterQueue(maybeBuildDeadLetterQueueRecords(null, null, context, exception));
+        return DeserializationHandlerResponse.CONTINUE.andAddToDeadLetterQueue(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
     }
 
     @Override
     public void configure(final Map<String, ?> configs) {
-        super.configure(configs);
+        deadLetterQueueTopic = String.valueOf(configs.get(StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG));
     }
 }

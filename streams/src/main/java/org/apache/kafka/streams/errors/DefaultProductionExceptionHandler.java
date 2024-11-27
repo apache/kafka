@@ -18,14 +18,20 @@ package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.streams.StreamsConfig;
 
 import java.util.Map;
+
+import static org.apache.kafka.streams.errors.ExceptionHandlerUtils.maybeBuildDeadLetterQueueRecords;
 
 /**
  * {@code ProductionExceptionHandler} that always instructs streams to fail when an exception
  * happens while attempting to produce result records.
  */
 public class DefaultProductionExceptionHandler implements ProductionExceptionHandler {
+
+    private String deadLetterQueueTopic;
+
     /**
      * @deprecated Since 3.9. Use {@link #handle(ErrorHandlerContext, ProducerRecord, Exception)} instead.
      */
@@ -45,7 +51,7 @@ public class DefaultProductionExceptionHandler implements ProductionExceptionHan
                                                      final Exception exception) {
         return exception instanceof RetriableException ?
                 ProductionExceptionHandlerResponse.RETRY :
-                ProductionExceptionHandlerResponse.FAIL.andAddToDeadLetterQueue(maybeBuildDeadLetterQueueRecords(null, null, context, exception));
+                ProductionExceptionHandlerResponse.FAIL.andAddToDeadLetterQueue(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
     }
 
     @Override
@@ -53,11 +59,11 @@ public class DefaultProductionExceptionHandler implements ProductionExceptionHan
                                                                            final ProducerRecord record,
                                                                            final Exception exception,
                                                                            final SerializationExceptionOrigin origin) {
-        return ProductionExceptionHandlerResponse.FAIL.andAddToDeadLetterQueue(maybeBuildDeadLetterQueueRecords(null, null, context, exception));
+        return ProductionExceptionHandlerResponse.FAIL.andAddToDeadLetterQueue(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
     }
 
     @Override
     public void configure(final Map<String, ?> configs) {
-        super.configure(configs);
+        deadLetterQueueTopic = String.valueOf(configs.get(StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG));
     }
 }

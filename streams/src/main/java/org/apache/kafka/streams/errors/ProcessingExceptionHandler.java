@@ -81,7 +81,7 @@ public interface ProcessingExceptionHandler extends Configurable {
             return this;
         }
 
-        public List<ProducerRecord<byte[], byte[]>> drainDeadLetterQueueRecords() {
+        public List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords() {
             final LinkedList<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords = new LinkedList<>();
             while (true) {
                 final ProducerRecord<byte[], byte[]> record = this.deadLetterQueueRecordsQueue.poll();

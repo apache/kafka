@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.errors;
 
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.api.Record;
 
 import org.slf4j.Logger;
@@ -23,12 +24,15 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
+import static org.apache.kafka.streams.errors.ExceptionHandlerUtils.maybeBuildDeadLetterQueueRecords;
+
 /**
  * Processing exception handler that logs a processing exception and then
  * signals the processing pipeline to stop processing more records and fail.
  */
-public class LogAndFailProcessingExceptionHandler extends CommonExceptionHandler implements ProcessingExceptionHandler {
+public class LogAndFailProcessingExceptionHandler implements ProcessingExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(LogAndFailProcessingExceptionHandler.class);
+    private String deadLetterQueueTopic;
 
     @Override
     public ProcessingHandlerResponse handle(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
@@ -42,11 +46,11 @@ public class LogAndFailProcessingExceptionHandler extends CommonExceptionHandler
             exception
         );
 
-        return ProcessingHandlerResponse.FAIL.andAddToDeadLetterQueue(maybeBuildDeadLetterQueueRecords(null, null, context, exception));
+        return ProcessingHandlerResponse.FAIL.andAddToDeadLetterQueue(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
     }
 
     @Override
     public void configure(final Map<String, ?> configs) {
-        super.configure(configs);
+        deadLetterQueueTopic = String.valueOf(configs.get(StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG));
     }
 }
