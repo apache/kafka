@@ -95,7 +95,10 @@ public class RecordDeserializer {
             rawRecord.headers(),
             sourceNodeName,
             processorContext.taskId(),
-            rawRecord.timestamp());
+            rawRecord.timestamp(),
+            rawRecord.key(),
+            rawRecord.value()
+        );
 
         final DeserializationHandlerResponse response;
         try {

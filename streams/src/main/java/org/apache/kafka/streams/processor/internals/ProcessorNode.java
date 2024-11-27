@@ -215,7 +215,9 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
                 internalProcessorContext.recordContext().headers(),
                 internalProcessorContext.currentNode().name(),
                 internalProcessorContext.taskId(),
-                internalProcessorContext.recordContext().timestamp()
+                internalProcessorContext.recordContext().timestamp(),
+                internalProcessorContext.recordContext().sourceRawKey(),
+                internalProcessorContext.recordContext().sourceRawValue()
             );
 
             final ProcessingExceptionHandler.ProcessingHandlerResponse response;

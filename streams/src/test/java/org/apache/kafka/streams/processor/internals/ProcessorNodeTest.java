@@ -80,6 +80,8 @@ public class ProcessorNodeTest {
     private static final String NAME = "name";
     private static final String KEY = "key";
     private static final String VALUE = "value";
+    private static final byte[] RAW_KEY = KEY.getBytes();
+    private static final byte[] RAW_VALUE = VALUE.getBytes();
 
     @Test
     public void shouldThrowStreamsExceptionIfExceptionCaughtDuringInit() {
@@ -331,7 +333,9 @@ public class ProcessorNodeTest {
                 OFFSET,
                 PARTITION,
                 TOPIC,
-                new RecordHeaders()));
+                new RecordHeaders(),
+                RAW_KEY,
+                RAW_VALUE));
         when(internalProcessorContext.currentNode()).thenReturn(new ProcessorNode<>(NAME));
 
         return internalProcessorContext;
@@ -359,6 +363,9 @@ public class ProcessorNodeTest {
             assertEquals(internalProcessorContext.currentNode().name(), context.processorNodeId());
             assertEquals(internalProcessorContext.taskId(), context.taskId());
             assertEquals(internalProcessorContext.recordContext().timestamp(), context.timestamp());
+            assertEquals(internalProcessorContext.recordContext().sourceRawKey(), context.sourceRawKey());
+            assertEquals(internalProcessorContext.recordContext().sourceRawValue(), context.sourceRawValue());
+
             assertEquals(KEY, record.key());
             assertEquals(VALUE, record.value());
             assertInstanceOf(RuntimeException.class, exception);

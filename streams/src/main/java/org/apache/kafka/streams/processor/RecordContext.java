@@ -110,4 +110,31 @@ public interface RecordContext {
      */
     Headers headers();
 
+    /**
+     * Return the non-deserialized byte[] of the input message key if the context has been triggered by a message.
+     *
+     * <p> If this method is invoked within a {@link Punctuator#punctuate(long)
+     * punctuation callback}, or while processing a record that was forwarded by a punctuation
+     * callback, it will return {@code null}.
+     *
+     * <p> If this method is invoked in a sub-topology due to a repartition, the returned key would be one sent
+     * to the repartition topic.
+     *
+     * @return the raw byte of the key of the source message
+     */
+    byte[] sourceRawKey();
+
+    /**
+     * Return the non-deserialized byte[] of the input message value if the context has been triggered by a message.
+     *
+     * <p> If this method is invoked within a {@link Punctuator#punctuate(long)
+     * punctuation callback}, or while processing a record that was forwarded by a punctuation
+     * callback, it will return {@code null}.
+     *
+     * <p> If this method is invoked in a sub-topology due to a repartition, the returned key would be one sent
+     * to the repartition topic.
+     *
+     * @return the raw byte of the value of the source message
+     */
+    byte[] sourceRawValue();
 }

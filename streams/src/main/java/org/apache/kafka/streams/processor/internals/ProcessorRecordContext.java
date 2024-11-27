@@ -24,6 +24,7 @@ import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Objects;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -37,6 +38,8 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
     private final String topic;
     private final int partition;
     private final Headers headers;
+    private byte[] sourceRawKey;
+    private byte[] sourceRawValue;
 
     public ProcessorRecordContext(final long timestamp,
                                   final long offset,
@@ -48,6 +51,24 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
         this.topic = topic;
         this.partition = partition;
         this.headers = Objects.requireNonNull(headers);
+        this.sourceRawKey = null;
+        this.sourceRawValue = null;
+    }
+
+    public ProcessorRecordContext(final long timestamp,
+                                  final long offset,
+                                  final int partition,
+                                  final String topic,
+                                  final Headers headers,
+                                  final byte[] sourceRawKey,
+                                  final byte[] sourceRawValue) {
+        this.timestamp = timestamp;
+        this.offset = offset;
+        this.topic = topic;
+        this.partition = partition;
+        this.headers = Objects.requireNonNull(headers);
+        this.sourceRawKey = sourceRawKey;
+        this.sourceRawValue = sourceRawValue;
     }
 
     @Override
@@ -73,6 +94,16 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
     @Override
     public Headers headers() {
         return headers;
+    }
+
+    @Override
+    public byte[] sourceRawKey() {
+        return sourceRawKey;
+    }
+
+    @Override
+    public byte[] sourceRawValue() {
+        return sourceRawValue;
     }
 
     public long residentMemorySizeEstimate() {
@@ -176,6 +207,11 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
         return new ProcessorRecordContext(timestamp, offset, partition, topic, headers);
     }
 
+    public void freeRawRecord() {
+        this.sourceRawKey = null;
+        this.sourceRawValue = null;
+    }
+
     @Override
     public boolean equals(final Object o) {
         if (this == o) {
@@ -189,7 +225,9 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
             offset == that.offset &&
             partition == that.partition &&
             Objects.equals(topic, that.topic) &&
-            Objects.equals(headers, that.headers);
+            Objects.equals(headers, that.headers) &&
+            Arrays.equals(sourceRawKey, that.sourceRawKey) &&
+            Arrays.equals(sourceRawValue, that.sourceRawValue);
     }
 
     /**
