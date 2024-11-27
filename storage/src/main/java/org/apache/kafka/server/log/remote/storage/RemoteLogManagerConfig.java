@@ -54,8 +54,8 @@ public final class RemoteLogManagerConfig {
     public static final String DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX = "rlmm.config.";
 
     public static final String REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP = "remote.log.storage.system.enable";
-    public static final String REMOTE_LOG_STORAGE_SYSTEM_ENABLE_DOC = "Whether to enable tiered storage functionality in a broker or not. Valid values " +
-            "are `true` or `false` and the default value is false. When it is true broker starts all the services required for the tiered storage functionality.";
+    public static final String REMOTE_LOG_STORAGE_SYSTEM_ENABLE_DOC = "Whether to enable tiered storage functionality in a broker or not. " +
+            "When it is true broker starts all the services required for the tiered storage functionality.";
     public static final boolean DEFAULT_REMOTE_LOG_STORAGE_SYSTEM_ENABLE = false;
 
     public static final String REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP = "remote.log.storage.manager.class.name";

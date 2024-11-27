@@ -220,7 +220,7 @@ public class TopicConfig {
 
     public static final String MESSAGE_TIMESTAMP_TYPE_CONFIG = "message.timestamp.type";
     public static final String MESSAGE_TIMESTAMP_TYPE_DOC = "Define whether the timestamp in the message is " +
-        "message create time or log append time. The value should be either `CreateTime` or `LogAppendTime`";
+        "message create time or log append time.";
 
     /**
      * @deprecated since 3.6, removal planned in 4.0.
