@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.AbstractHeartbeatRequestManager.HeartbeatRequestState;
 import org.apache.kafka.clients.consumer.internals.AbstractMembershipManager.LocalAssignment;
 import org.apache.kafka.clients.consumer.internals.ConsumerHeartbeatRequestManager.HeartbeatState;
@@ -862,6 +863,61 @@ public class ConsumerHeartbeatRequestManagerTest {
         pollResult = heartbeatRequestManager.pollOnClose(time.milliseconds());
         assertTrue(pollResult.unsentRequests.isEmpty(),
             "No requests should be generated on close if the member is not leaving when closing the manager");
+    }
+
+    @Test
+    public void testRegexInHeartbeatLifecycle() {
+        heartbeatState = new HeartbeatState(subscriptions, membershipManager, DEFAULT_MAX_POLL_INTERVAL_MS);
+        createHeartbeatRequestStateWithZeroHeartbeatInterval();
+
+        // Initial heartbeat with regex
+        mockJoiningMemberData(null);
+        when(subscriptions.subscriptionPattern()).thenReturn(new SubscriptionPattern("t1.*"));
+        ConsumerGroupHeartbeatRequestData data = heartbeatState.buildRequestData();
+        assertEquals("t1.*", data.subscribedTopicRegex());
+
+        // Regex not included in HB if not updated
+        when(membershipManager.state()).thenReturn(MemberState.STABLE);
+        data = heartbeatState.buildRequestData();
+        assertNull(data.subscribedTopicRegex());
+
+        // Regex included in HB if updated
+        when(subscriptions.subscriptionPattern()).thenReturn(new SubscriptionPattern("t2.*"));
+        data = heartbeatState.buildRequestData();
+        assertEquals("t2.*", data.subscribedTopicRegex());
+
+        // Empty regex included in HB to remove pattern subscription
+        when(subscriptions.subscriptionPattern()).thenReturn(null);
+        data = heartbeatState.buildRequestData();
+        assertEquals("", data.subscribedTopicRegex());
+
+        // Regex not included in HB after pattern subscription removed
+        when(subscriptions.subscriptionPattern()).thenReturn(null);
+        data = heartbeatState.buildRequestData();
+        assertNull(data.subscribedTopicRegex());
+    }
+
+    @Test
+    public void testRegexInJoiningHeartbeat() {
+        heartbeatState = new HeartbeatState(subscriptions, membershipManager, DEFAULT_MAX_POLL_INTERVAL_MS);
+        createHeartbeatRequestStateWithZeroHeartbeatInterval();
+
+        // Initial heartbeat with regex
+        mockJoiningMemberData(null);
+        when(subscriptions.subscriptionPattern()).thenReturn(new SubscriptionPattern("t1.*"));
+        ConsumerGroupHeartbeatRequestData data = heartbeatState.buildRequestData();
+        assertEquals("t1.*", data.subscribedTopicRegex());
+
+        // Members unsubscribes from regex (empty regex included in HB)
+        when(subscriptions.subscriptionPattern()).thenReturn(null);
+        data = heartbeatState.buildRequestData();
+        assertEquals("", data.subscribedTopicRegex());
+
+        // Member rejoins (ie. fenced) should not include regex field in HB
+        when(membershipManager.state()).thenReturn(MemberState.JOINING);
+        when(subscriptions.subscriptionPattern()).thenReturn(null);
+        data = heartbeatState.buildRequestData();
+        assertNull(data.subscribedTopicRegex());
     }
 
     private void assertHeartbeat(ConsumerHeartbeatRequestManager hrm, int nextPollMs) {

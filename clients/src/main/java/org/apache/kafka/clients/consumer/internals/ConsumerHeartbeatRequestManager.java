@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
 import org.apache.kafka.common.Uuid;
@@ -32,6 +33,7 @@ import org.apache.kafka.common.utils.Timer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
@@ -231,6 +233,15 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
                 sentFields.subscribedTopicNames = subscribedTopicNames;
             }
 
+            // SubscribedTopicRegex - only sent if it has changed since the last heartbeat.
+            // Send empty string to indicate that a subscribed pattern needs to be removed.
+            SubscriptionPattern pattern = subscriptions.subscriptionPattern();
+            boolean patternUpdated = !Objects.equals(pattern, sentFields.pattern);
+            if ((sendAllFields && pattern != null) || patternUpdated) {
+                data.setSubscribedTopicRegex((pattern != null) ? pattern.pattern() : "");
+                sentFields.pattern = pattern;
+            }
+
             // ServerAssignor - sent when joining or if it has changed since the last heartbeat
             this.membershipManager.serverAssignor().ifPresent(serverAssignor -> {
                 if (sendAllFields || !serverAssignor.equals(sentFields.serverAssignor)) {
@@ -238,8 +249,6 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
                     sentFields.serverAssignor = serverAssignor;
                 }
             });
-
-            // ClientAssignors - not supported yet
 
             // TopicPartitions - sent when joining or with the first heartbeat after a new assignment from
             // the server was reconciled. This is ensured by resending the topic partitions whenever the
@@ -268,6 +277,7 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
         static class SentFields {
             private int rebalanceTimeoutMs = -1;
             private TreeSet<String> subscribedTopicNames = null;
+            private SubscriptionPattern pattern = null;
             private String serverAssignor = null;
             private AbstractMembershipManager.LocalAssignment localAssignment = null;
 
@@ -278,6 +288,7 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
                 rebalanceTimeoutMs = -1;
                 serverAssignor = null;
                 localAssignment = null;
+                pattern = null;
             }
         }
     }

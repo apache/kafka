@@ -361,6 +361,24 @@ public class SubscriptionState {
         return Collections.emptySet();
     }
 
+    /**
+     * @return The RE2J compatible pattern in use, provided via a call to
+     * {@link #subscribe(SubscriptionPattern, Optional)}.
+     * Null if there is no SubscriptionPattern in use.
+     */
+    public synchronized SubscriptionPattern subscriptionPattern() {
+        if (hasRe2JPatternSubscription())
+            return this.subscribedRe2JPattern;
+        return null;
+    }
+
+    /**
+     * @return True if subscribed using RE2J pattern. False otherwise.
+     */
+    public synchronized boolean hasRe2JPatternSubscription() {
+        return this.subscriptionType == SubscriptionType.AUTO_PATTERN_RE2J;
+    }
+
     public synchronized Set<TopicPartition> pausedPartitions() {
         return collectPartitions(TopicPartitionState::isPaused);
     }
@@ -469,7 +487,7 @@ public class SubscriptionState {
 
     public synchronized boolean hasAutoAssignedPartitions() {
         return this.subscriptionType == SubscriptionType.AUTO_TOPICS || this.subscriptionType == SubscriptionType.AUTO_PATTERN
-                || this.subscriptionType == SubscriptionType.AUTO_TOPICS_SHARE;
+                || this.subscriptionType == SubscriptionType.AUTO_TOPICS_SHARE || this.subscriptionType == SubscriptionType.AUTO_PATTERN_RE2J;
     }
 
     public synchronized void position(TopicPartition tp, FetchPosition position) {

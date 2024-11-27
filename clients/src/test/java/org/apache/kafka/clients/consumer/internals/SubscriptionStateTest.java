@@ -400,7 +400,7 @@ public class SubscriptionStateTest {
 
     @Test
     public void testSubscribeToRe2JPattern() {
-        String pattern = "t*";
+        String pattern = "t.*";
         state.subscribe(new SubscriptionPattern(pattern), Optional.of(rebalanceListener));
         assertTrue(state.toString().contains("type=AUTO_PATTERN_RE2J"));
         assertTrue(state.toString().contains("subscribedPattern=" + pattern));
@@ -409,13 +409,26 @@ public class SubscriptionStateTest {
     @Test
     public void testMixedPatternSubscriptionNotAllowed() {
         state.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener));
-        assertThrows(IllegalStateException.class, () -> state.subscribe(new SubscriptionPattern("t*"),
+        assertThrows(IllegalStateException.class, () -> state.subscribe(new SubscriptionPattern("t.*"),
             Optional.of(rebalanceListener)));
 
         state.unsubscribe();
 
-        state.subscribe(new SubscriptionPattern("t*"), Optional.of(rebalanceListener));
+        state.subscribe(new SubscriptionPattern("t.*"), Optional.of(rebalanceListener));
         assertThrows(IllegalStateException.class, () -> state.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener)));
+    }
+
+    @Test
+    public void testSubscriptionPattern() {
+        SubscriptionPattern pattern = new SubscriptionPattern("t.*");
+        state.subscribe(pattern, Optional.of(rebalanceListener));
+        assertTrue(state.hasRe2JPatternSubscription());
+        assertEquals(pattern, state.subscriptionPattern());
+        assertTrue(state.hasAutoAssignedPartitions());
+
+        state.unsubscribe();
+        assertFalse(state.hasRe2JPatternSubscription());
+        assertNull(state.subscriptionPattern());
     }
 
 
