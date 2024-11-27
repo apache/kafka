@@ -55,7 +55,7 @@ import org.apache.kafka.streams.state.internals.InMemoryWindowStore;
 import org.apache.kafka.streams.state.internals.RocksDBStore;
 import org.apache.kafka.streams.state.internals.RocksDBWindowStore;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
-import org.apache.kafka.streams.utils.TestUtils.CountingProcessorWrapper;
+import org.apache.kafka.streams.utils.TestUtils.RecordingProcessorWrapper;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockPredicate;
@@ -65,6 +65,7 @@ import org.apache.kafka.test.NoopValueTransformerWithKey;
 import org.apache.kafka.test.StreamsTestUtils;
 
 import org.hamcrest.CoreMatchers;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -75,12 +76,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
@@ -1417,10 +1418,10 @@ public class StreamsBuilderTest {
     @Test
     public void shouldWrapProcessorsForProcess() {
         final Map<Object, Object> props = dummyStreamsConfigMap();
-        props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, CountingProcessorWrapper.class);
+        props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, RecordingProcessorWrapper.class);
 
-        final AtomicInteger wrappedProcessorCount = new AtomicInteger();
-        props.put(PROCESSOR_WRAPPER_COUNTER_CONFIG, wrappedProcessorCount);
+        final Set<String> wrappedProcessors = Collections.synchronizedSet(new HashSet<>());
+        props.put(PROCESSOR_WRAPPER_COUNTER_CONFIG, wrappedProcessors);
 
         final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
 
@@ -1430,56 +1431,84 @@ public class StreamsBuilderTest {
         final Random random = new Random();
 
         builder.stream("input")
-            .process((ProcessorSupplier<Object, Object, Object, Object>) () -> record -> System.out.println("Processing: " + random.nextInt()))
-            .processValues(() -> record -> System.out.println("Processing: " + random.nextInt()))
+            .process((ProcessorSupplier<Object, Object, Object, Object>) () -> record -> System.out.println("Processing: " + random.nextInt()), Named.as("processor1"))
+            .processValues(() -> record -> System.out.println("Processing: " + random.nextInt()), Named.as("processor2"))
             .to("output");
 
         builder.build();
-        assertThat(wrappedProcessorCount.get(), CoreMatchers.is(2));
+        assertThat(wrappedProcessors.size(), CoreMatchers.is(2));
+        assertThat(wrappedProcessors, Matchers.containsInAnyOrder("processor1", "processor2"));
     }
 
     @Test
     public void shouldWrapProcessorsForAggregationOperators() {
         final Map<Object, Object> props = dummyStreamsConfigMap();
-        props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, CountingProcessorWrapper.class);
+        props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, RecordingProcessorWrapper.class);
 
-        final AtomicInteger wrappedProcessorCount = new AtomicInteger();
-        props.put(PROCESSOR_WRAPPER_COUNTER_CONFIG, wrappedProcessorCount);
+        final Set<String> wrappedProcessors = Collections.synchronizedSet(new HashSet<>());
+        props.put(PROCESSOR_WRAPPER_COUNTER_CONFIG, wrappedProcessors);
 
         final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
 
         builder.stream("input")
             .groupByKey()
-            .count() // wrapped 1
-            .toStream()// wrapped 2
+            .count(Named.as("count")) // wrapped 1
+            .toStream(Named.as("toStream"))// wrapped 2
             .to("output");
 
         builder.build();
-        assertThat(wrappedProcessorCount.get(), CoreMatchers.is(2));
+        assertThat(wrappedProcessors.size(), CoreMatchers.is(2));
+        assertThat(wrappedProcessors, Matchers.containsInAnyOrder("count", "toStream"));
     }
 
     @Test
     public void shouldWrapProcessorsForStatelessOperators() {
         final Map<Object, Object> props = dummyStreamsConfigMap();
-        props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, CountingProcessorWrapper.class);
+        props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, RecordingProcessorWrapper.class);
 
-        final AtomicInteger wrappedProcessorCount = new AtomicInteger();
-        props.put(PROCESSOR_WRAPPER_COUNTER_CONFIG, wrappedProcessorCount);
+        final Set<String> wrappedProcessors = Collections.synchronizedSet(new HashSet<>());
+        props.put(PROCESSOR_WRAPPER_COUNTER_CONFIG, wrappedProcessors);
 
         final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
 
         builder.stream("input")
-            .filter((k, v) -> true) // wrapped 1
-            .map(KeyValue::new) // wrapped 2
-            .selectKey((k, v) -> k) // wrapped 3
-            .peek((k, v) -> { }) // wrapped 4
-            .flatMapValues(e -> new ArrayList<>()) // wrapped 5
-            .toTable() // wrapped 6
-            .toStream() // wrapped 7
+            .filter((k, v) -> true, Named.as("filter")) // wrapped 1
+            .map(KeyValue::new, Named.as("map")) // wrapped 2
+            .selectKey((k, v) -> k, Named.as("selectKey")) // wrapped 3
+            .peek((k, v) -> { }, Named.as("peek")) // wrapped 4
+            .flatMapValues(e -> new ArrayList<>(), Named.as("flatMap")) // wrapped 5
+            .toTable(Named.as("toTable")) // wrapped 6 (note named as toTable-repartition-filter)
+            .toStream(Named.as("toStream")) // wrapped 7
             .to("output");
 
         builder.build();
-        assertThat(wrappedProcessorCount.get(), CoreMatchers.is(7));
+        assertThat(wrappedProcessors.size(), CoreMatchers.is(7));
+        assertThat(wrappedProcessors, Matchers.containsInAnyOrder(
+                "filter", "map", "selectKey", "peek", "flatMap", "toTable-repartition-filter",
+                "toStream"
+        ));
+    }
+
+    @Test
+    public void shouldWrapProcessorsForTableSource() {
+        final Map<Object, Object> props = dummyStreamsConfigMap();
+        props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, RecordingProcessorWrapper.class);
+
+        final Set<String> wrappedProcessors = Collections.synchronizedSet(new HashSet<>());
+        props.put(PROCESSOR_WRAPPER_COUNTER_CONFIG, wrappedProcessors);
+
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
+
+        builder.table("input") // wrapped 1 (named KTABLE_SOURCE-0000000002)
+                .toStream(Named.as("toStream")) // wrapped 2
+                .to("output");
+
+        builder.build();
+        assertThat(wrappedProcessors.size(), CoreMatchers.is(2));
+        assertThat(wrappedProcessors, Matchers.containsInAnyOrder(
+                "KTABLE-SOURCE-0000000002",
+                "toStream"
+        ));
     }
 
     @Test

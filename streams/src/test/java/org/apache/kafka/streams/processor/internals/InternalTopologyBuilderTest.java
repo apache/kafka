@@ -95,7 +95,8 @@ public class InternalTopologyBuilderTest {
 
     private final Serde<String> stringSerde = Serdes.String();
     private final InternalTopologyBuilder builder = new InternalTopologyBuilder();
-    private final StoreFactory storeBuilder = new MockKeyValueStoreBuilder("testStore", false).asFactory();
+    private final StoreBuilder<?> storeBuilder = new MockKeyValueStoreBuilder("testStore", false);
+    private final StoreFactory storeFactory = new MockKeyValueStoreBuilder("testStore", false).asFactory();
 
     @Test
     public void shouldAddSourceWithOffsetReset() {
@@ -225,7 +226,6 @@ public class InternalTopologyBuilderTest {
         final IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
             () -> builder.addGlobalStore(
-                        new MockKeyValueStoreBuilder("global-store", false).asFactory().withLoggingDisabled(),
                         "globalSource",
                         null,
                         null,
@@ -331,18 +331,20 @@ public class InternalTopologyBuilderTest {
 
     @Test
     public void testPatternSourceTopicsWithGlobalTopics() {
+        final StoreBuilder<?> storeBuilder =
+                new MockKeyValueStoreBuilder("global-store", false)
+                        .withLoggingDisabled();
         builder.setApplicationId("X");
         builder.addSource(null, "source-1", null, null, null, Pattern.compile("topic-1"));
         builder.addSource(null, "source-2", null, null, null, Pattern.compile("topic-2"));
         builder.addGlobalStore(
-            new MockKeyValueStoreBuilder("global-store", false).asFactory().withLoggingDisabled(),
             "globalSource",
             null,
             null,
             null,
             "globalTopic",
             "global-processor",
-            new MockApiProcessorSupplier<>(),
+            new StoreDelegatingProcessorSupplier<>(new MockApiProcessorSupplier<>(), Set.of(storeBuilder)),
             false
         );
         builder.initializeSubscription();
@@ -356,18 +358,20 @@ public class InternalTopologyBuilderTest {
 
     @Test
     public void testNameSourceTopicsWithGlobalTopics() {
+        final StoreBuilder<?> storeBuilder =
+                new MockKeyValueStoreBuilder("global-store", false)
+                        .withLoggingDisabled();
         builder.setApplicationId("X");
         builder.addSource(null, "source-1", null, null, null, "topic-1");
         builder.addSource(null, "source-2", null, null, null, "topic-2");
         builder.addGlobalStore(
-            new MockKeyValueStoreBuilder("global-store", false).asFactory().withLoggingDisabled(),
             "globalSource",
             null,
             null,
             null,
             "globalTopic",
             "global-processor",
-            new MockApiProcessorSupplier<>(),
+            new StoreDelegatingProcessorSupplier<>(new MockApiProcessorSupplier<>(), Set.of(storeBuilder)),
             false
         );
         builder.initializeSubscription();
@@ -427,14 +431,14 @@ public class InternalTopologyBuilderTest {
 
     @Test
     public void testAddStateStoreWithNonExistingProcessor() {
-        assertThrows(TopologyException.class, () -> builder.addStateStore(storeBuilder, "no-such-processor"));
+        assertThrows(TopologyException.class, () -> builder.addStateStore(storeFactory, "no-such-processor"));
     }
 
     @Test
     public void testAddStateStoreWithSource() {
         builder.addSource(null, "source-1", null, null, null, "topic-1");
         try {
-            builder.addStateStore(storeBuilder, "source-1");
+            builder.addStateStore(storeFactory, "source-1");
             fail("Should throw TopologyException with store cannot be added to source");
         } catch (final TopologyException expected) { /* ok */ }
     }
@@ -444,7 +448,7 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source-1", null, null, null, "topic-1");
         builder.addSink("sink-1", "topic-1", null, null, null, "source-1");
         try {
-            builder.addStateStore(storeBuilder, "sink-1");
+            builder.addStateStore(storeFactory, "sink-1");
             fail("Should throw TopologyException with store cannot be added to sink");
         } catch (final TopologyException expected) { /* ok */ }
     }
@@ -454,7 +458,7 @@ public class InternalTopologyBuilderTest {
         final StoreBuilder<KeyValueStore<Object, Object>> otherBuilder =
             new MockKeyValueStoreBuilder("testStore", false);
 
-        builder.addStateStore(storeBuilder);
+        builder.addStateStore(storeFactory);
 
         final TopologyException exception = assertThrows(
             TopologyException.class,
@@ -469,24 +473,23 @@ public class InternalTopologyBuilderTest {
 
     @Test
     public void shouldNotAllowToAddStoresWithSameNameWhenFirstStoreIsGlobal() {
-        final StoreFactory globalBuilder =
-            new MockKeyValueStoreBuilder("testStore", false).asFactory().withLoggingDisabled();
+        final StoreBuilder<?> globalBuilder =
+            new MockKeyValueStoreBuilder("testStore", false).withLoggingDisabled();
 
         builder.addGlobalStore(
-            globalBuilder,
             "global-store",
             null,
             null,
             null,
             "global-topic",
             "global-processor",
-            new MockApiProcessorSupplier<>(),
+            new StoreDelegatingProcessorSupplier<>(new MockApiProcessorSupplier<>(), Set.of(globalBuilder)),
             false
         );
 
         final TopologyException exception = assertThrows(
             TopologyException.class,
-            () -> builder.addStateStore(storeBuilder)
+            () -> builder.addStateStore(storeFactory)
         );
 
         assertThat(
@@ -497,22 +500,21 @@ public class InternalTopologyBuilderTest {
 
     @Test
     public void shouldNotAllowToAddStoresWithSameNameWhenSecondStoreIsGlobal() {
-        final StoreFactory globalBuilder =
-            new MockKeyValueStoreBuilder("testStore", false).asFactory().withLoggingDisabled();
+        final StoreBuilder<?> globalBuilder =
+            new MockKeyValueStoreBuilder("testStore", false).withLoggingDisabled();
 
-        builder.addStateStore(storeBuilder);
+        builder.addStateStore(storeFactory);
 
         final TopologyException exception = assertThrows(
             TopologyException.class,
             () -> builder.addGlobalStore(
-                globalBuilder,
                 "global-store",
                 null,
                 null,
                 null,
                 "global-topic",
                 "global-processor",
-                new MockApiProcessorSupplier<>(),
+                new StoreDelegatingProcessorSupplier<>(new MockApiProcessorSupplier<>(), Set.of(globalBuilder)),
                 false
             )
         );
@@ -525,34 +527,32 @@ public class InternalTopologyBuilderTest {
 
     @Test
     public void shouldNotAllowToAddGlobalStoresWithSameName() {
-        final StoreFactory firstGlobalBuilder =
-            new MockKeyValueStoreBuilder("testStore", false).asFactory().withLoggingDisabled();
-        final StoreFactory secondGlobalBuilder =
-            new MockKeyValueStoreBuilder("testStore", false).asFactory().withLoggingDisabled();
+        final StoreBuilder<KeyValueStore<Object, Object>> firstGlobalBuilder =
+            new MockKeyValueStoreBuilder("testStore", false).withLoggingDisabled();
+        final StoreBuilder<KeyValueStore<Object, Object>> secondGlobalBuilder =
+            new MockKeyValueStoreBuilder("testStore", false).withLoggingDisabled();
 
         builder.addGlobalStore(
-            firstGlobalBuilder,
             "global-store",
             null,
             null,
             null,
             "global-topic",
             "global-processor",
-            new MockApiProcessorSupplier<>(),
+            new StoreDelegatingProcessorSupplier<>(new MockApiProcessorSupplier<>(), Set.of(firstGlobalBuilder)),
             false
         );
 
         final TopologyException exception = assertThrows(
             TopologyException.class,
             () -> builder.addGlobalStore(
-                secondGlobalBuilder,
                 "global-store-2",
                 null,
                 null,
                 null,
                 "global-topic",
                 "global-processor-2",
-                new MockApiProcessorSupplier<>(),
+                new StoreDelegatingProcessorSupplier<>(new MockApiProcessorSupplier<>(), Set.of(secondGlobalBuilder)),
                 false
             )
         );
@@ -565,35 +565,35 @@ public class InternalTopologyBuilderTest {
 
     @Test
     public void testAddStateStore() {
-        builder.addStateStore(storeBuilder);
+        builder.addStateStore(storeFactory);
         builder.setApplicationId("X");
         builder.addSource(null, "source-1", null, null, null, "topic-1");
         builder.addProcessor("processor-1", new MockApiProcessorSupplier<>(), "source-1");
 
         assertEquals(0, builder.buildTopology().stateStores().size());
 
-        builder.connectProcessorAndStateStores("processor-1", storeBuilder.name());
+        builder.connectProcessorAndStateStores("processor-1", storeFactory.name());
 
         final List<StateStore> suppliers = builder.buildTopology().stateStores();
         assertEquals(1, suppliers.size());
-        assertEquals(storeBuilder.name(), suppliers.get(0).name());
+        assertEquals(storeFactory.name(), suppliers.get(0).name());
     }
 
     @Test
     public void testStateStoreNamesForSubtopology() {
-        builder.addStateStore(storeBuilder);
+        builder.addStateStore(storeFactory);
         builder.setApplicationId("X");
 
         builder.addSource(null, "source-1", null, null, null, "topic-1");
         builder.addProcessor("processor-1", new MockApiProcessorSupplier<>(), "source-1");
-        builder.connectProcessorAndStateStores("processor-1", storeBuilder.name());
+        builder.connectProcessorAndStateStores("processor-1", storeFactory.name());
 
         builder.addSource(null, "source-2", null, null, null, "topic-2");
         builder.addProcessor("processor-2", new MockApiProcessorSupplier<>(), "source-2");
 
         builder.buildTopology();
         final Set<String> stateStoreNames = builder.stateStoreNamesForSubtopology(0);
-        assertThat(stateStoreNames, equalTo(Set.of(storeBuilder.name())));
+        assertThat(stateStoreNames, equalTo(Set.of(storeFactory.name())));
 
         final Set<String> emptyStoreNames = builder.stateStoreNamesForSubtopology(1);
         assertThat(emptyStoreNames, equalTo(Set.of()));
@@ -607,13 +607,13 @@ public class InternalTopologyBuilderTest {
         builder.setApplicationId("X");
         builder.addSource(null, "source-1", null, null, null, "topic-1");
 
-        builder.addStateStore(storeBuilder);
+        builder.addStateStore(storeFactory);
         builder.addProcessor("processor-1", new MockApiProcessorSupplier<>(), "source-1");
-        builder.connectProcessorAndStateStores("processor-1", storeBuilder.name());
+        builder.connectProcessorAndStateStores("processor-1", storeFactory.name());
 
-        builder.addStateStore(storeBuilder);
+        builder.addStateStore(storeFactory);
         builder.addProcessor("processor-2", new MockApiProcessorSupplier<>(), "source-1");
-        builder.connectProcessorAndStateStores("processor-2", storeBuilder.name());
+        builder.connectProcessorAndStateStores("processor-2", storeFactory.name());
 
         assertEquals(1, builder.buildTopology().stateStores().size());
     }
@@ -763,15 +763,16 @@ public class InternalTopologyBuilderTest {
         assertNotEquals(oldNodeGroups, newNodeGroups);
 
         oldNodeGroups = newNodeGroups;
+
+        final StoreBuilder<?> globalBuilder = new MockKeyValueStoreBuilder("global-store", false).withLoggingDisabled();
         builder.addGlobalStore(
-            new MockKeyValueStoreBuilder("global-store", false).asFactory().withLoggingDisabled(),
             "globalSource",
             null,
             null,
             null,
             "globalTopic",
             "global-processor",
-            new MockApiProcessorSupplier<>(),
+            new StoreDelegatingProcessorSupplier<>(new MockApiProcessorSupplier<>(), Set.of(globalBuilder)),
             false
         );
         newNodeGroups = builder.nodeGroups();
@@ -879,7 +880,7 @@ public class InternalTopologyBuilderTest {
     public void shouldAssociateStateStoreNameWhenStateStoreSupplierIsInternal() {
         builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
-        builder.addStateStore(storeBuilder, "processor");
+        builder.addStateStore(storeFactory, "processor");
         final Map<String, List<String>> stateStoreNameToSourceTopic = builder.stateStoreNameToFullSourceTopicNames();
         assertEquals(1, stateStoreNameToSourceTopic.size());
         assertEquals(Collections.singletonList("topic"), stateStoreNameToSourceTopic.get("testStore"));
@@ -889,7 +890,7 @@ public class InternalTopologyBuilderTest {
     public void shouldAssociateStateStoreNameWhenStateStoreSupplierIsExternal() {
         builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
-        builder.addStateStore(storeBuilder, "processor");
+        builder.addStateStore(storeFactory, "processor");
         final Map<String, List<String>> stateStoreNameToSourceTopic = builder.stateStoreNameToFullSourceTopicNames();
         assertEquals(1, stateStoreNameToSourceTopic.size());
         assertEquals(Collections.singletonList("topic"), stateStoreNameToSourceTopic.get("testStore"));
@@ -901,7 +902,7 @@ public class InternalTopologyBuilderTest {
         builder.addInternalTopic("internal-topic", InternalTopicProperties.empty());
         builder.addSource(null, "source", null, null, null, "internal-topic");
         builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
-        builder.addStateStore(storeBuilder, "processor");
+        builder.addStateStore(storeFactory, "processor");
         final Map<String, List<String>> stateStoreNameToSourceTopic = builder.stateStoreNameToFullSourceTopicNames();
         assertEquals(1, stateStoreNameToSourceTopic.size());
         assertEquals(Collections.singletonList("appId-internal-topic"), stateStoreNameToSourceTopic.get("testStore"));
@@ -975,7 +976,7 @@ public class InternalTopologyBuilderTest {
         builder.setApplicationId("appId");
         builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
-        builder.addStateStore(storeBuilder, "processor");
+        builder.addStateStore(storeFactory, "processor");
         builder.buildTopology();
         final Map<Subtopology, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.subtopologyToTopicsInfo();
         final InternalTopologyBuilder.TopicsInfo topicsInfo = topicGroups.values().iterator().next();
@@ -1183,7 +1184,7 @@ public class InternalTopologyBuilderTest {
     public void shouldConnectRegexMatchedTopicsToStateStore() {
         builder.addSource(null, "ingest", null, null, null, Pattern.compile("topic-\\d+"));
         builder.addProcessor("my-processor", new MockApiProcessorSupplier<>(), "ingest");
-        builder.addStateStore(storeBuilder, "my-processor");
+        builder.addStateStore(storeFactory, "my-processor");
 
         final Set<String> updatedTopics = new HashSet<>();
 
@@ -1195,7 +1196,7 @@ public class InternalTopologyBuilderTest {
         builder.setApplicationId("test-app");
 
         final Map<String, List<String>> stateStoreAndTopics = builder.stateStoreNameToFullSourceTopicNames();
-        final List<String> topics = stateStoreAndTopics.get(storeBuilder.name());
+        final List<String> topics = stateStoreAndTopics.get(storeFactory.name());
 
         assertEquals(2, topics.size(), "Expected to contain two topics");
 
@@ -1208,14 +1209,13 @@ public class InternalTopologyBuilderTest {
     public void shouldNotAllowToAddGlobalStoreWithSourceNameEqualsProcessorName() {
         final String sameNameForSourceAndProcessor = "sameName";
         assertThrows(TopologyException.class, () -> builder.addGlobalStore(
-            storeBuilder,
             sameNameForSourceAndProcessor,
             null,
             null,
             null,
             "anyTopicName",
             sameNameForSourceAndProcessor,
-            new MockApiProcessorSupplier<>(),
+            new StoreDelegatingProcessorSupplier<>(new MockApiProcessorSupplier<>(), Set.of(storeBuilder)),
             false
         ));
     }
@@ -1351,16 +1351,17 @@ public class InternalTopologyBuilderTest {
     public void shouldConnectGlobalStateStoreToInputTopic() {
         final String globalStoreName = "global-store";
         final String globalTopic = "global-topic";
+        final StoreBuilder<?> storeBuilder =
+                new MockKeyValueStoreBuilder(globalStoreName, false).withLoggingDisabled();
         builder.setApplicationId("X");
         builder.addGlobalStore(
-            new MockKeyValueStoreBuilder(globalStoreName, false).asFactory().withLoggingDisabled(),
             "globalSource",
             null,
             null,
             null,
             globalTopic,
             "global-processor",
-            new MockApiProcessorSupplier<>(),
+            new StoreDelegatingProcessorSupplier<>(new MockApiProcessorSupplier<>(), Set.of(storeBuilder)),
             false
         );
         builder.initializeSubscription();

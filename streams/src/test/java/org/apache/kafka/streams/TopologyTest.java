@@ -45,13 +45,14 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
-import org.apache.kafka.streams.utils.TestUtils.CountingProcessorWrapper;
+import org.apache.kafka.streams.utils.TestUtils.RecordingProcessorWrapper;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -71,7 +72,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 import static java.time.Duration.ofMillis;
@@ -2425,10 +2425,10 @@ public class TopologyTest {
     @Test
     public void shouldWrapProcessors() {
         final Map<Object, Object> props = dummyStreamsConfigMap();
-        props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, CountingProcessorWrapper.class);
+        props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, RecordingProcessorWrapper.class);
 
-        final AtomicInteger wrappedProcessorCount = new AtomicInteger();
-        props.put(PROCESSOR_WRAPPER_COUNTER_CONFIG, wrappedProcessorCount);
+        final Set<String> wrappedProcessors = Collections.synchronizedSet(new HashSet<>());
+        props.put(PROCESSOR_WRAPPER_COUNTER_CONFIG, wrappedProcessors);
 
         final Topology topology = new Topology(new TopologyConfig(new StreamsConfig(props)));
 
@@ -2453,7 +2453,8 @@ public class TopologyTest {
             () -> (Processor<Object, Object, Object, Object>) record -> System.out.println("Processing: " + random.nextInt()),
             "p2"
         );
-        assertThat(wrappedProcessorCount.get(), is(3));
+        assertThat(wrappedProcessors.size(), is(3));
+        assertThat(wrappedProcessors, Matchers.containsInAnyOrder("p1", "p2", "p3"));
     }
 
     @SuppressWarnings("deprecation")

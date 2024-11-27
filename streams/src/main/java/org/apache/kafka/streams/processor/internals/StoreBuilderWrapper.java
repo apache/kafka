@@ -38,7 +38,15 @@ public class StoreBuilderWrapper implements StoreFactory {
     private final StoreBuilder<?> builder;
     private final Set<String> connectedProcessorNames = new HashSet<>();
 
-    public StoreBuilderWrapper(final StoreBuilder<?> builder) {
+    public static StoreFactory wrapStoreBuilder(final StoreBuilder<?> builder) {
+        if (builder instanceof FactoryWrappingStoreBuilder) {
+            return ((FactoryWrappingStoreBuilder<?>) builder).storeFactory();
+        } else {
+            return new StoreBuilderWrapper(builder);
+        }
+    }
+
+    private StoreBuilderWrapper(final StoreBuilder<?> builder) {
         this.builder = builder;
     }
 

@@ -42,7 +42,7 @@ import org.apache.kafka.streams.processor.internals.NoOpProcessorWrapper;
 import org.apache.kafka.streams.processor.internals.RecordCollectorTest;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
-import org.apache.kafka.streams.utils.TestUtils.CountingProcessorWrapper;
+import org.apache.kafka.streams.utils.TestUtils.RecordingProcessorWrapper;
 
 import org.apache.log4j.Level;
 import org.junit.jupiter.api.BeforeEach;
@@ -1230,13 +1230,13 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldAllowConfiguringProcessorWrapperWithClass() {
-        props.put(StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG, CountingProcessorWrapper.class);
+        props.put(StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG, RecordingProcessorWrapper.class);
         new StreamsConfig(props);
     }
 
     @Test
     public void shouldAllowConfiguringProcessorWrapperWithClassName() {
-        props.put(StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG, CountingProcessorWrapper.class.getName());
+        props.put(StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG, RecordingProcessorWrapper.class.getName());
         new StreamsConfig(props);
     }
 

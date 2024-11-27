@@ -262,7 +262,7 @@ class KStreamImplJoin {
     private static <K, V> StoreFactory joinWindowStoreBuilderFromSupplier(final WindowBytesStoreSupplier storeSupplier,
                                                                           final Serde<K> keySerde,
                                                                           final Serde<V> valueSerde) {
-        return new StoreBuilderWrapper(Stores.windowStoreBuilder(
+        return StoreBuilderWrapper.wrapStoreBuilder(Stores.windowStoreBuilder(
             storeSupplier,
             keySerde,
             valueSerde

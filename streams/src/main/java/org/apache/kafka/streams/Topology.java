@@ -34,7 +34,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
-import org.apache.kafka.streams.processor.internals.StoreBuilderWrapper;
+import org.apache.kafka.streams.processor.internals.StoreDelegatingProcessorSupplier;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Set;
@@ -853,14 +853,13 @@ public class Topology {
                                                            final String processorName,
                                                            final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
         internalTopologyBuilder.addGlobalStore(
-            new StoreBuilderWrapper(storeBuilder),
             sourceName,
             null,
             keyDeserializer,
             valueDeserializer,
             topic,
             processorName,
-            stateUpdateSupplier,
+            new StoreDelegatingProcessorSupplier<>(stateUpdateSupplier, Set.of(storeBuilder)),
             true
         );
         return this;
@@ -899,14 +898,13 @@ public class Topology {
                                                            final String processorName,
                                                            final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
         internalTopologyBuilder.addGlobalStore(
-            new StoreBuilderWrapper(storeBuilder),
             sourceName,
             timestampExtractor,
             keyDeserializer,
             valueDeserializer,
             topic,
             processorName,
-            stateUpdateSupplier,
+            new StoreDelegatingProcessorSupplier<>(stateUpdateSupplier, Set.of(storeBuilder)),
             true
         );
         return this;

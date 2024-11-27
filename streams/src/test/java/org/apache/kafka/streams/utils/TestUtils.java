@@ -28,10 +28,12 @@ import org.junit.jupiter.api.TestInfo;
 
 import java.lang.reflect.Method;
 import java.time.Duration;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.StreamsConfig.APPLICATION_ID_CONFIG;
@@ -115,30 +117,30 @@ public class TestUtils {
      * To retrieve the current count, pass an instance of AtomicInteger into the configs
      * alongside the wrapper itself. Use the config key defined with {@link #PROCESSOR_WRAPPER_COUNTER_CONFIG}
      */
-    public static class CountingProcessorWrapper implements ProcessorWrapper {
+    public static class RecordingProcessorWrapper implements ProcessorWrapper {
 
-        private AtomicInteger wrappedProcessorCount;
+        private Set<String> wrappedProcessorNames;
 
         @Override
         public void configure(final Map<String, ?> configs) {
             if (configs.containsKey(PROCESSOR_WRAPPER_COUNTER_CONFIG)) {
-                wrappedProcessorCount = (AtomicInteger) configs.get(PROCESSOR_WRAPPER_COUNTER_CONFIG);
+                wrappedProcessorNames = (Set<String>) configs.get(PROCESSOR_WRAPPER_COUNTER_CONFIG);
             } else {
-                wrappedProcessorCount = new AtomicInteger();
+                wrappedProcessorNames = Collections.synchronizedSet(new HashSet<>());
             }
         }
 
         @Override
         public <KIn, VIn, KOut, VOut> WrappedProcessorSupplier<KIn, VIn, KOut, VOut> wrapProcessorSupplier(final String processorName,
                                                                                                            final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier) {
-            wrappedProcessorCount.incrementAndGet();
+            wrappedProcessorNames.add(processorName);
             return ProcessorWrapper.asWrapped(processorSupplier);
         }
 
         @Override
         public <KIn, VIn, VOut> WrappedFixedKeyProcessorSupplier<KIn, VIn, VOut> wrapFixedKeyProcessorSupplier(final String processorName,
                                                                                                                final FixedKeyProcessorSupplier<KIn, VIn, VOut> processorSupplier) {
-            wrappedProcessorCount.incrementAndGet();
+            wrappedProcessorNames.add(processorName);
             return ProcessorWrapper.asWrappedFixedKey(processorSupplier);
         }
     }
