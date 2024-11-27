@@ -560,7 +560,7 @@ class DumpLogSegmentsTest {
 
     val lastContainedLogTimestamp = 10000
 
-    Using(
+    Using.resource(
       new RecordsSnapshotWriter.Builder()
         .setTime(new MockTime)
         .setLastContainedLogTimestamp(lastContainedLogTimestamp)

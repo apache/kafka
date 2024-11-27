@@ -111,7 +111,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
     //replicate for each of the two follower brokers.
     if (!leaderThrottle) throttle = throttle * 3
 
-    Using(createAdminClient(brokers, listenerName)) { admin =>
+    Using.resource(createAdminClient(brokers, listenerName)) { admin =>
       (106 to 107).foreach(registerBroker)
       admin.createTopics(List(new NewTopic(topic, assignment.map(a => a._1.asInstanceOf[Integer] ->
         a._2.map(_.asInstanceOf[Integer]).toList.asJava).asJava)).asJava).all().get()
@@ -212,7 +212,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
     val expectedDuration = 4
     val throttle: Long = msg.length * msgCount / expectedDuration
 
-    Using(createAdminClient(brokers, listenerName)) { admin =>
+    Using.resource(createAdminClient(brokers, listenerName)) { admin =>
       registerBroker(101)
       admin.createTopics(
         List(new NewTopic(topic, Collections.singletonMap(0, List(100, 101).map(_.asInstanceOf[Integer]).asJava))).asJava

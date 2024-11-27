@@ -26,6 +26,7 @@ import org.apache.kafka.common.errors.SaslAuthenticationException
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.api.Assertions._
 import kafka.utils.{TestInfoUtils, TestUtils}
+import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
@@ -74,8 +75,10 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
   override def setUp(testInfo: TestInfo): Unit = {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), Both,
       JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
+    val superuserLoginContext = jaasAdminLoginModule(kafkaClientSaslMechanism)
+    superuserClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, superuserLoginContext)
     super.setUp(testInfo)
-    Using(createPrivilegedAdminClient()) { superuserAdminClient =>
+    Using.resource(createPrivilegedAdminClient()) { superuserAdminClient =>
       TestUtils.createTopicWithAdmin(
         superuserAdminClient, topic, brokers, controllerServers, numPartitions
       )
