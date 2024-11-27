@@ -32,7 +32,7 @@ import static org.apache.kafka.streams.errors.ExceptionHandlerUtils.maybeBuildDe
  */
 public class LogAndFailProcessingExceptionHandler implements ProcessingExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(LogAndFailProcessingExceptionHandler.class);
-    private String deadLetterQueueTopic;
+    private String deadLetterQueueTopic = null;
 
     @Override
     public ProcessingHandlerResponse handle(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
@@ -51,6 +51,7 @@ public class LogAndFailProcessingExceptionHandler implements ProcessingException
 
     @Override
     public void configure(final Map<String, ?> configs) {
-        deadLetterQueueTopic = String.valueOf(configs.get(StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG));
+        if (configs.get(StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG) != null)
+            deadLetterQueueTopic = String.valueOf(configs.get(StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG));
     }
 }
