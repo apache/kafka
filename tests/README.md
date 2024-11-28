@@ -161,7 +161,7 @@ https://cwiki.apache.org/confluence/display/KAFKA/tutorial+-+set+up+and+run+Kafk
         $ cd kafka/tests
         $ virtualenv -p python3 venv
         $ . ./venv/bin/activate
-        $ python3 setup.py develop
+        $ python3 -m pip install --editable .
         $ cd ..  # back to base kafka directory
 
 * Run the bootstrap script to set up Vagrant for testing
