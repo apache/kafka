@@ -23,6 +23,7 @@ import kafka.security.JaasTestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -114,6 +115,8 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     public void setUp(TestInfo testInfo) {
         startSasl(jaasSections(KAFKA_SERVER_SASL_MECHANISMS, Some$.MODULE$.apply(KAFKA_CLIENT_SASL_MECHANISM), Both$.MODULE$,
             JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME));
+        String superuserLoginContext = jaasAdminLoginModule(KAFKA_CLIENT_SASL_MECHANISM, Option.empty());
+        this.superuserClientConfig().put(SaslConfigs.SASL_JAAS_CONFIG, superuserLoginContext);
         super.setUp(testInfo);
         try (Admin admin = createPrivilegedAdminClient()) {
             admin.createTopics(Collections.singletonList(
