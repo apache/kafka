@@ -800,9 +800,11 @@ public class ResetConsumerGroupOffsetTest {
         configs.put(GROUP_PROTOCOL_CONFIG, groupProtocol.name);
         configs.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         configs.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        configs.put(PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RangeAssignor.class.getName());
         configs.put(AUTO_COMMIT_INTERVAL_MS_CONFIG, 1000);
         configs.put(GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 1000);
+        if (GroupProtocol.CLASSIC == groupProtocol) {
+            configs.put(PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RangeAssignor.class.getName());
+        }
         return configs;
     }
 

@@ -992,7 +992,6 @@ public class DescribeConsumerGroupTest {
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
-        configs.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RangeAssignor.class.getName());
 
         configs.putAll(customConfigs);
         return configs;
