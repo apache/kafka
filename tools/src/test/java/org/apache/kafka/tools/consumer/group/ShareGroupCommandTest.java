@@ -23,10 +23,10 @@ import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.admin.ListGroupsOptions;
 import org.apache.kafka.clients.admin.ListGroupsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
-import org.apache.kafka.clients.admin.MemberAssignment;
-import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.admin.ShareGroupDescription;
+import org.apache.kafka.clients.admin.ShareMemberAssignment;
+import org.apache.kafka.clients.admin.ShareMemberDescription;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.KafkaFuture;
@@ -42,6 +42,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -92,8 +93,8 @@ public class ShareGroupCommandTest {
         Map<String, ShareGroupDescription> resultMap = new HashMap<>();
         ShareGroupDescription exp = new ShareGroupDescription(
                 firstGroup,
-                Collections.singletonList(new MemberDescription("memid1", "clId1", "host1", new MemberAssignment(
-                        Collections.singleton(new TopicPartition("topic1", 0))
+                List.of(new ShareMemberDescription("memid1", "clId1", "host1", new ShareMemberAssignment(
+                        Set.of(new TopicPartition("topic1", 0))
                 ))),
                 GroupState.STABLE,
                 new Node(0, "host1", 9090));
@@ -123,10 +124,10 @@ public class ShareGroupCommandTest {
 
         when(adminClient.listOffsets(ArgumentMatchers.anyMap())).thenReturn(startOffset, endOffset);
 
-        MemberDescription description = new MemberDescription("", "", "",
-                new MemberAssignment(Collections.singleton(new TopicPartition("topic1", 0))));
+        ShareMemberDescription description = new ShareMemberDescription("", "", "",
+                new ShareMemberAssignment(Set.of(new TopicPartition("topic1", 0))));
         ShareGroupService service = new ShareGroupService(null, adminClient);
-        Map<TopicPartition, Long> lags = service.getOffsets(Collections.singletonList(description));
+        Map<TopicPartition, Long> lags = service.getOffsets(List.of(description));
         assertEquals(1, lags.size());
         assertEquals(20, lags.get(new TopicPartition("topic1", 0)));
         service.close();

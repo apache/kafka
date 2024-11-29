@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
-import org.apache.kafka.clients.admin.MemberAssignment;
-import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.admin.ShareGroupDescription;
+import org.apache.kafka.clients.admin.ShareMemberAssignment;
+import org.apache.kafka.clients.admin.ShareMemberDescription;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -114,15 +114,15 @@ public class DescribeShareGroupsHandler extends AdminApiHandler.Batched<Coordina
                 continue;
             }
 
-            final List<MemberDescription> memberDescriptions = new ArrayList<>(describedGroup.members().size());
+            final List<ShareMemberDescription> memberDescriptions = new ArrayList<>(describedGroup.members().size());
             final Set<AclOperation> authorizedOperations = validAclOperations(describedGroup.authorizedOperations());
 
             describedGroup.members().forEach(groupMember ->
-                memberDescriptions.add(new MemberDescription(
+                memberDescriptions.add(new ShareMemberDescription(
                     groupMember.memberId(),
                     groupMember.clientId(),
                     groupMember.clientHost(),
-                    new MemberAssignment(convertAssignment(groupMember.assignment()))
+                    new ShareMemberAssignment(convertAssignment(groupMember.assignment()))
                 ))
             );
 

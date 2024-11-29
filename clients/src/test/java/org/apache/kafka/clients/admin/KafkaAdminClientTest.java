@@ -4974,11 +4974,11 @@ public class KafkaAdminClientTest {
             expectedTopicPartitions.add(1, new TopicPartition("my_topic", 1));
             expectedTopicPartitions.add(2, new TopicPartition("my_topic", 2));
 
-            List<MemberDescription> expectedMemberDescriptions = new ArrayList<>();
-            expectedMemberDescriptions.add(convertToMemberDescriptions(memberOne,
-                new MemberAssignment(new HashSet<>(expectedTopicPartitions))));
-            expectedMemberDescriptions.add(convertToMemberDescriptions(memberTwo,
-                new MemberAssignment(new HashSet<>(expectedTopicPartitions))));
+            List<ShareMemberDescription> expectedMemberDescriptions = new ArrayList<>();
+            expectedMemberDescriptions.add(convertToShareMemberDescriptions(memberOne,
+                new ShareMemberAssignment(new HashSet<>(expectedTopicPartitions))));
+            expectedMemberDescriptions.add(convertToShareMemberDescriptions(memberTwo,
+                new ShareMemberAssignment(new HashSet<>(expectedTopicPartitions))));
             data.groups().add(new ShareGroupDescribeResponseData.DescribedGroup()
                 .setGroupId(GROUP_ID)
                 .setGroupState(GroupState.STABLE.toString())
@@ -8549,13 +8549,12 @@ public class KafkaAdminClientTest {
                                      assignment);
     }
 
-    private static MemberDescription convertToMemberDescriptions(ShareGroupDescribeResponseData.Member member,
-                                                                 MemberAssignment assignment) {
-        return new MemberDescription(member.memberId(),
-                                     Optional.empty(),
-                                     member.clientId(),
-                                     member.clientHost(),
-                                     assignment);
+    private static ShareMemberDescription convertToShareMemberDescriptions(ShareGroupDescribeResponseData.Member member,
+                                                                           ShareMemberAssignment assignment) {
+        return new ShareMemberDescription(member.memberId(),
+                                          member.clientId(),
+                                          member.clientHost(),
+                                          assignment);
     }
 
     @Test

@@ -35,20 +35,20 @@ import java.util.stream.Collectors;
 @InterfaceStability.Evolving
 public class ShareGroupDescription {
     private final String groupId;
-    private final Collection<MemberDescription> members;
+    private final Collection<ShareMemberDescription> members;
     private final GroupState groupState;
     private final Node coordinator;
     private final Set<AclOperation> authorizedOperations;
 
     public ShareGroupDescription(String groupId,
-                                 Collection<MemberDescription> members,
+                                 Collection<ShareMemberDescription> members,
                                  GroupState groupState,
                                  Node coordinator) {
         this(groupId, members, groupState, coordinator, Collections.emptySet());
     }
 
     public ShareGroupDescription(String groupId,
-                                 Collection<MemberDescription> members,
+                                 Collection<ShareMemberDescription> members,
                                  GroupState groupState,
                                  Node coordinator,
                                  Set<AclOperation> authorizedOperations) {
@@ -86,7 +86,7 @@ public class ShareGroupDescription {
     /**
      * A list of the members of the share group.
      */
-    public Collection<MemberDescription> members() {
+    public Collection<ShareMemberDescription> members() {
         return members;
     }
 
@@ -114,7 +114,7 @@ public class ShareGroupDescription {
     @Override
     public String toString() {
         return "(groupId=" + groupId +
-            ", members=" + members.stream().map(MemberDescription::toString).collect(Collectors.joining(",")) +
+            ", members=" + members.stream().map(ShareMemberDescription::toString).collect(Collectors.joining(",")) +
             ", groupState=" + groupState +
             ", coordinator=" + coordinator +
             ", authorizedOperations=" + authorizedOperations +

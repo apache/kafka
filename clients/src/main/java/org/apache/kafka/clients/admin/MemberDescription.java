@@ -21,7 +21,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * A detailed description of a single group instance in the cluster.
+ * A detailed description of a single group member in the cluster.
  */
 public class MemberDescription {
     private final String memberId;
