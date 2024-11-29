@@ -65,6 +65,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -93,6 +94,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class OffsetFetcherTest {
 
@@ -178,6 +181,26 @@ public class OffsetFetcherTest {
         client.updateMetadata(initialUpdateResponse);
 
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetsRequest.LATEST_TIMESTAMP),
+                listOffsetResponse(Errors.NONE, 1L, 5L));
+        offsetFetcher.resetPositionsIfNeeded();
+        consumerClient.pollNoWakeup();
+        assertFalse(subscriptions.isOffsetResetNeeded(tp0));
+        assertTrue(subscriptions.isFetchable(tp0));
+        assertEquals(5, subscriptions.position(tp0).offset);
+    }
+
+    @Test
+    public void testUpdateFetchPositionResetToDurationOffset() {
+        long timestamp = Instant.now().toEpochMilli();
+        AutoOffsetResetStrategy durationStrategy = mock(AutoOffsetResetStrategy.class);
+        when(durationStrategy.timestamp()).thenReturn(Optional.of(timestamp));
+        buildFetcher(durationStrategy);
+        assignFromUser(singleton(tp0));
+        subscriptions.requestOffsetReset(tp0, durationStrategy);
+
+        client.updateMetadata(initialUpdateResponse);
+
+        client.prepareResponse(listOffsetRequestMatcher(timestamp),
                 listOffsetResponse(Errors.NONE, 1L, 5L));
         offsetFetcher.resetPositionsIfNeeded();
         consumerClient.pollNoWakeup();

@@ -1082,7 +1082,20 @@ public class KafkaConsumerTest {
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
     public void testResetUsingAutoResetPolicy(GroupProtocol groupProtocol) {
-        SubscriptionState subscription = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.LATEST);
+        setUpConsumerWithAutoResetPolicy(groupProtocol, AutoOffsetResetStrategy.LATEST);
+        assertEquals(50L, consumer.position(tp0));
+    }
+
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testResetUsingDurationBasedAutoResetPolicy(GroupProtocol groupProtocol) {
+        AutoOffsetResetStrategy durationStrategy = AutoOffsetResetStrategy.fromString("by_duration:PT1H");
+        setUpConsumerWithAutoResetPolicy(groupProtocol, durationStrategy);
+        assertEquals(50L, consumer.position(tp0));
+    }
+
+    private void setUpConsumerWithAutoResetPolicy(GroupProtocol groupProtocol, AutoOffsetResetStrategy strategy) {
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), strategy);
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
@@ -1100,8 +1113,6 @@ public class KafkaConsumerTest {
         client.prepareResponse(listOffsetsResponse(Collections.singletonMap(tp0, 50L)));
 
         consumer.poll(Duration.ZERO);
-
-        assertEquals(50L, consumer.position(tp0));
     }
 
     @ParameterizedTest

@@ -173,6 +173,8 @@ public class ConsumerConfig extends AbstractConfig {
             "(e.g. because that data has been deleted): " +
             "<ul><li>earliest: automatically reset the offset to the earliest offset" +
             "<li>latest: automatically reset the offset to the latest offset</li>" +
+            "<li>by_duration:<duration>: automatically reset the offset to a configured <duration> from the current timestamp. <duration> must be specified in ISO8601 format (PnDTnHnMn.nS). " +
+            "Negative duration is not allowed.</li>" +
             "<li>none: throw exception to the consumer if no previous offset is found for the consumer's group</li>" +
             "<li>anything else: throw exception to the consumer.</li></ul>" +
             "<p>Note that altering partition numbers while setting this config to latest may cause message delivery loss since " +

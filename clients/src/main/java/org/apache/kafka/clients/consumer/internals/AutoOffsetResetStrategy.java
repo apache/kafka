@@ -18,15 +18,19 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.Utils;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 
 public class AutoOffsetResetStrategy {
-    private enum StrategyType {
-        LATEST, EARLIEST, NONE;
+    public enum StrategyType {
+        LATEST, EARLIEST, NONE, BY_DURATION;
 
         @Override
         public String toString() {
@@ -39,30 +43,65 @@ public class AutoOffsetResetStrategy {
     public static final AutoOffsetResetStrategy NONE = new AutoOffsetResetStrategy(StrategyType.NONE);
 
     private final StrategyType type;
+    private final Optional<Duration> duration;
 
     private AutoOffsetResetStrategy(StrategyType type) {
         this.type = type;
+        this.duration = Optional.empty();
     }
 
-    public static boolean isValid(String offsetStrategy) {
-        return Arrays.asList(Utils.enumOptions(StrategyType.class)).contains(offsetStrategy);
+    private AutoOffsetResetStrategy(Duration duration) {
+        this.type = StrategyType.BY_DURATION;
+        this.duration = Optional.of(duration);
     }
 
+    /**
+     *  Returns the AutoOffsetResetStrategy from the given string.
+     */
     public static AutoOffsetResetStrategy fromString(String offsetStrategy) {
-        if (offsetStrategy == null || !isValid(offsetStrategy)) {
-            throw new IllegalArgumentException("Unknown auto offset reset strategy: " + offsetStrategy);
+        if (offsetStrategy == null) {
+            throw new IllegalArgumentException("Auto offset reset strategy is null");
         }
-        StrategyType type = StrategyType.valueOf(offsetStrategy.toUpperCase(Locale.ROOT));
-        switch (type) {
-            case EARLIEST:
-                return EARLIEST;
-            case LATEST:
-                return LATEST;
-            case NONE:
-                return NONE;
-            default:
-                throw new IllegalArgumentException("Unknown auto offset reset strategy: " + offsetStrategy);
+
+        if (StrategyType.BY_DURATION.toString().equals(offsetStrategy)) {
+            throw new IllegalArgumentException("<:duration> part is missing in by_duration auto offset reset strategy.");
         }
+
+        if (Arrays.asList(Utils.enumOptions(StrategyType.class)).contains(offsetStrategy)) {
+            StrategyType type = StrategyType.valueOf(offsetStrategy.toUpperCase(Locale.ROOT));
+            switch (type) {
+                case EARLIEST:
+                    return EARLIEST;
+                case LATEST:
+                    return LATEST;
+                case NONE:
+                    return NONE;
+                default:
+                    throw new IllegalArgumentException("Unknown auto offset reset strategy: " + offsetStrategy);
+            }
+        }
+
+        if (offsetStrategy.startsWith(StrategyType.BY_DURATION + ":")) {
+            String isoDuration = offsetStrategy.substring(StrategyType.BY_DURATION.toString().length() + 1);
+            try {
+                Duration duration = Duration.parse(isoDuration);
+                if (duration.isNegative()) {
+                    throw new IllegalArgumentException("Negative duration is not supported in by_duration offset reset strategy.");
+                }
+                return new AutoOffsetResetStrategy(duration);
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Unable to parse duration string in by_duration offset reset strategy.", e);
+            }
+        }
+
+        throw new IllegalArgumentException("Unknown auto offset reset strategy: " + offsetStrategy);
+    }
+
+    /**
+     * Returns the offset reset strategy type.
+     */
+    public StrategyType type() {
+        return type;
     }
 
     /**
@@ -72,33 +111,54 @@ public class AutoOffsetResetStrategy {
         return type.toString();
     }
 
+    /**
+     * Return the timestamp to be used for the ListOffsetsRequest.
+     * @return the timestamp for the OffsetResetStrategy,
+     * if the strategy is EARLIEST or LATEST or duration is provided
+     * else return Optional.empty()
+     */
+    public Optional<Long> timestamp() {
+        if (type == StrategyType.EARLIEST)
+            return Optional.of(ListOffsetsRequest.EARLIEST_TIMESTAMP);
+        else if (type == StrategyType.LATEST)
+            return Optional.of(ListOffsetsRequest.LATEST_TIMESTAMP);
+        else if (type == StrategyType.BY_DURATION && duration.isPresent()) {
+            Instant now = Instant.now();
+            return Optional.of(now.minus(duration.get()).toEpochMilli());
+        } else
+            return Optional.empty();
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         AutoOffsetResetStrategy that = (AutoOffsetResetStrategy) o;
-        return Objects.equals(type, that.type);
+        return type == that.type && Objects.equals(duration, that.duration);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hashCode(type);
+        return Objects.hash(type, duration);
     }
 
     @Override
     public String toString() {
         return "AutoOffsetResetStrategy{" +
-                "type='" + type + '\'' +
+                "type=" + type +
+                (duration.map(value -> ", duration=" + value).orElse("")) +
                 '}';
     }
 
     public static class Validator implements ConfigDef.Validator {
         @Override
         public void ensureValid(String name, Object value) {
-            String strategy = (String) value;
-            if (!AutoOffsetResetStrategy.isValid(strategy)) {
-                throw new ConfigException(name, value, "Invalid value " + strategy + " for configuration " +
-                        name + ": the value must be either 'earliest', 'latest', or 'none'.");
+            String offsetStrategy = (String) value;
+            try {
+                fromString(offsetStrategy);
+            } catch (Exception e) {
+                throw new ConfigException(name, value, "Invalid value `" + offsetStrategy + "` for configuration " +
+                        name + ". The value must be either 'earliest', 'latest', 'none' or of the format 'by_duration:<PnDTnHnMn.nS.>'.");
             }
         }
     }
