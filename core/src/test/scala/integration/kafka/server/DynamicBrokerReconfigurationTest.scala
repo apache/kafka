@@ -760,6 +760,17 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testThreadPoolResize(quorum: String, groupProtocol: String): Unit = {
+
+    // In kraft mode, the StripedReplicaPlacer#initialize includes some randomization,
+    // so the replica assignment is not deterministic.
+    // If a fetcher thread is not assigned any topic partition, it will not be created.
+    // Change the replica assignment to ensure that all fetcher threads are created.
+    TestUtils.deleteTopicWithAdmin(adminClients.head, topic, servers, controllerServers)
+    val replicaAssignment = Map(
+      0 -> Seq(0, 1, 2), 1 -> Seq(1, 2, 0), 2 -> Seq(2, 1, 0), 3 -> Seq(0, 1, 2), 4 -> Seq(1, 2, 0),
+      5 -> Seq(2, 1, 0), 6 -> Seq(0, 1, 2), 7 -> Seq(1, 2, 0), 8 -> Seq(2, 1, 0), 9 -> Seq(0, 1, 2))
+    TestUtils.createTopicWithAdmin(adminClients.head, topic, servers, controllerServers, replicaAssignment = replicaAssignment)
+
     val requestHandlerPrefix = "data-plane-kafka-request-handler-"
     val networkThreadPrefix = "data-plane-kafka-network-thread-"
     val fetcherThreadPrefix = "ReplicaFetcherThread-"
