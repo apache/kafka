@@ -126,6 +126,10 @@
                         <li>The <code>--broker-list</code> option was removed from the <code>kafka-verifiable-consumer</code> command line tool.
                             Please use <code>--bootstrap-server</code> instead.
                         </li>
+                        <li>kafka-configs.sh now uses incrementalAlterConfigs API to alter broker configurations instead of the deprecated alterConfigs API,
+                            and it will fall directly if the broker doesn't support incrementalAlterConfigs API, which means the broker version is prior to 2.3.x.
+                            See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1011%3A+Use+incrementalAlterConfigs+when+updating+broker+configs+by+kafka-configs.sh">KIP-1011</a> for more details.
+                        </li>
                     </ul>
                 </li>
                 <li><b>Connect</b>
