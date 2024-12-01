@@ -42,7 +42,9 @@ public class RequestContext implements AuthorizableRequestContext {
     public final KafkaPrincipal principal;
     public final ListenerName listenerName;
     public final SecurityProtocol securityProtocol;
-    public final ClientInformation clientInformation;
+    // The client information can be updated if the request is ApiVersionRequest,
+    // so the client information will not be unknown for ApiVersionRequest.
+    public ClientInformation clientInformation;
     public final boolean fromPrivilegedListener;
     public final Optional<KafkaPrincipalSerde> principalSerde;
 

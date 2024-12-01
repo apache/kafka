@@ -276,8 +276,8 @@ class SocketServerTest {
     sendRequest(plainSocket, apiVersionRequestBytes(clientId, version))
     var receivedReq = receiveRequest(server.dataPlaneRequestChannel)
 
-    assertEquals(ClientInformation.UNKNOWN_NAME_OR_VERSION, receivedReq.context.clientInformation.softwareName)
-    assertEquals(ClientInformation.UNKNOWN_NAME_OR_VERSION, receivedReq.context.clientInformation.softwareVersion)
+    assertEquals(expectedClientSoftwareName, receivedReq.context.clientInformation.softwareName)
+    assertEquals(expectedClientSoftwareVersion, receivedReq.context.clientInformation.softwareVersion)
 
     server.dataPlaneRequestChannel.sendNoOpResponse(receivedReq)
 

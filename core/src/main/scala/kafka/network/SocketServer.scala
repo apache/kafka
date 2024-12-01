@@ -1035,6 +1035,7 @@ private[kafka] class Processor(
                     channel.channelMetadataRegistry.registerClientInformation(new ClientInformation(
                       apiVersionsRequest.data.clientSoftwareName,
                       apiVersionsRequest.data.clientSoftwareVersion))
+                    context.clientInformation = channel.channelMetadataRegistry.clientInformation
                   }
                 }
                 requestChannel.sendRequest(req)
