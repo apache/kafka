@@ -61,7 +61,7 @@ versions += [
   // when updating checkstyle, check whether the exclusion of
   // CVE-2023-2976 and CVE-2020-8908 can be dropped from
   // gradle/resources/dependencycheck-suppressions.xml
-  checkstyle: "8.36.2",
+  checkstyle: project.hasProperty('checkstyleVersion') ? checkstyleVersion : "8.36.2",
   commonsCli: "1.4",
   commonsIo: "2.14.0", // ZooKeeper dependency. Do not use, this is going away.
   commonsValidator: "1.9.0",
