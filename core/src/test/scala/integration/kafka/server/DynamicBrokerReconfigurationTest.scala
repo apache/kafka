@@ -69,7 +69,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
 import java.util.concurrent.atomic.AtomicInteger
-import scala.annotation.nowarn
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
@@ -586,14 +585,16 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     val (producerThread, consumerThread) = startProduceConsume(retries = 0, groupProtocol)
 
     val props = new Properties
+    val logIndexSizeMaxBytes = "100000"
+    val logRetentionMs = TimeUnit.DAYS.toMillis(1)
     props.put(ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG, "4000")
     props.put(ServerLogConfigs.LOG_ROLL_TIME_MILLIS_CONFIG, TimeUnit.HOURS.toMillis(2).toString)
     props.put(ServerLogConfigs.LOG_ROLL_TIME_JITTER_MILLIS_CONFIG, TimeUnit.HOURS.toMillis(1).toString)
-    props.put(ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_CONFIG, "100000")
+    props.put(ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_CONFIG, logIndexSizeMaxBytes)
     props.put(ServerLogConfigs.LOG_FLUSH_INTERVAL_MESSAGES_CONFIG, "1000")
     props.put(ServerLogConfigs.LOG_FLUSH_INTERVAL_MS_CONFIG, "60000")
     props.put(ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG, "10000000")
-    props.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, TimeUnit.DAYS.toMillis(1).toString)
+    props.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, logRetentionMs.toString)
     props.put(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, "100000")
     props.put(ServerLogConfigs.LOG_INDEX_INTERVAL_BYTES_CONFIG, "10000")
     props.put(CleanerConfig.LOG_CLEANER_DELETE_RETENTION_MS_PROP, TimeUnit.DAYS.toMillis(1).toString)
@@ -674,8 +675,8 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     assertEquals(500000, servers.head.config.values.get(ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_CONFIG))
     assertEquals(TimeUnit.DAYS.toMillis(2), servers.head.config.values.get(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG))
     servers.tail.foreach { server =>
-      assertEquals(ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_DEFAULT, server.config.values.get(ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_CONFIG))
-      assertEquals(1680000000L, server.config.values.get(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG))
+      assertEquals(logIndexSizeMaxBytes.toInt, server.config.values.get(ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_CONFIG))
+      assertEquals(logRetentionMs, server.config.values.get(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG))
     }
 
     // Verify that produce/consume worked throughout this test without any retries in producer
@@ -1174,29 +1175,27 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     waitForConfig(s"$configPrefix$SSL_KEYSTORE_LOCATION_CONFIG", props.getProperty(SSL_KEYSTORE_LOCATION_CONFIG))
   }
 
-  @nowarn("cat=deprecation")
   private def alterConfigsOnServer(server: KafkaBroker, props: Properties): Unit = {
-    val configEntries = props.asScala.map { case (k, v) => new ConfigEntry(k, v) }.toList.asJava
-    val newConfig = new Config(configEntries)
-    val configs = Map(new ConfigResource(ConfigResource.Type.BROKER, server.config.brokerId.toString) -> newConfig).asJava
-    adminClients.head.alterConfigs(configs).all.get
+val configEntries = props.asScala.map { case (k, v) => new AlterConfigOp(new ConfigEntry(k, v), OpType.SET) }.toList.asJava
+    val alterConfigs = new java.util.HashMap[ConfigResource, java.util.Collection[AlterConfigOp]]()
+    alterConfigs.put(new ConfigResource(ConfigResource.Type.BROKER, server.config.brokerId.toString), configEntries)
+    adminClients.head.incrementalAlterConfigs(alterConfigs)
     props.asScala.foreach { case (k, v) => waitForConfigOnServer(server, k, v) }
   }
 
-  @nowarn("cat=deprecation")
   private def alterConfigs(servers: Seq[KafkaBroker], adminClient: Admin, props: Properties,
                    perBrokerConfig: Boolean): AlterConfigsResult = {
-    val configEntries = props.asScala.map { case (k, v) => new ConfigEntry(k, v) }.toList.asJava
-    val newConfig = new Config(configEntries)
+    val configEntries = props.asScala.map { case (k, v) => new AlterConfigOp(new ConfigEntry(k, v), OpType.SET) }.toList.asJava
     val configs = if (perBrokerConfig) {
-      servers.map { server =>
-        val resource = new ConfigResource(ConfigResource.Type.BROKER, server.config.brokerId.toString)
-        (resource, newConfig)
-      }.toMap.asJava
+      val alterConfigs = new java.util.HashMap[ConfigResource, java.util.Collection[AlterConfigOp]]()
+      servers.foreach(server => alterConfigs.put(new ConfigResource(ConfigResource.Type.BROKER, server.config.brokerId.toString), configEntries))
+      alterConfigs
     } else {
-      Map(new ConfigResource(ConfigResource.Type.BROKER, "") -> newConfig).asJava
+      val alterConfigs = new java.util.HashMap[ConfigResource, java.util.Collection[AlterConfigOp]]()
+      alterConfigs.put(new ConfigResource(ConfigResource.Type.BROKER, ""), configEntries)
+      alterConfigs
     }
-    adminClient.alterConfigs(configs)
+    adminClient.incrementalAlterConfigs(configs)
   }
 
   private def reconfigureServers(newProps: Properties, perBrokerConfig: Boolean, aPropToVerify: (String, String), expectFailure: Boolean = false): Unit = {

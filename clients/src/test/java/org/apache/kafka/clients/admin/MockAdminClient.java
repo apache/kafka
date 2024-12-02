@@ -872,12 +872,6 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    @Deprecated
-    public synchronized AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
-    }
-
-    @Override
     public synchronized AlterConfigsResult incrementalAlterConfigs(
             Map<ConfigResource, Collection<AlterConfigOp>> configs,
             AlterConfigsOptions options) {

@@ -33,6 +33,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils._
 import kafka.utils.{Log4jController, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.HostResolver
+import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, GroupProtocol, KafkaConsumer, OffsetAndMetadata, ShareConsumer}
@@ -53,7 +54,7 @@ import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEX
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.authorizer.AclEntry
-import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs, ServerLogConfigs, ZkConfigs}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogFileUtils}
 import org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS
 import org.apache.log4j.PropertyConfigurator
@@ -64,7 +65,6 @@ import org.junit.jupiter.params.provider.{MethodSource, ValueSource}
 import org.slf4j.LoggerFactory
 
 import java.util.AbstractMap.SimpleImmutableEntry
-import scala.annotation.nowarn
 import scala.collection.Seq
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
@@ -117,29 +117,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
       val exception = assertThrows(classOf[ExecutionException], () => {
         brokenClient.describeConfigs(configResources.asJava,new DescribeConfigsOptions().timeoutMs(0)).all().get()
-      })
-      assertInstanceOf(classOf[TimeoutException], exception.getCause)
-    } finally brokenClient.close(time.Duration.ZERO)
-  }
-
-  @ParameterizedTest
-  @Timeout(30)
-  @ValueSource(strings = Array("kraft"))
-  def testAlterConfigsWithOptionTimeoutMs(quorum: String): Unit = {
-    client = createAdminClient
-    val config = createConfig
-    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, s"localhost:${TestUtils.IncorrectBrokerPort}")
-    val brokenClient = Admin.create(config)
-
-    try {
-      val alterLogLevelsEntries = Seq(
-        new ConfigEntry("kafka.server.ControllerServer", LogLevelConfig.INFO_LOG_LEVEL)
-      ).asJavaCollection
-
-      val exception = assertThrows(classOf[ExecutionException], () => {
-        brokenClient.alterConfigs(
-        Map(brokerLoggerConfigResource -> new Config(alterLogLevelsEntries)).asJava,
-          new AlterConfigsOptions().timeoutMs(0)).all().get()
       })
       assertInstanceOf(classOf[TimeoutException], exception.getCause)
     } finally brokenClient.close(time.Duration.ZERO)
@@ -993,8 +970,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val topic1 = "describe-alter-configs-topic-1"
     val topicResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
     val topicConfig1 = new Properties
-    topicConfig1.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "500000")
-    topicConfig1.setProperty(TopicConfig.RETENTION_MS_CONFIG, "60000000")
+    val maxMessageBytes = "500000"
+    val retentionMs = "60000000"
+    topicConfig1.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, maxMessageBytes)
+    topicConfig1.setProperty(TopicConfig.RETENTION_MS_CONFIG, retentionMs)
     createTopic(topic1, numPartitions = 1, replicationFactor = 1, topicConfig1)
 
     val topic2 = "describe-alter-configs-topic-2"
@@ -1064,7 +1043,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(brokers(2).config.logCleanerThreads.toString,
       configs.get(brokerResource2).get(CleanerConfig.LOG_CLEANER_THREADS_PROP).value)
 
-    checkValidAlterConfigs(client, this, topicResource1, topicResource2)
+    checkValidAlterConfigs(client, this, topicResource1, topicResource2, maxMessageBytes, retentionMs)
   }
 
   @ParameterizedTest
@@ -3709,22 +3688,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertLogLevelDidNotChange()
   }
 
-  /**
-    * The AlterConfigs API is deprecated and should not support altering log levels
-    */
-  @nowarn("cat=deprecation")
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testAlterConfigsForLog4jLogLevelsDoesNotWork(quorum: String): Unit = {
-    client = createAdminClient
-
-    val alterLogLevelsEntries = Seq(
-      new ConfigEntry("kafka.server.ControllerServer", LogLevelConfig.INFO_LOG_LEVEL)
-    ).asJavaCollection
-    val alterResult = client.alterConfigs(Map(brokerLoggerConfigResource -> new Config(alterLogLevelsEntries)).asJava)
-    assertTrue(assertThrows(classOf[ExecutionException], () => alterResult.values.get(brokerLoggerConfigResource).get).getCause.isInstanceOf[InvalidRequestException])
-  }
-
   def alterBrokerLoggers(entries: util.Collection[AlterConfigOp], validateOnly: Boolean = false): Unit = {
     client.incrementalAlterConfigs(Map(brokerLoggerConfigResource -> entries).asJava, new AlterConfigsOptions().validateOnly(validateOnly))
       .values.get(brokerLoggerConfigResource).get()
@@ -3890,27 +3853,21 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
 object PlaintextAdminIntegrationTest {
 
-  @nowarn("cat=deprecation")
   def checkValidAlterConfigs(
     admin: Admin,
     test: KafkaServerTestHarness,
     topicResource1: ConfigResource,
-    topicResource2: ConfigResource
-  ): Unit = {
+    topicResource2: ConfigResource,
+    maxMessageBytes: String,
+    retentionMs: String): Unit = {
     // Alter topics
-    var topicConfigEntries1 = Seq(
-      new ConfigEntry(TopicConfig.FLUSH_MS_CONFIG, "1000")
-    ).asJava
-
-    var topicConfigEntries2 = Seq(
-      new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.9"),
-      new ConfigEntry(TopicConfig.COMPRESSION_TYPE_CONFIG, "lz4")
-    ).asJava
-
-    var alterResult = admin.alterConfigs(Map(
-      topicResource1 -> new Config(topicConfigEntries1),
-      topicResource2 -> new Config(topicConfigEntries2)
-    ).asJava)
+    val alterConfigs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
+    alterConfigs.put(topicResource1, util.Arrays.asList(new AlterConfigOp(new ConfigEntry(TopicConfig.FLUSH_MS_CONFIG, "1000"), OpType.SET)))
+    alterConfigs.put(topicResource2, util.Arrays.asList(
+      new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.9"), OpType.SET),
+      new AlterConfigOp(new ConfigEntry(TopicConfig.COMPRESSION_TYPE_CONFIG, "lz4"), OpType.SET)
+    ))
+    var alterResult = admin.incrementalAlterConfigs(alterConfigs)
 
     assertEquals(Set(topicResource1, topicResource2).asJava, alterResult.values.keySet)
     alterResult.all.get
@@ -3924,26 +3881,16 @@ object PlaintextAdminIntegrationTest {
     assertEquals(2, configs.size)
 
     assertEquals("1000", configs.get(topicResource1).get(TopicConfig.FLUSH_MS_CONFIG).value)
-    assertEquals(LogConfig.DEFAULT_MAX_MESSAGE_BYTES.toString,
-      configs.get(topicResource1).get(TopicConfig.MAX_MESSAGE_BYTES_CONFIG).value)
-    assertEquals(LogConfig.DEFAULT_RETENTION_MS.toString, configs.get(topicResource1).get(TopicConfig.RETENTION_MS_CONFIG).value)
+    assertEquals(maxMessageBytes, configs.get(topicResource1).get(TopicConfig.MAX_MESSAGE_BYTES_CONFIG).value)
+    assertEquals(retentionMs, configs.get(topicResource1).get(TopicConfig.RETENTION_MS_CONFIG).value)
 
     assertEquals("0.9", configs.get(topicResource2).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value)
     assertEquals("lz4", configs.get(topicResource2).get(TopicConfig.COMPRESSION_TYPE_CONFIG).value)
 
     // Alter topics with validateOnly=true
-    topicConfigEntries1 = Seq(
-      new ConfigEntry(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "10")
-    ).asJava
-
-    topicConfigEntries2 = Seq(
-      new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.3")
-    ).asJava
-
-    alterResult = admin.alterConfigs(Map(
-      topicResource1 -> new Config(topicConfigEntries1),
-      topicResource2 -> new Config(topicConfigEntries2)
-    ).asJava, new AlterConfigsOptions().validateOnly(true))
+    alterConfigs.put(topicResource1, util.Arrays.asList(new AlterConfigOp(new ConfigEntry(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "10"), OpType.SET)))
+    alterConfigs.put(topicResource2, util.Arrays.asList(new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.3"), OpType.SET)))
+    alterResult = admin.incrementalAlterConfigs(alterConfigs, new AlterConfigsOptions().validateOnly(true))
 
     assertEquals(Set(topicResource1, topicResource2).asJava, alterResult.values.keySet)
     alterResult.all.get
@@ -3955,12 +3902,10 @@ object PlaintextAdminIntegrationTest {
 
     assertEquals(2, configs.size)
 
-    assertEquals(LogConfig.DEFAULT_MAX_MESSAGE_BYTES.toString,
-      configs.get(topicResource1).get(TopicConfig.MAX_MESSAGE_BYTES_CONFIG).value)
+    assertEquals(maxMessageBytes, configs.get(topicResource1).get(TopicConfig.MAX_MESSAGE_BYTES_CONFIG).value)
     assertEquals("0.9", configs.get(topicResource2).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value)
   }
 
-  @nowarn("cat=deprecation")
   def checkInvalidAlterConfigs(
     test: KafkaServerTestHarness,
     admin: Admin
@@ -3974,22 +3919,17 @@ object PlaintextAdminIntegrationTest {
     val topicResource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2)
     createTopicWithAdmin(admin, topic2, test.brokers, test.controllerServers, numPartitions = 1, replicationFactor = 1)
 
-    val topicConfigEntries1 = Seq(
-      new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "1.1"), // this value is invalid as it's above 1.0
-      new ConfigEntry(TopicConfig.COMPRESSION_TYPE_CONFIG, "lz4")
-    ).asJava
-
-    var topicConfigEntries2 = Seq(new ConfigEntry(TopicConfig.COMPRESSION_TYPE_CONFIG, "snappy")).asJava
-
     val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, test.brokers.head.config.brokerId.toString)
-    val brokerConfigEntries = Seq(new ConfigEntry(ServerConfigs.BROKER_ID_CONFIG, "10")).asJava
 
     // Alter configs: first and third are invalid, second is valid
-    var alterResult = admin.alterConfigs(Map(
-      topicResource1 -> new Config(topicConfigEntries1),
-      topicResource2 -> new Config(topicConfigEntries2),
-      brokerResource -> new Config(brokerConfigEntries)
-    ).asJava)
+    val alterConfigs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
+    alterConfigs.put(topicResource1, util.Arrays.asList(
+      new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "1.1"), OpType.SET),
+      new AlterConfigOp(new ConfigEntry(TopicConfig.COMPRESSION_TYPE_CONFIG, "lz4"), OpType.SET)
+    ))
+    alterConfigs.put(topicResource2, util.Arrays.asList(new AlterConfigOp(new ConfigEntry(TopicConfig.COMPRESSION_TYPE_CONFIG, "snappy"), OpType.SET)))
+    alterConfigs.put(brokerResource, util.Arrays.asList(new AlterConfigOp(new ConfigEntry(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181"), OpType.SET)))
+    var alterResult = admin.incrementalAlterConfigs(alterConfigs)
 
     assertEquals(Set(topicResource1, topicResource2, brokerResource).asJava, alterResult.values.keySet)
     assertFutureExceptionTypeEquals(alterResult.values.get(topicResource1), classOf[InvalidConfigurationException])
@@ -4012,13 +3952,13 @@ object PlaintextAdminIntegrationTest {
     assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, configs.get(brokerResource).get(ServerConfigs.COMPRESSION_TYPE_CONFIG).value)
 
     // Alter configs with validateOnly = true: first and third are invalid, second is valid
-    topicConfigEntries2 = Seq(new ConfigEntry(TopicConfig.COMPRESSION_TYPE_CONFIG, "gzip")).asJava
-
-    alterResult = admin.alterConfigs(Map(
-      topicResource1 -> new Config(topicConfigEntries1),
-      topicResource2 -> new Config(topicConfigEntries2),
-      brokerResource -> new Config(brokerConfigEntries)
-    ).asJava, new AlterConfigsOptions().validateOnly(true))
+    alterConfigs.put(topicResource1, util.Arrays.asList(
+      new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "1.1"), OpType.SET),
+      new AlterConfigOp(new ConfigEntry(TopicConfig.COMPRESSION_TYPE_CONFIG, "lz4"), OpType.SET)
+    ))
+    alterConfigs.put(topicResource2, util.Arrays.asList(new AlterConfigOp(new ConfigEntry(TopicConfig.COMPRESSION_TYPE_CONFIG, "gzip"), OpType.SET)))
+    alterConfigs.put(brokerResource, util.Arrays.asList(new AlterConfigOp(new ConfigEntry(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181"), OpType.SET)))
+    alterResult = admin.incrementalAlterConfigs(alterConfigs, new AlterConfigsOptions().validateOnly(true))
 
     assertEquals(Set(topicResource1, topicResource2, brokerResource).asJava, alterResult.values.keySet)
     assertFutureExceptionTypeEquals(alterResult.values.get(topicResource1), classOf[InvalidConfigurationException])

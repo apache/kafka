@@ -1460,11 +1460,6 @@ public class ConfigCommandTest {
         }
 
         @Override
-        public synchronized AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options) {
-            return mock(AlterConfigsResult.class);
-        }
-
-        @Override
         public DescribeClientQuotasResult describeClientQuotas(ClientQuotaFilter filter, DescribeClientQuotasOptions options) {
             return mock(DescribeClientQuotasResult.class);
         }

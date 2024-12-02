@@ -63,7 +63,6 @@ import java.{lang, util}
 import java.util.concurrent.{CompletableFuture, CompletionStage, ExecutionException, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Optional, OptionalLong, Properties}
-import scala.annotation.nowarn
 import scala.collection.{Seq, mutable}
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS, SECONDS}
 import scala.jdk.CollectionConverters._
@@ -784,83 +783,6 @@ class KRaftClusterTest {
         validateConfigs(admin, Map(broker2 -> Seq(
           (log.getName, initialLog4j(broker2).get(log.getName)),
           (log2.getName, initialLog4j(broker2).get(log2.getName)))))
-      } finally {
-        admin.close()
-      }
-    } finally {
-      cluster.close()
-    }
-  }
-
-  @nowarn("cat=deprecation") // Suppress warnings about using legacy alterConfigs
-  def legacyAlter(
-    admin: Admin,
-    resources: Map[ConfigResource, Seq[ConfigEntry]]
-  ): Seq[ApiError] = {
-    val configs = new util.HashMap[ConfigResource, Config]()
-    resources.foreach {
-      case (resource, entries) => configs.put(resource, new Config(entries.asJava))
-    }
-    val values = admin.alterConfigs(configs).values()
-    resources.map {
-      case (resource, _) => try {
-        values.get(resource).get()
-        ApiError.NONE
-      } catch {
-        case e: ExecutionException => ApiError.fromThrowable(e.getCause)
-        case t: Throwable => ApiError.fromThrowable(t)
-      }
-    }.toSeq
-  }
-
-  @Test
-  def testLegacyAlterConfigs(): Unit = {
-    val cluster = new KafkaClusterTestKit.Builder(
-      new TestKitNodes.Builder().
-        setNumBrokerNodes(4).
-        setNumControllerNodes(3).build()).build()
-    try {
-      cluster.format()
-      cluster.startup()
-      cluster.waitForReadyBrokers()
-      val admin = Admin.create(cluster.clientProperties())
-      try {
-        val defaultBroker = new ConfigResource(Type.BROKER, "")
-
-        assertEquals(Seq(ApiError.NONE), legacyAlter(admin, Map(defaultBroker -> Seq(
-          new ConfigEntry("log.roll.ms", "1234567"),
-          new ConfigEntry("max.connections.per.ip", "6")))))
-
-        validateConfigs(admin, Map(defaultBroker -> Seq(
-          ("log.roll.ms", "1234567"),
-          ("max.connections.per.ip", "6"))), exhaustive = true)
-
-        assertEquals(Seq(ApiError.NONE), legacyAlter(admin, Map(defaultBroker -> Seq(
-          new ConfigEntry("log.roll.ms", "1234567")))))
-
-        // Since max.connections.per.ip was left out of the previous legacyAlter, it is removed.
-        validateConfigs(admin, Map(defaultBroker -> Seq(
-          ("log.roll.ms", "1234567"))), exhaustive = true)
-
-        admin.createTopics(util.Arrays.asList(
-          new NewTopic("foo", 2, 3.toShort),
-          new NewTopic("bar", 2, 3.toShort))).all().get()
-        TestUtils.waitForAllPartitionsMetadata(cluster.brokers().values().asScala.toSeq, "foo", 2)
-        TestUtils.waitForAllPartitionsMetadata(cluster.brokers().values().asScala.toSeq, "bar", 2)
-        assertEquals(Seq(ApiError.NONE,
-            new ApiError(INVALID_CONFIG, "Unknown topic config name: not.a.real.topic.config"),
-            new ApiError(UNKNOWN_TOPIC_OR_PARTITION, "The topic 'baz' does not exist.")),
-          legacyAlter(admin, Map(
-            new ConfigResource(Type.TOPIC, "foo") -> Seq(
-              new ConfigEntry("segment.jitter.ms", "345")),
-            new ConfigResource(Type.TOPIC, "bar") -> Seq(
-              new ConfigEntry("not.a.real.topic.config", "789")),
-            new ConfigResource(Type.TOPIC, "baz") -> Seq(
-              new ConfigEntry("segment.jitter.ms", "678")))))
-
-        validateConfigs(admin, Map(new ConfigResource(Type.TOPIC, "foo") -> Seq(
-          ("segment.jitter.ms", "345"))))
-
       } finally {
         admin.close()
       }
