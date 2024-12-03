@@ -26,6 +26,7 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
@@ -555,6 +556,12 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         // or a consumer which does not use the group management facility. In this case,
         // the request can commit offsets if the group is empty.
         if (memberEpoch < 0 && members().isEmpty()) return;
+
+        // The TxnOffsetCommit API does not require the member id, the generation id and the group instance id fields.
+        // Hence, they are only validated if any of them is provided
+        if (isTransactional && memberEpoch == JoinGroupRequest.UNKNOWN_GENERATION_ID &&
+            memberId.equals(JoinGroupRequest.UNKNOWN_MEMBER_ID) && groupInstanceId == null)
+            return;
 
         final ConsumerGroupMember member = getOrMaybeCreateMember(memberId, false);
 

@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
@@ -35,7 +36,9 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.apache.kafka.common.requests.TxnOffsetCommitRequest.getErrorResponse;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
 
@@ -150,5 +153,19 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
                             .setPartitionIndex(partitionTwo)))));
 
         assertEquals(expectedResponse, getErrorResponse(builderWithGroupMetadata.data, Errors.UNKNOWN_MEMBER_ID));
+    }
+
+    @Test
+    public void testVersionSupportForGroupMetadata() {
+        for (short version : ApiKeys.TXN_OFFSET_COMMIT.allVersions()) {
+            assertDoesNotThrow(() -> builder.build(version));
+            if (version >= 3) {
+                assertDoesNotThrow(() -> builderWithGroupMetadata.build(version));
+            } else {
+                assertEquals("Broker doesn't support group metadata commit API on version " + version +
+                    ", minimum supported request version is 3 which requires brokers to be on version 2.5 or above.",
+                    assertThrows(UnsupportedVersionException.class, () -> builderWithGroupMetadata.build(version)).getMessage());
+            }
+        }
     }
 }

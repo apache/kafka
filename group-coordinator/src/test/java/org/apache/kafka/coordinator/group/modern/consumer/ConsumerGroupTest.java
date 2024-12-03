@@ -1037,7 +1037,7 @@ public class ConsumerGroupTest {
     }
 
     @ParameterizedTest
-    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
+    @ApiKeyVersionsSource(apiKey = ApiKeys.TXN_OFFSET_COMMIT)
     public void testValidateTransactionalOffsetCommit(short version) {
         boolean isTransactional = true;
         ConsumerGroup group = createConsumerGroup("group-foo");
@@ -1063,6 +1063,9 @@ public class ConsumerGroupTest {
 
         // This should succeed.
         group.validateOffsetCommit("member-id", "", 0, isTransactional, version);
+
+        // This should succeed.
+        group.validateOffsetCommit("", null, -1, isTransactional, version);
     }
 
     @ParameterizedTest
@@ -1093,6 +1096,8 @@ public class ConsumerGroupTest {
         // A call from the admin client should fail as the group is not empty.
         assertThrows(UnknownMemberIdException.class, () ->
             group.validateOffsetCommit("", "", -1, isTransactional, version));
+        assertThrows(UnknownMemberIdException.class, () ->
+            group.validateOffsetCommit("", null, -1, isTransactional, version));
 
         // The member epoch is stale.
         if (version >= 9) {

@@ -500,6 +500,23 @@ object TestUtils extends Logging {
     )
   }
 
+  def createTransactionStateTopicWithAdmin[B <: KafkaBroker](
+    admin: Admin,
+    brokers: Seq[B],
+    controllers: Seq[ControllerServer]
+  ): Map[Int, Int] = {
+    val broker = brokers.head
+    createTopicWithAdmin(
+      admin = admin,
+      topic = Topic.TRANSACTION_STATE_TOPIC_NAME,
+      numPartitions = broker.config.getInt(TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG),
+      replicationFactor = broker.config.getShort(TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG).toInt,
+      brokers = brokers,
+      controllers = controllers,
+      topicConfig = new Properties(),
+    )
+  }
+
   def deleteTopicWithAdmin[B <: KafkaBroker](
     admin: Admin,
     topic: String,
