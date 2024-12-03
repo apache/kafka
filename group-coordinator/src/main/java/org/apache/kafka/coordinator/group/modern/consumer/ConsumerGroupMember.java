@@ -408,7 +408,8 @@ public class ConsumerGroupMember extends ModernGroupMember {
             .setInstanceId(instanceId)
             .setRackId(rackId)
             .setSubscribedTopicNames(subscribedTopicNames == null ? null : new ArrayList<>(subscribedTopicNames))
-            .setSubscribedTopicRegex(subscribedTopicRegex);
+            .setSubscribedTopicRegex(subscribedTopicRegex)
+            .setMemberType(useClassicProtocol() ? (byte) 0 : (byte) 1);
     }
 
     private static List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitionsFromMap(
