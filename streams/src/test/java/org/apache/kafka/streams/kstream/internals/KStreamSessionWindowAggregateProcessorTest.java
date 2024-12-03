@@ -64,6 +64,7 @@ import java.util.stream.Collectors;
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.utils.TestUtils.mockStoreFactory;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.is;
@@ -126,7 +127,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
         sessionAggregator = new KStreamSessionWindowAggregate<>(
             SessionWindows.ofInactivityGapWithNoGrace(ofMillis(GAP_MS)),
-            STORE_NAME,
+            mockStoreFactory(STORE_NAME),
             emitStrategy,
             initializer,
             aggregator,
@@ -484,7 +485,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         setup(inputType, false);
         final Processor<String, String, Windowed<String>, Change<Long>> processor = new KStreamSessionWindowAggregate<>(
             SessionWindows.ofInactivityGapAndGrace(ofMillis(10L), ofMillis(0L)),
-            STORE_NAME,
+            mockStoreFactory(STORE_NAME),
             EmitStrategy.onWindowUpdate(),
             initializer,
             aggregator,
@@ -551,7 +552,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         setup(inputType, false);
         final Processor<String, String, Windowed<String>, Change<Long>> processor = new KStreamSessionWindowAggregate<>(
             SessionWindows.ofInactivityGapAndGrace(ofMillis(10L), ofMillis(1L)),
-            STORE_NAME,
+            mockStoreFactory(STORE_NAME),
             EmitStrategy.onWindowUpdate(),
             initializer,
             aggregator,

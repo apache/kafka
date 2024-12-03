@@ -98,7 +98,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, REDUCE_NAME);
         return doAggregate(
-            new KStreamReduce<>(materializedInternal.storeName(), reducer),
+            new KStreamReduce<>(materializedInternal, reducer),
             name,
             materializedInternal
         );
@@ -130,7 +130,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
         return doAggregate(
-            new KStreamAggregate<>(materializedInternal.storeName(), initializer, aggregator),
+            new KStreamAggregate<>(materializedInternal, initializer, aggregator),
             name,
             materializedInternal
         );
@@ -184,7 +184,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
         return doAggregate(
-            new KStreamAggregate<>(materializedInternal.storeName(), aggregateBuilder.countInitializer, aggregateBuilder.countAggregator),
+            new KStreamAggregate<>(materializedInternal, aggregateBuilder.countInitializer, aggregateBuilder.countAggregator),
             name,
             materializedInternal);
     }

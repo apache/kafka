@@ -58,14 +58,14 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                                 final Serde<VOut> valueSerde,
                                 final String queryableName,
                                 final boolean isOutputVersioned) {
-        processRepartitions(groupPatterns, storeFactory);
+        processRepartitions(groupPatterns, storeFactory.name());
         final Collection<GraphNode> processors = new ArrayList<>();
         final Collection<KStreamAggProcessorSupplier> parentProcessors = new ArrayList<>();
         boolean stateCreated = false;
         int counter = 0;
         for (final Entry<KGroupedStreamImpl<K, ?>, Aggregator<? super K, Object, VOut>> kGroupedStream : groupPatterns.entrySet()) {
             final KStreamAggProcessorSupplier<K, ?, K, ?> parentProcessor =
-                new KStreamAggregate<>(storeFactory.name(), initializer, kGroupedStream.getValue());
+                new KStreamAggregate<>(storeFactory, initializer, kGroupedStream.getValue());
             parentProcessors.add(parentProcessor);
             final StatefulProcessorNode<K, ?> statefulProcessorNode = getStatefulProcessorNode(
                 named.suffixWithOrElseGet(
@@ -92,7 +92,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                                                   final Serde<VOut> valueSerde,
                                                   final String queryableName,
                                                   final Windows<W> windows) {
-        processRepartitions(groupPatterns, storeFactory);
+        processRepartitions(groupPatterns, storeFactory.name());
 
         final Collection<GraphNode> processors = new ArrayList<>();
         final Collection<KStreamAggProcessorSupplier> parentProcessors = new ArrayList<>();
@@ -102,7 +102,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
             final KStreamAggProcessorSupplier<K, ?, K, ?>  parentProcessor =
                 (KStreamAggProcessorSupplier<K, ?, K, ?>) new KStreamWindowAggregate<K, K, VOut, W>(
                     windows,
-                    storeFactory.name(),
+                    storeFactory,
                     EmitStrategy.onWindowUpdate(),
                     initializer,
                     kGroupedStream.getValue());
@@ -132,7 +132,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                                 final String queryableName,
                                 final SessionWindows sessionWindows,
                                 final Merger<? super K, VOut> sessionMerger) {
-        processRepartitions(groupPatterns, storeFactory);
+        processRepartitions(groupPatterns, storeFactory.name());
         final Collection<GraphNode> processors = new ArrayList<>();
         final Collection<KStreamAggProcessorSupplier> parentProcessors = new ArrayList<>();
         boolean stateCreated = false;
@@ -141,7 +141,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
             final KStreamAggProcessorSupplier<K, ?, K, ?> parentProcessor =
                 (KStreamAggProcessorSupplier<K, ?, K, ?>) new KStreamSessionWindowAggregate<K, K, VOut>(
                     sessionWindows,
-                    storeFactory.name(),
+                    storeFactory,
                     EmitStrategy.onWindowUpdate(),
                     initializer,
                     kGroupedStream.getValue(),
@@ -171,7 +171,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                                 final Serde<VOut> valueSerde,
                                 final String queryableName,
                                 final SlidingWindows slidingWindows) {
-        processRepartitions(groupPatterns, storeFactory);
+        processRepartitions(groupPatterns, storeFactory.name());
         final Collection<KStreamAggProcessorSupplier> parentProcessors = new ArrayList<>();
         final Collection<GraphNode> processors = new ArrayList<>();
         boolean stateCreated = false;
@@ -180,7 +180,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
             final KStreamAggProcessorSupplier<K, ?, K, ?> parentProcessor =
                 (KStreamAggProcessorSupplier<K, ?, K, ?>) new KStreamSlidingWindowAggregate<K, K, VOut>(
                     slidingWindows,
-                    storeFactory.name(),
+                    storeFactory,
                     // TODO: We do not have other emit policies for co-group yet
                     EmitStrategy.onWindowUpdate(),
                     initializer,
@@ -202,7 +202,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
     }
 
     private void processRepartitions(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
-                                     final StoreFactory storeFactory) {
+                                     final String storeName) {
         for (final KGroupedStreamImpl<K, ?> repartitionReqs : groupPatterns.keySet()) {
 
             if (repartitionReqs.repartitionRequired) {
@@ -210,7 +210,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                 final OptimizableRepartitionNodeBuilder<K, ?> repartitionNodeBuilder = optimizableRepartitionNodeBuilder();
 
                 final String repartitionNamePrefix = repartitionReqs.userProvidedRepartitionTopicName != null ?
-                    repartitionReqs.userProvidedRepartitionTopicName : storeFactory.name();
+                    repartitionReqs.userProvidedRepartitionTopicName : storeName;
 
                 createRepartitionSource(repartitionNamePrefix, repartitionNodeBuilder, repartitionReqs.keySerde, repartitionReqs.valueSerde);
 
