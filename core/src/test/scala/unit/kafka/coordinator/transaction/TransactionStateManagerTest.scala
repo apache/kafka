@@ -219,6 +219,65 @@ class TransactionStateManagerTest {
   }
 
   @Test
+  def testMakeFollowerLoadingPartition(): Unit = {
+    // Verify the handling of a call to make a partition a follower while it is in the
+    // process of being loaded. The partition should not be loaded.
+
+    val startOffset = 0L
+    val endOffset = 1L
+
+    val fileRecordsMock = mock[FileRecords](classOf[FileRecords])
+    val logMock = mock[UnifiedLog](classOf[UnifiedLog])
+    when(replicaManager.getLog(topicPartition)).thenReturn(Some(logMock))
+    when(logMock.logStartOffset).thenReturn(startOffset)
+    when(logMock.read(ArgumentMatchers.eq(startOffset),
+      maxLength = anyInt(),
+      isolation = ArgumentMatchers.eq(FetchIsolation.LOG_END),
+      minOneMessage = ArgumentMatchers.eq(true))
+    ).thenReturn(new FetchDataInfo(new LogOffsetMetadata(startOffset), fileRecordsMock))
+    when(replicaManager.getLogEndOffset(topicPartition)).thenReturn(Some(endOffset))
+
+    txnMetadata1.state = PrepareCommit
+    txnMetadata1.addPartitions(Set[TopicPartition](
+      new TopicPartition("topic1", 0),
+      new TopicPartition("topic1", 1)))
+    val records = MemoryRecords.withRecords(startOffset, Compression.NONE,
+      new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit(), TV_2)))
+
+    // We create a latch which is awaited while the log is loading. This ensures that the follower transition
+    // is triggered before the loading returns
+    val latch = new CountDownLatch(1)
+
+    when(fileRecordsMock.sizeInBytes()).thenReturn(records.sizeInBytes)
+    val bufferCapture: ArgumentCaptor[ByteBuffer] = ArgumentCaptor.forClass(classOf[ByteBuffer])
+    when(fileRecordsMock.readInto(bufferCapture.capture(), anyInt())).thenAnswer(_ => {
+      latch.await()
+      val buffer = bufferCapture.getValue
+      buffer.put(records.buffer.duplicate)
+      buffer.flip()
+    })
+
+    val coordinatorEpoch = 0
+    val partitionAndLeaderEpoch = TransactionPartitionAndLeaderEpoch(partitionId, coordinatorEpoch)
+
+    val loadingThread = new Thread(() => {
+      transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch, (_, _, _, _) => ())
+    })
+    loadingThread.start()
+    TestUtils.waitUntilTrue(() => transactionManager.loadingPartitions.contains(partitionAndLeaderEpoch),
+      "Timed out waiting for loading partition", pause = 10)
+
+    transactionManager.removeTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch + 1)
+    assertFalse(transactionManager.loadingPartitions.contains(partitionAndLeaderEpoch))
+
+    latch.countDown()
+    loadingThread.join()
+
+    // Verify that transaction state was not loaded
+    assertEquals(Left(Errors.NOT_COORDINATOR), transactionManager.getTransactionState(txnMetadata1.transactionalId))
+  }
+
+  @Test
   def testLoadAndRemoveTransactionsForPartition(): Unit = {
     // generate transaction log messages for two pids traces:
 
