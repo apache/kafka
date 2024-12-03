@@ -40,7 +40,7 @@ public interface Persister {
      * @param request Request parameters
      * @return A {@link CompletableFuture} that completes with the result.
      */
-    CompletableFuture<ReadShareGroupStateResult> readState(ReadShareGroupStateParameters request) throws IllegalArgumentException;
+    CompletableFuture<ReadShareGroupStateResult> readState(ReadShareGroupStateParameters request);
 
     /**
      * Write share-partition state.
@@ -48,7 +48,7 @@ public interface Persister {
      * @param request Request parameters
      * @return A {@link CompletableFuture} that completes with the result.
      */
-    CompletableFuture<WriteShareGroupStateResult> writeState(WriteShareGroupStateParameters request) throws IllegalArgumentException;
+    CompletableFuture<WriteShareGroupStateResult> writeState(WriteShareGroupStateParameters request);
 
     /**
      * Delete share-partition state.

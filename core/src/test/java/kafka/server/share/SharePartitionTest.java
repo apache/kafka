@@ -490,11 +490,8 @@ public class SharePartitionTest {
             if (!executorService.awaitTermination(30, TimeUnit.MILLISECONDS))
                 executorService.shutdown();
         }
-
-        for (CompletableFuture<Void> result : results) {
-            assertTrue(result.isDone());
-            assertFalse(result.isCompletedExceptionally());
-        }
+        assertTrue(results.stream().allMatch(CompletableFuture::isDone));
+        assertFalse(results.stream().allMatch(CompletableFuture::isCompletedExceptionally));
 
         assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
         // Verify the persister read state is called only once.
@@ -771,24 +768,20 @@ public class SharePartitionTest {
         Persister persister = Mockito.mock(Persister.class);
         // Complete the future exceptionally for read state.
         Mockito.when(persister.readState(Mockito.any())).thenReturn(FutureUtils.failedFuture(new RuntimeException("Read exception")));
-        SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
+        SharePartition sharePartition1 = SharePartitionBuilder.builder().withPersister(persister).build();
 
-        CompletableFuture<Void> result = sharePartition.maybeInitialize();
+        CompletableFuture<Void> result = sharePartition1.maybeInitialize();
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
         assertFutureThrows(result, RuntimeException.class);
-        assertEquals(SharePartitionState.FAILED, sharePartition.partitionState());
+        assertEquals(SharePartitionState.FAILED, sharePartition1.partitionState());
 
         persister = Mockito.mock(Persister.class);
         // Throw exception for read state.
         Mockito.when(persister.readState(Mockito.any())).thenThrow(new RuntimeException("Read exception"));
-        sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
+        SharePartition sharePartition2 = SharePartitionBuilder.builder().withPersister(persister).build();
 
-        result = sharePartition.maybeInitialize();
-        assertTrue(result.isDone());
-        assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, RuntimeException.class);
-        assertEquals(SharePartitionState.FAILED, sharePartition.partitionState());
+        assertThrows(RuntimeException.class, sharePartition2::maybeInitialize);
     }
 
     @Test
@@ -4453,12 +4446,20 @@ public class SharePartitionTest {
     public void testWriteShareGroupStateWithWriteException() {
         Persister persister = Mockito.mock(Persister.class);
         mockPersisterReadStateMethod(persister);
-        SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
+        SharePartition sharePartition1 = SharePartitionBuilder.builder().withPersister(persister).build();
 
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(FutureUtils.failedFuture(new RuntimeException("Write exception")));
-        CompletableFuture<Void> writeResult = sharePartition.writeShareGroupState(anyList());
+        CompletableFuture<Void> writeResult = sharePartition1.writeShareGroupState(anyList());
         assertTrue(writeResult.isCompletedExceptionally());
         assertFutureThrows(writeResult, IllegalStateException.class);
+
+        persister = Mockito.mock(Persister.class);
+        // Throw exception for write state.
+        mockPersisterReadStateMethod(persister);
+        SharePartition sharePartition2 = SharePartitionBuilder.builder().withPersister(persister).build();
+
+        Mockito.when(persister.writeState(Mockito.any())).thenThrow(new RuntimeException("Write exception"));
+        assertThrows(RuntimeException.class, () -> sharePartition2.writeShareGroupState(anyList()));
     }
 
     @Test
