@@ -71,6 +71,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
@@ -768,7 +769,8 @@ public class ClusterControlManagerTest {
     void registerNewBrokerWithDirs(ClusterControlManager clusterControl, int brokerId, List<Uuid> dirs) {
         BrokerRegistrationRequestData data = new BrokerRegistrationRequestData().setBrokerId(brokerId)
                 .setClusterId(clusterControl.clusterId())
-                .setIncarnationId(Uuid.randomUuid()).setLogDirs(dirs);
+                .setIncarnationId(new Uuid(brokerId, brokerId))
+                .setLogDirs(dirs);
         FinalizedControllerFeatures finalizedFeatures = new FinalizedControllerFeatures(Collections.emptyMap(), 456L);
         ControllerResult<BrokerRegistrationReply> result = clusterControl.registerBroker(data, 123L, finalizedFeatures);
         RecordTestUtils.replayAll(clusterControl, result.records());
@@ -851,5 +853,33 @@ public class ClusterControlManagerTest {
             assertEquals(100,
                     clusterControl.brokerRegistrations().get(1).epoch());
         }
+    }
+
+    @Test
+    public void testBrokerContactTimesAreUpdatedOnClusterControlActivation() {
+        MockTime time = new MockTime(0L, 20L, 1000L);
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
+            setClusterId("pjvUwj3ZTEeSVQmUiH3IJw").
+            setFeatureControlManager(new FeatureControlManager.Builder().build()).
+            setBrokerUncleanShutdownHandler((brokerId, records) -> { }).
+            setTime(time).
+            build();
+        clusterControl.replay(new RegisterBrokerRecord().
+            setBrokerEpoch(100).
+            setBrokerId(0).
+            setLogDirs(asList(Uuid.fromString("Mj3CW3OSRi29cFeNJlXuAQ"))), 10002);
+        clusterControl.replay(new RegisterBrokerRecord().
+            setBrokerEpoch(123).
+            setBrokerId(1).
+            setLogDirs(asList(Uuid.fromString("TyNK6XSSQJaJc2q9uflNHg"))), 10005);
+        clusterControl.activate();
+        assertEquals(OptionalLong.of(1000L), clusterControl.heartbeatManager().tracker().
+            contactTime(new BrokerIdAndEpoch(0, 100)));
+        assertEquals(OptionalLong.of(1000L), clusterControl.heartbeatManager().tracker().
+            contactTime(new BrokerIdAndEpoch(1, 123)));
+        assertEquals(OptionalLong.empty(), clusterControl.heartbeatManager().tracker().
+            contactTime(new BrokerIdAndEpoch(1, 124)));
+        assertEquals(OptionalLong.empty(), clusterControl.heartbeatManager().tracker().
+            contactTime(new BrokerIdAndEpoch(2, 100)));
     }
 }

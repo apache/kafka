@@ -148,7 +148,7 @@ class PeriodicTaskControlManager {
         Time time,
         QueueAccessor queueAccessor
     ) {
-        this.log = logContext.logger(OffsetControlManager.class);
+        this.log = logContext.logger(PeriodicTaskControlManager.class);
         this.time = time;
         this.queueAccessor = queueAccessor;
         this.active = false;
