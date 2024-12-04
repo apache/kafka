@@ -17,7 +17,6 @@ import java.util
 import java.util.{Collections, Properties}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
-import kafka.utils.TestUtils.assertFutureExceptionTypeEquals
 import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, AlterConfigsOptions, ConfigEntry}
@@ -28,6 +27,7 @@ import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.config.{ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.policy.AlterConfigPolicy
 import org.apache.kafka.storage.internals.log.LogConfig
+import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
@@ -155,10 +155,10 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     alterResult = client.incrementalAlterConfigs(alterConfigs)
 
     assertEquals(Set(topicResource1, topicResource2, topicResource3, brokerResource).asJava, alterResult.values.keySet)
-    assertFutureExceptionTypeEquals(alterResult.values.get(topicResource1), classOf[PolicyViolationException])
+    assertFutureThrows(alterResult.values.get(topicResource1), classOf[PolicyViolationException])
     alterResult.values.get(topicResource2).get
-    assertFutureExceptionTypeEquals(alterResult.values.get(topicResource3), classOf[InvalidConfigurationException])
-    assertFutureExceptionTypeEquals(alterResult.values.get(brokerResource), classOf[InvalidRequestException])
+    assertFutureThrows(alterResult.values.get(topicResource3), classOf[InvalidConfigurationException])
+    assertFutureThrows(alterResult.values.get(brokerResource), classOf[InvalidRequestException])
     assertTrue(validationsForResource(brokerResource).isEmpty,
       "Should not see the broker resource in the AlterConfig policy when the broker configs are not being updated.")
     validations.clear()
@@ -184,10 +184,10 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     alterResult = client.incrementalAlterConfigs(alterConfigs, new AlterConfigsOptions().validateOnly(true))
 
     assertEquals(Set(topicResource1, topicResource2, topicResource3, brokerResource).asJava, alterResult.values.keySet)
-    assertFutureExceptionTypeEquals(alterResult.values.get(topicResource1), classOf[PolicyViolationException])
+    assertFutureThrows(alterResult.values.get(topicResource1), classOf[PolicyViolationException])
     alterResult.values.get(topicResource2).get
-    assertFutureExceptionTypeEquals(alterResult.values.get(topicResource3), classOf[InvalidConfigurationException])
-    assertFutureExceptionTypeEquals(alterResult.values.get(brokerResource), classOf[InvalidRequestException])
+    assertFutureThrows(alterResult.values.get(topicResource3), classOf[InvalidConfigurationException])
+    assertFutureThrows(alterResult.values.get(brokerResource), classOf[InvalidRequestException])
     assertTrue(validationsForResource(brokerResource).isEmpty,
       "Should not see the broker resource in the AlterConfig policy when the broker configs are not being updated.")
     validations.clear()
