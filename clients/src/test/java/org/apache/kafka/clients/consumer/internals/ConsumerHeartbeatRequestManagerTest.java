@@ -602,6 +602,44 @@ public class ConsumerHeartbeatRequestManagerTest {
         }
     }
 
+    @Test
+    public void testUnsupportedVersion() {
+        mockErrorResponse(Errors.UNSUPPORTED_VERSION, null);
+        ArgumentCaptor<ErrorEvent> errorEventArgumentCaptor = ArgumentCaptor.forClass(ErrorEvent.class);
+        verify(backgroundEventHandler).add(errorEventArgumentCaptor.capture());
+        ErrorEvent errorEvent = errorEventArgumentCaptor.getValue();
+
+        // UnsupportedApiVersion in HB response without any custom message. It's considered as new protocol not supported.
+        String hbNotSupportedMsg = "The cluster does not support the new consumer group protocol. Set group" +
+            ".protocol=classic on the consumer configs to revert to the classic protocol until the cluster is upgraded.";
+        assertInstanceOf(Errors.UNSUPPORTED_VERSION.exception().getClass(), errorEvent.error());
+        assertEquals(hbNotSupportedMsg, errorEvent.error().getMessage());
+        clearInvocations(backgroundEventHandler);
+
+        // UnsupportedApiVersion in HB response with custom message. Specific to required version not present, should
+        // keep the custom message.
+        String hbVersionNotSupportedMsg = "The cluster does not support resolution of SubscriptionPattern on version 0. " +
+            "It must be upgraded to version >= 1 to allow to subscribe to a SubscriptionPattern.";
+        mockErrorResponse(Errors.UNSUPPORTED_VERSION, hbVersionNotSupportedMsg);
+        errorEventArgumentCaptor = ArgumentCaptor.forClass(ErrorEvent.class);
+        verify(backgroundEventHandler).add(errorEventArgumentCaptor.capture());
+        errorEvent = errorEventArgumentCaptor.getValue();
+        assertInstanceOf(Errors.UNSUPPORTED_VERSION.exception().getClass(), errorEvent.error());
+        assertEquals(hbVersionNotSupportedMsg, errorEvent.error().getMessage());
+    }
+
+    private void mockErrorResponse(Errors error, String exceptionCustomMsg) {
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+
+        when(subscriptions.hasAutoAssignedPartitions()).thenReturn(true);
+        ClientResponse response = createHeartbeatResponse(
+            result.unsentRequests.get(0), error, exceptionCustomMsg);
+        result.unsentRequests.get(0).handler().onComplete(response);
+        ConsumerGroupHeartbeatResponse mockResponse = (ConsumerGroupHeartbeatResponse) response.responseBody();
+    }
+
     private void assertNextHeartbeatTiming(long expectedTimeToNextHeartbeatMs) {
         long currentTimeMs = time.milliseconds();
         assertEquals(expectedTimeToNextHeartbeatMs, heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));
@@ -969,9 +1007,15 @@ public class ConsumerHeartbeatRequestManagerTest {
             Arguments.of(Errors.GROUP_MAX_SIZE_REACHED, true));
     }
 
+    private ClientResponse createHeartbeatResponse(NetworkClientDelegate.UnsentRequest request,
+                                                   Errors error) {
+        return createHeartbeatResponse(request, error, "stubbed error message");
+    }
+
     private ClientResponse createHeartbeatResponse(
         final NetworkClientDelegate.UnsentRequest request,
-        final Errors error
+        final Errors error,
+        final String msg
     ) {
         ConsumerGroupHeartbeatResponseData data = new ConsumerGroupHeartbeatResponseData()
             .setErrorCode(error.code())
@@ -979,7 +1023,7 @@ public class ConsumerHeartbeatRequestManagerTest {
             .setMemberId(DEFAULT_MEMBER_ID)
             .setMemberEpoch(DEFAULT_MEMBER_EPOCH);
         if (error != Errors.NONE) {
-            data.setErrorMessage("stubbed error message");
+            data.setErrorMessage(msg);
         }
         ConsumerGroupHeartbeatResponse response = new ConsumerGroupHeartbeatResponse(data);
         return new ClientResponse(

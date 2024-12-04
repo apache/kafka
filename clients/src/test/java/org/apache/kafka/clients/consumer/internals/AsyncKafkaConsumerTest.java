@@ -17,6 +17,8 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.Metadata.LeaderAndEpoch;
+import org.apache.kafka.clients.MockClient;
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -57,7 +59,9 @@ import org.apache.kafka.clients.consumer.internals.events.UnsubscribeEvent;
 import org.apache.kafka.clients.consumer.internals.events.UpdatePatternSubscriptionEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
@@ -66,17 +70,26 @@ import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
+import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
+import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.test.MockConsumerInterceptor;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -1876,6 +1889,66 @@ public class AsyncKafkaConsumerTest {
         clearInvocations(applicationEventHandler);
         consumer.subscribe(new SubscriptionPattern("t*"), mock(ConsumerRebalanceListener.class));
         verify(applicationEventHandler).addAndGet(ArgumentMatchers.isA(TopicRe2JPatternSubscriptionChangeEvent.class));
+    }
+
+    // SubscriptionPattern is supported as of ConsumerGroupHeartbeatRequest v1. Clients using subscribe
+    // (SubscribePattern) against older broker versions should get UnsupportedVersionException on poll after subscribe
+    @Test
+    public void testSubscribePatternAgainstBrokerNotSupportingRegex() throws InterruptedException {
+        final Properties props = requiredConsumerConfig();
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "group-id");
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+
+        final ConsumerConfig config = new ConsumerConfig(props);
+
+        ConsumerMetadata metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, false, false,
+            mock(SubscriptionState.class), new LogContext(), new ClusterResourceListeners());
+        MockClient client = new MockClient(time, metadata);
+        MetadataResponse initialMetadata = RequestTestUtils.metadataUpdateWithIds(1, Map.of("topic1", 2),
+            Map.of("topic1", Uuid.randomUuid()));
+        client.updateMetadata(initialMetadata);
+        // ConsumerGroupHeartbeat v0 does not support broker-side regex resolution
+        client.setNodeApiVersions(NodeApiVersions.create(ApiKeys.CONSUMER_GROUP_HEARTBEAT.id, (short) 0, (short) 0));
+
+        // Mock response to find coordinator
+        Node node = metadata.fetch().nodes().get(0);
+        client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node), node);
+
+        // Mock HB response (needed so that the MockClient builds the request)
+        ConsumerGroupHeartbeatResponse result =
+            new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
+                .setMemberId("")
+                .setMemberEpoch(0));
+        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        client.prepareResponseFrom(result, coordinator);
+
+        SubscriptionState subscriptionState = mock(SubscriptionState.class);
+
+        consumer = new AsyncKafkaConsumer<>(
+            new LogContext(),
+            time,
+            config,
+            new StringDeserializer(),
+            new StringDeserializer(),
+            client,
+            subscriptionState,
+            metadata
+        );
+        completeTopicRe2JPatternSubscriptionChangeEventSuccessfully();
+
+        SubscriptionPattern pattern = new SubscriptionPattern("t*");
+        consumer.subscribe(pattern);
+        when(subscriptionState.subscriptionPattern()).thenReturn(pattern);
+        TestUtils.waitForCondition(() -> {
+            try {
+                // The request is generated in the background thread so allow for that
+                // async operation to happen to detect the failure.
+                consumer.poll(Duration.ZERO);
+                return false;
+            } catch (UnsupportedVersionException e) {
+                return true;
+            }
+        }, "Consumer did not throw the expected UnsupportedVersionException on poll");
     }
 
     private Map<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {

@@ -19,6 +19,7 @@ package kafka.clients.consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.internals.AbstractHeartbeatRequestManager;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.test.TestUtils;
@@ -64,8 +65,7 @@ public class AsyncKafkaConsumerIntegrationTest {
                     consumer.poll(Duration.ofMillis(1000));
                     return false;
                 } catch (UnsupportedVersionException e) {
-                    return e.getMessage().contains("The cluster doesn't yet support the new consumer group protocol. " +
-                        "Set group.protocol=classic to revert to the classic protocol until the cluster is upgraded.");
+                    return e.getMessage().equals(AbstractHeartbeatRequestManager.CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG);
                 }
             }, "Should get UnsupportedVersionException and how to revert to classic protocol");
         }

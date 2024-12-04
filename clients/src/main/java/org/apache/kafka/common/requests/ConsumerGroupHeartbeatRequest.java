@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -59,6 +60,11 @@ public class ConsumerGroupHeartbeatRequest extends AbstractRequest {
 
         @Override
         public ConsumerGroupHeartbeatRequest build(short version) {
+            if (version == 0 && data.subscribedTopicRegex() != null) {
+                throw new UnsupportedVersionException("The cluster does not support regular expressions resolution " +
+                    "on ConsumerGroupHeartbeat API version " + version + ". It must be upgraded to use " +
+                    "ConsumerGroupHeartbeat API version >= 1 to allow to subscribe to a SubscriptionPattern.");
+            }
             return new ConsumerGroupHeartbeatRequest(data, version);
         }
 
