@@ -608,9 +608,11 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         if (subscriptions.subscribeFromPattern(topicsToSubscribe)) {
             this.metadataVersionSnapshot = metadata.requestUpdateForNewTopics();
 
-            // Join the group if not already part of it, or just send the new subscription to the broker on the next poll.
-            requestManagers.consumerHeartbeatRequestManager.get().membershipManager().onSubscriptionUpdated();
         }
+        // Join the group if not already part of it, or just send the updated subscription
+        // to the broker on the next poll. Note that this is done even if no topics matched
+        // the regex, to ensure the member joins the group if needed (with empty subscription).
+        requestManagers.consumerHeartbeatRequestManager.get().membershipManager().onSubscriptionUpdated();
     }
 
     // Visible for testing
