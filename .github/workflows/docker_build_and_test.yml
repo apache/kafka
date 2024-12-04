@@ -41,6 +41,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r docker/requirements.txt
+        pip install --upgrade --force-reinstall --no-cache-dir docker-compose && ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose
     - name: Build image and run tests
       working-directory: ./docker
       env:
