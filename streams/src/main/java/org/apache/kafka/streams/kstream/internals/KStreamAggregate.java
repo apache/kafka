@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
@@ -28,7 +27,6 @@ import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.processor.internals.StoreFactory.FactoryWrappingStoreBuilder;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
@@ -55,20 +53,11 @@ public class KStreamAggregate<KIn, VIn, VAgg> implements KStreamAggProcessorSupp
 
     private boolean sendOldValues = false;
 
-    KStreamAggregate(final MaterializedInternal<KIn, VAgg, KeyValueStore<Bytes, byte[]>> materialized,
-                     final Initializer<VAgg> initializer,
-                     final Aggregator<? super KIn, ? super VIn, VAgg> aggregator) {
-        this.storeFactory = new KeyValueStoreMaterializer<>(materialized);
-        this.storeName = materialized.storeName();
-        this.initializer = initializer;
-        this.aggregator = aggregator;
-    }
-
     KStreamAggregate(final StoreFactory storeFactory,
                      final Initializer<VAgg> initializer,
                      final Aggregator<? super KIn, ? super VIn, VAgg> aggregator) {
         this.storeFactory = storeFactory;
-        this.storeName = storeFactory.name();
+        this.storeName = storeFactory.storeName();
         this.initializer = initializer;
         this.aggregator = aggregator;
     }

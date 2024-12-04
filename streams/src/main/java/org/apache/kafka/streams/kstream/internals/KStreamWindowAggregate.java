@@ -63,7 +63,7 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                                   final Initializer<VAgg> initializer,
                                   final Aggregator<? super KIn, ? super VIn, VAgg> aggregator) {
         this.windows = windows;
-        this.storeName = storeFactory.name();
+        this.storeName = storeFactory.storeName();
         this.storeFactory = storeFactory;
         this.emitStrategy = emitStrategy;
         this.initializer = initializer;

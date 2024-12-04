@@ -19,7 +19,6 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.SlidingWindows;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.DslWindowParams;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -58,7 +57,7 @@ public class SlidingWindowStoreMaterializer<K, V> extends MaterializedStoreFacto
     }
 
     @Override
-    public StateStore build() {
+    public StoreBuilder<?> builder() {
         final WindowBytesStoreSupplier supplier = materialized.storeSupplier() == null
                 ? dslStoreSuppliers().windowStore(new DslWindowParams(
                         materialized.storeName(),
@@ -91,7 +90,7 @@ public class SlidingWindowStoreMaterializer<K, V> extends MaterializedStoreFacto
             builder.withCachingDisabled();
         }
 
-        return builder.build();
+        return builder;
     }
 
     @Override

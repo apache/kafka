@@ -24,7 +24,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyConfig;
-import org.apache.kafka.streams.TopologyDescription;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.processor.StateStore;
@@ -433,7 +432,7 @@ public class InternalTopologyBuilder {
         // build global state stores
         for (final StoreFactory storeFactory : globalStateBuilders.values()) {
             storeFactory.configure(config);
-            globalStateStores.put(storeFactory.name(), storeFactory.build());
+            globalStateStores.put(storeFactory.storeName(), storeFactory.builder().build());
         }
 
         return this;
@@ -620,20 +619,20 @@ public class InternalTopologyBuilder {
                                     final boolean allowOverride,
                                     final String... processorNames) {
         Objects.requireNonNull(storeFactory, "stateStoreFactory can't be null");
-        final StoreFactory stateFactory = stateFactories.get(storeFactory.name());
+        final StoreFactory stateFactory = stateFactories.get(storeFactory.storeName());
         if (!allowOverride && stateFactory != null && !stateFactory.isCompatibleWith(storeFactory)) {
-            throw new TopologyException("A different StateStore has already been added with the name " + storeFactory.name());
+            throw new TopologyException("A different StateStore has already been added with the name " + storeFactory.storeName());
         }
-        if (globalStateBuilders.containsKey(storeFactory.name())) {
-            throw new TopologyException("A different GlobalStateStore has already been added with the name " + storeFactory.name());
+        if (globalStateBuilders.containsKey(storeFactory.storeName())) {
+            throw new TopologyException("A different GlobalStateStore has already been added with the name " + storeFactory.storeName());
         }
 
-        stateFactories.put(storeFactory.name(), storeFactory);
+        stateFactories.put(storeFactory.storeName(), storeFactory);
 
         if (processorNames != null) {
             for (final String processorName : processorNames) {
                 Objects.requireNonNull(processorName, "processor name must not be null");
-                connectProcessorAndStateStore(processorName, storeFactory.name());
+                connectProcessorAndStateStore(processorName, storeFactory.storeName());
             }
         }
         nodeGroups = null;
@@ -660,7 +659,7 @@ public class InternalTopologyBuilder {
                                      topic,
                                      processorName,
                                      stateUpdateSupplier,
-                                     storeFactory.name(),
+                                     storeFactory.storeName(),
                                      storeFactory.loggingEnabled());
         validateTopicNotAlreadyRegistered(topic);
 
@@ -682,18 +681,18 @@ public class InternalTopologyBuilder {
             keyDeserializer,
             valueDeserializer)
         );
-        storeNameToReprocessOnRestore.put(storeFactory.name(),
+        storeNameToReprocessOnRestore.put(storeFactory.storeName(),
             reprocessOnRestore ?
                 Optional.of(new ReprocessFactory<>(stateUpdateSupplier, keyDeserializer, valueDeserializer))
                 : Optional.empty());
         nodeToSourceTopics.put(sourceName, Arrays.asList(topics));
         nodeGrouper.add(sourceName);
-        nodeFactory.addStateStore(storeFactory.name());
+        nodeFactory.addStateStore(storeFactory.storeName());
         nodeFactories.put(processorName, nodeFactory);
         nodeGrouper.add(processorName);
         nodeGrouper.unite(processorName, predecessors);
-        globalStateBuilders.put(storeFactory.name(), storeFactory);
-        connectSourceStoreAndTopic(storeFactory.name(), topic);
+        globalStateBuilders.put(storeFactory.storeName(), storeFactory);
+        connectSourceStoreAndTopic(storeFactory.storeName(), topic);
         nodeGroups = null;
     }
 
@@ -1158,7 +1157,7 @@ public class InternalTopologyBuilder {
                     if (topologyConfigs != null) {
                         storeFactory.configure(topologyConfigs.applicationConfigs);
                     }
-                    store = storeFactory.build();
+                    store = storeFactory.builder().build();
                     stateStoreMap.put(stateStoreName, store);
                 } else {
                     store = globalStateStores.get(stateStoreName);
@@ -1258,8 +1257,8 @@ public class InternalTopologyBuilder {
                 // if the node is connected to a state store whose changelog topics are not predefined,
                 // add to the changelog topics
                 for (final StoreFactory stateFactory : stateFactories.values()) {
-                    if (stateFactory.connectedProcessorNames().contains(node) && storeToChangelogTopic.containsKey(stateFactory.name())) {
-                        final String topicName = storeToChangelogTopic.get(stateFactory.name());
+                    if (stateFactory.connectedProcessorNames().contains(node) && storeToChangelogTopic.containsKey(stateFactory.storeName())) {
+                        final String topicName = storeToChangelogTopic.get(stateFactory.storeName());
                         if (!stateChangelogTopics.containsKey(topicName)) {
                             final InternalTopicConfig internalTopicConfig =
                                 createChangelogTopicConfig(stateFactory, topicName);

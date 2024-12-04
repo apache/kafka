@@ -52,7 +52,7 @@ public interface StoreFactory {
         // do nothing
     }
 
-    StateStore build();
+    StoreBuilder<?> builder();
 
     long retentionPeriod();
 
@@ -62,7 +62,7 @@ public interface StoreFactory {
 
     boolean loggingEnabled();
 
-    String name();
+    String storeName();
 
     boolean isWindowStore();
 
@@ -132,7 +132,7 @@ public interface StoreFactory {
         @SuppressWarnings("unchecked")
         @Override
         public T build() {
-            return (T) storeFactory.build();
+            return (T) storeFactory.builder().build();
         }
 
         @Override
@@ -147,7 +147,7 @@ public interface StoreFactory {
 
         @Override
         public String name() {
-            return storeFactory.name();
+            return storeFactory.storeName();
         }
     }
 

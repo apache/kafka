@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
@@ -27,7 +26,6 @@ import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.processor.internals.StoreFactory.FactoryWrappingStoreBuilder;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
@@ -53,9 +51,9 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, V, K,
 
     private boolean sendOldValues = false;
 
-    KStreamReduce(final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized, final Reducer<V> reducer) {
-        this.storeFactory = new KeyValueStoreMaterializer<>(materialized);
-        this.storeName = materialized.storeName();
+    KStreamReduce(final StoreFactory storeFactory, final Reducer<V> reducer) {
+        this.storeFactory = storeFactory;
+        this.storeName = storeFactory.storeName();
         this.reducer = reducer;
     }
 

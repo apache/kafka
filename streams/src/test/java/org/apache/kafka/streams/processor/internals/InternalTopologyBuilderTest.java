@@ -572,11 +572,11 @@ public class InternalTopologyBuilderTest {
 
         assertEquals(0, builder.buildTopology().stateStores().size());
 
-        builder.connectProcessorAndStateStores("processor-1", storeFactory.name());
+        builder.connectProcessorAndStateStores("processor-1", storeFactory.storeName());
 
         final List<StateStore> suppliers = builder.buildTopology().stateStores();
         assertEquals(1, suppliers.size());
-        assertEquals(storeFactory.name(), suppliers.get(0).name());
+        assertEquals(storeFactory.storeName(), suppliers.get(0).name());
     }
 
     @Test
@@ -586,14 +586,14 @@ public class InternalTopologyBuilderTest {
 
         builder.addSource(null, "source-1", null, null, null, "topic-1");
         builder.addProcessor("processor-1", new MockApiProcessorSupplier<>(), "source-1");
-        builder.connectProcessorAndStateStores("processor-1", storeFactory.name());
+        builder.connectProcessorAndStateStores("processor-1", storeFactory.storeName());
 
         builder.addSource(null, "source-2", null, null, null, "topic-2");
         builder.addProcessor("processor-2", new MockApiProcessorSupplier<>(), "source-2");
 
         builder.buildTopology();
         final Set<String> stateStoreNames = builder.stateStoreNamesForSubtopology(0);
-        assertThat(stateStoreNames, equalTo(Set.of(storeFactory.name())));
+        assertThat(stateStoreNames, equalTo(Set.of(storeFactory.storeName())));
 
         final Set<String> emptyStoreNames = builder.stateStoreNamesForSubtopology(1);
         assertThat(emptyStoreNames, equalTo(Set.of()));
@@ -609,11 +609,11 @@ public class InternalTopologyBuilderTest {
 
         builder.addStateStore(storeFactory);
         builder.addProcessor("processor-1", new MockApiProcessorSupplier<>(), "source-1");
-        builder.connectProcessorAndStateStores("processor-1", storeFactory.name());
+        builder.connectProcessorAndStateStores("processor-1", storeFactory.storeName());
 
         builder.addStateStore(storeFactory);
         builder.addProcessor("processor-2", new MockApiProcessorSupplier<>(), "source-1");
-        builder.connectProcessorAndStateStores("processor-2", storeFactory.name());
+        builder.connectProcessorAndStateStores("processor-2", storeFactory.storeName());
 
         assertEquals(1, builder.buildTopology().stateStores().size());
     }
@@ -1196,7 +1196,7 @@ public class InternalTopologyBuilderTest {
         builder.setApplicationId("test-app");
 
         final Map<String, List<String>> stateStoreAndTopics = builder.stateStoreNameToFullSourceTopicNames();
-        final List<String> topics = stateStoreAndTopics.get(storeFactory.name());
+        final List<String> topics = stateStoreAndTopics.get(storeFactory.storeName());
 
         assertEquals(2, topics.size(), "Expected to contain two topics");
 

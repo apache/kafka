@@ -54,7 +54,7 @@ public class TableProcessorNode<K, V> extends GraphNode {
     public String toString() {
         return "TableProcessorNode{" +
             ", processorParameters=" + processorParameters +
-            ", storeFactory=" + (storeFactory == null ? "null" : storeFactory.name()) +
+            ", storeFactory=" + (storeFactory == null ? "null" : storeFactory.storeName()) +
             ", storeNames=" + Arrays.toString(storeNames) +
             "} " + super.toString();
     }

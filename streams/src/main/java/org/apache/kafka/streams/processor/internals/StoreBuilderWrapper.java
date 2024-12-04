@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
@@ -51,8 +50,8 @@ public class StoreBuilderWrapper implements StoreFactory {
     }
 
     @Override
-    public StateStore build() {
-        return builder.build();
+    public StoreBuilder<?> builder() {
+        return builder;
     }
 
     @Override
@@ -90,7 +89,7 @@ public class StoreBuilderWrapper implements StoreFactory {
     }
 
     @Override
-    public String name() {
+    public String storeName() {
         return builder.name();
     }
 

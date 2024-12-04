@@ -75,7 +75,7 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                                          final Aggregator<? super KIn, ? super VIn, VAgg> aggregator,
                                          final Merger<? super KIn, VAgg> sessionMerger) {
         this.windows = windows;
-        this.storeName = storeFactory.name();
+        this.storeName = storeFactory.storeName();
         this.storeFactory = storeFactory;
         this.emitStrategy = emitStrategy;
         this.initializer = initializer;
