@@ -61,8 +61,8 @@ import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
-import org.apache.kafka.streams.processor.internals.StoreBuilderWrapper;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDBTimeOrderedKeyValueBuffer;
 
@@ -1127,7 +1127,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             leftJoin);
         final ProcessorParameters<K, V, ?, ?> processorParameters = new ProcessorParameters<>(processorSupplier, name);
         final StreamTableJoinNode<K, V> streamTableJoinNode =
-            new StreamTableJoinNode<>(name, processorParameters, new String[] {}, null, null, Optional.empty());
+            new StreamTableJoinNode<>(name, processorParameters, new String[] {}, null, null);
 
         if (leftJoin) {
             streamTableJoinNode.labels().add(GraphNode.Label.NULL_KEY_RELAXED_JOIN);
@@ -1159,16 +1159,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final String name = renamed.orElseGenerateWithPrefix(builder, leftJoin ? LEFTJOIN_NAME : JOIN_NAME);
 
-        Optional<String> bufferStoreName = Optional.empty();
+        Optional<StoreBuilder<?>> bufferStoreBuilder = Optional.empty();
 
         if (joinedInternal.gracePeriod() != null) {
             if (!((KTableImpl<K, ?, VO>) table).graphNode.isOutputVersioned().orElse(true)) {
                 throw new IllegalArgumentException("KTable must be versioned to use a grace period in a stream table join.");
             }
-            bufferStoreName = Optional.of(name + "-Buffer");
-            final RocksDBTimeOrderedKeyValueBuffer.Builder<Object, Object> storeBuilder =
-                    new RocksDBTimeOrderedKeyValueBuffer.Builder<>(bufferStoreName.get(), joinedInternal.gracePeriod(), name);
-            builder.addStateStore(StoreBuilderWrapper.wrapStoreBuilder(storeBuilder));
+            final String bufferName = name + "-Buffer";
+            bufferStoreBuilder = Optional.of(new RocksDBTimeOrderedKeyValueBuffer.Builder<>(bufferName, joinedInternal.gracePeriod(), name));
         }
 
         final ProcessorSupplier<K, V, K, ? extends VR> processorSupplier = new KStreamKTableJoin<>(
@@ -1176,7 +1174,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             joiner,
             leftJoin,
             Optional.ofNullable(joinedInternal.gracePeriod()),
-            bufferStoreName);
+            bufferStoreBuilder
+        );
 
         final ProcessorParameters<K, V, ?, ?> processorParameters = new ProcessorParameters<>(processorSupplier, name);
         final StreamTableJoinNode<K, V> streamTableJoinNode = new StreamTableJoinNode<>(
@@ -1184,8 +1183,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             processorParameters,
             ((KTableImpl<K, ?, VO>) table).valueGetterSupplier().storeNames(),
             this.name,
-            joinedInternal.gracePeriod(),
-            bufferStoreName
+            joinedInternal.gracePeriod()
         );
 
         builder.addGraphNode(graphNode, streamTableJoinNode);
