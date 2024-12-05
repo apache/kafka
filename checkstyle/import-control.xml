@@ -331,6 +331,7 @@
         <allow pkg="org.apache.kafka.tools"/>
         <allow pkg="org.apache.kafka.server.config" />
         <allow pkg="scala"/>
+        <allow pkg="com.google.re2j"/>
         <subpackage name="share">
           <allow pkg="org.apache.kafka.server.share" />
           <allow pkg="org.apache.kafka.coordinator.share" />

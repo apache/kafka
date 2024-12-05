@@ -52,6 +52,8 @@ import org.apache.kafka.server.util.CommandLineUtils;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.ObjectWriter;
+import com.google.re2j.Pattern;
+import com.google.re2j.PatternSyntaxException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -85,6 +87,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import joptsimple.OptionException;
+import joptsimple.OptionSpec;
 
 public class ConsumerGroupCommand {
     private static final Logger LOGGER = LoggerFactory.getLogger(ConsumerGroupCommand.class);
@@ -94,10 +97,27 @@ public class ConsumerGroupCommand {
     public static void main(String[] args) {
         ConsumerGroupCommandOptions opts = ConsumerGroupCommandOptions.fromArgs(args);
         try {
-            // should have exactly one action
-            long actions = Stream.of(opts.listOpt, opts.describeOpt, opts.deleteOpt, opts.resetOffsetsOpt, opts.deleteOffsetsOpt).filter(opts.options::has).count();
-            if (actions != 1)
-                CommandLineUtils.printUsageAndExit(opts.parser, "Command must include exactly one action: --list, --describe, --delete, --reset-offsets, --delete-offsets");
+            List<OptionSpec<?>> actions = List.of(
+                opts.listOpt,
+                opts.describeOpt,
+                opts.deleteOpt,
+                opts.resetOffsetsOpt,
+                opts.deleteOffsetsOpt,
+                opts.validateRegexOpt
+            );
+
+            // Should have exactly one action.
+            if (actions.stream().filter(opts.options::has).count() != 1) {
+                CommandLineUtils.printUsageAndExit(
+                    opts.parser,
+                    String.format(
+                        "Command must include exactly one action: %s",
+                        actions.stream().map(opt ->
+                            "--" + opt.options().get(0)
+                        ).collect(Collectors.joining(", "))
+                    )
+                );
+            }
 
             run(opts);
         } catch (OptionException e) {
@@ -106,6 +126,11 @@ public class ConsumerGroupCommand {
     }
 
     static void run(ConsumerGroupCommandOptions opts) {
+        if (opts.options.has(opts.validateRegexOpt)) {
+            validateRegex(opts.options.valueOf(opts.validateRegexOpt));
+            return;
+        }
+
         try (ConsumerGroupService consumerGroupService = new ConsumerGroupService(opts, Collections.emptyMap())) {
             if (opts.options.has(opts.listOpt))
                 consumerGroupService.listGroups();
@@ -127,6 +152,15 @@ public class ConsumerGroupCommand {
             CommandLineUtils.printUsageAndExit(opts.parser, e.getMessage());
         } catch (Throwable e) {
             printError("Executing consumer group command failed due to " + e.getMessage(), Optional.of(e));
+        }
+    }
+
+    static void validateRegex(String regex) {
+        try {
+            Pattern.compile(regex);
+            System.out.printf("The regular expression `%s` is valid.%n", regex);
+        } catch (PatternSyntaxException ex) {
+            System.out.printf("The regular expression `%s` is invalid: %s.%n", regex, ex.getDescription());
         }
     }
 

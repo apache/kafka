@@ -2426,6 +2426,7 @@ project(':tools') {
     implementation libs.slf4jApi
     implementation libs.slf4jReload4j
     implementation libs.joptSimple
+    implementation libs.re2j
 
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
     implementation libs.jacksonJaxrsJsonProvider

@@ -35,7 +35,7 @@ import static org.apache.kafka.tools.ToolsUtils.minus;
 public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
     private static final Logger LOGGER = LoggerFactory.getLogger(ConsumerGroupCommandOptions.class);
 
-    private static final String BOOTSTRAP_SERVER_DOC = "REQUIRED: The server(s) to connect to.";
+    private static final String BOOTSTRAP_SERVER_DOC = "The server(s) to connect to. REQUIRED for all options except for --validate-regex.";
     private static final String GROUP_DOC = "The consumer group we wish to act on.";
     private static final String TOPIC_DOC = "The topic whose consumer group information should be deleted or topic whose should be included in the reset offset process. " +
         "In `reset-offsets` case, partitions can be specified using this format: `topic1:0,1,2`, where 0,1,2 are the partition to be included in the process. " +
@@ -84,6 +84,7 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
         "Example: --bootstrap-server localhost:9092 --list --type classic,consumer" + NL +
         "This option may be used with the '--list' option only.";
     private static final String DELETE_OFFSETS_DOC = "Delete offsets of consumer group. Supports one consumer group at the time, and multiple topics.";
+    private static final String VALIDATE_REGEX_DOC = "Validate that the syntax of the provided regular expression is valid according to the RE2 format.";
 
     final OptionSpec<String> bootstrapServerOpt;
     final OptionSpec<String> groupOpt;
@@ -113,6 +114,7 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
     final OptionSpec<Void> offsetsOpt;
     final OptionSpec<String> stateOpt;
     final OptionSpec<String> typeOpt;
+    final OptionSpec<String> validateRegexOpt;
 
     final Set<OptionSpec<?>> allGroupSelectionScopeOpts;
     final Set<OptionSpec<?>> allConsumerGroupLevelOpts;
@@ -196,6 +198,10 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
             .availableIf(listOpt)
             .withOptionalArg()
             .ofType(String.class);
+        validateRegexOpt = parser.accepts("validate-regex", VALIDATE_REGEX_DOC)
+            .withRequiredArg()
+            .describedAs("regex")
+            .ofType(String.class);
 
         allGroupSelectionScopeOpts = new HashSet<>(Arrays.asList(groupOpt, allGroupsOpt));
         allConsumerGroupLevelOpts = new HashSet<>(Arrays.asList(listOpt, describeOpt, deleteOpt, resetOffsetsOpt));
@@ -210,7 +216,9 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
     void checkArgs() {
         CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to list all consumer groups, describe a consumer group, delete consumer group info, or reset consumer group offsets.");
 
-        CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt);
+        if (!options.has(validateRegexOpt)) {
+            CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt);
+        }
 
         if (options.has(describeOpt)) {
             if (!options.has(groupOpt) && !options.has(allGroupsOpt))
