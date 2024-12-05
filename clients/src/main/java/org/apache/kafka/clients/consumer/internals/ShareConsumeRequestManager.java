@@ -996,14 +996,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             nodesWithPendingRequests.add(nodeId);
             isProcessed = false;
 
-            BiConsumer<ClientResponse, Throwable> responseHandler = (clientResponse, error) -> {
-                if (error != null) {
-                    handleShareAcknowledgeFailure(nodeToSend, requestBuilder.data(), this, error, clientResponse.receivedTimeMs());
-                } else {
-                    handleShareAcknowledgeSuccess(nodeToSend, requestBuilder.data(), this, clientResponse, clientResponse.receivedTimeMs());
-                }
-            };
-
             if (requestBuilder == null) {
                 handleSessionErrorCode(Errors.SHARE_SESSION_NOT_FOUND);
                 return null;
@@ -1014,7 +1006,16 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 } else {
                     incompleteAcknowledgements.clear();
                 }
-                return new UnsentRequest(requestBuilder, Optional.of(nodeToSend)).whenComplete(responseHandler);
+
+                UnsentRequest unsentRequest = new UnsentRequest(requestBuilder, Optional.of(nodeToSend));
+                BiConsumer<ClientResponse, Throwable> responseHandler = (clientResponse, error) -> {
+                    if (error != null) {
+                        handleShareAcknowledgeFailure(nodeToSend, requestBuilder.data(), this, error, unsentRequest.handler().completionTimeMs());
+                    } else {
+                        handleShareAcknowledgeSuccess(nodeToSend, requestBuilder.data(), this, clientResponse, unsentRequest.handler().completionTimeMs());
+                    }
+                };
+                return unsentRequest.whenComplete(responseHandler);
             }
         }
 
