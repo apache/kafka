@@ -45,7 +45,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.raft.{Endpoints, FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, QuorumConfig, RaftClient, ReplicatedLog}
 import org.apache.kafka.server.ProcessRole
-import org.apache.kafka.server.common.Features
+import org.apache.kafka.server.common.Feature
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.util.{FileLock, KafkaScheduler}
 import org.apache.kafka.server.fault.FaultHandler
@@ -240,7 +240,7 @@ class KafkaRaftManager[T](
       clusterId,
       bootstrapServers,
       localListeners,
-      Features.KRAFT_VERSION.supportedVersionRange(),
+      Feature.KRAFT_VERSION.supportedVersionRange(),
       raftConfig
     )
   }

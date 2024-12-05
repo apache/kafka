@@ -27,9 +27,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.kafka.server.common.Features.ELIGIBLE_LEADER_REPLICAS_VERSION;
-import static org.apache.kafka.server.common.Features.GROUP_VERSION;
-import static org.apache.kafka.server.common.Features.TRANSACTION_VERSION;
+import static org.apache.kafka.server.common.Feature.ELIGIBLE_LEADER_REPLICAS_VERSION;
+import static org.apache.kafka.server.common.Feature.GROUP_VERSION;
+import static org.apache.kafka.server.common.Feature.TRANSACTION_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;

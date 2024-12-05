@@ -33,7 +33,7 @@ import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, 
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol.PLAINTEXT
 import org.apache.kafka.controller.ControllerRequestContextUtil
-import org.apache.kafka.server.common.{Features, MetadataVersion}
+import org.apache.kafka.server.common.{Feature, MetadataVersion}
 import org.apache.kafka.server.config.QuotaConfig
 import org.apache.kafka.server.quota.QuotaType
 import org.junit.jupiter.api.Assertions._
@@ -282,7 +282,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
       .setName(MetadataVersion.FEATURE_NAME)
       .setMinSupportedVersion(MetadataVersion.latestProduction().featureLevel())
       .setMaxSupportedVersion(MetadataVersion.latestTesting().featureLevel()))
-    Features.PRODUCTION_FEATURES.forEach { feature =>
+    Feature.PRODUCTION_FEATURES.forEach { feature =>
       features.add(new BrokerRegistrationRequestData.Feature()
         .setName(feature.featureName())
         .setMinSupportedVersion(feature.minimumProduction())

@@ -27,7 +27,7 @@ import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.mutable.BoundedList;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -251,9 +251,9 @@ public class FeatureControlManager {
         } else {
             // Validate dependencies for features that are not metadata.version
             try {
-                Features.validateVersion(
+                Feature.validateVersion(
                     // Allow unstable feature versions is true because the version range is already checked above.
-                    Features.featureFromName(featureName).fromFeatureLevel(newVersion, true),
+                    Feature.featureFromName(featureName).fromFeatureLevel(newVersion, true),
                     proposedUpdatedVersions);
             } catch (IllegalArgumentException e) {
                 return invalidUpdateVersion(featureName, newVersion, e.getMessage());

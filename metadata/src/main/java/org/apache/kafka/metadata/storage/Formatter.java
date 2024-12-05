@@ -29,8 +29,8 @@ import org.apache.kafka.raft.DynamicVoters;
 import org.apache.kafka.raft.KafkaRaftClient;
 import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.FeatureVersion;
-import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.snapshot.FileRawSnapshotWriter;
@@ -69,7 +69,7 @@ public class Formatter {
     /**
      * The features that are supported.
      */
-    private List<Features> supportedFeatures = Features.PRODUCTION_FEATURES;
+    private List<Feature> supportedFeatures = Feature.PRODUCTION_FEATURES;
 
     /**
      * The current node id.
@@ -139,7 +139,7 @@ public class Formatter {
         return this;
     }
 
-    public Formatter setSupportedFeatures(List<Features> supportedFeatures) {
+    public Formatter setSupportedFeatures(List<Feature> supportedFeatures) {
         this.supportedFeatures = supportedFeatures;
         return this;
     }
@@ -298,7 +298,7 @@ public class Formatter {
     }
 
     Map<String, Short> calculateEffectiveFeatureLevels() {
-        Map<String, Features> nameToSupportedFeature = new TreeMap<>();
+        Map<String, Feature> nameToSupportedFeature = new TreeMap<>();
         supportedFeatures.forEach(feature -> nameToSupportedFeature.put(feature.featureName(), feature));
         Map<String, Short> newFeatureLevels = new TreeMap<>();
         // Verify that all specified features are known to us.
@@ -321,7 +321,7 @@ public class Formatter {
                     Optional.ofNullable(newFeatureLevels.get(KRaftVersion.FEATURE_NAME))));
             } else if (!newFeatureLevels.containsKey(supportedFeature.featureName())) {
                 newFeatureLevels.put(supportedFeature.featureName(),
-                    supportedFeature.defaultValue(releaseVersion));
+                    supportedFeature.defaultLevel(releaseVersion));
             }
         });
         // Verify that the specified features support the given levels. This requires the full
@@ -330,10 +330,10 @@ public class Formatter {
             String featureName = entry.getKey();
             if (!featureName.equals(MetadataVersion.FEATURE_NAME)) {
                 short level = entry.getValue();
-                Features supportedFeature = nameToSupportedFeature.get(featureName);
+                Feature supportedFeature = nameToSupportedFeature.get(featureName);
                 FeatureVersion featureVersion =
                     supportedFeature.fromFeatureLevel(level, unstableFeatureVersionsEnabled);
-                Features.validateVersion(featureVersion, newFeatureLevels);
+                Feature.validateVersion(featureVersion, newFeatureLevels);
             }
         }
         return newFeatureLevels;

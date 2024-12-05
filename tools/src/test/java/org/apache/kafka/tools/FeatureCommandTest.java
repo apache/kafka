@@ -21,7 +21,7 @@ import org.apache.kafka.common.test.api.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import net.sourceforge.argparse4j.inf.Namespace;
@@ -49,7 +49,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @ExtendWith(value = ClusterTestExtensions.class)
 public class FeatureCommandTest {
 
-    private final List<Features> testingFeatures = Arrays.stream(Features.FEATURES).collect(Collectors.toList());
+    private final List<Feature> testingFeatures = Arrays.stream(Feature.FEATURES).collect(Collectors.toList());
 
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_3_IV1)
     public void testDescribeWithKRaft(ClusterInstance cluster) {
@@ -390,8 +390,8 @@ public class FeatureCommandTest {
         assertTrue(versionMappingOutput.contains("metadata.version=" + metadataVersion.featureLevel() + " (" + metadataVersion.version() + ")"),
             "Output did not contain expected Metadata Version: " + versionMappingOutput);
 
-        for (Features feature : Features.values()) {
-            int featureLevel = feature.defaultValue(metadataVersion);
+        for (Feature feature : Feature.values()) {
+            int featureLevel = feature.defaultLevel(metadataVersion);
             assertTrue(versionMappingOutput.contains(feature.featureName() + "=" + featureLevel),
                 "Output did not contain expected feature mapping: " + versionMappingOutput);
         }
@@ -414,8 +414,8 @@ public class FeatureCommandTest {
         assertTrue(versionMappingOutput.contains("metadata.version=" + metadataVersion.featureLevel() + " (" + metadataVersion.version() + ")"),
             "Output did not contain expected Metadata Version: " + versionMappingOutput);
 
-        for (Features feature : Features.values()) {
-            int featureLevel = feature.defaultValue(metadataVersion);
+        for (Feature feature : Feature.values()) {
+            int featureLevel = feature.defaultLevel(metadataVersion);
             assertTrue(versionMappingOutput.contains(feature.featureName() + "=" + featureLevel),
                 "Output did not contain expected feature mapping: " + versionMappingOutput);
         }

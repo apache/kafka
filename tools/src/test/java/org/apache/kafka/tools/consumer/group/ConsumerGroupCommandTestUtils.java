@@ -22,7 +22,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.Feature;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -85,8 +85,8 @@ class ConsumerGroupCommandTestUtils {
                 .setServerProperties(serverProperties)
                 .setTags(Collections.singletonList("kraftGroupCoordinator"))
                 .setFeatures(Utils.mkMap(
-                    Utils.mkEntry(Features.TRANSACTION_VERSION, (short) 2),
-                    Utils.mkEntry(Features.GROUP_VERSION, (short) 1)))
+                    Utils.mkEntry(Feature.TRANSACTION_VERSION, (short) 2),
+                    Utils.mkEntry(Feature.GROUP_VERSION, (short) 1)))
                 .build());
     }
 

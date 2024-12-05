@@ -28,7 +28,7 @@ import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.TestFeatureVersion;
 import org.apache.kafka.server.common.TransactionVersion;
@@ -381,32 +381,32 @@ public class FeatureControlManagerTest {
         Map<String, VersionRange> localSupportedFeatures = new HashMap<>();
         localSupportedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
             MetadataVersion.IBP_3_0_IV1.featureLevel(), MetadataVersion.latestTesting().featureLevel()));
-        localSupportedFeatures.put(Features.TEST_VERSION.featureName(), VersionRange.of(0, 2));
+        localSupportedFeatures.put(Feature.TEST_VERSION.featureName(), VersionRange.of(0, 2));
         FeatureControlManager manager = new FeatureControlManager.Builder().
             setQuorumFeatures(new QuorumFeatures(0, localSupportedFeatures, emptyList())).
             setClusterFeatureSupportDescriber(createFakeClusterFeatureSupportDescriber(
-                Collections.singletonList(new SimpleImmutableEntry<>(1, Collections.singletonMap(Features.TEST_VERSION.featureName(), VersionRange.of(0, 3)))),
+                Collections.singletonList(new SimpleImmutableEntry<>(1, Collections.singletonMap(Feature.TEST_VERSION.featureName(), VersionRange.of(0, 3)))),
                 emptyList())).
                 build();
         ControllerResult<ApiError> result  = manager.updateFeatures(
-                Collections.singletonMap(Features.TEST_VERSION.featureName(), (short) 1),
-                Collections.singletonMap(Features.TEST_VERSION.featureName(), FeatureUpdate.UpgradeType.UPGRADE),
+                Collections.singletonMap(Feature.TEST_VERSION.featureName(), (short) 1),
+                Collections.singletonMap(Feature.TEST_VERSION.featureName(), FeatureUpdate.UpgradeType.UPGRADE),
                 false);
         assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
-                new FeatureLevelRecord().setName(Features.TEST_VERSION.featureName()).setFeatureLevel((short) 1), (short) 0)),
+                new FeatureLevelRecord().setName(Feature.TEST_VERSION.featureName()).setFeatureLevel((short) 1), (short) 0)),
                 ApiError.NONE), result);
         RecordTestUtils.replayAll(manager, result.records());
-        assertEquals(Optional.of((short) 1), manager.finalizedFeatures(Long.MAX_VALUE).get(Features.TEST_VERSION.featureName()));
+        assertEquals(Optional.of((short) 1), manager.finalizedFeatures(Long.MAX_VALUE).get(Feature.TEST_VERSION.featureName()));
 
         ControllerResult<ApiError> result2  = manager.updateFeatures(
-                Collections.singletonMap(Features.TEST_VERSION.featureName(), (short) 0),
-                Collections.singletonMap(Features.TEST_VERSION.featureName(), FeatureUpdate.UpgradeType.UNSAFE_DOWNGRADE),
+                Collections.singletonMap(Feature.TEST_VERSION.featureName(), (short) 0),
+                Collections.singletonMap(Feature.TEST_VERSION.featureName(), FeatureUpdate.UpgradeType.UNSAFE_DOWNGRADE),
                 false);
         assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
-            new FeatureLevelRecord().setName(Features.TEST_VERSION.featureName()).setFeatureLevel((short) 0), (short) 0)),
+            new FeatureLevelRecord().setName(Feature.TEST_VERSION.featureName()).setFeatureLevel((short) 0), (short) 0)),
             ApiError.NONE), result2);
         RecordTestUtils.replayAll(manager, result2.records());
-        assertEquals(Optional.empty(), manager.finalizedFeatures(Long.MAX_VALUE).get(Features.TEST_VERSION.featureName()));
+        assertEquals(Optional.empty(), manager.finalizedFeatures(Long.MAX_VALUE).get(Feature.TEST_VERSION.featureName()));
     }
 
     @Test

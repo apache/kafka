@@ -31,7 +31,7 @@ import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.security.authorizer.AclEntry
-import org.apache.kafka.server.common.Features
+import org.apache.kafka.server.common.Feature
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
 import org.junit.jupiter.api.extension.ExtendWith
 
@@ -50,7 +50,7 @@ class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCo
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
     ),
     features = Array(
-      new ClusterFeature(feature = Features.GROUP_VERSION, version = 0)
+      new ClusterFeature(feature = Feature.GROUP_VERSION, version = 0)
     )
   )
   def testConsumerGroupDescribeWhenFeatureFlagNotEnabled(): Unit = {

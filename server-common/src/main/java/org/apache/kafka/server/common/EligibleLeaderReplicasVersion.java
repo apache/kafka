@@ -29,6 +29,8 @@ public enum EligibleLeaderReplicasVersion implements FeatureVersion {
 
     public static final String FEATURE_NAME = "eligible.leader.replicas.version";
 
+    public static final EligibleLeaderReplicasVersion LATEST_PRODUCTION = ELRV_0;
+
     private final short featureLevel;
     private final MetadataVersion bootstrapMetadataVersion;
     private final Map<String, Short> dependencies;

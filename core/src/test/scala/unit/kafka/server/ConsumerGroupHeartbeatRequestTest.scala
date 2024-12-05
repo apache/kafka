@@ -26,7 +26,7 @@ import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, Consu
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse}
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
-import org.apache.kafka.server.common.Features
+import org.apache.kafka.server.common.Feature
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull}
 import org.junit.jupiter.api.extension.ExtendWith
 
@@ -60,7 +60,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
   @ClusterTest(
     features = Array(
-      new ClusterFeature(feature = Features.GROUP_VERSION, version = 0)
+      new ClusterFeature(feature = Feature.GROUP_VERSION, version = 0)
     )
   )
   def testConsumerGroupHeartbeatIsInaccessibleWhenFeatureFlagNotEnabled(): Unit = {

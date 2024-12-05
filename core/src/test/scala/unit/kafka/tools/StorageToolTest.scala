@@ -27,7 +27,7 @@ import kafka.utils.TestUtils
 import net.sourceforge.argparse4j.inf.ArgumentParserException
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.common.{Features, MetadataVersion}
+import org.apache.kafka.server.common.{Feature, MetadataVersion}
 import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
 import org.apache.kafka.metadata.properties.{MetaPropertiesEnsemble, PropertiesUtils}
 import org.apache.kafka.metadata.storage.FormatterException
@@ -54,7 +54,7 @@ class StorageToolTest {
     properties
   }
 
-  val testingFeatures = Features.FEATURES.toList.asJava
+  val testingFeatures = Feature.FEATURES.toList.asJava
 
   @Test
   def testConfigToLogDirectories(): Unit = {
@@ -571,8 +571,8 @@ Found problem:
       s"Output did not contain expected Metadata Version: $output"
     )
 
-    for (feature <- Features.PRODUCTION_FEATURES.asScala) {
-      val featureLevel = feature.defaultValue(metadataVersion)
+    for (feature <- Feature.PRODUCTION_FEATURES.asScala) {
+      val featureLevel = feature.defaultLevel(metadataVersion)
       assertTrue(output.contains(s"${feature.featureName()}=$featureLevel"),
         s"Output did not contain expected feature mapping: $output"
       )
@@ -594,8 +594,8 @@ Found problem:
       s"Output did not contain expected Metadata Version: $output"
     )
 
-    for (feature <- Features.PRODUCTION_FEATURES.asScala) {
-      val featureLevel = feature.defaultValue(metadataVersion)
+    for (feature <- Feature.PRODUCTION_FEATURES.asScala) {
+      val featureLevel = feature.defaultLevel(metadataVersion)
       assertTrue(output.contains(s"${feature.featureName()}=$featureLevel"),
         s"Output did not contain expected feature mapping: $output"
       )
