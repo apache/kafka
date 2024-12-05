@@ -42,6 +42,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.AssertionFailureBuilder.assertionFailure;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -92,6 +93,38 @@ public class Assertions {
                 CoordinatorRecord actualRecord = actualRecords.get(i);
                 assertRecordEquals(expectedRecord, actualRecord);
             }
+        } catch (AssertionFailedError e) {
+            assertionFailure()
+                .expected(expectedRecords)
+                .actual(actualRecords)
+                .buildAndThrow();
+        }
+    }
+
+    public static void assertUnorderedRecordsEquals(
+        List<List<CoordinatorRecord>> expectedRecords,
+        List<CoordinatorRecord> actualRecords
+    ) {
+        try {
+            int i = 0, j = 0;
+            while (i < expectedRecords.size()) {
+                List<CoordinatorRecord> slice = expectedRecords.get(i);
+                assertRecordsEquals(
+                    slice
+                        .stream()
+                        .sorted(Comparator.comparing(Object::toString))
+                        .collect(Collectors.toList()),
+                    actualRecords
+                        .subList(j, j + slice.size())
+                        .stream()
+                        .sorted(Comparator.comparing(Object::toString))
+                        .collect(Collectors.toList())
+                );
+
+                j += slice.size();
+                i++;
+            }
+            assertEquals(j, actualRecords.size());
         } catch (AssertionFailedError e) {
             assertionFailure()
                 .expected(expectedRecords)
