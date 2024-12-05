@@ -116,7 +116,7 @@ public class ClusterTestExtensionsTest {
             @ClusterConfigProperty(key = "spam", value = "eggs"),
             @ClusterConfigProperty(key = "default.key", value = "overwrite.value")
         }, tags = {
-                "default.display.key1", "default.display.key2"
+            "default.display.key1", "default.display.key2"
         }),
         @ClusterTest(types = {Type.CO_KRAFT}, serverProperties = {
             @ClusterConfigProperty(key = "foo", value = "baz"),
@@ -126,7 +126,7 @@ public class ClusterTestExtensionsTest {
             @ClusterConfigProperty(key = "spam", value = "eggs"),
             @ClusterConfigProperty(key = "default.key", value = "overwrite.value")
         }, tags = {
-                "default.display.key1", "default.display.key2"
+            "default.display.key1", "default.display.key2"
         })
     })
     public void testClusterTests() throws ExecutionException, InterruptedException {

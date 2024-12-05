@@ -202,14 +202,14 @@ public interface Authorizer extends Configurable, Closeable {
 
         EnumMap<PatternType, Set<String>> denyPatterns =
             new EnumMap<>(PatternType.class) {{
-                put(PatternType.LITERAL, new HashSet<>());
-                put(PatternType.PREFIXED, new HashSet<>());
-            }};
+                    put(PatternType.LITERAL, new HashSet<>());
+                    put(PatternType.PREFIXED, new HashSet<>());
+                }};
         EnumMap<PatternType, Set<String>> allowPatterns =
             new EnumMap<>(PatternType.class) {{
-                put(PatternType.LITERAL, new HashSet<>());
-                put(PatternType.PREFIXED, new HashSet<>());
-            }};
+                    put(PatternType.LITERAL, new HashSet<>());
+                    put(PatternType.PREFIXED, new HashSet<>());
+                }};
 
         boolean hasWildCardAllow = false;
 

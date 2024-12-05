@@ -1196,7 +1196,7 @@ public class AbstractHerderTest {
         keys.putAll(configDef.configKeys());
     }
 
-    protected void addValue(List<ConfigValue> values, String name, String value, String...errors) {
+    protected void addValue(List<ConfigValue> values, String name, String value, String... errors) {
         values.add(new ConfigValue(name, value, new ArrayList<>(), Arrays.asList(errors)));
     }
 
@@ -1211,7 +1211,7 @@ public class AbstractHerderTest {
         assertNull(info.configKey());
     }
 
-    protected void assertInfoValue(ConfigInfos infos, String name, String value, String...errors) {
+    protected void assertInfoValue(ConfigInfos infos, String name, String value, String... errors) {
         ConfigValueInfo info = findInfo(infos, name).configValue();
         assertEquals(name, info.name());
         assertEquals(value, info.value());

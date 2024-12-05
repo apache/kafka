@@ -1815,10 +1815,10 @@ public class TransactionManagerTest {
 
     @ParameterizedTest
     @EnumSource(names = {
-            "UNKNOWN_TOPIC_OR_PARTITION",
-            "REQUEST_TIMED_OUT",
-            "COORDINATOR_LOAD_IN_PROGRESS",
-            "CONCURRENT_TRANSACTIONS"
+        "UNKNOWN_TOPIC_OR_PARTITION",
+        "REQUEST_TIMED_OUT",
+        "COORDINATOR_LOAD_IN_PROGRESS",
+        "CONCURRENT_TRANSACTIONS"
     })
     public void testRetriableErrors(Errors error) {
         // Ensure FindCoordinator retries.

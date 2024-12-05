@@ -235,7 +235,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     }
 
     public static class RocksDBConfigSetterWithUserProvidedStatistics implements RocksDBConfigSetter {
-        public RocksDBConfigSetterWithUserProvidedStatistics(){}
+        public RocksDBConfigSetterWithUserProvidedStatistics() {}
 
         public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
             lastStatistics = new Statistics();
@@ -306,7 +306,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
 
     public static class RocksDBConfigSetterWithUserProvidedNewBlockBasedTableFormatConfig implements RocksDBConfigSetter {
-        public RocksDBConfigSetterWithUserProvidedNewBlockBasedTableFormatConfig(){}
+        public RocksDBConfigSetterWithUserProvidedNewBlockBasedTableFormatConfig() {}
 
         public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
             options.setTableFormatConfig(new BlockBasedTableConfig());
@@ -335,7 +335,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     }
 
     public static class RocksDBConfigSetterWithUserProvidedNewPlainTableFormatConfig implements RocksDBConfigSetter {
-        public RocksDBConfigSetterWithUserProvidedNewPlainTableFormatConfig(){}
+        public RocksDBConfigSetterWithUserProvidedNewPlainTableFormatConfig() {}
 
         public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
             options.setTableFormatConfig(new PlainTableConfig());

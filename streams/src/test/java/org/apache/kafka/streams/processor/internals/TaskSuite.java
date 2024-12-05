@@ -31,13 +31,13 @@ import org.junit.platform.suite.api.Suite;
  */
 @Suite
 @SelectClasses({
-        StreamTaskTest.class,
-        StandbyTaskTest.class,
-        GlobalStateTaskTest.class,
-        TaskManagerTest.class,
-        TaskMetricsTest.class,
-        LegacyStickyTaskAssignorTest.class,
-        StreamsPartitionAssignorTest.class,
+    StreamTaskTest.class,
+    StandbyTaskTest.class,
+    GlobalStateTaskTest.class,
+    TaskManagerTest.class,
+    TaskMetricsTest.class,
+    LegacyStickyTaskAssignorTest.class,
+    StreamsPartitionAssignorTest.class,
 })
 public class TaskSuite {
 }

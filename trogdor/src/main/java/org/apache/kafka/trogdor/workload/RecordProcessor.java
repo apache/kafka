@@ -28,7 +28,7 @@ import com.fasterxml.jackson.databind.JsonNode;
  */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
 @JsonSubTypes(value = {
-        @JsonSubTypes.Type(value = TimestampRecordProcessor.class, name = "timestamp"),
+    @JsonSubTypes.Type(value = TimestampRecordProcessor.class, name = "timestamp"),
 })
 public interface RecordProcessor {
     void processRecords(ConsumerRecords<byte[], byte[]> consumerRecords);

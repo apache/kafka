@@ -907,8 +907,8 @@ public class SelectorTest {
         }
         assertNotNull(selector.lowestPriorityChannel());
         for (int i = conns - 1; i >= 0; i--) {
-            if (i != 2)
-              assertEquals("", blockingRequest(String.valueOf(i), ""));
+            if (i != 2) 
+                assertEquals("", blockingRequest(String.valueOf(i), ""));
             time.sleep(10);
         }
         assertEquals("2", selector.lowestPriorityChannel().id());

@@ -1800,7 +1800,7 @@ public class ReplicationControlManagerTest {
                             setReplicas(asList(0, 2, 1)),
                         new ReassignablePartition().setPartitionIndex(2).
                             setReplicas(asList(0, 2, 1)))),
-                new ReassignableTopic().setName("bar"))));
+                    new ReassignableTopic().setName("bar"))));
         assertEquals(new AlterPartitionReassignmentsResponseData().
                 setErrorMessage(null).setResponses(asList(
                     new ReassignableTopicResponse().setName("foo").setPartitions(asList(
@@ -2151,27 +2151,21 @@ public class ReplicationControlManagerTest {
                             setReplicas(asList(5, 6, 7)),
                         new ReassignablePartition().setPartitionIndex(3).
                             setReplicas(Collections.emptyList()))),
-                new ReassignableTopic().setName("bar").setPartitions(singletonList(
+                    new ReassignableTopic().setName("bar").setPartitions(singletonList(
                         new ReassignablePartition().setPartitionIndex(0).
                             setReplicas(asList(1, 2, 3, 4, 0)))))));
         assertEquals(new AlterPartitionReassignmentsResponseData().
-                setErrorMessage(null).setResponses(asList(
-            new ReassignableTopicResponse().setName("foo").setPartitions(asList(
-                new ReassignablePartitionResponse().setPartitionIndex(0).
-                    setErrorMessage(null),
-                new ReassignablePartitionResponse().setPartitionIndex(1).
-                    setErrorMessage(null),
-                new ReassignablePartitionResponse().setPartitionIndex(2).
-                    setErrorCode(INVALID_REPLICA_ASSIGNMENT.code()).
-                    setErrorMessage("The manual partition assignment includes broker 5, " +
-                        "but no such broker is registered."),
-                new ReassignablePartitionResponse().setPartitionIndex(3).
-                    setErrorCode(INVALID_REPLICA_ASSIGNMENT.code()).
-                    setErrorMessage("The manual partition assignment includes an empty " +
-                        "replica list."))),
-            new ReassignableTopicResponse().setName("bar").setPartitions(singletonList(
-                new ReassignablePartitionResponse().setPartitionIndex(0).
-                    setErrorMessage(null))))),
+                setErrorMessage(null).
+                setResponses(asList(
+                    new ReassignableTopicResponse().setName("foo").setPartitions(asList(
+                        new ReassignablePartitionResponse().setPartitionIndex(0).setErrorMessage(null), 
+                        new ReassignablePartitionResponse().setPartitionIndex(1).setErrorMessage(null), 
+                        new ReassignablePartitionResponse().setPartitionIndex(2).setErrorCode(INVALID_REPLICA_ASSIGNMENT.code()).
+                            setErrorMessage("The manual partition assignment includes broker 5, but no such broker is registered."), 
+                        new ReassignablePartitionResponse().setPartitionIndex(3).setErrorCode(INVALID_REPLICA_ASSIGNMENT.code()).
+                            setErrorMessage("The manual partition assignment includes an empty replica list."))),
+                    new ReassignableTopicResponse().setName("bar").setPartitions(singletonList(
+                        new ReassignablePartitionResponse().setPartitionIndex(0).setErrorMessage(null))))),
             alterResult.response());
         ctx.replay(alterResult.records());
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 4}).setIsr(new int[] {1, 2, 4}).

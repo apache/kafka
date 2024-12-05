@@ -2061,9 +2061,9 @@ public class KafkaAdminClientTest {
                 new DescribeConfigsResponseData().setResults(asList(new DescribeConfigsResponseData.DescribeConfigsResult()
                     .setResourceName(brokerResource.name()).setResourceType(brokerResource.type().id()).setErrorCode(Errors.NONE.code())
                     .setConfigs(emptyList()),
-                new DescribeConfigsResponseData.DescribeConfigsResult()
-                    .setResourceName(brokerLoggerResource.name()).setResourceType(brokerLoggerResource.type().id()).setErrorCode(Errors.NONE.code())
-                    .setConfigs(emptyList())))), env.cluster().nodeById(0));
+                    new DescribeConfigsResponseData.DescribeConfigsResult()
+                        .setResourceName(brokerLoggerResource.name()).setResourceType(brokerLoggerResource.type().id()).setErrorCode(Errors.NONE.code())
+                        .setConfigs(emptyList())))), env.cluster().nodeById(0));
             Map<ConfigResource, KafkaFuture<Config>> result = env.adminClient().describeConfigs(asList(
                     brokerResource,
                     brokerLoggerResource)).values();
@@ -2102,9 +2102,9 @@ public class KafkaAdminClientTest {
                 new DescribeConfigsResponseData().setResults(asList(new DescribeConfigsResponseData.DescribeConfigsResult()
                         .setResourceName(topic.name()).setResourceType(topic.type().id()).setErrorCode(Errors.NONE.code())
                         .setConfigs(emptyList()),
-                new DescribeConfigsResponseData.DescribeConfigsResult()
-                        .setResourceName(unrequested.name()).setResourceType(unrequested.type().id()).setErrorCode(Errors.NONE.code())
-                        .setConfigs(emptyList())))));
+                    new DescribeConfigsResponseData.DescribeConfigsResult()
+                            .setResourceName(unrequested.name()).setResourceType(unrequested.type().id()).setErrorCode(Errors.NONE.code())
+                            .setConfigs(emptyList())))));
             Map<ConfigResource, KafkaFuture<Config>> result = env.adminClient().describeConfigs(singletonList(
                     topic)).values();
             assertEquals(new HashSet<>(singletonList(topic)), result.keySet());

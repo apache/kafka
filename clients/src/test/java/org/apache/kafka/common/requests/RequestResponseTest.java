@@ -2187,9 +2187,9 @@ public class RequestResponseTest {
         JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols =
             new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
                 Collections.singleton(
-                new JoinGroupRequestData.JoinGroupRequestProtocol()
-                        .setName("consumer-range")
-                        .setMetadata(new byte[0])).iterator()
+                        new JoinGroupRequestData.JoinGroupRequestProtocol()
+                                .setName("consumer-range")
+                                .setMetadata(new byte[0])).iterator()
         );
 
         JoinGroupRequestData data = new JoinGroupRequestData()

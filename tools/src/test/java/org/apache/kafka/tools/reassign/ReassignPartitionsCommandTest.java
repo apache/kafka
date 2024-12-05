@@ -101,16 +101,16 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ClusterTestDefaults(brokers = 5, disksPerBroker = 3, serverProperties = {
-        // shorter backoff to reduce test durations when no active partitions are eligible for fetching due to throttling
-        @ClusterConfigProperty(key = REPLICA_FETCH_BACKOFF_MS_CONFIG, value = "100"),
-        // Don't move partition leaders automatically.
-        @ClusterConfigProperty(key = AUTO_LEADER_REBALANCE_ENABLE_CONFIG, value = "false"),
-        @ClusterConfigProperty(key = REPLICA_LAG_TIME_MAX_MS_CONFIG, value = "1000"),
-        @ClusterConfigProperty(id = 0, key = "broker.rack", value = "rack0"),
-        @ClusterConfigProperty(id = 1, key = "broker.rack", value = "rack0"),
-        @ClusterConfigProperty(id = 2, key = "broker.rack", value = "rack1"),
-        @ClusterConfigProperty(id = 3, key = "broker.rack", value = "rack1"),
-        @ClusterConfigProperty(id = 4, key = "broker.rack", value = "rack1"),
+    // shorter backoff to reduce test durations when no active partitions are eligible for fetching due to throttling
+    @ClusterConfigProperty(key = REPLICA_FETCH_BACKOFF_MS_CONFIG, value = "100"),
+    // Don't move partition leaders automatically.
+    @ClusterConfigProperty(key = AUTO_LEADER_REBALANCE_ENABLE_CONFIG, value = "false"),
+    @ClusterConfigProperty(key = REPLICA_LAG_TIME_MAX_MS_CONFIG, value = "1000"),
+    @ClusterConfigProperty(id = 0, key = "broker.rack", value = "rack0"),
+    @ClusterConfigProperty(id = 1, key = "broker.rack", value = "rack0"),
+    @ClusterConfigProperty(id = 2, key = "broker.rack", value = "rack1"),
+    @ClusterConfigProperty(id = 3, key = "broker.rack", value = "rack1"),
+    @ClusterConfigProperty(id = 4, key = "broker.rack", value = "rack1"),
 })
 @ExtendWith(ClusterTestExtensions.class)
 public class ReassignPartitionsCommandTest {
@@ -133,7 +133,7 @@ public class ReassignPartitionsCommandTest {
     }
 
     @ClusterTests({
-            @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, metadataVersion = IBP_3_3_IV0)
+        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, metadataVersion = IBP_3_3_IV0)
     })
     public void testReassignmentWithAlterPartitionDisabled() throws Exception {
         // Test reassignment when the IBP is on an older version which does not use
@@ -145,11 +145,11 @@ public class ReassignPartitionsCommandTest {
     }
 
     @ClusterTests({
-            @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
-                    @ClusterConfigProperty(id = 1, key = INTER_BROKER_PROTOCOL_VERSION_CONFIG, value = "3.3-IV0"),
-                    @ClusterConfigProperty(id = 2, key = INTER_BROKER_PROTOCOL_VERSION_CONFIG, value = "3.3-IV0"),
-                    @ClusterConfigProperty(id = 3, key = INTER_BROKER_PROTOCOL_VERSION_CONFIG, value = "3.3-IV0"),
-            })
+        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
+            @ClusterConfigProperty(id = 1, key = INTER_BROKER_PROTOCOL_VERSION_CONFIG, value = "3.3-IV0"),
+            @ClusterConfigProperty(id = 2, key = INTER_BROKER_PROTOCOL_VERSION_CONFIG, value = "3.3-IV0"),
+            @ClusterConfigProperty(id = 3, key = INTER_BROKER_PROTOCOL_VERSION_CONFIG, value = "3.3-IV0"),
+        })
     })
     public void testReassignmentCompletionDuringPartialUpgrade() throws Exception {
         // Test reassignment during a partial upgrade when some brokers are relying on

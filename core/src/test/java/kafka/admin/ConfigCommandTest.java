@@ -420,7 +420,7 @@ public class ConfigCommandTest {
         assertEquals("[[1, 2], [3, 4]]", addedProps.getProperty("nested"));
     }
 
-    public void testExpectedEntityTypeNames(List<String> expectedTypes, List<String> expectedNames, List<String> connectOpts, String...args) {
+    public void testExpectedEntityTypeNames(List<String> expectedTypes, List<String> expectedNames, List<String> connectOpts, String... args) {
         ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray(Arrays.asList(connectOpts.get(0), connectOpts.get(1), "--describe"), Arrays.asList(args)));
         createOpts.checkArgs();
         assertEquals(createOpts.entityTypes().toSeq(), seq(expectedTypes));
@@ -1434,7 +1434,7 @@ public class ConfigCommandTest {
     }
 
     @SafeVarargs
-    public static <K, V> Map<K, V> concat(Map<K, V>...maps) {
+    public static <K, V> Map<K, V> concat(Map<K, V>... maps) {
         Map<K, V> res = new HashMap<>();
         Stream.of(maps)
             .map(Map::entrySet)
