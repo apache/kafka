@@ -1328,9 +1328,11 @@ public class SharePartitionManagerTest {
         assertEquals(Errors.NONE.code(), result.get(tp1).errorCode());
         assertEquals(2, result.get(tp2).partitionIndex());
         assertEquals(Errors.INVALID_RECORD_STATE.code(), result.get(tp2).errorCode());
+        assertEquals("Unable to release acquired records for the batch", result.get(tp2).errorMessage());
         // tp3 was not a part of partitionCacheMap.
         assertEquals(4, result.get(tp3).partitionIndex());
         assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), result.get(tp3).errorCode());
+        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.message(), result.get(tp3).errorMessage());
     }
 
     @Test
@@ -1585,6 +1587,7 @@ public class SharePartitionManagerTest {
         assertTrue(result.containsKey(tp));
         assertEquals(0, result.get(tp).partitionIndex());
         assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), result.get(tp).errorCode());
+        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.message(), result.get(tp).errorMessage());
     }
 
     @Test
@@ -1615,6 +1618,7 @@ public class SharePartitionManagerTest {
         assertTrue(result.containsKey(tp));
         assertEquals(0, result.get(tp).partitionIndex());
         assertEquals(Errors.INVALID_REQUEST.code(), result.get(tp).errorCode());
+        assertEquals("Member is not the owner of batch record", result.get(tp).errorMessage());
     }
 
     @Test
@@ -1637,6 +1641,7 @@ public class SharePartitionManagerTest {
         assertTrue(result.containsKey(tp));
         assertEquals(3, result.get(tp).partitionIndex());
         assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), result.get(tp).errorCode());
+        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.message(), result.get(tp).errorMessage());
     }
 
     @Test
