@@ -137,6 +137,9 @@
                         <li>The <code>whitelist</code> and <code>blacklist</code> configurations were removed from the <code>org.apache.kafka.connect.transforms.ReplaceField</code> transformation.
                             Please use <code>include</code> and <code>exclude</code> respectively instead.
                         </li>
+                        <li>The <code>onPartitionsRevoked(Collection&lt;TopicPartition&gt;)</code> and <code>onPartitionsAssigned(Collection&lt;TopicPartition&gt;)</code> methods
+                            were removed from <code>SinkTask</code>.
+                        </li>
                     </ul>
                 </li>
                 <li><b>Consumer</b>

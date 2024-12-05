@@ -109,9 +109,7 @@ public class BlockingConnectorTest {
     private static final String SINK_TASK_FLUSH = "SinkTask::flush";
     private static final String SINK_TASK_PRE_COMMIT = "SinkTask::preCommit";
     private static final String SINK_TASK_OPEN = "SinkTask::open";
-    private static final String SINK_TASK_ON_PARTITIONS_ASSIGNED = "SinkTask::onPartitionsAssigned";
     private static final String SINK_TASK_CLOSE = "SinkTask::close";
-    private static final String SINK_TASK_ON_PARTITIONS_REVOKED = "SinkTask::onPartitionsRevoked";
     private static final String SOURCE_TASK_INITIALIZE = "SourceTask::initialize";
     private static final String SOURCE_TASK_POLL = "SourceTask::poll";
     private static final String SOURCE_TASK_COMMIT = "SourceTask::commit";
@@ -870,23 +868,9 @@ public class BlockingConnectorTest {
             }
 
             @Override
-            @SuppressWarnings("deprecation")
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                block.maybeBlockOn(SINK_TASK_ON_PARTITIONS_ASSIGNED);
-                super.onPartitionsAssigned(partitions);
-            }
-
-            @Override
             public void close(Collection<TopicPartition> partitions) {
                 block.maybeBlockOn(SINK_TASK_CLOSE);
                 super.close(partitions);
-            }
-
-            @Override
-            @SuppressWarnings("deprecation")
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-                block.maybeBlockOn(SINK_TASK_ON_PARTITIONS_REVOKED);
-                super.onPartitionsRevoked(partitions);
             }
         }
     }
