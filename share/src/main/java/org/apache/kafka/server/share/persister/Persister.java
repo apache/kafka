@@ -32,7 +32,7 @@ public interface Persister {
      * @param request Request parameters
      * @return A {@link CompletableFuture} that completes with the result.
      */
-    CompletableFuture<InitializeShareGroupStateResult> initializeState(InitializeShareGroupStateParameters request) throws IllegalArgumentException;
+    CompletableFuture<InitializeShareGroupStateResult> initializeState(InitializeShareGroupStateParameters request);
 
     /**
      * Read share-partition state.
@@ -56,7 +56,7 @@ public interface Persister {
      * @param request Request parameters
      * @return A {@link CompletableFuture} that completes with the result.
      */
-    CompletableFuture<DeleteShareGroupStateResult> deleteState(DeleteShareGroupStateParameters request) throws IllegalArgumentException;
+    CompletableFuture<DeleteShareGroupStateResult> deleteState(DeleteShareGroupStateParameters request);
 
     /**
      * Read the offset information from share-partition state.
@@ -64,7 +64,7 @@ public interface Persister {
      * @param request Request parameters
      * @return A {@link CompletableFuture} that completes with the result.
      */
-    CompletableFuture<ReadShareGroupStateSummaryResult> readSummary(ReadShareGroupStateSummaryParameters request) throws IllegalArgumentException;
+    CompletableFuture<ReadShareGroupStateSummaryResult> readSummary(ReadShareGroupStateSummaryParameters request);
 
     /**
      * Perform cleanup and interrupt any threads

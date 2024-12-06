@@ -67,7 +67,7 @@ public class DefaultStatePersister implements Persister {
      * @param request InitializeShareGroupStateParameters
      * @return A completable future of InitializeShareGroupStateResult
      */
-    public CompletableFuture<InitializeShareGroupStateResult> initializeState(InitializeShareGroupStateParameters request) throws IllegalArgumentException {
+    public CompletableFuture<InitializeShareGroupStateResult> initializeState(InitializeShareGroupStateParameters request) {
         throw new RuntimeException("not implemented");
     }
 
@@ -276,7 +276,7 @@ public class DefaultStatePersister implements Persister {
      * @param request DeleteShareGroupStateParameters
      * @return A completable future of DeleteShareGroupStateResult
      */
-    public CompletableFuture<DeleteShareGroupStateResult> deleteState(DeleteShareGroupStateParameters request) throws IllegalArgumentException {
+    public CompletableFuture<DeleteShareGroupStateResult> deleteState(DeleteShareGroupStateParameters request) {
         throw new RuntimeException("not implemented");
     }
 
@@ -287,7 +287,7 @@ public class DefaultStatePersister implements Persister {
      * @param request ReadShareGroupStateSummaryParameters
      * @return A completable future of  ReadShareGroupStateSummaryResult
      */
-    public CompletableFuture<ReadShareGroupStateSummaryResult> readSummary(ReadShareGroupStateSummaryParameters request) throws IllegalArgumentException {
+    public CompletableFuture<ReadShareGroupStateSummaryResult> readSummary(ReadShareGroupStateSummaryParameters request) {
         throw new RuntimeException("not implemented");
     }
 
