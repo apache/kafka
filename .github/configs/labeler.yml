@@ -131,3 +131,8 @@ dependencies:
       - "grade/dependencies.gradle"
       - "LICENSE-binary"
 
+tiered-storage:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '*/src/*/java/org/apache/kafka/server/log/remote/**'
+      - '*/src/*/java/kafka/log/remote/**'
