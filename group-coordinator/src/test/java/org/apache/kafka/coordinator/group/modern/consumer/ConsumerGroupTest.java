@@ -46,6 +46,7 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataV
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
+import org.apache.kafka.coordinator.group.modern.SubscriptionCount;
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -1660,9 +1661,9 @@ public class ConsumerGroupTest {
         // Verify initial state.
         assertEquals(
             Map.of(
-                "foo", 2,
-                "bar", 2,
-                "zar", 1
+                "foo", new SubscriptionCount(2, 0),
+                "bar", new SubscriptionCount(2, 0),
+                "zar", new SubscriptionCount(1, 0)
             ),
             consumerGroup.subscribedTopicNames()
         );
@@ -1679,9 +1680,9 @@ public class ConsumerGroupTest {
 
         assertEquals(
             Map.of(
-                "foo", 3,
-                "bar", 3,
-                "zar", 1
+                "foo", new SubscriptionCount(2, 1),
+                "bar", new SubscriptionCount(2, 1),
+                "zar", new SubscriptionCount(1, 0)
             ),
             consumerGroup.subscribedTopicNames()
         );
@@ -1698,10 +1699,10 @@ public class ConsumerGroupTest {
 
         assertEquals(
             Map.of(
-                "foo", 3,
-                "bar", 3,
-                "zar", 1,
-                "foobar", 1
+                "foo", new SubscriptionCount(2, 1),
+                "bar", new SubscriptionCount(2, 1),
+                "zar", new SubscriptionCount(1, 0),
+                "foobar", new SubscriptionCount(0, 1)
             ),
             consumerGroup.subscribedTopicNames()
         );
@@ -1718,10 +1719,10 @@ public class ConsumerGroupTest {
 
         assertEquals(
             Map.of(
-                "foo", 3,
-                "bar", 2,
-                "zar", 1,
-                "foobar", 1
+                "foo", new SubscriptionCount(2, 1),
+                "bar", new SubscriptionCount(2, 0),
+                "zar", new SubscriptionCount(1, 0),
+                "foobar", new SubscriptionCount(0, 1)
             ),
             consumerGroup.subscribedTopicNames()
         );
@@ -1731,10 +1732,10 @@ public class ConsumerGroupTest {
 
         assertEquals(
             Map.of(
-                "foo", 2,
-                "bar", 2,
-                "zar", 1,
-                "foobar", 1
+                "foo", new SubscriptionCount(2, 0),
+                "bar", new SubscriptionCount(2, 0),
+                "zar", new SubscriptionCount(1, 0),
+                "foobar", new SubscriptionCount(0, 1)
             ),
             consumerGroup.subscribedTopicNames()
         );
@@ -1744,9 +1745,9 @@ public class ConsumerGroupTest {
 
         assertEquals(
             Map.of(
-                "foo", 2,
-                "bar", 2,
-                "zar", 1
+                "foo", new SubscriptionCount(2, 0),
+                "bar", new SubscriptionCount(2, 0),
+                "zar", new SubscriptionCount(1, 0)
             ),
             consumerGroup.subscribedTopicNames()
         );
@@ -1807,11 +1808,11 @@ public class ConsumerGroupTest {
         // Verify initial state.
         assertEquals(
             Map.of(
-                "foo", 3,
-                "fooo", 1,
-                "bar", 3,
-                "barr", 1,
-                "zar", 1
+                "foo", new SubscriptionCount(2, 1),
+                "fooo", new SubscriptionCount(0, 1),
+                "bar", new SubscriptionCount(2, 1),
+                "barr", new SubscriptionCount(0, 1),
+                "zar", new SubscriptionCount(1, 0)
             ),
             consumerGroup.subscribedTopicNames()
         );
@@ -1819,10 +1820,10 @@ public class ConsumerGroupTest {
         // Compute with removed members and regexes.
         assertEquals(
             Map.of(
-                "foo", 1,
-                "bar", 2,
-                "barr", 1,
-                "zar", 1
+                "foo", new SubscriptionCount(1, 0),
+                "bar", new SubscriptionCount(1, 1),
+                "barr", new SubscriptionCount(0, 1),
+                "zar", new SubscriptionCount(1, 0)
             ),
             consumerGroup.computeSubscribedTopicNamesWithoutDeletedMembers(
                 Set.of(member2, member3, member4, member5),
@@ -1863,21 +1864,21 @@ public class ConsumerGroupTest {
         // Verify initial state.
         assertEquals(
             Map.of(
-                "foo", 4,
-                "fooo", 1,
-                "bar", 2,
-                "zar", 1
+                "foo", new SubscriptionCount(3, 1),
+                "fooo", new SubscriptionCount(0, 1),
+                "bar", new SubscriptionCount(2, 0),
+                "zar", new SubscriptionCount(1, 0)
             ),
             consumerGroup.subscribedTopicNames()
         );
 
-        // Compute subscribed topic names without changing the regex.
+        // Compute subscribed topic names without changing anything.
         assertEquals(
             Map.of(
-                "foo", 4,
-                "fooo", 1,
-                "bar", 2,
-                "zar", 1
+                "foo", new SubscriptionCount(3, 1),
+                "fooo", new SubscriptionCount(0, 1),
+                "bar", new SubscriptionCount(2, 0),
+                "zar", new SubscriptionCount(1, 0)
             ),
             consumerGroup.computeSubscribedTopicNames(member3, member3)
         );
@@ -1885,9 +1886,9 @@ public class ConsumerGroupTest {
         // Compute subscribed topic names with removing the regex.
         assertEquals(
             Map.of(
-                "foo", 3,
-                "bar", 2,
-                "zar", 1
+                "foo", new SubscriptionCount(3, 0),
+                "bar", new SubscriptionCount(2, 0),
+                "zar", new SubscriptionCount(1, 0)
             ),
             consumerGroup.computeSubscribedTopicNames(
                 member3,
@@ -1900,10 +1901,10 @@ public class ConsumerGroupTest {
         // Compute subscribed topic names with removing the names.
         assertEquals(
             Map.of(
-                "foo", 3,
-                "fooo", 1,
-                "bar", 2,
-                "zar", 1
+                "foo", new SubscriptionCount(2, 1),
+                "fooo", new SubscriptionCount(0, 1),
+                "bar", new SubscriptionCount(2, 0),
+                "zar", new SubscriptionCount(1, 0)
             ),
             consumerGroup.computeSubscribedTopicNames(
                 member3,
@@ -1916,9 +1917,9 @@ public class ConsumerGroupTest {
         // Compute subscribed topic names with removing both.
         assertEquals(
             Map.of(
-                "foo", 2,
-                "bar", 2,
-                "zar", 1
+                "foo", new SubscriptionCount(2, 0),
+                "bar", new SubscriptionCount(2, 0),
+                "zar", new SubscriptionCount(1, 0)
             ),
             consumerGroup.computeSubscribedTopicNames(
                 member3,
@@ -2095,6 +2096,147 @@ public class ConsumerGroupTest {
                 )
             ),
             records
+        );
+    }
+
+    @Test
+    public void testSubscriptionType() {
+        assertEquals(
+            HOMOGENEOUS,
+            ConsumerGroup.subscriptionType(
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                0
+            )
+        );
+
+        assertEquals(
+            HOMOGENEOUS,
+            ConsumerGroup.subscriptionType(
+                Collections.emptyMap(),
+                Map.of("foo", new SubscriptionCount(5, 0)),
+                5
+            )
+        );
+
+        assertEquals(
+            HETEROGENEOUS,
+            ConsumerGroup.subscriptionType(
+                Collections.emptyMap(),
+                Map.of(
+                    "foo", new SubscriptionCount(4, 0),
+                    "bar", new SubscriptionCount(1, 0)
+                ),
+                5
+            )
+        );
+
+        assertEquals(
+            HOMOGENEOUS,
+            ConsumerGroup.subscriptionType(
+                Map.of("foo*", 5),
+                Map.of("foo", new SubscriptionCount(0, 1)),
+                5
+            )
+        );
+
+        assertEquals(
+            HOMOGENEOUS,
+            ConsumerGroup.subscriptionType(
+                Map.of("foo*", 5),
+                Map.of(
+                    "foo", new SubscriptionCount(0, 1),
+                    "food", new SubscriptionCount(0, 1)),
+                5
+            )
+        );
+
+        assertEquals(
+            HETEROGENEOUS,
+            ConsumerGroup.subscriptionType(
+                Map.of("foo*", 5),
+                Map.of("foo", new SubscriptionCount(1, 1)),
+                5
+            )
+        );
+
+        assertEquals(
+            HETEROGENEOUS,
+            ConsumerGroup.subscriptionType(
+                Map.of("foo*", 5),
+                Map.of(
+                    "foo", new SubscriptionCount(0, 1),
+                    "bar", new SubscriptionCount(1, 0)
+                ),
+                5
+            )
+        );
+
+        assertEquals(
+            HETEROGENEOUS,
+            ConsumerGroup.subscriptionType(
+                Map.of("foo*", 4, "bar*", 1),
+                Map.of(
+                    "foo", new SubscriptionCount(0, 1),
+                    "bar", new SubscriptionCount(0, 1)),
+                5
+            )
+        );
+    }
+
+    @Test
+    public void testComputeSubscribedRegularExpressions() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+        consumerGroup.setGroupEpoch(10);
+
+        consumerGroup.updateMember(new ConsumerGroupMember.Builder("m1")
+            .setSubscribedTopicRegex("foo*")
+            .build());
+
+        consumerGroup.updateMember(new ConsumerGroupMember.Builder("m2")
+            .setSubscribedTopicRegex("foo*")
+            .build());
+
+        assertEquals(
+            Map.of("foo*", 3),
+            consumerGroup.computeSubscribedRegularExpressions(
+                null,
+                new ConsumerGroupMember.Builder("m3")
+                    .setSubscribedTopicRegex("foo*")
+                    .build()
+            )
+        );
+
+        assertEquals(
+            Map.of("foo*", 1),
+            consumerGroup.computeSubscribedRegularExpressions(
+                new ConsumerGroupMember.Builder("m2")
+                    .setSubscribedTopicRegex("foo*")
+                    .build(),
+                null
+            )
+        );
+
+        assertEquals(
+            Map.of("foo*", 2, "bar*", 1),
+            consumerGroup.computeSubscribedRegularExpressions(
+                null,
+                new ConsumerGroupMember.Builder("m4")
+                    .setSubscribedTopicRegex("bar*")
+                    .build()
+            )
+        );
+
+        assertEquals(
+            Map.of("foo*", 1, "bar*", 1),
+            consumerGroup.computeSubscribedRegularExpressions(
+                new ConsumerGroupMember.Builder("m2")
+                    .setSubscribedTopicRegex("foo*")
+                    .build(),
+                new ConsumerGroupMember.Builder("m2")
+                    .setSubscribedTopicRegex("bar*")
+                    .build()
+            )
         );
     }
 }

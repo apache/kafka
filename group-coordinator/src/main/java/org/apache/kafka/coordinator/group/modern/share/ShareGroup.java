@@ -163,8 +163,9 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
         }
 
         ShareGroupMember oldMember = members.put(newMember.memberId(), newMember);
-        maybeUpdateSubscribedTopicNamesAndGroupSubscriptionType(oldMember, newMember);
+        maybeUpdateSubscribedTopicNames(oldMember, newMember);
         maybeUpdateGroupState();
+        maybeUpdateGroupSubscriptionType();
     }
 
     /**
@@ -174,8 +175,9 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
      */
     public void removeMember(String memberId) {
         ShareGroupMember oldMember = members.remove(memberId);
-        maybeUpdateSubscribedTopicNamesAndGroupSubscriptionType(oldMember, null);
+        maybeUpdateSubscribedTopicNames(oldMember, null);
         maybeUpdateGroupState();
+        maybeUpdateGroupSubscriptionType();
     }
 
     @Override
