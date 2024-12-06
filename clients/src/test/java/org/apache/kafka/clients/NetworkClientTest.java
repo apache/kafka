@@ -596,14 +596,14 @@ public class NetworkClientTest {
     /**
      * This is a helper method that will execute two produce calls. The first call is expected to work and the
      * second produce call is intentionally made to emulate a request timeout. In the case that a timeout occurs
-     * during a request, we want to ensure that we {@link Metadata#requestUpdate() request a metadata update} so that
+     * during a request, we want to ensure that we {@link Metadata#requestUpdate(boolean) request a metadata update} so that
      * on a subsequent invocation of {@link NetworkClient#poll(long, long) poll}, the metadata request will be sent.
      *
      * <p/>
      *
      * The {@link MetadataUpdater} has a specific method to handle
      * {@link NetworkClient.DefaultMetadataUpdater#handleServerDisconnect(long, String, Optional) server disconnects}
-     * which is where we {@link Metadata#requestUpdate() request a metadata update}. This test helper method ensures
+     * which is where we {@link Metadata#requestUpdate(boolean) request a metadata update}. This test helper method ensures
      * that is invoked by checking {@link Metadata#updateRequested()} after the simulated timeout.
      *
      * @param requestTimeoutMs Timeout in ms
