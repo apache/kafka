@@ -207,6 +207,7 @@ public final class QuorumController implements Controller {
         private OptionalLong leaderImbalanceCheckIntervalNs = OptionalLong.empty();
         private OptionalLong maxIdleIntervalNs = OptionalLong.empty();
         private long sessionTimeoutNs = ClusterControlManager.DEFAULT_SESSION_TIMEOUT_NS;
+        private OptionalLong fenceStaleBrokerIntervalNs = OptionalLong.empty();
         private QuorumControllerMetrics controllerMetrics = null;
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
         private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
@@ -298,6 +299,11 @@ public final class QuorumController implements Controller {
 
         public Builder setSessionTimeoutNs(long sessionTimeoutNs) {
             this.sessionTimeoutNs = sessionTimeoutNs;
+            return this;
+        }
+
+        public Builder setFenceStaleBrokerIntervalNs(long fenceStaleBrokerIntervalNs) {
+            this.fenceStaleBrokerIntervalNs = OptionalLong.of(fenceStaleBrokerIntervalNs);
             return this;
         }
 
@@ -414,6 +420,7 @@ public final class QuorumController implements Controller {
                     leaderImbalanceCheckIntervalNs,
                     maxIdleIntervalNs,
                     sessionTimeoutNs,
+                    fenceStaleBrokerIntervalNs,
                     controllerMetrics,
                     createTopicPolicy,
                     alterConfigPolicy,
@@ -1456,6 +1463,7 @@ public final class QuorumController implements Controller {
         OptionalLong leaderImbalanceCheckIntervalNs,
         OptionalLong maxIdleIntervalNs,
         long sessionTimeoutNs,
+        OptionalLong fenceStaleBrokerIntervalNs,
         QuorumControllerMetrics controllerMetrics,
         Optional<CreateTopicPolicy> createTopicPolicy,
         Optional<AlterConfigPolicy> alterConfigPolicy,
@@ -1569,7 +1577,11 @@ public final class QuorumController implements Controller {
         if (maxIdleIntervalNs.isPresent()) {
             registerWriteNoOpRecord(maxIdleIntervalNs.getAsLong());
         }
-        registerMaybeFenceStaleBroker(sessionTimeoutNs);
+        if (fenceStaleBrokerIntervalNs.isPresent()) {
+            registerMaybeFenceStaleBroker(fenceStaleBrokerIntervalNs.getAsLong());
+        } else {
+            registerMaybeFenceStaleBroker(maybeFenceStaleBrokerPeriodNs(sessionTimeoutNs));
+        }
         if (leaderImbalanceCheckIntervalNs.isPresent()) {
             registerElectPreferred(leaderImbalanceCheckIntervalNs.getAsLong());
         }
@@ -1630,12 +1642,12 @@ public final class QuorumController implements Controller {
      * This task periodically checks to see if there is a stale broker that needs to
      * be fenced. It will only ever remove one stale broker at a time.
      *
-     * @param sessionTimeoutNs      The broker session timeout in nanoseconds.
+     * @param fenceStaleBrokerIntervalNs The interval to check for stale brokers in nanoseconds
      */
-    private void registerMaybeFenceStaleBroker(long sessionTimeoutNs) {
+    private void registerMaybeFenceStaleBroker(long fenceStaleBrokerIntervalNs) {
         periodicControl.registerTask(new PeriodicTask("maybeFenceStaleBroker",
             replicationControl::maybeFenceOneStaleBroker,
-            maybeFenceStaleBrokerPeriodNs(sessionTimeoutNs),
+            fenceStaleBrokerIntervalNs,
             EnumSet.noneOf(PeriodicTaskFlag.class)));
     }
 

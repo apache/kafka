@@ -166,6 +166,7 @@ import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -353,7 +354,7 @@ public class QuorumControllerTest {
     }
 
     @Test
-    public void testUncleanShutdownBroker() throws Throwable {
+    public void testUncleanShutdownBrokerElrEnabled() throws Throwable {
         List<Integer> allBrokers = Arrays.asList(1, 2, 3);
         short replicationFactor = (short) allBrokers.size();
         long sessionTimeoutMillis = 500;
@@ -363,7 +364,6 @@ public class QuorumControllerTest {
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
                 setSessionTimeoutMillis(OptionalLong.of(sessionTimeoutMillis)).
-
                 setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_4_0_IV1, "test-provided bootstrap ELR enabled")).
                 build()
         ) {
@@ -479,6 +479,100 @@ public class QuorumControllerTest {
             assertEquals(0, partition.elr.length, partition.toString());
             assertEquals(0, partition.lastKnownElr.length, partition.toString());
             assertEquals(brokerToBeTheLeader, partition.leader, partition.toString());
+        }
+    }
+
+    @Test
+    public void testUncleanShutdownElrDisabled() throws Exception {
+        List<Integer> allBrokers = Arrays.asList(1, 2, 3);
+        short replicationFactor = (short) allBrokers.size();
+        long sessionTimeoutMillis = 500;
+
+        try (
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
+                build();
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv)
+                .setControllerBuilderInitializer(controllerBuilder ->
+                    controllerBuilder.setFenceStaleBrokerIntervalNs(TimeUnit.SECONDS.toNanos(15)))
+                .setSessionTimeoutMillis(OptionalLong.of(sessionTimeoutMillis))
+                .setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_4_0_IV0, "test-provided bootstrap ELR not supported"))
+                .build()
+        ) {
+            ListenerCollection listeners = new ListenerCollection();
+            listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
+            QuorumController active = controlEnv.activeController();
+            Map<Integer, Long> brokerEpochs = new HashMap<>();
+            BrokerRegistrationRequestData.FeatureCollection features =
+                brokerFeaturesPlusFeatureVersions(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_4_0_IV0,
+                    Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME, EligibleLeaderReplicasVersion.ELRV_0.featureLevel()));
+            for (Integer brokerId : allBrokers) {
+                CompletableFuture<BrokerRegistrationReply> reply = active.registerBroker(
+                    anonymousContextFor(ApiKeys.BROKER_REGISTRATION),
+                    new BrokerRegistrationRequestData().
+                        setBrokerId(brokerId).
+                        setClusterId(active.clusterId()).
+                        setFeatures(features).
+                        setIncarnationId(Uuid.randomUuid()).
+                        setLogDirs(Collections.singletonList(Uuid.randomUuid())).
+                        setListeners(listeners));
+                brokerEpochs.put(brokerId, reply.get().epoch());
+            }
+
+            // Brokers are only registered and should still be fenced
+            allBrokers.forEach(brokerId ->
+                assertFalse(active.clusterControl().isUnfenced(brokerId), "Broker " + brokerId + " should have been fenced")
+            );
+
+            // Unfence all brokers and create a topic foo
+            sendBrokerHeartbeatToUnfenceBrokers(active, allBrokers, brokerEpochs);
+            CreateTopicsRequestData createTopicsRequestData = new CreateTopicsRequestData().setTopics(
+                new CreatableTopicCollection(Collections.singleton(
+                    new CreatableTopic().setName("foo").setNumPartitions(1).
+                        setReplicationFactor(replicationFactor)).iterator()));
+            CreateTopicsResponseData createTopicsResponseData = active.createTopics(
+                ANONYMOUS_CONTEXT, createTopicsRequestData,
+                Collections.singleton("foo")).get();
+            assertEquals(Errors.NONE, Errors.forCode(createTopicsResponseData.topics().find("foo").errorCode()));
+            Uuid topicIdFoo = createTopicsResponseData.topics().find("foo").topicId();
+
+            // wait for brokers to become inactive
+            active.time().sleep(sessionTimeoutMillis);
+
+            // unclean shutdown for each replica
+            for (int i = 0; i < (int) replicationFactor; i++) {
+                // Verify that ELR is disabled
+                PartitionRegistration partition = active.replicationControl().getPartition(topicIdFoo, 0);
+                assertEquals(0, partition.elr.length, partition.toString());
+                assertEquals(0, partition.lastKnownElr.length, partition.toString());
+
+                boolean lastStandingIsr = i == (replicationFactor - 1);
+                int prevLeader = partition.leader;
+                int prevLeaderEpoch = partition.leaderEpoch;
+                // Unclean shutdown should remove the broker from the ISR and reassign leadership
+                active.registerBroker(
+                    anonymousContextFor(ApiKeys.BROKER_REGISTRATION),
+                    new BrokerRegistrationRequestData().
+                        setBrokerId(prevLeader).
+                        setClusterId(active.clusterId()).
+                        setFeatures(features).
+                        setIncarnationId(Uuid.randomUuid()).
+                        setLogDirs(Collections.singletonList(Uuid.randomUuid())).
+                        setListeners(listeners)).get();
+                partition = active.replicationControl().getPartition(topicIdFoo, 0);
+                // leader should always change, leader epoch should always be incremented
+                int currentLeader = partition.leader;
+                int currentLeaderEpoch = partition.leaderEpoch;
+                assertNotEquals(currentLeader, prevLeader);
+                assertNotEquals(currentLeaderEpoch, prevLeaderEpoch);
+                // if the broker is not the last standing ISR, it should be removed from the ISR
+                if (lastStandingIsr) {
+                    assertArrayEquals(new int[]{prevLeader}, partition.isr);
+                    assertEquals(NO_LEADER, currentLeader);
+                } else {
+                    List<Integer> isr = Arrays.stream(partition.isr).boxed().toList();
+                    assertFalse(isr.contains(prevLeader));
+                }
+            }
         }
     }
 
