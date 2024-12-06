@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Exit;
@@ -170,17 +171,24 @@ public class StreamsResetter {
         final DescribeConsumerGroupsResult describeResult = adminClient.describeConsumerGroups(
             Collections.singleton(groupId),
             new DescribeConsumerGroupsOptions().timeoutMs(10 * 1000));
-        final List<MemberDescription> members =
-            new ArrayList<>(describeResult.describedGroups().get(groupId).get().members());
-        if (!members.isEmpty()) {
-            if (options.hasForce()) {
-                System.out.println("Force deleting all active members in the group: " + groupId);
-                adminClient.removeMembersFromConsumerGroup(groupId, new RemoveMembersFromConsumerGroupOptions()).all().get();
-            } else {
-                throw new IllegalStateException("Consumer group '" + groupId + "' is still active "
+        try {
+            final List<MemberDescription> members =
+                new ArrayList<>(describeResult.describedGroups().get(groupId).get().members());
+            if (!members.isEmpty()) {
+                if (options.hasForce()) {
+                    System.out.println("Force deleting all active members in the group: " + groupId);
+                    adminClient.removeMembersFromConsumerGroup(groupId, new RemoveMembersFromConsumerGroupOptions()).all().get();
+                } else {
+                    throw new IllegalStateException("Consumer group '" + groupId + "' is still active "
                         + "and has following members: " + members + ". "
                         + "Make sure to stop all running application instances before running the reset tool."
                         + " You can use option '--force' to remove active members from the group.");
+                }
+            }
+        } catch (ExecutionException ee) {
+            // If the group ID is not found, this is not an error case
+            if (!(ee.getCause() instanceof GroupIdNotFoundException)) {
+                throw ee;
             }
         }
     }

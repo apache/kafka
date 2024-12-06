@@ -161,11 +161,18 @@
                         </li>
                     </ul>
                 </li>
-                <li><b>Admin</b>
+                <li><b>Admin client</b>
                     <ul>
                         <li>
-                            The <code>alterConfigs</code> method was removed from the <code>org.apache.kafka.clients.admin.Admin</code>
+                            The <code>alterConfigs</code> method was removed from the <code>org.apache.kafka.clients.admin.Admin</code>.
                             Please use <code>incrementalAlterConfigs</code> instead.
+                        </li>
+                        <li>The <code>org.apache.kafka.common.ConsumerGroupState</code> enumeration and related methods have been deprecated. Please use <code>GroupState</code> instead
+                            which applies to all types of group.
+                        </li>
+                        <li>The <code>Admin.describeConsumerGroups</code> method used to return a <code>ConsumerGroupDescription</code> in state
+                            <code>DEAD</code> if the group ID was not found. In Apache Kafka 4.0, the <code>GroupIdNotFoundException</code>
+                            is thrown instead as part of the support for new types of group.
                         </li>
                     </ul>
                 </li>
@@ -185,10 +192,11 @@
                     See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308223">KIP-750</a> for more details
                 </li>
                 <li>
-                    KafkaLog4jAppender has been remove, users should migrate to the log4j2 appender
+                    KafkaLog4jAppender has been removed, users should migrate to the log4j2 appender
                     See <a href="https://logging.apache.org/log4j/2.x/manual/appenders.html#KafkaAppender">KafkaAppender</a> for more details
                 </li>
-                <li>The <code>--delete-config</code> option in the <code>kafka-topics</code> command line tool has been deprecated.
+                <li>
+                    The <code>--delete-config</code> option in the <code>kafka-topics</code> command line tool has been deprecated.
                 </li>
                 <li>
                     For implementors of RemoteLogMetadataManager (RLMM), a new API `nextSegmentWithTxnIndex` is

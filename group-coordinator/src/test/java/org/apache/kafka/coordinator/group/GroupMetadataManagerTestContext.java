@@ -1270,7 +1270,43 @@ public class GroupMetadataManagerTestContext {
     }
 
     public List<DescribeGroupsResponseData.DescribedGroup> describeGroups(List<String> groupIds) {
-        return groupMetadataManager.describeGroups(groupIds, lastCommittedOffset);
+        RequestContext context = new RequestContext(
+            new RequestHeader(
+                ApiKeys.DESCRIBE_GROUPS,
+                ApiKeys.DESCRIBE_GROUPS.latestVersion(),
+                DEFAULT_CLIENT_ID,
+                0
+            ),
+            "1",
+            DEFAULT_CLIENT_ADDRESS,
+            KafkaPrincipal.ANONYMOUS,
+            ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+            SecurityProtocol.PLAINTEXT,
+            ClientInformation.EMPTY,
+            false
+        );
+
+        return groupMetadataManager.describeGroups(context, groupIds, lastCommittedOffset);
+    }
+
+    public List<DescribeGroupsResponseData.DescribedGroup> describeGroups(List<String> groupIds, short apiVersion) {
+        RequestContext context = new RequestContext(
+            new RequestHeader(
+                ApiKeys.DESCRIBE_GROUPS,
+                apiVersion,
+                DEFAULT_CLIENT_ID,
+                0
+            ),
+            "1",
+            DEFAULT_CLIENT_ADDRESS,
+            KafkaPrincipal.ANONYMOUS,
+            ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+            SecurityProtocol.PLAINTEXT,
+            ClientInformation.EMPTY,
+            false
+        );
+
+        return groupMetadataManager.describeGroups(context, groupIds, lastCommittedOffset);
     }
 
     public List<ShareGroupDescribeResponseData.DescribedGroup> sendShareGroupDescribe(List<String> groupIds) {
@@ -1388,6 +1424,21 @@ public class GroupMetadataManagerTestContext {
 
         assertEquals(
             List.of(new DescribeGroupsResponseData.DescribedGroup()
+                .setGroupId(groupId)
+                .setGroupState(DEAD.toString())
+                .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code())
+                .setErrorMessage("Group " + groupId + " not found.")
+            ),
+            describedGroups
+        );
+    }
+
+    public void verifyDescribeGroupsBeforeV6ReturnsDeadGroup(String groupId) {
+        List<DescribeGroupsResponseData.DescribedGroup> describedGroups =
+            describeGroups(Collections.singletonList(groupId), (short) 5);
+
+        assertEquals(
+            Collections.singletonList(new DescribeGroupsResponseData.DescribedGroup()
                 .setGroupId(groupId)
                 .setGroupState(DEAD.toString())
             ),

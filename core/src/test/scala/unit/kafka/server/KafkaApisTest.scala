@@ -3719,7 +3719,8 @@ class KafkaApisTest extends Logging {
     val describeGroupsRequest = new DescribeGroupsRequestData().setGroups(List(
       "group-1",
       "group-2",
-      "group-3"
+      "group-3",
+      "group-4"
     ).asJava)
 
     val requestChannelRequest = buildRequest(new DescribeGroupsRequest.Builder(describeGroupsRequest).build())
@@ -3746,7 +3747,12 @@ class KafkaApisTest extends Logging {
         .setErrorCode(Errors.NOT_COORDINATOR.code),
       new DescribeGroupsResponseData.DescribedGroup()
         .setGroupId("group-3")
-        .setErrorCode(Errors.REQUEST_TIMED_OUT.code)
+        .setErrorCode(Errors.REQUEST_TIMED_OUT.code),
+      new DescribeGroupsResponseData.DescribedGroup()
+        .setGroupId("group-4")
+        .setGroupState("Dead")
+        .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code)
+        .setErrorMessage("Group group-4 is not a classic group.")
     ).asJava
 
     future.complete(groupResults)

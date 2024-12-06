@@ -28,6 +28,7 @@ import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.clients.consumer.RoundRobinAssignor;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.test.api.ClusterConfig;
@@ -68,6 +69,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 @ExtendWith(value = ClusterTestExtensions.class)
 public class DescribeConsumerGroupTest {
@@ -92,9 +94,13 @@ public class DescribeConsumerGroupTest {
             List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", missingGroup));
             cgcArgs.addAll(describeType);
             try (ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(cgcArgs.toArray(new String[0]))) {
-                String output = ToolsTestUtils.grabConsoleOutput(describeGroups(service));
-                assertTrue(output.contains("Consumer group '" + missingGroup + "' does not exist."),
-                        "Expected error was not detected for describe option '" + String.join(" ", describeType) + "'");
+                service.describeGroups();
+                fail("Expected error was not detected for describe option '" + String.join(" ", describeType) + "'");
+            } catch (ExecutionException ee) {
+                assertInstanceOf(GroupIdNotFoundException.class, ee.getCause());
+                assertEquals("Group " + missingGroup + " not found.", ee.getCause().getMessage());
+            } catch (Exception e) {
+                fail("Expected error was not detected for describe option '" + String.join(" ", describeType) + "'");
             }
         }
     }
@@ -113,9 +119,11 @@ public class DescribeConsumerGroupTest {
                  // note the group to be queried is a different (non-existing) group
                  ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", missingGroup})
             ) {
-                Entry<Optional<GroupState>, Optional<Collection<PartitionAssignmentState>>> res = service.collectGroupOffsets(missingGroup);
-                assertTrue(res.getKey().map(s -> s.equals(GroupState.DEAD)).orElse(false) && res.getValue().map(Collection::isEmpty).orElse(false),
-                        "Expected the state to be 'Dead', with no members in the group '" + missingGroup + "'.");
+                service.collectGroupOffsets(missingGroup);
+                fail("Expected the group '" + missingGroup + "' to throw GroupIdNotFoundException");
+            } catch (ExecutionException ee) {
+                assertInstanceOf(GroupIdNotFoundException.class, ee.getCause(),
+                    "Expected the group '" + missingGroup + "' to throw GroupIdNotFoundException");
             }
         }
     }
@@ -132,13 +140,11 @@ public class DescribeConsumerGroupTest {
                  // note the group to be queried is a different (non-existing) group
                  ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", missingGroup})
             ) {
-                Entry<Optional<GroupState>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(missingGroup, false);
-                assertTrue(res.getKey().map(s -> s.equals(GroupState.DEAD)).orElse(false) && res.getValue().map(Collection::isEmpty).orElse(false),
-                        "Expected the state to be 'Dead', with no members in the group '" + missingGroup + "'.");
-
-                Entry<Optional<GroupState>, Optional<Collection<MemberAssignmentState>>> res2 = service.collectGroupMembers(missingGroup, true);
-                assertTrue(res2.getKey().map(s -> s.equals(GroupState.DEAD)).orElse(false) && res2.getValue().map(Collection::isEmpty).orElse(false),
-                        "Expected the state to be 'Dead', with no members in the group '" + missingGroup + "' (verbose option).");
+                service.collectGroupMembers(missingGroup, false);
+                fail("Expected the group '" + missingGroup + "' to throw GroupIdNotFoundException");
+            } catch (ExecutionException ee) {
+                assertInstanceOf(GroupIdNotFoundException.class, ee.getCause(),
+                    "Expected the group '" + missingGroup + "' to throw GroupIdNotFoundException");
             }
         }
     }
@@ -155,11 +161,11 @@ public class DescribeConsumerGroupTest {
                  // note the group to be queried is a different (non-existing) group
                  ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", missingGroup})
             ) {
-                GroupInformation state = service.collectGroupState(missingGroup);
-                assertTrue(Objects.equals(state.groupState, GroupState.DEAD) && state.numMembers == 0 &&
-                                state.coordinator != null && clusterInstance.brokerIds().contains(state.coordinator.id()),
-                        "Expected the state to be 'Dead', with no members in the group '" + missingGroup + "'."
-                );
+                service.collectGroupState(missingGroup);
+                fail("Expected the group '" + missingGroup + "' to throw GroupIdNotFoundException");
+            } catch (ExecutionException ee) {
+                assertInstanceOf(GroupIdNotFoundException.class, ee.getCause(),
+                        "Expected the group '" + missingGroup + "' to throw GroupIdNotFoundException");
             }
         }
     }

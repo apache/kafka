@@ -1610,7 +1610,8 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     createTopicWithBrokerPrincipal(topic)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, DESCRIBE, ALLOW)), groupResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, DESCRIBE, ALLOW)), topicResource)
-    createAdminClient().describeConsumerGroups(Seq(group).asJava).describedGroups().get(group).get()
+    val result = createAdminClient().describeConsumerGroups(Seq(group).asJava)
+    JTestUtils.assertFutureThrows(result.describedGroups().get(group), classOf[GroupIdNotFoundException])
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)

@@ -100,7 +100,7 @@ public class DeleteConsumerGroupsTest {
             assertEquals(1, result.size());
             assertNotNull(result.get(missingGroupId));
             assertInstanceOf(GroupIdNotFoundException.class,
-                    result.get(missingGroupId).getCause(),
+                    result.get(missingGroupId),
                     "The expected error (" + Errors.GROUP_ID_NOT_FOUND + ") was not detected while deleting consumer group");
         }
     }
@@ -132,7 +132,7 @@ public class DeleteConsumerGroupsTest {
                 assertEquals(1, result.size());
                 assertNotNull(result.get(groupId));
                 assertInstanceOf(GroupNotEmptyException.class,
-                        result.get(groupId).getCause(),
+                        result.get(groupId),
                         "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting consumer group. Result was:(" + result + ")");
             }
         }

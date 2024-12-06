@@ -23,6 +23,7 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema;
@@ -301,6 +302,7 @@ public class MirrorCheckpointTask extends SourceTask {
                 // sync offset to the target cluster only if the state of current consumer group is:
                 // (1) idle: because the consumer at target is not actively consuming the mirrored topic
                 // (2) dead: the new consumer that is recently created at source and never existed at target
+                //           This case will be reported as a GroupIdNotFoundException
                 if (consumerGroupState == GroupState.EMPTY) {
                     idleConsumerGroupsOffset.put(
                             group,
@@ -311,8 +313,13 @@ public class MirrorCheckpointTask extends SourceTask {
                     );
                 }
                 // new consumer upstream has state "DEAD" and will be identified during the offset sync-up
-            } catch (InterruptedException | ExecutionException e) {
-                log.error("Error querying for consumer group {} on cluster {}.", group, targetClusterAlias, e);
+            } catch (InterruptedException ie) {
+                log.error("Error querying for consumer group {} on cluster {}.", group, targetClusterAlias, ie);
+            } catch (ExecutionException ee) {
+                // check for non-existent new consumer upstream which will be identified during the offset sync-up
+                if (!(ee.getCause() instanceof GroupIdNotFoundException)) {
+                    log.error("Error querying for consumer group {} on cluster {}.", group, targetClusterAlias, ee);
+                }
             }
         }
     }

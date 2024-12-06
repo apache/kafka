@@ -1936,18 +1936,14 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           val expectedOperations = AclEntry.supportedOperations(ResourceType.GROUP)
           assertEquals(expectedOperations, testGroupDescription.authorizedOperations())
 
-          // Test that the fake group is listed as dead.
+          // Test that the fake group throws GroupIdNotFoundException
           assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(fakeGroupId))
-          val fakeGroupDescription = describeWithFakeGroupResult.describedGroups().get(fakeGroupId).get()
+          assertFutureThrows(describeWithFakeGroupResult.describedGroups().get(fakeGroupId), classOf[GroupIdNotFoundException],
+            s"Group $fakeGroupId not found.")
 
-          assertEquals(fakeGroupId, fakeGroupDescription.groupId())
-          assertEquals(0, fakeGroupDescription.members().size())
-          assertEquals("", fakeGroupDescription.partitionAssignor())
-          assertEquals(GroupState.DEAD, fakeGroupDescription.groupState())
-          assertEquals(expectedOperations, fakeGroupDescription.authorizedOperations())
-
-          // Test that all() returns 2 results
-          assertEquals(2, describeWithFakeGroupResult.all().get().size())
+          // Test that all() also throws GroupIdNotFoundException
+          assertFutureThrows(describeWithFakeGroupResult.all(), classOf[GroupIdNotFoundException],
+            s"Group $fakeGroupId not found.")
 
           val testTopicPart0 = new TopicPartition(testTopicName, 0)
 
@@ -2209,18 +2205,14 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           val expectedOperations = AclEntry.supportedOperations(ResourceType.GROUP)
           assertEquals(expectedOperations, testGroupDescription.authorizedOperations())
 
-          // Test that the fake group is listed as dead.
+          // Test that the fake group throws GroupIdNotFoundException
           assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(fakeGroupId))
-          val fakeGroupDescription = describeWithFakeGroupResult.describedGroups().get(fakeGroupId).get()
+          assertFutureThrows(describeWithFakeGroupResult.describedGroups().get(fakeGroupId),
+            classOf[GroupIdNotFoundException], s"Group $fakeGroupId not found.")
 
-          assertEquals(fakeGroupId, fakeGroupDescription.groupId())
-          assertEquals(0, fakeGroupDescription.members().size())
-          assertEquals("", fakeGroupDescription.partitionAssignor())
-          assertEquals(ConsumerGroupState.DEAD, fakeGroupDescription.state())
-          assertEquals(expectedOperations, fakeGroupDescription.authorizedOperations())
-
-          // Test that all() returns 2 results
-          assertEquals(2, describeWithFakeGroupResult.all().get().size())
+          // Test that all() also throws GroupIdNotFoundException
+          assertFutureThrows(describeWithFakeGroupResult.all(),
+            classOf[GroupIdNotFoundException], s"Group $fakeGroupId not found.")
 
           val testTopicPart0 = new TopicPartition(testTopicName, 0)
 
@@ -2642,17 +2634,14 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         val expectedOperations = AclEntry.supportedOperations(ResourceType.GROUP)
         assertEquals(expectedOperations, testGroupDescription.authorizedOperations())
 
-        // Test that the fake group is listed as dead.
+        // Test that the fake group throws GroupIdNotFoundException
         assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(fakeGroupId))
-        val fakeGroupDescription = describeWithFakeGroupResult.describedGroups().get(fakeGroupId).get()
+        assertFutureThrows(describeWithFakeGroupResult.describedGroups().get(fakeGroupId),
+          classOf[GroupIdNotFoundException], s"Group $fakeGroupId not found.")
 
-        assertEquals(fakeGroupId, fakeGroupDescription.groupId())
-        assertEquals(0, fakeGroupDescription.members().size())
-        assertEquals(GroupState.DEAD, fakeGroupDescription.groupState())
-        assertNull(fakeGroupDescription.authorizedOperations())
-
-        // Test that all() returns 2 results
-        assertEquals(2, describeWithFakeGroupResult.all().get().size())
+        // Test that all() also throws GroupIdNotFoundException
+        assertFutureThrows(describeWithFakeGroupResult.all(),
+          classOf[GroupIdNotFoundException], s"Group $fakeGroupId not found.")
 
         val describeTestGroupResult = client.describeShareGroups(Collections.singleton(testGroupId),
           new DescribeShareGroupsOptions().includeAuthorizedOperations(true))
@@ -2664,18 +2653,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         assertEquals(testGroupId, testGroupDescription.groupId)
         assertEquals(consumerSet.size, testGroupDescription.members().size())
 
-        // Describing a share group using describeConsumerGroups reports it as a DEAD consumer group
-        // in the same way as a non-existent group
+        // Describing a share group using describeConsumerGroups reports it as a non-existent group
+        // but the error message is different
         val describeConsumerGroupResult = client.describeConsumerGroups(Collections.singleton(testGroupId),
           new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
-        assertEquals(1, describeConsumerGroupResult.all().get().size())
-
-        val deadConsumerGroupDescription = describeConsumerGroupResult.describedGroups().get(testGroupId).get()
-        assertEquals(testGroupId, deadConsumerGroupDescription.groupId())
-        assertEquals(0, deadConsumerGroupDescription.members().size())
-        assertEquals("", deadConsumerGroupDescription.partitionAssignor())
-        assertEquals(ConsumerGroupState.DEAD, deadConsumerGroupDescription.state())
-        assertEquals(expectedOperations, deadConsumerGroupDescription.authorizedOperations())
+        assertFutureThrows(describeConsumerGroupResult.all(),
+          classOf[GroupIdNotFoundException], s"Group $testGroupId is not a consumer group.")
       } finally {
         consumerThreads.foreach {
           case consumerThread =>

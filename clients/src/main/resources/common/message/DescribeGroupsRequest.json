@@ -25,11 +25,13 @@
   // Starting in version 4, the response will include group.instance.id info for members.
   //
   // Version 5 is the first flexible version.
-  "validVersions": "0-5",
+  //
+  // Version 6 returns error code GROUP_ID_NOT_FOUND if the group ID is not found (KIP-1043).
+  "validVersions": "0-6",
   "flexibleVersions": "5+",
   "fields": [
     { "name": "Groups", "type": "[]string", "versions": "0+", "entityType": "groupId",
-      "about": "The names of the groups to describe" },
+      "about": "The names of the groups to describe." },
     { "name": "IncludeAuthorizedOperations", "type": "bool", "versions": "3+",
       "about": "Whether to include authorized operations." }
   ]

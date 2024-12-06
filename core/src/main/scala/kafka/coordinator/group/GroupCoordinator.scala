@@ -1138,15 +1138,20 @@ private[group] class GroupCoordinator(
     }
   }
 
-  def handleDescribeGroup(groupId: String): (Errors, GroupSummary) = {
+  def handleDescribeGroup(groupId: String, apiVersion: Short): (Errors, Option[String], GroupSummary) = {
     validateGroupStatus(groupId, ApiKeys.DESCRIBE_GROUPS) match {
-      case Some(error) => (error, GroupCoordinator.EmptyGroup)
+      case Some(error) => (error, None, GroupCoordinator.EmptyGroup)
       case None =>
         groupManager.getGroup(groupId) match {
-          case None => (Errors.NONE, GroupCoordinator.DeadGroup)
+          case None =>
+            if (apiVersion >= 6) {
+              (Errors.GROUP_ID_NOT_FOUND, Some(s"Group $groupId not found."), GroupCoordinator.DeadGroup)
+            } else {
+              (Errors.NONE, None, GroupCoordinator.DeadGroup)
+            }
           case Some(group) =>
             group.inLock {
-              (Errors.NONE, group.summary)
+              (Errors.NONE, None, group.summary)
             }
         }
     }

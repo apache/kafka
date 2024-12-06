@@ -249,10 +249,11 @@ private[group] class GroupCoordinatorAdapter(
   ): CompletableFuture[util.List[DescribeGroupsResponseData.DescribedGroup]] = {
 
     def describeGroup(groupId: String): DescribeGroupsResponseData.DescribedGroup = {
-      val (error, summary) = coordinator.handleDescribeGroup(groupId)
+      val (error, errorMessage, summary) = coordinator.handleDescribeGroup(groupId, context.apiVersion())
 
       new DescribeGroupsResponseData.DescribedGroup()
         .setErrorCode(error.code)
+        .setErrorMessage(errorMessage.orNull)
         .setGroupId(groupId)
         .setGroupState(summary.state)
         .setProtocolType(summary.protocolType)

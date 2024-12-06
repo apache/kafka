@@ -64,6 +64,7 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
     private final Logger log;
     private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
     private final Set<String> useClassicGroupApi;
+    private final Map<String, String> groupIdNotFoundErrorMessages;
 
     public DescribeConsumerGroupsHandler(
         boolean includeAuthorizedOperations,
@@ -73,6 +74,7 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
         this.log = logContext.logger(DescribeConsumerGroupsHandler.class);
         this.lookupStrategy = new CoordinatorStrategy(CoordinatorType.GROUP, logContext);
         this.useClassicGroupApi = new HashSet<>();
+        this.groupIdNotFoundErrorMessages = new HashMap<>();
     }
 
     private static Set<CoordinatorKey> buildKeySet(Collection<String> groupIds) {
@@ -255,7 +257,7 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                 handleError(
                     groupIdKey,
                     error,
-                    null,
+                    describedGroup.errorMessage(),
                     failed,
                     groupsToUnmap,
                     false
@@ -354,11 +356,18 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
             case GROUP_ID_NOT_FOUND:
                 if (isConsumerGroupResponse) {
                     log.debug("`{}` request for group id {} failed because the group is not " +
-                        "a new consumer group. Will retry with `DescribeGroups` API.", apiName, groupId.idValue);
+                        "a new consumer group. Will retry with `DescribeGroups` API. {}",
+                        apiName, groupId.idValue, errorMsg != null ? errorMsg : "");
                     useClassicGroupApi.add(groupId.idValue);
+
+                    // The error message from the ConsumerGroupDescribe API is more informative to the user
+                    // than the error message from the classic group API. Capture it and use it if we get the
+                    // same error code for the classic group API also.
+                    groupIdNotFoundErrorMessages.put(groupId.idValue, errorMsg);
                 } else {
-                    log.error("`{}` request for group id {} failed because the group does not exist.", apiName, groupId.idValue);
-                    failed.put(groupId, error.exception(errorMsg));
+                    log.debug("`{}` request for group id {} failed because the group does not exist. {}",
+                        apiName, groupId.idValue, errorMsg != null ? errorMsg : "");
+                    failed.put(groupId, error.exception(groupIdNotFoundErrorMessages.getOrDefault(groupId.idValue, errorMsg)));
                 }
                 break;
 

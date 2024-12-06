@@ -414,12 +414,12 @@ class GroupCoordinatorAdapterTest {
       ))
     )
 
-    when(groupCoordinator.handleDescribeGroup(groupId1)).thenReturn {
-      (Errors.NONE, groupSummary1)
+    when(groupCoordinator.handleDescribeGroup(groupId1, ApiKeys.DESCRIBE_GROUPS.latestVersion)).thenReturn {
+      (Errors.NONE, None, groupSummary1)
     }
 
-    when(groupCoordinator.handleDescribeGroup(groupId2)).thenReturn {
-      (Errors.NOT_COORDINATOR, GroupCoordinator.EmptyGroup)
+    when(groupCoordinator.handleDescribeGroup(groupId2, ApiKeys.DESCRIBE_GROUPS.latestVersion)).thenReturn {
+      (Errors.NOT_COORDINATOR, None, GroupCoordinator.EmptyGroup)
     }
 
     val ctx = makeContext(ApiKeys.DESCRIBE_GROUPS, ApiKeys.DESCRIBE_GROUPS.latestVersion)

@@ -29,6 +29,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.utils.Time;
@@ -1002,7 +1003,9 @@ public class IntegrationTestUtils {
                             .get(applicationId)
                             .get();
             return groupDescription.members().isEmpty();
-        } catch (final ExecutionException | InterruptedException e) {
+        } catch (final ExecutionException e) {
+            return e.getCause() instanceof GroupIdNotFoundException;
+        } catch (final InterruptedException e) {
             return false;
         }
     }

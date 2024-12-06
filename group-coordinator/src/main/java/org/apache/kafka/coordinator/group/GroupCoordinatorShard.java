@@ -603,7 +603,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         List<String> groupIds,
         long committedOffset
     ) {
-        return groupMetadataManager.describeGroups(groupIds, committedOffset);
+        return groupMetadataManager.describeGroups(context, groupIds, committedOffset);
     }
 
     /**
