@@ -95,11 +95,16 @@ public class AdminFenceProducersTest {
             producer.beginTransaction();
             ExecutionException exceptionDuringSend = assertThrows(
                     ExecutionException.class,
-                    () -> producer.send(RECORD).get(), "expected ProducerFencedException"
+                    () -> producer.send(RECORD).get(), "expected InvalidProducerEpochException"
             );
-            assertInstanceOf(ProducerFencedException.class, exceptionDuringSend.getCause());
 
-            assertThrows(ProducerFencedException.class, producer::commitTransaction);
+            // In Transaction V2, the ProducerFencedException will be converted to InvalidProducerEpochException when
+            // coordinator handles AddPartitionRequest.
+            assertInstanceOf(InvalidProducerEpochException.class, exceptionDuringSend.getCause());
+
+            // InvalidProducerEpochException is treated as fatal error. The commitTransaction will return this last
+            // fatal error.
+            assertThrows(InvalidProducerEpochException.class, producer::commitTransaction);
         }
     }
 

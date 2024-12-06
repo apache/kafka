@@ -17,9 +17,9 @@
 
 package kafka.api
 
-import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils.{consumeRecords, waitUntilTrue}
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerGroupMetadata, ConsumerRecord, OffsetAndMetadata}
+import kafka.utils.{TestInfoUtils, TestUtils}
+import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException, TimeoutException}
@@ -30,8 +30,7 @@ import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, Server
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.MethodSource
-import org.junit.jupiter.params.provider.CsvSource
+import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
 
 import java.lang.{Long => JLong}
 import java.nio.charset.StandardCharsets
@@ -39,8 +38,8 @@ import java.time.Duration
 import java.util
 import java.util.concurrent.TimeUnit
 import java.util.{Optional, Properties}
-import scala.collection.{Seq, mutable}
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+import scala.collection.{Seq, mutable}
 import scala.concurrent.ExecutionException
 import scala.jdk.CollectionConverters._
 
@@ -394,6 +393,7 @@ class TransactionsTest extends IntegrationTestHarness {
     producer1.beginTransaction()
     producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "1", "1", willBeCommitted = false))
     producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "3", "3", willBeCommitted = false))
+    producer1.flush()
 
     producer2.initTransactions()  // ok, will abort the open transaction.
     producer2.beginTransaction()
@@ -431,7 +431,7 @@ class TransactionsTest extends IntegrationTestHarness {
     producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "4", willBeCommitted = true))
     producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "4", willBeCommitted = true))
 
-    assertThrows(classOf[ProducerFencedException], () => producer1.sendOffsetsToTransaction(Map(new TopicPartition("foobartopic", 0)
+    assertThrows(classOf[ProducerFencedException], () => producer1.sendOffsetsToTransaction(Map(new TopicPartition(topic1, 0)
       -> new OffsetAndMetadata(110L)).asJava, new ConsumerGroupMetadata("foobarGroup")))
 
     producer2.commitTransaction()  // ok
@@ -561,6 +561,8 @@ class TransactionsTest extends IntegrationTestHarness {
     val consumer = transactionalConsumers(0)
 
     consumer.subscribe(List(topic1, topic2).asJava)
+    TestUtils.waitUntilLeaderIsKnown(brokers, new TopicPartition(topic1, 0))
+    TestUtils.waitUntilLeaderIsKnown(brokers, new TopicPartition(topic2, 0))
 
     producer1.initTransactions()
     producer1.beginTransaction()
@@ -579,15 +581,21 @@ class TransactionsTest extends IntegrationTestHarness {
       producer1.beginTransaction()
       val result =  producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "1", "5", willBeCommitted = false))
       val recordMetadata = result.get()
-      error(s"Missed a producer fenced exception when writing to ${recordMetadata.topic}-${recordMetadata.partition}. Grab the logs!!")
+      error(s"Missed an exception when writing to ${recordMetadata.topic}-${recordMetadata.partition}. Grab the logs!!")
       brokers.foreach { broker =>
         error(s"log dirs: ${broker.logManager.liveLogDirs.map(_.getAbsolutePath).head}")
       }
       fail("Should not be able to send messages from a fenced producer.")
     } catch {
-      case _: ProducerFencedException =>
-      case e: ExecutionException =>
-        assertTrue(e.getCause.isInstanceOf[ProducerFencedException])
+      case _: InvalidProducerEpochException =>
+      case e: ExecutionException => {
+        if (quorum == "zk") {
+          assertTrue(e.getCause.isInstanceOf[ProducerFencedException])
+        } else {
+          // In kraft mode, transactionV2 is used.
+          assertTrue(e.getCause.isInstanceOf[InvalidProducerEpochException])
+        }
+      }
       case e: Exception =>
         throw new AssertionError("Got an unexpected exception from a fenced producer.", e)
     }
@@ -615,14 +623,27 @@ class TransactionsTest extends IntegrationTestHarness {
     // Wait for the expiration cycle to kick in.
     Thread.sleep(600)
 
-    try {
-      // Now that the transaction has expired, the second send should fail with a ProducerFencedException.
-      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "2", willBeCommitted = false)).get()
-      fail("should have raised a ProducerFencedException since the transaction has expired")
-    } catch {
-      case _: ProducerFencedException =>
-      case e: ExecutionException =>
-      assertTrue(e.getCause.isInstanceOf[ProducerFencedException])
+    if (quorum == "zk") {
+      // In zk mode, transaction v1 is used.
+      try {
+        // Now that the transaction has expired, the second send should fail with a ProducerFencedException.
+        producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "2", willBeCommitted = false)).get()
+        fail("should have raised a ProducerFencedException since the transaction has expired")
+      } catch {
+        case _: ProducerFencedException =>
+        case e: ExecutionException =>
+          assertTrue(e.getCause.isInstanceOf[ProducerFencedException])
+      }
+    } else {
+      try {
+        // Now that the transaction has expired, the second send should fail with a InvalidProducerEpochException.
+        producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "2", willBeCommitted = false)).get()
+        fail("should have raised a InvalidProducerEpochException since the transaction has expired")
+      } catch {
+        case _: InvalidProducerEpochException =>
+        case e: ExecutionException =>
+          assertTrue(e.getCause.isInstanceOf[InvalidProducerEpochException])
+      }
     }
 
     // Verify that the first message was aborted and the second one was never written at all.
@@ -789,6 +810,8 @@ class TransactionsTest extends IntegrationTestHarness {
       val producerId = producerStateEntry.producerId
       var previousProducerEpoch = producerStateEntry.producerEpoch
 
+      Thread.sleep(3000) // Wait for the markers to be persisted and the transaction state to be updated.
+
       // Second transaction: abort
       producer.beginTransaction()
       producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "2", willBeCommitted = false))
@@ -899,7 +922,8 @@ class TransactionsTest extends IntegrationTestHarness {
       producer1.close()
     }
 
-    val producer3 = createTransactionalProducer("transactional-producer", maxBlockMs = 5000)
+    // Make sure to leave this producer enough time before request timeout. The broker restart can take some time.
+    val producer3 = createTransactionalProducer("transactional-producer")
     producer3.initTransactions()
 
     producer3.beginTransaction()

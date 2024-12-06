@@ -2161,7 +2161,9 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     producer.initTransactions()
     producer.beginTransaction()
     removeAllClientAcls()
-    assertThrows(classOf[TransactionalIdAuthorizationException], () => {
+    // In transaction V2, the server receives the offset commit request first, so the error is GroupAuthorizationException
+    // instead of TransactionalIdAuthorizationException.
+    assertThrows(classOf[GroupAuthorizationException], () => {
       val offsets = Map(tp -> new OffsetAndMetadata(1L)).asJava
       producer.sendOffsetsToTransaction(offsets, new ConsumerGroupMetadata(group))
       producer.commitTransaction()

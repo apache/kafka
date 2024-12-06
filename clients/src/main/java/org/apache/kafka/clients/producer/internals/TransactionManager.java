@@ -31,6 +31,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
@@ -369,15 +370,22 @@ public class TransactionManager {
                 "(currentState= " + currentState + ")");
         }
 
-        log.debug("Begin adding offsets {} for consumer group {} to transaction", offsets, groupMetadata);
-        AddOffsetsToTxnRequest.Builder builder = new AddOffsetsToTxnRequest.Builder(
-            new AddOffsetsToTxnRequestData()
-                .setTransactionalId(transactionalId)
-                .setProducerId(producerIdAndEpoch.producerId)
-                .setProducerEpoch(producerIdAndEpoch.epoch)
-                .setGroupId(groupMetadata.groupId())
-        );
-        AddOffsetsToTxnHandler handler = new AddOffsetsToTxnHandler(builder, offsets, groupMetadata);
+        // In transaction V2, the client will skip sending AddOffsetsToTxn before sending txnOffsetCommit.
+        TxnRequestHandler handler;
+        if (isTransactionV2Enabled()) {
+            log.debug("Begin adding offsets {} for consumer group {} to transaction with transaction protocol V2", offsets, groupMetadata);
+            handler = txnOffsetCommitHandler(null, offsets, groupMetadata);
+        } else {
+            log.debug("Begin adding offsets {} for consumer group {} to transaction", offsets, groupMetadata);
+            AddOffsetsToTxnRequest.Builder builder = new AddOffsetsToTxnRequest.Builder(
+                    new AddOffsetsToTxnRequestData()
+                            .setTransactionalId(transactionalId)
+                            .setProducerId(producerIdAndEpoch.producerId)
+                            .setProducerEpoch(producerIdAndEpoch.epoch)
+                            .setGroupId(groupMetadata.groupId())
+            );
+            handler = new AddOffsetsToTxnHandler(builder, offsets, groupMetadata);
+        }
 
         enqueueRequest(handler);
         return handler.result;
@@ -394,7 +402,10 @@ public class TransactionManager {
             } else if (currentState != State.IN_TRANSACTION) {
                 throw new IllegalStateException("Cannot add partition " + topicPartition +
                     " to transaction while in state  " + currentState);
-            } else if (isPartitionAdded(topicPartition) || isPartitionPendingAdd(topicPartition)) {
+            } else if (isTransactionV2Enabled()) {
+                txnPartitionMap.getOrCreate(topicPartition);
+                partitionsInTransaction.add(topicPartition);
+            } else if (transactionContainsPartition(topicPartition) || isPartitionPendingAdd(topicPartition)) {
                 return;
             } else {
                 log.debug("Begin adding new partition {} to transaction", topicPartition);
@@ -495,11 +506,6 @@ public class TransactionManager {
         } else {
             transitionToFatalError(fatalException);
         }
-    }
-
-    // visible for testing
-    synchronized boolean isPartitionAdded(TopicPartition partition) {
-        return partitionsInTransaction.contains(partition);
     }
 
     // visible for testing
@@ -695,7 +701,8 @@ public class TransactionManager {
         if (exception instanceof ClusterAuthorizationException
                 || exception instanceof TransactionalIdAuthorizationException
                 || exception instanceof ProducerFencedException
-                || exception instanceof UnsupportedVersionException) {
+                || exception instanceof UnsupportedVersionException
+                || exception instanceof InvalidPidMappingException) {
             transitionToFatalError(exception);
         } else if (isTransactional()) {
             if (needToTriggerEpochBumpFromClient() && !isCompleting()) {
@@ -830,7 +837,7 @@ public class TransactionManager {
             return null;
         }
 
-        if (nextRequestHandler.isEndTxn() && !transactionStarted) {
+        if (nextRequestHandler.isEndTxn() && (!isTransactionV2Enabled() && !transactionStarted)) {
             nextRequestHandler.result.done();
             if (currentState != State.FATAL_ERROR) {
                 log.debug("Not sending EndTxn for completed transaction since no partitions " +
@@ -908,7 +915,7 @@ public class TransactionManager {
     }
 
     // visible for testing
-    synchronized boolean transactionContainsPartition(TopicPartition topicPartition) {
+    public synchronized boolean transactionContainsPartition(TopicPartition topicPartition) {
         return partitionsInTransaction.contains(topicPartition);
     }
 
@@ -1142,8 +1149,13 @@ public class TransactionManager {
                 pendingTxnOffsetCommits,
                 groupMetadata.memberId(),
                 groupMetadata.generationId(),
-                groupMetadata.groupInstanceId()
+                groupMetadata.groupInstanceId(),
+                isTransactionV2Enabled()
             );
+        if (result == null) {
+            // In this case, transaction V2 is in use.
+            return new TxnOffsetCommitHandler(builder);
+        }
         return new TxnOffsetCommitHandler(result, builder);
     }
 
@@ -1738,6 +1750,11 @@ public class TransactionManager {
         private TxnOffsetCommitHandler(TransactionalRequestResult result,
                                        TxnOffsetCommitRequest.Builder builder) {
             super(result);
+            this.builder = builder;
+        }
+
+        private TxnOffsetCommitHandler(TxnOffsetCommitRequest.Builder builder) {
+            super("TxnOffsetCommitHandler");
             this.builder = builder;
         }
 

@@ -17,7 +17,7 @@
 package kafka.coordinator.group
 
 import kafka.cluster.PartitionListener
-import kafka.server.{ReplicaManager, defaultError, genericError}
+import kafka.server.{AddPartitionsToTxnManager, ReplicaManager}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
@@ -110,7 +110,7 @@ class CoordinatorPartitionWriter(
     producerEpoch: Short,
     apiVersion: Short
   ): CompletableFuture[VerificationGuard] = {
-    val transactionSupportedOperation = if (apiVersion >= 4) genericError else defaultError
+    val transactionSupportedOperation = AddPartitionsToTxnManager.txnOffsetCommitRequestVersionToTransactionSupportedOperation(apiVersion)
     val future = new CompletableFuture[VerificationGuard]()
     replicaManager.maybeStartTransactionVerificationForPartition(
       topicPartition = tp,
