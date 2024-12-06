@@ -28,6 +28,7 @@ import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
+import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
 import org.apache.kafka.server.share.fetch.ShareFetch;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
@@ -40,6 +41,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.BiConsumer;
 
 import scala.Option;
 import scala.Some;
@@ -58,8 +60,8 @@ public class ShareFetchUtils {
             ShareFetch shareFetch,
             Map<TopicIdPartition, FetchPartitionData> responseData,
             LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions,
-            ReplicaManager replicaManager
-    ) {
+            ReplicaManager replicaManager,
+            BiConsumer<SharePartitionKey, Throwable> exceptionHandler) {
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> response = new HashMap<>();
 
         // Acquired records count for the share fetch request.
@@ -84,7 +86,16 @@ public class ShareFetchUtils {
                 // response and let the client retry the fetch. This way we do not lose out on the data that
                 // would be returned for other share partitions in the fetch request.
                 if (fetchPartitionData.error.code() == Errors.OFFSET_OUT_OF_RANGE.code()) {
-                    sharePartition.updateCacheAndOffsets(offsetForEarliestTimestamp(topicIdPartition, replicaManager));
+                    try {
+                        sharePartition.updateCacheAndOffsets(offsetForEarliestTimestamp(topicIdPartition,
+                            replicaManager, sharePartition.leaderEpoch()));
+                    } catch (Exception e) {
+                        log.error("Error while fetching offset for earliest timestamp for topicIdPartition: {}", topicIdPartition, e);
+                        shareFetch.addErroneous(topicIdPartition, e);
+                        exceptionHandler.accept(new SharePartitionKey(shareFetch.groupId(), topicIdPartition), e);
+                        // Do not fill the response for this partition and continue.
+                        continue;
+                    }
                     // We set the error code to NONE, as we have updated the start offset of the share partition
                     // and the client can retry the fetch.
                     partitionData.setErrorCode(Errors.NONE.code());
@@ -123,13 +134,13 @@ public class ShareFetchUtils {
      *
      * @return The offset for the earliest timestamp.
      */
-    static long offsetForEarliestTimestamp(TopicIdPartition topicIdPartition, ReplicaManager replicaManager) {
+    static long offsetForEarliestTimestamp(TopicIdPartition topicIdPartition, ReplicaManager replicaManager, int leaderEpoch) {
         // Isolation level is only required when reading from the latest offset hence use Option.empty() for now.
         Option<FileRecords.TimestampAndOffset> timestampAndOffset = replicaManager.fetchOffsetForTimestamp(
                 topicIdPartition.topicPartition(), ListOffsetsRequest.EARLIEST_TIMESTAMP, Option.empty(),
-                Optional.empty(), true).timestampAndOffsetOpt();
+                Optional.of(leaderEpoch), true).timestampAndOffsetOpt();
         if (timestampAndOffset.isEmpty()) {
-            throw new OffsetNotAvailableException("offset for Earliest timestamp not found for topic partition: " + topicIdPartition);
+            throw new OffsetNotAvailableException("Offset for earliest timestamp not found for topic partition: " + topicIdPartition);
         }
         return timestampAndOffset.get().offset;
     }
@@ -139,13 +150,13 @@ public class ShareFetchUtils {
      *
      * @return The offset for the latest timestamp.
      */
-    static long offsetForLatestTimestamp(TopicIdPartition topicIdPartition, ReplicaManager replicaManager) {
+    static long offsetForLatestTimestamp(TopicIdPartition topicIdPartition, ReplicaManager replicaManager, int leaderEpoch) {
         // Isolation level is set to READ_UNCOMMITTED, matching with that used in share fetch requests
         Option<FileRecords.TimestampAndOffset> timestampAndOffset = replicaManager.fetchOffsetForTimestamp(
             topicIdPartition.topicPartition(), ListOffsetsRequest.LATEST_TIMESTAMP, new Some<>(IsolationLevel.READ_UNCOMMITTED),
-            Optional.empty(), true).timestampAndOffsetOpt();
+            Optional.of(leaderEpoch), true).timestampAndOffsetOpt();
         if (timestampAndOffset.isEmpty()) {
-            throw new OffsetNotAvailableException("offset for Latest timestamp not found for topic partition: " + topicIdPartition);
+            throw new OffsetNotAvailableException("Offset for latest timestamp not found for topic partition: " + topicIdPartition);
         }
         return timestampAndOffset.get().offset;
     }

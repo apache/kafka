@@ -1170,6 +1170,10 @@ public class SharePartition {
         return this.listener;
     }
 
+    int leaderEpoch() {
+        return leaderEpoch;
+    }
+
     private boolean stateNotActive() {
         return  partitionState() != SharePartitionState.ACTIVE;
     }
@@ -2128,8 +2132,8 @@ public class SharePartition {
         }
 
         if (offsetResetStrategy == GroupConfig.ShareGroupAutoOffsetReset.EARLIEST)
-            return offsetForEarliestTimestamp(topicIdPartition, replicaManager);
-        return offsetForLatestTimestamp(topicIdPartition, replicaManager);
+            return offsetForEarliestTimestamp(topicIdPartition, replicaManager, leaderEpoch);
+        return offsetForLatestTimestamp(topicIdPartition, replicaManager, leaderEpoch);
     }
 
     // Visible for testing. Should only be used for testing purposes.
