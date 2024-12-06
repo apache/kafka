@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.errors.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -41,8 +41,7 @@ public class SyncGroupRequest extends AbstractRequest {
         @Override
         public SyncGroupRequest build(short version) {
             if (data.groupInstanceId() != null && version < 3) {
-                throw new UnsupportedVersionException("The broker sync group protocol version " +
-                        version + " does not support usage of config group.instance.id.");
+                throw new UnsupportedProtocolFieldException("GroupInstanceId", apiKey().name(), version, 3);
             }
             return new SyncGroupRequest(data, version);
         }

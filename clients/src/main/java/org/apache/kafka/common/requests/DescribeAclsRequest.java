@@ -20,7 +20,7 @@ import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.errors.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.message.DescribeAclsRequestData;
 import org.apache.kafka.common.message.DescribeAclsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -30,6 +30,8 @@ import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.stream.Collectors;
 
 public class DescribeAclsRequest extends AbstractRequest {
 
@@ -77,8 +79,13 @@ public class DescribeAclsRequest extends AbstractRequest {
             // to LITERAL. Note that the wildcard `*` is considered `LITERAL` for compatibility reasons.
             if (patternType == PatternType.ANY)
                 data.setPatternTypeFilter(PatternType.LITERAL.code());
-            else if (patternType != PatternType.LITERAL)
-                throw new UnsupportedVersionException("Version 0 only supports literal resource pattern types");
+            else if (patternType != PatternType.LITERAL) {
+                String unsupportedTypes = Arrays.stream(PatternType.values())
+                    .filter(type -> type != PatternType.LITERAL)
+                    .map(PatternType::name)
+                    .collect(Collectors.joining(","));
+                throw new UnsupportedProtocolFieldException(unsupportedTypes, apiKey().name(), version, 1);
+            }
         }
 
         if (data.patternTypeFilter() == PatternType.UNKNOWN.code()

@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchRequestData.OffsetFetchRequestGroup;
@@ -143,8 +144,7 @@ public class OffsetFetchRequest extends AbstractRequest {
             }
             if (data.requireStable() && version < 7) {
                 if (throwOnFetchStableOffsetsUnsupported) {
-                    throw new UnsupportedVersionException("Broker unexpectedly " +
-                        "doesn't support requireStable flag on version " + version);
+                    throw new UnsupportedProtocolFieldException("RequireStable", apiKey().name(), version, 7);
                 } else {
                     log.trace("Fallback the requireStable flag to false as broker " +
                         "only supports OffsetFetchRequest version {}. Need " +

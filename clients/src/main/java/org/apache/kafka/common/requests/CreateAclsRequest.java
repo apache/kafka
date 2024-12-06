@@ -21,7 +21,7 @@ import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.errors.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.message.CreateAclsRequestData;
 import org.apache.kafka.common.message.CreateAclsRequestData.AclCreation;
 import org.apache.kafka.common.message.CreateAclsResponseData;
@@ -33,8 +33,10 @@ import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class CreateAclsRequest extends AbstractRequest {
 
@@ -91,8 +93,13 @@ public class CreateAclsRequest extends AbstractRequest {
         if (version() == 0) {
             final boolean unsupported = data.creations().stream().anyMatch(creation ->
                 creation.resourcePatternType() != PatternType.LITERAL.code());
-            if (unsupported)
-                throw new UnsupportedVersionException("Version 0 only supports literal resource pattern types");
+            if (unsupported) {
+                String unsupportedType = Arrays.stream(PatternType.values())
+                    .filter(type -> type != PatternType.LITERAL)
+                    .map(PatternType::name)
+                    .collect(Collectors.joining(","));
+                throw new UnsupportedProtocolFieldException(unsupportedType, apiKey().name(), version(), 1);
+            }
         }
 
         final boolean unknown = data.creations().stream().anyMatch(creation ->

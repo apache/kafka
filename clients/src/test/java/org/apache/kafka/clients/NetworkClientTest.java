@@ -21,7 +21,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.RebootstrapRequiredException;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.errors.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
@@ -240,7 +240,7 @@ public class NetworkClientTest {
         // disabling auto topic creation for versions less than 4 is not supported
         MetadataRequest.Builder builder = new MetadataRequest.Builder(topics, false, (short) 3);
         client.sendInternalMetadataRequest(builder, node.idString(), time.milliseconds());
-        assertEquals(UnsupportedVersionException.class, metadataUpdater.getAndClearFailure().getClass());
+        assertEquals(UnsupportedProtocolFieldException.class, metadataUpdater.getAndClearFailure().getClass());
     }
 
     @Test

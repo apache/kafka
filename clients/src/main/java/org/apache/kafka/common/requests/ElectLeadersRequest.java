@@ -19,7 +19,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.errors.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersRequestData.TopicPartitions;
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
@@ -30,6 +30,7 @@ import org.apache.kafka.common.protocol.MessageUtil;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -65,7 +66,11 @@ public class ElectLeadersRequest extends AbstractRequest {
 
         private ElectLeadersRequestData toRequestData(short version) {
             if (electionType != ElectionType.PREFERRED && version == 0) {
-                throw new UnsupportedVersionException("API Version 0 only supports PREFERRED election type");
+                String unsupportedTypes = Arrays.stream(ElectionType.values())
+                    .filter(type -> type != ElectionType.PREFERRED)
+                    .map(ElectionType::name)
+                    .collect(Collectors.joining(","));
+                throw new UnsupportedProtocolFieldException(unsupportedTypes, apiKey().name(), version, 1);
             }
 
             ElectLeadersRequestData data = new ElectLeadersRequestData()

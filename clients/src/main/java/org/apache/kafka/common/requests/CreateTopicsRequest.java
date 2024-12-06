@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.errors.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
@@ -40,8 +40,7 @@ public class CreateTopicsRequest extends AbstractRequest {
         @Override
         public CreateTopicsRequest build(short version) {
             if (data.validateOnly() && version == 0)
-                throw new UnsupportedVersionException("validateOnly is not supported in version 0 of " +
-                        "CreateTopicsRequest");
+                throw new UnsupportedProtocolFieldException("validateOnly", apiKey().name(), version, 1);
 
             final List<String> topicsWithDefaults = data.topics()
                 .stream()
@@ -53,10 +52,7 @@ public class CreateTopicsRequest extends AbstractRequest {
                 .collect(Collectors.toList());
 
             if (!topicsWithDefaults.isEmpty() && version < 4) {
-                throw new UnsupportedVersionException("Creating topics with default "
-                    + "partitions/replication factor are only supported in CreateTopicRequest "
-                    + "version 4+. The following topics need values for partitions and replicas: "
-                    + topicsWithDefaults);
+                throw new UnsupportedProtocolFieldException(String.join(",", topicsWithDefaults), apiKey().name(), version, 4);
             }
 
             return new CreateTopicsRequest(data, version);

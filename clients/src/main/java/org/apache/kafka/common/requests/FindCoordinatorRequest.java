@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
@@ -43,8 +44,7 @@ public class FindCoordinatorRequest extends AbstractRequest {
         @Override
         public FindCoordinatorRequest build(short version) {
             if (version < 1 && data.keyType() == CoordinatorType.TRANSACTION.id()) {
-                throw new UnsupportedVersionException("Cannot create a v" + version + " FindCoordinator request " +
-                        "because we require features supported only in 2 or later.");
+                throw new UnsupportedProtocolFieldException(CoordinatorType.TRANSACTION.name(), apiKey().name(), version, 2);
             }
             int batchedKeys = data.coordinatorKeys().size();
             if (version < MIN_BATCHED_VERSION) {
