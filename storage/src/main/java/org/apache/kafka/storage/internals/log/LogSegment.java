@@ -257,13 +257,21 @@ public class LogSegment implements Closeable {
             if (largestTimestampMs > maxTimestampSoFar()) {
                 maxTimestampAndOffsetSoFar = new TimestampOffset(largestTimestampMs, shallowOffsetOfMaxTimestamp);
             }
-            // append an entry to the index (if needed)
+            // append an entry to the timestamp index at MemoryRecords level (if needed)
             if (bytesSinceLastIndexEntry > indexIntervalBytes) {
-                offsetIndex().append(largestOffset, physicalPosition);
                 timeIndex().maybeAppend(maxTimestampSoFar(), shallowOffsetOfMaxTimestampSoFar());
-                bytesSinceLastIndexEntry = 0;
             }
-            bytesSinceLastIndexEntry += records.sizeInBytes();
+
+            // append an entry to the offset index at batches level (if needed)
+            for (RecordBatch batch : records.batches()) {
+                if (bytesSinceLastIndexEntry > indexIntervalBytes &&
+                    batch.lastOffset() >= offsetIndex().lastOffset()) {
+                    offsetIndex().append(batch.lastOffset(), physicalPosition);
+                    bytesSinceLastIndexEntry = 0;
+                }
+                physicalPosition += batch.sizeInBytes();
+                bytesSinceLastIndexEntry += batch.sizeInBytes();
+            }
         }
     }
 
