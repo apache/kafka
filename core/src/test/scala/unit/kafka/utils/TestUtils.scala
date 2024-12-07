@@ -135,14 +135,7 @@ object TestUtils extends Logging {
    * Create a random log directory in the format <string>-<int> used for Kafka partition logs.
    * It is the responsibility of the caller to set up a shutdown hook for deletion of the directory.
    */
-  def randomPartitionLogDir(parentDir: File): File = {
-    val attempts = 1000
-    val f = Iterator.continually(new File(parentDir, "kafka-" + random.nextInt(1000000)))
-                                  .take(attempts).find(_.mkdir())
-                                  .getOrElse(sys.error(s"Failed to create directory after $attempts attempts"))
-    f.deleteOnExit()
-    f
-  }
+  def randomPartitionLogDir(parentDir: File): File = JTestUtils.randomPartitionLogDir(parentDir)
 
   /**
    * Create a temporary file
