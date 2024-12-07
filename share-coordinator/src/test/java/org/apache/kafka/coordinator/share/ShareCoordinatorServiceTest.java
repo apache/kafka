@@ -40,7 +40,6 @@ import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.util.FutureUtils;
 
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentMatchers;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -57,6 +56,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -163,10 +163,10 @@ class ShareCoordinatorServiceTest {
             ));
 
         when(runtime.scheduleWriteOperation(
-            ArgumentMatchers.eq("write-share-group-state"),
-            ArgumentMatchers.eq(new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
-            ArgumentMatchers.any()
+            eq("write-share-group-state"),
+            eq(new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0)),
+            eq(Duration.ofMillis(5000)),
+            any()
         ))
             .thenReturn(CompletableFuture.completedFuture(response1))
             .thenReturn(CompletableFuture.completedFuture(response2));
@@ -274,10 +274,11 @@ class ShareCoordinatorServiceTest {
                 )))
             );
 
-        when(runtime.scheduleReadOperation(
-            ArgumentMatchers.eq("read-share-group-state"),
-            ArgumentMatchers.eq(new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0)),
-            ArgumentMatchers.any()
+        when(runtime.scheduleWriteOperation(
+            eq("read-update-leader-epoch-state"),
+            eq(new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0)),
+            any(),
+            any()
         ))
             .thenReturn(CompletableFuture.completedFuture(new ReadShareGroupStateResponseData()
                 .setResults(Collections.singletonList(topicData1))))
@@ -590,7 +591,7 @@ class ShareCoordinatorServiceTest {
         Uuid topicId = Uuid.randomUuid();
         int partition = 0;
 
-        when(runtime.scheduleReadOperation(any(), any(), any()))
+        when(runtime.scheduleWriteOperation(any(), any(), any(), any()))
             .thenReturn(FutureUtils.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception()));
 
         assertEquals(new ReadShareGroupStateResponseData()
@@ -625,7 +626,7 @@ class ShareCoordinatorServiceTest {
             Time.SYSTEM
         );
 
-        service.startup(() -> 50);
+        service.startup(() -> 1);
 
         String groupId = "group1";
         Uuid topicId = Uuid.randomUuid();
@@ -635,7 +636,7 @@ class ShareCoordinatorServiceTest {
         assertEquals(Topic.SHARE_GROUP_STATE_TOPIC_NAME, tp.topic());
         int expectedPartition = tp.partition();
 
-        // The presence of a topic name should not affect the choice of partition
+        // The presence of a topic name should not affect the choice of partition.
         tp = service.topicPartitionFor(new SharePartitionKey(groupId, new TopicIdPartition(topicId, partition, "whatever")));
         assertEquals(Topic.SHARE_GROUP_STATE_TOPIC_NAME, tp.topic());
         assertEquals(expectedPartition, tp.partition());
@@ -656,22 +657,20 @@ class ShareCoordinatorServiceTest {
         Uuid topicId = Uuid.randomUuid();
         int partition = 0;
 
-        // inactive shard should throw exception
+        // Inactive shard should throw exception.
         assertThrows(CoordinatorNotAvailableException.class, () -> service.partitionFor(SharePartitionKey.getInstance(groupId, topicId, partition)));
 
-        final int numPartitions = 50;
+        final int numPartitions = 1;
         service.startup(() -> numPartitions);
 
         final SharePartitionKey key1 = SharePartitionKey.getInstance(groupId, new TopicIdPartition(topicId, partition, null));
-        int sharePartitionKey = service.partitionFor(key1);
-        assertEquals(Utils.abs(key1.asCoordinatorKey().hashCode()) % numPartitions, sharePartitionKey);
+        assertEquals(Utils.abs(key1.asCoordinatorKey().hashCode()) % numPartitions, service.partitionFor(key1));
 
-        // The presence of a topic name should not affect the choice of partition
+        // The presence of a topic name should not affect the choice of partition.
         final SharePartitionKey key2 = new SharePartitionKey(groupId, new TopicIdPartition(topicId, partition, "whatever"));
-        sharePartitionKey = service.partitionFor(key2);
-        assertEquals(Utils.abs(key2.asCoordinatorKey().hashCode()) % numPartitions, sharePartitionKey);
+        assertEquals(Utils.abs(key2.asCoordinatorKey().hashCode()) % numPartitions, service.partitionFor(key2));
 
-        // asCoordinatorKey does not discriminate on topic name
+        // asCoordinatorKey does not discriminate on topic name.
         assertEquals(key1.asCoordinatorKey(), key2.asCoordinatorKey());
     }
 }
