@@ -14,7 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.log.remote;
+package org.apache.kafka.storage.internals.log;
 
-class CustomMetadataSizeLimitExceededException extends Exception {
+/**
+ * Indicates the follower received records with non-monotonically increasing offsets
+ */
+public class OffsetsOutOfOrderException extends RuntimeException {
+
+    public OffsetsOutOfOrderException(String message) {
+        super(message);
+    }
 }
