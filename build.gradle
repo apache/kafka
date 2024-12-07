@@ -3518,6 +3518,7 @@ project(':connect:runtime') {
 
     implementation libs.slf4jApi
     implementation libs.reload4j
+    implementation libs.slf4jReload4j
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
     implementation libs.jacksonAnnotations
     implementation libs.jacksonJaxrsJsonProvider

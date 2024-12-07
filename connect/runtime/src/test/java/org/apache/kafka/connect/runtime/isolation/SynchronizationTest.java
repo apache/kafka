@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.storage.Converter;
 
+import org.apache.maven.artifact.versioning.VersionRange;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -190,10 +191,10 @@ public class SynchronizationTest {
         }
 
         @Override
-        public PluginClassLoader pluginClassLoader(String name) {
+        public PluginClassLoader pluginClassLoader(String name, VersionRange range) {
             dclBreakpoint.await(name);
             dclBreakpoint.await(name);
-            return super.pluginClassLoader(name);
+            return super.pluginClassLoader(name, range);
         }
     }
 
