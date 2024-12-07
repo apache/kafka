@@ -106,7 +106,7 @@ $ cd kafka_{{scalaVersion}}-{{fullDotVersion}}</code></pre>
   Format Log Directories
 </p>
 
-<pre><code class="language-bash">$ bin/kafka-storage.sh format -t $KAFKA_CLUSTER_ID -c config/kraft/reconfig-server.properties</code></pre>
+<pre><code class="language-bash">$ bin/kafka-storage.sh format --standalone -t $KAFKA_CLUSTER_ID -c config/kraft/reconfig-server.properties</code></pre>
 
 <p>
   Start the Kafka Server

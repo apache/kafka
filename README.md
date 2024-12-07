@@ -97,7 +97,7 @@ fail due to code changes. You can just run:
 Using compiled files:
 
     KAFKA_CLUSTER_ID="$(./bin/kafka-storage.sh random-uuid)"
-    ./bin/kafka-storage.sh format -t $KAFKA_CLUSTER_ID -c config/kraft/reconfig-server.properties
+    ./bin/kafka-storage.sh format --standalone -t $KAFKA_CLUSTER_ID -c config/kraft/reconfig-server.properties
     ./bin/kafka-server-start.sh config/kraft/reconfig-server.properties
 
 Using docker image:
