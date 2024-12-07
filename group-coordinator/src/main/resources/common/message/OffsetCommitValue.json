@@ -22,10 +22,15 @@
   "validVersions": "0-4",
   "flexibleVersions": "4+",
   "fields": [
-    { "name": "offset", "type": "int64", "versions": "0+" },
-    { "name": "leaderEpoch", "type": "int32", "versions": "3+", "default": -1, "ignorable": true},
-    { "name": "metadata", "type": "string", "versions": "0+" },
-    { "name": "commitTimestamp", "type": "int64", "versions": "0+" },
-    { "name": "expireTimestamp", "type": "int64", "versions": "1", "default": -1, "ignorable": true}
+    { "name": "offset", "type": "int64", "versions": "0+",
+      "about": "The offset that the consumer wants to store (for this partition)."},
+    { "name": "leaderEpoch", "type": "int32", "versions": "3+", "default": -1, "ignorable": true,
+      "about": "The leader epoch of the last consumed record."},
+    { "name": "metadata", "type": "string", "versions": "0+",
+      "about": "Any metadata the client wants to keep."},
+    { "name": "commitTimestamp", "type": "int64", "versions": "0+",
+      "about": "The time at which the commit was added to the log."},
+    { "name": "expireTimestamp", "type": "int64", "versions": "1", "default": -1, "ignorable": true,
+      "about": "The time at which the offset will expire."}
   ]
 }

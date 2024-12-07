@@ -48,9 +48,9 @@
       { "name": "Renewers", "type": "[]DescribedDelegationTokenRenewer", "versions": "0+",
         "about": "Those who are able to renew this token before it expires.", "fields": [
         { "name": "PrincipalType", "type": "string", "versions": "0+",
-          "about": "The renewer principal type" },
+          "about": "The renewer principal type." },
         { "name": "PrincipalName", "type": "string", "versions": "0+",
-          "about": "The renewer principal name" }
+          "about": "The renewer principal name." }
       ]}
     ]},
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",

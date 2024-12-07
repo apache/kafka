@@ -23,31 +23,32 @@
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The top level error code."},
-    { "name": "Topics", "type": "[]TopicData",
-      "versions": "0+", "fields": [
+    { "name": "Topics", "type": "[]TopicData", "versions": "0+",
+      "about": "The results for each topic.", "fields": [
         { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
           "about": "The topic name." },
-        { "name": "Partitions", "type": "[]PartitionData",
-          "versions": "0+", "fields": [
+        { "name": "Partitions", "type": "[]PartitionData", "versions": "0+",
+          "about": "The results for each partition.", "fields": [
             { "name": "PartitionIndex", "type": "int32", "versions": "0+",
               "about": "The partition index." },
-            { "name": "ErrorCode", "type": "int16", "versions": "0+"},
+            { "name": "ErrorCode", "type": "int16", "versions": "0+",
+              "about": "The partition level error code."},
             { "name": "LeaderId", "type": "int32", "versions": "0+", "entityType": "brokerId",
               "about": "The ID of the current leader or -1 if the leader is unknown."},
             { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
-              "about": "The latest known leader epoch"},
+              "about": "The latest known leader epoch."},
             { "name": "VoteGranted", "type": "bool", "versions": "0+",
-              "about": "True if the vote was granted and false otherwise"}
+              "about": "True if the vote was granted and false otherwise."}
           ]
         }
       ]
     },
     { "name": "NodeEndpoints", "type": "[]NodeEndpoint", "versions": "1+", "taggedVersions": "1+", "tag": 0,
-      "about": "Endpoints for all current-leaders enumerated in PartitionData", "fields": [
+      "about": "Endpoints for all current-leaders enumerated in PartitionData.", "fields": [
         { "name": "NodeId", "type": "int32", "versions": "1+",
-          "mapKey": true, "entityType": "brokerId", "about": "The ID of the associated node"},
-        { "name": "Host", "type": "string", "versions": "1+", "about": "The node's hostname" },
-        { "name": "Port", "type": "uint16", "versions": "1+", "about": "The node's port" }
+          "mapKey": true, "entityType": "brokerId", "about": "The ID of the associated node."},
+        { "name": "Host", "type": "string", "versions": "1+", "about": "The node's hostname." },
+        { "name": "Port", "type": "uint16", "versions": "1+", "about": "The node's port." }
       ]
     }
   ]

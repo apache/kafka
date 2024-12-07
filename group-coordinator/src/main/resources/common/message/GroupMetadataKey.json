@@ -19,6 +19,7 @@
   "validVersions": "2",
   "flexibleVersions": "none",
   "fields": [
-    { "name": "group", "type": "string", "versions": "2" }
+    { "name": "group", "type": "string", "versions": "2",
+      "about": "The group id."}
   ]
 }

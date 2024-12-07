@@ -46,7 +46,7 @@
     { "name": "Topics", "type": "[]ListOffsetsTopicResponse", "versions": "0+",
       "about": "Each topic in the response.", "fields": [
       { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
-        "about": "The topic name" },
+        "about": "The topic name." },
       { "name": "Partitions", "type": "[]ListOffsetsPartitionResponse", "versions": "0+",
         "about": "Each partition in the response.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
@@ -59,7 +59,8 @@
           "about": "The timestamp associated with the returned offset." },
         { "name": "Offset", "type": "int64", "versions": "1+", "default": "-1", "ignorable": false,
           "about": "The returned offset." },
-        { "name": "LeaderEpoch", "type": "int32", "versions": "4+", "default": "-1" }
+        { "name": "LeaderEpoch", "type": "int32", "versions": "4+", "default": "-1",
+          "about": "The leader epoch associated with the returned offset."}
       ]}
     ]}
   ]

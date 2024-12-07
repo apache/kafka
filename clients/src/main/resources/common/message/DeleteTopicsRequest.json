@@ -30,13 +30,13 @@
   "deprecatedVersions": "0",
   "flexibleVersions": "4+",
   "fields": [
-    { "name": "Topics", "type": "[]DeleteTopicState", "versions": "6+", "about": "The name or topic ID of the topic",
+    { "name": "Topics", "type": "[]DeleteTopicState", "versions": "6+", "about": "The name or topic ID of the topic.",
       "fields": [
-        {"name": "Name", "type": "string", "versions": "6+", "nullableVersions": "6+", "default": "null", "entityType": "topicName", "about": "The topic name"},
-        {"name": "TopicId", "type": "uuid", "versions": "6+", "about": "The unique topic ID"}
+        {"name": "Name", "type": "string", "versions": "6+", "nullableVersions": "6+", "default": "null", "entityType": "topicName", "about": "The topic name."},
+        {"name": "TopicId", "type": "uuid", "versions": "6+", "about": "The unique topic ID."}
     ]},
     { "name": "TopicNames", "type": "[]string", "versions": "0-5", "entityType": "topicName", "ignorable": true,
-      "about": "The names of the topics to delete" },
+      "about": "The names of the topics to delete." },
     { "name": "TimeoutMs", "type": "int32", "versions": "0+",
       "about": "The length of time in milliseconds to wait for the deletions to complete." }
   ]

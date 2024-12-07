@@ -19,6 +19,7 @@
   "validVersions": "0",
   "flexibleVersions": "none",
   "fields": [
-    { "name": "TransactionalId", "type": "string", "versions": "0"}
+    { "name": "TransactionalId", "type": "string", "versions": "0",
+      "about": "The transactional id of the transaction."}
   ]
 }

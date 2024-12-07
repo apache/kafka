@@ -55,7 +55,7 @@
       { "name": "Name", "type": "string", "versions": "0-7", "entityType": "topicName",
         "about": "The topic name." },
       { "name": "Partitions", "type": "[]OffsetFetchResponsePartition", "versions": "0-7",
-        "about": "The responses per partition", "fields": [
+        "about": "The responses per partition.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0-7",
           "about": "The partition index." },
         { "name": "CommittedOffset", "type": "int64", "versions": "0-7",
@@ -79,7 +79,7 @@
         { "name": "Name", "type": "string", "versions": "8+", "entityType": "topicName",
           "about": "The topic name." },
         { "name": "Partitions", "type": "[]OffsetFetchResponsePartitions", "versions": "8+",
-          "about": "The responses per partition", "fields": [
+          "about": "The responses per partition.", "fields": [
           { "name": "PartitionIndex", "type": "int32", "versions": "8+",
             "about": "The partition index." },
           { "name": "CommittedOffset", "type": "int64", "versions": "8+",
