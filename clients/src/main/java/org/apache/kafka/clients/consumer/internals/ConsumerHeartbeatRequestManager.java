@@ -97,6 +97,18 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
         boolean errorHandled;
 
         switch (error) {
+            case UNSUPPORTED_VERSION:
+                // Handle consumer-specific unsupported version error
+                String message = CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG;
+                if (errorMessage.contains("regex")) {
+                    // If the error is about regex subscription, use the original error message
+                    message = errorMessage;
+                }
+                logger.error("{} failed due to {}: {}", heartbeatRequestName(), error, message);
+                handleFatalFailure(error.exception(message));
+                errorHandled = true;
+                break;
+
             case UNRELEASED_INSTANCE_ID:
                 logger.error("{} failed due to unreleased instance id {}: {}",
                     heartbeatRequestName(), membershipManager.groupInstanceId().orElse("null"), errorMessage);

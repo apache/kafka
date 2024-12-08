@@ -408,8 +408,10 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
                 // Broker responded with HB not supported, meaning the new protocol is not enabled, so propagate
                 // custom message for it. Note that the case where the protocol is not supported at all should fail
                 // on the client side when building the request and checking supporting APIs (handled on onFailure).
-                logger.error("{} failed due to {}: {}", heartbeatRequestName(), error, errorMessage);
-                handleFatalFailure(error.exception(CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG));
+                if (!handleSpecificError(response, currentTimeMs)) {
+                    logger.error("{} failed due to {}: {}", heartbeatRequestName(), error, errorMessage);
+                    handleFatalFailure(error.exception(errorMessage));
+                }
                 break;
 
             case FENCED_MEMBER_EPOCH:
