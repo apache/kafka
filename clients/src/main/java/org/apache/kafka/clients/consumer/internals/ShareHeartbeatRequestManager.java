@@ -206,9 +206,6 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
         }
     }
 
-    public static final String SHARE_PROTOCOL_NOT_SUPPORTED_MSG = "The cluster does not support the new SHARE " +
-        "group protocol. The cluster must be upgraded to use the share consumer feature.";
-
     @Override
     public boolean handleSpecificError(final ShareGroupHeartbeatResponse response, final long currentTimeMs) {
         Errors error = errorForResponse(response);

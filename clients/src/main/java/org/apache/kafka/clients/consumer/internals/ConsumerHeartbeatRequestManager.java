@@ -38,6 +38,8 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.REGEX_RESOLUTION_NOT_SUPPORTED_MSG;
+
 /**
  * This is the heartbeat request manager for consumer groups.
  *
@@ -100,7 +102,7 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
             case UNSUPPORTED_VERSION:
                 // Handle consumer-specific unsupported version error
                 String message = CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG;
-                if (errorMessage.contains("regex")) {
+                if (errorMessage.contains(REGEX_RESOLUTION_NOT_SUPPORTED_MSG)) {
                     // If the error is about regex subscription, use the original error message
                     message = errorMessage;
                 }

@@ -25,6 +25,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.metrics.KafkaMetric;
@@ -58,6 +59,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.kafka.clients.consumer.internals.AbstractHeartbeatRequestManager.SHARE_PROTOCOL_NOT_SUPPORTED_MSG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -67,6 +69,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -363,7 +366,7 @@ public class ShareHeartbeatRequestManagerTest {
     @ParameterizedTest
     @MethodSource("errorProvider")
     public void testHeartbeatResponseOnErrorHandling(final Errors error, final boolean isFatal) {
-        // Handling errors on the second heartbeat
+       // Handling errors on the second heartbeat
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size());
@@ -420,6 +423,29 @@ public class ShareHeartbeatRequestManagerTest {
             result = heartbeatRequestManager.poll(time.milliseconds());
             assertEquals(1, result.unsentRequests.size());
         }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {SHARE_PROTOCOL_NOT_SUPPORTED_MSG})
+    public void testUnsupportedVersion(String errorMsg) {
+        // Handling errors on the second heartbeat
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        UnsupportedVersionException exception = new UnsupportedVersionException(errorMsg);
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+
+        // Manually completing the response to test error handling
+        when(subscriptions.hasAutoAssignedPartitions()).thenReturn(true);
+        ClientResponse response = createHeartbeatResponseWithException(
+                result.unsentRequests.get(0),
+                exception);
+        result.unsentRequests.get(0).handler().onComplete(response);
+        ArgumentCaptor<ErrorEvent> errorEventArgumentCaptor = ArgumentCaptor.forClass(ErrorEvent.class);
+        verify(backgroundEventHandler).add(errorEventArgumentCaptor.capture());
+        ErrorEvent errorEvent = errorEventArgumentCaptor.getValue();
+        assertInstanceOf(Errors.UNSUPPORTED_VERSION.exception().getClass(), errorEvent.error());
+        assertEquals(errorMsg, errorEvent.error().getMessage());
+        clearInvocations(backgroundEventHandler);
     }
 
     @Test
@@ -642,6 +668,25 @@ public class ShareHeartbeatRequestManagerTest {
                 time.milliseconds(),
                 false,
                 null,
+                null,
+                response);
+    }
+
+    private ClientResponse createHeartbeatResponseWithException(
+            final NetworkClientDelegate.UnsentRequest request,
+            final UnsupportedVersionException exception
+    ) {
+        ShareGroupHeartbeatResponse response = new ShareGroupHeartbeatResponse(new ShareGroupHeartbeatResponseData()
+                .setErrorCode(Errors.UNSUPPORTED_VERSION.code())
+                .setErrorMessage(exception.getMessage()));
+        return new ClientResponse(
+                new RequestHeader(ApiKeys.SHARE_GROUP_HEARTBEAT, ApiKeys.SHARE_GROUP_HEARTBEAT.latestVersion(), "client-id", 1),
+                request.handler(),
+                "0",
+                time.milliseconds(),
+                time.milliseconds(),
+                false,
+                exception,
                 null,
                 response);
     }

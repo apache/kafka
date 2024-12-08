@@ -100,6 +100,9 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
         "group protocol. Set group.protocol=classic on the consumer configs to revert to the CLASSIC protocol " +
         "until the cluster is upgraded.";
 
+    public static final String SHARE_PROTOCOL_NOT_SUPPORTED_MSG = "The cluster does not support the new SHARE " +
+            "group protocol. The cluster must be upgraded to use the share consumer feature.";
+
     AbstractHeartbeatRequestManager(
             final LogContext logContext,
             final Time time,
