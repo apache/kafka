@@ -47,7 +47,7 @@
     <suppress checks="JavaNCSS"
               files="(RemoteLogManagerTest|SharePartitionTest).java"/>
     <suppress checks="ClassDataAbstractionCoupling|ClassFanOutComplexity" files="SharePartitionManagerTest"/>
-    <suppress checks="CyclomaticComplexity|ClassDataAbstractionCoupling" files="SharePartition.java"/>
+    <suppress checks="CyclomaticComplexity" files="SharePartition.java"/>
 
     <!-- server tests -->
     <suppress checks="MethodLength|JavaNCSS|NPath" files="DescribeTopicPartitionsRequestHandlerTest.java"/>
