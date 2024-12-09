@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 /**
  * {@code CompletableEventReaper} is responsible for tracking {@link CompletableEvent time-bound events} and removing
@@ -155,4 +156,11 @@ public class CompletableEventReaper {
     public boolean contains(CompletableEvent<?> event) {
         return event != null && tracked.contains(event);
     }
+
+    public List<CompletableEvent<?>> uncompletedEvents() {
+        return tracked.stream()
+                .filter(e -> !e.future().isDone())
+                .collect(Collectors.toList());
+    }
+    
 }

@@ -66,10 +66,8 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
-import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -280,40 +278,6 @@ public class AsyncKafkaConsumerTest {
         consumer.close();
         final IllegalStateException res = assertThrows(IllegalStateException.class, consumer::assignment);
         assertEquals("This consumer has already been closed.", res.getMessage());
-    }
-
-    @Test
-    public void testUnsubscribeWithInvalidTopicException() {
-        consumer = newConsumer();
-        backgroundEventQueue.add(new ErrorEvent(new InvalidTopicException("Invalid topic name")));
-        completeUnsubscribeApplicationEventSuccessfully();
-        assertDoesNotThrow(() -> consumer.unsubscribe());
-        assertDoesNotThrow(() -> consumer.close());
-    }
-
-    @Test
-    public void testCloseWithInvalidTopicException() {
-        consumer = newConsumer();
-        backgroundEventQueue.add(new ErrorEvent(new InvalidTopicException("Invalid topic name")));
-        completeUnsubscribeApplicationEventSuccessfully();
-        assertDoesNotThrow(() -> consumer.close());
-    }
-
-    @Test
-    public void testUnsubscribeWithTopicAuthorizationException() {
-        consumer = newConsumer();
-        backgroundEventQueue.add(new ErrorEvent(new TopicAuthorizationException(Set.of("test-topic"))));
-        completeUnsubscribeApplicationEventSuccessfully();
-        assertDoesNotThrow(() -> consumer.unsubscribe());
-        assertDoesNotThrow(() -> consumer.close());
-    }
-
-    @Test
-    public void testCloseWithTopicAuthorizationException() {
-        consumer = newConsumer();
-        backgroundEventQueue.add(new ErrorEvent(new TopicAuthorizationException(Set.of("test-topic"))));
-        completeUnsubscribeApplicationEventSuccessfully();
-        assertDoesNotThrow(() -> consumer.close());
     }
 
     @Test

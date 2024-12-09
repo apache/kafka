@@ -52,6 +52,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.REQUEST_TIMEOUT_M
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -78,7 +79,7 @@ public class NetworkClientDelegateTest {
 
     @Test
     void testPollResultTimer() throws Exception {
-        try (NetworkClientDelegate ncd = newNetworkClientDelegate()) {
+        try (NetworkClientDelegate ncd = newNetworkClientDelegate(false)) {
             NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(
                     new FindCoordinatorRequest.Builder(
                             new FindCoordinatorRequestData()
@@ -102,7 +103,7 @@ public class NetworkClientDelegateTest {
 
     @Test
     public void testSuccessfulResponse() throws Exception {
-        try (NetworkClientDelegate ncd = newNetworkClientDelegate()) {
+        try (NetworkClientDelegate ncd = newNetworkClientDelegate(false)) {
             NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest();
             prepareFindCoordinatorResponse(Errors.NONE);
 
@@ -116,7 +117,7 @@ public class NetworkClientDelegateTest {
 
     @Test
     public void testTimeoutBeforeSend() throws Exception {
-        try (NetworkClientDelegate ncd = newNetworkClientDelegate()) {
+        try (NetworkClientDelegate ncd = newNetworkClientDelegate(false)) {
             client.setUnreachable(mockNode(), REQUEST_TIMEOUT_MS);
             NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest();
             ncd.add(unsentRequest);
@@ -130,7 +131,7 @@ public class NetworkClientDelegateTest {
 
     @Test
     public void testTimeoutAfterSend() throws Exception {
-        try (NetworkClientDelegate ncd = newNetworkClientDelegate()) {
+        try (NetworkClientDelegate ncd = newNetworkClientDelegate(false)) {
             NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest();
             ncd.add(unsentRequest);
             ncd.poll(0, time.milliseconds());
@@ -164,7 +165,7 @@ public class NetworkClientDelegateTest {
 
     @Test
     public void testEnsureTimerSetOnAdd() {
-        NetworkClientDelegate ncd = newNetworkClientDelegate();
+        NetworkClientDelegate ncd = newNetworkClientDelegate(false);
         NetworkClientDelegate.UnsentRequest findCoordRequest = newUnsentFindCoordinatorRequest();
         assertNull(findCoordRequest.timer());
 
@@ -181,7 +182,7 @@ public class NetworkClientDelegateTest {
 
     @Test
     public void testHasAnyPendingRequests() throws Exception {
-        try (NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate()) {
+        try (NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate(false)) {
             NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest();
             networkClientDelegate.add(unsentRequest);
 
@@ -212,9 +213,24 @@ public class NetworkClientDelegateTest {
         AuthenticationException authException = new AuthenticationException("Test Auth Exception");
         doThrow(authException).when(metadata).maybeThrowAnyException();
 
+        NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate(false);
+        assertTrue(networkClientDelegate.getAndClearMetadataError().isEmpty());
+        networkClientDelegate.poll(0, time.milliseconds());
+
+        Optional<Exception> metadataError = networkClientDelegate.getAndClearMetadataError();
+        assertTrue(metadataError.isPresent());
+        assertInstanceOf(AuthenticationException.class, metadataError.get());
+        assertEquals(authException.getMessage(), metadataError.get().getMessage());
+    }
+
+    @Test
+    public void testPropagateMetadataErrorWithErrorEvent() {
+        AuthenticationException authException = new AuthenticationException("Test Auth Exception");
+        doThrow(authException).when(metadata).maybeThrowAnyException();
+
         LinkedList<BackgroundEvent> backgroundEventQueue = new LinkedList<>();
         this.backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
-        NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate();
+        NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate(true);
 
         assertEquals(0, backgroundEventQueue.size());
         networkClientDelegate.poll(0, time.milliseconds());
@@ -226,7 +242,7 @@ public class NetworkClientDelegateTest {
         assertEquals(authException, ((ErrorEvent) event).error());
     }
 
-    public NetworkClientDelegate newNetworkClientDelegate() {
+    public NetworkClientDelegate newNetworkClientDelegate(boolean notifyMetadataErrorsViaErrorQueue) {
         LogContext logContext = new LogContext();
         Properties properties = new Properties();
         properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
@@ -238,7 +254,8 @@ public class NetworkClientDelegateTest {
                 logContext,
                 this.client,
                 this.metadata,
-                this.backgroundEventHandler);
+                this.backgroundEventHandler,
+                notifyMetadataErrorsViaErrorQueue);
     }
 
     public NetworkClientDelegate.UnsentRequest newUnsentFindCoordinatorRequest() {

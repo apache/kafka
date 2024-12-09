@@ -279,7 +279,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     metrics,
                     shareFetchMetricsManager.throttleTimeSensor(),
                     clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null),
-                    backgroundEventHandler
+                    backgroundEventHandler,
+                    true
             );
             this.completedAcknowledgements = new LinkedList<>();
 
@@ -378,7 +379,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
 
         final Supplier<NetworkClientDelegate> networkClientDelegateSupplier =
-                () -> new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler);
+                () -> new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler, true);
 
         GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
                 config,
