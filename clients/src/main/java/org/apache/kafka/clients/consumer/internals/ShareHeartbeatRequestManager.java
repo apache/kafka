@@ -50,6 +50,9 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
      */
     private final HeartbeatState heartbeatState;
 
+    public static final String SHARE_PROTOCOL_NOT_SUPPORTED_MSG = "The cluster does not support the share group protocol. " +
+        "To use share groups, the cluster must have the share group protocol enabled.";
+
     public ShareHeartbeatRequestManager(
             final LogContext logContext,
             final Time time,
