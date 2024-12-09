@@ -1360,6 +1360,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
          */
         @Override
         public void complete(Throwable exception) {
+            if (future.isDone()) {
+                return;
+            }
+
             final long purgatoryTimeMs = time.milliseconds() - deferredEventQueuedTimestamp;
             CompletableFuture<Void> appendFuture = result != null ? result.appendFuture() : null;
 
@@ -1653,6 +1657,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
          */
         @Override
         public void complete(Throwable exception) {
+            if (future.isDone()) {
+                return;
+            }
+
             final long purgatoryTimeMs = time.milliseconds() - deferredEventQueuedTimestamp;
             if (exception == null) {
                 future.complete(null);
