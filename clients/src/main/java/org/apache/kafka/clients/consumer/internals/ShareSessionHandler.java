@@ -178,6 +178,8 @@ public class ShareSessionHandler {
     public ShareAcknowledgeRequest.Builder newShareAcknowledgeBuilder(String groupId, FetchConfig fetchConfig) {
         if (nextMetadata.isNewSession()) {
             // A share session cannot be started with a ShareAcknowledge request
+            nextPartitions.clear();
+            nextAcknowledgements.clear();
             return null;
         }
 

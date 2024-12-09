@@ -990,16 +990,18 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             }
 
             ShareAcknowledgeRequest.Builder requestBuilder = sessionHandler.newShareAcknowledgeBuilder(groupId, fetchConfig);
-            Node nodeToSend = metadata.fetch().nodeById(nodeId);
 
-            log.trace("Building acknowledgements to send : {}", finalAcknowledgementsToSend);
-            nodesWithPendingRequests.add(nodeId);
             isProcessed = false;
 
             if (requestBuilder == null) {
                 handleSessionErrorCode(Errors.SHARE_SESSION_NOT_FOUND);
                 return null;
             } else {
+                Node nodeToSend = metadata.fetch().nodeById(nodeId);
+                nodesWithPendingRequests.add(nodeId);
+
+                log.trace("Building acknowledgements to send : {}", finalAcknowledgementsToSend);
+
                 inFlightAcknowledgements.putAll(finalAcknowledgementsToSend);
                 if (incompleteAcknowledgements.isEmpty()) {
                     acknowledgementsToSend.clear();
@@ -1082,12 +1084,16 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
          * being sent.
          */
         void handleSessionErrorCode(Errors errorCode) {
-            inFlightAcknowledgements.forEach((tip, acks) -> {
+            Map<TopicIdPartition, Acknowledgements> acknowledgementsMapToClear =
+                    incompleteAcknowledgements.isEmpty() ? acknowledgementsToSend : incompleteAcknowledgements;
+
+            acknowledgementsMapToClear.forEach((tip, acks) -> {
                 if (acks != null) {
                     acks.setAcknowledgeErrorCode(errorCode);
                 }
                 resultHandler.complete(tip, acks, onCommitAsync());
             });
+            acknowledgementsMapToClear.clear();
             processingComplete();
         }
 

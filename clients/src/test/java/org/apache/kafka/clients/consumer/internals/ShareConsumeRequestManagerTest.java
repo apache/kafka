@@ -369,7 +369,7 @@ public class ShareConsumeRequestManagerTest {
     }
 
     @Test
-    public void testServerDisconnectedOnShareAcknowledge() {
+    public void testServerDisconnectedOnShareAcknowledge() throws InterruptedException {
         buildRequestManager();
         // Enabling the config so that background event is sent when the acknowledgement response is received.
         shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
@@ -384,22 +384,46 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
+        fetchRecords();
+
         Acknowledgements acknowledgements = Acknowledgements.empty();
         acknowledgements.add(1L, AcknowledgeType.ACCEPT);
         acknowledgements.add(2L, AcknowledgeType.ACCEPT);
-        acknowledgements.add(3L, AcknowledgeType.REJECT);
 
         shareConsumeRequestManager.commitAsync(Collections.singletonMap(tip0, acknowledgements));
 
         assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
 
+        Acknowledgements acknowledgements2 = Acknowledgements.empty();
+        acknowledgements2.add(3L, AcknowledgeType.REJECT);
+
+        shareConsumeRequestManager.commitAsync(Collections.singletonMap(tip0, acknowledgements2));
+
         client.prepareResponse(null, true);
         networkClientDelegate.poll(time.timer(0));
-        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
         assertEquals(Collections.singletonMap(tip0, acknowledgements), completedAcknowledgements.get(0));
         assertEquals(Errors.UNKNOWN_SERVER_ERROR, completedAcknowledgements.get(0).get(tip0).getAcknowledgeErrorCode());
         completedAcknowledgements.clear();
+
+        assertEquals(1, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getAcknowledgementsToSendCount(tip0));
+
+        TestUtils.retryOnExceptionWithTimeout(() -> {
+            assertEquals(0, shareConsumeRequestManager.sendAcknowledgements());
+            // We expect the remaining acknowledgements to be cleared due to share session epoch being set to 0.
+            assertNull(shareConsumeRequestManager.requestStates(0));
+            // The callback for these unsent acknowledgements will be invoked with an error code.
+            assertEquals(Collections.singletonMap(tip0, acknowledgements2), completedAcknowledgements.get(0));
+            assertEquals(Errors.SHARE_SESSION_NOT_FOUND, completedAcknowledgements.get(0).get(tip0).getAcknowledgeErrorCode());
+        });
+
+        // Attempt a normal fetch to check if nodesWithPendingRequests is empty.
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tip0, records, acquiredRecords, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
     }
 
     @Test
