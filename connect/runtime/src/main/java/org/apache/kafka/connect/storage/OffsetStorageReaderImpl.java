@@ -87,14 +87,18 @@ public class OffsetStorageReaderImpl implements CloseableOffsetStorageReader {
         Map<ByteBuffer, ByteBuffer> raw;
         try {
             Future<Map<ByteBuffer, ByteBuffer>> offsetReadFuture;
+
+            // Note: this call can block for long time waiting for data flush to complete (`KafkaProducer.flush()`).
+            offsetReadFuture = backingStore.get(serializedToOriginal.keySet());
+
             synchronized (offsetReadFutures) {
                 if (closed.get()) {
+                    offsetReadFuture.cancel(true);
                     throw new ConnectException(
                         "Offset reader is closed. This is likely because the task has already been "
                             + "scheduled to stop but has taken longer than the graceful shutdown "
                             + "period to do so.");
                 }
-                offsetReadFuture = backingStore.get(serializedToOriginal.keySet());
                 offsetReadFutures.add(offsetReadFuture);
             }
 
