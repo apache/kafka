@@ -41,6 +41,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class OffsetStorageReaderImpl implements CloseableOffsetStorageReader {
     private static final Logger log = LoggerFactory.getLogger(OffsetStorageReaderImpl.class);
 
+    private static final String CLOSED_ERR_MSG = "Offset reader is closed. This is likely because the task has already been "
+            + "scheduled to stop but has taken longer than the graceful shutdown "
+            + "period to do so.";
+
     private final OffsetBackingStore backingStore;
     private final String namespace;
     private final Converter keyConverter;
@@ -86,14 +90,19 @@ public class OffsetStorageReaderImpl implements CloseableOffsetStorageReader {
         Map<ByteBuffer, ByteBuffer> raw;
         try {
             Future<Map<ByteBuffer, ByteBuffer>> offsetReadFuture;
+
+            if (closed.get()) {
+                throw new ConnectException(CLOSED_ERR_MSG);
+            }
+
+            // Note: this call can block for long time waiting for data flush to complete (`KafkaProducer.flush()`).
+            offsetReadFuture = backingStore.get(serializedToOriginal.keySet());
+
             synchronized (offsetReadFutures) {
                 if (closed.get()) {
-                    throw new ConnectException(
-                        "Offset reader is closed. This is likely because the task has already been "
-                            + "scheduled to stop but has taken longer than the graceful shutdown "
-                            + "period to do so.");
+                    offsetReadFuture.cancel(true);
+                    throw new ConnectException(CLOSED_ERR_MSG);
                 }
-                offsetReadFuture = backingStore.get(serializedToOriginal.keySet());
                 offsetReadFutures.add(offsetReadFuture);
             }
 
@@ -102,7 +111,7 @@ public class OffsetStorageReaderImpl implements CloseableOffsetStorageReader {
             } catch (CancellationException e) {
                 throw new ConnectException(
                     "Offset reader closed while attempting to read offsets. This is likely because "
-                        + "the task was been scheduled to stop but has taken longer than the "
+                        + "the task has been scheduled to stop but has taken longer than the "
                         + "graceful shutdown period to do so.");
             } finally {
                 synchronized (offsetReadFutures) {
