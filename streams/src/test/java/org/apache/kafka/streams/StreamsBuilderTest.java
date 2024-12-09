@@ -61,12 +61,11 @@ import org.apache.kafka.streams.state.internals.RocksDBWindowStore;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.apache.kafka.streams.utils.TestUtils.RecordingProcessorWrapper;
 import org.apache.kafka.streams.utils.TestUtils.RecordingProcessorWrapper.WrapperRecorder;
+import org.apache.kafka.test.MockApiFixedKeyProcessorSupplier;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockPredicate;
 import org.apache.kafka.test.MockValueJoiner;
-import org.apache.kafka.test.NoopValueTransformer;
-import org.apache.kafka.test.NoopValueTransformerWithKey;
 import org.apache.kafka.test.StreamsTestUtils;
 
 import org.hamcrest.CoreMatchers;
@@ -1315,29 +1314,21 @@ public class StreamsBuilderTest {
     }
 
     @Test
+    public void shouldUseSpecifiedNameForProcessValuesOperation() {
+        builder.stream(STREAM_TOPIC)
+            .processValues(new MockApiFixedKeyProcessorSupplier<>(), Named.as("test-fixed-key-processor"));
+
+        builder.build();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
+        assertNamesForOperation(topology, "KSTREAM-SOURCE-0000000000", "test-fixed-key-processor");
+    }
+
+    @Test
     public void shouldUseSpecifiedNameForPrintOperation() {
         builder.stream(STREAM_TOPIC).print(Printed.toSysOut().withName("print-processor"));
         builder.build();
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
         assertNamesForOperation(topology, "KSTREAM-SOURCE-0000000000", "print-processor");
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldUseSpecifiedNameForFlatTransformValueOperation() {
-        builder.stream(STREAM_TOPIC).flatTransformValues(() -> new NoopValueTransformer<>(), Named.as(STREAM_OPERATION_NAME));
-        builder.build();
-        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
-        assertNamesForOperation(topology, "KSTREAM-SOURCE-0000000000", STREAM_OPERATION_NAME);
-    }
-
-    @Test
-    @SuppressWarnings({"unchecked", "rawtypes", "deprecation"})
-    public void shouldUseSpecifiedNameForFlatTransformValueWithKeyOperation() {
-        builder.stream(STREAM_TOPIC).flatTransformValues(() -> new NoopValueTransformerWithKey(), Named.as(STREAM_OPERATION_NAME));
-        builder.build();
-        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
-        assertNamesForOperation(topology, "KSTREAM-SOURCE-0000000000", STREAM_OPERATION_NAME);
     }
 
     @Test
