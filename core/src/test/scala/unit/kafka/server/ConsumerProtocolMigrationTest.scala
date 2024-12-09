@@ -486,6 +486,121 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     )
   }
 
+  /**
+   * The test method checks the following scenario:
+   * 1. Creating a classic group with member 1, whose assignment has non-empty user data.
+   * 2. Member 2 using consumer protocol joins. The group cannot be upgraded and the join is
+   *    rejected.
+   * 3. Member 1 leaves.
+   * 4. Member 2 using consumer protocol joins. The group is upgraded.
+   */
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "bidirectional")
+    )
+  )
+  def testOnlineMigrationWithNonEmptyUserDataInAssignment(): Unit = {
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    createOffsetsTopic()
+
+    // Create the topic.
+    createTopic(
+      topic = "foo",
+      numPartitions = 3
+    )
+
+    // Classic member 1 joins the classic group.
+    val groupId = "grp"
+
+    val memberId1 = joinDynamicConsumerGroupWithOldProtocol(
+      groupId = groupId,
+      metadata = metadata(List.empty),
+      assignment = assignment(List(0, 1, 2), ByteBuffer.allocate(1))
+    )._1
+
+    // The joining request with a consumer group member 2 is rejected.
+    val errorMessage = consumerGroupHeartbeat(
+      groupId = groupId,
+      memberId = Uuid.randomUuid.toString,
+      rebalanceTimeoutMs = 5 * 60 * 1000,
+      subscribedTopicNames = List("foo"),
+      topicPartitions = List.empty,
+      expectedError = Errors.GROUP_ID_NOT_FOUND
+    ).errorMessage
+
+    assertEquals(
+      "Cannot upgrade classic group grp to consumer group because an unsupported custom assignor is in use. " +
+      "Please refer to the documentation or switch to a default assignor before re-attempting the upgrade.",
+      errorMessage
+    )
+
+    // The group is still a classic group.
+    assertEquals(
+      List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId(groupId)
+          .setProtocolType("consumer")
+          .setGroupState(ClassicGroupState.STABLE.toString)
+          .setGroupType(Group.GroupType.CLASSIC.toString)
+      ),
+      listGroups(
+        statesFilter = List.empty,
+        typesFilter = List(Group.GroupType.CLASSIC.toString)
+      )
+    )
+
+    // Classic member 1 leaves the group.
+    leaveGroup(
+      groupId = groupId,
+      memberId = memberId1,
+      useNewProtocol = false,
+      version = ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)
+    )
+
+    // Verify that the group is empty.
+    assertEquals(
+      List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId(groupId)
+          .setProtocolType("consumer")
+          .setGroupState(ClassicGroupState.EMPTY.toString)
+          .setGroupType(Group.GroupType.CLASSIC.toString)
+      ),
+      listGroups(
+        statesFilter = List.empty,
+        typesFilter = List(Group.GroupType.CLASSIC.toString)
+      )
+    )
+
+    // The joining request with a consumer group member is accepted.
+    consumerGroupHeartbeat(
+      groupId = groupId,
+      memberId = Uuid.randomUuid.toString,
+      rebalanceTimeoutMs = 5 * 60 * 1000,
+      subscribedTopicNames = List("foo"),
+      topicPartitions = List.empty,
+      expectedError = Errors.NONE
+    )
+
+    // The group has become a consumer group.
+    assertEquals(
+      List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId(groupId)
+          .setProtocolType("consumer")
+          .setGroupState(ConsumerGroupState.STABLE.toString)
+          .setGroupType(Group.GroupType.CONSUMER.toString)
+      ),
+      listGroups(
+        statesFilter = List.empty,
+        typesFilter = List(Group.GroupType.CONSUMER.toString)
+      )
+    )
+  }
+
   private def testUpgradeFromEmptyClassicToConsumerGroup(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
@@ -1262,10 +1377,11 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     ).array
   }
 
-  private def assignment(assignedPartitions: List[Int]): Array[Byte] = {
+  private def assignment(assignedPartitions: List[Int], userData: ByteBuffer = null): Array[Byte] = {
     ConsumerProtocol.serializeAssignment(
       new ConsumerPartitionAssignor.Assignment(
-        assignedPartitions.map(new TopicPartition("foo", _)).asJava
+        assignedPartitions.map(new TopicPartition("foo", _)).asJava,
+        userData
       )
     ).array
   }
