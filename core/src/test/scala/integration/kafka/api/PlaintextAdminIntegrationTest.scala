@@ -1921,12 +1921,17 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           // Test that we can get information about the test consumer group.
           assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(testGroupId))
           var testGroupDescription = describeWithFakeGroupResult.describedGroups().get(testGroupId).get()
+          assertEquals(groupType == GroupType.CLASSIC, testGroupDescription.groupEpoch.isEmpty)
+          assertEquals(groupType == GroupType.CLASSIC, testGroupDescription.targetAssignmentEpoch.isEmpty)
 
           assertEquals(testGroupId, testGroupDescription.groupId())
           assertFalse(testGroupDescription.isSimpleConsumerGroup)
           assertEquals(groupInstanceSet.size, testGroupDescription.members().size())
           val members = testGroupDescription.members()
-          members.asScala.foreach(member => assertEquals(testClientId, member.clientId()))
+          members.asScala.foreach { member =>
+            assertEquals(testClientId, member.clientId)
+            assertEquals(if (groupType == GroupType.CLASSIC) Optional.empty else Optional.of(true), member.upgraded)
+          }
           val topicPartitionsByTopic = members.asScala.flatMap(_.assignment().topicPartitions().asScala).groupBy(_.topic())
           topicSet.foreach { topic =>
             val topicPartitions = topicPartitionsByTopic.getOrElse(topic, List.empty)
@@ -2054,6 +2059,89 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         consumerSet.zip(groupInstanceSet).foreach(zipped => Utils.closeQuietly(zipped._1, zipped._2))
       }
     } finally {
+      Utils.closeQuietly(client, "adminClient")
+    }
+  }
+
+  /**
+   * Test the consumer group APIs.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testConsumerGroupWithMemberMigration(quorum: String): Unit = {
+    val config = createConfig
+    client = Admin.create(config)
+    var classicConsumer: Consumer[Array[Byte], Array[Byte]] = null
+    var consumerConsumer: Consumer[Array[Byte], Array[Byte]] = null
+    try {
+      // Verify that initially there are no consumer groups to list.
+      val list1 = client.listConsumerGroups
+      assertEquals(0, list1.all.get.size)
+      assertEquals(0, list1.errors.get.size)
+      assertEquals(0, list1.valid.get.size)
+      val testTopicName = "test_topic"
+      val testNumPartitions = 2
+
+      client.createTopics(util.Arrays.asList(
+        new NewTopic(testTopicName, testNumPartitions, 1.toShort),
+      )).all.get
+      waitForTopics(client, List(testTopicName), List())
+
+      val producer = createProducer()
+      try {
+        producer.send(new ProducerRecord(testTopicName, 0, null, null))
+        producer.send(new ProducerRecord(testTopicName, 1, null, null))
+        producer.flush()
+      } finally {
+        Utils.closeQuietly(producer, "producer")
+      }
+
+      val testGroupId = "test_group_id"
+      val testClassicClientId = "test_classic_client_id"
+      val testConsumerClientId = "test_consumer_client_id"
+
+      val newConsumerConfig = new Properties(consumerConfig)
+      newConsumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
+      newConsumerConfig.put(ConsumerConfig.CLIENT_ID_CONFIG, testClassicClientId)
+      consumerConfig.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name)
+
+      classicConsumer = createConsumer(configOverrides = newConsumerConfig)
+      classicConsumer.subscribe(List(testTopicName).asJava)
+      classicConsumer.poll(JDuration.ofMillis(1000))
+
+      newConsumerConfig.put(ConsumerConfig.CLIENT_ID_CONFIG, testConsumerClientId)
+      consumerConfig.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name)
+      consumerConsumer = createConsumer(configOverrides = newConsumerConfig)
+      consumerConsumer.subscribe(List(testTopicName).asJava)
+      consumerConsumer.poll(JDuration.ofMillis(1000))
+
+      TestUtils.waitUntilTrue(() => {
+        classicConsumer.poll(JDuration.ofMillis(100))
+        consumerConsumer.poll(JDuration.ofMillis(100))
+        val describeConsumerGroupResult = client.describeConsumerGroups(Seq(testGroupId).asJava).all.get
+        describeConsumerGroupResult.containsKey(testGroupId) &&
+          describeConsumerGroupResult.get(testGroupId).groupState == GroupState.STABLE &&
+          describeConsumerGroupResult.get(testGroupId).members.size == 2
+      }, s"Expected to find 2 members in a stable group $testGroupId")
+
+      val describeConsumerGroupResult = client.describeConsumerGroups(Seq(testGroupId).asJava).all.get
+      val group = describeConsumerGroupResult.get(testGroupId)
+      assertNotNull(group)
+      assertEquals(Optional.of(2), group.groupEpoch)
+      assertEquals(Optional.of(2), group.targetAssignmentEpoch)
+
+      val classicMember = group.members.asScala.find(_.clientId == testClassicClientId)
+      assertTrue(classicMember.isDefined)
+      assertEquals(Optional.of(2), classicMember.get.memberEpoch)
+      assertEquals(Optional.of(false), classicMember.get.upgraded)
+
+      val consumerMember = group.members.asScala.find(_.clientId == testConsumerClientId)
+      assertTrue(consumerMember.isDefined)
+      assertEquals(Optional.of(2), consumerMember.get.memberEpoch)
+      assertEquals(Optional.of(true), consumerMember.get.upgraded)
+    } finally {
+      Utils.closeQuietly(classicConsumer, "classicConsumer")
+      Utils.closeQuietly(consumerConsumer, "consumerConsumer")
       Utils.closeQuietly(client, "adminClient")
     }
   }
@@ -2546,9 +2634,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       }, "Expected to find all groups")
 
       val classicConsumers = client.describeClassicGroups(groupIds.asJavaCollection).all().get()
-      assertNotNull(classicConsumers.get(classicGroupId))
-      assertEquals(classicGroupId, classicConsumers.get(classicGroupId).groupId())
-      assertEquals("consumer", classicConsumers.get(classicGroupId).protocol())
+      val classicConsumer = classicConsumers.get(classicGroupId)
+      assertNotNull(classicConsumer)
+      assertEquals(classicGroupId, classicConsumer.groupId)
+      assertEquals("consumer", classicConsumer.protocol)
+      assertFalse(classicConsumer.members.isEmpty)
+      classicConsumer.members.forEach(member => assertTrue(member.upgraded.isEmpty))
 
       assertNotNull(classicConsumers.get(simpleGroupId))
       assertEquals(simpleGroupId, classicConsumers.get(simpleGroupId).groupId())
