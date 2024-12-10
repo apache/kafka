@@ -51,6 +51,54 @@ using this for very simple tasks such as applying labels or adding comments to P
 
 _We must never run the untrusted PR code in the elevated `pull_request_target` context_
 
+## Our Workflows
+
+### Trunk Build
+
+The [ci.yml](ci.yml) is run when commits are pushed to trunk. This calls into [build.yml](build.yml)
+to run our main build. In the trunk build, we do not read from the Gradle cache,
+but we do write to it. Also, the test catalog is only updated from trunk builds.
+
+### PR Build
+
+Similar to trunk, this workflow starts in [ci.yml](ci.yml) and calls into [build.yml](build.yml).
+Unlike trunk, the PR builds _will_ utilize the Gradle cache.
+
+### PR Triage
+
+In order to get the attention of committers, we have a triage workflow for Pull Requests
+opened by non-committers. This workflow consists of three files:
+
+* [pr-update.yml](pr-update.yml) When a PR is created add the `triage` label if the PR
+  was opened by a non-committer.
+* [pr-reviewed-trigger.yml](pr-reviewed-trigger.yml) Runs when any PR is reviewed. 
+  Used as a trigger for the next workflow
+* [pr-reviewed.yml](pr-reviewed.yml) Remove the `triage` label after a PR has been reviewed
+
+_The pr-update.yml workflow includes pull_request_target!_
+
+### CI Approved
+
+Due to a combination of GitHub security and ASF's policy, we required explicit
+approval of workflows on PRs submitted by non-committers (and non-contributors).
+To simply this process, we have a `ci-approved` label which automatically approves
+these workflows.
+
+There are two files related to this workflow:
+
+* [pr-labeled.yml](pr-labeled.yml) approves a pending approval for PRs that have
+been labeled with `ci-approved`
+* [ci-requested.yml](ci-requested.yml) approves future CI requests automatically
+if the PR has the `ci-approved` label
+
+_The pr-labeled.yml workflow includes pull_request_target!_
+
+### Stale PRs
+
+This one is straightforward. Using the "actions/stale" GitHub Action, we automatically
+label and eventually close PRs which have not had activity for some time. See the
+[stale.yml](stale.yml) workflow file for specifics.
+
 ## GitHub Actions Quirks
 
 ### Composite Actions
