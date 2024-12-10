@@ -129,8 +129,7 @@ ext {
     if (name in ["compileTestJava", "compileTestScala"]) {
       options.compilerArgs << "-parameters"
     } else if (name in ["compileJava", "compileScala"]) {
-      if (!project.path.startsWith(":connect") && !project.path.startsWith(":storage"))
-        options.compilerArgs << "-Xlint:-rawtypes"
+      options.compilerArgs << "-Xlint:-rawtypes"
       options.compilerArgs << "-Xlint:all"
       options.compilerArgs << "-Xlint:-serial"
       options.compilerArgs << "-Xlint:-try"
