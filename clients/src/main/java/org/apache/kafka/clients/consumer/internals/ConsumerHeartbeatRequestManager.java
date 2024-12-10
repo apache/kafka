@@ -99,6 +99,9 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
         boolean errorHandled;
 
         switch (error) {
+            // Broker responded with HB not supported, meaning the new protocol is not enabled, so propagate
+            // custom message for it. Note that the case where the protocol is not supported at all should fail
+            // on the client side when building the request and checking supporting APIs (handled on onFailure).
             case UNSUPPORTED_VERSION:
                 // Handle consumer-specific unsupported version error
                 String message = CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG;
