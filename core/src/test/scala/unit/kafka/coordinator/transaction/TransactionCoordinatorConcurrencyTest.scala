@@ -547,6 +547,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
             txnMetadata.producerEpoch,
             partitions,
             resultCallback,
+            TransactionVersion.TV_2,
             RequestLocal.withThreadConfinedCaching)
         replicaManager.tryCompleteActions()
       }

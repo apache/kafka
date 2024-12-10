@@ -2301,6 +2301,7 @@ class KafkaApisTest extends Logging {
         ArgumentMatchers.eq(epoch),
         ArgumentMatchers.eq(Set(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partition))),
         responseCallback.capture(),
+        ArgumentMatchers.eq(TransactionVersion.TV_0),
         ArgumentMatchers.eq(requestLocal)
       )).thenAnswer(_ => responseCallback.getValue.apply(Errors.PRODUCER_FENCED))
       val kafkaApis = createKafkaApis()
@@ -2359,6 +2360,7 @@ class KafkaApisTest extends Logging {
         ArgumentMatchers.eq(epoch),
         ArgumentMatchers.eq(Set(topicPartition)),
         responseCallback.capture(),
+        ArgumentMatchers.eq(TransactionVersion.TV_0),
         ArgumentMatchers.eq(requestLocal)
       )).thenAnswer(_ => responseCallback.getValue.apply(Errors.PRODUCER_FENCED))
       val kafkaApis = createKafkaApis()
@@ -2434,6 +2436,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(epoch),
       ArgumentMatchers.eq(Set(tp0)),
       responseCallback.capture(),
+      any[TransactionVersion],
       ArgumentMatchers.eq(requestLocal)
     )).thenAnswer(_ => responseCallback.getValue.apply(Errors.NONE))
 
