@@ -992,12 +992,12 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             ShareAcknowledgeRequest.Builder requestBuilder = sessionHandler.newShareAcknowledgeBuilder(groupId, fetchConfig);
 
             isProcessed = false;
+            Node nodeToSend = metadata.fetch().nodeById(nodeId);
 
             if (requestBuilder == null) {
                 handleSessionErrorCode(Errors.SHARE_SESSION_NOT_FOUND);
                 return null;
-            } else {
-                Node nodeToSend = metadata.fetch().nodeById(nodeId);
+            } else if (nodeToSend != null) {
                 nodesWithPendingRequests.add(nodeId);
 
                 log.trace("Building acknowledgements to send : {}", finalAcknowledgementsToSend);
@@ -1019,6 +1019,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 };
                 return unsentRequest.whenComplete(responseHandler);
             }
+
+            return null;
         }
 
         int getInFlightAcknowledgementsCount(TopicIdPartition tip) {
