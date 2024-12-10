@@ -972,9 +972,4 @@ public class ConnectorsResourceTest {
         return expectAndCallbackException(cb, new NotLeaderException("not leader test", LEADER_URL));
     }
 
-    @FunctionalInterface
-    public interface RunnableWithThrowable<T> {
-        T run() throws Throwable;
-    }
-
 }

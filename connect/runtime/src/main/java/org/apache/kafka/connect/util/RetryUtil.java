@@ -59,7 +59,7 @@ public class RetryUtil {
 
     // visible for testing
     static <T> T retryUntilTimeout(Callable<T> callable, Supplier<String> description, Duration timeoutDuration, long retryBackoffMs, Time time) throws Exception {
-        // if null supplier or string is provided, the message will be default to "callabe"
+        // if null supplier or string is provided, the message will be default to "callable"
         final String descriptionStr = Optional.ofNullable(description)
                 .map(Supplier::get)
                 .orElse("callable");
