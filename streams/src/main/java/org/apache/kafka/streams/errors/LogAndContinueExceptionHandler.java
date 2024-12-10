@@ -57,6 +57,8 @@ public class LogAndContinueExceptionHandler implements DeserializationExceptionH
         return DeserializationHandlerResponse.CONTINUE;
     }
 
+    @SuppressWarnings("deprecation")
+    @Deprecated
     @Override
     public DeserializationHandlerResponse handle(final ErrorHandlerContext context,
                                                  final ConsumerRecord<byte[], byte[]> record,
@@ -71,7 +73,23 @@ public class LogAndContinueExceptionHandler implements DeserializationExceptionH
             exception
         );
 
-        return DeserializationHandlerResponse.CONTINUE.andAddToDeadLetterQueue(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
+        return DeserializationHandlerResponse.CONTINUE;
+    }
+
+    @Override
+    public DeserializationExceptionResponse handleError(final ErrorHandlerContext context,
+                                                        final ConsumerRecord<byte[], byte[]> record,
+                                                        final Exception exception) {
+        log.warn(
+            "Exception caught during Deserialization, taskId: {}, topic: {}, partition: {}, offset: {}",
+            context.taskId(),
+            record.topic(),
+            record.partition(),
+            record.offset(),
+            exception
+        );
+
+        return DeserializationExceptionResponse.continueProcessing(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
     }
 
     @Override

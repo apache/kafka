@@ -57,6 +57,8 @@ public class LogAndFailExceptionHandler implements DeserializationExceptionHandl
         return DeserializationHandlerResponse.FAIL;
     }
 
+    @SuppressWarnings("deprecation")
+    @Deprecated
     @Override
     public DeserializationHandlerResponse handle(final ErrorHandlerContext context,
                                                  final ConsumerRecord<byte[], byte[]> record,
@@ -71,7 +73,23 @@ public class LogAndFailExceptionHandler implements DeserializationExceptionHandl
             exception
         );
 
-        return DeserializationHandlerResponse.FAIL.andAddToDeadLetterQueue(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
+        return DeserializationHandlerResponse.FAIL;
+    }
+
+    @Override
+    public DeserializationExceptionResponse handleError(final ErrorHandlerContext context,
+                                                        final ConsumerRecord<byte[], byte[]> record,
+                                                        final Exception exception) {
+        log.warn(
+            "Exception caught during Deserialization, taskId: {}, topic: {}, partition: {}, offset: {}",
+            context.taskId(),
+            record.topic(),
+            record.partition(),
+            record.offset(),
+            exception
+        );
+
+        return DeserializationExceptionResponse.failProcessing(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
     }
 
     @Override

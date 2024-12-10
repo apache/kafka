@@ -946,10 +946,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 recordContext.sourceRawValue()
             );
 
-            final ProcessingExceptionHandler.ProcessingHandlerResponse response;
+            final ProcessingExceptionHandler.ProcessingExceptionResponse processingExceptionResponse;
             try {
-                response = Objects.requireNonNull(
-                    processingExceptionHandler.handle(errorHandlerContext, null, processingException),
+                processingExceptionResponse = Objects.requireNonNull(
+                    processingExceptionHandler.handleError(errorHandlerContext, null, processingException),
                     "Invalid ProcessingExceptionHandler response."
                 );
             } catch (final Exception fatalUserException) {
@@ -964,7 +964,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 throw new FailedProcessingException("Fatal user code error in processing error callback", node.name(), fatalUserException);
             }
 
-            final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords = response.deadLetterQueueRecords();
+            final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords = processingExceptionResponse.deadLetterQueueRecords();
             if (!deadLetterQueueRecords.isEmpty()) {
                 final RecordCollector collector = ((RecordCollector.Supplier) processorContext).recordCollector();
                 for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : deadLetterQueueRecords) {
@@ -977,7 +977,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 }
             }
 
-            if (response == ProcessingExceptionHandler.ProcessingHandlerResponse.FAIL) {
+            if (processingExceptionResponse.response() == ProcessingExceptionHandler.ProcessingHandlerResponse.FAIL) {
                 log.error("Processing exception handler is set to fail upon" +
                         " a processing error. If you would rather have the streaming pipeline" +
                         " continue after a processing error, please set the " +

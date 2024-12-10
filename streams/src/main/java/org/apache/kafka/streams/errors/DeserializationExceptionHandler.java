@@ -22,10 +22,8 @@ import org.apache.kafka.common.Configurable;
 import org.apache.kafka.streams.errors.internals.DefaultErrorHandlerContext;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
-import java.util.LinkedList;
+import java.util.Collections;
 import java.util.List;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * Interface that specifies how an exception from source node deserialization
@@ -69,13 +67,34 @@ public interface DeserializationExceptionHandler extends Configurable {
      *     The actual exception.
      *
      * @return Whether to continue or stop processing.
+     *
+     * @deprecated Use {@link #handleError(ErrorHandlerContext, ConsumerRecord, Exception)} instead.
      */
+    @Deprecated
     default DeserializationHandlerResponse handle(final ErrorHandlerContext context,
                                                   final ConsumerRecord<byte[], byte[]> record,
                                                   final Exception exception) {
         return handle(((DefaultErrorHandlerContext) context).processorContext().orElse(null), record, exception);
     }
 
+    /**
+     * Inspects a record and the exception received during deserialization.
+     *
+     * @param context
+     *     Error handler context.
+     * @param record
+     *     Record that failed deserialization.
+     * @param exception
+     *     The actual exception.
+     *
+     * @return a {@link DeserializationExceptionResponse} object
+     */
+    default DeserializationExceptionResponse handleError(final ErrorHandlerContext context, final ConsumerRecord<byte[], byte[]> record, final Exception exception) {
+        if (DeserializationHandlerResponse.FAIL == handle(context, record, exception)) {
+            return DeserializationExceptionResponse.failProcessing(Collections.emptyList());
+        }
+        return DeserializationExceptionResponse.continueProcessing(Collections.emptyList());
+    }
     /**
      * Enumeration that describes the response from the exception handler.
      */
@@ -95,35 +114,100 @@ public interface DeserializationExceptionHandler extends Configurable {
          */
         public final int id;
 
-        /** a list of Kafka records to publish, e.g. in a Dead Letter Queue topic */
-        private final Queue<ProducerRecord<byte[], byte[]>> deadLetterQueueRecordsQueue;
-
         DeserializationHandlerResponse(final int id, final String name) {
             this.id = id;
             this.name = name;
-            this.deadLetterQueueRecordsQueue = new ConcurrentLinkedQueue<>();
+        }
+    }
+
+    /**
+     * Represents the result of handling a deserialization exception.
+     * <p>
+     * The {@code Response} class encapsulates a {@link ProcessingExceptionHandler.ProcessingHandlerResponse},
+     * indicating whether processing should continue or fail, along with an optional list of
+     * {@link ProducerRecord} instances to be sent to a dead letter queue.
+     * </p>
+     */
+    class DeserializationExceptionResponse {
+
+        private DeserializationHandlerResponse deserializationHandlerResponse;
+
+        private List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords;
+
+        /**
+         * Constructs a new {@code DeserializationExceptionResponse} object.
+         *
+         * @param deserializationHandlerResponse the response indicating whether processing should continue or fail;
+         *                                  must not be {@code null}.
+         * @param deadLetterQueueRecords    the list of records to be sent to the dead letter queue; may be {@code null}.
+         */
+        private DeserializationExceptionResponse(final DeserializationHandlerResponse deserializationHandlerResponse,
+                                                 final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords) {
+            this.deserializationHandlerResponse = deserializationHandlerResponse;
+            this.deadLetterQueueRecords = deadLetterQueueRecords;
         }
 
-        public DeserializationHandlerResponse andAddToDeadLetterQueue(final Iterable<org.apache.kafka.clients.producer.ProducerRecord<byte[], byte[]>> deadLetterQueueRecords) {
-            if (deadLetterQueueRecords == null) {
-                return this;
-            }
-            for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : deadLetterQueueRecords) {
-                this.deadLetterQueueRecordsQueue.add(deadLetterQueueRecord);
-            }
-            return this;
+        /**
+         * Creates a {@code DeserializationExceptionResponse} indicating that processing should fail.
+         *
+         * @param deadLetterQueueRecords the list of records to be sent to the dead letter queue; may be {@code null}.
+         * @return a {@code DeserializationExceptionResponse} with a {@link DeserializationHandlerResponse#FAIL} status.
+         */
+        public static DeserializationExceptionResponse failProcessing(final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords) {
+            return new DeserializationExceptionResponse(DeserializationHandlerResponse.FAIL, deadLetterQueueRecords);
         }
 
+        /**
+         * Creates a {@code DeserializationExceptionResponse} indicating that processing should fail.
+         *
+         * @return a {@code DeserializationExceptionResponse} with a {@link DeserializationHandlerResponse#FAIL} status.
+         */
+        public static DeserializationExceptionResponse failProcessing() {
+            return failProcessing(Collections.emptyList());
+        }
+
+        /**
+         * Creates a {@code DeserializationExceptionResponse} indicating that processing should continue.
+         *
+         * @param deadLetterQueueRecords the list of records to be sent to the dead letter queue; may be {@code null}.
+         * @return a {@code DeserializationExceptionResponse} with a {@link DeserializationHandlerResponse#CONTINUE} status.
+         */
+        public static DeserializationExceptionResponse continueProcessing(final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords) {
+            return new DeserializationExceptionResponse(DeserializationHandlerResponse.CONTINUE, deadLetterQueueRecords);
+        }
+
+        /**
+         * Creates a {@code DeserializationExceptionResponse} indicating that processing should continue.
+         *
+         * @return a {@code DeserializationExceptionResponse} with a {@link DeserializationHandlerResponse#CONTINUE} status.
+         */
+        public static DeserializationExceptionResponse continueProcessing() {
+            return continueProcessing(Collections.emptyList());
+        }
+
+        /**
+         * Retrieves the deserialization handler response.
+         *
+         * @return the {@link DeserializationHandlerResponse} indicating whether processing should continue or fail.
+         */
+        public DeserializationHandlerResponse response() {
+            return deserializationHandlerResponse;
+        }
+
+        /**
+         * Retrieves an unmodifiable list of records to be sent to the dead letter queue.
+         * <p>
+         * If the list is {@code null}, an empty list is returned.
+         * </p>
+         *
+         * @return an unmodifiable list of {@link ProducerRecord} instances
+         *         for the dead letter queue, or an empty list if no records are available.
+         */
         public List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords() {
-            final LinkedList<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords = new LinkedList<>();
-            while (true) {
-                final ProducerRecord<byte[], byte[]> record = this.deadLetterQueueRecordsQueue.poll();
-                if (record == null) {
-                    break;
-                }
-                deadLetterQueueRecords.add(record);
+            if (deadLetterQueueRecords == null) {
+                return Collections.emptyList();
             }
-            return deadLetterQueueRecords;
+            return Collections.unmodifiableList(deadLetterQueueRecords);
         }
     }
 }

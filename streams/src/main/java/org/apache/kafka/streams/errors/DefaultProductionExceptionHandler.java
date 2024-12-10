@@ -41,26 +41,49 @@ public class DefaultProductionExceptionHandler implements ProductionExceptionHan
     public ProductionExceptionHandlerResponse handle(final ProducerRecord<byte[], byte[]> record,
                                                      final Exception exception) {
         return exception instanceof RetriableException ?
-            ProductionExceptionHandlerResponse.RETRY :
-            ProductionExceptionHandlerResponse.FAIL;
+            ProductionExceptionHandler.ProductionExceptionHandlerResponse.RETRY :
+            ProductionExceptionHandler.ProductionExceptionHandlerResponse.FAIL;
     }
 
+    @SuppressWarnings("deprecation")
+    @Deprecated
     @Override
     public ProductionExceptionHandlerResponse handle(final ErrorHandlerContext context,
                                                      final ProducerRecord<byte[], byte[]> record,
                                                      final Exception exception) {
         return exception instanceof RetriableException ?
-                ProductionExceptionHandlerResponse.RETRY :
-                ProductionExceptionHandlerResponse.FAIL.andAddToDeadLetterQueue(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
+                ProductionExceptionHandler.ProductionExceptionHandlerResponse.RETRY :
+                ProductionExceptionHandler.ProductionExceptionHandlerResponse.FAIL;
     }
 
+    @Override
+    public ProductionExceptionResponse handleError(final ErrorHandlerContext context,
+                                                   final ProducerRecord<byte[], byte[]> record,
+                                                   final Exception exception) {
+        return exception instanceof RetriableException ?
+            ProductionExceptionResponse.retryProcessing() :
+            ProductionExceptionResponse.continueProcessing(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
+    }
+
+
+    @SuppressWarnings("deprecation")
+    @Deprecated
     @Override
     public ProductionExceptionHandlerResponse handleSerializationException(final ErrorHandlerContext context,
                                                                            final ProducerRecord record,
                                                                            final Exception exception,
                                                                            final SerializationExceptionOrigin origin) {
-        return ProductionExceptionHandlerResponse.FAIL.andAddToDeadLetterQueue(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
+        return ProductionExceptionHandler.ProductionExceptionHandlerResponse.FAIL;
     }
+
+    @Override
+    public ProductionExceptionResponse handleSerializationError(final ErrorHandlerContext context,
+                                                                final ProducerRecord record,
+                                                                final Exception exception,
+                                                                final SerializationExceptionOrigin origin) {
+        return ProductionExceptionResponse.failProcessing(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
+    }
+
 
     @Override
     public void configure(final Map<String, ?> configs) {

@@ -20,15 +20,14 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.streams.processor.api.Record;
 
-import java.util.LinkedList;
+import java.util.Collections;
 import java.util.List;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * An interface that allows user code to inspect a record that has failed processing
  */
 public interface ProcessingExceptionHandler extends Configurable {
+
     /**
      * Inspect a record and the exception received
      *
@@ -40,8 +39,32 @@ public interface ProcessingExceptionHandler extends Configurable {
      *     The actual exception.
      *
      * @return Whether to continue or stop processing.
+     * @deprecated Use {@link #handleError(ErrorHandlerContext, Record, Exception)} instead.
      */
-    ProcessingHandlerResponse handle(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception);
+    @Deprecated
+    default ProcessingHandlerResponse handle(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
+        throw new UnsupportedOperationException();
+    };
+
+    /**
+     * Inspects a record and the exception received during processing.
+     *
+     * @param context
+     *     Processing context metadata.
+     * @param record
+     *     Record where the exception occurred.
+     * @param exception
+     *     The actual exception.
+     *
+     * @return a {@link ProcessingExceptionResponse} object
+     */
+    default ProcessingExceptionResponse handleError(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
+        if (ProcessingHandlerResponse.FAIL == handle(context, record, exception)) {
+            return ProcessingExceptionResponse.failProcessing();
+        }
+        return ProcessingExceptionResponse.continueProcessing();
+    }
+
 
     enum ProcessingHandlerResponse {
         /** Continue processing. */
@@ -59,38 +82,100 @@ public interface ProcessingExceptionHandler extends Configurable {
          */
         public final int id;
 
-        /**
-         * a list of Kafka records to publish, e.g. in a Dead Letter Queue topic
-         */
-        private final Queue<ProducerRecord<byte[], byte[]>> deadLetterQueueRecordsQueue;
-
         ProcessingHandlerResponse(final int id, final String name) {
             this.id = id;
             this.name = name;
-            deadLetterQueueRecordsQueue = new ConcurrentLinkedQueue<>();
+        }
+    }
+
+    /**
+     * Represents the result of handling a processing exception.
+     * <p>
+     * The {@code Response} class encapsulates a {@link ProcessingHandlerResponse},
+     * indicating whether processing should continue or fail, along with an optional list of
+     * {@link org.apache.kafka.clients.producer.ProducerRecord} instances to be sent to a dead letter queue.
+     * </p>
+     */
+    class ProcessingExceptionResponse {
+
+        private ProcessingHandlerResponse processingHandlerResponse;
+
+        private List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords;
+
+        /**
+         * Constructs a new {@code ProcessingExceptionResponse} object.
+         *
+         * @param processingHandlerResponse the response indicating whether processing should continue or fail;
+         *                                  must not be {@code null}.
+         * @param deadLetterQueueRecords    the list of records to be sent to the dead letter queue; may be {@code null}.
+         */
+        private ProcessingExceptionResponse(final ProcessingHandlerResponse processingHandlerResponse,
+                                            final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords) {
+            this.processingHandlerResponse = processingHandlerResponse;
+            this.deadLetterQueueRecords = deadLetterQueueRecords;
         }
 
-
-        public ProcessingExceptionHandler.ProcessingHandlerResponse andAddToDeadLetterQueue(final Iterable<org.apache.kafka.clients.producer.ProducerRecord<byte[], byte[]>> deadLetterQueueRecords) {
-            if (deadLetterQueueRecords == null) {
-                return this;
-            }
-            for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : deadLetterQueueRecords) {
-                this.deadLetterQueueRecordsQueue.add(deadLetterQueueRecord);
-            }
-            return this;
+        /**
+         * Creates a {@code ProcessingExceptionResponse} indicating that processing should fail.
+         *
+         * @param deadLetterQueueRecords the list of records to be sent to the dead letter queue; may be {@code null}.
+         * @return a {@code ProcessingExceptionResponse} with a {@link ProcessingHandlerResponse#FAIL} status.
+         */
+        public static ProcessingExceptionResponse failProcessing(final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords) {
+            return new ProcessingExceptionResponse(ProcessingHandlerResponse.FAIL, deadLetterQueueRecords);
         }
 
+        /**
+         * Creates a {@code ProcessingExceptionResponse} indicating that processing should fail.
+         *
+         * @return a {@code ProcessingExceptionResponse} with a {@link ProcessingHandlerResponse#FAIL} status.
+         */
+        public static ProcessingExceptionResponse failProcessing() {
+            return failProcessing(Collections.emptyList());
+        }
+
+        /**
+         * Creates a {@code ProcessingExceptionResponse} indicating that processing should continue.
+         *
+         * @param deadLetterQueueRecords the list of records to be sent to the dead letter queue; may be {@code null}.
+         * @return a {@code Response} with a {@link ProcessingHandlerResponse#CONTINUE} status.
+         */
+        public static ProcessingExceptionResponse continueProcessing(final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords) {
+            return new ProcessingExceptionResponse(ProcessingHandlerResponse.CONTINUE, deadLetterQueueRecords);
+        }
+
+        /**
+         * Creates a {@code ProcessingExceptionResponse} indicating that processing should continue.
+         *
+         * @return a {@code ProcessingExceptionResponse} with a {@link ProcessingHandlerResponse#CONTINUE} status.
+         */
+        public static ProcessingExceptionResponse continueProcessing() {
+            return continueProcessing(Collections.emptyList());
+        }
+
+        /**
+         * Retrieves the processing handler response.
+         *
+         * @return the {@link ProcessingHandlerResponse} indicating whether processing should continue or fail.
+         */
+        public ProcessingHandlerResponse response() {
+            return processingHandlerResponse;
+        }
+
+        /**
+         * Retrieves an unmodifiable list of records to be sent to the dead letter queue.
+         * <p>
+         * If the list is {@code null}, an empty list is returned.
+         * </p>
+         *
+         * @return an unmodifiable list of {@link ProducerRecord} instances
+         *         for the dead letter queue, or an empty list if no records are available.
+         */
         public List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords() {
-            final LinkedList<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords = new LinkedList<>();
-            while (true) {
-                final ProducerRecord<byte[], byte[]> record = this.deadLetterQueueRecordsQueue.poll();
-                if (record == null) {
-                    break;
-                }
-                deadLetterQueueRecords.add(record);
+            if (deadLetterQueueRecords == null) {
+                return Collections.emptyList();
             }
-            return deadLetterQueueRecords;
+            return Collections.unmodifiableList(deadLetterQueueRecords);
         }
     }
 }

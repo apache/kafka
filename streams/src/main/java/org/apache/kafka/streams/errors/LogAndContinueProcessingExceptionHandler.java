@@ -34,8 +34,11 @@ public class LogAndContinueProcessingExceptionHandler implements ProcessingExcep
     private static final Logger log = LoggerFactory.getLogger(LogAndContinueProcessingExceptionHandler.class);
     private String deadLetterQueueTopic = null;
 
+    @Deprecated
     @Override
-    public ProcessingHandlerResponse handle(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
+    public ProcessingHandlerResponse handle(final ErrorHandlerContext context,
+                                            final Record<?, ?> record,
+                                            final Exception exception) {
         log.warn(
             "Exception caught during message processing, processor node: {}, taskId: {}, source topic: {}, source partition: {}, source offset: {}",
             context.processorNodeId(),
@@ -46,8 +49,25 @@ public class LogAndContinueProcessingExceptionHandler implements ProcessingExcep
             exception
         );
 
-        return ProcessingHandlerResponse.CONTINUE.andAddToDeadLetterQueue(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
+        return ProcessingHandlerResponse.CONTINUE;
     }
+
+    @Override
+    public ProcessingExceptionResponse handleError(final ErrorHandlerContext context,
+                                                   final Record<?, ?> record,
+                                                   final Exception exception) {
+        log.warn(
+            "Exception caught during message processing, processor node: {}, taskId: {}, source topic: {}, source partition: {}, source offset: {}",
+            context.processorNodeId(),
+            context.taskId(),
+            context.topic(),
+            context.partition(),
+            context.offset(),
+            exception
+        );
+        return ProcessingExceptionResponse.continueProcessing(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
+    }
+
 
     @Override
     public void configure(final Map<String, ?> configs) {

@@ -102,10 +102,10 @@ public class RecordDeserializer {
             rawRecord.value()
         );
 
-        final DeserializationHandlerResponse response;
+        final DeserializationExceptionHandler.DeserializationExceptionResponse response;
         try {
             response = Objects.requireNonNull(
-                deserializationExceptionHandler.handle(errorHandlerContext, rawRecord, deserializationException),
+                deserializationExceptionHandler.handleError(errorHandlerContext, rawRecord, deserializationException),
                 "Invalid DeserializationExceptionHandler response."
             );
         } catch (final Exception fatalUserException) {
@@ -134,7 +134,7 @@ public class RecordDeserializer {
             }
         }
 
-        if (response == DeserializationHandlerResponse.FAIL) {
+        if (response.response() == DeserializationHandlerResponse.FAIL) {
             throw new StreamsException("Deserialization exception handler is set to fail upon" +
                 " a deserialization error. If you would rather have the streaming pipeline" +
                 " continue after a deserialization error, please set the " +

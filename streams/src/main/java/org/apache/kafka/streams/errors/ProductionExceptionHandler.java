@@ -19,10 +19,8 @@ package org.apache.kafka.streams.errors;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Configurable;
 
-import java.util.LinkedList;
+import java.util.Collections;
 import java.util.List;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * Interface that specifies how an exception when attempting to produce a result to
@@ -60,11 +58,38 @@ public interface ProductionExceptionHandler extends Configurable {
      *     The exception that occurred during production.
      *
      * @return Whether to continue or stop processing, or retry the failed operation.
+     * @deprecated Use {@link #handleError(ErrorHandlerContext, ProducerRecord, Exception)} instead.
      */
+    @Deprecated
     default ProductionExceptionHandlerResponse handle(final ErrorHandlerContext context,
                                                       final ProducerRecord<byte[], byte[]> record,
                                                       final Exception exception) {
-        return handle(record, exception);
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Inspect a record that we attempted to produce, and the exception that resulted
+     * from attempting to produce it and determine to continue or stop processing.
+     *
+     * @param context
+     *     The error handler context metadata.
+     * @param record
+     *     The record that failed to produce.
+     * @param exception
+     *     The exception that occurred during production.
+     *
+     * @return a {@link ProductionExceptionResponse} object
+     */
+    default ProductionExceptionResponse handleError(final ErrorHandlerContext context,
+                                                    final ProducerRecord<byte[], byte[]> record,
+                                                    final Exception exception) {
+        final ProductionExceptionHandlerResponse response =  handle(context, record, exception);
+        if (ProductionExceptionHandler.ProductionExceptionHandlerResponse.FAIL == response) {
+            return ProductionExceptionResponse.failProcessing();
+        } else if (ProductionExceptionHandler.ProductionExceptionHandlerResponse.RETRY == response) {
+            return ProductionExceptionResponse.retryProcessing();
+        }
+        return ProductionExceptionResponse.continueProcessing();
     }
 
     /**
@@ -84,7 +109,7 @@ public interface ProductionExceptionHandler extends Configurable {
     @Deprecated
     default ProductionExceptionHandlerResponse handleSerializationException(final ProducerRecord record,
                                                                             final Exception exception) {
-        return ProductionExceptionHandlerResponse.FAIL;
+        return ProductionExceptionHandler.ProductionExceptionHandlerResponse.FAIL;
     }
 
     /**
@@ -101,13 +126,45 @@ public interface ProductionExceptionHandler extends Configurable {
      *     The origin of the serialization exception.
      *
      * @return Whether to continue or stop processing, or retry the failed operation.
+     *
+     * @deprecated Use {@link #handleSerializationError(ErrorHandlerContext, ProducerRecord, Exception, SerializationExceptionOrigin)} instead.
      */
     @SuppressWarnings("rawtypes")
+    @Deprecated
     default ProductionExceptionHandlerResponse handleSerializationException(final ErrorHandlerContext context,
                                                                             final ProducerRecord record,
                                                                             final Exception exception,
                                                                             final SerializationExceptionOrigin origin) {
         return handleSerializationException(record, exception);
+    }
+
+    /**
+     * Handles serialization exception and determine if the process should continue. The default implementation is to
+     * fail the process.
+     *
+     * @param context
+     *     The error handler context metadata.
+     * @param record
+     *     The record that failed to serialize.
+     * @param exception
+     *     The exception that occurred during serialization.
+     * @param origin
+     *     The origin of the serialization exception.
+     *
+     * @return a {@link ProductionExceptionResponse} object
+     */
+    @SuppressWarnings("rawtypes")
+    default ProductionExceptionResponse handleSerializationError(final ErrorHandlerContext context,
+                                                                 final ProducerRecord record,
+                                                                 final Exception exception,
+                                                                 final SerializationExceptionOrigin origin) {
+        final ProductionExceptionHandlerResponse response =  handleSerializationException(context, record, exception, origin);
+        if (ProductionExceptionHandler.ProductionExceptionHandlerResponse.FAIL == response) {
+            return ProductionExceptionResponse.failProcessing();
+        } else if (ProductionExceptionHandler.ProductionExceptionHandlerResponse.RETRY == response) {
+            return ProductionExceptionResponse.retryProcessing();
+        }
+        return ProductionExceptionResponse.continueProcessing();
     }
 
     enum ProductionExceptionHandlerResponse {
@@ -145,38 +202,10 @@ public interface ProductionExceptionHandler extends Configurable {
          */
         public final int id;
 
-        /**
-         * a list of Kafka records to publish, e.g. in a Dead Letter Queue topic
-         */
-        private final Queue<ProducerRecord<byte[], byte[]>> deadLetterQueueRecordsQueue;
-
         ProductionExceptionHandlerResponse(final int id,
                                            final String name) {
             this.id = id;
             this.name = name;
-            this.deadLetterQueueRecordsQueue = new ConcurrentLinkedQueue<>();
-        }
-
-        public ProductionExceptionHandler.ProductionExceptionHandlerResponse andAddToDeadLetterQueue(final Iterable<org.apache.kafka.clients.producer.ProducerRecord<byte[], byte[]>> deadLetterQueueRecords) {
-            if (deadLetterQueueRecords == null) {
-                return this;
-            }
-            for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : deadLetterQueueRecords) {
-                this.deadLetterQueueRecordsQueue.add(deadLetterQueueRecord);
-            }
-            return this;
-        }
-
-        public List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords() {
-            final LinkedList<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords = new LinkedList<>();
-            while (true) {
-                final ProducerRecord<byte[], byte[]> record = this.deadLetterQueueRecordsQueue.poll();
-                if (record == null) {
-                    break;
-                }
-                deadLetterQueueRecords.add(record);
-            }
-            return deadLetterQueueRecords;
         }
     }
 
@@ -185,5 +214,105 @@ public interface ProductionExceptionHandler extends Configurable {
         KEY,
         /** Serialization exception occurred during serialization of the value. */
         VALUE
+    }
+
+    /**
+     * Represents the result of handling a production exception.
+     * <p>
+     * The {@code Response} class encapsulates a {@link ProductionExceptionHandlerResponse},
+     * indicating whether processing should continue or fail, along with an optional list of
+     * {@link ProducerRecord} instances to be sent to a dead letter queue.
+     * </p>
+     */
+    class ProductionExceptionResponse {
+
+        private ProductionExceptionHandlerResponse productionExceptionHandlerResponse;
+
+        private List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords;
+
+        /**
+         * Constructs a new {@code ProductionExceptionResponse} object.
+         *
+         * @param productionExceptionHandlerResponse the response indicating whether processing should continue or fail;
+         *                                  must not be {@code null}.
+         * @param deadLetterQueueRecords    the list of records to be sent to the dead letter queue; may be {@code null}.
+         */
+        private ProductionExceptionResponse(final ProductionExceptionHandlerResponse productionExceptionHandlerResponse,
+                                            final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords) {
+            this.productionExceptionHandlerResponse = productionExceptionHandlerResponse;
+            this.deadLetterQueueRecords = deadLetterQueueRecords;
+        }
+
+        /**
+         * Creates a {@code ProductionExceptionResponse} indicating that processing should fail.
+         *
+         * @param deadLetterQueueRecords the list of records to be sent to the dead letter queue; may be {@code null}.
+         * @return a {@code ProductionExceptionResponse} with a {@link DeserializationExceptionHandler.DeserializationHandlerResponse#FAIL} status.
+         */
+        public static ProductionExceptionResponse failProcessing(final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords) {
+            return new ProductionExceptionResponse(ProductionExceptionHandlerResponse.FAIL, deadLetterQueueRecords);
+        }
+
+        /**
+         * Creates a {@code ProductionExceptionResponse} indicating that processing should fail.
+         *
+         * @return a {@code ProductionExceptionResponse} with a {@link DeserializationExceptionHandler.DeserializationHandlerResponse#FAIL} status.
+         */
+        public static ProductionExceptionResponse failProcessing() {
+            return new ProductionExceptionResponse(ProductionExceptionHandlerResponse.FAIL, Collections.emptyList());
+        }
+
+        /**
+         * Creates a {@code ProductionExceptionResponse} indicating that processing should continue.
+         *
+         * @param deadLetterQueueRecords the list of records to be sent to the dead letter queue; may be {@code null}.
+         * @return a {@code ProductionExceptionResponse} with a {@link DeserializationExceptionHandler.DeserializationHandlerResponse#CONTINUE} status.
+         */
+        public static ProductionExceptionResponse continueProcessing(final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords) {
+            return new ProductionExceptionResponse(ProductionExceptionHandlerResponse.CONTINUE, deadLetterQueueRecords);
+        }
+
+        /**
+         * Creates a {@code ProductionExceptionResponse} indicating that processing should continue.
+         *
+         * @return a {@code ProductionExceptionResponse} with a {@link DeserializationExceptionHandler.DeserializationHandlerResponse#CONTINUE} status.
+         */
+        public static ProductionExceptionResponse continueProcessing() {
+            return new ProductionExceptionResponse(ProductionExceptionHandlerResponse.CONTINUE, Collections.emptyList());
+        }
+
+        /**
+         * Creates a {@code ProductionExceptionResponse} indicating that processing should retry.
+         *
+         * @return a {@code ProductionExceptionResponse} with a {@link DeserializationExceptionHandler.DeserializationHandlerResponse#CONTINUE} status.
+         */
+        public static ProductionExceptionResponse retryProcessing() {
+            return new ProductionExceptionResponse(ProductionExceptionHandlerResponse.RETRY, Collections.emptyList());
+        }
+
+        /**
+         * Retrieves the production exception handler response.
+         *
+         * @return the {@link ProductionExceptionHandlerResponse} indicating whether processing should continue or fail.
+         */
+        public ProductionExceptionHandlerResponse response() {
+            return productionExceptionHandlerResponse;
+        }
+
+        /**
+         * Retrieves an unmodifiable list of records to be sent to the dead letter queue.
+         * <p>
+         * If the list is {@code null}, an empty list is returned.
+         * </p>
+         *
+         * @return an unmodifiable list of {@link ProducerRecord} instances
+         *         for the dead letter queue, or an empty list if no records are available.
+         */
+        public List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords() {
+            if (deadLetterQueueRecords == null) {
+                return Collections.emptyList();
+            }
+            return Collections.unmodifiableList(deadLetterQueueRecords);
+        }
     }
 }

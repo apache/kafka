@@ -25,6 +25,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.Collections;
+import java.util.List;
 
 /**
  * {@code CommonExceptionHandler} Contains utilities method that could be used by all exception handlers
@@ -50,16 +51,16 @@ class ExceptionHandlerUtils {
      * @param exception Thrown exception
      * @return A list of Dead Letter Queue records to produce
      */
-    static Iterable<ProducerRecord<byte[], byte[]>> maybeBuildDeadLetterQueueRecords(final String deadLetterQueueTopicName,
-                                                                                     final byte[] key,
-                                                                                     final byte[] value,
-                                                                                     final ErrorHandlerContext context,
-                                                                                     final Exception exception) {
+    static List<ProducerRecord<byte[], byte[]>> maybeBuildDeadLetterQueueRecords(final String deadLetterQueueTopicName,
+                                                                                 final byte[] key,
+                                                                                 final byte[] value,
+                                                                                 final ErrorHandlerContext context,
+                                                                                 final Exception exception) {
         if (!shouldBuildDeadLetterQueueRecord(deadLetterQueueTopicName)) {
             return Collections.emptyList();
         }
 
-        return Collections.singleton(buildDeadLetterQueueRecord(deadLetterQueueTopicName, key, value, context, exception));
+        return Collections.singletonList(buildDeadLetterQueueRecord(deadLetterQueueTopicName, key, value, context, exception));
     }
 
 
