@@ -24,8 +24,8 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 import java.util.Objects;
 
-import javax.ws.rs.core.Configurable;
-import javax.ws.rs.core.Configuration;
+import jakarta.ws.rs.core.Configurable;
+import jakarta.ws.rs.core.Configuration;
 
 /**
  * The implementation delegates to {@link ResourceConfig} so that we can handle duplicate

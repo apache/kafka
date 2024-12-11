@@ -114,9 +114,9 @@ import java.util.stream.IntStream;
 
 import javax.crypto.SecretKey;
 
+import static jakarta.ws.rs.core.Response.Status.FORBIDDEN;
+import static jakarta.ws.rs.core.Response.Status.SERVICE_UNAVAILABLE;
 import static java.util.Collections.singletonList;
-import static javax.ws.rs.core.Response.Status.FORBIDDEN;
-import static javax.ws.rs.core.Response.Status.SERVICE_UNAVAILABLE;
 import static org.apache.kafka.common.utils.Utils.UncheckedCloseable;
 import static org.apache.kafka.connect.runtime.AbstractStatus.State.FAILED;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX;

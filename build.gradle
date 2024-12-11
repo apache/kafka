@@ -1835,7 +1835,7 @@ project(':generator') {
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
-    implementation libs.jacksonJaxrsJsonProvider
+    implementation libs.jacksonJakartarsJsonProvider
 
     implementation 'org.eclipse.jgit:org.eclipse.jgit:6.4.0.202211300538-r'
     // SSH support for JGit based on Apache MINA sshd
@@ -1882,7 +1882,7 @@ project(':clients') {
     compileOnly libs.jose4j          // for SASL/OAUTHBEARER JWT validation; only used by broker
 
     testImplementation libs.bcpkix
-    testImplementation libs.jacksonJaxrsJsonProvider
+    testImplementation libs.jacksonJakartarsJsonProvider
     testImplementation libs.jose4j
     testImplementation libs.junitJupiter
     testImplementation libs.reload4j
@@ -2446,7 +2446,7 @@ project(':tools') {
     implementation libs.re2j
 
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
-    implementation libs.jacksonJaxrsJsonProvider
+    implementation libs.jacksonJakartarsJsonProvider
 
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
@@ -2515,14 +2515,20 @@ project(':trogdor') {
     implementation libs.slf4jApi
     runtimeOnly libs.reload4j
 
-    implementation libs.jacksonJaxrsJsonProvider
+    implementation libs.jacksonJakartarsJsonProvider
     implementation libs.jerseyContainerServlet
     implementation libs.jerseyHk2
     implementation libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
     implementation libs.activation // Jersey dependency that was available in the JDK before Java 9
-    implementation libs.jettyServer
-    implementation libs.jettyServlet
-    implementation libs.jettyServlets
+    implementation (libs.jettyServer) {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    implementation (libs.jettyServlet) {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    implementation (libs.jettyServlets) {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
 
     implementation project(':group-coordinator')
     implementation project(':group-coordinator:group-coordinator-api')
@@ -2572,7 +2578,7 @@ project(':shell') {
     implementation project(':raft')
 
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
-    implementation libs.jacksonJaxrsJsonProvider
+    implementation libs.jacksonJakartarsJsonProvider
 
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
@@ -2895,11 +2901,7 @@ project(':streams:examples') {
 
   dependencies {
     // this dependency should be removed after we unify data API
-    implementation(project(':connect:json')) {
-      // this transitive dependency is not used in Streams, and it breaks SBT builds
-      exclude module: 'javax.ws.rs-api'
-    }
-
+    implementation(project(':connect:json'))
     implementation project(':streams')
 
     implementation libs.slf4jReload4j
@@ -3342,7 +3344,7 @@ project(':connect:api') {
     api project(':clients')
     implementation libs.slf4jApi
     runtimeOnly libs.reload4j
-    implementation libs.jaxrsApi
+    implementation libs.jakartaRsApi
 
     testImplementation libs.junitJupiter
     testImplementation project(':clients').sourceSets.test.output
@@ -3466,15 +3468,23 @@ project(':connect:runtime') {
     implementation libs.slf4jReload4j
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
     implementation libs.jacksonAnnotations
-    implementation libs.jacksonJaxrsJsonProvider
+    implementation libs.jacksonJakartarsJsonProvider
     implementation libs.jerseyContainerServlet
     implementation libs.jerseyHk2
     implementation libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
     implementation libs.activation // Jersey dependency that was available in the JDK before Java 9
-    implementation libs.jettyServer
-    implementation libs.jettyServlet
-    implementation libs.jettyServlets
-    implementation libs.jettyClient
+    implementation (libs.jettyServer) {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    implementation (libs.jettyServlet) {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    implementation (libs.jettyServlets) {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    implementation (libs.jettyClient) {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
     implementation libs.classgraph
     implementation libs.mavenArtifact
     implementation libs.swaggerAnnotations
@@ -3637,7 +3647,7 @@ project(':connect:basic-auth-extension') {
     implementation project(':connect:api')
     implementation libs.slf4jApi
     runtimeOnly libs.reload4j
-    implementation libs.jaxrsApi
+    implementation libs.jakartaRsApi
     implementation libs.jaxAnnotationApi
 
     testImplementation libs.bcpkix
@@ -3683,15 +3693,23 @@ project(':connect:mirror') {
     implementation libs.slf4jApi
     runtimeOnly libs.reload4j
     implementation libs.jacksonAnnotations
-    implementation libs.jacksonJaxrsJsonProvider
+    implementation libs.jacksonJakartarsJsonProvider
     implementation libs.jerseyContainerServlet
     implementation libs.jerseyHk2
     implementation libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
     implementation libs.activation // Jersey dependency that was available in the JDK before Java 9
-    implementation libs.jettyServer
-    implementation libs.jettyServlet
-    implementation libs.jettyServlets
-    implementation libs.jettyClient
+    implementation (libs.jettyServer) {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    implementation (libs.jettyServlet) {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    implementation (libs.jettyServlets) {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    implementation (libs.jettyClient) {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
     implementation libs.swaggerAnnotations
 
     testImplementation libs.junitJupiter

@@ -360,8 +360,8 @@
 
   <subpackage name="trogdor">
     <allow pkg="com.fasterxml.jackson" />
-    <allow pkg="javax.servlet" />
-    <allow pkg="javax.ws.rs" />
+    <allow pkg="jakarta.servlet" />
+    <allow pkg="jakarta.ws.rs" />
     <allow pkg="net.sourceforge.argparse4j" />
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.clients.admin" />
@@ -529,7 +529,7 @@
 
     <subpackage name="rest">
       <allow pkg="org.apache.kafka.connect.health" />
-      <allow pkg="javax.ws.rs" />
+      <allow pkg="jakarta.ws.rs" />
       <allow pkg= "javax.security.auth"/>
       <subpackage name="basic">
         <allow pkg="org.apache.kafka.connect.rest"/>
@@ -555,8 +555,8 @@
       <allow pkg="org.apache.kafka.server.config" />
       <allow pkg="kafka.server" />
       <subpackage name="rest">
-        <allow pkg="javax.ws.rs" />
-        <allow pkg="javax.inject" />
+        <allow pkg="jakarta.ws.rs" />
+        <allow pkg="jakarta.inject" />
         <allow pkg="org.glassfish.jersey" />
         <allow pkg="org.glassfish.hk2" />
       </subpackage>
@@ -571,10 +571,10 @@
 
       <subpackage name="rest">
         <allow pkg="org.eclipse.jetty" />
-        <allow pkg="javax.ws.rs" />
-        <allow pkg="javax.inject" />
+        <allow pkg="jakarta.ws.rs" />
+        <allow pkg="jakarta.inject" />
         <allow pkg="org.glassfish.hk2" />
-        <allow pkg="javax.servlet" />
+        <allow pkg="jakarta.servlet" />
         <allow pkg="org.glassfish.jersey" />
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="org.apache.http"/>
@@ -588,7 +588,7 @@
       </subpackage>
 
       <subpackage name="distributed">
-        <allow pkg="javax.ws.rs.core" />
+        <allow pkg="jakarta.ws.rs.core" />
       </subpackage>
     </subpackage>
 
@@ -620,8 +620,8 @@
         <allow pkg="org.apache.kafka.common.test" />
         <allow pkg="kafka.zk" />
         <allow pkg="kafka.utils" />
-        <allow class="javax.servlet.http.HttpServletResponse" />
-        <allow class="javax.ws.rs.core.Response" />
+        <allow class="jakarta.servlet.http.HttpServletResponse" />
+        <allow class="jakarta.ws.rs.core.Response" />
         <allow pkg="com.fasterxml.jackson.core.type" />
         <allow pkg="org.apache.kafka.metadata" />
         <allow pkg="org.eclipse.jetty.client"/>
@@ -633,7 +633,7 @@
     <subpackage name="integration">
       <allow pkg="org.apache.kafka.connect.util.clusters" />
       <allow pkg="org.apache.kafka.connect" />
-      <allow pkg="javax.ws.rs" />
+      <allow pkg="jakarta.ws.rs" />
       <allow pkg="org.apache.http"/>
       <allow pkg="org.eclipse.jetty.util"/>
       <!-- for tests -->

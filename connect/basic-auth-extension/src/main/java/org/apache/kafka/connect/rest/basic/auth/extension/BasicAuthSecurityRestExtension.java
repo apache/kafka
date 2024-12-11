@@ -51,7 +51,7 @@ import javax.security.auth.login.Configuration;
  *</Pre>
  *
  * <p>This is a reference implementation of the {@link ConnectRestExtension} interface. It registers an implementation of {@link
- * javax.ws.rs.container.ContainerRequestFilter} that does JAAS based authentication of incoming Basic Auth credentials. {@link
+ * jakarta.ws.rs.container.ContainerRequestFilter} that does JAAS based authentication of incoming Basic Auth credentials. {@link
  * ConnectRestExtension} implementations are loaded via the plugin class loader using {@link java.util.ServiceLoader} mechanism and hence
  * the packaged jar includes {@code META-INF/services/org.apache.kafka.connect.rest.extension.ConnectRestExtension} with the entry
  * {@code org.apache.kafka.connect.extension.auth.jaas.BasicAuthSecurityRestExtension}
