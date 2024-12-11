@@ -103,6 +103,7 @@ public class ConsumerGroupServiceTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testAdminRequestsForDescribeNegativeOffsets() throws Exception {
         String[] args = new String[]{"--bootstrap-server", "localhost:9092", "--group", GROUP, "--describe", "--offsets"};
         ConsumerGroupCommand.ConsumerGroupService groupService = consumerGroupService(args);
@@ -232,6 +233,7 @@ public class ConsumerGroupServiceTest {
         };
     }
 
+    @SuppressWarnings("deprecation")
     private DescribeConsumerGroupsResult describeGroupsResult(GroupState groupState) {
         MemberDescription member1 = new MemberDescription("member1", Optional.of("instance1"), "client1", "host1", null);
         ConsumerGroupDescription description = new ConsumerGroupDescription(GROUP,
