@@ -90,10 +90,7 @@ public interface DeserializationExceptionHandler extends Configurable {
      * @return a {@link DeserializationExceptionResponse} object
      */
     default DeserializationExceptionResponse handleError(final ErrorHandlerContext context, final ConsumerRecord<byte[], byte[]> record, final Exception exception) {
-        if (DeserializationHandlerResponse.FAIL == handle(context, record, exception)) {
-            return DeserializationExceptionResponse.failProcessing(Collections.emptyList());
-        }
-        return DeserializationExceptionResponse.continueProcessing(Collections.emptyList());
+        return new DeserializationExceptionResponse(handle(context, record, exception), Collections.emptyList());
     }
     /**
      * Enumeration that describes the response from the exception handler.

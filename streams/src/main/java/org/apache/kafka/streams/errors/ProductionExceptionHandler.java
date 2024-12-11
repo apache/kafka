@@ -83,13 +83,7 @@ public interface ProductionExceptionHandler extends Configurable {
     default ProductionExceptionResponse handleError(final ErrorHandlerContext context,
                                                     final ProducerRecord<byte[], byte[]> record,
                                                     final Exception exception) {
-        final ProductionExceptionHandlerResponse response =  handle(context, record, exception);
-        if (ProductionExceptionHandler.ProductionExceptionHandlerResponse.FAIL == response) {
-            return ProductionExceptionResponse.failProcessing();
-        } else if (ProductionExceptionHandler.ProductionExceptionHandlerResponse.RETRY == response) {
-            return ProductionExceptionResponse.retryProcessing();
-        }
-        return ProductionExceptionResponse.continueProcessing();
+        return new ProductionExceptionResponse(handle(context, record, exception), Collections.emptyList());
     }
 
     /**
@@ -158,13 +152,7 @@ public interface ProductionExceptionHandler extends Configurable {
                                                                  final ProducerRecord record,
                                                                  final Exception exception,
                                                                  final SerializationExceptionOrigin origin) {
-        final ProductionExceptionHandlerResponse response =  handleSerializationException(context, record, exception, origin);
-        if (ProductionExceptionHandler.ProductionExceptionHandlerResponse.FAIL == response) {
-            return ProductionExceptionResponse.failProcessing();
-        } else if (ProductionExceptionHandler.ProductionExceptionHandlerResponse.RETRY == response) {
-            return ProductionExceptionResponse.retryProcessing();
-        }
-        return ProductionExceptionResponse.continueProcessing();
+        return new ProductionExceptionResponse(handleSerializationException(context, record, exception, origin), Collections.emptyList());
     }
 
     enum ProductionExceptionHandlerResponse {

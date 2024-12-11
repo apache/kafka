@@ -59,10 +59,7 @@ public interface ProcessingExceptionHandler extends Configurable {
      * @return a {@link ProcessingExceptionResponse} object
      */
     default ProcessingExceptionResponse handleError(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
-        if (ProcessingHandlerResponse.FAIL == handle(context, record, exception)) {
-            return ProcessingExceptionResponse.failProcessing();
-        }
-        return ProcessingExceptionResponse.continueProcessing();
+        return new ProcessingExceptionResponse(handle(context, record, exception), Collections.emptyList());
     }
 
 
