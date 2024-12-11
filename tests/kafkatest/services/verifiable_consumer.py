@@ -231,7 +231,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         }
 
     def __init__(self, context, num_nodes, kafka, topic, group_id,
-                 static_membership=False, max_messages=-1, session_timeout_sec=30, enable_autocommit=False,
+                 static_membership=False, max_messages=-1, session_timeout_sec=0, enable_autocommit=False,
                  assignment_strategy=None, group_protocol=None, group_remote_assignor=None,
                  version=DEV_BRANCH, stop_timeout_sec=30, log_level="INFO", jaas_override_variables=None,
                  on_record_consumed=None, reset_policy="earliest", verify_offsets=True):
@@ -251,8 +251,6 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         self.session_timeout_sec = session_timeout_sec
         self.enable_autocommit = enable_autocommit
         self.assignment_strategy = assignment_strategy
-        self.group_protocol = group_protocol
-        self.group_remote_assignor = group_remote_assignor
         self.prop_file = ""
         self.stop_timeout_sec = stop_timeout_sec
         self.on_record_consumed = on_record_consumed
@@ -417,10 +415,12 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         else:
             cmd += " --bootstrap-server %s" % self.kafka.bootstrap_servers(self.security_config.security_protocol)
 
-        cmd += " --reset-policy %s --group-id %s --topic %s --session-timeout %s" % \
-               (self.reset_policy, self.group_id, self.topic,
-                self.session_timeout_sec*1000)
-               
+        cmd += " --reset-policy %s --group-id %s --topic %s" % \
+                (self.reset_policy, self.group_id, self.topic)
+
+        if self.session_timeout_sec > 0:
+            cmd += " --session-timeout %s" % self.session_timeout_sec*1000
+
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)
 
