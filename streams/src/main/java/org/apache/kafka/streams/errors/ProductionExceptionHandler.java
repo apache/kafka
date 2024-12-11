@@ -259,7 +259,7 @@ public interface ProductionExceptionHandler extends Configurable {
          * @return a {@code ProductionExceptionResponse} with a {@link DeserializationExceptionHandler.DeserializationHandlerResponse#FAIL} status.
          */
         public static ProductionExceptionResponse failProcessing() {
-            return new ProductionExceptionResponse(ProductionExceptionHandlerResponse.FAIL, Collections.emptyList());
+            return failProcessing(Collections.emptyList());
         }
 
         /**
@@ -278,7 +278,7 @@ public interface ProductionExceptionHandler extends Configurable {
          * @return a {@code ProductionExceptionResponse} with a {@link DeserializationExceptionHandler.DeserializationHandlerResponse#CONTINUE} status.
          */
         public static ProductionExceptionResponse continueProcessing() {
-            return new ProductionExceptionResponse(ProductionExceptionHandlerResponse.CONTINUE, Collections.emptyList());
+            return continueProcessing(Collections.emptyList());
         }
 
         /**

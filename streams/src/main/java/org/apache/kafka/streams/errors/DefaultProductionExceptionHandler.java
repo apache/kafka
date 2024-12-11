@@ -62,7 +62,7 @@ public class DefaultProductionExceptionHandler implements ProductionExceptionHan
                                                    final Exception exception) {
         return exception instanceof RetriableException ?
             ProductionExceptionResponse.retryProcessing() :
-            ProductionExceptionResponse.continueProcessing(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
+            ProductionExceptionResponse.failProcessing(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
     }
 
 

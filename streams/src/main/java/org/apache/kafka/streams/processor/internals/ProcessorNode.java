@@ -225,7 +225,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
             try {
                 processingExceptionResponse = Objects.requireNonNull(
                     processingExceptionHandler.handleError(errorHandlerContext, record, processingException),
-                    "Invalid ProcessingResponse response."
+                    "Invalid ProcessingExceptionResponse response."
                 );
             } catch (final Exception fatalUserException) {
                 // while Java distinguishes checked vs unchecked exceptions, other languages

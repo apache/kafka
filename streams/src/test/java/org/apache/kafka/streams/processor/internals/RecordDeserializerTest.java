@@ -27,7 +27,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
-import org.apache.kafka.streams.errors.DeserializationExceptionHandler.DeserializationHandlerResponse;
 import org.apache.kafka.streams.errors.ErrorHandlerContext;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
@@ -116,7 +115,7 @@ public class RecordDeserializerTest {
                             "value"
                     ),
                     new DeserializationExceptionHandlerMock(
-                            Optional.of(DeserializationHandlerResponse.FAIL),
+                            Optional.of(DeserializationExceptionHandler.DeserializationExceptionResponse.failProcessing()),
                             rawRecord,
                             sourceNodeName,
                             taskId
@@ -155,7 +154,7 @@ public class RecordDeserializerTest {
                             "value"
                     ),
                     new DeserializationExceptionHandlerMock(
-                            Optional.of(DeserializationHandlerResponse.CONTINUE),
+                            Optional.of(DeserializationExceptionHandler.DeserializationExceptionResponse.continueProcessing()),
                             rawRecord,
                             sourceNodeName,
                             taskId
@@ -196,7 +195,7 @@ public class RecordDeserializerTest {
             );
             assertEquals("Fatal user code error in deserialization error callback", exception.getMessage());
             assertInstanceOf(NullPointerException.class, exception.getCause());
-            assertEquals("Invalid DeserializationExceptionHandler response.", exception.getCause().getMessage());
+            assertEquals("Invalid DeserializationExceptionResponse response.", exception.getCause().getMessage());
         }
     }
 
@@ -342,12 +341,12 @@ public class RecordDeserializerTest {
     }
 
     public static class DeserializationExceptionHandlerMock implements DeserializationExceptionHandler {
-        private final Optional<DeserializationHandlerResponse> response;
+        private final Optional<DeserializationExceptionResponse> response;
         private final ConsumerRecord<byte[], byte[]> expectedRecord;
         private final String expectedProcessorNodeId;
         private final TaskId expectedTaskId;
 
-        public DeserializationExceptionHandlerMock(final Optional<DeserializationHandlerResponse> response,
+        public DeserializationExceptionHandlerMock(final Optional<DeserializationExceptionResponse> response,
                                                    final ConsumerRecord<byte[], byte[]> record,
                                                    final String processorNodeId,
                                                    final TaskId taskId) {
@@ -358,7 +357,7 @@ public class RecordDeserializerTest {
         }
 
         @Override
-        public DeserializationHandlerResponse handle(final ErrorHandlerContext context,
+        public DeserializationExceptionResponse handleError(final ErrorHandlerContext context,
                                                      final ConsumerRecord<byte[], byte[]> record,
                                                      final Exception exception) {
             assertEquals(expectedRecord.topic(), context.topic());

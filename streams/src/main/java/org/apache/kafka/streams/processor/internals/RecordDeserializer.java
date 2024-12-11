@@ -106,7 +106,7 @@ public class RecordDeserializer {
         try {
             response = Objects.requireNonNull(
                 deserializationExceptionHandler.handleError(errorHandlerContext, rawRecord, deserializationException),
-                "Invalid DeserializationExceptionHandler response."
+                "Invalid DeserializationExceptionResponse response."
             );
         } catch (final Exception fatalUserException) {
             // while Java distinguishes checked vs unchecked exceptions, other languages
