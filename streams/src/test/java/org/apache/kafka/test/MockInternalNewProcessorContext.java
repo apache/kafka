@@ -41,12 +41,16 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 import java.io.File;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 
 public class MockInternalNewProcessorContext<KOut, VOut> extends MockProcessorContext<KOut, VOut> implements InternalProcessorContext<KOut, VOut> {
 
-    private ProcessorNode currentNode;
+    private ProcessorNode<?, ?, ?, ?> currentNode;
+    private RecordCollector recordCollector;
+    private final Map<String, StateRestoreCallback> restoreCallbacks = new LinkedHashMap<>();
     private long currentSystemTimeMs;
     private final TaskType taskType = TaskType.ACTIVE;
 
@@ -108,12 +112,12 @@ public class MockInternalNewProcessorContext<KOut, VOut> extends MockProcessorCo
     }
 
     @Override
-    public void setCurrentNode(final ProcessorNode currentNode) {
+    public void setCurrentNode(final ProcessorNode<?, ?, ?, ?> currentNode) {
         this.currentNode = currentNode;
     }
 
     @Override
-    public ProcessorNode currentNode() {
+    public ProcessorNode<?, ?, ?, ?> currentNode() {
         return currentNode;
     }
 
@@ -129,8 +133,18 @@ public class MockInternalNewProcessorContext<KOut, VOut> extends MockProcessorCo
     public void uninitialize() {}
 
     @Override
+    public RecordCollector recordCollector() {
+        return recordCollector;
+    }
+
+    public void setRecordCollector(final RecordCollector recordCollector) {
+        this.recordCollector = recordCollector;
+    }
+
+    @Override
     public void register(final StateStore store,
                          final StateRestoreCallback stateRestoreCallback) {
+        restoreCallbacks.put(store.name(), stateRestoreCallback);
         addStateStore(store);
     }
 
@@ -138,7 +152,12 @@ public class MockInternalNewProcessorContext<KOut, VOut> extends MockProcessorCo
     public void register(final StateStore store,
                          final StateRestoreCallback stateRestoreCallback,
                          final CommitCallback checkpoint) {
+        restoreCallbacks.put(store.name(), stateRestoreCallback);
         addStateStore(store);
+    }
+
+    public StateRestoreCallback stateRestoreCallback(final String storeName) {
+        return restoreCallbacks.get(storeName);
     }
 
     @Override
