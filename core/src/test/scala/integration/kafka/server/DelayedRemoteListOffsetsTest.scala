@@ -16,7 +16,6 @@
  */
 package kafka.server
 
-import kafka.log.AsyncOffsetReadFutureHolder
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse
@@ -25,6 +24,7 @@ import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.requests.ListOffsetsResponse
 import org.apache.kafka.server.purgatory.{DelayedOperationPurgatory, TopicPartitionOperationKey}
 import org.apache.kafka.server.util.timer.MockTimer
+import org.apache.kafka.storage.internals.log.AsyncOffsetReadFutureHolder
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.mockito.ArgumentMatchers.anyBoolean

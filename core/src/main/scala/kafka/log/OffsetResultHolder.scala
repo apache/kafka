@@ -18,21 +18,11 @@ package kafka.log
 
 import org.apache.kafka.common.errors.ApiException
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
-
-import java.util.concurrent.{CompletableFuture, Future}
+import org.apache.kafka.storage.internals.log.AsyncOffsetReadFutureHolder
 
 case class OffsetResultHolder(timestampAndOffsetOpt: Option[TimestampAndOffset],
                               futureHolderOpt: Option[AsyncOffsetReadFutureHolder[Either[Exception, Option[TimestampAndOffset]]]] = None) {
 
   var maybeOffsetsError: Option[ApiException] = None
   var lastFetchableOffset: Option[Long] = None
-}
-
-/**
- * A remote log offset read task future holder. It contains two futures:
- * 1. JobFuture - Use this future to cancel the running job.
- * 2. TaskFuture - Use this future to get the result of the job/computation.
- */
-case class AsyncOffsetReadFutureHolder[T](jobFuture: Future[Void], taskFuture: CompletableFuture[T]) {
-
 }
