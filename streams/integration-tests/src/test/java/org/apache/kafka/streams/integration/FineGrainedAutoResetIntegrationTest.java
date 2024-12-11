@@ -25,11 +25,11 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.server.util.MockTime;
+import org.apache.kafka.streams.AutoOffsetReset;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
@@ -48,6 +48,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -57,6 +58,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.regex.Pattern;
 
+import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -70,6 +72,9 @@ public class FineGrainedAutoResetIntegrationTest {
     private static final String OUTPUT_TOPIC_0 = "outputTopic_0";
     private static final String OUTPUT_TOPIC_1 = "outputTopic_1";
     private static final String OUTPUT_TOPIC_2 = "outputTopic_2";
+    private static final String OUTPUT_TOPIC_3 = "outputTopic_3";
+    private static final String OUTPUT_TOPIC_4 = "outputTopic_4";
+    private static final String OUTPUT_TOPIC_5 = "outputTopic_5";
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
@@ -95,6 +100,9 @@ public class FineGrainedAutoResetIntegrationTest {
                 TOPIC_C_2,
                 TOPIC_Y_2,
                 TOPIC_Z_2,
+                TOPIC_DURATION_1,
+                TOPIC_DURATION_1,
+                TOPIC_DURATION_3,
                 NOOP,
                 DEFAULT_OUTPUT_TOPIC,
                 OUTPUT_TOPIC_0,
@@ -127,10 +135,13 @@ public class FineGrainedAutoResetIntegrationTest {
     private static final String TOPIC_C_2 = "topic-C_2";
     private static final String TOPIC_Y_2 = "topic-Y_2";
     private static final String TOPIC_Z_2 = "topic-Z_2";
+    private static final String TOPIC_DURATION_1 = "durationTopic-1";
+    private static final String TOPIC_DURATION_2 = "durationTopic-2";
+    private static final String TOPIC_DURATION_3 = "durationTopic-3";
     private static final String NOOP = "noop";
     private final Serde<String> stringSerde = Serdes.String();
 
-    private static final String STRING_SERDE_CLASSNAME = Serdes.String().getClass().getName();
+    private static final String STRING_SERDE_CLASSNAME = Serdes.StringSerde.class.getName();
     private Properties streamsConfiguration;
 
     private final String topic1TestMessage = "topic-1 test";
@@ -141,7 +152,7 @@ public class FineGrainedAutoResetIntegrationTest {
     private final String topicZTestMessage = "topic-Z test";
 
     @BeforeEach
-    public void setUp() throws IOException {
+    public void setUp() throws Exception {
 
         final Properties props = new Properties();
         props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
@@ -196,8 +207,8 @@ public class FineGrainedAutoResetIntegrationTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
 
-        final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("topic-\\d" + topicSuffix), Consumed.with(Topology.AutoOffsetReset.EARLIEST));
-        final KStream<String, String> pattern2Stream = builder.stream(Pattern.compile("topic-[A-D]" + topicSuffix), Consumed.with(Topology.AutoOffsetReset.LATEST));
+        final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("topic-\\d" + topicSuffix), Consumed.with(AutoOffsetReset.earliest()));
+        final KStream<String, String> pattern2Stream = builder.stream(Pattern.compile("topic-[A-D]" + topicSuffix), Consumed.with(AutoOffsetReset.latest()));
         final KStream<String, String> namedTopicsStream = builder.stream(Arrays.asList(topicY, topicZ));
 
         pattern1Stream.to(outputTopic, Produced.with(stringSerde, stringSerde));
@@ -215,17 +226,18 @@ public class FineGrainedAutoResetIntegrationTest {
 
         final Properties consumerConfig = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, StringDeserializer.class);
 
-        final KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfiguration);
-        streams.start();
-
-        final List<KeyValue<String, String>> receivedKeyValues = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, outputTopic, expectedReceivedValues.size());
         final List<String> actualValues = new ArrayList<>(expectedReceivedValues.size());
 
-        for (final KeyValue<String, String> receivedKeyValue : receivedKeyValues) {
-            actualValues.add(receivedKeyValue.value);
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfiguration)) {
+            streams.start();
+
+            final List<KeyValue<String, String>> receivedKeyValues = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, outputTopic, expectedReceivedValues.size());
+
+            for (final KeyValue<String, String> receivedKeyValue : receivedKeyValues) {
+                actualValues.add(receivedKeyValue.value);
+            }
         }
 
-        streams.close();
         Collections.sort(actualValues);
         Collections.sort(expectedReceivedValues);
         assertThat(actualValues, equalTo(expectedReceivedValues));
@@ -252,13 +264,107 @@ public class FineGrainedAutoResetIntegrationTest {
     }
 
     @Test
+    public void shouldFailForResetNone() throws Exception {
+        final Properties props = new Properties();
+        props.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1000");
+
+        final Properties localConfig = StreamsTestUtils.getStreamsConfig(
+            "testConfigAutoOffsetWithNone",
+            CLUSTER.bootstrapServers(),
+            STRING_SERDE_CLASSNAME,
+            STRING_SERDE_CLASSNAME,
+            props);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<String, String> exceptionStream = builder.stream(NOOP, Consumed.with(AutoOffsetReset.none()));
+
+        exceptionStream.to(DEFAULT_OUTPUT_TOPIC, Produced.with(stringSerde, stringSerde));
+
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), localConfig)) {
+            final TestingUncaughtExceptionHandler uncaughtExceptionHandler = new TestingUncaughtExceptionHandler();
+            streams.setUncaughtExceptionHandler(uncaughtExceptionHandler);
+
+            streams.start();
+
+            waitForCondition(
+                () -> uncaughtExceptionHandler.correctExceptionThrown,
+                "The expected NoOffsetForPartitionException was never thrown"
+            );
+        }
+    }
+
+    @Test
+    public void shouldResetByDuration() throws Exception {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        builder.<String, String>stream(TOPIC_DURATION_1, Consumed.with(AutoOffsetReset.byDuration(Duration.ofHours(6L).plus(Duration.ofMinutes(40L)))))
+            .to(OUTPUT_TOPIC_3, Produced.with(stringSerde, stringSerde));
+        builder.<String, String>stream(TOPIC_DURATION_2, Consumed.with(AutoOffsetReset.byDuration(Duration.ofMillis(mockTime.milliseconds()).minus(Duration.ofDays(1L)))))
+            .to(OUTPUT_TOPIC_4, Produced.with(stringSerde, stringSerde));
+        builder.<String, String>stream(TOPIC_DURATION_3, Consumed.with(AutoOffsetReset.byDuration(Duration.ZERO)))
+            .to(OUTPUT_TOPIC_5, Produced.with(stringSerde, stringSerde));
+
+        final Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class);
+
+        for (int i = 0; i < 10; ++i) {
+            mockTime.sleep(Duration.ofHours(1L).toMillis());
+            IntegrationTestUtils.produceValuesSynchronously(TOPIC_DURATION_1, Collections.singletonList("" + i), producerConfig, mockTime);
+            IntegrationTestUtils.produceValuesSynchronously(TOPIC_DURATION_2, Collections.singletonList("" + i), producerConfig, mockTime);
+            IntegrationTestUtils.produceValuesSynchronously(TOPIC_DURATION_3, Collections.singletonList("" + i), producerConfig, mockTime);
+        }
+
+        final Properties consumerConfig = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, StringDeserializer.class);
+
+        final List<String> expectedValues = Arrays.asList("3", "4", "5", "6", "7", "8", "9");
+        final List<String> allExpectedValues = Arrays.asList("0", "1", "2", "3", "4", "5", "6", "7", "8", "9");
+        final List<String> singleFinalExpectedValues = List.of("10");
+        final List<String> actualValuesOne = new ArrayList<>(expectedValues.size());
+        final List<String> actualValuesTwo = new ArrayList<>(allExpectedValues.size());
+        final List<String> actualValuesThree = new ArrayList<>(singleFinalExpectedValues.size());
+
+        final MockTime streamsMockTime = new MockTime(mockTime.milliseconds() + Duration.ofMinutes(20).toMillis(), 0);
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfiguration, streamsMockTime)) {
+            streams.start();
+
+            final List<KeyValue<String, String>> receivedKeyValuesOne =
+                IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_TOPIC_3, expectedValues.size());
+            for (final KeyValue<String, String> receivedKeyValue : receivedKeyValuesOne) {
+                actualValuesOne.add(receivedKeyValue.value);
+            }
+
+            final List<KeyValue<String, String>> receivedKeyValuesTwo =
+                IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_TOPIC_4, allExpectedValues.size());
+            for (final KeyValue<String, String> receivedKeyValue : receivedKeyValuesTwo) {
+                actualValuesTwo.add(receivedKeyValue.value);
+            }
+
+            IntegrationTestUtils.produceValuesSynchronously(TOPIC_DURATION_3, Collections.singletonList("10"), producerConfig, mockTime);
+            final List<KeyValue<String, String>> receivedKeyValuesThree =
+                IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_TOPIC_5, singleFinalExpectedValues.size());
+            for (final KeyValue<String, String> receivedKeyValue : receivedKeyValuesThree) {
+                actualValuesThree.add(receivedKeyValue.value);
+            }
+        }
+
+        Collections.sort(actualValuesOne);
+        Collections.sort(expectedValues);
+        assertThat(actualValuesOne, equalTo(expectedValues));
+
+        Collections.sort(actualValuesTwo);
+        Collections.sort(allExpectedValues);
+        assertThat(actualValuesTwo, equalTo(allExpectedValues));
+
+        assertThat(actualValuesThree, equalTo(singleFinalExpectedValues));
+    }
+
+    @Test
     public void shouldThrowExceptionOverlappingPattern() {
         final StreamsBuilder builder = new StreamsBuilder();
         //NOTE this would realistically get caught when building topology, the test is for completeness
-        builder.stream(Pattern.compile("topic-[A-D]_1"), Consumed.with(Topology.AutoOffsetReset.EARLIEST));
+        builder.stream(Pattern.compile("topic-[A-D]_1"), Consumed.with(AutoOffsetReset.earliest()));
 
         try {
-            builder.stream(Pattern.compile("topic-[A-D]_1"), Consumed.with(Topology.AutoOffsetReset.LATEST));
+            builder.stream(Pattern.compile("topic-[A-D]_1"), Consumed.with(AutoOffsetReset.latest()));
             builder.build();
             fail("Should have thrown TopologyException");
         } catch (final TopologyException expected) {
@@ -270,9 +376,9 @@ public class FineGrainedAutoResetIntegrationTest {
     public void shouldThrowExceptionOverlappingTopic() {
         final StreamsBuilder builder = new StreamsBuilder();
         //NOTE this would realistically get caught when building topology, the test is for completeness
-        builder.stream(Pattern.compile("topic-[A-D]_1"), Consumed.with(Topology.AutoOffsetReset.EARLIEST));
+        builder.stream(Pattern.compile("topic-[A-D]_1"), Consumed.with(AutoOffsetReset.earliest()));
         try {
-            builder.stream(Arrays.asList(TOPIC_A_1, TOPIC_Z_1), Consumed.with(Topology.AutoOffsetReset.LATEST));
+            builder.stream(Arrays.asList(TOPIC_A_1, TOPIC_Z_1), Consumed.with(AutoOffsetReset.latest()));
             builder.build();
             fail("Should have thrown TopologyException");
         } catch (final TopologyException expected) {
@@ -300,15 +406,17 @@ public class FineGrainedAutoResetIntegrationTest {
 
         exceptionStream.to(DEFAULT_OUTPUT_TOPIC, Produced.with(stringSerde, stringSerde));
 
-        final KafkaStreams streams = new KafkaStreams(builder.build(), localConfig);
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), localConfig)) {
+            final TestingUncaughtExceptionHandler uncaughtExceptionHandler = new TestingUncaughtExceptionHandler();
+            streams.setUncaughtExceptionHandler(uncaughtExceptionHandler);
 
-        final TestingUncaughtExceptionHandler uncaughtExceptionHandler = new TestingUncaughtExceptionHandler();
+            streams.start();
 
-        streams.setUncaughtExceptionHandler(uncaughtExceptionHandler);
-        streams.start();
-        TestUtils.waitForCondition(() -> uncaughtExceptionHandler.correctExceptionThrown,
-                "The expected NoOffsetForPartitionException was never thrown");
-        streams.close();
+            waitForCondition(
+                () -> uncaughtExceptionHandler.correctExceptionThrown,
+                "The expected NoOffsetForPartitionException was never thrown"
+            );
+        }
     }
 
 

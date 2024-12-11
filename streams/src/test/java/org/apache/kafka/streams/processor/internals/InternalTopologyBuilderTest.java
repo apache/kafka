@@ -21,13 +21,14 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.AutoOffsetReset;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.TopologyDescription;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.internals.AutoOffsetResetInternal;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
@@ -100,28 +101,43 @@ public class InternalTopologyBuilderTest {
 
     @Test
     public void shouldAddSourceWithOffsetReset() {
+        final String noneTopic = "noneTopic";
         final String earliestTopic = "earliestTopic";
         final String latestTopic = "latestTopic";
+        final String durationTopic = "durationTopic";
 
-        builder.addSource(Topology.AutoOffsetReset.EARLIEST, "source", null, null, null, earliestTopic);
-        builder.addSource(Topology.AutoOffsetReset.LATEST, "source2", null, null, null, latestTopic);
+        builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.none()), "source0", null, null, null, noneTopic);
+        builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.earliest()), "source1", null, null, null, earliestTopic);
+        builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.latest()), "source2", null, null, null, latestTopic);
+        builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.byDuration(Duration.ofSeconds(42))), "source3", null, null, null, durationTopic);
         builder.initializeSubscription();
 
+        assertThat(builder.offsetResetStrategy(noneTopic), equalTo(AutoOffsetResetStrategy.NONE));
         assertThat(builder.offsetResetStrategy(earliestTopic), equalTo(AutoOffsetResetStrategy.EARLIEST));
         assertThat(builder.offsetResetStrategy(latestTopic), equalTo(AutoOffsetResetStrategy.LATEST));
+        assertThat(builder.offsetResetStrategy(durationTopic).type(), equalTo(AutoOffsetResetStrategy.StrategyType.BY_DURATION));
+        assertThat(builder.offsetResetStrategy(durationTopic).duration().get().toSeconds(), equalTo(42L));
     }
 
     @Test
     public void shouldAddSourcePatternWithOffsetReset() {
+        final String noneTopicPattern = "none.*Topic";
         final String earliestTopicPattern = "earliest.*Topic";
         final String latestTopicPattern = "latest.*Topic";
+        final String durationTopicPattern = "duration.*Topic";
 
-        builder.addSource(Topology.AutoOffsetReset.EARLIEST, "source", null, null, null, Pattern.compile(earliestTopicPattern));
-        builder.addSource(Topology.AutoOffsetReset.LATEST, "source2", null, null, null,  Pattern.compile(latestTopicPattern));
+        builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.none()), "source0", null, null, null, Pattern.compile(noneTopicPattern));
+        builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.earliest()), "sourc1", null, null, null, Pattern.compile(earliestTopicPattern));
+        builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.latest()), "source2", null, null, null,  Pattern.compile(latestTopicPattern));
+        builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.byDuration(Duration.ofSeconds(42))), "source3", null, null, null, Pattern.compile(durationTopicPattern));
+
         builder.initializeSubscription();
 
+        assertThat(builder.offsetResetStrategy("noneTestTopic"), equalTo(AutoOffsetResetStrategy.NONE));
         assertThat(builder.offsetResetStrategy("earliestTestTopic"), equalTo(AutoOffsetResetStrategy.EARLIEST));
         assertThat(builder.offsetResetStrategy("latestTestTopic"), equalTo(AutoOffsetResetStrategy.LATEST));
+        assertThat(builder.offsetResetStrategy("durationTestTopic").type(), equalTo(AutoOffsetResetStrategy.StrategyType.BY_DURATION));
+        assertThat(builder.offsetResetStrategy("durationTestTopic").duration().get().toSeconds(), equalTo(42L));
     }
 
     @Test
@@ -131,7 +147,7 @@ public class InternalTopologyBuilderTest {
 
         assertEquals(Collections.singletonList("test-topic"), builder.fullSourceTopicNames());
 
-        assertThat(builder.offsetResetStrategy("test-topic"), equalTo(AutoOffsetResetStrategy.NONE));
+        assertThat(builder.offsetResetStrategy("test-topic"), equalTo(null));
     }
 
     @Test
@@ -143,20 +159,20 @@ public class InternalTopologyBuilderTest {
 
         assertThat(expectedPattern.pattern(), builder.sourceTopicPatternString(), equalTo("test-.*"));
 
-        assertThat(builder.offsetResetStrategy("test-topic"), equalTo(AutoOffsetResetStrategy.NONE));
+        assertThat(builder.offsetResetStrategy("test-topic"), equalTo(null));
     }
 
     @Test
     public void shouldNotAllowOffsetResetSourceWithoutTopics() {
-        assertThrows(TopologyException.class, () -> builder.addSource(Topology.AutoOffsetReset.EARLIEST, "source",
+        assertThrows(TopologyException.class, () -> builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.earliest()), "source",
             null, stringSerde.deserializer(), stringSerde.deserializer()));
     }
 
     @Test
     public void shouldNotAllowOffsetResetSourceWithDuplicateSourceName() {
-        builder.addSource(Topology.AutoOffsetReset.EARLIEST, "source", null, stringSerde.deserializer(), stringSerde.deserializer(), "topic-1");
+        builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.earliest()), "source", null, stringSerde.deserializer(), stringSerde.deserializer(), "topic-1");
         try {
-            builder.addSource(Topology.AutoOffsetReset.LATEST, "source", null, stringSerde.deserializer(), stringSerde.deserializer(), "topic-2");
+            builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.latest()), "source", null, stringSerde.deserializer(), stringSerde.deserializer(), "topic-2");
             fail("Should throw TopologyException for duplicate source name");
         } catch (final TopologyException expected) { /* ok */ }
     }

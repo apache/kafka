@@ -272,6 +272,12 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <Class name="org.apache.kafka.streams.processor.internals.TopologyMetadata"/>
+        <Method name="offsetResetStrategy"/>
+        <Bug pattern="NP_OPTIONAL_RETURN_NULL"/>
+    </Match>
+
+    <Match>
         <!-- Suppress warnings about ignoring the return value of await.
              This is done intentionally because we use other clues to determine
              if the wait was cut short. -->

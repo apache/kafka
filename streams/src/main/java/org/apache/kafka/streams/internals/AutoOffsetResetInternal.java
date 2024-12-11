@@ -20,7 +20,6 @@ import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy.Strat
 import org.apache.kafka.streams.AutoOffsetReset;
 
 import java.time.Duration;
-import java.util.Optional;
 
 public class AutoOffsetResetInternal extends AutoOffsetReset {
 
@@ -31,7 +30,9 @@ public class AutoOffsetResetInternal extends AutoOffsetReset {
     public StrategyType offsetResetStrategy() {
         return offsetResetStrategy;
     }
-    public Optional<Duration> duration() {
-        return duration;
+
+    @SuppressWarnings("all")
+    public Duration duration() {
+        return duration.get();
     }
 }

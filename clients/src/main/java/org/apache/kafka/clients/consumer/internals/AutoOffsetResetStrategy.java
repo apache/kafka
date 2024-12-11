@@ -129,6 +129,10 @@ public class AutoOffsetResetStrategy {
             return Optional.empty();
     }
 
+    public Optional<Duration> duration() {
+        return duration;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

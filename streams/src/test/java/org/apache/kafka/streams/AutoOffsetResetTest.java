@@ -21,31 +21,37 @@ import org.apache.kafka.streams.internals.AutoOffsetResetInternal;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.NoSuchElementException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AutoOffsetResetTest {
 
     @Test
-    void latestShouldReturnAnEmptyDuration() {
-        final AutoOffsetResetInternal latest = new AutoOffsetResetInternal(AutoOffsetReset.latest());
-        assertTrue(latest.duration().isEmpty(), "Latest should have an empty duration.");
+    void shouldThrowExceptionOnDurationForNoneReset() {
+        final AutoOffsetResetInternal none = new AutoOffsetResetInternal(AutoOffsetReset.none());
+        assertThrows(NoSuchElementException.class, none::duration, "None should not have a duration.");
     }
 
     @Test
-    void earliestShouldReturnAnEmptyDuration() {
+    void shouldThrowExceptionOnDurationForEarliestReset() {
         final AutoOffsetResetInternal earliest = new AutoOffsetResetInternal(AutoOffsetReset.earliest());
-        assertTrue(earliest.duration().isEmpty(), "Earliest should have an empty duration.");
+        assertThrows(NoSuchElementException.class, earliest::duration, "Earliest should not have a duration.");
+    }
+
+    @Test
+    void shouldThrowExceptionOnDurationForLastetReset() {
+        final AutoOffsetResetInternal latest = new AutoOffsetResetInternal(AutoOffsetReset.latest());
+        assertThrows(NoSuchElementException.class, latest::duration, "Latest should not have a duration.");
     }
 
     @Test
     void customDurationShouldMatchExpectedValue() {
         final Duration duration = Duration.ofSeconds(10L);
         final AutoOffsetResetInternal custom = new AutoOffsetResetInternal(AutoOffsetReset.byDuration(duration));
-        assertEquals(10L, custom.duration().get().toSeconds(), "Duration should match the specified value in milliseconds.");
+        assertEquals(10L, custom.duration().toSeconds(), "Duration should match the specified value in milliseconds.");
     }
 
     @Test

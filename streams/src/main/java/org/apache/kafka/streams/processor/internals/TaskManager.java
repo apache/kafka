@@ -1886,7 +1886,7 @@ public class TaskManager {
         }
     }
 
-    private Task getActiveTask(final TopicPartition partition) {
+    Task getActiveTask(final TopicPartition partition) {
         final Task activeTask = tasks.activeTasksForInputPartition(partition);
 
         if (activeTask == null) {

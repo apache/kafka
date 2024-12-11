@@ -19,6 +19,7 @@ package org.apache.kafka.streams;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.internals.AutoOffsetResetInternal;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.processor.ConnectedStoreProvider;
@@ -81,6 +82,19 @@ public class Topology {
         EARLIEST, LATEST
     }
 
+    @Deprecated
+    private static AutoOffsetResetInternal convertOldToNew(final Topology.AutoOffsetReset resetPolicy) {
+        if (resetPolicy == null) {
+            return null;
+        }
+
+        return new AutoOffsetResetInternal(
+            resetPolicy == org.apache.kafka.streams.Topology.AutoOffsetReset.EARLIEST
+                ? org.apache.kafka.streams.AutoOffsetReset.earliest()
+                : org.apache.kafka.streams.AutoOffsetReset.latest()
+        );
+    }
+
     /**
      * Add a new source that consumes the named topics and forward the records to child processor and/or sink nodes.
      * The source will use the {@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key deserializer} and
@@ -139,7 +153,7 @@ public class Topology {
     public synchronized Topology addSource(final AutoOffsetReset offsetReset,
                                            final String name,
                                            final String... topics) {
-        internalTopologyBuilder.addSource(offsetReset, name, null, null, null, topics);
+        internalTopologyBuilder.addSource(convertOldToNew(offsetReset), name, null, null, null, topics);
         return this;
     }
 
@@ -156,8 +170,7 @@ public class Topology {
     public synchronized Topology addSource(final org.apache.kafka.streams.AutoOffsetReset offsetReset,
                                            final String name,
                                            final String... topics) {
-        // TODO mjsax
-        //internalTopologyBuilder.addSource(offsetReset, name, null, null, null, topics);
+        internalTopologyBuilder.addSource(new AutoOffsetResetInternal(offsetReset), name, null, null, null, topics);
         return this;
     }
 
@@ -181,7 +194,7 @@ public class Topology {
     public synchronized Topology addSource(final AutoOffsetReset offsetReset,
                                            final String name,
                                            final Pattern topicPattern) {
-        internalTopologyBuilder.addSource(offsetReset, name, null, null, null, topicPattern);
+        internalTopologyBuilder.addSource(convertOldToNew(offsetReset), name, null, null, null, topicPattern);
         return this;
     }
 
@@ -203,8 +216,7 @@ public class Topology {
     public synchronized Topology addSource(final org.apache.kafka.streams.AutoOffsetReset offsetReset,
                                            final String name,
                                            final Pattern topicPattern) {
-        // TODO: mjsax
-        //internalTopologyBuilder.addSource(offsetReset, name, null, null, null, topicPattern);
+        internalTopologyBuilder.addSource(new AutoOffsetResetInternal(offsetReset), name, null, null, null, topicPattern);
         return this;
     }
 
@@ -273,7 +285,7 @@ public class Topology {
                                            final TimestampExtractor timestampExtractor,
                                            final String name,
                                            final String... topics) {
-        internalTopologyBuilder.addSource(offsetReset, name, timestampExtractor, null, null, topics);
+        internalTopologyBuilder.addSource(convertOldToNew(offsetReset), name, timestampExtractor, null, null, topics);
         return this;
     }
 
@@ -293,8 +305,7 @@ public class Topology {
                                            final TimestampExtractor timestampExtractor,
                                            final String name,
                                            final String... topics) {
-        // TODO mjsax
-        //internalTopologyBuilder.addSource(offsetReset, name, timestampExtractor, null, null, topics);
+        internalTopologyBuilder.addSource(new AutoOffsetResetInternal(offsetReset), name, timestampExtractor, null, null, topics);
         return this;
     }
 
@@ -321,7 +332,7 @@ public class Topology {
                                            final TimestampExtractor timestampExtractor,
                                            final String name,
                                            final Pattern topicPattern) {
-        internalTopologyBuilder.addSource(offsetReset, name, timestampExtractor, null, null, topicPattern);
+        internalTopologyBuilder.addSource(convertOldToNew(offsetReset), name, timestampExtractor, null, null, topicPattern);
         return this;
     }
 
@@ -341,8 +352,7 @@ public class Topology {
                                            final TimestampExtractor timestampExtractor,
                                            final String name,
                                            final Pattern topicPattern) {
-        // TODO
-        //internalTopologyBuilder.addSource(offsetReset, name, timestampExtractor, null, null, topicPattern);
+        internalTopologyBuilder.addSource(new AutoOffsetResetInternal(offsetReset), name, timestampExtractor, null, null, topicPattern);
         return this;
     }
 
@@ -421,7 +431,7 @@ public class Topology {
                                            final Deserializer<?> keyDeserializer,
                                            final Deserializer<?> valueDeserializer,
                                            final String... topics) {
-        internalTopologyBuilder.addSource(offsetReset, name, null, keyDeserializer, valueDeserializer, topics);
+        internalTopologyBuilder.addSource(convertOldToNew(offsetReset), name, null, keyDeserializer, valueDeserializer, topics);
         return this;
     }
 
@@ -448,8 +458,7 @@ public class Topology {
                                            final Deserializer<?> keyDeserializer,
                                            final Deserializer<?> valueDeserializer,
                                            final String... topics) {
-        // TODO mjsax
-        //internalTopologyBuilder.addSource(offsetReset, name, null, keyDeserializer, valueDeserializer, topics);
+        internalTopologyBuilder.addSource(new AutoOffsetResetInternal(offsetReset), name, null, keyDeserializer, valueDeserializer, topics);
         return this;
     }
 
@@ -479,7 +488,7 @@ public class Topology {
                                            final Deserializer<?> keyDeserializer,
                                            final Deserializer<?> valueDeserializer,
                                            final Pattern topicPattern) {
-        internalTopologyBuilder.addSource(offsetReset, name, null, keyDeserializer, valueDeserializer, topicPattern);
+        internalTopologyBuilder.addSource(convertOldToNew(offsetReset), name, null, keyDeserializer, valueDeserializer, topicPattern);
         return this;
     }
 
@@ -506,8 +515,7 @@ public class Topology {
                                            final Deserializer<?> keyDeserializer,
                                            final Deserializer<?> valueDeserializer,
                                            final Pattern topicPattern) {
-        // TODO mjsax
-        //internalTopologyBuilder.addSource(offsetReset, name, null, keyDeserializer, valueDeserializer, topicPattern);
+        internalTopologyBuilder.addSource(new AutoOffsetResetInternal(offsetReset), name, null, keyDeserializer, valueDeserializer, topicPattern);
         return this;
     }
 
@@ -537,7 +545,7 @@ public class Topology {
                                            final Deserializer<?> keyDeserializer,
                                            final Deserializer<?> valueDeserializer,
                                            final String... topics) {
-        internalTopologyBuilder.addSource(offsetReset, name, timestampExtractor, keyDeserializer, valueDeserializer, topics);
+        internalTopologyBuilder.addSource(convertOldToNew(offsetReset), name, timestampExtractor, keyDeserializer, valueDeserializer, topics);
         return this;
     }
 
@@ -564,8 +572,7 @@ public class Topology {
                                            final Deserializer<?> keyDeserializer,
                                            final Deserializer<?> valueDeserializer,
                                            final String... topics) {
-        // TODO mjsax
-        //internalTopologyBuilder.addSource(offsetReset, name, timestampExtractor, keyDeserializer, valueDeserializer, topics);
+        internalTopologyBuilder.addSource(new AutoOffsetResetInternal(offsetReset), name, timestampExtractor, keyDeserializer, valueDeserializer, topics);
         return this;
     }
 
@@ -598,7 +605,7 @@ public class Topology {
                                            final Deserializer<?> keyDeserializer,
                                            final Deserializer<?> valueDeserializer,
                                            final Pattern topicPattern) {
-        internalTopologyBuilder.addSource(offsetReset, name, timestampExtractor, keyDeserializer, valueDeserializer, topicPattern);
+        internalTopologyBuilder.addSource(convertOldToNew(offsetReset), name, timestampExtractor, keyDeserializer, valueDeserializer, topicPattern);
         return this;
     }
 
@@ -628,8 +635,7 @@ public class Topology {
                                            final Deserializer<?> keyDeserializer,
                                            final Deserializer<?> valueDeserializer,
                                            final Pattern topicPattern) {
-        // TODO mjsax
-        //internalTopologyBuilder.addSource(offsetReset, name, timestampExtractor, keyDeserializer, valueDeserializer, topicPattern);
+        internalTopologyBuilder.addSource(new AutoOffsetResetInternal(offsetReset), name, timestampExtractor, keyDeserializer, valueDeserializer, topicPattern);
         return this;
     }
 
@@ -987,7 +993,14 @@ public class Topology {
                                                                   final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
         storeBuilder.withLoggingDisabled();
 
-        internalTopologyBuilder.addSource(AutoOffsetReset.EARLIEST, sourceName, timestampExtractor, keyDeserializer, valueDeserializer, topic);
+        internalTopologyBuilder.addSource(
+            new AutoOffsetResetInternal(org.apache.kafka.streams.AutoOffsetReset.earliest()),
+            sourceName,
+            timestampExtractor,
+            keyDeserializer,
+            valueDeserializer,
+            topic
+        );
         internalTopologyBuilder.addProcessor(processorName, stateUpdateSupplier, sourceName);
         internalTopologyBuilder.addStateStore(storeBuilder, processorName);
         internalTopologyBuilder.connectSourceStoreAndTopic(storeBuilder.name(), topic);
