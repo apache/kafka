@@ -144,7 +144,7 @@ public class StreamsBuilder {
      * @return a {@link KStream} for the specified topics
      */
     public synchronized <K, V> KStream<K, V> stream(final Collection<String> topics) {
-        return stream(topics, Consumed.with(null, null, null, null));
+        return stream(topics, Consumed.with(null, null));
     }
 
     /**

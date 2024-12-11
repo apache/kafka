@@ -438,6 +438,7 @@ public class InternalTopologyBuilder {
         return this;
     }
 
+    @SuppressWarnings("deprecation")
     public final void addSource(final Topology.AutoOffsetReset offsetReset,
                                 final String name,
                                 final TimestampExtractor timestampExtractor,
@@ -465,6 +466,7 @@ public class InternalTopologyBuilder {
         nodeGroups = null;
     }
 
+    @SuppressWarnings("deprecation")
     public final void addSource(final Topology.AutoOffsetReset offsetReset,
                                 final String name,
                                 final TimestampExtractor timestampExtractor,
@@ -915,6 +917,7 @@ public class InternalTopologyBuilder {
 
     }
 
+    @SuppressWarnings("deprecation")
     private <T> void maybeAddToResetList(final Collection<T> earliestResets,
                                          final Collection<T> latestResets,
                                          final Topology.AutoOffsetReset offsetReset,

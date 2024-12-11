@@ -96,7 +96,8 @@ public class TableSourceNode<K, V> extends SourceGraphNode<K, V> {
                 false
             );
         } else {
-            topologyBuilder.addSource(consumedInternal().offsetResetPolicy(),
+            // TODO mjsax
+            topologyBuilder.addSource(consumedInternal().legacyOffsetResetPolicy(),
                                       sourceName,
                                       consumedInternal().timestampExtractor(),
                                       consumedInternal().keyDeserializer(),

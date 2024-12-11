@@ -18,7 +18,7 @@ package org.apache.kafka.streams.scala.kstream
 
 import org.apache.kafka.common.serialization.Serde
 import org.apache.kafka.streams.kstream.{Consumed => ConsumedJ}
-import org.apache.kafka.streams.Topology
+import org.apache.kafka.streams.{AutoOffsetReset, Topology}
 import org.apache.kafka.streams.processor.TimestampExtractor
 
 object Consumed {
@@ -36,9 +36,29 @@ object Consumed {
    * @param valueSerde         the value serde to use.
    * @return a new instance of [[Consumed]]
    */
+  @deprecated("Use `with` method that accepts `AutoOffsetReset` instead", "4.0.0")
   def `with`[K, V](
     timestampExtractor: TimestampExtractor,
     resetPolicy: Topology.AutoOffsetReset
+  )(implicit keySerde: Serde[K], valueSerde: Serde[V]): ConsumedJ[K, V] =
+    ConsumedJ.`with`(keySerde, valueSerde, timestampExtractor, resetPolicy)
+
+  /**
+   * Create an instance of [[Consumed]] with the supplied arguments. `null` values are acceptable.
+   *
+   * @tparam K                 key type
+   * @tparam V                 value type
+   * @param timestampExtractor the timestamp extractor to used. If `null` the default timestamp extractor from
+   *                           config will be used
+   * @param resetPolicy        the offset reset policy to be used. If `null` the default reset policy from config
+   *                           will be used
+   * @param keySerde           the key serde to use.
+   * @param valueSerde         the value serde to use.
+   * @return a new instance of [[Consumed]]
+   */
+  def `with`[K, V](
+    timestampExtractor: TimestampExtractor,
+    resetPolicy: AutoOffsetReset
   )(implicit keySerde: Serde[K], valueSerde: Serde[V]): ConsumedJ[K, V] =
     ConsumedJ.`with`(keySerde, valueSerde, timestampExtractor, resetPolicy)
 
@@ -74,8 +94,22 @@ object Consumed {
    * @param resetPolicy the offset reset policy to be used. If `null` the default reset policy from config will be used
    * @return a new instance of [[Consumed]]
    */
+  @deprecated("Use `with` method that accepts `AutoOffsetReset` instead", "4.0.0")
   def `with`[K, V](
     resetPolicy: Topology.AutoOffsetReset
+  )(implicit keySerde: Serde[K], valueSerde: Serde[V]): ConsumedJ[K, V] =
+    ConsumedJ.`with`(resetPolicy).withKeySerde(keySerde).withValueSerde(valueSerde)
+
+  /**
+   * Create an instance of [[Consumed]] with a `org.apache.kafka.streams.AutoOffsetReset`.
+   *
+   * @tparam K          key type
+   * @tparam V          value type
+   * @param resetPolicy the offset reset policy to be used. If `null` the default reset policy from config will be used
+   * @return a new instance of [[Consumed]]
+   */
+  def `with`[K, V](
+    resetPolicy: AutoOffsetReset
   )(implicit keySerde: Serde[K], valueSerde: Serde[V]): ConsumedJ[K, V] =
     ConsumedJ.`with`(resetPolicy).withKeySerde(keySerde).withValueSerde(valueSerde)
 }
