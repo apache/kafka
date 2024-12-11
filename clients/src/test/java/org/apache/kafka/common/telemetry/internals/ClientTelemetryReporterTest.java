@@ -63,7 +63,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 
@@ -238,7 +237,7 @@ public class ClientTelemetryReporterTest {
         assertEquals(Long.MAX_VALUE, telemetrySender.timeToNextUpdate(100));
 
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.TERMINATED));
-        assertThrows(IllegalStateException.class, () -> telemetrySender.timeToNextUpdate(100));
+        assertEquals(Long.MAX_VALUE, telemetrySender.timeToNextUpdate(100));
     }
 
     @Test
