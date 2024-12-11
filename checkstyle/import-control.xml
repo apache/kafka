@@ -566,6 +566,7 @@
       <allow pkg="org.apache.kafka.connect" />
       <allow pkg="io.github.classgraph"/>
       <allow pkg="javax.crypto"/>
+      <allow pkg="org.apache.maven.artifact.versioning" />
       <allow pkg="org.eclipse.jetty.util" />
       <allow pkg="org.apache.log4j" />
 
@@ -583,7 +584,6 @@
 
       <subpackage name="isolation">
         <allow pkg="com.fasterxml.jackson" />
-        <allow pkg="org.apache.maven.artifact.versioning" />
         <allow pkg="javax.tools" />
       </subpackage>
 

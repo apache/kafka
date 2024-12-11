@@ -139,6 +139,23 @@ public class DelegatingClassLoader extends URLClassLoader {
         return inner.lastKey().version();
     }
 
+    String versionInLocation(String classOrAlias, String location) {
+        if (classOrAlias == null) {
+            return null;
+        }
+        String fullName = aliases.getOrDefault(classOrAlias, classOrAlias);
+        SortedMap<PluginDesc<?>, ClassLoader> inner = pluginLoaders.get(fullName);
+        if (inner == null) {
+            return null;
+        }
+        for (Map.Entry<PluginDesc<?>, ClassLoader> entry : inner.entrySet()) {
+            if (entry.getKey().location().equals(location)) {
+                return entry.getKey().version();
+            }
+        }
+        return null;
+    }
+
     private ClassLoader findPluginLoader(
         SortedMap<PluginDesc<?>, ClassLoader> loaders,
         String pluginName,
@@ -226,8 +243,12 @@ public class DelegatingClassLoader extends URLClassLoader {
             ));
         }
 
-        List<PluginDesc<?>> classpathPlugins = scannedPlugin.keySet().stream()
+        // if a plugin implements two interfaces (like JsonConverter implements both converter and header converter)
+        // it will have two entries under classpath, one for each scan. Hence, we count distinct by version.
+        List<String> classpathPlugins = scannedPlugin.keySet().stream()
                 .filter(pluginDesc -> pluginDesc.location().equals("classpath"))
+                .map(PluginDesc::version)
+                .distinct()
                 .collect(Collectors.toList());
 
         if (classpathPlugins.size() > 1) {
@@ -239,7 +260,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         } else if (classpathPlugins.isEmpty()) {
             throw new VersionedPluginLoadingException("Invalid plugin found in classpath");
         } else {
-            pluginVersion = classpathPlugins.get(0).version();
+            pluginVersion = classpathPlugins.get(0);
             if (!range.containsVersion(new DefaultArtifactVersion(pluginVersion))) {
                 throw new VersionedPluginLoadingException(String.format(
                         "Plugin %s has version %s which does not match the required version range %s",
