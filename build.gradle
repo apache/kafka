@@ -124,7 +124,7 @@ ext {
     def releaseVersion = modulesNeedingJava11.any { projectPath == it } ? minClientJavaVersion : minNonClientJavaVersion
 
     options.compilerArgs << "-encoding" << "UTF-8"
-    options.compilerArgs += ["--release", String.valueOf(releaseVersion)]
+    options.release = releaseVersion
 
     if (name in ["compileTestJava", "compileTestScala"]) {
       options.compilerArgs << "-parameters"
