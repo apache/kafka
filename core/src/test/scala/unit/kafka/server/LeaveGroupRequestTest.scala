@@ -49,29 +49,50 @@ class LeaveGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
       numPartitions = 3
     )
 
+    def instanceId(memberId: String): String = "instance_" + memberId
+    val memberIds = Range(0, 3).map { __ =>
+      Uuid.randomUuid().toString
+    }
+
     for (version <- 3 to ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)) {
-      val memberId = Uuid.randomUuid().toString
-      assertEquals(Errors.NONE.code, consumerGroupHeartbeat(
-        groupId = "group",
-        memberId = memberId,
-        memberEpoch = 0,
-        instanceId = "instance-id",
-        rebalanceTimeoutMs = 5 * 60 * 1000,
-        subscribedTopicNames = List("foo"),
-        topicPartitions = List.empty,
-      ).errorCode)
+      // Join with all the members.
+      memberIds.foreach { memberId =>
+        assertEquals(Errors.NONE.code, consumerGroupHeartbeat(
+          groupId = "group",
+          memberId = memberId,
+          memberEpoch = 0,
+          instanceId = instanceId(memberId),
+          rebalanceTimeoutMs = 5 * 60 * 1000,
+          subscribedTopicNames = List("foo"),
+          topicPartitions = List.empty,
+        ).errorCode)
+      }
 
       assertEquals(
         new LeaveGroupResponseData()
           .setMembers(List(
             new LeaveGroupResponseData.MemberResponse()
-              .setMemberId(memberId)
-              .setGroupInstanceId("instance-id")
+              .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+              .setGroupInstanceId(instanceId(memberIds(0))),
+            new LeaveGroupResponseData.MemberResponse()
+              .setMemberId(memberIds(1))
+              .setGroupInstanceId(instanceId(memberIds(1))),
+            new LeaveGroupResponseData.MemberResponse()
+              .setMemberId(memberIds(2))
+              .setGroupInstanceId(null)
           ).asJava),
         classicLeaveGroup(
           groupId = "group",
-          memberIds = List(JoinGroupRequest.UNKNOWN_MEMBER_ID),
-          groupInstanceIds = List("instance-id"),
+          memberIds = List(
+            JoinGroupRequest.UNKNOWN_MEMBER_ID,
+            memberIds(1),
+            memberIds(2)
+          ),
+          groupInstanceIds = List(
+            instanceId(memberIds(0)),
+            instanceId(memberIds(1)),
+            null
+          ),
           version = version.toShort
         )
       )

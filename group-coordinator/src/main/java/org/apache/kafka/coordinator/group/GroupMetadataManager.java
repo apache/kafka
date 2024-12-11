@@ -6020,7 +6020,7 @@ public class GroupMetadataManager {
         }
 
         if (group.type() == CLASSIC) {
-            return classicGroupLeaveToClassicGroup((ClassicGroup) group, context, request);
+            return classicGroupLeaveToClassicGroup((ClassicGroup) group, request);
         } else if (group.type() == CONSUMER) {
             return classicGroupLeaveToConsumerGroup((ConsumerGroup) group, request);
         } else {
@@ -6046,48 +6046,46 @@ public class GroupMetadataManager {
         List<CoordinatorRecord> records = new ArrayList<>();
 
         for (MemberIdentity memberIdentity : request.members()) {
-            String memberId = memberIdentity.memberId();
-            String instanceId = memberIdentity.groupInstanceId();
             String reason = memberIdentity.reason() != null ? memberIdentity.reason() : "not provided";
 
-            ConsumerGroupMember member;
             try {
-                if (instanceId == null) {
-                    member = group.getOrMaybeCreateMember(memberId, false);
-                    throwIfMemberDoesNotUseClassicProtocol(member);
+                ConsumerGroupMember member;
+
+                if (memberIdentity.groupInstanceId() == null) {
+                    member = group.getOrMaybeCreateMember(memberIdentity.memberId(), false);
 
                     log.info("[GroupId {}] Dynamic member {} has left group " +
                             "through explicit `LeaveGroup` request; client reason: {}",
-                        groupId, memberId, reason);
+                        groupId, memberIdentity.memberId(), reason);
                 } else {
-                    member = group.staticMember(instanceId);
-                    throwIfStaticMemberIsUnknown(member, instanceId);
+                    member = group.staticMember(memberIdentity.groupInstanceId());
+                    throwIfStaticMemberIsUnknown(member, memberIdentity.groupInstanceId());
                     // The LeaveGroup API allows administrative removal of members by GroupInstanceId
                     // in which case we expect the MemberId to be undefined.
-                    if (!UNKNOWN_MEMBER_ID.equals(memberId)) {
-                        throwIfInstanceIdIsFenced(member, groupId, memberId, instanceId);
-                        throwIfMemberDoesNotUseClassicProtocol(member);
+                    if (!UNKNOWN_MEMBER_ID.equals(memberIdentity.memberId())) {
+                        throwIfInstanceIdIsFenced(member, groupId, memberIdentity.memberId(), memberIdentity.groupInstanceId());
                     }
 
-                    memberId = member.memberId();
                     log.info("[GroupId {}] Static member {} with instance id {} has left group " +
                             "through explicit `LeaveGroup` request; client reason: {}",
-                        groupId, memberId, instanceId, reason);
+                        groupId, memberIdentity.memberId(), memberIdentity.groupInstanceId(), reason);
                 }
 
-                removeMember(records, groupId, memberId);
-                cancelTimers(groupId, memberId);
+                removeMember(records, groupId, member.memberId());
+                cancelTimers(groupId, member.memberId());
+
                 memberResponses.add(
                     new MemberResponse()
-                        .setMemberId(memberId)
-                        .setGroupInstanceId(instanceId)
+                        .setMemberId(memberIdentity.memberId())
+                        .setGroupInstanceId(memberIdentity.groupInstanceId())
                 );
+
                 validLeaveGroupMembers.add(member);
             } catch (KafkaException e) {
                 memberResponses.add(
                     new MemberResponse()
-                        .setMemberId(memberId)
-                        .setGroupInstanceId(instanceId)
+                        .setMemberId(memberIdentity.memberId())
+                        .setGroupInstanceId(memberIdentity.groupInstanceId())
                         .setErrorCode(Errors.forException(e).code())
                 );
             }
@@ -6126,7 +6124,6 @@ public class GroupMetadataManager {
      * Handle a classic LeaveGroupRequest to a ClassicGroup.
      *
      * @param group          The ClassicGroup.
-     * @param context        The request context.
      * @param request        The actual LeaveGroup request.
      *
      * @return The LeaveGroup response and the GroupMetadata record to append if the group
@@ -6134,7 +6131,6 @@ public class GroupMetadataManager {
      */
     private CoordinatorResult<LeaveGroupResponseData, CoordinatorRecord> classicGroupLeaveToClassicGroup(
         ClassicGroup group,
-        RequestContext context,
         LeaveGroupRequestData request
     ) throws UnknownMemberIdException {
         if (group.isInState(DEAD)) {
