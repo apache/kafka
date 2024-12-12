@@ -89,6 +89,7 @@ import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_1;
 import static org.apache.kafka.streams.state.Stores.inMemoryKeyValueStore;
@@ -1610,8 +1611,8 @@ public class StreamsBuilderTest {
             .toStream(Named.as("toStream"))// wrapped 4
             .to("output", Produced.as("sink"));
 
-        final var top = builder.build();
-        System.out.println(top.describe());
+        builder.build();
+
         assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
             "aggregate-cogroup-agg-0", "aggregate-cogroup-agg-1", "aggregate-cogroup-merge", "toStream"
         ));
@@ -1748,6 +1749,209 @@ public class StreamsBuilderTest {
     }
 
     @Test
+    public void shouldWrapProcessorsForStreamStreamInnerJoin() {
+        final Map<Object, Object> props = dummyStreamsConfigMap();
+        props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, RecordingProcessorWrapper.class);
+
+        final WrapperRecorder counter = new WrapperRecorder();
+        props.put(PROCESSOR_WRAPPER_COUNTER_CONFIG, counter);
+
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
+
+        final KStream<String, String> stream1 = builder.stream("input-1", Consumed.as("source-1"));
+        final KStream<String, String> stream2 = builder.stream("input-2", Consumed.as("source-2"));
+
+        stream1.join(
+                stream2,
+                MockValueJoiner.TOSTRING_JOINER,
+                JoinWindows.ofTimeDifferenceAndGrace(Duration.ofDays(1), Duration.ofDays(1)),
+                StreamJoined.as("ss-join"))
+            .to("output", Produced.as("sink"));
+
+        builder.build();
+
+        // TODO: fix these names once we address https://issues.apache.org/jira/browse/KAFKA-18191
+        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
+            "KSTREAM-JOINTHIS-0000000004", "KSTREAM-JOINOTHER-0000000005",
+            "KSTREAM-WINDOWED-0000000003", "KSTREAM-WINDOWED-0000000002",
+            "KSTREAM-MERGE-0000000006"
+        ));
+        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(5));
+        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(2));
+        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(4));
+    }
+
+    @Test
+    public void shouldWrapProcessorsForStreamStreamLeftJoin() {
+        final Map<Object, Object> props = dummyStreamsConfigMap();
+        props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, RecordingProcessorWrapper.class);
+
+        final WrapperRecorder counter = new WrapperRecorder();
+        props.put(PROCESSOR_WRAPPER_COUNTER_CONFIG, counter);
+
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
+
+        final KStream<String, String> stream1 = builder.stream("input-1", Consumed.as("source-1"));
+        final KStream<String, String> stream2 = builder.stream("input-2", Consumed.as("source-2"));
+
+        stream1.leftJoin(
+                stream2,
+                MockValueJoiner.TOSTRING_JOINER,
+                JoinWindows.ofTimeDifferenceAndGrace(Duration.ofDays(1), Duration.ofDays(1)),
+                StreamJoined.as("ss-join"))
+            .to("output", Produced.as("sink"));
+
+        builder.build();
+
+        // TODO: fix these names once we address https://issues.apache.org/jira/browse/KAFKA-18191
+        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
+            "KSTREAM-JOINTHIS-0000000004", "KSTREAM-OUTEROTHER-0000000005",
+            "KSTREAM-WINDOWED-0000000003", "KSTREAM-WINDOWED-0000000002",
+            "KSTREAM-MERGE-0000000006"
+        ));
+        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(5));
+
+        // 1 additional store due to spurious results fix for left/outer joins
+        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(3));
+        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(6));
+    }
+
+    @Test
+    public void shouldWrapProcessorsForStreamStreamOuterJoin() {
+        final Map<Object, Object> props = dummyStreamsConfigMap();
+        props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, RecordingProcessorWrapper.class);
+
+        final WrapperRecorder counter = new WrapperRecorder();
+        props.put(PROCESSOR_WRAPPER_COUNTER_CONFIG, counter);
+
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
+
+        final KStream<String, String> stream1 = builder.stream("input-1", Consumed.as("source-1"));
+        final KStream<String, String> stream2 = builder.stream("input-2", Consumed.as("source-2"));
+
+        stream1.outerJoin(
+                stream2,
+                MockValueJoiner.TOSTRING_JOINER,
+                JoinWindows.ofTimeDifferenceAndGrace(Duration.ofDays(1), Duration.ofDays(1)),
+                StreamJoined.as("ss-join"))
+            .to("output", Produced.as("sink"));
+
+        builder.build();
+
+        // TODO: fix these names once we address https://issues.apache.org/jira/browse/KAFKA-18191
+        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
+            "KSTREAM-OUTERTHIS-0000000004", "KSTREAM-OUTEROTHER-0000000005",
+            "KSTREAM-WINDOWED-0000000003", "KSTREAM-WINDOWED-0000000002",
+            "KSTREAM-MERGE-0000000006"
+        ));
+        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(5));
+
+        // 1 additional store due to spurious results fix for left/outer joins
+        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(3));
+        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(6));
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldWrapProcessorsForStreamStreamOuterJoinWithoutSpuriousResultsFix() {
+        final Map<Object, Object> props = dummyStreamsConfigMap();
+        props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, RecordingProcessorWrapper.class);
+
+        final WrapperRecorder counter = new WrapperRecorder();
+        props.put(PROCESSOR_WRAPPER_COUNTER_CONFIG, counter);
+
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
+
+        final KStream<String, String> stream1 = builder.stream("input-1", Consumed.as("source-1"));
+        final KStream<String, String> stream2 = builder.stream("input-2", Consumed.as("source-2"));
+
+        stream1.outerJoin(
+                stream2,
+                MockValueJoiner.TOSTRING_JOINER,
+                JoinWindows.of(Duration.ofDays(1)), // intentionally uses deprecated version of this API!
+                StreamJoined.as("ss-join"))
+            .to("output", Produced.as("sink"));
+
+        builder.build();
+
+        // TODO: fix these names once we address https://issues.apache.org/jira/browse/KAFKA-18191
+        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
+            "KSTREAM-OUTERTHIS-0000000004", "KSTREAM-OUTEROTHER-0000000005",
+            "KSTREAM-WINDOWED-0000000003", "KSTREAM-WINDOWED-0000000002",
+            "KSTREAM-MERGE-0000000006"
+        ));
+        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(5));
+        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(2));
+        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(4));
+    }
+
+    @Test
+    public void shouldWrapProcessorsForStreamStreamSelfJoin() {
+        final Map<Object, Object> props = dummyStreamsConfigMap();
+        props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, RecordingProcessorWrapper.class);
+
+        final WrapperRecorder counter = new WrapperRecorder();
+        props.put(PROCESSOR_WRAPPER_COUNTER_CONFIG, counter);
+
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
+
+        final KStream<String, String> stream1 = builder.stream("input", Consumed.as("source"));
+
+        stream1.join(
+                stream1,
+                MockValueJoiner.TOSTRING_JOINER,
+                JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofDays(1)),
+                StreamJoined.as("ss-join"))
+            .to("output", Produced.as("sink"));
+
+        builder.build();
+
+        // TODO: fix these names once we address https://issues.apache.org/jira/browse/KAFKA-18191
+        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
+            "KSTREAM-JOINTHIS-0000000003", "KSTREAM-JOINOTHER-0000000004",
+            "KSTREAM-WINDOWED-0000000001", "KSTREAM-WINDOWED-0000000002",
+            "KSTREAM-MERGE-0000000005"
+        ));
+        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(5));
+        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(2));
+        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(4));
+    }
+
+    @Test
+    public void shouldWrapProcessorsForStreamStreamSelfJoinWithSharedStoreOptimization() {
+        final Map<Object, Object> props = dummyStreamsConfigMap();
+        props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, RecordingProcessorWrapper.class);
+        props.put(TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+
+        final WrapperRecorder counter = new WrapperRecorder();
+        props.put(PROCESSOR_WRAPPER_COUNTER_CONFIG, counter);
+
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
+
+        final KStream<String, String> stream1 = builder.stream("input", Consumed.as("source"));
+
+        stream1.join(
+                stream1,
+                MockValueJoiner.TOSTRING_JOINER,
+                JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofDays(1)),
+                StreamJoined.as("ss-join"))
+            .to("output", Produced.as("sink"));
+
+        final Properties properties = new Properties();
+        properties.putAll(props);
+        builder.build(properties);
+
+        // TODO: fix these names once we address https://issues.apache.org/jira/browse/KAFKA-18191
+        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
+            "KSTREAM-WINDOWED-0000000001", "KSTREAM-MERGE-0000000005"
+        ));
+        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(2));
+        // only 1 store when topology optimizations enabled due to sharing self-join store
+        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(1));
+        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(2));
+    }
+
+    @Test
     public void shouldWrapProcessorsForStreamTableJoin() {
         final Map<Object, Object> props = dummyStreamsConfigMap();
         props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, RecordingProcessorWrapper.class);
@@ -1767,6 +1971,7 @@ public class StreamsBuilderTest {
             .to("output", Produced.as("sink"));
 
         builder.build();
+
         assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
             "source-table", "st-join"
         ));

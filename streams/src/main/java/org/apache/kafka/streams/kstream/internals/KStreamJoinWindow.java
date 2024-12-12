@@ -21,14 +21,25 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
+import org.apache.kafka.streams.processor.internals.StoreFactory.FactoryWrappingStoreBuilder;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.WindowStore;
+
+import java.util.Collections;
+import java.util.Set;
 
 class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V, K, V> {
 
-    private final String windowName;
+    private final StoreFactory thisWindowStoreFactory;
 
-    KStreamJoinWindow(final String windowName) {
-        this.windowName = windowName;
+    KStreamJoinWindow(final StoreFactory thisWindowStoreFactory) {
+        this.thisWindowStoreFactory = thisWindowStoreFactory;
+    }
+
+    @Override
+    public Set<StoreBuilder<?>> stores() {
+        return Collections.singleton(new FactoryWrappingStoreBuilder<>(thisWindowStoreFactory));
     }
 
     @Override
@@ -44,7 +55,7 @@ class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V, K, V> {
         public void init(final ProcessorContext<K, V> context) {
             super.init(context);
 
-            window = context.getStateStore(windowName);
+            window = context.getStateStore(thisWindowStoreFactory.storeName());
         }
 
         @Override
