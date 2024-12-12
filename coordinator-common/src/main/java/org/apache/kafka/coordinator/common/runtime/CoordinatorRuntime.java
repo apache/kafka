@@ -52,6 +52,7 @@ import org.slf4j.Logger;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -2467,5 +2468,24 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         executorService.shutdown();
         Utils.closeQuietly(runtimeMetrics, "runtime metrics");
         log.info("Coordinator runtime closed.");
+    }
+
+    /**
+     * Util method which returns all the topic partitions for which
+     * the state machine is in active state.
+     * <p>
+     * This could be useful if the caller does not have a specific
+     * target internal topic partition.
+     * @return List of {@link TopicPartition} whose coordinators are active
+     */
+    public List<TopicPartition> activeTopicPartitions() {
+        if (coordinators == null || coordinators.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        return coordinators.entrySet().stream()
+            .filter(entry -> entry.getValue().state.equals(CoordinatorState.ACTIVE))
+            .map(Map.Entry::getKey)
+            .toList();
     }
 }

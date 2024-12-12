@@ -77,7 +77,7 @@ import org.apache.kafka.common.utils.{ImplicitLinkedHashCollection, ProducerIdAn
 import org.apache.kafka.coordinator.group.GroupConfig.{CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_SESSION_TIMEOUT_MS_CONFIG, SHARE_AUTO_OFFSET_RESET_CONFIG, SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, SHARE_RECORD_LOCK_DURATION_MS_CONFIG, SHARE_SESSION_TIMEOUT_MS_CONFIG}
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinator, GroupCoordinatorConfig}
-import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorConfigTest}
+import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorTestConfig}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.LeaderAndIsr
 import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
@@ -11702,7 +11702,7 @@ class KafkaApisTest extends Logging {
 
     val response = getReadShareGroupResponse(
       readRequestData,
-      config ++ ShareCoordinatorConfigTest.testConfigMap().asScala,
+      config ++ ShareCoordinatorTestConfig.testConfigMap().asScala,
       verifyNoErr = true,
       null,
       readStateResultData
@@ -11757,7 +11757,7 @@ class KafkaApisTest extends Logging {
 
     val response = getReadShareGroupResponse(
       readRequestData,
-      config ++ ShareCoordinatorConfigTest.testConfigMap().asScala,
+      config ++ ShareCoordinatorTestConfig.testConfigMap().asScala,
       verifyNoErr = false,
       authorizer,
       readStateResultData
@@ -11812,7 +11812,7 @@ class KafkaApisTest extends Logging {
 
     val response = getWriteShareGroupResponse(
       writeRequestData,
-      config ++ ShareCoordinatorConfigTest.testConfigMap().asScala,
+      config ++ ShareCoordinatorTestConfig.testConfigMap().asScala,
       verifyNoErr = true,
       null,
       writeStateResultData
@@ -11867,7 +11867,7 @@ class KafkaApisTest extends Logging {
 
     val response = getWriteShareGroupResponse(
       writeRequestData,
-      config ++ ShareCoordinatorConfigTest.testConfigMap().asScala,
+      config ++ ShareCoordinatorTestConfig.testConfigMap().asScala,
       verifyNoErr = false,
       authorizer,
       writeStateResultData
