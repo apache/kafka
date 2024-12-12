@@ -1686,16 +1686,16 @@ public class StreamsBuilderTest {
             .selectKey((k, v) -> k, Named.as("selectKey")) // wrapped 3
             .peek((k, v) -> { }, Named.as("peek")) // wrapped 4
             .flatMapValues(e -> new ArrayList<>(), Named.as("flatMap")) // wrapped 5
-            .toTable(Named.as("toTable")) // should be wrapped when we do StreamToTableNode
+            .toTable(Named.as("toTable")) // wrapped 6
             .filter((k, v) -> true, Named.as("filter-table")) // should be wrapped once we do TableProcessorNode
             .toStream(Named.as("toStream")) // wrapped 7
             .to("output", Produced.as("sink"));
 
         builder.build();
-        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(7));
+        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(8));
         assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
             "filter-stream", "map", "selectKey", "peek", "flatMap",
-            "toTable-repartition-filter", "toStream"
+            "toTable-repartition-filter", "toStream", "toTable"
         ));
         assertThat(counter.numUniqueStateStores(), CoreMatchers.is(0));
         assertThat(counter.numConnectedStateStores(), CoreMatchers.is(0));
