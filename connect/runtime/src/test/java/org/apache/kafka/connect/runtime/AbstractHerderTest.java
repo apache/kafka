@@ -1278,7 +1278,7 @@ public class AbstractHerderTest {
                 .defaultAnswer(CALLS_REAL_METHODS));
     }
 
-    @SuppressWarnings("unchecked, rawtypes")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private void mockValidationIsolation(String connectorClass, Connector connector) {
         when(workerConfig.getClass(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG)).thenReturn((Class) SimpleHeaderConverter.class);
         when(worker.config()).thenReturn(workerConfig);
