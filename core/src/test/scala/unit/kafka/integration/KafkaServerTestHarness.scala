@@ -51,18 +51,14 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
   private val _brokers = new mutable.ArrayBuffer[KafkaBroker]
 
   /**
-   * Get the list of brokers, which could be either BrokerServer objects or KafkaServer objects.
+   * Get the list of brokers.
    */
   def brokers: mutable.Buffer[KafkaBroker] = _brokers
 
   /**
-   * Get the list of brokers, as instances of KafkaServer.
-   * This method should only be used when dealing with brokers that use ZooKeeper.
+   * Get the list of brokers.
    */
-  def servers: mutable.Buffer[KafkaServer] = {
-    checkIsZKTest()
-    _brokers.asInstanceOf[mutable.Buffer[KafkaServer]]
-  }
+  def servers: mutable.Buffer[KafkaBroker] = brokers
 
   def brokerServers: mutable.Buffer[BrokerServer] = {
     checkIsKRaftTest()
@@ -102,9 +98,9 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     instanceConfigs
   }
 
-  def serverForId(id: Int): Option[KafkaServer] = servers.find(s => s.config.brokerId == id)
+  def serverForId(id: Int): Option[KafkaBroker] = brokers.find(s => s.config.brokerId == id)
 
-  def boundPort(server: KafkaServer): Int = server.boundPort(listenerName)
+  def boundPort(server: KafkaBroker): Int = server.boundPort(listenerName)
 
   def bootstrapServers(listenerName: ListenerName = listenerName): String = {
     TestUtils.bootstrapServers(_brokers, listenerName)
@@ -345,47 +341,26 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     }
   }
 
-  def getController(): KafkaServer = {
-    checkIsZKTest()
-    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
-    servers.filter(s => s.config.brokerId == controllerId).head
-  }
-
   def getTopicIds(names: Seq[String]): Map[String, Uuid] = {
     val result = new util.HashMap[String, Uuid]()
-    if (isKRaftTest()) {
-      val topicIdsMap = controllerServer.controller.findTopicIds(ANONYMOUS_CONTEXT, names.asJava).get()
-      names.foreach { name =>
-        val response = topicIdsMap.get(name)
-        result.put(name, response.result())
-      }
-    } else {
-      val topicIdsMap = getController().kafkaController.controllerContext.topicIds.toMap
-      names.foreach { name =>
-        if (topicIdsMap.contains(name)) result.put(name, topicIdsMap(name))
-      }
+    val topicIdsMap = controllerServer.controller.findTopicIds(ANONYMOUS_CONTEXT, names.asJava).get()
+    names.foreach { name =>
+      val response = topicIdsMap.get(name)
+      result.put(name, response.result())
     }
     result.asScala.toMap
   }
 
   def getTopicIds(): Map[String, Uuid] = {
-    if (isKRaftTest()) {
-      controllerServer.controller.findAllTopicIds(ANONYMOUS_CONTEXT).get().asScala.toMap
-    } else {
-      getController().kafkaController.controllerContext.topicIds.toMap
-    }
+    controllerServer.controller.findAllTopicIds(ANONYMOUS_CONTEXT).get().asScala.toMap
   }
 
   def getTopicNames(): Map[Uuid, String] = {
-    if (isKRaftTest()) {
-      val result = new util.HashMap[Uuid, String]()
-      controllerServer.controller.findAllTopicIds(ANONYMOUS_CONTEXT).get().forEach {
-        (key, value) => result.put(value, key)
-      }
-      result.asScala.toMap
-    } else {
-      getController().kafkaController.controllerContext.topicNames.toMap
+    val result = new util.HashMap[Uuid, String]()
+    controllerServer.controller.findAllTopicIds(ANONYMOUS_CONTEXT).get().forEach {
+      (key, value) => result.put(value, key)
     }
+    result.asScala.toMap
   }
 
   private def createBrokers(startup: Boolean): Unit = {

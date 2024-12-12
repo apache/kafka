@@ -20,7 +20,6 @@ import java.io.File
 import java.util.Collections
 import java.util.concurrent.{ExecutionException, TimeUnit}
 import kafka.api.IntegrationTestHarness
-import kafka.controller.{OfflineReplica, PartitionAndReplica}
 import kafka.utils.TestUtils.{Checkpoint, LogDirFailureType, Roll, waitUntilTrue}
 import kafka.utils.{CoreUtils, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer.Consumer
@@ -195,26 +194,17 @@ class LogDirFailureTest extends IntegrationTestHarness {
     // Consumer should receive some messages
     TestUtils.pollUntilAtLeastNumRecords(consumer, 1)
 
-    if (quorum == "kraft") {
-      waitUntilTrue(() => {
-        // get the broker with broker.nodeId == originalLeaderServerId
-        val brokerWithDirFail = brokers.find(_.config.nodeId == originalLeaderServerId).map(_.asInstanceOf[BrokerServer])
-        // check if the broker has the offline log dir
-        val hasOfflineDir = brokerWithDirFail.exists(_.logDirFailureChannel.hasOfflineLogDir(failedLogDir.toPath.toString))
-        // check if the broker has the offline replica
-        hasOfflineDir && brokerWithDirFail.exists(broker =>
-          broker.replicaManager.metadataCache
-            .getClusterMetadata(broker.clusterId, broker.config.interBrokerListenerName)
-            .partition(new TopicPartition(topic, 0)).offlineReplicas().map(_.id()).contains(originalLeaderServerId))
-      }, "Expected to find an offline log dir")
-    } else {
-      // There should be no remaining LogDirEventNotification znode
-      assertTrue(zkClient.getAllLogDirEventNotifications.isEmpty)
-      // The controller should have marked the replica on the original leader as offline
-      val controllerServer = servers.find(_.kafkaController.isActive).get
-      val offlineReplicas = controllerServer.kafkaController.controllerContext.replicasInState(topic, OfflineReplica)
-      assertTrue(offlineReplicas.contains(PartitionAndReplica(new TopicPartition(topic, 0), originalLeaderServerId)))
-    }
+    waitUntilTrue(() => {
+      // get the broker with broker.nodeId == originalLeaderServerId
+      val brokerWithDirFail = brokers.find(_.config.nodeId == originalLeaderServerId).map(_.asInstanceOf[BrokerServer])
+      // check if the broker has the offline log dir
+      val hasOfflineDir = brokerWithDirFail.exists(_.logDirFailureChannel.hasOfflineLogDir(failedLogDir.toPath.toString))
+      // check if the broker has the offline replica
+      hasOfflineDir && brokerWithDirFail.exists(broker =>
+        broker.replicaManager.metadataCache
+          .getClusterMetadata(broker.clusterId, broker.config.interBrokerListenerName)
+          .partition(new TopicPartition(topic, 0)).offlineReplicas().map(_.id()).contains(originalLeaderServerId))
+    }, "Expected to find an offline log dir")
   }
 
 
