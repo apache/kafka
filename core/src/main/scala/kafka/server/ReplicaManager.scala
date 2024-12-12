@@ -2093,24 +2093,6 @@ class ReplicaManager(val config: KafkaConfig,
             s"Latest known controller epoch is $controllerEpoch")
           leaderAndIsrRequest.getErrorResponse(0, Errors.STALE_CONTROLLER_EPOCH.exception)
         } else {
-          // In migration mode, reconcile missed topic deletions when handling full LISR from KRaft controller.
-          // LISR "type" field was previously unspecified (0), so if we see it set to Full (2), then we know the
-          // request came from a KRaft controller.
-          //
-          // Note that we have to do this first, before anything else, since topics may be recreated with the same
-          // name, but a different ID. And in that case, we need to move aside the old version of those topics
-          // (with the obsolete topic ID) before doing anything else.
-          if (config.migrationEnabled &&
-            leaderAndIsrRequest.isKRaftController &&
-            leaderAndIsrRequest.requestType() == AbstractControlRequest.Type.FULL)
-          {
-            val strays = LogManager.findStrayReplicas(localBrokerId, leaderAndIsrRequest, logManager.allLogs)
-            stateChangeLogger.info(s"While handling full LeaderAndIsr request from KRaft " +
-              s"controller $controllerId with correlation id $correlationId, found ${strays.size} " +
-              "stray partition(s).")
-            updateStrayLogs(strays)
-          }
-
           val responseMap = new mutable.HashMap[TopicPartition, Errors]
           controllerEpoch = leaderAndIsrRequest.controllerEpoch
 
@@ -2671,16 +2653,12 @@ class ReplicaManager(val config: KafkaConfig,
            s"for partitions ${partitionsWithOfflineFutureReplica.mkString(",")} because they are in the failed log directory $dir.")
     }
     logManager.handleLogDirFailure(dir)
-    if (dir == new File(config.metadataLogDir).getAbsolutePath && (config.processRoles.nonEmpty || config.migrationEnabled)) {
+    if (dir == new File(config.metadataLogDir).getAbsolutePath && config.processRoles.nonEmpty) {
       fatal(s"Shutdown broker because the metadata log dir $dir has failed")
       Exit.halt(1)
     }
 
     if (notifyController) {
-      if (config.migrationEnabled) {
-        fatal(s"Shutdown broker because some log directory has failed during migration mode: $dir")
-        Exit.halt(1)
-      }
       if (zkClient.isEmpty) {
         if (uuid.isDefined) {
           directoryEventHandler.handleFailure(uuid.get)

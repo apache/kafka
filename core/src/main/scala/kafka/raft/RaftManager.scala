@@ -98,8 +98,6 @@ object KafkaRaftManager {
     // These constraints are enforced in KafkaServer, but repeating them here to guard against future callers
     if (config.processRoles.nonEmpty) {
       throw new RuntimeException("Not deleting metadata log dir since this node is in KRaft mode.")
-    } else if (!config.migrationEnabled) {
-      throw new RuntimeException("Not deleting metadata log dir since migrations are not enabled.")
     } else {
       val metadataDir = new File(config.metadataLogDir)
       val logDirName = UnifiedLog.logDirName(Topic.CLUSTER_METADATA_TOPIC_PARTITION)

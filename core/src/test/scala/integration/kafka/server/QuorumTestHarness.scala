@@ -82,7 +82,7 @@ class ZooKeeperQuorumImplementation(
     startup: Boolean,
     threadNamePrefix: Option[String],
   ): KafkaBroker = {
-    val server = new KafkaServer(config, time, threadNamePrefix, false)
+    val server = new KafkaServer(config, time, threadNamePrefix)
     if (startup) server.startup()
     server
   }

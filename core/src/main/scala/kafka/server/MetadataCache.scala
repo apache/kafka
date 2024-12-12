@@ -117,10 +117,9 @@ trait MetadataCache {
 object MetadataCache {
   def zkMetadataCache(brokerId: Int,
                       metadataVersion: MetadataVersion,
-                      brokerFeatures: BrokerFeatures = BrokerFeatures.createEmpty(),
-                      zkMigrationEnabled: Boolean = false)
+                      brokerFeatures: BrokerFeatures = BrokerFeatures.createEmpty())
   : ZkMetadataCache = {
-    new ZkMetadataCache(brokerId, metadataVersion, brokerFeatures, zkMigrationEnabled)
+    new ZkMetadataCache(brokerId, metadataVersion, brokerFeatures)
   }
 
   def kRaftMetadataCache(

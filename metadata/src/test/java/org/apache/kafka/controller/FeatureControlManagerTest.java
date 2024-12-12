@@ -25,8 +25,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.VersionRange;
-import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
-import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -407,41 +405,5 @@ public class FeatureControlManagerTest {
             ApiError.NONE), result2);
         RecordTestUtils.replayAll(manager, result2.records());
         assertEquals(Optional.empty(), manager.finalizedFeatures(Long.MAX_VALUE).get(Feature.TEST_VERSION.featureName()));
-    }
-
-    @Test
-    public void testNoMetadataVersionChangeDuringMigration() {
-        FeatureControlManager manager = new FeatureControlManager.Builder().
-            setQuorumFeatures(features(MetadataVersion.FEATURE_NAME,
-                    MetadataVersion.IBP_3_0_IV0.featureLevel(), MetadataVersion.IBP_3_5_IV1.featureLevel())).
-            setMetadataVersion(MetadataVersion.IBP_3_4_IV0).
-            build();
-        BootstrapMetadata bootstrapMetadata = BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_4_IV0, "FeatureControlManagerTest");
-        RecordTestUtils.replayAll(manager, bootstrapMetadata.records());
-        RecordTestUtils.replayOne(manager, ZkMigrationState.PRE_MIGRATION.toRecord());
-
-        assertEquals(ControllerResult.of(Collections.emptyList(), new ApiError(Errors.INVALID_UPDATE_VERSION,
-            "Invalid metadata.version 10. Unable to modify metadata.version while a ZK migration is in progress.")),
-            manager.updateFeatures(
-                singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_5_IV1.featureLevel()),
-                singletonMap(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.UPGRADE),
-                true));
-
-        assertEquals(ControllerResult.of(Collections.emptyList(), new ApiError(Errors.INVALID_UPDATE_VERSION,
-            "Invalid metadata.version 4. Unable to modify metadata.version while a ZK migration is in progress.")),
-            manager.updateFeatures(
-                singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_3_IV0.featureLevel()),
-                singletonMap(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE),
-                true));
-
-        // Complete the migration
-        RecordTestUtils.replayOne(manager, ZkMigrationState.POST_MIGRATION.toRecord());
-        ControllerResult<ApiError> result = manager.updateFeatures(
-            singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_5_IV1.featureLevel()),
-            singletonMap(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.UPGRADE),
-            false);
-        assertEquals(ApiError.NONE, result.response());
-        RecordTestUtils.replayAll(manager, result.records());
-        assertEquals(MetadataVersion.IBP_3_5_IV1, manager.metadataVersion());
     }
 }

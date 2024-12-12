@@ -408,13 +408,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     if (isKRaftTest()) {
       createBroker(config, brokerTime(config.brokerId), startup = false)
     } else {
-      TestUtils.createServer(
-        config,
-        time = brokerTime(config.brokerId),
-        threadNamePrefix = None,
-        startup = false,
-        enableZkApiForwarding = config.migrationEnabled && config.interBrokerProtocolVersion.isApiForwardingEnabled
-      )
+      TestUtils.createServer(config, time = brokerTime(config.brokerId), threadNamePrefix = None, startup = false)
     }
   }
 

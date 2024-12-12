@@ -1830,45 +1830,6 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testMigrationCannotBeEnabledWithJBOD(): Unit = {
-    val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect, port = TestUtils.MockZkPort, logDirCount = 2)
-    props.setProperty(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
-    props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "3000@localhost:9093")
-    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
-    props.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, MetadataVersion.IBP_3_7_IV1.version())
-
-    assertEquals(
-      "requirement failed: Cannot enable ZooKeeper migration with multiple log directories " +
-      "(aka JBOD) without setting 'inter.broker.protocol.version' to 3.7-IV2 or higher",
-      assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props)).getMessage)
-  }
-
-  @Test
-  def testMigrationCannotBeEnabledWithBrokerIdGeneration(): Unit = {
-    val props = TestUtils.createBrokerConfig(-1, TestUtils.MockZkConnect, port = TestUtils.MockZkPort, logDirCount = 2)
-    props.setProperty(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
-    props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "3000@localhost:9093")
-    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
-    assertEquals(
-      "requirement failed: broker.id generation is incompatible with ZooKeeper migration. Please stop using it before enabling migration (set broker.id to a value greater or equal to 0).",
-      assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props)).getMessage)
-  }
-
-  @Test
-  def testMigrationEnabledKRaftMode(): Unit = {
-    val props = new Properties()
-    props.putAll(kraftProps())
-    props.setProperty(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
-
-    assertEquals(
-      "If using `zookeeper.metadata.migration.enable` in KRaft mode, `zookeeper.connect` must also be set.",
-      assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props)).getMessage)
-
-    props.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
-    KafkaConfig.fromProps(props)
-  }
-
-  @Test
   def testConsumerGroupSessionTimeoutValidation(): Unit = {
     val props = new Properties()
     props.putAll(kraftProps())
