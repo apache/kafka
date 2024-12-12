@@ -63,7 +63,7 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
         return fixedKeyProcessorSupplier;
     }
 
-    public void addProcessorTo(final InternalTopologyBuilder topologyBuilder, final String[] parentNodeNames) {
+    public void addProcessorTo(final InternalTopologyBuilder topologyBuilder, final String... parentNodeNames) {
         if (processorSupplier != null) {
             ApiUtils.checkSupplier(processorSupplier);
 
