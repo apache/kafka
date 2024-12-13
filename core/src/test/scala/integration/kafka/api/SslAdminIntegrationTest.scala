@@ -18,7 +18,7 @@ import java.util.Properties
 import com.yammer.metrics.core.Gauge
 import kafka.security.JaasTestUtils
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.{AdminClientConfig, CreateAclsResult}
+import org.apache.kafka.clients.admin.{AdminClientConfig, CreateAclsResult, DescribeClusterOptions}
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
@@ -32,7 +32,7 @@ import org.apache.kafka.common.network.ConnectionMode
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.authorizer.{ClusterMetadataAuthorizer, StandardAuthorizer}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertThrows, assertTrue}
 import org.junit.jupiter.api.{AfterEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -156,6 +156,25 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     semaphore.foreach(s => s.release(s.getQueueLength))
 
     super.tearDown()
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testListNodesFromControllersIncludingFencedBrokers(quorum: String): Unit = {
+    useBoostrapControllers()
+    client = createAdminClient
+    val result = client.describeCluster(new DescribeClusterOptions().includeFencedBrokers(true))
+    val exception = assertThrows(classOf[Exception], () => { result.nodes().get()})
+    assertTrue(exception.getCause.getCause.getMessage.contains("Cannot request fenced brokers from controller endpoint"))
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testListNodesFromControllers(quorum: String): Unit = {
+    useBoostrapControllers()
+    client = createAdminClient
+    val result = client.describeCluster(new DescribeClusterOptions())
+    assertTrue(result.nodes().get().size().equals(controllerServers.size))
   }
 
   @ParameterizedTest

@@ -597,6 +597,30 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
+  def testListNodesWithFencedBroker(quorum: String): Unit = {
+    client = createAdminClient
+    val fencedBrokerId = brokers.last.config.brokerId
+    killBroker(fencedBrokerId, JDuration.ofMillis(0))
+    // It takes a few seconds for a broker to get fenced after being killed
+    // So we retry until only 2 of 3 brokers returned in the result or the max wait is reached
+    TestUtils.retry(20000) {
+      assertTrue(client.describeCluster().nodes().get().asScala.size.equals(brokers.size - 1))
+    }
+
+    // List nodes again but this time include the fenced broker
+    val nodes = client.describeCluster(new DescribeClusterOptions().includeFencedBrokers(true)).nodes().get().asScala
+    assertTrue(nodes.size.equals(brokers.size))
+    nodes.foreach(node => {
+      if (node.id().equals(fencedBrokerId)) {
+        assertTrue(node.isFenced)
+      } else {
+        assertFalse(node.isFenced)
+      }
+    })
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
   def testAdminClientHandlingBadIPWithoutTimeout(quorum: String): Unit = {
     val config = createConfig
     config.put(AdminClientConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, "1000")
