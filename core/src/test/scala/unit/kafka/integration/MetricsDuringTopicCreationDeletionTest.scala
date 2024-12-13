@@ -145,8 +145,8 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
       // Delete topics
       for (t <- topics if running) {
           try {
-            adminZkClient.deleteTopic(t)
-            TestUtils.verifyTopicDeletion(zkClient, t, partitionNum, servers)
+            deleteTopic(t)
+            TestUtils.verifyTopicDeletion(null, t, partitionNum, servers)
           } catch {
           case e: Exception => e.printStackTrace()
           }
