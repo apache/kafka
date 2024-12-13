@@ -121,6 +121,8 @@ Streams has multiple sub-projects, but you can run all the tests:
     ./gradlew tasks
 
 ### Building IDE project ####
+*Note Please ensure that JDK17 is used when developing Kafka.*
+
 *Note that this is not strictly necessary (IntelliJ IDEA has good built-in support for Gradle projects, for example).*
 
     ./gradlew eclipse
@@ -129,6 +131,11 @@ Streams has multiple sub-projects, but you can run all the tests:
 The `eclipse` task has been configured to use `${project_dir}/build_eclipse` as Eclipse's build directory. Eclipse's default
 build directory (`${project_dir}/bin`) clashes with Kafka's scripts directory and we don't use Gradle's build directory
 to avoid known issues with this configuration.
+
+IntelliJ Language Level awareness:
+
+IntelliJ will automatically check Java syntax and compatibility for each module, even if the Java version is not 
+explicitly set in the Structure > Project Settings > Modules.
 
 ### Publishing the streams quickstart archetype artifact to maven ###
 For the Streams archetype project, one cannot use gradle to upload to maven; instead the `mvn deploy` command needs to be called at the quickstart folder:
