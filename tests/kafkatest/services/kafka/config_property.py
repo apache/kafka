@@ -44,6 +44,8 @@ LOG_SEGMENT_BYTES = "log.segment.bytes"
 LOG_RETENTION_CHECK_INTERVAL_MS = "log.retention.check.interval.ms"
 LOG_RETENTION_MS = "log.retention.ms"
 LOG_CLEANER_ENABLE = "log.cleaner.enable"
+LOG_DELETE_DELAY_MS = "log.segment.delete.delay.ms"
+LOG_INITIAL_TASK_DELAY_MS = "log.initial.task.delay.ms"
 
 METADATA_LOG_DIR = "metadata.log.dir"
 METADATA_LOG_SEGMENT_BYTES = "metadata.log.segment.bytes"

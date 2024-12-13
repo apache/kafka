@@ -47,6 +47,8 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         self.kafka = KafkaService(test_context, num_nodes=4, zk=None,
                                   server_prop_overrides=[
                                       [config_property.LOG_ROLL_TIME_MS, "5000"],
+                                      [config_property.LOG_INITIAL_TASK_DELAY_MS, "100"],
+                                      [config_property.LOG_DELETE_DELAY_MS, "1000"],
                                       [config_property.LOG_RETENTION_CHECK_INTERVAL_MS, "5000"]
                                   ],
                                   topics={self.topic: {
