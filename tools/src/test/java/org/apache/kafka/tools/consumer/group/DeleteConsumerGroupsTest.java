@@ -116,7 +116,7 @@ public class DeleteConsumerGroupsTest {
                     ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs)
             ) {
                 TestUtils.waitForCondition(
-                        () -> service.collectGroupMembers(groupId, false).getValue().get().size() == 1,
+                        () -> service.collectGroupMembers(groupId).getValue().get().size() == 1,
                         "The group did not initialize as expected."
                 );
 
